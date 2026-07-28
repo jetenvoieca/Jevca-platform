@@ -1,0 +1,9 @@
+[build]
+  command = "npx prisma generate && npx prisma migrate deploy && npm run build"
+  publish = ".next"
+
+[build.environment]
+  NODE_VERSION = "24"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
