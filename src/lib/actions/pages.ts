@@ -64,7 +64,7 @@ export async function saveDraftBlocks(pageId: string, blocks: unknown) {
   return { ok: true };
 }
 
-export async function publishSite(siteId: string) {
+export async function publishSite(siteId: string): Promise<void> {
   const pages = await db.page.findMany({ where: { siteId } });
 
   await db.$transaction(
@@ -77,5 +77,4 @@ export async function publishSite(siteId: string) {
   );
 
   revalidatePath(`/sites/${siteId}`);
-  return { ok: true, count: pages.length };
 }
