@@ -18,10 +18,12 @@ export type ArtworkBlock = {
   id: string;
   type: "artwork";
   artworkId: string;
-  // Editor-only preview snapshot — NOT used when actually rendering the page.
-  // Rendering always re-fetches the artwork's live title/image/price/status.
+  // Editor-only preview snapshot — NOT authoritative for the real published page.
+  // The Preview route and eventual public site always re-fetch the artwork's live data.
   previewTitle?: string;
   previewImageUrl?: string;
+  previewPrice?: string | null;
+  previewAvailability?: string;
 };
 
 export type VideoBlock = {
