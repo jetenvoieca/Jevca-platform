@@ -1,0 +1,80 @@
+import type { ContentBlock } from "@/lib/blocks";
+
+type ArtworkData = {
+  id: string;
+  title: string;
+  price: unknown;
+  availability: string;
+  images: { url: string }[];
+};
+
+export default function BlockRenderer({
+  blocks,
+  artworks,
+}: {
+  blocks: ContentBlock[];
+  artworks: ArtworkData[];
+}) {
+  return (
+    <div className="space-y-6">
+      {blocks.map((block) => {
+        if (block.type === "text") {
+          return (
+            <p key={block.id} className="whitespace-pre-wrap text-neutral-800">
+              {block.text}
+            </p>
+          );
+        }
+        if (block.type === "image") {
+          return block.url ? (
+            <figure key={block.id}>
+              <img src={block.url} alt={block.caption || ""} className="w-full rounded-md" />
+              {block.caption && (
+                <figcaption className="mt-1 text-sm text-neutral-500">
+                  {block.caption}
+                </figcaption>
+              )}
+            </figure>
+          ) : null;
+        }
+        if (block.type === "gallery") {
+          return (
+            <div key={block.id} className="grid grid-cols-2 gap-2">
+              {block.images.map((img) => (
+                <img key={img.imageId} src={img.url} alt="" className="rounded-md" />
+              ))}
+            </div>
+          );
+        }
+        if (block.type === "video") {
+          return block.url ? (
+            <video key={block.id} src={block.url} controls className="w-full rounded-md" />
+          ) : null;
+        }
+        if (block.type === "artwork") {
+          const artwork = artworks.find((a) => a.id === block.artworkId);
+          if (!artwork) return null;
+          return (
+            <div key={block.id} className="flex gap-4 rounded-md border border-neutral-200 p-4">
+              {artwork.images[0] && (
+                <img
+                  src={artwork.images[0].url}
+                  alt=""
+                  className="h-32 w-32 rounded object-cover"
+                />
+              )}
+              <div>
+                <h3 className="font-medium text-neutral-900">{artwork.title}</h3>
+                {artwork.price != null && (
+                  <p className="text-sm text-neutral-600">£{String(artwork.price)}</p>
+                )}
+                <p className="text-xs uppercase text-neutral-400">{artwork.availability}</p>
+              </div>
+            </div>
+          );
+        }
+        return null;
+      })}
+    </div>
+  );
+}
