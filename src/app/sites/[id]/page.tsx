@@ -1,5 +1,4 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { createPage, publishSite } from "@/lib/actions/pages";
 
@@ -9,12 +8,6 @@ export default async function SiteWebsitePage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-
-  const site = await db.site.findUnique({
-    where: { id },
-    include: { artist: true },
-  });
-  if (!site) notFound();
 
   const pages = await db.page.findMany({
     where: { siteId: id },
@@ -26,17 +19,10 @@ export default async function SiteWebsitePage({
   );
 
   return (
-    <main className="mx-auto max-w-4xl px-6 py-10">
-      <Link href="/" className="text-sm text-neutral-500 hover:underline">
-        ← Back to Sites
-      </Link>
-
-      <div className="mt-4 mb-2 flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-semibold text-neutral-900">{site.name}</h1>
-          <p className="text-sm text-neutral-500">Owner: {site.artist.name}</p>
-        </div>
-        <form action={publishSite.bind(null, site.id)}>
+    <main className="mx-auto max-w-4xl px-6 py-8">
+      <div className="mb-6 flex items-center justify-between">
+        <h2 className="text-lg font-semibold text-neutral-900">Pages</h2>
+        <form action={publishSite.bind(null, id)}>
           <button
             type="submit"
             disabled={!hasUnpublished}
@@ -47,9 +33,9 @@ export default async function SiteWebsitePage({
         </form>
       </div>
 
-      <div className="mt-8 grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <form
-          action={createPage.bind(null, site.id, "SECTION")}
+          action={createPage.bind(null, id, "SECTION")}
           className="rounded-lg border border-dashed border-neutral-300 p-4"
         >
           <label className="mb-2 block text-sm font-medium text-neutral-700">
@@ -73,7 +59,7 @@ export default async function SiteWebsitePage({
         </form>
 
         <form
-          action={createPage.bind(null, site.id, "PRIVATE")}
+          action={createPage.bind(null, id, "PRIVATE")}
           className="rounded-lg border border-dashed border-neutral-300 p-4"
         >
           <label className="mb-2 block text-sm font-medium text-neutral-700">
@@ -118,7 +104,7 @@ export default async function SiteWebsitePage({
                   <tr key={page.id} className="border-b border-neutral-100">
                     <td className="py-3">
                       <Link
-                        href={`/sites/${site.id}/pages/${page.id}`}
+                        href={`/sites/${id}/pages/${page.id}`}
                         className="font-medium text-neutral-900 hover:underline"
                       >
                         {page.title}
