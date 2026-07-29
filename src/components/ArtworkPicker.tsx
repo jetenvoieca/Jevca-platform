@@ -3,7 +3,13 @@
 import { useState, useTransition } from "react";
 import { getArtworksForSite, quickCreateArtwork } from "@/lib/actions/media";
 
-type PickedArtwork = { id: string; title: string; imageUrl: string | null };
+type PickedArtwork = {
+  id: string;
+  title: string;
+  imageUrl: string | null;
+  price: string | null;
+  availability: string;
+};
 
 export default function ArtworkPicker({
   siteId,
@@ -27,6 +33,8 @@ export default function ArtworkPicker({
           id: a.id,
           title: a.title,
           imageUrl: a.images[0]?.url ?? null,
+          price: a.price != null ? a.price.toString() : null,
+          availability: a.availability,
         }))
       );
     });
@@ -46,7 +54,13 @@ export default function ArtworkPicker({
         return;
       }
       if (result.artwork) {
-        onSelect({ id: result.artwork.id, title: result.artwork.title, imageUrl: null });
+        onSelect({
+          id: result.artwork.id,
+          title: result.artwork.title,
+          imageUrl: null,
+          price: null,
+          availability: "AVAILABLE",
+        });
         setNewTitle("");
         setOpen(false);
       }
