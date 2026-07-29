@@ -14,8 +14,12 @@ export async function GET(
       return new Response("Not found", { status: 404 });
     }
     const bytes = await object.Body.transformToByteArray();
+    const arrayBuffer = bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset + bytes.byteLength
+    ) as ArrayBuffer;
 
-    return new Response(new Blob([bytes]), {
+    return new Response(new Blob([arrayBuffer]), {
       headers: {
         "Content-Type": object.ContentType || "application/octet-stream",
         "Cache-Control": "public, max-age=31536000, immutable",
