@@ -15,7 +15,7 @@ export async function GET(
     }
     const bytes = await object.Body.transformToByteArray();
 
-    return new Response(bytes, {
+    return new Response(new Blob([bytes]), {
       headers: {
         "Content-Type": object.ContentType || "application/octet-stream",
         "Cache-Control": "public, max-age=31536000, immutable",
