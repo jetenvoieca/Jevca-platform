@@ -20,6 +20,28 @@ enum SiteStatus {
   ARCHIVED
 }
 
+enum PageType {
+  SECTION
+  PRIVATE
+}
+
+enum ArtworkAvailability {
+  AVAILABLE
+  RESERVED
+  SOLD
+}
+
+enum ImageStatus {
+  HOPPER
+  SORTED
+  ARCHIVED
+}
+
+enum ImageKind {
+  PHOTO
+  VIDEO
+}
+
 model Artist {
   id        String       @id @default(cuid())
   name      String
@@ -43,5 +65,75 @@ model Site {
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 
+  pages    Page[]
+  artworks Artwork[]
+  images   Image[]
+
   @@index([artistId])
+}
+
+model Page {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id])
+  type      PageType
+  title     String
+  slug      String
+  visible   Boolean  @default(true)
+  position  Int      @default(0)
+  sourceTag String?
+
+  draftBlocks Json  @default("[]")
+  liveBlocks  Json?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([siteId, slug])
+  @@index([siteId])
+}
+
+model Artwork {
+  id              String              @id @default(cuid())
+  siteId          String
+  site            Site                @relation(fields: [siteId], references: [id])
+  title           String
+  catalogueNumber String
+  medium          String?
+  dimensions      String?
+  year            Int?
+  price           Decimal?            @db.Decimal(10, 2)
+  availability    ArtworkAvailability @default(AVAILABLE)
+  visible         Boolean             @default(true)
+  description     String?
+  images          Image[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([siteId, catalogueNumber])
+  @@index([siteId])
+}
+
+model Image {
+  id        String      @id @default(cuid())
+  siteId    String
+  site      Site        @relation(fields: [siteId], references: [id])
+  key       String
+  url       String
+  kind      ImageKind   @default(PHOTO)
+  mimeType  String
+  caption   String?
+  altText   String?
+  tags      String[]    @default([])
+  status    ImageStatus @default(SORTED)
+  source    String?
+  artworkId String?
+  artwork   Artwork?    @relation(fields: [artworkId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteId])
+  @@index([artworkId])
 }
