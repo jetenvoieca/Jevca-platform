@@ -5,9 +5,9 @@ import { getArtworksForSite, quickCreateArtwork } from "@/lib/actions/media";
 
 type PickedArtwork = {
   id: string;
-  title: string;
+  presentationTitle: string;
   imageUrl: string | null;
-  price: string | null;
+  presentationPrice: string | null;
   availability: string;
 };
 
@@ -31,9 +31,9 @@ export default function ArtworkPicker({
       setArtworks(
         results.map((a) => ({
           id: a.id,
-          title: a.title,
+          presentationTitle: a.presentationTitle,
           imageUrl: a.images[0]?.url ?? null,
-          price: a.price != null ? a.price.toString() : null,
+          presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
           availability: a.availability,
         }))
       );
@@ -56,9 +56,9 @@ export default function ArtworkPicker({
       if (result.artwork) {
         onSelect({
           id: result.artwork.id,
-          title: result.artwork.title,
+          presentationTitle: result.artwork.presentationTitle,
           imageUrl: null,
-          price: null,
+          presentationPrice: null,
           availability: "AVAILABLE",
         });
         setNewTitle("");
@@ -119,7 +119,7 @@ export default function ArtworkPicker({
                 No image
               </div>
             )}
-            <p className="mt-1 truncate text-xs text-neutral-700">{a.title}</p>
+            <p className="mt-1 truncate text-xs text-neutral-700">{a.presentationTitle}</p>
           </button>
         ))}
         {artworks.length === 0 && (
@@ -146,8 +146,8 @@ export default function ArtworkPicker({
       </div>
       {error && <p className="mt-1 text-xs text-red-600">{error}</p>}
       <p className="mt-1 text-xs text-neutral-400">
-        This creates a bare-bones Artwork record (title only) — fill in price, medium etc. once
-        the Artworks Catalogue screen is built.
+        This creates a bare-bones Artwork record (title only) — fill in the rest from the
+        Artworks Catalogue.
       </p>
     </div>
   );
