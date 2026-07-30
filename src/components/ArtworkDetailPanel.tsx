@@ -59,7 +59,7 @@ export default function ArtworkDetailPanel({
   };
 
   return (
-    <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-6">
+    <div className="rounded-lg border border-neutral-200 bg-white p-6">
       <div className="mb-4 flex items-start justify-between">
         <div>
           <h2 className="text-xl font-semibold text-neutral-900">{artwork.presentationTitle}</h2>
@@ -81,6 +81,48 @@ export default function ArtworkDetailPanel({
             Close
           </Link>
         </div>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="mb-2 text-sm font-medium text-neutral-700">Images</h3>
+        {images.length > 0 && (
+          <div className="mb-2 flex flex-wrap gap-2">
+            {images.map((img) => (
+              <div key={img.id} className="group relative">
+                <img src={img.url} alt="" className="h-16 w-16 rounded object-cover" />
+                <button
+                  type="button"
+                  onClick={() => {
+                    startTransition(async () => {
+                      await unlinkImageFromArtwork(artwork.id, img.id);
+                      setImages((prev) => prev.filter((i) => i.id !== img.id));
+                    });
+                  }}
+                  className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <MediaPicker
+          siteId={siteId}
+          mode="multi"
+          label="Link Images"
+          onSelect={(imgs) => {
+            const ids = imgs.map((i) => i.id);
+            startTransition(async () => {
+              await linkImagesToArtwork(artwork.id, ids);
+              setImages((prev) => [
+                ...prev,
+                ...imgs
+                  .filter((img) => !prev.some((p) => p.id === img.id))
+                  .map((img) => ({ id: img.id, url: img.url })),
+              ]);
+            });
+          }}
+        />
       </div>
 
       <div className="mb-6 flex gap-2 border-b border-neutral-200">
@@ -108,9 +150,8 @@ export default function ArtworkDetailPanel({
         </button>
       </div>
 
-      <div className="grid grid-cols-[1fr_180px] gap-8">
-        <div>
-          {tab === "presentation" ? (
+      <div>
+        {tab === "presentation" ? (
             <>
               <p className="mb-3 text-xs text-neutral-400">
                 What customers see on the public site.
@@ -386,50 +427,7 @@ export default function ArtworkDetailPanel({
                 </div>
               </form>
             </>
-          )}
-        </div>
-
-        <div>
-          <h3 className="mb-2 text-sm font-medium text-neutral-700">Images</h3>
-          {images.length > 0 && (
-            <div className="mb-2 grid grid-cols-2 gap-2">
-              {images.map((img) => (
-                <div key={img.id} className="group relative">
-                  <img src={img.url} alt="" className="aspect-square w-full rounded object-cover" />
-                  <button
-                    type="button"
-                    onClick={() => {
-                      startTransition(async () => {
-                        await unlinkImageFromArtwork(artwork.id, img.id);
-                        setImages((prev) => prev.filter((i) => i.id !== img.id));
-                      });
-                    }}
-                    className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-          <MediaPicker
-            siteId={siteId}
-            mode="multi"
-            label="Link Images"
-            onSelect={(imgs) => {
-              const ids = imgs.map((i) => i.id);
-              startTransition(async () => {
-                await linkImagesToArtwork(artwork.id, ids);
-                setImages((prev) => [
-                  ...prev,
-                  ...imgs
-                    .filter((img) => !prev.some((p) => p.id === img.id))
-                    .map((img) => ({ id: img.id, url: img.url })),
-                ]);
-              });
-            }}
-          />
-        </div>
+        )}
       </div>
     </div>
   );
