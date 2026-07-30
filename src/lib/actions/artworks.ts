@@ -11,13 +11,21 @@ async function nextCatalogueNumber(siteId: string) {
   return `AW-${String(count + 1).padStart(4, "0")}`;
 }
 
+// "+ Add New Artwork" — minimum entry is a Title. That single value seeds
+// both facets (presentationTitle and catalogueName) as a starting point;
+// from this point on the two are independent.
 export async function createArtwork(siteId: string, formData: FormData) {
   const title = (formData.get("title") as string)?.trim();
   if (!title) return;
 
   const catalogueNumber = await nextCatalogueNumber(siteId);
   const artwork = await db.artwork.create({
-    data: { siteId, title, catalogueNumber },
+    data: {
+      siteId,
+      catalogueNumber,
+      presentationTitle: title,
+      catalogueName: title,
+    },
   });
 
   revalidatePath(`/sites/${siteId}/artworks`);
@@ -31,12 +39,14 @@ type ListFilters = {
   sort?: string;
 };
 
+// Lightweight rows for the grid — only what a tile needs to render.
+// Full detail is fetched separately (getArtworkDetail) when a tile is opened.
 export async function listArtworks(siteId: string, filters: ListFilters) {
   const { q, availability, visibility, sort } = filters;
 
   const orderBy = {
-    price: sort === "price" ? ("desc" as const) : undefined,
-    title: sort === "title" ? ("asc" as const) : undefined,
+    presentationPrice: sort === "price" ? ("desc" as const) : undefined,
+    presentationTitle: sort === "title" ? ("asc" as const) : undefined,
     createdAt: sort === "price" || sort === "title" ? undefined : ("desc" as const),
   };
 
@@ -46,7 +56,8 @@ export async function listArtworks(siteId: string, filters: ListFilters) {
       ...(q
         ? {
             OR: [
-              { title: { contains: q, mode: "insensitive" as const } },
+              { presentationTitle: { contains: q, mode: "insensitive" as const } },
+              { catalogueName: { contains: q, mode: "insensitive" as const } },
               { catalogueNumber: { contains: q, mode: "insensitive" as const } },
               { medium: { contains: q, mode: "insensitive" as const } },
             ],
@@ -60,44 +71,84 @@ export async function listArtworks(siteId: string, filters: ListFilters) {
         : {}),
     },
     orderBy,
-    include: { images: { take: 1 } },
+    select: {
+      id: true,
+      presentationTitle: true,
+      presentationPrice: true,
+      catalogueNumber: true,
+      availability: true,
+      visible: true,
+      images: { take: 1, select: { url: true } },
+    },
   });
 }
 
-export async function getArtwork(id: string) {
+// Full record for the slide-in detail panel — both facets, all images.
+export async function getArtworkDetail(id: string) {
   return db.artwork.findUnique({
     where: { id },
     include: { images: true },
   });
 }
 
-export async function updateArtwork(id: string, formData: FormData): Promise<void> {
-  const title = (formData.get("title") as string)?.trim();
-  const medium = (formData.get("medium") as string)?.trim() || null;
+export async function updatePresentation(id: string, formData: FormData): Promise<void> {
+  const presentationTitle = (formData.get("presentationTitle") as string)?.trim();
+  const priceRaw = (formData.get("presentationPrice") as string)?.trim();
   const dimensions = (formData.get("dimensions") as string)?.trim() || null;
-  const yearRaw = (formData.get("year") as string)?.trim();
-  const year = yearRaw ? parseInt(yearRaw, 10) : null;
-  const priceRaw = (formData.get("price") as string)?.trim();
+  const description = (formData.get("description") as string)?.trim() || null;
+  const medium = (formData.get("medium") as string)?.trim() || null;
+  const presentationGroup = (formData.get("presentationGroup") as string)?.trim() || null;
   const availability = formData.get("availability") as Availability;
   const visible = formData.get("visible") === "on";
-  const description = (formData.get("description") as string)?.trim() || null;
 
   const artwork = await db.artwork.update({
     where: { id },
     data: {
-      title,
-      medium,
+      presentationTitle,
+      presentationPrice: priceRaw || null,
       dimensions,
-      year,
-      price: priceRaw || null,
+      description,
+      medium,
+      presentationGroup,
       availability,
       visible,
-      description,
     },
   });
 
   revalidatePath(`/sites/${artwork.siteId}/artworks`);
-  revalidatePath(`/sites/${artwork.siteId}/artworks/${id}`);
+}
+
+export async function updateCatalogue(id: string, formData: FormData): Promise<void> {
+  const catalogueName = (formData.get("catalogueName") as string)?.trim();
+  const yearRaw = (formData.get("year") as string)?.trim();
+  const type = (formData.get("type") as string)?.trim() || null;
+  const catalogueGroup = (formData.get("catalogueGroup") as string)?.trim() || null;
+  const size = (formData.get("size") as string)?.trim() || null;
+  const location = (formData.get("location") as string)?.trim() || null;
+  const edition = (formData.get("edition") as string)?.trim() || null;
+  const availableQtyRaw = (formData.get("availableQty") as string)?.trim();
+  const priceUnframedRaw = (formData.get("priceUnframed") as string)?.trim();
+  const priceFramedRaw = (formData.get("priceFramed") as string)?.trim();
+  const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
+
+  const artwork = await db.artwork.update({
+    where: { id },
+    data: {
+      catalogueName,
+      year: yearRaw ? parseInt(yearRaw, 10) : null,
+      type,
+      catalogueGroup,
+      size,
+      location,
+      edition,
+      availableQty: availableQtyRaw ? parseInt(availableQtyRaw, 10) : null,
+      priceUnframed: priceUnframedRaw || null,
+      priceFramed: priceFramedRaw || null,
+      studioNotes,
+    },
+  });
+
+  revalidatePath(`/sites/${artwork.siteId}/artworks`);
 }
 
 export async function deleteArtwork(siteId: string, id: string) {
@@ -112,7 +163,7 @@ export async function linkImagesToArtwork(artworkId: string, imageIds: string[])
     data: { artworkId },
   });
   const artwork = await db.artwork.findUnique({ where: { id: artworkId } });
-  if (artwork) revalidatePath(`/sites/${artwork.siteId}/artworks/${artworkId}`);
+  if (artwork) revalidatePath(`/sites/${artwork.siteId}/artworks`);
 }
 
 export async function unlinkImageFromArtwork(artworkId: string, imageId: string) {
@@ -121,5 +172,5 @@ export async function unlinkImageFromArtwork(artworkId: string, imageId: string)
     data: { artworkId: null },
   });
   const artwork = await db.artwork.findUnique({ where: { id: artworkId } });
-  if (artwork) revalidatePath(`/sites/${artwork.siteId}/artworks/${artworkId}`);
+  if (artwork) revalidatePath(`/sites/${artwork.siteId}/artworks`);
 }
