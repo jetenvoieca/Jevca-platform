@@ -7,8 +7,42 @@ import { redirect } from "next/navigation";
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
 async function nextCatalogueNumber(siteId: string) {
-  const count = await db.artwork.count({ where: { siteId } });
-  return `AW-${String(count + 1).padStart(4, "0")}`;
+  // Based on the highest catalogue number actually in use, not the row
+  // count — count() breaks the moment any artwork is ever deleted, since
+  // the count drops but a surviving artwork can still hold a higher
+  // number, causing the next "count + 1" guess to collide with it.
+  const rows = await db.artwork.findMany({
+    where: { siteId },
+    select: { catalogueNumber: true },
+  });
+  const highest = rows.reduce((max, r) => {
+    const match = r.catalogueNumber.match(/(\d+)$/);
+    const n = match ? parseInt(match[1], 10) : 0;
+    return Math.max(max, n);
+  }, 0);
+  return `AW-${String(highest + 1).padStart(4, "0")}`;
+}
+
+// Wraps a create attempt with a short retry in case two artworks are
+// created at the exact same instant and both compute the same next
+// number — rare, but cheap to guard against.
+async function createArtworkWithRetry(
+  siteId: string,
+  data: { presentationTitle: string; catalogueName: string }
+) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const catalogueNumber = await nextCatalogueNumber(siteId);
+    try {
+      return await db.artwork.create({
+        data: { siteId, catalogueNumber, ...data },
+      });
+    } catch (err: unknown) {
+      const isUniqueViolation =
+        typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
+      if (!isUniqueViolation || attempt === 2) throw err;
+    }
+  }
+  throw new Error("Could not generate a unique catalogue number.");
 }
 
 // "+ New" — a Title is optional. If left blank the record is created as
@@ -19,14 +53,9 @@ async function nextCatalogueNumber(siteId: string) {
 export async function createArtwork(siteId: string, formData: FormData) {
   const title = (formData.get("title") as string)?.trim() || "Untitled";
 
-  const catalogueNumber = await nextCatalogueNumber(siteId);
-  const artwork = await db.artwork.create({
-    data: {
-      siteId,
-      catalogueNumber,
-      presentationTitle: title,
-      catalogueName: title,
-    },
+  const artwork = await createArtworkWithRetry(siteId, {
+    presentationTitle: title,
+    catalogueName: title,
   });
 
   revalidatePath(`/sites/${siteId}/artworks`);
