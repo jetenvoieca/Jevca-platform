@@ -94,19 +94,37 @@ model Page {
 }
 
 model Artwork {
-  id              String              @id @default(cuid())
-  siteId          String
-  site            Site                @relation(fields: [siteId], references: [id])
-  title           String
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id])
+
+  // Catalogue number is the record's identifier — auto-generated, shared by both facets.
   catalogueNumber String
-  medium          String?
-  dimensions      String?
-  year            Int?
-  price           Decimal?            @db.Decimal(10, 2)
-  availability    ArtworkAvailability @default(AVAILABLE)
-  visible         Boolean             @default(true)
-  description     String?
-  images          Image[]
+
+  // --- Presentation facet: what customers see on the public site ---
+  presentationTitle String
+  presentationPrice Decimal?            @db.Decimal(10, 2)
+  dimensions        String?
+  description       String?
+  medium            String?
+  presentationGroup String?
+  availability      ArtworkAvailability @default(AVAILABLE)
+  visible           Boolean             @default(true)
+
+  // --- Catalogue facet: the artist's private working record ---
+  catalogueName  String
+  year           Int?
+  type           String?
+  catalogueGroup String?
+  size           String?
+  location       String?
+  edition        String?
+  availableQty   Int?
+  priceUnframed  Decimal? @db.Decimal(10, 2)
+  priceFramed    Decimal? @db.Decimal(10, 2)
+  studioNotes    String?
+
+  images Image[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
