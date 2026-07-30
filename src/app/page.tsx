@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { db } from "@/lib/db";
 import SitesDirectoryView from "@/components/SitesDirectoryView";
 
@@ -25,12 +26,12 @@ export default async function SitesDirectoryPage({
           <p className="mb-4 text-sm text-neutral-600">
             No sites yet. Add your first one to get started.
           </p>
-          
+          <Link
             href="/sites/new"
             className="inline-block rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
           >
             + Add New Site
-          </a>
+          </Link>
         </div>
       </main>
     );
