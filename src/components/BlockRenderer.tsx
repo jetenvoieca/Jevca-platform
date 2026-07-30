@@ -2,8 +2,8 @@ import type { ContentBlock } from "@/lib/blocks";
 
 type ArtworkData = {
   id: string;
-  title: string;
-  price: unknown;
+  presentationTitle: string;
+  presentationPrice: unknown;
   availability: string;
   images: { url: string }[];
 };
@@ -64,9 +64,9 @@ export default function BlockRenderer({
                 />
               )}
               <div>
-                <h3 className="font-medium text-neutral-900">{artwork.title}</h3>
-                {artwork.price != null && (
-                  <p className="text-sm text-neutral-600">£{String(artwork.price)}</p>
+                <h3 className="font-medium text-neutral-900">{artwork.presentationTitle}</h3>
+                {artwork.presentationPrice != null && (
+                  <p className="text-sm text-neutral-600">£{String(artwork.presentationPrice)}</p>
                 )}
                 <p className="text-xs uppercase text-neutral-400">{artwork.availability}</p>
               </div>
