@@ -69,11 +69,14 @@ export async function listImages(siteId: string, q?: string) {
   });
 }
 
+// Used by the Artwork Feature block picker — reads the Presentation facet,
+// since that's what a page visitor would see (matches the "block pulls in
+// Presentation data" decision in the Artworks Catalogue design).
 export async function getArtworksForSite(siteId: string, q?: string) {
   return db.artwork.findMany({
     where: {
       siteId,
-      ...(q ? { title: { contains: q, mode: "insensitive" } } : {}),
+      ...(q ? { presentationTitle: { contains: q, mode: "insensitive" } } : {}),
     },
     include: { images: { take: 1 } },
     orderBy: { createdAt: "desc" },
@@ -93,7 +96,12 @@ export async function quickCreateArtwork(siteId: string, title: string) {
   const catalogueNumber = await nextCatalogueNumber(siteId);
 
   const artwork = await db.artwork.create({
-    data: { siteId, title: trimmed, catalogueNumber },
+    data: {
+      siteId,
+      catalogueNumber,
+      presentationTitle: trimmed,
+      catalogueName: trimmed,
+    },
   });
 
   revalidatePath(`/sites/${siteId}`);
