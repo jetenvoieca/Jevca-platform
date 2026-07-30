@@ -65,26 +65,9 @@ export default function ArtworksCatalogueView({
 
   return (
     <div>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
-        <form action={createArtwork.bind(null, siteId)} className="flex items-center gap-2">
-          <input
-            type="text"
-            name="title"
-            required
-            placeholder="New artwork title"
-            className="w-48 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-          />
-          <button
-            type="submit"
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
-          >
-            + New
-          </button>
-        </form>
-      </div>
+      <h1 className="mb-3 text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex gap-2">
           <Link
             href={chipHref("")}
@@ -124,7 +107,7 @@ export default function ArtworksCatalogueView({
             name="q"
             defaultValue={q}
             placeholder="Search title, catalogue #, medium"
-            className="w-56 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+            className="w-48 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
           />
           <input type="hidden" name="availability" value={availability} />
           <select
@@ -153,47 +136,61 @@ export default function ArtworksCatalogueView({
           </button>
         </form>
 
-        <div className="flex items-center gap-3">
-          <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-            <button
-              type="button"
-              onClick={() => setView("tile")}
-              className={`px-3 py-1.5 ${
-                view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-              }`}
-            >
-              Tile
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("list")}
-              className={`px-3 py-1.5 ${
-                view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-              }`}
-            >
-              List
-            </button>
-          </div>
-          {view === "tile" && (
-            <div className="flex items-center gap-1 text-sm text-neutral-500">
-              <span>Per row</span>
-              {DENSITY_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setDensityAndStore(n)}
-                  className={`h-7 w-7 rounded-md text-sm ${
-                    density === n
-                      ? "bg-neutral-900 text-white"
-                      : "border border-neutral-300 hover:bg-neutral-50"
-                  }`}
-                >
-                  {n}
-                </button>
-              ))}
-            </div>
-          )}
+        <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+          <button
+            type="button"
+            onClick={() => setView("tile")}
+            className={`px-3 py-1.5 ${
+              view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+            }`}
+          >
+            Tile
+          </button>
+          <button
+            type="button"
+            onClick={() => setView("list")}
+            className={`px-3 py-1.5 ${
+              view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+            }`}
+          >
+            List
+          </button>
         </div>
+
+        {view === "tile" && (
+          <div className="flex items-center gap-1 text-sm text-neutral-500">
+            <span>Per row</span>
+            {DENSITY_OPTIONS.map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setDensityAndStore(n)}
+                className={`h-7 w-7 rounded-md text-sm ${
+                  density === n
+                    ? "bg-neutral-900 text-white"
+                    : "border border-neutral-300 hover:bg-neutral-50"
+                }`}
+              >
+                {n}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <form action={createArtwork.bind(null, siteId)} className="ml-auto flex items-center gap-2">
+          <input
+            type="text"
+            name="title"
+            placeholder="Untitled (optional)"
+            className="w-40 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+          />
+          <button
+            type="submit"
+            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+          >
+            + New
+          </button>
+        </form>
       </div>
 
       <p className="mb-4 text-sm text-neutral-400">
