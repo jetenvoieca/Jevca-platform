@@ -24,10 +24,9 @@ export default async function ArtworksCataloguePage({
 
   const rows = artworks.map((a) => ({
     id: a.id,
-    title: a.title,
+    presentationTitle: a.presentationTitle,
+    presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
     catalogueNumber: a.catalogueNumber,
-    medium: a.medium,
-    price: a.price != null ? a.price.toString() : null,
     availability: a.availability,
     visible: a.visible,
     imageUrl: a.images[0]?.url ?? null,
@@ -41,6 +40,7 @@ export default async function ArtworksCataloguePage({
       availability={sp.availability || ""}
       visibility={sp.visibility || ""}
       sort={sp.sort || ""}
+      selected={null}
     />
   );
 }
