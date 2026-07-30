@@ -11,12 +11,13 @@ async function nextCatalogueNumber(siteId: string) {
   return `AW-${String(count + 1).padStart(4, "0")}`;
 }
 
-// "+ Add New Artwork" — minimum entry is a Title. That single value seeds
-// both facets (presentationTitle and catalogueName) as a starting point;
-// from this point on the two are independent.
+// "+ New" — a Title is optional. If left blank the record is created as
+// "Untitled" so you can jump straight in and upload an image first, name
+// it later. Whatever title it ends up with seeds both facets
+// (presentationTitle and catalogueName) as a starting point; from this
+// point on the two are independent.
 export async function createArtwork(siteId: string, formData: FormData) {
-  const title = (formData.get("title") as string)?.trim();
-  if (!title) return;
+  const title = (formData.get("title") as string)?.trim() || "Untitled";
 
   const catalogueNumber = await nextCatalogueNumber(siteId);
   const artwork = await db.artwork.create({
