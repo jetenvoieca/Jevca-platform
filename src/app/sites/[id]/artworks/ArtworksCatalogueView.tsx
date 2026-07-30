@@ -200,93 +200,112 @@ export default function ArtworksCatalogueView({
         {artworks.length} work{artworks.length === 1 ? "" : "s"} · {soldCount} sold
       </p>
 
-      {artworks.length === 0 ? (
-        <p className="text-sm text-neutral-500">No artworks match.</p>
-      ) : view === "tile" ? (
-        <div
-          className="grid gap-3"
-          style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
-        >
-          {artworks.map((a) => (
-            <Link
-              key={a.id}
-              href={`/sites/${siteId}/artworks/${a.id}`}
-              className={`block rounded-md border-2 p-1 ${
-                selected?.id === a.id ? "border-neutral-900" : "border-transparent"
-              }`}
+      <div
+        className={selected ? "grid items-start gap-6" : ""}
+        style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
+      >
+        <div>
+          {artworks.length === 0 ? (
+            <p className="text-sm text-neutral-500">No artworks match.</p>
+          ) : view === "tile" ? (
+            <div
+              className="grid gap-3"
+              style={{
+                gridTemplateColumns: `repeat(${selected ? Math.max(2, density - 2) : density}, minmax(0, 1fr))`,
+              }}
             >
-              <div className="relative">
-                {a.imageUrl ? (
-                  <img
-                    src={a.imageUrl}
-                    alt=""
-                    className="aspect-square w-full rounded-md object-cover"
-                  />
-                ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                    No image
-                  </div>
-                )}
-                {a.availability === "SOLD" && (
-                  <span className="absolute right-1.5 top-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
-                    Sold
-                  </span>
-                )}
-              </div>
-              <p className="mt-1 truncate text-sm font-medium text-neutral-900">
-                {a.presentationTitle}
-              </p>
-              <p className="text-xs text-neutral-500">
-                {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
-              </p>
-            </Link>
-          ))}
-        </div>
-      ) : (
-        <table className="w-full border-collapse text-sm">
-          <thead>
-            <tr className="border-b border-neutral-200 text-left text-neutral-500">
-              <th className="py-2 font-medium"></th>
-              <th className="py-2 font-medium">Title</th>
-              <th className="py-2 font-medium">Catalogue #</th>
-              <th className="py-2 font-medium">Price</th>
-              <th className="py-2 font-medium">Availability</th>
-              <th className="py-2 font-medium">Visibility</th>
-            </tr>
-          </thead>
-          <tbody>
-            {artworks.map((a) => (
-              <tr
-                key={a.id}
-                className={`border-b border-neutral-100 ${
-                  selected?.id === a.id ? "bg-neutral-100" : "hover:bg-neutral-50"
-                }`}
-              >
-                <td className="py-2">
-                  <Link href={`/sites/${siteId}/artworks/${a.id}`}>
+              {artworks.map((a) => (
+                <Link
+                  key={a.id}
+                  href={`/sites/${siteId}/artworks/${a.id}`}
+                  className={`block rounded-md border-2 p-1 ${
+                    selected?.id === a.id ? "border-neutral-900" : "border-transparent"
+                  }`}
+                >
+                  <div className="relative">
                     {a.imageUrl ? (
-                      <img src={a.imageUrl} alt="" className="h-10 w-10 rounded object-cover" />
+                      <img
+                        src={a.imageUrl}
+                        alt=""
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
                     ) : (
-                      <div className="h-10 w-10 rounded bg-neutral-100" />
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
+                        No image
+                      </div>
                     )}
-                  </Link>
-                </td>
-                <td className="py-2 font-medium text-neutral-900">
-                  <Link href={`/sites/${siteId}/artworks/${a.id}`}>{a.presentationTitle}</Link>
-                </td>
-                <td className="py-2 text-neutral-500">{a.catalogueNumber}</td>
-                <td className="py-2 text-neutral-500">
-                  {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
-                </td>
-                <td className="py-2 text-neutral-500">{a.availability}</td>
-                <td className="py-2 text-neutral-500">{a.visible ? "Shown" : "Hidden"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
+                    {a.availability === "SOLD" && (
+                      <span className="absolute right-1.5 top-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
+                        Sold
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 truncate text-sm font-medium text-neutral-900">
+                    {a.presentationTitle}
+                  </p>
+                  <p className="text-xs text-neutral-500">
+                    {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
+                  </p>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                  <th className="py-2 font-medium"></th>
+                  <th className="py-2 font-medium">Title</th>
+                  <th className="py-2 font-medium">Catalogue #</th>
+                  <th className="py-2 font-medium">Price</th>
+                  <th className="py-2 font-medium">Availability</th>
+                  <th className="py-2 font-medium">Visibility</th>
+                </tr>
+              </thead>
+              <tbody>
+                {artworks.map((a) => (
+                  <tr
+                    key={a.id}
+                    className={`border-b border-neutral-100 ${
+                      selected?.id === a.id ? "bg-neutral-100" : "hover:bg-neutral-50"
+                    }`}
+                  >
+                    <td className="py-2">
+                      <Link href={`/sites/${siteId}/artworks/${a.id}`}>
+                        {a.imageUrl ? (
+                          <img
+                            src={a.imageUrl}
+                            alt=""
+                            className="h-10 w-10 rounded object-cover"
+                          />
+                        ) : (
+                          <div className="h-10 w-10 rounded bg-neutral-100" />
+                        )}
+                      </Link>
+                    </td>
+                    <td className="py-2 font-medium text-neutral-900">
+                      <Link href={`/sites/${siteId}/artworks/${a.id}`}>
+                        {a.presentationTitle}
+                      </Link>
+                    </td>
+                    <td className="py-2 text-neutral-500">{a.catalogueNumber}</td>
+                    <td className="py-2 text-neutral-500">
+                      {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
+                    </td>
+                    <td className="py-2 text-neutral-500">{a.availability}</td>
+                    <td className="py-2 text-neutral-500">{a.visible ? "Shown" : "Hidden"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
 
-      {selected && <ArtworkDetailPanel siteId={siteId} artwork={selected} />}
+        {selected && (
+          <div className="sticky top-4">
+            <ArtworkDetailPanel siteId={siteId} artwork={selected} />
+          </div>
+        )}
+      </div>
     </div>
   );
 }
