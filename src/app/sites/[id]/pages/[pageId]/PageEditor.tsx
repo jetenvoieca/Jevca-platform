@@ -233,9 +233,9 @@ export default function PageEditor({
                       onSelect={(a) =>
                         updateBlock(block.id, {
                           artworkId: a.id,
-                          previewTitle: a.title,
+                          previewTitle: a.presentationTitle,
                           previewImageUrl: a.imageUrl || undefined,
-                          previewPrice: a.price,
+                          previewPrice: a.presentationPrice,
                           previewAvailability: a.availability,
                         })
                       }
