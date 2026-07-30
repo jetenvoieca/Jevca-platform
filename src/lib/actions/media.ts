@@ -85,25 +85,42 @@ export async function getArtworksForSite(siteId: string, q?: string) {
 }
 
 async function nextCatalogueNumber(siteId: string) {
-  const count = await db.artwork.count({ where: { siteId } });
-  return `AW-${String(count + 1).padStart(4, "0")}`;
+  // See src/lib/actions/artworks.ts for why this is based on the highest
+  // existing number rather than a row count.
+  const rows = await db.artwork.findMany({
+    where: { siteId },
+    select: { catalogueNumber: true },
+  });
+  const highest = rows.reduce((max, r) => {
+    const match = r.catalogueNumber.match(/(\d+)$/);
+    const n = match ? parseInt(match[1], 10) : 0;
+    return Math.max(max, n);
+  }, 0);
+  return `AW-${String(highest + 1).padStart(4, "0")}`;
 }
 
 export async function quickCreateArtwork(siteId: string, title: string) {
   const trimmed = title.trim();
   if (!trimmed) return { error: "Title is required." };
 
-  const catalogueNumber = await nextCatalogueNumber(siteId);
-
-  const artwork = await db.artwork.create({
-    data: {
-      siteId,
-      catalogueNumber,
-      presentationTitle: trimmed,
-      catalogueName: trimmed,
-    },
-  });
-
-  revalidatePath(`/sites/${siteId}`);
-  return { artwork };
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const catalogueNumber = await nextCatalogueNumber(siteId);
+    try {
+      const artwork = await db.artwork.create({
+        data: {
+          siteId,
+          catalogueNumber,
+          presentationTitle: trimmed,
+          catalogueName: trimmed,
+        },
+      });
+      revalidatePath(`/sites/${siteId}`);
+      return { artwork };
+    } catch (err: unknown) {
+      const isUniqueViolation =
+        typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
+      if (!isUniqueViolation || attempt === 2) throw err;
+    }
+  }
+  throw new Error("Could not generate a unique catalogue number.");
 }
