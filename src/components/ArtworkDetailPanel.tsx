@@ -55,10 +55,12 @@ function withCurrent(presets: string[], current: string | null) {
 
 export default function ArtworkDetailPanel({
   siteId,
+  artistId,
   artwork,
   settings,
 }: {
   siteId: string;
+  artistId: string;
   artwork: ArtworkDetail;
   settings: ArtworkSettings;
 }) {
@@ -124,7 +126,7 @@ export default function ArtworkDetailPanel({
           </div>
         )}
         <MediaPicker
-          siteId={siteId}
+          artistId={artistId}
           mode="multi"
           label="Link Images"
           onSelect={(imgs) => {
