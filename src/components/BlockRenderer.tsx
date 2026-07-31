@@ -73,6 +73,32 @@ export default function BlockRenderer({
             </div>
           );
         }
+        if (block.type === "textgrid") {
+          const rows = block.rows.filter((r) => r.cell1 || r.cell2 || r.cell3);
+          if (rows.length === 0) return null;
+          return (
+            <table key={block.id} className="w-full border-collapse text-left text-sm">
+              <thead>
+                <tr className="border-b border-neutral-300">
+                  {block.columns.map((col, i) => (
+                    <th key={i} className="py-2 pr-4 font-medium text-neutral-500">
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((row) => (
+                  <tr key={row.id} className="border-b border-neutral-100">
+                    <td className="py-2 pr-4 text-neutral-800">{row.cell1}</td>
+                    <td className="py-2 pr-4 text-neutral-800">{row.cell2}</td>
+                    <td className="py-2 pr-4 text-neutral-800">{row.cell3}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          );
+        }
         return null;
       })}
     </div>
