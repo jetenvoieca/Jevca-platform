@@ -88,158 +88,162 @@ export default function ArtworksCatalogueView({
 
   return (
     <div className="px-6 py-4">
-      <h1 className="mb-3 text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
-
       <div
         className={selected ? "grid items-start gap-6" : ""}
         style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
       >
         <div>
-          {/* Everything below is one consolidated row — keeps the grid and
-              detail panel starting as close to the top as possible. */}
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-        <div className="flex gap-2">
-          <Link
-            href={chipHref("")}
-            className={`rounded-full px-3 py-1.5 text-sm ${
-              !availability
-                ? "bg-neutral-900 text-white"
-                : "border border-neutral-300 hover:bg-neutral-50"
-            }`}
-          >
-            All
-          </Link>
-          <Link
-            href={chipHref("AVAILABLE")}
-            className={`rounded-full px-3 py-1.5 text-sm ${
-              availability === "AVAILABLE"
-                ? "bg-neutral-900 text-white"
-                : "border border-neutral-300 hover:bg-neutral-50"
-            }`}
-          >
-            Available
-          </Link>
-          <Link
-            href={chipHref("SOLD")}
-            className={`rounded-full px-3 py-1.5 text-sm ${
-              availability === "SOLD"
-                ? "bg-neutral-900 text-white"
-                : "border border-neutral-300 hover:bg-neutral-50"
-            }`}
-          >
-            Sold
-          </Link>
-        </div>
+          {/* Row 1: title + view controls, together since they both govern
+              how the whole catalogue displays. */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
-        <form method="get" className="flex flex-wrap items-center gap-2">
-          <input
-            type="text"
-            name="q"
-            defaultValue={q}
-            placeholder="Search title, catalogue #, medium"
-            className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-          />
-          <input type="hidden" name="availability" value={availability} />
-          <select
-            name="location"
-            defaultValue={location}
-            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">All locations</option>
-            {settings.artworkLocations.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <select
-            name="type"
-            defaultValue={type}
-            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">All types</option>
-            {settings.artworkTypes.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
-          <select
-            name="group"
-            defaultValue={group}
-            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">All groups</option>
-            {settings.artworkGroups.map((g) => (
-              <option key={g} value={g}>
-                {g}
-              </option>
-            ))}
-          </select>
-          <select
-            name="sort"
-            defaultValue={sort}
-            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">Sort: Date added</option>
-            <option value="title">Sort: Title</option>
-            <option value="price">Sort: Price</option>
-          </select>
-          <button
-            type="submit"
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-          >
-            Apply
-          </button>
-        </form>
-
-        <div className="ml-auto flex items-center gap-3">
-          <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-            <button
-              type="button"
-              onClick={() => setView("tile")}
-              className={`px-3 py-1.5 ${
-                view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-              }`}
-            >
-              Tile
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("list")}
-              className={`px-3 py-1.5 ${
-                view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-              }`}
-            >
-              List
-            </button>
-          </div>
-
-          {view === "tile" && (
-            <div className="flex items-center gap-1 text-sm text-neutral-500">
-              <span>Per row</span>
-              {DENSITY_OPTIONS.map((n) => (
+            <div className="flex items-center gap-3">
+              <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
                 <button
-                  key={n}
                   type="button"
-                  onClick={() => setDensityAndStore(n)}
-                  className={`h-7 w-7 rounded-md text-sm ${
-                    density === n
-                      ? "bg-neutral-900 text-white"
-                      : "border border-neutral-300 hover:bg-neutral-50"
+                  onClick={() => setView("tile")}
+                  className={`px-3 py-1.5 ${
+                    view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
                   }`}
                 >
-                  {n}
+                  Tile
                 </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
+                <button
+                  type="button"
+                  onClick={() => setView("list")}
+                  className={`px-3 py-1.5 ${
+                    view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                  }`}
+                >
+                  List
+                </button>
+              </div>
 
-      <p className="mb-3 text-sm text-neutral-400">
-        {artworks.length} work{artworks.length === 1 ? "" : "s"} · {soldCount} sold
-      </p>
+              {view === "tile" && (
+                <div className="flex items-center gap-1 text-sm text-neutral-500">
+                  <span>Per row</span>
+                  {DENSITY_OPTIONS.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setDensityAndStore(n)}
+                      className={`h-7 w-7 rounded-md text-sm ${
+                        density === n
+                          ? "bg-neutral-900 text-white"
+                          : "border border-neutral-300 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: filtering/search — a separate functional group from
+              the view controls above. */}
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <div className="flex gap-2">
+              <Link
+                href={chipHref("")}
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  !availability
+                    ? "bg-neutral-900 text-white"
+                    : "border border-neutral-300 hover:bg-neutral-50"
+                }`}
+              >
+                All
+              </Link>
+              <Link
+                href={chipHref("AVAILABLE")}
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  availability === "AVAILABLE"
+                    ? "bg-neutral-900 text-white"
+                    : "border border-neutral-300 hover:bg-neutral-50"
+                }`}
+              >
+                Available
+              </Link>
+              <Link
+                href={chipHref("SOLD")}
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  availability === "SOLD"
+                    ? "bg-neutral-900 text-white"
+                    : "border border-neutral-300 hover:bg-neutral-50"
+                }`}
+              >
+                Sold
+              </Link>
+            </div>
+
+            <form method="get" className="flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="Search title, catalogue #, medium"
+                className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+              />
+              <input type="hidden" name="availability" value={availability} />
+              <select
+                name="location"
+                defaultValue={location}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">All locations</option>
+                {settings.artworkLocations.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+              <select
+                name="type"
+                defaultValue={type}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">All types</option>
+                {settings.artworkTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <select
+                name="group"
+                defaultValue={group}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">All groups</option>
+                {settings.artworkGroups.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+              <select
+                name="sort"
+                defaultValue={sort}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">Sort: Date added</option>
+                <option value="title">Sort: Title</option>
+                <option value="price">Sort: Price</option>
+              </select>
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                Apply
+              </button>
+            </form>
+          </div>
+
+          <p className="mb-3 text-sm text-neutral-400">
+            {artworks.length} work{artworks.length === 1 ? "" : "s"} · {soldCount} sold
+          </p>
 
           {view === "tile" ? (
             <div
