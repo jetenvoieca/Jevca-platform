@@ -10,9 +10,12 @@ export type SettingsField =
   | "mediumPresets"
   | "sizePresets";
 
-export async function getArtworkSettings(siteId: string) {
-  const site = await db.site.findUnique({
-    where: { id: siteId },
+// These presets belong to the Artist now (same reasoning as Artwork
+// ownership) — shared across all of that artist's sites, not duplicated
+// per site.
+export async function getArtworkSettings(artistId: string) {
+  const artist = await db.artist.findUnique({
+    where: { id: artistId },
     select: {
       artworkGroups: true,
       artworkTypes: true,
@@ -22,7 +25,7 @@ export async function getArtworkSettings(siteId: string) {
     },
   });
   return (
-    site || {
+    artist || {
       artworkGroups: [],
       artworkTypes: [],
       artworkLocations: [],
@@ -34,25 +37,33 @@ export async function getArtworkSettings(siteId: string) {
 
 // Deliberately not using a computed key (e.g. `select: { [field]: true }`)
 // anywhere here — Prisma can't type that precisely against a variable field
-// name, since it has to allow for every possible key on Site including
-// relations like `menus`, and TypeScript then refuses a plain `as string[]`
+// name, since it has to allow for every possible key on Artist including
+// relations like `sites`, and TypeScript then refuses a plain `as string[]`
 // cast. Writing out each field explicitly keeps everything properly typed.
-async function updateList(siteId: string, field: SettingsField, next: string[]) {
+// `siteId` is passed through only so the calling screen (reached via a
+// particular site) revalidates correctly — it's not part of what's being
+// updated.
+async function updateList(
+  artistId: string,
+  siteId: string,
+  field: SettingsField,
+  next: string[]
+) {
   switch (field) {
     case "artworkGroups":
-      await db.site.update({ where: { id: siteId }, data: { artworkGroups: next } });
+      await db.artist.update({ where: { id: artistId }, data: { artworkGroups: next } });
       break;
     case "artworkTypes":
-      await db.site.update({ where: { id: siteId }, data: { artworkTypes: next } });
+      await db.artist.update({ where: { id: artistId }, data: { artworkTypes: next } });
       break;
     case "artworkLocations":
-      await db.site.update({ where: { id: siteId }, data: { artworkLocations: next } });
+      await db.artist.update({ where: { id: artistId }, data: { artworkLocations: next } });
       break;
     case "mediumPresets":
-      await db.site.update({ where: { id: siteId }, data: { mediumPresets: next } });
+      await db.artist.update({ where: { id: artistId }, data: { mediumPresets: next } });
       break;
     case "sizePresets":
-      await db.site.update({ where: { id: siteId }, data: { sizePresets: next } });
+      await db.artist.update({ where: { id: artistId }, data: { sizePresets: next } });
       break;
   }
   revalidatePath(`/sites/${siteId}/artworks/settings`);
@@ -60,19 +71,25 @@ async function updateList(siteId: string, field: SettingsField, next: string[]) 
 }
 
 export async function addSettingOption(
+  artistId: string,
   siteId: string,
   field: SettingsField,
   formData: FormData
 ) {
   const value = (formData.get("value") as string)?.trim();
   if (!value) return;
-  const settings = await getArtworkSettings(siteId);
+  const settings = await getArtworkSettings(artistId);
   const current = settings[field].filter((v) => v.toLowerCase() !== value.toLowerCase());
-  await updateList(siteId, field, [...current, value]);
+  await updateList(artistId, siteId, field, [...current, value]);
 }
 
-export async function removeSettingOption(siteId: string, field: SettingsField, value: string) {
-  const settings = await getArtworkSettings(siteId);
+export async function removeSettingOption(
+  artistId: string,
+  siteId: string,
+  field: SettingsField,
+  value: string
+) {
+  const settings = await getArtworkSettings(artistId);
   const current = settings[field].filter((v) => v !== value);
-  await updateList(siteId, field, current);
+  await updateList(artistId, siteId, field, current);
 }
