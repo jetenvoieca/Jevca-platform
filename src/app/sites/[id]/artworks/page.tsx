@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import { listArtworks } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import ArtworksCatalogueView from "./ArtworksCatalogueView";
@@ -23,9 +24,12 @@ export default async function ArtworksCataloguePage({
   const { id } = await params;
   const sp = await searchParams;
 
+  const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
+  const artistId = site!.artistId;
+
   const [artworks, settings] = await Promise.all([
-    listArtworks(id, sp),
-    getArtworkSettings(id),
+    listArtworks(artistId, sp),
+    getArtworkSettings(artistId),
   ]);
 
   const rows = artworks.map((a) => ({
@@ -40,6 +44,7 @@ export default async function ArtworksCataloguePage({
   return (
     <ArtworksCatalogueView
       siteId={id}
+      artistId={artistId}
       artworks={rows}
       q={sp.q || ""}
       availability={sp.availability || ""}
