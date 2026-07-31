@@ -17,7 +17,9 @@ export default function SiteNavPanel({
   const pathname = usePathname();
   const [adding, setAdding] = useState(false);
 
-  const artworksActive = pathname.startsWith(`/sites/${siteId}/artworks`);
+  const settingsActive = pathname === `/sites/${siteId}/artworks/settings`;
+  const artworksActive =
+    pathname.startsWith(`/sites/${siteId}/artworks`) && !settingsActive;
 
   return (
     <nav className="flex flex-col gap-1 text-sm">
@@ -114,6 +116,16 @@ export default function SiteNavPanel({
         }`}
       >
         Artwork Catalogue
+      </Link>
+      <Link
+        href={`/sites/${siteId}/artworks/settings`}
+        className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
+          settingsActive
+            ? "bg-neutral-200 font-medium text-neutral-900"
+            : "text-neutral-500 hover:bg-neutral-100"
+        }`}
+      >
+        Settings
       </Link>
 
       <span className="cursor-not-allowed rounded-md px-3 py-2 text-neutral-300">
