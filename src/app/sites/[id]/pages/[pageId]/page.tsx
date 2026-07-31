@@ -10,12 +10,21 @@ export default async function PageEditorPage({
 }) {
   const { id, pageId } = await params;
 
-  const page = await db.page.findUnique({ where: { id: pageId } });
-  if (!page || page.siteId !== id) notFound();
+  const [page, site] = await Promise.all([
+    db.page.findUnique({ where: { id: pageId } }),
+    db.site.findUnique({ where: { id }, select: { artistId: true } }),
+  ]);
+  if (!page || page.siteId !== id || !site) notFound();
 
   const blocks = (page.draftBlocks as unknown as ContentBlock[]) || [];
 
   return (
-    <PageEditor siteId={id} pageId={page.id} pageTitle={page.title} initialBlocks={blocks} />
+    <PageEditor
+      siteId={id}
+      artistId={site.artistId}
+      pageId={page.id}
+      pageTitle={page.title}
+      initialBlocks={blocks}
+    />
   );
 }
