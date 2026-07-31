@@ -11,11 +11,13 @@ import type { ContentBlock } from "@/lib/blocks";
 
 export default function PageEditor({
   siteId,
+  artistId,
   pageId,
   pageTitle,
   initialBlocks,
 }: {
   siteId: string;
+  artistId: string;
   pageId: string;
   pageTitle: string;
   initialBlocks: ContentBlock[];
@@ -229,7 +231,7 @@ export default function PageEditor({
                       </div>
                     )}
                     <ArtworkPicker
-                      siteId={siteId}
+                      artistId={artistId}
                       onSelect={(a) =>
                         updateBlock(block.id, {
                           artworkId: a.id,
