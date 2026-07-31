@@ -64,6 +64,13 @@ model Artist {
   artworkLocations String[] @default([])
   mediumPresets    String[] @default([])
   sizePresets      String[] @default([])
+
+  // Preset tag list for the Media Catalogue's Settings screen — used for
+  // tagging Marketing media (Related media is found via its linked
+  // artwork instead, so doesn't need tags).
+  mediaTags String[] @default([])
+
+  images Image[]
 }
 
 model Site {
@@ -77,9 +84,8 @@ model Site {
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 
-  pages  Page[]
-  images Image[]
-  menus  Menu[]
+  pages Page[]
+  menus Menu[]
 
   @@index([artistId])
 }
@@ -206,9 +212,9 @@ model Artwork {
 }
 
 model Image {
-  id        String      @id @default(cuid())
-  siteId    String
-  site      Site        @relation(fields: [siteId], references: [id])
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
   key       String
   url       String
   kind      ImageKind   @default(PHOTO)
@@ -224,6 +230,6 @@ model Image {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([siteId])
+  @@index([artistId])
   @@index([artworkId])
 }
