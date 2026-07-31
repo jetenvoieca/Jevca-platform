@@ -70,6 +70,16 @@ model Site {
   images   Image[]
   menus    Menu[]
 
+  // Preset option lists for the Artwork Catalogue's Settings screen — kept
+  // as simple string arrays rather than separate tables, since they're just
+  // curated lists of text the artwork editor's dropdowns offer, not records
+  // with their own identity or relations.
+  artworkGroups    String[] @default([])
+  artworkTypes     String[] @default([])
+  artworkLocations String[] @default([])
+  mediumPresets    String[] @default([])
+  sizePresets      String[] @default([])
+
   @@index([artistId])
 }
 
