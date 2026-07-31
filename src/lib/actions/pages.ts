@@ -51,6 +51,25 @@ export async function createPage(siteId: string, formData: FormData) {
   redirect(`/sites/${siteId}/pages/${page.id}`);
 }
 
+// Used by the delete-confirmation prompt, so it can warn accurately
+// ("used in 2 menu placements") rather than a generic guess.
+export async function menuItemCountForPage(pageId: string) {
+  return db.menuItem.count({ where: { pageId } });
+}
+
+// Page has no cascade delete for MenuItems that reference it (a MenuItem's
+// own label/byline are independent of the Page, so losing the Page
+// shouldn't silently corrupt a saved Menu) — so any placements are removed
+// explicitly here, in the same transaction as the Page itself.
+export async function deletePage(siteId: string, pageId: string) {
+  await db.$transaction([
+    db.menuItem.deleteMany({ where: { pageId } }),
+    db.page.delete({ where: { id: pageId } }),
+  ]);
+  revalidatePath(`/sites/${siteId}`);
+  redirect(`/sites/${siteId}`);
+}
+
 export async function saveDraftBlocks(pageId: string, blocks: unknown) {
   const page = await db.page.update({
     where: { id: pageId },
