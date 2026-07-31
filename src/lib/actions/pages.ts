@@ -51,6 +51,14 @@ export async function createPage(siteId: string, formData: FormData) {
   redirect(`/sites/${siteId}/pages/${page.id}`);
 }
 
+// The visible toggle lets a page be built/edited in readiness without it
+// counting as "ready" — doesn't affect Draft/Publish (that's still about
+// content changes), just whether the page is meant to be found/shown yet.
+export async function updatePageVisibility(pageId: string, siteId: string, visible: boolean) {
+  await db.page.update({ where: { id: pageId }, data: { visible } });
+  revalidatePath(`/sites/${siteId}`);
+}
+
 // Renaming deliberately leaves the slug untouched — changing it would break
 // any existing links/menu placements pointing at this page's URL.
 export async function updatePageTitle(
