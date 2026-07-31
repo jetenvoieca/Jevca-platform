@@ -95,6 +95,14 @@ export default function PageEditor({
       case "video":
         newBlock = { id, type: "video", imageId: "", url: "" };
         break;
+      case "textgrid":
+        newBlock = {
+          id,
+          type: "textgrid",
+          columns: ["Year", "Exhibition", "Location"],
+          rows: [{ id: crypto.randomUUID(), cell1: "", cell2: "", cell3: "" }],
+        };
+        break;
     }
     setBlocks((prev) => [...prev, newBlock]);
   };
@@ -299,6 +307,98 @@ export default function PageEditor({
                     />
                   </div>
                 )}
+
+                {block.type === "textgrid" && (
+                  <div>
+                    <p className="mb-2 text-xs text-neutral-400">
+                      Column headers — e.g. Year / Exhibition / Location
+                    </p>
+                    <div className="mb-3 grid grid-cols-3 gap-2">
+                      {block.columns.map((col, ci) => (
+                        <input
+                          key={ci}
+                          type="text"
+                          value={col}
+                          onChange={(e) => {
+                            const next = [...block.columns] as [string, string, string];
+                            next[ci] = e.target.value;
+                            updateBlock(block.id, { columns: next });
+                          }}
+                          className="rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium"
+                        />
+                      ))}
+                    </div>
+
+                    <div className="space-y-2">
+                      {block.rows.map((row) => (
+                        <div key={row.id} className="flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={row.cell1}
+                            onChange={(e) =>
+                              updateBlock(block.id, {
+                                rows: block.rows.map((r) =>
+                                  r.id === row.id ? { ...r, cell1: e.target.value } : r
+                                ),
+                              })
+                            }
+                            className="w-1/4 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={row.cell2}
+                            onChange={(e) =>
+                              updateBlock(block.id, {
+                                rows: block.rows.map((r) =>
+                                  r.id === row.id ? { ...r, cell2: e.target.value } : r
+                                ),
+                              })
+                            }
+                            className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                          />
+                          <input
+                            type="text"
+                            value={row.cell3}
+                            onChange={(e) =>
+                              updateBlock(block.id, {
+                                rows: block.rows.map((r) =>
+                                  r.id === row.id ? { ...r, cell3: e.target.value } : r
+                                ),
+                              })
+                            }
+                            className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              updateBlock(block.id, {
+                                rows: block.rows.filter((r) => r.id !== row.id),
+                              })
+                            }
+                            className="shrink-0 px-1 text-neutral-400 hover:text-red-600"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        updateBlock(block.id, {
+                          rows: [
+                            ...block.rows,
+                            { id: crypto.randomUUID(), cell1: "", cell2: "", cell3: "" },
+                          ],
+                        })
+                      }
+                      className="mt-2 rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
+                    >
+                      + Add Row
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
@@ -355,6 +455,13 @@ export default function PageEditor({
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
               >
                 + Video
+              </button>
+              <button
+                type="button"
+                onClick={() => addBlock("textgrid")}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
+              >
+                + Text Grid
               </button>
             </div>
           </div>
