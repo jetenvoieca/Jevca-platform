@@ -312,7 +312,11 @@ async function handleFileUpload(
 ) {
   const formData = new FormData();
   formData.set("file", file);
-  await uploadImage(artistId, formData);
+  const result = await uploadImage(artistId, formData);
+  if (result.error) {
+    alert(result.error);
+    return;
+  }
   window.location.href = `/sites/${siteId}/media`;
 }
 
