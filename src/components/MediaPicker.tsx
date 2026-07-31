@@ -6,13 +6,13 @@ import { listImages, uploadImage } from "@/lib/actions/media";
 type PickedImage = { id: string; url: string; caption: string | null; kind: string };
 
 export default function MediaPicker({
-  siteId,
+  artistId,
   mode = "single",
   videoOnly = false,
   label = "Choose Image",
   onSelect,
 }: {
-  siteId: string;
+  artistId: string;
   mode?: "single" | "multi";
   videoOnly?: boolean;
   label?: string;
@@ -28,7 +28,7 @@ export default function MediaPicker({
 
   const load = (q: string) => {
     startTransition(async () => {
-      const results = await listImages(siteId, q || undefined);
+      const results = await listImages(artistId, q || undefined);
       setImages(
         results
           .filter((img) => (videoOnly ? img.kind === "VIDEO" : img.kind === "PHOTO"))
@@ -48,7 +48,7 @@ export default function MediaPicker({
     const formData = new FormData();
     formData.set("file", file);
     startTransition(async () => {
-      const result = await uploadImage(siteId, formData);
+      const result = await uploadImage(artistId, formData);
       if (result.error) {
         setUploadError(result.error);
         return;
