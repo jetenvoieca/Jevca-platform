@@ -3,7 +3,10 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createArtwork } from "@/lib/actions/artworks";
-import ArtworkDetailPanel, { type ArtworkDetail } from "@/components/ArtworkDetailPanel";
+import ArtworkDetailPanel, {
+  type ArtworkDetail,
+  type ArtworkSettings,
+} from "@/components/ArtworkDetailPanel";
 
 type ArtworkRow = {
   id: string;
@@ -11,7 +14,6 @@ type ArtworkRow = {
   presentationPrice: string | null;
   catalogueNumber: string;
   availability: string;
-  visible: boolean;
   imageUrl: string | null;
 };
 
@@ -23,17 +25,23 @@ export default function ArtworksCatalogueView({
   artworks,
   q,
   availability,
-  visibility,
+  location,
+  type,
+  group,
   sort,
   selected,
+  settings,
 }: {
   siteId: string;
   artworks: ArtworkRow[];
   q: string;
   availability: string;
-  visibility: string;
+  location: string;
+  type: string;
+  group: string;
   sort: string;
   selected: ArtworkDetail | null;
+  settings: ArtworkSettings;
 }) {
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
@@ -55,7 +63,9 @@ export default function ArtworksCatalogueView({
     const params = new URLSearchParams();
     if (q) params.set("q", q);
     if (sort) params.set("sort", sort);
-    if (visibility) params.set("visibility", visibility);
+    if (location) params.set("location", location);
+    if (type) params.set("type", type);
+    if (group) params.set("group", group);
     if (nextAvailability) params.set("availability", nextAvailability);
     const qs = params.toString();
     return `/sites/${siteId}/artworks${qs ? `?${qs}` : ""}`;
@@ -111,13 +121,40 @@ export default function ArtworksCatalogueView({
           />
           <input type="hidden" name="availability" value={availability} />
           <select
-            name="visibility"
-            defaultValue={visibility}
+            name="location"
+            defaultValue={location}
             className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
           >
-            <option value="">All visibility</option>
-            <option value="shown">Shown</option>
-            <option value="hidden">Hidden</option>
+            <option value="">All locations</option>
+            {settings.artworkLocations.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <select
+            name="type"
+            defaultValue={type}
+            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">All types</option>
+            {settings.artworkTypes.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <select
+            name="group"
+            defaultValue={group}
+            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">All groups</option>
+            {settings.artworkGroups.map((g) => (
+              <option key={g} value={g}>
+                {g}
+              </option>
+            ))}
           </select>
           <select
             name="sort"
@@ -253,7 +290,6 @@ export default function ArtworksCatalogueView({
                   <th className="py-2 font-medium">Catalogue #</th>
                   <th className="py-2 font-medium">Price</th>
                   <th className="py-2 font-medium">Availability</th>
-                  <th className="py-2 font-medium">Visibility</th>
                 </tr>
               </thead>
               <tbody>
@@ -287,7 +323,6 @@ export default function ArtworksCatalogueView({
                       {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
                     </td>
                     <td className="py-2 text-neutral-500">{a.availability}</td>
-                    <td className="py-2 text-neutral-500">{a.visible ? "Shown" : "Hidden"}</td>
                   </tr>
                 ))}
               </tbody>
@@ -297,7 +332,7 @@ export default function ArtworksCatalogueView({
 
         {selected && (
           <div className="sticky top-4">
-            <ArtworkDetailPanel siteId={siteId} artwork={selected} />
+            <ArtworkDetailPanel siteId={siteId} artwork={selected} settings={settings} />
           </div>
         )}
       </div>
