@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import ThreeColumnShell from "@/components/ThreeColumnShell";
+import AppShell from "@/components/AppShell";
 import StatusSelect from "@/components/StatusSelect";
 import ArchiveButton from "@/components/ArchiveButton";
 
@@ -30,13 +30,15 @@ export default function SitesDirectoryView({
   const selected = sites.find((s) => s.id === selectedId) || null;
 
   return (
-    <ThreeColumnShell
+    <AppShell
+      publishEnabled={false}
+      navItems={[{ label: "Sites", href: "/", active: true }]}
       preview={
         selected ? (
           <div>
             <h3 className="mb-1 text-lg font-semibold text-neutral-900">{selected.name}</h3>
             <p className="mb-4 text-sm text-neutral-500">Owner: {selected.ownerName}</p>
-            <dl className="space-y-2 text-sm">
+            <dl className="mb-6 space-y-2 text-sm">
               <div>
                 <dt className="text-neutral-400">Domain</dt>
                 <dd className="text-neutral-800">{selected.domain || "—"}</dd>
@@ -54,19 +56,34 @@ export default function SitesDirectoryView({
             </dl>
             <Link
               href={`/sites/${selected.id}`}
-              className="mt-6 inline-block rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+              className="mb-6 inline-block rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
             >
               Open Site →
             </Link>
+
+            {/* Homepage preview — placeholder until the public-facing page
+                renderer exists; this fills in once pages are built properly. */}
+            <div className="overflow-hidden rounded-lg border border-neutral-300 bg-white">
+              <div className="border-b border-neutral-200 px-3 py-2 text-xs font-medium text-neutral-400">
+                Home page
+              </div>
+              <div className="flex h-40 items-center justify-center text-xs text-neutral-300">
+                Preview coming soon
+              </div>
+            </div>
           </div>
         ) : (
           <p className="text-sm text-neutral-400">Select a site to preview it here.</p>
         )
       }
-      edit={
+      content={
         <div>
           <h1 className="mb-4 text-2xl font-semibold text-neutral-900">Sites</h1>
-          <form method="get" className="mb-4 flex flex-wrap items-center gap-3">
+
+          <form
+            method="get"
+            className="mb-4 flex flex-wrap items-center gap-3"
+          >
             <input
               type="text"
               name="q"
@@ -89,7 +106,29 @@ export default function SitesDirectoryView({
             >
               Apply
             </button>
+
+            <label className="flex items-center gap-2 text-sm text-neutral-600">
+              <input
+                type="checkbox"
+                name="archived"
+                value="1"
+                defaultChecked={showArchived}
+                onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              />
+              Show archived
+            </label>
+
+            <Link
+              href="/sites/new"
+              className="ml-auto rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+            >
+              + Add New Site
+            </Link>
           </form>
+
+          <p className="mb-2 text-xs text-neutral-400">
+            {sites.length} site{sites.length === 1 ? "" : "s"}
+          </p>
 
           {sites.length === 0 ? (
             <p className="text-sm text-neutral-500">No sites match.</p>
@@ -135,33 +174,6 @@ export default function SitesDirectoryView({
               </tbody>
             </table>
           )}
-        </div>
-      }
-      menu={
-        <div className="space-y-4">
-          <Link
-            href="/sites/new"
-            className="block rounded-md bg-neutral-900 px-3 py-2 text-center text-sm font-medium text-white hover:bg-neutral-700"
-          >
-            + Add New Site
-          </Link>
-          <form method="get">
-            {q && <input type="hidden" name="q" value={q} />}
-            {sort && <input type="hidden" name="sort" value={sort} />}
-            <label className="flex items-center gap-2 text-sm text-neutral-600">
-              <input
-                type="checkbox"
-                name="archived"
-                value="1"
-                defaultChecked={showArchived}
-                onChange={(e) => e.currentTarget.form?.requestSubmit()}
-              />
-              Show archived
-            </label>
-          </form>
-          <p className="text-xs text-neutral-400">
-            {sites.length} site{sites.length === 1 ? "" : "s"}
-          </p>
         </div>
       }
     />
