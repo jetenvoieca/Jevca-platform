@@ -38,12 +38,29 @@ export type ArtworkDetail = {
   images: { id: string; url: string }[];
 };
 
+export type ArtworkSettings = {
+  artworkGroups: string[];
+  artworkTypes: string[];
+  artworkLocations: string[];
+  mediumPresets: string[];
+  sizePresets: string[];
+};
+
+// Keeps a select from silently dropping an existing value that isn't (yet)
+// in the preset list — e.g. legacy data typed in before Settings existed.
+function withCurrent(presets: string[], current: string | null) {
+  if (!current || presets.includes(current)) return presets;
+  return [current, ...presets];
+}
+
 export default function ArtworkDetailPanel({
   siteId,
   artwork,
+  settings,
 }: {
   siteId: string;
   artwork: ArtworkDetail;
+  settings: ArtworkSettings;
 }) {
   const [tab, setTab] = useState<"presentation" | "catalogue">("presentation");
   const [images, setImages] = useState(artwork.images);
@@ -217,51 +234,50 @@ export default function ArtworkDetailPanel({
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Medium
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="medium"
                       defaultValue={artwork.medium || ""}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.mediumPresets, artwork.medium).map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Group
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="presentationGroup"
                       defaultValue={artwork.presentationGroup || ""}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Availability
-                    </label>
-                    <select
-                      name="availability"
-                      defaultValue={artwork.availability}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
-                      <option value="AVAILABLE">Available</option>
-                      <option value="RESERVED">Reserved</option>
-                      <option value="SOLD">Sold</option>
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.artworkGroups, artwork.presentationGroup).map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
                     </select>
                   </div>
-                  <div className="flex items-center gap-2 pt-6">
-                    <input
-                      type="checkbox"
-                      name="visible"
-                      id="visible"
-                      defaultChecked={artwork.visible}
-                    />
-                    <label htmlFor="visible" className="text-sm text-neutral-700">
-                      Shown on public site
-                    </label>
-                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Availability
+                  </label>
+                  <select
+                    name="availability"
+                    defaultValue={artwork.availability}
+                    className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  >
+                    <option value="AVAILABLE">Available</option>
+                    <option value="RESERVED">Reserved</option>
+                    <option value="SOLD">Sold</option>
+                  </select>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
@@ -318,45 +334,69 @@ export default function ArtworkDetailPanel({
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Type
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="type"
                       defaultValue={artwork.type || ""}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.artworkTypes, artwork.type).map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Group
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="catalogueGroup"
                       defaultValue={artwork.catalogueGroup || ""}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.artworkGroups, artwork.catalogueGroup).map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Size
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="size"
                       defaultValue={artwork.size || ""}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.sizePresets, artwork.size).map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Location
                     </label>
-                    <input
-                      type="text"
+                    <select
                       name="location"
                       defaultValue={artwork.location || ""}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.artworkLocations, artwork.location).map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
