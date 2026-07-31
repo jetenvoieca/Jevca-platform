@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { db } from "@/lib/db";
 import { listArtworks, getArtworkDetail } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import ArtworksCatalogueView from "../ArtworksCatalogueView";
@@ -24,13 +25,20 @@ export default async function ArtworkDetailPage({
   const { id, artworkId } = await params;
   const sp = await searchParams;
 
+  const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
+  if (!site) notFound();
+  const artistId = site.artistId;
+
   const [artworks, artwork, settings] = await Promise.all([
-    listArtworks(id, sp),
+    listArtworks(artistId, sp),
     getArtworkDetail(artworkId),
-    getArtworkSettings(id),
+    getArtworkSettings(artistId),
   ]);
 
-  if (!artwork || artwork.siteId !== id) notFound();
+  // An artwork belongs to the artist, not this particular site — so it's a
+  // valid page as long as it's one of this artist's artworks, viewed via
+  // any of their sites, not only the site it happened to be created from.
+  if (!artwork || artwork.artistId !== artistId) notFound();
 
   const rows = artworks.map((a) => ({
     id: a.id,
@@ -44,7 +52,7 @@ export default async function ArtworkDetailPage({
   // Decimal fields aren't serializable across the server/client boundary as-is.
   const selected = {
     id: artwork.id,
-    siteId: artwork.siteId,
+    artistId: artwork.artistId,
     catalogueNumber: artwork.catalogueNumber,
     presentationTitle: artwork.presentationTitle,
     presentationPrice: artwork.presentationPrice != null ? artwork.presentationPrice.toString() : null,
@@ -71,6 +79,7 @@ export default async function ArtworkDetailPage({
   return (
     <ArtworksCatalogueView
       siteId={id}
+      artistId={artistId}
       artworks={rows}
       q={sp.q || ""}
       availability={sp.availability || ""}
