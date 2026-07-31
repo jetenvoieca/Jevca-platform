@@ -337,7 +337,12 @@ export default function ArtworksCatalogueView({
 
         {selected && (
           <div className="sticky top-4">
-            <ArtworkDetailPanel siteId={siteId} artwork={selected} settings={settings} />
+            <ArtworkDetailPanel
+              siteId={siteId}
+              artistId={artistId}
+              artwork={selected}
+              settings={settings}
+            />
           </div>
         )}
       </div>
