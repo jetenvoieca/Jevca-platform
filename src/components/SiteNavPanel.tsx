@@ -17,9 +17,12 @@ export default function SiteNavPanel({
   const pathname = usePathname();
   const [adding, setAdding] = useState(false);
 
-  const settingsActive = pathname === `/sites/${siteId}/artworks/settings`;
+  const artworkSettingsActive = pathname === `/sites/${siteId}/artworks/settings`;
   const artworksActive =
-    pathname.startsWith(`/sites/${siteId}/artworks`) && !settingsActive;
+    pathname.startsWith(`/sites/${siteId}/artworks`) && !artworkSettingsActive;
+
+  const mediaSettingsActive = pathname === `/sites/${siteId}/media/settings`;
+  const mediaActive = pathname.startsWith(`/sites/${siteId}/media`) && !mediaSettingsActive;
 
   return (
     <nav className="flex flex-col gap-1 text-sm">
@@ -120,7 +123,7 @@ export default function SiteNavPanel({
       <Link
         href={`/sites/${siteId}/artworks/settings`}
         className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
-          settingsActive
+          artworkSettingsActive
             ? "bg-neutral-200 font-medium text-neutral-900"
             : "text-neutral-500 hover:bg-neutral-100"
         }`}
@@ -128,9 +131,24 @@ export default function SiteNavPanel({
         Settings
       </Link>
 
-      <span className="cursor-not-allowed rounded-md px-3 py-2 text-neutral-300">
-        Image Catalogue (soon)
-      </span>
+      <Link
+        href={`/sites/${siteId}/media`}
+        className={`mt-3 rounded-md px-3 py-2 font-medium ${
+          mediaActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
+        }`}
+      >
+        Media Catalogue
+      </Link>
+      <Link
+        href={`/sites/${siteId}/media/settings`}
+        className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
+          mediaSettingsActive
+            ? "bg-neutral-200 font-medium text-neutral-900"
+            : "text-neutral-500 hover:bg-neutral-100"
+        }`}
+      >
+        Settings
+      </Link>
     </nav>
   );
 }
