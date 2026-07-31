@@ -65,14 +65,16 @@ export async function createArtwork(siteId: string, formData: FormData) {
 type ListFilters = {
   q?: string;
   availability?: string;
-  visibility?: string;
+  location?: string;
+  type?: string;
+  group?: string;
   sort?: string;
 };
 
 // Lightweight rows for the grid — only what a tile needs to render.
 // Full detail is fetched separately (getArtworkDetail) when a tile is opened.
 export async function listArtworks(siteId: string, filters: ListFilters) {
-  const { q, availability, visibility, sort } = filters;
+  const { q, availability, location, type, group, sort } = filters;
 
   const orderBy = {
     presentationPrice: sort === "price" ? ("desc" as const) : undefined,
@@ -94,11 +96,12 @@ export async function listArtworks(siteId: string, filters: ListFilters) {
           }
         : {}),
       ...(availability ? { availability: availability as Availability } : {}),
-      ...(visibility === "shown"
-        ? { visible: true }
-        : visibility === "hidden"
-        ? { visible: false }
-        : {}),
+      ...(location ? { location } : {}),
+      ...(type ? { type } : {}),
+      // A Group filter matches either facet's Group, since the same preset
+      // list feeds both and it's not obvious to the user which one a given
+      // artwork was tagged under.
+      ...(group ? { OR: [{ catalogueGroup: group }, { presentationGroup: group }] } : {}),
     },
     orderBy,
     select: {
@@ -107,7 +110,6 @@ export async function listArtworks(siteId: string, filters: ListFilters) {
       presentationPrice: true,
       catalogueNumber: true,
       availability: true,
-      visible: true,
       images: { take: 1, select: { url: true } },
     },
   });
@@ -129,7 +131,6 @@ export async function updatePresentation(id: string, formData: FormData): Promis
   const medium = (formData.get("medium") as string)?.trim() || null;
   const presentationGroup = (formData.get("presentationGroup") as string)?.trim() || null;
   const availability = formData.get("availability") as Availability;
-  const visible = formData.get("visible") === "on";
 
   const artwork = await db.artwork.update({
     where: { id },
@@ -141,7 +142,11 @@ export async function updatePresentation(id: string, formData: FormData): Promis
       medium,
       presentationGroup,
       availability,
-      visible,
+      // Visibility is deliberately not set here anymore — it'll be
+      // governed by which pages feature the artwork, not a manual toggle
+      // on this screen. The column stays in the database (untouched,
+      // whatever it was) rather than being dropped, to avoid a
+      // destructive migration for a field that may be wanted again.
     },
   });
 
