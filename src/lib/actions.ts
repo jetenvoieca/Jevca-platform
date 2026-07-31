@@ -53,6 +53,41 @@ export async function createSite(
   redirect(`/sites/${site.id}`);
 }
 
+// ---- Edit Site details (name, domain) ----
+
+export async function updateSite(id: string, formData: FormData): Promise<void> {
+  const name = (formData.get("name") as string)?.trim();
+  const domainRaw = (formData.get("domain") as string)?.trim() || null;
+  // Store domains without a leading protocol/www so they're consistent
+  // however someone happens to type them in.
+  const domain = domainRaw
+    ? domainRaw.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "")
+    : null;
+  if (!name) return;
+
+  await db.site.update({
+    where: { id },
+    data: { name, domain },
+  });
+  revalidatePath("/");
+}
+
+// ---- Edit Owner (Artist) details ----
+
+export async function updateArtist(id: string, formData: FormData): Promise<void> {
+  const name = (formData.get("name") as string)?.trim();
+  const email = (formData.get("email") as string)?.trim() || null;
+  const phone = (formData.get("phone") as string)?.trim() || null;
+  const notes = (formData.get("notes") as string)?.trim() || null;
+  if (!name) return;
+
+  await db.artist.update({
+    where: { id },
+    data: { name, email, phone, notes },
+  });
+  revalidatePath("/");
+}
+
 // ---- Status toggle (Draft / Live / Paused) ----
 
 export async function updateSiteStatus(
