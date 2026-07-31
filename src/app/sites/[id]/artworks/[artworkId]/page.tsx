@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { listArtworks, getArtworkDetail } from "@/lib/actions/artworks";
+import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import ArtworksCatalogueView from "../ArtworksCatalogueView";
 
 export const dynamic = "force-dynamic";
@@ -7,7 +8,9 @@ export const dynamic = "force-dynamic";
 type SearchParams = {
   q?: string;
   availability?: string;
-  visibility?: string;
+  location?: string;
+  type?: string;
+  group?: string;
   sort?: string;
 };
 
@@ -21,9 +24,10 @@ export default async function ArtworkDetailPage({
   const { id, artworkId } = await params;
   const sp = await searchParams;
 
-  const [artworks, artwork] = await Promise.all([
+  const [artworks, artwork, settings] = await Promise.all([
     listArtworks(id, sp),
     getArtworkDetail(artworkId),
+    getArtworkSettings(id),
   ]);
 
   if (!artwork || artwork.siteId !== id) notFound();
@@ -34,7 +38,6 @@ export default async function ArtworkDetailPage({
     presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
     catalogueNumber: a.catalogueNumber,
     availability: a.availability,
-    visible: a.visible,
     imageUrl: a.images[0]?.url ?? null,
   }));
 
@@ -71,9 +74,12 @@ export default async function ArtworkDetailPage({
       artworks={rows}
       q={sp.q || ""}
       availability={sp.availability || ""}
-      visibility={sp.visibility || ""}
+      location={sp.location || ""}
+      type={sp.type || ""}
+      group={sp.group || ""}
       sort={sp.sort || ""}
       selected={selected}
+      settings={settings}
     />
   );
 }
