@@ -51,6 +51,20 @@ export async function createPage(siteId: string, formData: FormData) {
   redirect(`/sites/${siteId}/pages/${page.id}`);
 }
 
+// Renaming deliberately leaves the slug untouched — changing it would break
+// any existing links/menu placements pointing at this page's URL.
+export async function updatePageTitle(
+  pageId: string,
+  siteId: string,
+  formData: FormData
+): Promise<void> {
+  const title = (formData.get("title") as string)?.trim();
+  if (!title) return;
+  await db.page.update({ where: { id: pageId }, data: { title } });
+  revalidatePath(`/sites/${siteId}`);
+  revalidatePath(`/sites/${siteId}/pages/${pageId}`);
+}
+
 // Used by the delete-confirmation prompt, so it can warn accurately
 // ("used in 2 menu placements") rather than a generic guess.
 export async function menuItemCountForPage(pageId: string) {
