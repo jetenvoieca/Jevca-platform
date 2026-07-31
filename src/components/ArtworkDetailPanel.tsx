@@ -14,7 +14,7 @@ import MediaPicker from "@/components/MediaPicker";
 
 export type ArtworkDetail = {
   id: string;
-  siteId: string;
+  artistId: string;
   catalogueNumber: string;
   presentationTitle: string;
   presentationPrice: string | null;
@@ -111,7 +111,7 @@ export default function ArtworkDetailPanel({
                   type="button"
                   onClick={() => {
                     startTransition(async () => {
-                      await unlinkImageFromArtwork(artwork.id, img.id);
+                      await unlinkImageFromArtwork(artwork.id, img.id, siteId);
                       setImages((prev) => prev.filter((i) => i.id !== img.id));
                     });
                   }}
@@ -130,7 +130,7 @@ export default function ArtworkDetailPanel({
           onSelect={(imgs) => {
             const ids = imgs.map((i) => i.id);
             startTransition(async () => {
-              await linkImagesToArtwork(artwork.id, ids);
+              await linkImagesToArtwork(artwork.id, ids, siteId);
               setImages((prev) => [
                 ...prev,
                 ...imgs
@@ -175,7 +175,7 @@ export default function ArtworkDetailPanel({
               </p>
               <form
                 action={async (formData) => {
-                  await updatePresentation(artwork.id, formData);
+                  await updatePresentation(artwork.id, siteId, formData);
                   setSavedTab("presentation");
                   router.refresh();
                   setTimeout(() => setSavedTab(null), 2000);
@@ -299,7 +299,7 @@ export default function ArtworkDetailPanel({
               </p>
               <form
                 action={async (formData) => {
-                  await updateCatalogue(artwork.id, formData);
+                  await updateCatalogue(artwork.id, siteId, formData);
                   setSavedTab("catalogue");
                   router.refresh();
                   setTimeout(() => setSavedTab(null), 2000);
