@@ -1,11 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { createPage } from "@/lib/actions/pages";
+import { usePathname, useRouter } from "next/navigation";
+import { createPage, updatePageVisibility } from "@/lib/actions/pages";
 
-type PageRow = { id: string; title: string; type: string };
+type PageRow = { id: string; title: string; type: string; visible: boolean };
 
 export default function SiteNavPanel({
   siteId,
@@ -15,7 +15,9 @@ export default function SiteNavPanel({
   pages: PageRow[];
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [adding, setAdding] = useState(false);
+  const [isPending, startTransition] = useTransition();
 
   const artworkSettingsActive = pathname === `/sites/${siteId}/artworks/settings`;
   const artworksActive =
@@ -37,17 +39,40 @@ export default function SiteNavPanel({
         {pages.map((p) => {
           const active = pathname === `/sites/${siteId}/pages/${p.id}`;
           return (
-            <Link
-              key={p.id}
-              href={`/sites/${siteId}/pages/${p.id}`}
-              className={`truncate rounded-md px-3 py-1.5 ${
-                active
-                  ? "bg-neutral-200 font-medium text-neutral-900"
-                  : "text-neutral-600 hover:bg-neutral-100"
-              }`}
-            >
-              {p.title}
-            </Link>
+            <div key={p.id} className="flex items-center gap-1">
+              <Link
+                href={`/sites/${siteId}/pages/${p.id}`}
+                className={`flex-1 truncate rounded-md px-3 py-1.5 ${
+                  active
+                    ? "bg-neutral-200 font-medium text-neutral-900"
+                    : "text-neutral-600 hover:bg-neutral-100"
+                }`}
+              >
+                {p.title}
+              </Link>
+              <button
+                type="button"
+                disabled={isPending}
+                onClick={() =>
+                  startTransition(async () => {
+                    await updatePageVisibility(p.id, siteId, !p.visible);
+                    router.refresh();
+                  })
+                }
+                title={
+                  p.visible
+                    ? "Visible — click to hide while you build/edit it"
+                    : "Hidden — building in readiness, click to make visible"
+                }
+                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  p.visible
+                    ? "bg-green-100 text-green-700"
+                    : "bg-neutral-200 text-neutral-500"
+                }`}
+              >
+                {p.visible ? "Visible" : "Hidden"}
+              </button>
+            </div>
           );
         })}
 
