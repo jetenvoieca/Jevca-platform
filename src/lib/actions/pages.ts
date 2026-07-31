@@ -24,13 +24,10 @@ async function uniqueSlug(siteId: string, base: string) {
   return slug;
 }
 
-export async function createPage(
-  siteId: string,
-  type: "SECTION" | "PRIVATE",
-  formData: FormData
-) {
+export async function createPage(siteId: string, formData: FormData) {
   const title = (formData.get("title") as string)?.trim();
   if (!title) return;
+  const type = formData.get("type") === "PRIVATE" ? "PRIVATE" : "SECTION";
 
   const baseSlug = slugify(title);
   const slug = await uniqueSlug(siteId, baseSlug);
