@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { getArtworksForSite, quickCreateArtwork } from "@/lib/actions/media";
+import { getArtworksForArtist, quickCreateArtwork } from "@/lib/actions/media";
 
 type PickedArtwork = {
   id: string;
@@ -12,10 +12,10 @@ type PickedArtwork = {
 };
 
 export default function ArtworkPicker({
-  siteId,
+  artistId,
   onSelect,
 }: {
-  siteId: string;
+  artistId: string;
   onSelect: (artwork: PickedArtwork) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -27,7 +27,7 @@ export default function ArtworkPicker({
 
   const load = (q: string) => {
     startTransition(async () => {
-      const results = await getArtworksForSite(siteId, q || undefined);
+      const results = await getArtworksForArtist(artistId, q || undefined);
       setArtworks(
         results.map((a) => ({
           id: a.id,
@@ -48,7 +48,7 @@ export default function ArtworkPicker({
   const handleCreate = () => {
     setError(null);
     startTransition(async () => {
-      const result = await quickCreateArtwork(siteId, newTitle);
+      const result = await quickCreateArtwork(artistId, newTitle);
       if (result.error) {
         setError(result.error);
         return;
