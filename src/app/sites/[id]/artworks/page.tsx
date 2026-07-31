@@ -1,4 +1,5 @@
 import { listArtworks } from "@/lib/actions/artworks";
+import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import ArtworksCatalogueView from "./ArtworksCatalogueView";
 
 export const dynamic = "force-dynamic";
@@ -6,7 +7,9 @@ export const dynamic = "force-dynamic";
 type SearchParams = {
   q?: string;
   availability?: string;
-  visibility?: string;
+  location?: string;
+  type?: string;
+  group?: string;
   sort?: string;
 };
 
@@ -20,7 +23,10 @@ export default async function ArtworksCataloguePage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const artworks = await listArtworks(id, sp);
+  const [artworks, settings] = await Promise.all([
+    listArtworks(id, sp),
+    getArtworkSettings(id),
+  ]);
 
   const rows = artworks.map((a) => ({
     id: a.id,
@@ -28,7 +34,6 @@ export default async function ArtworksCataloguePage({
     presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
     catalogueNumber: a.catalogueNumber,
     availability: a.availability,
-    visible: a.visible,
     imageUrl: a.images[0]?.url ?? null,
   }));
 
@@ -38,9 +43,12 @@ export default async function ArtworksCataloguePage({
       artworks={rows}
       q={sp.q || ""}
       availability={sp.availability || ""}
-      visibility={sp.visibility || ""}
+      location={sp.location || ""}
+      type={sp.type || ""}
+      group={sp.group || ""}
       sort={sp.sort || ""}
       selected={null}
+      settings={settings}
     />
   );
 }
