@@ -4,6 +4,7 @@ import { useRef, useTransition } from "react";
 import { addSettingOption, removeSettingOption, type SettingsField } from "@/lib/actions/artworkSettings";
 
 export default function SettingsListCard({
+  artistId,
   siteId,
   field,
   title,
@@ -11,6 +12,7 @@ export default function SettingsListCard({
   options,
   placeholder,
 }: {
+  artistId: string;
   siteId: string;
   field: SettingsField;
   title: string;
@@ -37,7 +39,7 @@ export default function SettingsListCard({
               type="button"
               disabled={isPending}
               onClick={() =>
-                startTransition(() => removeSettingOption(siteId, field, opt))
+                startTransition(() => removeSettingOption(artistId, siteId, field, opt))
               }
               className="shrink-0 text-neutral-400 hover:text-red-600 disabled:opacity-50"
             >
@@ -54,7 +56,7 @@ export default function SettingsListCard({
         ref={formRef}
         action={(formData) => {
           startTransition(async () => {
-            await addSettingOption(siteId, field, formData);
+            await addSettingOption(artistId, siteId, field, formData);
             formRef.current?.reset();
           });
         }}
