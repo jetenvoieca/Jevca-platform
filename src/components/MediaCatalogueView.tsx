@@ -54,7 +54,9 @@ export default function MediaCatalogueView({
     <div className="px-6 py-4">
       <h1 className="mb-3 text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      {/* One consolidated row, same pattern as the Artwork Catalogue — keeps
+          the grid and detail panel starting as close to the top as possible. */}
+      <div className="mb-3 flex flex-wrap items-center gap-3">
         <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
           <Link
             href={toggleHref("marketing")}
@@ -83,7 +85,7 @@ export default function MediaCatalogueView({
             name="q"
             defaultValue={q}
             placeholder="Search caption, alt text"
-            className="w-48 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+            className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
           />
           {purpose === "marketing" ? (
             <select
@@ -127,13 +129,9 @@ export default function MediaCatalogueView({
             Apply
           </button>
         </form>
-
-        <div className="ml-auto">
-          <UploadButton artistId={artistId} siteId={siteId} />
-        </div>
       </div>
 
-      <p className="mb-4 text-sm text-neutral-400">
+      <p className="mb-3 text-sm text-neutral-400">
         {media.length} item{media.length === 1 ? "" : "s"}
       </p>
 
@@ -142,45 +140,38 @@ export default function MediaCatalogueView({
         style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
       >
         <div>
-          {media.length === 0 ? (
-            <p className="text-sm text-neutral-500">
-              {purpose === "marketing"
-                ? "No marketing media yet — upload one above."
-                : "No media related to an artwork yet."}
-            </p>
-          ) : (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-              {media.map((m) => (
-                <Link
-                  key={m.id}
-                  href={tileHref(m.id)}
-                  className={`block rounded-md border-2 p-1 ${
-                    selected?.id === m.id ? "border-neutral-900" : "border-transparent"
-                  }`}
-                >
-                  {m.kind === "VIDEO" ? (
-                    <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-200 text-xs text-neutral-500">
-                      Video
-                    </div>
-                  ) : (
-                    <img
-                      src={m.url}
-                      alt=""
-                      className="aspect-square w-full rounded-md object-cover"
-                    />
-                  )}
-                  <p className="mt-1 truncate text-sm font-medium text-neutral-900">
-                    {m.caption || "Untitled"}
+          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+            {media.map((m) => (
+              <Link
+                key={m.id}
+                href={tileHref(m.id)}
+                className={`block rounded-md border-2 p-1 ${
+                  selected?.id === m.id ? "border-neutral-900" : "border-transparent"
+                }`}
+              >
+                {m.kind === "VIDEO" ? (
+                  <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-200 text-xs text-neutral-500">
+                    Video
+                  </div>
+                ) : (
+                  <img
+                    src={m.url}
+                    alt=""
+                    className="aspect-square w-full rounded-md object-cover"
+                  />
+                )}
+                <p className="mt-1 truncate text-sm font-medium text-neutral-900">
+                  {m.caption || "Untitled"}
+                </p>
+                {m.artwork && (
+                  <p className="truncate text-xs font-medium text-rose-600">
+                    → {m.artwork.presentationTitle}
                   </p>
-                  {m.artwork && (
-                    <p className="truncate text-xs font-medium text-rose-600">
-                      → {m.artwork.presentationTitle}
-                    </p>
-                  )}
-                </Link>
-              ))}
-            </div>
-          )}
+                )}
+              </Link>
+            ))}
+            <AddNewTile artistId={artistId} siteId={siteId} />
+          </div>
         </div>
 
         {selected && (
@@ -198,10 +189,15 @@ export default function MediaCatalogueView({
   );
 }
 
-function UploadButton({ artistId, siteId }: { artistId: string; siteId: string }) {
+// Replaces the old toolbar "+ Upload" button — sits as the last grid tile
+// instead, same "click straight in, no form fields first" pattern as
+// Artworks' "+ Add New" tile. Still needs a real file picked (unlike an
+// artwork, media can't exist without one), so this opens the file dialog
+// directly rather than creating anything blank first.
+function AddNewTile({ artistId, siteId }: { artistId: string; siteId: string }) {
   return (
-    <label className="cursor-pointer rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-700">
-      + Upload
+    <label className="flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600">
+      + Add New
       <input
         type="file"
         accept="image/*,video/*"
