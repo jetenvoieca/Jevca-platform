@@ -54,9 +54,14 @@ export default function MediaCatalogueView({
     <div className="px-6 py-4">
       <h1 className="mb-3 text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
 
-      {/* One consolidated row, same pattern as the Artwork Catalogue — keeps
-          the grid and detail panel starting as close to the top as possible. */}
-      <div className="mb-3 flex flex-wrap items-center gap-3">
+      <div
+        className={selected ? "grid items-start gap-6" : ""}
+        style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
+      >
+        <div>
+          {/* One consolidated row, same pattern as the Artwork Catalogue — keeps
+              the grid and detail panel starting as close to the top as possible. */}
+          <div className="mb-3 flex flex-wrap items-center gap-3">
         <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
           <Link
             href={toggleHref("marketing")}
@@ -135,11 +140,6 @@ export default function MediaCatalogueView({
         {media.length} item{media.length === 1 ? "" : "s"}
       </p>
 
-      <div
-        className={selected ? "grid items-start gap-6" : ""}
-        style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
-      >
-        <div>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
             {media.map((m) => (
               <Link
