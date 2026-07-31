@@ -59,7 +59,11 @@ export default async function SitesDirectoryPage({
     domain: s.domain,
     status: s.status,
     createdAt: s.createdAt.toISOString(),
+    ownerId: s.artist.id,
     ownerName: s.artist.name,
+    ownerEmail: s.artist.email,
+    ownerPhone: s.artist.phone,
+    ownerNotes: s.artist.notes,
   }));
 
   return <SitesDirectoryView sites={rows} q={q} sort={sort} showArchived={showArchived} />;
