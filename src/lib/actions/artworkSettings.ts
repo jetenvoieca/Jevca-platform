@@ -32,14 +32,29 @@ export async function getArtworkSettings(siteId: string) {
   );
 }
 
-// Shared add/remove for all five preset lists — each is just a plain string
-// array on Site, so the only real work is reading the current array,
-// changing it, and writing it back.
+// Deliberately not using a computed key (e.g. `select: { [field]: true }`)
+// anywhere here — Prisma can't type that precisely against a variable field
+// name, since it has to allow for every possible key on Site including
+// relations like `menus`, and TypeScript then refuses a plain `as string[]`
+// cast. Writing out each field explicitly keeps everything properly typed.
 async function updateList(siteId: string, field: SettingsField, next: string[]) {
-  await db.site.update({
-    where: { id: siteId },
-    data: { [field]: next },
-  });
+  switch (field) {
+    case "artworkGroups":
+      await db.site.update({ where: { id: siteId }, data: { artworkGroups: next } });
+      break;
+    case "artworkTypes":
+      await db.site.update({ where: { id: siteId }, data: { artworkTypes: next } });
+      break;
+    case "artworkLocations":
+      await db.site.update({ where: { id: siteId }, data: { artworkLocations: next } });
+      break;
+    case "mediumPresets":
+      await db.site.update({ where: { id: siteId }, data: { mediumPresets: next } });
+      break;
+    case "sizePresets":
+      await db.site.update({ where: { id: siteId }, data: { sizePresets: next } });
+      break;
+  }
   revalidatePath(`/sites/${siteId}/artworks/settings`);
   revalidatePath(`/sites/${siteId}/artworks`);
 }
@@ -51,15 +66,13 @@ export async function addSettingOption(
 ) {
   const value = (formData.get("value") as string)?.trim();
   if (!value) return;
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { [field]: true } });
-  const current = ((site?.[field] as string[]) || []).filter(
-    (v) => v.toLowerCase() !== value.toLowerCase()
-  );
+  const settings = await getArtworkSettings(siteId);
+  const current = settings[field].filter((v) => v.toLowerCase() !== value.toLowerCase());
   await updateList(siteId, field, [...current, value]);
 }
 
 export async function removeSettingOption(siteId: string, field: SettingsField, value: string) {
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { [field]: true } });
-  const current = ((site?.[field] as string[]) || []).filter((v) => v !== value);
+  const settings = await getArtworkSettings(siteId);
+  const current = settings[field].filter((v) => v !== value);
   await updateList(siteId, field, current);
 }
