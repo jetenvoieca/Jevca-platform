@@ -1,3 +1,4 @@
+import { db } from "@/lib/db";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SettingsListCard from "@/components/SettingsListCard";
 
@@ -7,18 +8,21 @@ export default async function ArtworkSettingsPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const settings = await getArtworkSettings(id);
+  const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
+  const artistId = site!.artistId;
+  const settings = await getArtworkSettings(artistId);
 
   return (
     <div className="p-6">
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Settings</h1>
       <p className="mb-6 text-sm text-neutral-500">
         Manage the Group, Type, Location, Medium and Size options offered across the Artwork
-        Catalogue.
+        Catalogue. Shared across all of this artist&apos;s sites.
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SettingsListCard
+          artistId={artistId}
           siteId={id}
           field="artworkGroups"
           title="Groups"
@@ -27,6 +31,7 @@ export default async function ArtworkSettingsPage({
           placeholder="New group…"
         />
         <SettingsListCard
+          artistId={artistId}
           siteId={id}
           field="artworkTypes"
           title="Types"
@@ -35,6 +40,7 @@ export default async function ArtworkSettingsPage({
           placeholder="New type…"
         />
         <SettingsListCard
+          artistId={artistId}
           siteId={id}
           field="artworkLocations"
           title="Locations"
@@ -43,6 +49,7 @@ export default async function ArtworkSettingsPage({
           placeholder="New location…"
         />
         <SettingsListCard
+          artistId={artistId}
           siteId={id}
           field="mediumPresets"
           title="Medium Presets"
@@ -54,6 +61,7 @@ export default async function ArtworkSettingsPage({
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SettingsListCard
+          artistId={artistId}
           siteId={id}
           field="sizePresets"
           title="Size Presets"
