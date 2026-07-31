@@ -308,16 +308,24 @@ export default function MediaCatalogueView({
 async function handleFileUpload(
   file: File,
   artistId: string,
-  siteId: string
+  siteId: string,
+  onDone: (error: string | null) => void
 ) {
-  const formData = new FormData();
-  formData.set("file", file);
-  const result = await uploadImage(artistId, formData);
-  if (result.error) {
-    alert(result.error);
-    return;
+  try {
+    const formData = new FormData();
+    formData.set("file", file);
+    const result = await uploadImage(artistId, formData);
+    if (result.error) {
+      onDone(result.error);
+      return;
+    }
+    window.location.href = `/sites/${siteId}/media`;
+  } catch {
+    // A network error or a request that timed out partway through both
+    // land here — previously this just went silent, which is exactly what
+    // "nothing happens" looks like from a large file on a slow connection.
+    onDone("Upload failed — the connection may have dropped or timed out. Try again.");
   }
-  window.location.href = `/sites/${siteId}/media`;
 }
 
 // Replaces the old toolbar "+ Upload" button — sits as the last grid tile
@@ -326,16 +334,32 @@ async function handleFileUpload(
 // artwork, media can't exist without one), so this opens the file dialog
 // directly rather than creating anything blank first.
 function AddNewTile({ artistId, siteId }: { artistId: string; siteId: string }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   return (
-    <label className="flex aspect-square w-full cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600">
-      + Add New
+    <label
+      className={`flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed text-center text-sm ${
+        uploading
+          ? "cursor-wait border-neutral-300 text-neutral-400"
+          : "cursor-pointer border-neutral-300 text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
+      }`}
+    >
+      {uploading ? "Uploading…" : error ? <span className="px-2 text-red-500">{error}</span> : "+ Add New"}
       <input
         type="file"
         accept="image/*,video/*"
         className="hidden"
+        disabled={uploading}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) handleFileUpload(file, artistId, siteId);
+          if (!file) return;
+          setError(null);
+          setUploading(true);
+          handleFileUpload(file, artistId, siteId, (err) => {
+            setUploading(false);
+            if (err) setError(err);
+          });
         }}
       />
     </label>
@@ -344,16 +368,32 @@ function AddNewTile({ artistId, siteId }: { artistId: string; siteId: string }) 
 
 // Same "+ Add New" action, as a row for List view.
 function AddNewRow({ artistId, siteId }: { artistId: string; siteId: string }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
   return (
-    <label className="cursor-pointer text-sm text-neutral-500 hover:text-neutral-900 hover:underline">
-      + Add New
+    <label
+      className={`text-sm ${
+        uploading
+          ? "cursor-wait text-neutral-400"
+          : "cursor-pointer text-neutral-500 hover:text-neutral-900 hover:underline"
+      }`}
+    >
+      {uploading ? "Uploading…" : error ? <span className="text-red-500">{error}</span> : "+ Add New"}
       <input
         type="file"
         accept="image/*,video/*"
         className="hidden"
+        disabled={uploading}
         onChange={(e) => {
           const file = e.target.files?.[0];
-          if (file) handleFileUpload(file, artistId, siteId);
+          if (!file) return;
+          setError(null);
+          setUploading(true);
+          handleFileUpload(file, artistId, siteId, (err) => {
+            setUploading(false);
+            if (err) setError(err);
+          });
         }}
       />
     </label>
