@@ -33,9 +33,22 @@ export type VideoBlock = {
   url: string;
 };
 
+export type TextGridRow = { id: string; cell1: string; cell2: string; cell3: string };
+
+// A simple 3-column table — built for lists like past exhibitions (e.g.
+// Year / Exhibition / Location), but the column headers are editable so
+// it works equally for press mentions, awards, or any similar list.
+export type TextGridBlock = {
+  id: string;
+  type: "textgrid";
+  columns: [string, string, string];
+  rows: TextGridRow[];
+};
+
 export type ContentBlock =
   | TextBlock
   | ImageBlock
   | GalleryBlock
   | ArtworkBlock
-  | VideoBlock;
+  | VideoBlock
+  | TextGridBlock;
