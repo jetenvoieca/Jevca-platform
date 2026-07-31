@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import { saveDraftBlocks } from "@/lib/actions/pages";
+import { saveDraftBlocks, deletePage, menuItemCountForPage } from "@/lib/actions/pages";
 import MediaPicker from "@/components/MediaPicker";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import ThreeColumnShell from "@/components/ThreeColumnShell";
@@ -24,8 +24,25 @@ export default function PageEditor({
 }) {
   const [blocks, setBlocks] = useState<ContentBlock[]>(initialBlocks);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const [isDeleting, setIsDeleting] = useState(false);
   const isFirstRun = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleDeletePage = async () => {
+    setIsDeleting(true);
+    const menuCount = await menuItemCountForPage(pageId);
+    const warning =
+      menuCount > 0
+        ? `"${pageTitle}" is used in ${menuCount} menu placement${
+            menuCount === 1 ? "" : "s"
+          } — deleting it will remove those too. `
+        : "";
+    if (!confirm(`${warning}Delete "${pageTitle}"? This can't be undone.`)) {
+      setIsDeleting(false);
+      return;
+    }
+    await deletePage(siteId, pageId);
+  };
 
   useEffect(() => {
     if (isFirstRun.current) {
@@ -337,6 +354,15 @@ export default function PageEditor({
             >
               Open full preview
             </Link>
+
+            <button
+              type="button"
+              onClick={handleDeletePage}
+              disabled={isDeleting}
+              className="mt-4 block w-full rounded-md border border-red-200 px-3 py-1.5 text-center text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              Delete Page
+            </button>
           </div>
         </div>
       }
