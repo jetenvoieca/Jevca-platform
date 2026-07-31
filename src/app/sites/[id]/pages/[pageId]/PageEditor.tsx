@@ -149,7 +149,7 @@ export default function PageEditor({
                       />
                     )}
                     <MediaPicker
-                      siteId={siteId}
+                      artistId={artistId}
                       mode="single"
                       label={block.url ? "Change Image" : "Choose Image"}
                       onSelect={(imgs) =>
@@ -197,7 +197,7 @@ export default function PageEditor({
                       </div>
                     )}
                     <MediaPicker
-                      siteId={siteId}
+                      artistId={artistId}
                       mode="multi"
                       label="Add Images"
                       onSelect={(imgs) =>
@@ -259,7 +259,7 @@ export default function PageEditor({
                       />
                     )}
                     <MediaPicker
-                      siteId={siteId}
+                      artistId={artistId}
                       mode="single"
                       videoOnly
                       label={block.url ? "Change Video" : "Choose Video"}
