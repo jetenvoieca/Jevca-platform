@@ -71,11 +71,13 @@ export async function listImages(siteId: string, q?: string) {
 
 // Used by the Artwork Feature block picker — reads the Presentation facet,
 // since that's what a page visitor would see (matches the "block pulls in
-// Presentation data" decision in the Artworks Catalogue design).
-export async function getArtworksForSite(siteId: string, q?: string) {
+// Presentation data" decision in the Artworks Catalogue design). Scoped to
+// the artist, not the site, since a page on any of that artist's sites can
+// feature any of their artworks.
+export async function getArtworksForArtist(artistId: string, q?: string) {
   return db.artwork.findMany({
     where: {
-      siteId,
+      artistId,
       ...(q ? { presentationTitle: { contains: q, mode: "insensitive" } } : {}),
     },
     include: { images: { take: 1 } },
@@ -84,11 +86,11 @@ export async function getArtworksForSite(siteId: string, q?: string) {
   });
 }
 
-async function nextCatalogueNumber(siteId: string) {
+async function nextCatalogueNumber(artistId: string) {
   // See src/lib/actions/artworks.ts for why this is based on the highest
   // existing number rather than a row count.
   const rows = await db.artwork.findMany({
-    where: { siteId },
+    where: { artistId },
     select: { catalogueNumber: true },
   });
   const highest = rows.reduce((max, r) => {
@@ -99,22 +101,21 @@ async function nextCatalogueNumber(siteId: string) {
   return `AW-${String(highest + 1).padStart(4, "0")}`;
 }
 
-export async function quickCreateArtwork(siteId: string, title: string) {
+export async function quickCreateArtwork(artistId: string, title: string) {
   const trimmed = title.trim();
   if (!trimmed) return { error: "Title is required." };
 
   for (let attempt = 0; attempt < 3; attempt++) {
-    const catalogueNumber = await nextCatalogueNumber(siteId);
+    const catalogueNumber = await nextCatalogueNumber(artistId);
     try {
       const artwork = await db.artwork.create({
         data: {
-          siteId,
+          artistId,
           catalogueNumber,
           presentationTitle: trimmed,
           catalogueName: trimmed,
         },
       });
-      revalidatePath(`/sites/${siteId}`);
       return { artwork };
     } catch (err: unknown) {
       const isUniqueViolation =
