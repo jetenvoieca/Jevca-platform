@@ -2,7 +2,6 @@
 
 import { db } from "@/lib/db";
 import { uploadToR2 } from "@/lib/r2";
-import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 
 function sanitizeFilename(name: string) {
@@ -12,7 +11,7 @@ function sanitizeFilename(name: string) {
     .replace(/-+/g, "-");
 }
 
-export async function uploadImage(siteId: string, formData: FormData) {
+export async function uploadImage(artistId: string, formData: FormData) {
   const file = formData.get("file") as File | null;
   if (!file || file.size === 0) {
     return { error: "No file selected." };
@@ -20,7 +19,8 @@ export async function uploadImage(siteId: string, formData: FormData) {
 
   const isVideo = file.type.startsWith("video/");
   // Practical limit for now — direct server-side upload, not chunked.
-  // Larger/chunked video upload can be added when the Images module is built properly.
+  // Larger/chunked video upload can be added when the Media Catalogue's
+  // own upload flow needs it.
   const maxBytes = isVideo ? 50 * 1024 * 1024 : 15 * 1024 * 1024;
   if (file.size > maxBytes) {
     return {
@@ -31,29 +31,28 @@ export async function uploadImage(siteId: string, formData: FormData) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  const key = `${siteId}/${randomUUID()}-${sanitizeFilename(file.name)}`;
+  const key = `${artistId}/${randomUUID()}-${sanitizeFilename(file.name)}`;
 
   await uploadToR2(key, buffer, file.type || "application/octet-stream");
 
   const image = await db.image.create({
     data: {
-      siteId,
+      artistId,
       key,
       url: `/api/media/${key}`,
       kind: isVideo ? "VIDEO" : "PHOTO",
       mimeType: file.type || "application/octet-stream",
-      status: "SORTED", // uploaded directly into a block = already sorted, not in the Hopper
+      status: "SORTED", // uploaded directly = already sorted, not in the Hopper
     },
   });
 
-  revalidatePath(`/sites/${siteId}`);
   return { image };
 }
 
-export async function listImages(siteId: string, q?: string) {
+export async function listImages(artistId: string, q?: string) {
   return db.image.findMany({
     where: {
-      siteId,
+      artistId,
       status: { not: "ARCHIVED" },
       ...(q
         ? {
