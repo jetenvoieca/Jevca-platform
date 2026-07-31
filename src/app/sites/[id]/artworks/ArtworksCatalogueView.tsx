@@ -64,7 +64,7 @@ export default function ArtworksCatalogueView({
   const soldCount = artworks.filter((a) => a.availability === "SOLD").length;
 
   return (
-    <div>
+    <div className="px-6 py-4">
       <h1 className="mb-3 text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -207,9 +207,7 @@ export default function ArtworksCatalogueView({
           ) : view === "tile" ? (
             <div
               className="grid gap-3"
-              style={{
-                gridTemplateColumns: `repeat(${selected ? Math.max(2, density - 2) : density}, minmax(0, 1fr))`,
-              }}
+              style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
             >
               {artworks.map((a) => (
                 <Link
