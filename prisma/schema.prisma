@@ -68,6 +68,7 @@ model Site {
   pages    Page[]
   artworks Artwork[]
   images   Image[]
+  menus    Menu[]
 
   @@index([artistId])
 }
@@ -86,11 +87,69 @@ model Page {
   draftBlocks Json  @default("[]")
   liveBlocks  Json?
 
+  menuItems MenuItem[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([siteId, slug])
   @@index([siteId])
+}
+
+// A saved, named navigation arrangement. A site can have several; exactly
+// one is active (used by the live site) at a time — switching which one is
+// active is a single action, not a rebuild.
+model Menu {
+  id       String  @id @default(cuid())
+  siteId   String
+  site     Site    @relation(fields: [siteId], references: [id])
+  name     String
+  isActive Boolean @default(false)
+
+  groups MenuGroup[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteId])
+}
+
+// A named cluster of menu items within one Menu (e.g. "MY GALLERIES").
+// Belongs to exactly one Menu — editing one saved Menu never touches another.
+model MenuGroup {
+  id       String @id @default(cuid())
+  menuId   String
+  menu     Menu   @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  name     String
+  position Int    @default(0)
+
+  items MenuItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([menuId])
+}
+
+// One entry in a menu group. Always points at a real Page, but carries its
+// own label and byline — fully independent of that Page's actual title, and
+// the same Page can be featured by more than one MenuItem (different
+// groups, different menus, or more than once in the same group).
+model MenuItem {
+  id       String    @id @default(cuid())
+  groupId  String
+  group    MenuGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  pageId   String
+  page     Page      @relation(fields: [pageId], references: [id])
+  label    String
+  byline   String?
+  position Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([pageId])
 }
 
 model Artwork {
