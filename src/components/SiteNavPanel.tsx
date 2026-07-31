@@ -97,6 +97,17 @@ export default function SiteNavPanel({
       </div>
 
       <Link
+        href={`/sites/${siteId}/menus`}
+        className={`rounded-md px-3 py-2 font-medium ${
+          pathname.startsWith(`/sites/${siteId}/menus`)
+            ? "bg-neutral-900 text-white"
+            : "text-neutral-700 hover:bg-neutral-100"
+        }`}
+      >
+        Menu
+      </Link>
+
+      <Link
         href={`/sites/${siteId}/artworks`}
         className={`mt-3 rounded-md px-3 py-2 font-medium ${
           artworksActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
