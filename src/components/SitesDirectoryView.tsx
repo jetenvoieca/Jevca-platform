@@ -1,10 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import StatusSelect from "@/components/StatusSelect";
 import ArchiveButton from "@/components/ArchiveButton";
+import { updateSite, updateArtist } from "@/lib/actions";
 
 type SiteRow = {
   id: string;
@@ -12,7 +14,11 @@ type SiteRow = {
   domain: string | null;
   status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED";
   createdAt: string;
+  ownerId: string;
   ownerName: string;
+  ownerEmail: string | null;
+  ownerPhone: string | null;
+  ownerNotes: string | null;
 };
 
 export default function SitesDirectoryView({
@@ -28,6 +34,40 @@ export default function SitesDirectoryView({
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = sites.find((s) => s.id === selectedId) || null;
+  const [isPending, startTransition] = useTransition();
+  const [savedField, setSavedField] = useState<string | null>(null);
+  const router = useRouter();
+
+  const saveSite = (field: "name" | "domain", value: string) => {
+    if (!selected) return;
+    const fd = new FormData();
+    fd.set("name", field === "name" ? value : selected.name);
+    fd.set("domain", field === "domain" ? value : selected.domain || "");
+    startTransition(async () => {
+      await updateSite(selected.id, fd);
+      router.refresh();
+      setSavedField(field);
+      setTimeout(() => setSavedField(null), 1500);
+    });
+  };
+
+  const saveOwner = (
+    field: "name" | "email" | "phone" | "notes",
+    value: string
+  ) => {
+    if (!selected) return;
+    const fd = new FormData();
+    fd.set("name", field === "name" ? value : selected.ownerName);
+    fd.set("email", field === "email" ? value : selected.ownerEmail || "");
+    fd.set("phone", field === "phone" ? value : selected.ownerPhone || "");
+    fd.set("notes", field === "notes" ? value : selected.ownerNotes || "");
+    startTransition(async () => {
+      await updateArtist(selected.ownerId, fd);
+      router.refresh();
+      setSavedField(field);
+      setTimeout(() => setSavedField(null), 1500);
+    });
+  };
 
   return (
     <AppShell
@@ -36,13 +76,31 @@ export default function SitesDirectoryView({
       preview={
         selected ? (
           <div>
-            <h3 className="mb-1 text-lg font-semibold text-neutral-900">{selected.name}</h3>
-            <p className="mb-4 text-sm text-neutral-500">Owner: {selected.ownerName}</p>
-            <dl className="mb-6 space-y-2 text-sm">
-              <div>
-                <dt className="text-neutral-400">Domain</dt>
-                <dd className="text-neutral-800">{selected.domain || "—"}</dd>
-              </div>
+            <input
+              key={`name-${selected.id}`}
+              type="text"
+              defaultValue={selected.name}
+              onBlur={(e) => e.target.value.trim() && saveSite("name", e.target.value.trim())}
+              disabled={isPending}
+              className="mb-1 w-full rounded-md border border-transparent px-1 py-0.5 -mx-1 text-lg font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300 disabled:opacity-50"
+            />
+            {savedField === "name" && <p className="mb-1 text-xs text-green-600">Saved</p>}
+
+            <label className="mb-1 mt-3 block text-xs uppercase tracking-wide text-neutral-400">
+              Domain
+            </label>
+            <input
+              key={`domain-${selected.id}`}
+              type="text"
+              defaultValue={selected.domain || ""}
+              placeholder="e.g. janedoeartist.com"
+              onBlur={(e) => saveSite("domain", e.target.value.trim())}
+              disabled={isPending}
+              className="mb-1 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+            />
+            {savedField === "domain" && <p className="text-xs text-green-600">Saved</p>}
+
+            <dl className="my-4 space-y-2 text-sm">
               <div>
                 <dt className="text-neutral-400">Status</dt>
                 <dd className="text-neutral-800">{selected.status}</dd>
@@ -54,12 +112,62 @@ export default function SitesDirectoryView({
                 </dd>
               </div>
             </dl>
+
             <Link
               href={`/sites/${selected.id}`}
               className="mb-6 inline-block rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
             >
               Open Site →
             </Link>
+
+            <div className="mb-6 border-t border-neutral-200 pt-4">
+              <h4 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                Owner
+              </h4>
+              <div className="space-y-2">
+                <input
+                  key={`owner-name-${selected.ownerId}`}
+                  type="text"
+                  defaultValue={selected.ownerName}
+                  onBlur={(e) =>
+                    e.target.value.trim() && saveOwner("name", e.target.value.trim())
+                  }
+                  disabled={isPending}
+                  placeholder="Name"
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                />
+                <input
+                  key={`owner-email-${selected.ownerId}`}
+                  type="email"
+                  defaultValue={selected.ownerEmail || ""}
+                  onBlur={(e) => saveOwner("email", e.target.value.trim())}
+                  disabled={isPending}
+                  placeholder="Email"
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                />
+                <input
+                  key={`owner-phone-${selected.ownerId}`}
+                  type="text"
+                  defaultValue={selected.ownerPhone || ""}
+                  onBlur={(e) => saveOwner("phone", e.target.value.trim())}
+                  disabled={isPending}
+                  placeholder="Phone"
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                />
+                <textarea
+                  key={`owner-notes-${selected.ownerId}`}
+                  defaultValue={selected.ownerNotes || ""}
+                  onBlur={(e) => saveOwner("notes", e.target.value.trim())}
+                  disabled={isPending}
+                  placeholder="Notes"
+                  rows={2}
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                />
+                {(savedField === "email" ||
+                  savedField === "phone" ||
+                  savedField === "notes") && <p className="text-xs text-green-600">Saved</p>}
+              </div>
+            </div>
 
             {/* Homepage preview — placeholder until the public-facing page
                 renderer exists; this fills in once pages are built properly. */}
