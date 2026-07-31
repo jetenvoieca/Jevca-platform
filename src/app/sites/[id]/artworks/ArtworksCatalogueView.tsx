@@ -22,6 +22,7 @@ const DENSITY_STORAGE_KEY = "jevca:artworks-density";
 
 export default function ArtworksCatalogueView({
   siteId,
+  artistId,
   artworks,
   q,
   availability,
@@ -33,6 +34,7 @@ export default function ArtworksCatalogueView({
   settings,
 }: {
   siteId: string;
+  artistId: string;
   artworks: ArtworkRow[];
   q: string;
   availability: string;
@@ -214,7 +216,10 @@ export default function ArtworksCatalogueView({
           </div>
         )}
 
-        <form action={createArtwork.bind(null, siteId)} className="ml-auto flex items-center gap-2">
+        <form
+          action={createArtwork.bind(null, artistId, siteId)}
+          className="ml-auto flex items-center gap-2"
+        >
           <input
             type="text"
             name="title"
