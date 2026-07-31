@@ -6,13 +6,18 @@ import { redirect } from "next/navigation";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
-async function nextCatalogueNumber(siteId: string) {
+// Artworks belong to the Artist, not any one Site — the same piece can be
+// featured on more than one of that artist's sites. Actions here take an
+// explicit `siteId` only where it's needed to know which site's URL to
+// redirect to or revalidate — never to scope which artworks are returned.
+
+async function nextCatalogueNumber(artistId: string) {
   // Based on the highest catalogue number actually in use, not the row
   // count — count() breaks the moment any artwork is ever deleted, since
   // the count drops but a surviving artwork can still hold a higher
   // number, causing the next "count + 1" guess to collide with it.
   const rows = await db.artwork.findMany({
-    where: { siteId },
+    where: { artistId },
     select: { catalogueNumber: true },
   });
   const highest = rows.reduce((max, r) => {
@@ -27,14 +32,14 @@ async function nextCatalogueNumber(siteId: string) {
 // created at the exact same instant and both compute the same next
 // number — rare, but cheap to guard against.
 async function createArtworkWithRetry(
-  siteId: string,
+  artistId: string,
   data: { presentationTitle: string; catalogueName: string }
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
-    const catalogueNumber = await nextCatalogueNumber(siteId);
+    const catalogueNumber = await nextCatalogueNumber(artistId);
     try {
       return await db.artwork.create({
-        data: { siteId, catalogueNumber, ...data },
+        data: { artistId, catalogueNumber, ...data },
       });
     } catch (err: unknown) {
       const isUniqueViolation =
@@ -50,10 +55,13 @@ async function createArtworkWithRetry(
 // it later. Whatever title it ends up with seeds both facets
 // (presentationTitle and catalogueName) as a starting point; from this
 // point on the two are independent.
-export async function createArtwork(siteId: string, formData: FormData) {
+// `siteId` here is only which site you're currently working in, so the
+// new artwork's editor opens back on that site's URL — it doesn't scope
+// ownership, `artistId` does.
+export async function createArtwork(artistId: string, siteId: string, formData: FormData) {
   const title = (formData.get("title") as string)?.trim() || "Untitled";
 
-  const artwork = await createArtworkWithRetry(siteId, {
+  const artwork = await createArtworkWithRetry(artistId, {
     presentationTitle: title,
     catalogueName: title,
   });
@@ -73,7 +81,7 @@ type ListFilters = {
 
 // Lightweight rows for the grid — only what a tile needs to render.
 // Full detail is fetched separately (getArtworkDetail) when a tile is opened.
-export async function listArtworks(siteId: string, filters: ListFilters) {
+export async function listArtworks(artistId: string, filters: ListFilters) {
   const { q, availability, location, type, group, sort } = filters;
 
   const orderBy = {
@@ -84,7 +92,7 @@ export async function listArtworks(siteId: string, filters: ListFilters) {
 
   return db.artwork.findMany({
     where: {
-      siteId,
+      artistId,
       ...(q
         ? {
             OR: [
@@ -123,7 +131,13 @@ export async function getArtworkDetail(id: string) {
   });
 }
 
-export async function updatePresentation(id: string, formData: FormData): Promise<void> {
+// `siteId` is only used to revalidate/redirect back to whichever site's
+// screen you were editing from — it no longer scopes the artwork itself.
+export async function updatePresentation(
+  id: string,
+  siteId: string,
+  formData: FormData
+): Promise<void> {
   const presentationTitle = (formData.get("presentationTitle") as string)?.trim();
   const priceRaw = (formData.get("presentationPrice") as string)?.trim();
   const dimensions = (formData.get("dimensions") as string)?.trim() || null;
@@ -132,7 +146,7 @@ export async function updatePresentation(id: string, formData: FormData): Promis
   const presentationGroup = (formData.get("presentationGroup") as string)?.trim() || null;
   const availability = formData.get("availability") as Availability;
 
-  const artwork = await db.artwork.update({
+  await db.artwork.update({
     where: { id },
     data: {
       presentationTitle,
@@ -150,10 +164,14 @@ export async function updatePresentation(id: string, formData: FormData): Promis
     },
   });
 
-  revalidatePath(`/sites/${artwork.siteId}/artworks`);
+  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
-export async function updateCatalogue(id: string, formData: FormData): Promise<void> {
+export async function updateCatalogue(
+  id: string,
+  siteId: string,
+  formData: FormData
+): Promise<void> {
   const catalogueName = (formData.get("catalogueName") as string)?.trim();
   const yearRaw = (formData.get("year") as string)?.trim();
   const type = (formData.get("type") as string)?.trim() || null;
@@ -166,7 +184,7 @@ export async function updateCatalogue(id: string, formData: FormData): Promise<v
   const priceFramedRaw = (formData.get("priceFramed") as string)?.trim();
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
 
-  const artwork = await db.artwork.update({
+  await db.artwork.update({
     where: { id },
     data: {
       catalogueName,
@@ -183,7 +201,7 @@ export async function updateCatalogue(id: string, formData: FormData): Promise<v
     },
   });
 
-  revalidatePath(`/sites/${artwork.siteId}/artworks`);
+  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 export async function deleteArtwork(siteId: string, id: string) {
@@ -192,20 +210,18 @@ export async function deleteArtwork(siteId: string, id: string) {
   redirect(`/sites/${siteId}/artworks`);
 }
 
-export async function linkImagesToArtwork(artworkId: string, imageIds: string[]) {
+export async function linkImagesToArtwork(artworkId: string, imageIds: string[], siteId: string) {
   await db.image.updateMany({
     where: { id: { in: imageIds } },
     data: { artworkId },
   });
-  const artwork = await db.artwork.findUnique({ where: { id: artworkId } });
-  if (artwork) revalidatePath(`/sites/${artwork.siteId}/artworks`);
+  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
-export async function unlinkImageFromArtwork(artworkId: string, imageId: string) {
+export async function unlinkImageFromArtwork(artworkId: string, imageId: string, siteId: string) {
   await db.image.update({
     where: { id: imageId },
     data: { artworkId: null },
   });
-  const artwork = await db.artwork.findUnique({ where: { id: artworkId } });
-  if (artwork) revalidatePath(`/sites/${artwork.siteId}/artworks`);
+  revalidatePath(`/sites/${siteId}/artworks`);
 }
