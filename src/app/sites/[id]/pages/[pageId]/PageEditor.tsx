@@ -194,7 +194,7 @@ export default function PageEditor({
                             <img
                               src={img.url}
                               alt=""
-                              className="h-16 w-full rounded object-cover"
+                              className="aspect-square w-full rounded object-cover"
                             />
                             <button
                               type="button"
