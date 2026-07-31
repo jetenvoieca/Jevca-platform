@@ -52,6 +52,18 @@ model Artist {
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
   sites     Site[]
+  artworks  Artwork[]
+
+  // Preset option lists for the Artwork Catalogue's Settings screen. Live
+  // here rather than on Site because Artworks belong to the artist, not any
+  // one of their sites — the same piece can be featured on more than one
+  // site, so its catalogue and the presets that describe it are shared
+  // across all of that artist's sites, not duplicated per site.
+  artworkGroups    String[] @default([])
+  artworkTypes     String[] @default([])
+  artworkLocations String[] @default([])
+  mediumPresets    String[] @default([])
+  sizePresets      String[] @default([])
 }
 
 model Site {
@@ -65,20 +77,9 @@ model Site {
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
 
-  pages    Page[]
-  artworks Artwork[]
-  images   Image[]
-  menus    Menu[]
-
-  // Preset option lists for the Artwork Catalogue's Settings screen — kept
-  // as simple string arrays rather than separate tables, since they're just
-  // curated lists of text the artwork editor's dropdowns offer, not records
-  // with their own identity or relations.
-  artworkGroups    String[] @default([])
-  artworkTypes     String[] @default([])
-  artworkLocations String[] @default([])
-  mediumPresets    String[] @default([])
-  sizePresets      String[] @default([])
+  pages  Page[]
+  images Image[]
+  menus  Menu[]
 
   @@index([artistId])
 }
@@ -163,11 +164,13 @@ model MenuItem {
 }
 
 model Artwork {
-  id     String @id @default(cuid())
-  siteId String
-  site   Site   @relation(fields: [siteId], references: [id])
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
 
-  // Catalogue number is the record's identifier — auto-generated, shared by both facets.
+  // Catalogue number is the record's identifier — auto-generated, unique
+  // per artist (not per site, since the same artwork can appear on more
+  // than one of that artist's sites).
   catalogueNumber String
 
   // --- Presentation facet: what customers see on the public site ---
@@ -198,8 +201,8 @@ model Artwork {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@unique([siteId, catalogueNumber])
-  @@index([siteId])
+  @@unique([artistId, catalogueNumber])
+  @@index([artistId])
 }
 
 model Image {
