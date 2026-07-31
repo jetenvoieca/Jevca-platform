@@ -90,9 +90,14 @@ export default function ArtworksCatalogueView({
     <div className="px-6 py-4">
       <h1 className="mb-3 text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
-      {/* Everything below is one consolidated row — keeps the grid and
-          detail panel starting as close to the top as possible. */}
-      <div className="mb-3 flex flex-wrap items-center gap-3">
+      <div
+        className={selected ? "grid items-start gap-6" : ""}
+        style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
+      >
+        <div>
+          {/* Everything below is one consolidated row — keeps the grid and
+              detail panel starting as close to the top as possible. */}
+          <div className="mb-3 flex flex-wrap items-center gap-3">
         <div className="flex gap-2">
           <Link
             href={chipHref("")}
@@ -236,11 +241,6 @@ export default function ArtworksCatalogueView({
         {artworks.length} work{artworks.length === 1 ? "" : "s"} · {soldCount} sold
       </p>
 
-      <div
-        className={selected ? "grid items-start gap-6" : ""}
-        style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
-      >
-        <div>
           {view === "tile" ? (
             <div
               className="grid gap-3"
