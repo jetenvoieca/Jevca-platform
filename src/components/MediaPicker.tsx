@@ -60,7 +60,7 @@ export default function MediaPicker({
           caption: result.image.caption,
           kind: result.image.kind,
         };
-        setImages((prev) => [img, ...prev]);
+        setImages((prev) => [...prev, img]);
         handlePick(img);
       }
     });
