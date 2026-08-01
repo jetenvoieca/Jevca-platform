@@ -11,6 +11,8 @@ import {
   unlinkImageFromArtwork,
 } from "@/lib/actions/artworks";
 import MediaPicker from "@/components/MediaPicker";
+import PaymentsPanel from "@/components/PaymentsPanel";
+import type { PaymentPlanDetail } from "@/lib/actions/payments";
 
 export type ArtworkDetail = {
   id: string;
@@ -36,6 +38,7 @@ export type ArtworkDetail = {
   priceFramed: string | null;
   studioNotes: string | null;
   images: { id: string; url: string }[];
+  paymentPlan: PaymentPlanDetail | null;
 };
 
 export type ArtworkSettings = {
@@ -44,6 +47,9 @@ export type ArtworkSettings = {
   artworkLocations: string[];
   mediumPresets: string[];
   sizePresets: string[];
+  defaultInstalmentCount: number;
+  defaultReleaseMessage: string;
+  defaultReleaseTriggerCount: number;
 };
 
 // Keeps a select from silently dropping an existing value that isn't (yet)
@@ -58,12 +64,17 @@ export default function ArtworkDetailPanel({
   artistId,
   artwork,
   settings,
+  siteDefaultCurrency = "GBP",
   onClose,
 }: {
   siteId: string;
   artistId: string;
   artwork: ArtworkDetail;
   settings: ArtworkSettings;
+  // Used to default the currency when a new Payment plan is first set up.
+  // Optional (falls back to GBP) since not every caller has easy access
+  // to the site record — see decisions-log.md.
+  siteDefaultCurrency?: string;
   // When provided, Close calls this instead of navigating to the Artworks
   // Catalogue — used when this panel is embedded somewhere else (e.g. the
   // Section editor), where "close" means "go back to what I was doing",
@@ -71,6 +82,10 @@ export default function ArtworkDetailPanel({
   onClose?: () => void;
 }) {
   const [tab, setTab] = useState<"presentation" | "catalogue">("presentation");
+  // Sub-tab within Catalogue — Payments lives here, not as a third
+  // top-level facet, per the agreed design (it's part of the artist's
+  // private working record, not shown to the public).
+  const [catalogueSubTab, setCatalogueSubTab] = useState<"details" | "payments">("details");
   const [images, setImages] = useState(artwork.images);
   const [isPending, startTransition] = useTransition();
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
@@ -315,6 +330,45 @@ export default function ArtworkDetailPanel({
               <p className="mb-3 text-xs text-neutral-400">
                 Your private working record — never shown on the public site.
               </p>
+
+              <div className="mb-4 flex gap-2 border-b border-neutral-200">
+                <button
+                  type="button"
+                  onClick={() => setCatalogueSubTab("details")}
+                  className={`px-3 py-1.5 text-sm font-medium ${
+                    catalogueSubTab === "details"
+                      ? "border-b-2 border-neutral-900 text-neutral-900"
+                      : "text-neutral-400 hover:text-neutral-600"
+                  }`}
+                >
+                  Details
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCatalogueSubTab("payments")}
+                  className={`px-3 py-1.5 text-sm font-medium ${
+                    catalogueSubTab === "payments"
+                      ? "border-b-2 border-neutral-900 text-neutral-900"
+                      : "text-neutral-400 hover:text-neutral-600"
+                  }`}
+                >
+                  Payments
+                </button>
+              </div>
+
+              {catalogueSubTab === "payments" ? (
+                <PaymentsPanel
+                  artworkId={artwork.id}
+                  siteId={siteId}
+                  siteDefaultCurrency={siteDefaultCurrency}
+                  plan={artwork.paymentPlan}
+                  defaults={{
+                    defaultInstalmentCount: settings.defaultInstalmentCount,
+                    defaultReleaseMessage: settings.defaultReleaseMessage,
+                    defaultReleaseTriggerCount: settings.defaultReleaseTriggerCount,
+                  }}
+                />
+              ) : (
               <form
                 action={async (formData) => {
                   await updateCatalogue(artwork.id, siteId, formData);
@@ -484,6 +538,7 @@ export default function ArtworkDetailPanel({
                   )}
                 </div>
               </form>
+              )}
             </>
         )}
       </div>
