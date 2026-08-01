@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import PageEditor from "./PageEditor";
 import SectionEditor from "@/components/SectionEditor";
 import { getArtworksByIds } from "@/lib/actions/artworks";
+import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import type { ContentBlock, SectionContent } from "@/lib/blocks";
 
 export default async function PageEditorPage({
@@ -23,12 +24,15 @@ export default async function PageEditorPage({
       byline: "",
       artworkIds: [],
     };
-    const artworkRows = await getArtworksByIds(content.artworkIds || []);
+    const [artworkRows, settings] = await Promise.all([
+      getArtworksByIds(content.artworkIds || []),
+      getArtworkSettings(site.artistId),
+    ]);
     const artworks = artworkRows.map((a) => ({
       id: a.id,
       presentationTitle: a.presentationTitle,
       imageUrl: a.images[0]?.url ?? null,
-      presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
+      presentationPrice: a.presentationPrice,
     }));
 
     return (
@@ -39,6 +43,7 @@ export default async function PageEditorPage({
         pageTitle={page.title}
         initialByline={content.byline || ""}
         initialArtworks={artworks}
+        settings={settings}
       />
     );
   }
