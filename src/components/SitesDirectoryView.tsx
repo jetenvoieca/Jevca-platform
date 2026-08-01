@@ -14,6 +14,7 @@ type SiteRow = {
   domain: string | null;
   status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED";
   createdAt: string;
+  defaultCurrency: string;
   ownerId: string;
   ownerName: string;
   ownerEmail: string | null;
@@ -38,11 +39,12 @@ export default function SitesDirectoryView({
   const [savedField, setSavedField] = useState<string | null>(null);
   const router = useRouter();
 
-  const saveSite = (field: "name" | "domain", value: string) => {
+  const saveSite = (field: "name" | "domain" | "defaultCurrency", value: string) => {
     if (!selected) return;
     const fd = new FormData();
     fd.set("name", field === "name" ? value : selected.name);
     fd.set("domain", field === "domain" ? value : selected.domain || "");
+    fd.set("defaultCurrency", field === "defaultCurrency" ? value : selected.defaultCurrency);
     startTransition(async () => {
       await updateSite(selected.id, fd);
       router.refresh();
@@ -99,6 +101,21 @@ export default function SitesDirectoryView({
               className="mb-1 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
             />
             {savedField === "domain" && <p className="text-xs text-green-600">Saved</p>}
+
+            <label className="mb-1 mt-3 block text-xs uppercase tracking-wide text-neutral-400">
+              Default currency
+            </label>
+            <select
+              key={`currency-${selected.id}`}
+              defaultValue={selected.defaultCurrency}
+              onChange={(e) => saveSite("defaultCurrency", e.target.value)}
+              disabled={isPending}
+              className="mb-1 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+            >
+              <option value="GBP">GBP</option>
+              <option value="EUR">EUR</option>
+            </select>
+            {savedField === "defaultCurrency" && <p className="text-xs text-green-600">Saved</p>}
 
             <dl className="my-4 space-y-2 text-sm">
               <div>
