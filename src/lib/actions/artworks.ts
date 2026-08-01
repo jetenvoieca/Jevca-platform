@@ -131,6 +131,43 @@ export async function getArtworkDetail(id: string) {
   });
 }
 
+// getArtworkDetail returns raw Prisma data, including Decimal price
+// fields — fine when a Server Component converts them before handing off
+// as props (the existing routes already do this), but Decimal isn't safely
+// serializable across a direct client-to-server-action call. This is that
+// same data, pre-converted, for callers that need to fetch it straight
+// from a client component (e.g. clicking an artwork tile to edit it
+// in-place, as the Section editor does).
+export async function getArtworkDetailForClient(id: string) {
+  const artwork = await getArtworkDetail(id);
+  if (!artwork) return null;
+  return {
+    id: artwork.id,
+    artistId: artwork.artistId,
+    catalogueNumber: artwork.catalogueNumber,
+    presentationTitle: artwork.presentationTitle,
+    presentationPrice: artwork.presentationPrice != null ? artwork.presentationPrice.toString() : null,
+    dimensions: artwork.dimensions,
+    description: artwork.description,
+    medium: artwork.medium,
+    presentationGroup: artwork.presentationGroup,
+    availability: artwork.availability,
+    visible: artwork.visible,
+    catalogueName: artwork.catalogueName,
+    year: artwork.year,
+    type: artwork.type,
+    catalogueGroup: artwork.catalogueGroup,
+    size: artwork.size,
+    location: artwork.location,
+    edition: artwork.edition,
+    availableQty: artwork.availableQty,
+    priceUnframed: artwork.priceUnframed != null ? artwork.priceUnframed.toString() : null,
+    priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
+    studioNotes: artwork.studioNotes,
+    images: artwork.images.map((img) => ({ id: img.id, url: img.url })),
+  };
+}
+
 // `siteId` is only used to revalidate/redirect back to whichever site's
 // screen you were editing from — it no longer scopes the artwork itself.
 export async function updatePresentation(
@@ -236,5 +273,11 @@ export async function getArtworksByIds(ids: string[]) {
     include: { images: { take: 1 } },
   });
   const byId = new Map(rows.map((a) => [a.id, a]));
-  return ids.map((id) => byId.get(id)).filter((a): a is NonNullable<typeof a> => Boolean(a));
+  return ids
+    .map((id) => byId.get(id))
+    .filter((a): a is NonNullable<typeof a> => Boolean(a))
+    .map((a) => ({
+      ...a,
+      presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
+    }));
 }
