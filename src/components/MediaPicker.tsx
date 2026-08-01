@@ -4,13 +4,19 @@ import { useState, useTransition, useRef } from "react";
 import { listImages } from "@/lib/actions/media";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 
-type PickedImage = { id: string; url: string; caption: string | null; kind: string };
+type PickedImage = {
+  id: string;
+  url: string;
+  posterUrl: string | null;
+  caption: string | null;
+  kind: string;
+};
 
 export default function MediaPicker({
   artistId,
   mode = "single",
   videoOnly = false,
-  label = "Choose Image",
+  label = "Add Image",
   onSelect,
 }: {
   artistId: string;
@@ -33,7 +39,13 @@ export default function MediaPicker({
       setImages(
         results
           .filter((img) => (videoOnly ? img.kind === "VIDEO" : img.kind === "PHOTO"))
-          .map((img) => ({ id: img.id, url: img.url, caption: img.caption, kind: img.kind }))
+          .map((img) => ({
+            id: img.id,
+            url: img.url,
+            posterUrl: img.posterUrl,
+            caption: img.caption,
+            kind: img.kind,
+          }))
       );
     });
   };
@@ -52,6 +64,7 @@ export default function MediaPicker({
         const img = {
           id: image.id,
           url: image.url,
+          posterUrl: image.posterUrl,
           caption: image.caption,
           kind: image.kind,
         };
@@ -82,14 +95,18 @@ export default function MediaPicker({
     setOpen(false);
   };
 
+  // Same trigger everywhere an image/video can be added — a blank dashed
+  // tile, not a button — so adding media looks and behaves identically
+  // across the Artwork Catalogue, Media Catalogue, page Content Blocks,
+  // and Section artwork grids. See decisions-log.md, 2026-07-31.
   if (!open) {
     return (
       <button
         type="button"
         onClick={handleOpen}
-        className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+        className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
       >
-        {label}
+        + {label}
       </button>
     );
   }
@@ -101,7 +118,7 @@ export default function MediaPicker({
         if (e.target === e.currentTarget) setOpen(false);
       }}
     >
-      <div className="flex h-full max-h-[85vh] w-full max-w-5xl flex-col rounded-lg bg-white shadow-xl">
+      <div className="flex h-full max-h-[85vh] w-full max-w-6xl flex-col rounded-lg bg-white shadow-xl">
         <div className="flex items-center gap-2 border-b border-neutral-200 p-4">
           <input
             type="text"
@@ -144,7 +161,7 @@ export default function MediaPicker({
         )}
 
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="grid grid-cols-6 gap-3">
+          <div className="grid grid-cols-8 gap-3">
             {images.map((img) => {
               const isSelected = selected.some((s) => s.id === img.id);
               return (
@@ -157,9 +174,17 @@ export default function MediaPicker({
                   }`}
                 >
                   {img.kind === "VIDEO" ? (
-                    <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-xs text-neutral-500">
-                      Video
-                    </div>
+                    img.posterUrl ? (
+                      <img
+                        src={img.posterUrl}
+                        alt=""
+                        className="aspect-square w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-xs text-neutral-500">
+                        Video
+                      </div>
+                    )
                   ) : (
                     <img src={img.url} alt="" className="aspect-square w-full object-cover" />
                   )}
@@ -183,7 +208,7 @@ export default function MediaPicker({
               disabled={selected.length === 0}
               className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >
-              Add to gallery
+              Add
             </button>
           </div>
         )}
