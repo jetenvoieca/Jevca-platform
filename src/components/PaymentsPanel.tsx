@@ -83,11 +83,11 @@ export default function PaymentsPanel({
     setError(null);
     setLinkUrl(null);
     startTransition(async () => {
-      try {
-        const url = await createPaymentLink(artworkId, siteId);
-        setLinkUrl(url);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not create a payment link.");
+      const result = await createPaymentLink(artworkId, siteId);
+      if (result.ok) {
+        setLinkUrl(result.url);
+      } else {
+        setError(result.error);
       }
     });
   };
@@ -96,11 +96,11 @@ export default function PaymentsPanel({
     setError(null);
     setCardSecret(null);
     startTransition(async () => {
-      try {
-        const secret = await createCardEntryIntent(artworkId, siteId);
-        setCardSecret(secret);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Could not start card entry.");
+      const result = await createCardEntryIntent(artworkId, siteId);
+      if (result.ok) {
+        setCardSecret(result.clientSecret);
+      } else {
+        setError(result.error);
       }
     });
   };
