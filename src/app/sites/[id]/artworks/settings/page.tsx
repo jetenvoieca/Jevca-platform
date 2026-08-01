@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SettingsListCard from "@/components/SettingsListCard";
+import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
 
 export default async function ArtworkSettingsPage({
   params,
@@ -68,6 +69,16 @@ export default async function ArtworkSettingsPage({
           description="Sizes offered in the Catalogue's Size dropdown — add the ones you use repeatedly, to avoid typos."
           options={settings.sizePresets}
           placeholder="e.g. 60 x 60 cm"
+        />
+      </div>
+
+      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <PaymentDefaultsCard
+          artistId={artistId}
+          siteId={id}
+          defaultInstalmentCount={settings.defaultInstalmentCount}
+          defaultReleaseMessage={settings.defaultReleaseMessage}
+          defaultReleaseTriggerCount={settings.defaultReleaseTriggerCount}
         />
       </div>
     </div>
