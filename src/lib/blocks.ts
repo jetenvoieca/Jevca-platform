@@ -31,6 +31,7 @@ export type VideoBlock = {
   type: "video";
   imageId: string;
   url: string;
+  posterUrl?: string;
 };
 
 export type TextGridRow = { id: string; cell1: string; cell2: string; cell3: string };
