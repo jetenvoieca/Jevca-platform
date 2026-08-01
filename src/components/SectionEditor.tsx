@@ -78,13 +78,18 @@ export default function SectionEditor({
     await deletePage(siteId, pageId);
   };
 
-  const addArtwork = (a: {
-    id: string;
-    presentationTitle: string;
-    imageUrl: string | null;
-    presentationPrice: string | null;
-  }) => {
-    setArtworks((prev) => (prev.some((p) => p.id === a.id) ? prev : [...prev, a]));
+  const addArtworks = (
+    picked: {
+      id: string;
+      presentationTitle: string;
+      imageUrl: string | null;
+      presentationPrice: string | null;
+    }[]
+  ) => {
+    setArtworks((prev) => [
+      ...prev,
+      ...picked.filter((a) => !prev.some((p) => p.id === a.id)),
+    ]);
   };
 
   const removeArtwork = (id: string) => {
@@ -118,54 +123,54 @@ export default function SectionEditor({
             />
           </div>
 
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3">
             <label className="text-sm font-medium text-neutral-700">Artworks</label>
-            <ArtworkPicker artistId={artistId} onSelect={addArtwork} />
           </div>
 
           {artworks.length === 0 ? (
-            <p className="text-sm text-neutral-400">
-              No artworks yet — use Choose Artwork above to add some, then drag to reorder.
+            <p className="mb-3 text-sm text-neutral-400">
+              Use the tile below to add artworks, then drag to reorder.
             </p>
-          ) : (
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-              {artworks.map((a, i) => (
-                <div
-                  key={a.id}
-                  draggable
-                  onDragStart={() => setDragIndex(i)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => handleDrop(i)}
-                  onDragEnd={() => setDragIndex(null)}
-                  className={`group relative cursor-move rounded-md border-2 p-1 ${
-                    dragIndex === i ? "border-neutral-900 opacity-50" : "border-transparent"
-                  }`}
+          ) : null}
+
+          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            {artworks.map((a, i) => (
+              <div
+                key={a.id}
+                draggable
+                onDragStart={() => setDragIndex(i)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => handleDrop(i)}
+                onDragEnd={() => setDragIndex(null)}
+                className={`group relative cursor-move rounded-md border-2 p-1 ${
+                  dragIndex === i ? "border-neutral-900 opacity-50" : "border-transparent"
+                }`}
+              >
+                {a.imageUrl ? (
+                  <img
+                    src={a.imageUrl}
+                    alt=""
+                    className="aspect-square w-full rounded-md object-cover"
+                  />
+                ) : (
+                  <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
+                    No image
+                  </div>
+                )}
+                <p className="mt-1 truncate text-xs font-medium text-neutral-900">
+                  {a.presentationTitle}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => removeArtwork(a.id)}
+                  className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
                 >
-                  {a.imageUrl ? (
-                    <img
-                      src={a.imageUrl}
-                      alt=""
-                      className="aspect-square w-full rounded-md object-cover"
-                    />
-                  ) : (
-                    <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                      No image
-                    </div>
-                  )}
-                  <p className="mt-1 truncate text-xs font-medium text-neutral-900">
-                    {a.presentationTitle}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => removeArtwork(a.id)}
-                    className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
-                  >
-                    ✕
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
+                  ✕
+                </button>
+              </div>
+            ))}
+            <ArtworkPicker artistId={artistId} mode="multi" label="Add Artwork" onSelect={addArtworks} />
+          </div>
           <p className="mt-2 text-xs text-neutral-400">Drag a tile to reorder.</p>
         </div>
       }
