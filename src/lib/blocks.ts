@@ -52,3 +52,13 @@ export type ContentBlock =
   | ArtworkBlock
   | VideoBlock
   | TextGridBlock;
+
+// A Section page isn't built from Content Blocks at all — it's a simple,
+// fixed shape: a byline under the page title, and an ordered grid of
+// artworks. Stored in the same draftBlocks/liveBlocks columns as Private
+// pages (so Draft/Publish keeps working unchanged for both page types),
+// just holding this shape instead of a block array.
+export type SectionContent = {
+  byline: string;
+  artworkIds: string[];
+};
