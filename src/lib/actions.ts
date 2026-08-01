@@ -58,6 +58,7 @@ export async function createSite(
 export async function updateSite(id: string, formData: FormData): Promise<void> {
   const name = (formData.get("name") as string)?.trim();
   const domainRaw = (formData.get("domain") as string)?.trim() || null;
+  const defaultCurrency = (formData.get("defaultCurrency") as string)?.trim() || "GBP";
   // Store domains without a leading protocol/www so they're consistent
   // however someone happens to type them in.
   const domain = domainRaw
@@ -67,7 +68,7 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
 
   await db.site.update({
     where: { id },
-    data: { name, domain },
+    data: { name, domain, defaultCurrency },
   });
   revalidatePath("/");
 }
