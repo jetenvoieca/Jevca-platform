@@ -8,6 +8,7 @@ import { updateMedia, archiveMedia } from "@/lib/actions/mediaCatalogue";
 export type MediaDetail = {
   id: string;
   url: string;
+  posterUrl: string | null;
   kind: string;
   caption: string | null;
   altText: string | null;
@@ -64,7 +65,12 @@ export default function MediaDetailPanel({
       </div>
 
       {media.kind === "VIDEO" ? (
-        <video src={media.url} controls className="mb-4 w-full rounded-md" />
+        <video
+          src={media.url}
+          poster={media.posterUrl || undefined}
+          controls
+          className="mb-4 w-full rounded-md"
+        />
       ) : (
         <img src={media.url} alt="" className="mb-4 w-full rounded-md object-cover" />
       )}
