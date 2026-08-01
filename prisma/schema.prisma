@@ -217,6 +217,10 @@ model Image {
   artist   Artist @relation(fields: [artistId], references: [id])
   key       String
   url       String
+  // A still frame grabbed client-side at upload time, so a video has a
+  // real thumbnail in the catalogue grid instead of a generic placeholder.
+  // Null for photos, and for any video uploaded before this existed.
+  posterUrl String?
   kind      ImageKind   @default(PHOTO)
   mimeType  String
   caption   String?
