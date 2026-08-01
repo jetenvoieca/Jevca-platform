@@ -225,3 +225,16 @@ export async function unlinkImageFromArtwork(artworkId: string, imageId: string,
   });
   revalidatePath(`/sites/${siteId}/artworks`);
 }
+
+// Used to hydrate a Section's saved artwork grid — Prisma's `in` filter
+// doesn't preserve order, so the results are re-sorted to match the saved
+// artworkIds order before returning.
+export async function getArtworksByIds(ids: string[]) {
+  if (ids.length === 0) return [];
+  const rows = await db.artwork.findMany({
+    where: { id: { in: ids } },
+    include: { images: { take: 1 } },
+  });
+  const byId = new Map(rows.map((a) => [a.id, a]));
+  return ids.map((id) => byId.get(id)).filter((a): a is NonNullable<typeof a> => Boolean(a));
+}
