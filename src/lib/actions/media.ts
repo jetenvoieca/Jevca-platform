@@ -41,13 +41,15 @@ export async function finalizeUpload(
   artistId: string,
   key: string,
   contentType: string,
-  kind: "PHOTO" | "VIDEO"
+  kind: "PHOTO" | "VIDEO",
+  posterUrl?: string
 ) {
   const image = await db.image.create({
     data: {
       artistId,
       key,
       url: `/api/media/${key}`,
+      posterUrl: posterUrl || null,
       kind,
       mimeType: contentType,
       status: "SORTED", // uploaded directly = already sorted, not in the Hopper
