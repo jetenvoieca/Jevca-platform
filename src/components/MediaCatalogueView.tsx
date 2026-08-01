@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { uploadImage } from "@/lib/actions/media";
+import { uploadFileDirect } from "@/lib/uploadDirect";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 
 type MediaRow = {
@@ -312,19 +312,12 @@ async function handleFileUpload(
   onDone: (error: string | null) => void
 ) {
   try {
-    const formData = new FormData();
-    formData.set("file", file);
-    const result = await uploadImage(artistId, formData);
-    if (result.error) {
-      onDone(result.error);
-      return;
-    }
+    await uploadFileDirect(file, artistId);
     window.location.href = `/sites/${siteId}/media`;
-  } catch {
-    // A network error or a request that timed out partway through both
-    // land here — previously this just went silent, which is exactly what
-    // "nothing happens" looks like from a large file on a slow connection.
-    onDone("Upload failed — the connection may have dropped or timed out. Try again.");
+  } catch (err) {
+    // A network error, a dropped connection, or the upload step itself
+    // failing all land here — surfaced now instead of going silent.
+    onDone(err instanceof Error ? err.message : "Upload failed. Try again.");
   }
 }
 
