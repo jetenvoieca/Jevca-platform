@@ -8,6 +8,7 @@ import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPane
 type MediaRow = {
   id: string;
   url: string;
+  posterUrl: string | null;
   kind: string;
   caption: string | null;
   artwork: { id: string; presentationTitle: string } | null;
@@ -220,9 +221,22 @@ export default function MediaCatalogueView({
                   }`}
                 >
                   {m.kind === "VIDEO" ? (
-                    <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-200 text-xs text-neutral-500">
-                      Video
-                    </div>
+                    m.posterUrl ? (
+                      <div className="relative">
+                        <img
+                          src={m.posterUrl}
+                          alt=""
+                          className="aspect-square w-full rounded-md object-cover"
+                        />
+                        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                          ▶ Video
+                        </span>
+                      </div>
+                    ) : (
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-200 text-xs text-neutral-500">
+                        Video
+                      </div>
+                    )
                   ) : (
                     <img
                       src={m.url}
@@ -263,9 +277,17 @@ export default function MediaCatalogueView({
                     <td className="py-2">
                       <Link href={tileHref(m.id)}>
                         {m.kind === "VIDEO" ? (
-                          <div className="flex h-10 w-10 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
-                            Video
-                          </div>
+                          m.posterUrl ? (
+                            <img
+                              src={m.posterUrl}
+                              alt=""
+                              className="h-10 w-10 rounded object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
+                              Video
+                            </div>
+                          )
                         ) : (
                           <img src={m.url} alt="" className="h-10 w-10 rounded object-cover" />
                         )}
