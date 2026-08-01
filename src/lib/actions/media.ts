@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { uploadToR2 } from "@/lib/r2";
+import { getPresignedUploadUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 
 function sanitizeFilename(name: string) {
@@ -11,41 +11,48 @@ function sanitizeFilename(name: string) {
     .replace(/-+/g, "-");
 }
 
-export async function uploadImage(artistId: string, formData: FormData) {
-  const file = formData.get("file") as File | null;
-  if (!file || file.size === 0) {
-    return { error: "No file selected." };
+// Step 1 of 2 for uploading: this only ever handles a filename and content
+// type — never the file itself — so it stays a tiny request regardless of
+// how large the actual file is. The browser then PUTs the file straight to
+// the URL this returns, going directly to R2 rather than through this
+// server action, since Netlify Functions cap request payloads at ~6MB
+// (nearer 4.5MB once binary content is base64-encoded in transit) — a
+// platform limit no amount of Next.js config can raise.
+export async function requestUploadUrl(
+  artistId: string,
+  filename: string,
+  contentType: string
+) {
+  const isImage = contentType.startsWith("image/");
+  const isVideo = contentType.startsWith("video/");
+  if (!isImage && !isVideo) {
+    return { error: "Only images and videos can be uploaded." };
   }
 
-  const isVideo = file.type.startsWith("video/");
-  // Practical limit for now — direct server-side upload, not chunked.
-  // Larger/chunked video upload can be added when the Media Catalogue's
-  // own upload flow needs it.
-  const maxBytes = isVideo ? 50 * 1024 * 1024 : 15 * 1024 * 1024;
-  if (file.size > maxBytes) {
-    return {
-      error: `File too large (${Math.round(
-        file.size / 1024 / 1024
-      )}MB). Limit for now is ${Math.round(maxBytes / 1024 / 1024)}MB.`,
-    };
-  }
+  const key = `${artistId}/${randomUUID()}-${sanitizeFilename(filename)}`;
+  const uploadUrl = await getPresignedUploadUrl(key, contentType);
+  return { uploadUrl, key, kind: isVideo ? ("VIDEO" as const) : ("PHOTO" as const) };
+}
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  const key = `${artistId}/${randomUUID()}-${sanitizeFilename(file.name)}`;
-
-  await uploadToR2(key, buffer, file.type || "application/octet-stream");
-
+// Step 2 of 2: once the browser has PUT the file straight to R2 using the
+// URL above, this creates the actual database record — again a tiny
+// request, just the key and a couple of strings.
+export async function finalizeUpload(
+  artistId: string,
+  key: string,
+  contentType: string,
+  kind: "PHOTO" | "VIDEO"
+) {
   const image = await db.image.create({
     data: {
       artistId,
       key,
       url: `/api/media/${key}`,
-      kind: isVideo ? "VIDEO" : "PHOTO",
-      mimeType: file.type || "application/octet-stream",
+      kind,
+      mimeType: contentType,
       status: "SORTED", // uploaded directly = already sorted, not in the Hopper
     },
   });
-
   return { image };
 }
 
