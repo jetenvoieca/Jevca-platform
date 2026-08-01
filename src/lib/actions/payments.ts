@@ -180,70 +180,103 @@ function firstChargeAmount(plan: {
 
 // ---------- Take payment: hosted Stripe payment link ----------
 
-export async function createPaymentLink(artworkId: string, siteId: string): Promise<string> {
-  const plan = await db.paymentPlan.findUnique({
-    where: { artworkId },
-    include: { artwork: true },
-  });
-  if (!plan) throw new Error("Set up the payment terms first.");
+// Returns a result object rather than throwing. Next.js redacts the
+// message of anything *thrown* inside a Server Action in production
+// builds (shown to the user as a generic "digest" error) — since these
+// messages are meant to be read by the person taking the payment (a
+// missing buyer email, a declined Stripe key, etc.), they need to travel
+// back as normal data instead.
+export async function createPaymentLink(
+  artworkId: string,
+  siteId: string
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const plan = await db.paymentPlan.findUnique({
+      where: { artworkId },
+      include: { artwork: true },
+    });
+    if (!plan) return { ok: false, error: "Set up the payment terms first." };
 
-  const customerId = await getOrCreateStripeCustomer(plan);
-  const amount = firstChargeAmount(plan);
+    const customerId = await getOrCreateStripeCustomer(plan);
+    const amount = firstChargeAmount(plan);
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    customer: customerId,
-    payment_intent_data: {
-      // Saves the card against the Customer so later instalments can be
-      // auto-charged with no buyer present — see handleFirstPaymentSucceeded.
-      setup_future_usage: "off_session",
-      metadata: { planId: plan.id, sequence: "1" },
-    },
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: plan.currency.toLowerCase(),
-          unit_amount: toMinorUnits(amount),
-          product_data: { name: plan.artwork.presentationTitle },
-        },
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      customer: customerId,
+      payment_intent_data: {
+        // Saves the card against the Customer so later instalments can be
+        // auto-charged with no buyer present — see handleFirstPaymentSucceeded.
+        setup_future_usage: "off_session",
+        metadata: { planId: plan.id, sequence: "1" },
       },
-    ],
-    success_url: `${APP_URL}/sites/${siteId}/artworks/${artworkId}?payment=success`,
-    cancel_url: `${APP_URL}/sites/${siteId}/artworks/${artworkId}?payment=cancelled`,
-  });
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: plan.currency.toLowerCase(),
+            unit_amount: toMinorUnits(amount),
+            product_data: { name: plan.artwork.presentationTitle },
+          },
+        },
+      ],
+      success_url: `${APP_URL}/sites/${siteId}/artworks/${artworkId}?payment=success`,
+      cancel_url: `${APP_URL}/sites/${siteId}/artworks/${artworkId}?payment=cancelled`,
+    });
 
-  await db.paymentPlan.update({
-    where: { id: plan.id },
-    data: { stripeCheckoutSessionId: session.id },
-  });
+    await db.paymentPlan.update({
+      where: { id: plan.id },
+      data: { stripeCheckoutSessionId: session.id },
+    });
 
-  if (!session.url) throw new Error("Stripe did not return a payment link.");
-  return session.url;
+    if (!session.url) return { ok: false, error: "Stripe did not return a payment link." };
+    return { ok: true, url: session.url };
+  } catch (err) {
+    return { ok: false, error: stripeErrorMessage(err) };
+  }
 }
 
 // ---------- Take payment: card entered directly in the app ----------
 
 // Returns a PaymentIntent client secret for the StripeCardForm component
 // (Stripe Elements) to confirm against — the card details themselves
-// never pass through our server.
-export async function createCardEntryIntent(artworkId: string, siteId: string): Promise<string> {
-  const plan = await db.paymentPlan.findUnique({ where: { artworkId } });
-  if (!plan) throw new Error("Set up the payment terms first.");
+// never pass through our server. Same result-object pattern as
+// createPaymentLink, for the same reason.
+export async function createCardEntryIntent(
+  artworkId: string,
+  siteId: string
+): Promise<{ ok: true; clientSecret: string } | { ok: false; error: string }> {
+  try {
+    const plan = await db.paymentPlan.findUnique({ where: { artworkId } });
+    if (!plan) return { ok: false, error: "Set up the payment terms first." };
 
-  const customerId = await getOrCreateStripeCustomer(plan);
-  const amount = firstChargeAmount(plan);
+    const customerId = await getOrCreateStripeCustomer(plan);
+    const amount = firstChargeAmount(plan);
 
-  const intent = await stripe.paymentIntents.create({
-    amount: toMinorUnits(amount),
-    currency: plan.currency.toLowerCase(),
-    customer: customerId,
-    setup_future_usage: "off_session",
-    metadata: { planId: plan.id, sequence: "1", siteId },
-  });
+    const intent = await stripe.paymentIntents.create({
+      amount: toMinorUnits(amount),
+      currency: plan.currency.toLowerCase(),
+      customer: customerId,
+      setup_future_usage: "off_session",
+      metadata: { planId: plan.id, sequence: "1", siteId },
+    });
 
-  if (!intent.client_secret) throw new Error("Stripe did not return a client secret.");
-  return intent.client_secret;
+    if (!intent.client_secret) {
+      return { ok: false, error: "Stripe did not return a client secret." };
+    }
+    return { ok: true, clientSecret: intent.client_secret };
+  } catch (err) {
+    return { ok: false, error: stripeErrorMessage(err) };
+  }
+}
+
+// Stripe's own SDK errors (bad API key, declined card set-up, invalid
+// request, etc.) carry a genuinely useful .message — surfaced as-is.
+// Anything else (a plain thrown Error, e.g. the "add buyer's email"
+// checks above) also has a usable .message. Only a truly unknown thrown
+// value falls back to a generic string.
+function stripeErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return "Something went wrong talking to Stripe. Check the Netlify function logs for details.";
 }
 
 // ---------- Webhook-side handlers (called from /api/stripe/webhook) ----------
