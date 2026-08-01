@@ -127,7 +127,7 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
 export async function getArtworkDetail(id: string) {
   return db.artwork.findUnique({
     where: { id },
-    include: { images: true },
+    include: { images: true, paymentPlan: { include: { payments: { orderBy: { sequence: "asc" } } } } },
   });
 }
 
@@ -165,6 +165,28 @@ export async function getArtworkDetailForClient(id: string) {
     priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
     studioNotes: artwork.studioNotes,
     images: artwork.images.map((img) => ({ id: img.id, url: img.url })),
+    paymentPlan: artwork.paymentPlan
+      ? {
+          id: artwork.paymentPlan.id,
+          type: artwork.paymentPlan.type,
+          totalAmount: artwork.paymentPlan.totalAmount.toString(),
+          currency: artwork.paymentPlan.currency,
+          instalmentCount: artwork.paymentPlan.instalmentCount,
+          releaseMessage: artwork.paymentPlan.releaseMessage,
+          releaseTriggerCount: artwork.paymentPlan.releaseTriggerCount,
+          buyerName: artwork.paymentPlan.buyerName,
+          buyerEmail: artwork.paymentPlan.buyerEmail,
+          payments: artwork.paymentPlan.payments.map((p) => ({
+            id: p.id,
+            sequence: p.sequence,
+            amount: p.amount.toString(),
+            currency: p.currency,
+            status: p.status,
+            dueDate: p.dueDate ? p.dueDate.toISOString() : null,
+            paidDate: p.paidDate ? p.paidDate.toISOString() : null,
+          })),
+        }
+      : null,
   };
 }
 
