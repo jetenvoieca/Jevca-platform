@@ -15,7 +15,7 @@ export default async function PageEditorPage({
 
   const [page, site] = await Promise.all([
     db.page.findUnique({ where: { id: pageId } }),
-    db.site.findUnique({ where: { id }, select: { artistId: true } }),
+    db.site.findUnique({ where: { id }, select: { artistId: true, defaultCurrency: true } }),
   ]);
   if (!page || page.siteId !== id || !site) notFound();
 
@@ -44,6 +44,7 @@ export default async function PageEditorPage({
         initialByline={content.byline || ""}
         initialArtworks={artworks}
         settings={settings}
+        siteDefaultCurrency={site.defaultCurrency}
       />
     );
   }
