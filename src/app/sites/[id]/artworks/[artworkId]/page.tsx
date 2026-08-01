@@ -1,121 +1,117 @@
-"use server";
-
+import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { revalidatePath } from "next/cache";
+import { listArtworks, getArtworkDetail } from "@/lib/actions/artworks";
+import { getArtworkSettings } from "@/lib/actions/artworkSettings";
+import ArtworksCatalogueView from "../ArtworksCatalogueView";
 
-export type SettingsField =
-  | "artworkGroups"
-  | "artworkTypes"
-  | "artworkLocations"
-  | "mediumPresets"
-  | "sizePresets";
+export const dynamic = "force-dynamic";
 
-// These presets belong to the Artist now (same reasoning as Artwork
-// ownership) — shared across all of that artist's sites, not duplicated
-// per site.
-export async function getArtworkSettings(artistId: string) {
-  const artist = await db.artist.findUnique({
-    where: { id: artistId },
-    select: {
-      artworkGroups: true,
-      artworkTypes: true,
-      artworkLocations: true,
-      mediumPresets: true,
-      sizePresets: true,
-      defaultInstalmentCount: true,
-      defaultReleaseMessage: true,
-      defaultReleaseTriggerCount: true,
-    },
-  });
+type SearchParams = {
+  q?: string;
+  availability?: string;
+  location?: string;
+  type?: string;
+  group?: string;
+  sort?: string;
+};
+
+export default async function ArtworkDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string; artworkId: string }>;
+  searchParams: Promise<SearchParams>;
+}) {
+  const { id, artworkId } = await params;
+  const sp = await searchParams;
+
+  const site = await db.site.findUnique({ where: { id }, select: { artistId: true, defaultCurrency: true } });
+  if (!site) notFound();
+  const artistId = site.artistId;
+
+  const [artworks, artwork, settings] = await Promise.all([
+    listArtworks(artistId, sp),
+    getArtworkDetail(artworkId),
+    getArtworkSettings(artistId),
+  ]);
+
+  // An artwork belongs to the artist, not this particular site — so it's a
+  // valid page as long as it's one of this artist's artworks, viewed via
+  // any of their sites, not only the site it happened to be created from.
+  if (!artwork || artwork.artistId !== artistId) notFound();
+
+  const rows = artworks.map((a) => ({
+    id: a.id,
+    presentationTitle: a.presentationTitle,
+    presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
+    catalogueNumber: a.catalogueNumber,
+    availability: a.availability,
+    imageUrl: a.images[0]?.url ?? null,
+  }));
+
+  // Decimal fields aren't serializable across the server/client boundary as-is.
+  const selected = {
+    id: artwork.id,
+    artistId: artwork.artistId,
+    catalogueNumber: artwork.catalogueNumber,
+    presentationTitle: artwork.presentationTitle,
+    presentationPrice: artwork.presentationPrice != null ? artwork.presentationPrice.toString() : null,
+    dimensions: artwork.dimensions,
+    description: artwork.description,
+    medium: artwork.medium,
+    presentationGroup: artwork.presentationGroup,
+    availability: artwork.availability,
+    visible: artwork.visible,
+    catalogueName: artwork.catalogueName,
+    year: artwork.year,
+    type: artwork.type,
+    catalogueGroup: artwork.catalogueGroup,
+    size: artwork.size,
+    location: artwork.location,
+    edition: artwork.edition,
+    availableQty: artwork.availableQty,
+    priceUnframed: artwork.priceUnframed != null ? artwork.priceUnframed.toString() : null,
+    priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
+    studioNotes: artwork.studioNotes,
+    images: artwork.images.map((img) => ({ id: img.id, url: img.url })),
+    paymentPlan: artwork.paymentPlan
+      ? {
+          id: artwork.paymentPlan.id,
+          type: artwork.paymentPlan.type,
+          totalAmount: artwork.paymentPlan.totalAmount.toString(),
+          currency: artwork.paymentPlan.currency,
+          instalmentCount: artwork.paymentPlan.instalmentCount,
+          releaseMessage: artwork.paymentPlan.releaseMessage,
+          releaseTriggerCount: artwork.paymentPlan.releaseTriggerCount,
+          buyerName: artwork.paymentPlan.buyerName,
+          buyerEmail: artwork.paymentPlan.buyerEmail,
+          payments: artwork.paymentPlan.payments.map((p) => ({
+            id: p.id,
+            sequence: p.sequence,
+            amount: p.amount.toString(),
+            currency: p.currency,
+            status: p.status,
+            dueDate: p.dueDate ? p.dueDate.toISOString() : null,
+            paidDate: p.paidDate ? p.paidDate.toISOString() : null,
+          })),
+        }
+      : null,
+  };
+
   return (
-    artist || {
-      artworkGroups: [],
-      artworkTypes: [],
-      artworkLocations: [],
-      mediumPresets: [],
-      sizePresets: [],
-      defaultInstalmentCount: 5,
-      defaultReleaseMessage: "Available for collection/delivery once 2 payments have been made.",
-      defaultReleaseTriggerCount: 2,
-    }
+    <ArtworksCatalogueView
+      siteId={id}
+      artistId={artistId}
+      artworks={rows}
+      q={sp.q || ""}
+      availability={sp.availability || ""}
+      location={sp.location || ""}
+      type={sp.type || ""}
+      group={sp.group || ""}
+      sort={sp.sort || ""}
+      selected={selected}
+      settings={settings}
+      siteDefaultCurrency={site.defaultCurrency}
+    />
   );
-}
-
-// The three Payments defaults are single values, not preset lists, so they
-// don't fit updateList/addSettingOption/removeSettingOption above — a
-// small dedicated action instead.
-export async function updatePaymentDefaults(artistId: string, siteId: string, formData: FormData) {
-  const defaultInstalmentCount = parseInt((formData.get("defaultInstalmentCount") as string) || "5", 10);
-  const defaultReleaseMessage = (formData.get("defaultReleaseMessage") as string)?.trim() || "";
-  const defaultReleaseTriggerCount = parseInt(
-    (formData.get("defaultReleaseTriggerCount") as string) || "2",
-    10
-  );
-
-  await db.artist.update({
-    where: { id: artistId },
-    data: { defaultInstalmentCount, defaultReleaseMessage, defaultReleaseTriggerCount },
-  });
-
-  revalidatePath(`/sites/${siteId}/artworks/settings`);
-  revalidatePath(`/sites/${siteId}/artworks`);
-}
-
-// Deliberately not using a computed key (e.g. `select: { [field]: true }`)
-// anywhere here — Prisma can't type that precisely against a variable field
-// name, since it has to allow for every possible key on Artist including
-// relations like `sites`, and TypeScript then refuses a plain `as string[]`
-// cast. Writing out each field explicitly keeps everything properly typed.
-// `siteId` is passed through only so the calling screen (reached via a
-// particular site) revalidates correctly — it's not part of what's being
-// updated.
-async function updateList(
-  artistId: string,
-  siteId: string,
-  field: SettingsField,
-  next: string[]
-) {
-  switch (field) {
-    case "artworkGroups":
-      await db.artist.update({ where: { id: artistId }, data: { artworkGroups: next } });
-      break;
-    case "artworkTypes":
-      await db.artist.update({ where: { id: artistId }, data: { artworkTypes: next } });
-      break;
-    case "artworkLocations":
-      await db.artist.update({ where: { id: artistId }, data: { artworkLocations: next } });
-      break;
-    case "mediumPresets":
-      await db.artist.update({ where: { id: artistId }, data: { mediumPresets: next } });
-      break;
-    case "sizePresets":
-      await db.artist.update({ where: { id: artistId }, data: { sizePresets: next } });
-      break;
-  }
-  revalidatePath(`/sites/${siteId}/artworks/settings`);
-  revalidatePath(`/sites/${siteId}/artworks`);
-}
-
-export async function addSettingOption(
-  artistId: string,
-  siteId: string,
-  field: SettingsField,
-  formData: FormData
-) {
-  const value = (formData.get("value") as string)?.trim();
-  if (!value) return;
-  const settings = await getArtworkSettings(artistId);
-  const current = settings[field].filter((v) => v.toLowerCase() !== value.toLowerCase());
-  await updateList(artistId, siteId, field, [...current, value]);
-}
-
-export async function removeSettingOption(
-  artistId: string,
-  siteId: string,
-  field: SettingsField,
-  value: string
-) {
-  const settings = await getArtworkSettings(artistId);
-  const current = settings[field].filter((v) => v !== value);
-  await updateList(artistId, siteId, field, current);
 }
