@@ -104,44 +104,44 @@ export default function ArtworkDetailPanel({
 
       <div className="mb-6">
         <h3 className="mb-2 text-sm font-medium text-neutral-700">Images</h3>
-        {images.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {images.map((img) => (
-              <div key={img.id} className="group relative">
-                <img src={img.url} alt="" className="h-16 w-16 rounded object-cover" />
-                <button
-                  type="button"
-                  onClick={() => {
-                    startTransition(async () => {
-                      await unlinkImageFromArtwork(artwork.id, img.id, siteId);
-                      setImages((prev) => prev.filter((i) => i.id !== img.id));
-                    });
-                  }}
-                  className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
+        <div className="flex flex-wrap gap-2">
+          {images.map((img) => (
+            <div key={img.id} className="group relative h-16 w-16">
+              <img src={img.url} alt="" className="h-16 w-16 rounded object-cover" />
+              <button
+                type="button"
+                onClick={() => {
+                  startTransition(async () => {
+                    await unlinkImageFromArtwork(artwork.id, img.id, siteId);
+                    setImages((prev) => prev.filter((i) => i.id !== img.id));
+                  });
+                }}
+                className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className="h-16 w-16">
+            <MediaPicker
+              artistId={artistId}
+              mode="multi"
+              label="Add"
+              onSelect={(imgs) => {
+                const ids = imgs.map((i) => i.id);
+                startTransition(async () => {
+                  await linkImagesToArtwork(artwork.id, ids, siteId);
+                  setImages((prev) => [
+                    ...prev,
+                    ...imgs
+                      .filter((img) => !prev.some((p) => p.id === img.id))
+                      .map((img) => ({ id: img.id, url: img.url })),
+                  ]);
+                });
+              }}
+            />
           </div>
-        )}
-        <MediaPicker
-          artistId={artistId}
-          mode="multi"
-          label="Link Images"
-          onSelect={(imgs) => {
-            const ids = imgs.map((i) => i.id);
-            startTransition(async () => {
-              await linkImagesToArtwork(artwork.id, ids, siteId);
-              setImages((prev) => [
-                ...prev,
-                ...imgs
-                  .filter((img) => !prev.some((p) => p.id === img.id))
-                  .map((img) => ({ id: img.id, url: img.url })),
-              ]);
-            });
-          }}
-        />
+        </div>
       </div>
 
       <div className="mb-6 flex gap-2 border-b border-neutral-200">
