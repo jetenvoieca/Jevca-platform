@@ -4,9 +4,14 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { saveDraftBlocks, deletePage, menuItemCountForPage, updatePageTitle } from "@/lib/actions/pages";
+import { getArtworkDetailForClient, getArtworksByIds } from "@/lib/actions/artworks";
 import ThreeColumnShell from "@/components/ThreeColumnShell";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import SectionGrid, { type SectionArtworkTile } from "@/components/SectionGrid";
+import ArtworkDetailPanel, {
+  type ArtworkDetail,
+  type ArtworkSettings,
+} from "@/components/ArtworkDetailPanel";
 
 export default function SectionEditor({
   siteId,
@@ -15,6 +20,7 @@ export default function SectionEditor({
   pageTitle,
   initialByline,
   initialArtworks,
+  settings,
 }: {
   siteId: string;
   artistId: string;
@@ -22,6 +28,7 @@ export default function SectionEditor({
   pageTitle: string;
   initialByline: string;
   initialArtworks: SectionArtworkTile[];
+  settings: ArtworkSettings;
 }) {
   const [byline, setByline] = useState(initialByline);
   const [artworks, setArtworks] = useState<SectionArtworkTile[]>(initialArtworks);
@@ -29,6 +36,9 @@ export default function SectionEditor({
   const [isDeleting, setIsDeleting] = useState(false);
   const [titleSaved, setTitleSaved] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingArtwork, setEditingArtwork] = useState<ArtworkDetail | null>(null);
+  const [loadingArtwork, setLoadingArtwork] = useState(false);
   const isFirstRun = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
@@ -107,6 +117,45 @@ export default function SectionEditor({
     setDragIndex(null);
   };
 
+  const openArtwork = (id: string) => {
+    setEditingId(id);
+    setLoadingArtwork(true);
+    getArtworkDetailForClient(id).then((detail) => {
+      setEditingArtwork(detail);
+      setLoadingArtwork(false);
+    });
+  };
+
+  const closeArtwork = async () => {
+    // Refresh just this tile's data — presentationTitle/price/image may
+    // have changed while the panel was open, and the grid should show
+    // that without needing a full page reload.
+    if (editingId) {
+      const [fresh] = await getArtworksByIds([editingId]);
+      if (fresh) {
+        setArtworks((prev) =>
+          prev.map((a) =>
+            a.id === editingId
+              ? {
+                  id: fresh.id,
+                  presentationTitle: fresh.presentationTitle,
+                  imageUrl: fresh.images[0]?.url ?? null,
+                  presentationPrice:
+                    fresh.presentationPrice != null ? fresh.presentationPrice.toString() : null,
+                }
+              : a
+          )
+        );
+      } else {
+        // The artwork was deleted from within the panel — drop it from
+        // this Section's grid too.
+        setArtworks((prev) => prev.filter((a) => a.id !== editingId));
+      }
+    }
+    setEditingId(null);
+    setEditingArtwork(null);
+  };
+
   return (
     <ThreeColumnShell
       preview={<SectionGrid title={pageTitle} byline={byline} artworks={artworks} />}
@@ -123,55 +172,91 @@ export default function SectionEditor({
             />
           </div>
 
-          <div className="mb-3">
-            <label className="text-sm font-medium text-neutral-700">Artworks</label>
-          </div>
-
-          {artworks.length === 0 ? (
-            <p className="mb-3 text-sm text-neutral-400">
-              Use the tile below to add artworks, then drag to reorder.
-            </p>
-          ) : null}
-
-          <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {artworks.map((a, i) => (
-              <div
-                key={a.id}
-                draggable
-                onDragStart={() => setDragIndex(i)}
-                onDragOver={(e) => e.preventDefault()}
-                onDrop={() => handleDrop(i)}
-                onDragEnd={() => setDragIndex(null)}
-                className={`group relative cursor-move rounded-md border-2 p-1 ${
-                  dragIndex === i ? "border-neutral-900 opacity-50" : "border-transparent"
-                }`}
+          {editingId ? (
+            <div>
+              <button
+                type="button"
+                onClick={closeArtwork}
+                className="mb-3 text-sm text-neutral-500 hover:underline"
               >
-                {a.imageUrl ? (
-                  <img
-                    src={a.imageUrl}
-                    alt=""
-                    className="aspect-square w-full rounded-md object-cover"
-                  />
-                ) : (
-                  <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                    No image
-                  </div>
-                )}
-                <p className="mt-1 truncate text-xs font-medium text-neutral-900">
-                  {a.presentationTitle}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => removeArtwork(a.id)}
-                  className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
-                >
-                  ✕
-                </button>
+                ← Back to artwork grid
+              </button>
+              {loadingArtwork || !editingArtwork ? (
+                <p className="text-sm text-neutral-400">Loading…</p>
+              ) : (
+                <ArtworkDetailPanel
+                  siteId={siteId}
+                  artistId={artistId}
+                  artwork={editingArtwork}
+                  settings={settings}
+                  onClose={closeArtwork}
+                />
+              )}
+            </div>
+          ) : (
+            <div>
+              <div className="mb-3">
+                <label className="text-sm font-medium text-neutral-700">Artworks</label>
               </div>
-            ))}
-            <ArtworkPicker artistId={artistId} mode="multi" label="Add Artwork" onSelect={addArtworks} />
-          </div>
-          <p className="mt-2 text-xs text-neutral-400">Drag a tile to reorder.</p>
+
+              {artworks.length === 0 && (
+                <p className="mb-3 text-sm text-neutral-400">
+                  Use the tile below to add artworks, then drag to reorder.
+                </p>
+              )}
+
+              <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+                {artworks.map((a, i) => (
+                  <div
+                    key={a.id}
+                    draggable
+                    onDragStart={() => setDragIndex(i)}
+                    onDragOver={(e) => e.preventDefault()}
+                    onDrop={() => handleDrop(i)}
+                    onDragEnd={() => setDragIndex(null)}
+                    onClick={() => openArtwork(a.id)}
+                    className={`group relative cursor-pointer rounded-md border-2 p-1 ${
+                      dragIndex === i ? "border-neutral-900 opacity-50" : "border-transparent"
+                    }`}
+                  >
+                    {a.imageUrl ? (
+                      <img
+                        src={a.imageUrl}
+                        alt=""
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                    ) : (
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
+                        No image
+                      </div>
+                    )}
+                    <p className="mt-1 truncate text-xs font-medium text-neutral-900">
+                      {a.presentationTitle}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeArtwork(a.id);
+                      }}
+                      className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ))}
+                <ArtworkPicker
+                  artistId={artistId}
+                  mode="multi"
+                  label="Add Artwork"
+                  onSelect={addArtworks}
+                />
+              </div>
+              <p className="mt-2 text-xs text-neutral-400">
+                Click a tile to edit that artwork. Drag to reorder.
+              </p>
+            </div>
+          )}
         </div>
       }
       menu={
