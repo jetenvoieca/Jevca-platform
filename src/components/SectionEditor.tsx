@@ -21,6 +21,7 @@ export default function SectionEditor({
   initialByline,
   initialArtworks,
   settings,
+  siteDefaultCurrency = "GBP",
 }: {
   siteId: string;
   artistId: string;
@@ -29,6 +30,7 @@ export default function SectionEditor({
   initialByline: string;
   initialArtworks: SectionArtworkTile[];
   settings: ArtworkSettings;
+  siteDefaultCurrency?: string;
 }) {
   const [byline, setByline] = useState(initialByline);
   const [artworks, setArtworks] = useState<SectionArtworkTile[]>(initialArtworks);
@@ -189,6 +191,7 @@ export default function SectionEditor({
                   artistId={artistId}
                   artwork={editingArtwork}
                   settings={settings}
+                  siteDefaultCurrency={siteDefaultCurrency}
                   onClose={closeArtwork}
                 />
               )}
