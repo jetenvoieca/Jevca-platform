@@ -42,6 +42,17 @@ enum ImageKind {
   VIDEO
 }
 
+enum PaymentPlanType {
+  FULL
+  INSTALMENTS
+}
+
+enum PaymentStatus {
+  DUE
+  PAID
+  FAILED
+}
+
 model Artist {
   id        String       @id @default(cuid())
   name      String
@@ -70,6 +81,14 @@ model Artist {
   // artwork instead, so doesn't need tags).
   mediaTags String[] @default([])
 
+  // Global defaults for the Payments panel. Each PaymentPlan copies these
+  // in once, at creation (same "seed once, then independent" pattern as
+  // Presentation being seeded from Catalogue) — changing a default here
+  // does not retroactively change a plan already created.
+  defaultInstalmentCount     Int    @default(5)
+  defaultReleaseMessage      String @default("Available for collection/delivery once 2 payments have been made.")
+  defaultReleaseTriggerCount Int    @default(2)
+
   images Image[]
 }
 
@@ -79,6 +98,10 @@ model Site {
   domain               String?
   status               SiteStatus @default(DRAFT)
   multiLanguageEnabled Boolean    @default(false)
+  // Most artworks sell through a single site and inherit this — a
+  // per-artwork override lives on PaymentPlan.currency for the rare
+  // cross-currency sale.
+  defaultCurrency      String     @default("GBP")
   artistId             String
   artist               Artist     @relation(fields: [artistId], references: [id])
   createdAt            DateTime   @default(now())
@@ -204,11 +227,81 @@ model Artwork {
 
   images Image[]
 
+  // One active plan per artwork at a time — a deliberate v1 simplification
+  // (same spirit as the other 80/20 calls in this project). The rare case
+  // of an artwork being re-sold after a cancelled/failed plan is handled
+  // manually: delete the old plan, start a new one.
+  paymentPlan PaymentPlan?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([artistId, catalogueNumber])
   @@index([artistId])
+}
+
+// The sale terms for one artwork: full payment or instalments, currency,
+// the buyer, and the editable release message/trigger. Actual Stripe
+// objects (Customer, Checkout Session, Subscription) are referenced by ID
+// only — Stripe itself remains the source of truth for whether money has
+// actually moved (see Payment.status, updated only via webhook).
+model PaymentPlan {
+  id        String  @id @default(cuid())
+  artworkId String  @unique
+  artwork   Artwork @relation(fields: [artworkId], references: [id])
+
+  type        PaymentPlanType @default(FULL)
+  totalAmount Decimal         @db.Decimal(10, 2)
+  currency    String          @default("GBP")
+
+  // Only meaningful when type = INSTALMENTS.
+  instalmentCount Int?
+
+  // Seeded from the Artist's global defaults at creation, then fully
+  // independent and editable per artwork from that point on.
+  releaseMessage      String?
+  releaseTriggerCount Int?
+
+  buyerName  String?
+  buyerEmail String?
+
+  stripeCustomerId             String?
+  stripeCheckoutSessionId      String?
+  stripeSubscriptionScheduleId String?
+  stripeSubscriptionId         String?
+
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artworkId])
+}
+
+// One row per actual instalment (or the single row for a Full payment).
+// Status only ever changes in response to a Stripe webhook event — never
+// set optimistically from the admin UI — so it always reflects what
+// Stripe actually confirms happened.
+model Payment {
+  id     String      @id @default(cuid())
+  planId String
+  plan   PaymentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+
+  sequence Int // 1st payment, 2nd, etc. — 1 for a Full payment.
+  amount   Decimal       @db.Decimal(10, 2)
+  currency String
+  status   PaymentStatus @default(DUE)
+
+  dueDate  DateTime?
+  paidDate DateTime?
+
+  stripePaymentIntentId String?
+  stripeInvoiceId       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([planId])
 }
 
 model Image {
