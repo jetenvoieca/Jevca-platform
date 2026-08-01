@@ -32,6 +32,7 @@ export default function ArtworksCatalogueView({
   sort,
   selected,
   settings,
+  siteDefaultCurrency = "GBP",
 }: {
   siteId: string;
   artistId: string;
@@ -44,6 +45,7 @@ export default function ArtworksCatalogueView({
   sort: string;
   selected: ArtworkDetail | null;
   settings: ArtworkSettings;
+  siteDefaultCurrency?: string;
 }) {
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
@@ -354,6 +356,7 @@ export default function ArtworksCatalogueView({
               artistId={artistId}
               artwork={selected}
               settings={settings}
+              siteDefaultCurrency={siteDefaultCurrency}
             />
           </div>
         )}
