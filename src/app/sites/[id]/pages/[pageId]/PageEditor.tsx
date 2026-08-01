@@ -186,14 +186,16 @@ export default function PageEditor({
                         className="mb-2 max-h-48 rounded-md object-cover"
                       />
                     )}
-                    <MediaPicker
-                      artistId={artistId}
-                      mode="single"
-                      label={block.url ? "Change Image" : "Choose Image"}
-                      onSelect={(imgs) =>
-                        updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })
-                      }
-                    />
+                    <div className="w-32">
+                      <MediaPicker
+                        artistId={artistId}
+                        mode="single"
+                        label={block.url ? "Change Image" : "Add Image"}
+                        onSelect={(imgs) =>
+                          updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })
+                        }
+                      />
+                    </div>
                     {block.url && (
                       <input
                         type="text"
@@ -207,33 +209,27 @@ export default function PageEditor({
                 )}
 
                 {block.type === "gallery" && (
-                  <div>
-                    {block.images.length > 0 && (
-                      <div className="mb-2 grid grid-cols-4 gap-2">
-                        {block.images.map((img) => (
-                          <div key={img.imageId} className="group relative">
-                            <img
-                              src={img.url}
-                              alt=""
-                              className="aspect-square w-full rounded object-cover"
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateBlock(block.id, {
-                                  images: block.images.filter(
-                                    (i) => i.imageId !== img.imageId
-                                  ),
-                                })
-                              }
-                              className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        ))}
+                  <div className="grid grid-cols-4 gap-2">
+                    {block.images.map((img) => (
+                      <div key={img.imageId} className="group relative">
+                        <img
+                          src={img.url}
+                          alt=""
+                          className="aspect-square w-full rounded object-cover"
+                        />
+                        <button
+                          type="button"
+                          onClick={() =>
+                            updateBlock(block.id, {
+                              images: block.images.filter((i) => i.imageId !== img.imageId),
+                            })
+                          }
+                          className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
+                        >
+                          ✕
+                        </button>
                       </div>
-                    )}
+                    ))}
                     <MediaPicker
                       artistId={artistId}
                       mode="multi"
@@ -268,18 +264,23 @@ export default function PageEditor({
                         <span className="text-sm text-neutral-700">{block.previewTitle}</span>
                       </div>
                     )}
-                    <ArtworkPicker
-                      artistId={artistId}
-                      onSelect={(a) =>
-                        updateBlock(block.id, {
-                          artworkId: a.id,
-                          previewTitle: a.presentationTitle,
-                          previewImageUrl: a.imageUrl || undefined,
-                          previewPrice: a.presentationPrice,
-                          previewAvailability: a.availability,
-                        })
-                      }
-                    />
+                    <div className="w-32">
+                      <ArtworkPicker
+                        artistId={artistId}
+                        mode="single"
+                        label={block.previewTitle ? "Change Artwork" : "Add Artwork"}
+                        onSelect={(arr) => {
+                          const a = arr[0];
+                          updateBlock(block.id, {
+                            artworkId: a.id,
+                            previewTitle: a.presentationTitle,
+                            previewImageUrl: a.imageUrl || undefined,
+                            previewPrice: a.presentationPrice,
+                            previewAvailability: a.availability,
+                          });
+                        }}
+                      />
+                    </div>
                     <p className="mt-1 text-xs text-neutral-400">
                       Always shows the artwork&apos;s current title, image, price and status —
                       editing the artwork updates every page it appears on.
@@ -292,19 +293,26 @@ export default function PageEditor({
                     {block.url && (
                       <video
                         src={block.url}
+                        poster={block.posterUrl}
                         controls
                         className="mb-2 max-h-48 w-full rounded-md"
                       />
                     )}
-                    <MediaPicker
-                      artistId={artistId}
-                      mode="single"
-                      videoOnly
-                      label={block.url ? "Change Video" : "Choose Video"}
-                      onSelect={(vids) =>
-                        updateBlock(block.id, { imageId: vids[0].id, url: vids[0].url })
-                      }
-                    />
+                    <div className="w-32">
+                      <MediaPicker
+                        artistId={artistId}
+                        mode="single"
+                        videoOnly
+                        label={block.url ? "Change Video" : "Add Video"}
+                        onSelect={(vids) =>
+                          updateBlock(block.id, {
+                            imageId: vids[0].id,
+                            url: vids[0].url,
+                            posterUrl: vids[0].posterUrl || undefined,
+                          })
+                        }
+                      />
+                    </div>
                   </div>
                 )}
 
