@@ -47,6 +47,7 @@ export default async function MediaDetailPage({
   const media = mediaRows.map((m) => ({
     id: m.id,
     url: m.url,
+    posterUrl: m.posterUrl,
     kind: m.kind,
     caption: m.caption,
     artwork: m.artwork,
@@ -55,6 +56,7 @@ export default async function MediaDetailPage({
   const selected = {
     id: item.id,
     url: item.url,
+    posterUrl: item.posterUrl,
     kind: item.kind,
     caption: item.caption,
     altText: item.altText,
