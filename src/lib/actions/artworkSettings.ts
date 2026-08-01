@@ -22,6 +22,9 @@ export async function getArtworkSettings(artistId: string) {
       artworkLocations: true,
       mediumPresets: true,
       sizePresets: true,
+      defaultInstalmentCount: true,
+      defaultReleaseMessage: true,
+      defaultReleaseTriggerCount: true,
     },
   });
   return (
@@ -31,8 +34,31 @@ export async function getArtworkSettings(artistId: string) {
       artworkLocations: [],
       mediumPresets: [],
       sizePresets: [],
+      defaultInstalmentCount: 5,
+      defaultReleaseMessage: "Available for collection/delivery once 2 payments have been made.",
+      defaultReleaseTriggerCount: 2,
     }
   );
+}
+
+// The three Payments defaults are single values, not preset lists, so they
+// don't fit updateList/addSettingOption/removeSettingOption above — a
+// small dedicated action instead.
+export async function updatePaymentDefaults(artistId: string, siteId: string, formData: FormData) {
+  const defaultInstalmentCount = parseInt((formData.get("defaultInstalmentCount") as string) || "5", 10);
+  const defaultReleaseMessage = (formData.get("defaultReleaseMessage") as string)?.trim() || "";
+  const defaultReleaseTriggerCount = parseInt(
+    (formData.get("defaultReleaseTriggerCount") as string) || "2",
+    10
+  );
+
+  await db.artist.update({
+    where: { id: artistId },
+    data: { defaultInstalmentCount, defaultReleaseMessage, defaultReleaseTriggerCount },
+  });
+
+  revalidatePath(`/sites/${siteId}/artworks/settings`);
+  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 // Deliberately not using a computed key (e.g. `select: { [field]: true }`)
