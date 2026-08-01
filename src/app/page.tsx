@@ -59,6 +59,7 @@ export default async function SitesDirectoryPage({
     domain: s.domain,
     status: s.status,
     createdAt: s.createdAt.toISOString(),
+    defaultCurrency: s.defaultCurrency,
     ownerId: s.artist.id,
     ownerName: s.artist.name,
     ownerEmail: s.artist.email,
