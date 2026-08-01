@@ -34,7 +34,10 @@ export async function listMedia(artistId: string, filters: ListFilters) {
           }
         : {}),
     },
-    orderBy: sort === "caption" ? { caption: "asc" } : { createdAt: "desc" },
+    // Default is oldest-first — new uploads land at the end, matching the
+    // "add to the end of the list" expectation everywhere else in the app,
+    // rather than newest-first pushing everything else down.
+    orderBy: sort === "caption" ? { caption: "asc" } : { createdAt: "asc" },
     include: { artwork: { select: { id: true, presentationTitle: true } } },
   });
 }
