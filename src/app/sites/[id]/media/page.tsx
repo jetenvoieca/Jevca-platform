@@ -41,6 +41,7 @@ export default async function MediaCataloguePage({
   const media = mediaRows.map((m) => ({
     id: m.id,
     url: m.url,
+    posterUrl: m.posterUrl,
     kind: m.kind,
     caption: m.caption,
     artwork: m.artwork,
