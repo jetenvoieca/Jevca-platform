@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useTransition, useRef } from "react";
-import { listImages, uploadImage } from "@/lib/actions/media";
+import { listImages } from "@/lib/actions/media";
+import { uploadFileDirect } from "@/lib/uploadDirect";
 
 type PickedImage = { id: string; url: string; caption: string | null; kind: string };
 
@@ -45,23 +46,19 @@ export default function MediaPicker({
 
   const handleUpload = (file: File) => {
     setUploadError(null);
-    const formData = new FormData();
-    formData.set("file", file);
     startTransition(async () => {
-      const result = await uploadImage(artistId, formData);
-      if (result.error) {
-        setUploadError(result.error);
-        return;
-      }
-      if (result.image) {
+      try {
+        const image = await uploadFileDirect(file, artistId);
         const img = {
-          id: result.image.id,
-          url: result.image.url,
-          caption: result.image.caption,
-          kind: result.image.kind,
+          id: image.id,
+          url: image.url,
+          caption: image.caption,
+          kind: image.kind,
         };
         setImages((prev) => [...prev, img]);
         handlePick(img);
+      } catch (err) {
+        setUploadError(err instanceof Error ? err.message : "Upload failed. Try again.");
       }
     });
   };
