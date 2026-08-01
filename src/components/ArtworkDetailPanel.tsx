@@ -58,11 +58,17 @@ export default function ArtworkDetailPanel({
   artistId,
   artwork,
   settings,
+  onClose,
 }: {
   siteId: string;
   artistId: string;
   artwork: ArtworkDetail;
   settings: ArtworkSettings;
+  // When provided, Close calls this instead of navigating to the Artworks
+  // Catalogue — used when this panel is embedded somewhere else (e.g. the
+  // Section editor), where "close" means "go back to what I was doing",
+  // not "leave the page".
+  onClose?: () => void;
 }) {
   const [tab, setTab] = useState<"presentation" | "catalogue">("presentation");
   const [images, setImages] = useState(artwork.images);
@@ -93,12 +99,22 @@ export default function ArtworkDetailPanel({
           >
             Delete
           </button>
-          <Link
-            href={`/sites/${siteId}/artworks`}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-          >
-            Close
-          </Link>
+          {onClose ? (
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+            >
+              Close
+            </button>
+          ) : (
+            <Link
+              href={`/sites/${siteId}/artworks`}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+            >
+              Close
+            </Link>
+          )}
         </div>
       </div>
 
