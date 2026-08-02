@@ -4,7 +4,7 @@ import SitesDirectoryView from "@/components/SitesDirectoryView";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = { q?: string; sort?: string; archived?: string };
+type SearchParams = { q?: string; sort?: string; archived?: string; selected?: string };
 
 export default async function SitesDirectoryPage({
   searchParams,
@@ -15,6 +15,7 @@ export default async function SitesDirectoryPage({
   const q = params.q?.trim() || "";
   const showArchived = params.archived === "1";
   const sort = params.sort === "date" ? "date" : "owner";
+  const initialSelectedId = params.selected || null;
 
   const totalSites = await db.site.count();
 
@@ -60,12 +61,23 @@ export default async function SitesDirectoryPage({
     status: s.status,
     createdAt: s.createdAt.toISOString(),
     defaultCurrency: s.defaultCurrency,
+    template: s.template,
     ownerId: s.artist.id,
     ownerName: s.artist.name,
     ownerEmail: s.artist.email,
     ownerPhone: s.artist.phone,
     ownerNotes: s.artist.notes,
+    ownerSubscriptionAmount: s.artist.subscriptionAmount ? s.artist.subscriptionAmount.toString() : "",
+    ownerPaymentMethod: s.artist.paymentMethod,
   }));
 
-  return <SitesDirectoryView sites={rows} q={q} sort={sort} showArchived={showArchived} />;
+  return (
+    <SitesDirectoryView
+      sites={rows}
+      q={q}
+      sort={sort}
+      showArchived={showArchived}
+      initialSelectedId={initialSelectedId}
+    />
+  );
 }
