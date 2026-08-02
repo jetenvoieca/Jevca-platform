@@ -18,6 +18,10 @@ enum SiteStatus {
   LIVE
   PAUSED
   ARCHIVED
+  // A site that currently exists elsewhere (a third-party/legacy site) that
+  // will be rebuilt in Studio — a holding status while it's tracked but not
+  // yet actually under construction here.
+  ISYT
 }
 
 enum PageType {
@@ -59,6 +63,12 @@ model Artist {
   email     String?
   phone     String?
   notes     String?
+  // What the artist pays Jevca for site management, and how — plain
+  // record-keeping alongside notes, not connected to Stripe or any billing
+  // automation (that's what the Artwork Payments panel is for — a
+  // different thing: what a buyer pays for an artwork).
+  subscriptionAmount Decimal? @db.Decimal(10, 2)
+  paymentMethod      String?
   status    ArtistStatus @default(ACTIVE)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
@@ -102,6 +112,10 @@ model Site {
   // per-artwork override lives on PaymentPlan.currency for the rare
   // cross-currency sale.
   defaultCurrency      String     @default("GBP")
+  // Place-marker for when the public renderer supports multiple
+  // interchangeable templates (they'll all read the same underlying
+  // site/page/artwork data) — not wired to anything yet.
+  template             String     @default("Default")
   artistId             String
   artist               Artist     @relation(fields: [artistId], references: [id])
   createdAt            DateTime   @default(now())
