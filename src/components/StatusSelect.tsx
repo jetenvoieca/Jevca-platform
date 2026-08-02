@@ -4,11 +4,14 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateSiteStatus } from "@/lib/actions";
 
-const STATUS_OPTIONS = ["DRAFT", "LIVE", "PAUSED"] as const;
+const STATUS_OPTIONS = ["DRAFT", "LIVE", "PAUSED", "ISYT"] as const;
 const STATUS_LABELS: Record<(typeof STATUS_OPTIONS)[number], string> = {
   DRAFT: "Draft",
   LIVE: "Live",
   PAUSED: "Paused",
+  // Third-party/legacy site being tracked here ahead of being rebuilt in
+  // Studio — not one of the "real" build states.
+  ISYT: "ISYT",
 };
 
 export default function StatusSelect({
@@ -16,7 +19,7 @@ export default function StatusSelect({
   status,
 }: {
   siteId: string;
-  status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED";
+  status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
 }) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -26,7 +29,7 @@ export default function StatusSelect({
       defaultValue={status}
       disabled={isPending}
       onChange={(e) => {
-        const newStatus = e.target.value as "DRAFT" | "LIVE" | "PAUSED";
+        const newStatus = e.target.value as "DRAFT" | "LIVE" | "PAUSED" | "ISYT";
         startTransition(async () => {
           await updateSiteStatus(siteId, newStatus);
           router.refresh();
