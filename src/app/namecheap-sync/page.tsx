@@ -5,10 +5,7 @@ export default function NamecheapSyncPage() {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={[
-        { label: "Sites", href: "/" },
-        { label: "Namecheap Sync", href: "/namecheap-sync", active: true },
-      ]}
+      navItems={[{ label: "Sites", href: "/" }]}
       preview={
         <div className="text-sm text-neutral-600">
           <h2 className="mb-2 text-sm font-semibold text-neutral-900">Why this is separate</h2>
