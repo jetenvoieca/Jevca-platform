@@ -122,7 +122,6 @@ model Site {
   // Revisit if a static-IP proxy or relay server is ever set up.
   domainStatus         String?
   domainRenewalDate    DateTime?
-  domainRenewalCost    Decimal?   @db.Decimal(10, 2)
   artistId             String
   artist               Artist     @relation(fields: [artistId], references: [id])
   createdAt            DateTime   @default(now())
