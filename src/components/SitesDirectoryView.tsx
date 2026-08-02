@@ -12,14 +12,17 @@ type SiteRow = {
   id: string;
   name: string;
   domain: string | null;
-  status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED";
+  status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
   createdAt: string;
   defaultCurrency: string;
+  template: string;
   ownerId: string;
   ownerName: string;
   ownerEmail: string | null;
   ownerPhone: string | null;
   ownerNotes: string | null;
+  ownerSubscriptionAmount: string;
+  ownerPaymentMethod: string | null;
 };
 
 export default function SitesDirectoryView({
@@ -27,24 +30,27 @@ export default function SitesDirectoryView({
   q,
   sort,
   showArchived,
+  initialSelectedId = null,
 }: {
   sites: SiteRow[];
   q: string;
   sort: string;
   showArchived: boolean;
+  initialSelectedId?: string | null;
 }) {
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId);
   const selected = sites.find((s) => s.id === selectedId) || null;
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
   const router = useRouter();
 
-  const saveSite = (field: "name" | "domain" | "defaultCurrency", value: string) => {
+  const saveSite = (field: "name" | "domain" | "defaultCurrency" | "template", value: string) => {
     if (!selected) return;
     const fd = new FormData();
     fd.set("name", field === "name" ? value : selected.name);
     fd.set("domain", field === "domain" ? value : selected.domain || "");
     fd.set("defaultCurrency", field === "defaultCurrency" ? value : selected.defaultCurrency);
+    fd.set("template", field === "template" ? value : selected.template);
     startTransition(async () => {
       await updateSite(selected.id, fd);
       router.refresh();
@@ -54,7 +60,7 @@ export default function SitesDirectoryView({
   };
 
   const saveOwner = (
-    field: "name" | "email" | "phone" | "notes",
+    field: "name" | "email" | "phone" | "notes" | "subscriptionAmount" | "paymentMethod",
     value: string
   ) => {
     if (!selected) return;
@@ -63,6 +69,11 @@ export default function SitesDirectoryView({
     fd.set("email", field === "email" ? value : selected.ownerEmail || "");
     fd.set("phone", field === "phone" ? value : selected.ownerPhone || "");
     fd.set("notes", field === "notes" ? value : selected.ownerNotes || "");
+    fd.set(
+      "subscriptionAmount",
+      field === "subscriptionAmount" ? value : selected.ownerSubscriptionAmount
+    );
+    fd.set("paymentMethod", field === "paymentMethod" ? value : selected.ownerPaymentMethod || "");
     startTransition(async () => {
       await updateArtist(selected.ownerId, fd);
       router.refresh();
@@ -116,6 +127,24 @@ export default function SitesDirectoryView({
               <option value="EUR">EUR</option>
             </select>
             {savedField === "defaultCurrency" && <p className="text-xs text-green-600">Saved</p>}
+
+            <label className="mb-1 mt-3 block text-xs uppercase tracking-wide text-neutral-400">
+              Template
+            </label>
+            <select
+              key={`template-${selected.id}`}
+              defaultValue={selected.template}
+              onChange={(e) => saveSite("template", e.target.value)}
+              disabled={isPending}
+              className="mb-1 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+            >
+              <option value="Default">Default</option>
+            </select>
+            {savedField === "template" && <p className="text-xs text-green-600">Saved</p>}
+            <p className="mb-1 text-xs text-neutral-400">
+              Place-marker for when multiple public-site templates exist — not wired to anything
+              yet.
+            </p>
 
             <dl className="my-4 space-y-2 text-sm">
               <div>
@@ -180,9 +209,44 @@ export default function SitesDirectoryView({
                   rows={2}
                   className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
                 />
+
+                <label className="mb-1 mt-2 block text-xs uppercase tracking-wide text-neutral-400">
+                  Subscription £
+                </label>
+                <input
+                  key={`owner-subscription-${selected.ownerId}`}
+                  type="text"
+                  inputMode="decimal"
+                  defaultValue={selected.ownerSubscriptionAmount}
+                  onBlur={(e) => saveOwner("subscriptionAmount", e.target.value.trim())}
+                  disabled={isPending}
+                  placeholder="e.g. 25.00"
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                />
+
+                <label className="mb-1 mt-2 block text-xs uppercase tracking-wide text-neutral-400">
+                  Payment
+                </label>
+                <select
+                  key={`owner-payment-${selected.ownerId}`}
+                  defaultValue={selected.ownerPaymentMethod || ""}
+                  onChange={(e) => saveOwner("paymentMethod", e.target.value)}
+                  disabled={isPending}
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                >
+                  <option value="">—</option>
+                  <option value="Stripe">Stripe</option>
+                  <option value="PayPal">PayPal</option>
+                  <option value="DD">DD</option>
+                </select>
+
                 {(savedField === "email" ||
                   savedField === "phone" ||
-                  savedField === "notes") && <p className="text-xs text-green-600">Saved</p>}
+                  savedField === "notes" ||
+                  savedField === "subscriptionAmount" ||
+                  savedField === "paymentMethod") && (
+                  <p className="text-xs text-green-600">Saved</p>
+                )}
               </div>
             </div>
 
