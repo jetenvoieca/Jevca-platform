@@ -18,7 +18,6 @@ type SiteRow = {
   template: string;
   domainStatus: string | null;
   domainRenewalDate: string;
-  domainRenewalCost: string;
   ownerId: string;
   ownerName: string;
   ownerEmail: string | null;
@@ -48,14 +47,7 @@ export default function SitesDirectoryView({
   const router = useRouter();
 
   const saveSite = (
-    field:
-      | "name"
-      | "domain"
-      | "defaultCurrency"
-      | "template"
-      | "domainStatus"
-      | "domainRenewalDate"
-      | "domainRenewalCost",
+    field: "name" | "domain" | "defaultCurrency" | "template" | "domainStatus" | "domainRenewalDate",
     value: string
   ) => {
     if (!selected) return;
@@ -68,10 +60,6 @@ export default function SitesDirectoryView({
     fd.set(
       "domainRenewalDate",
       field === "domainRenewalDate" ? value : selected.domainRenewalDate
-    );
-    fd.set(
-      "domainRenewalCost",
-      field === "domainRenewalCost" ? value : selected.domainRenewalCost
     );
     startTransition(async () => {
       await updateSite(selected.id, fd);
@@ -107,7 +95,10 @@ export default function SitesDirectoryView({
   return (
     <AppShell
       publishEnabled={false}
-      navItems={[{ label: "Sites", href: "/", active: true }]}
+      navItems={[
+        { label: "Sites", href: "/", active: true },
+        { label: "Namecheap Sync", href: "/namecheap-sync" },
+      ]}
       preview={
         selected ? (
           <div>
@@ -160,28 +151,14 @@ export default function SitesDirectoryView({
                 defaultValue={selected.domainRenewalDate}
                 onChange={(e) => saveSite("domainRenewalDate", e.target.value)}
                 disabled={isPending}
-                className="mb-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                className="mb-1 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
               />
 
-              <label className="mb-1 block text-xs text-neutral-500">Renewal cost</label>
-              <input
-                key={`domain-renewal-cost-${selected.id}`}
-                type="text"
-                inputMode="decimal"
-                defaultValue={selected.domainRenewalCost}
-                onBlur={(e) => saveSite("domainRenewalCost", e.target.value.trim())}
-                placeholder={`e.g. 12.00 ${selected.defaultCurrency}`}
-                disabled={isPending}
-                className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
-              />
-
-              {(savedField === "domainStatus" ||
-                savedField === "domainRenewalDate" ||
-                savedField === "domainRenewalCost") && (
+              {(savedField === "domainStatus" || savedField === "domainRenewalDate") && (
                 <p className="mt-1 text-xs text-green-600">Saved</p>
               )}
               <p className="mt-2 text-xs text-neutral-400">
-                Entered by hand — not synced live from Namecheap (see decisions log).
+                Editable here, or updated in bulk via Namecheap Sync.
               </p>
             </div>
 
