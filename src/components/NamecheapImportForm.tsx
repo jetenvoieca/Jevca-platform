@@ -4,6 +4,44 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { importNamecheapDomains, type NamecheapImportRow } from "@/lib/actions/namecheap";
 
+// Namecheap-fetching scripts have varied between attempts/projects — field
+// names and date formats seen so far: expires vs expiry, ISO vs
+// MM/DD/YYYY, a status field vs none at all (autoRenew instead). Rather
+// than assume one exact shape (and silently apply nothing if it doesn't
+// match, as happened once already), this normalizes whatever's actually
+// in the file.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function normalizeRow(raw: any): NamecheapImportRow | null {
+  const name = raw.name || raw.domain;
+  if (!name) return null;
+
+  const rawDate: string = raw.expires || raw.expiry || raw.expiryDate || "";
+  let isoExpiry = "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
+    isoExpiry = rawDate.slice(0, 10);
+  } else {
+    const m = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})$/); // MM/DD/YYYY
+    if (m) isoExpiry = `${m[3]}-${m[1]}-${m[2]}`;
+  }
+
+  let status: string = raw.status || "";
+  if (!status) {
+    // No explicit status in this file — derive one from the expiry date
+    // itself (autoRenew, if present, doesn't actually indicate whether a
+    // domain is close to expiring, so it's not used here).
+    if (raw.isExpired === true || raw.isExpired === "true") {
+      status = "Expired";
+    } else if (isoExpiry) {
+      const daysUntil = (new Date(isoExpiry).getTime() - Date.now()) / (1000 * 60 * 60 * 24);
+      status = daysUntil <= 30 ? "Expiring soon" : "Active";
+    } else {
+      status = "Active";
+    }
+  }
+
+  return { name, expires: isoExpiry, status };
+}
+
 export default function NamecheapImportForm() {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -18,8 +56,9 @@ export default function NamecheapImportForm() {
       let rows: NamecheapImportRow[];
       try {
         const parsed = JSON.parse(reader.result as string);
-        rows = Array.isArray(parsed) ? parsed : parsed.domains;
-        if (!Array.isArray(rows)) throw new Error("not an array");
+        const raw = Array.isArray(parsed) ? parsed : parsed.domains;
+        if (!Array.isArray(raw)) throw new Error("not an array");
+        rows = raw.map(normalizeRow).filter((r): r is NamecheapImportRow => r !== null);
       } catch {
         setError("That doesn't look like a valid namecheap-domains.json file.");
         return;
