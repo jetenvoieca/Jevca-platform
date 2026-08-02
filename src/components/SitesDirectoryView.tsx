@@ -16,6 +16,9 @@ type SiteRow = {
   createdAt: string;
   defaultCurrency: string;
   template: string;
+  domainStatus: string | null;
+  domainRenewalDate: string;
+  domainRenewalCost: string;
   ownerId: string;
   ownerName: string;
   ownerEmail: string | null;
@@ -44,13 +47,32 @@ export default function SitesDirectoryView({
   const [savedField, setSavedField] = useState<string | null>(null);
   const router = useRouter();
 
-  const saveSite = (field: "name" | "domain" | "defaultCurrency" | "template", value: string) => {
+  const saveSite = (
+    field:
+      | "name"
+      | "domain"
+      | "defaultCurrency"
+      | "template"
+      | "domainStatus"
+      | "domainRenewalDate"
+      | "domainRenewalCost",
+    value: string
+  ) => {
     if (!selected) return;
     const fd = new FormData();
     fd.set("name", field === "name" ? value : selected.name);
     fd.set("domain", field === "domain" ? value : selected.domain || "");
     fd.set("defaultCurrency", field === "defaultCurrency" ? value : selected.defaultCurrency);
     fd.set("template", field === "template" ? value : selected.template);
+    fd.set("domainStatus", field === "domainStatus" ? value : selected.domainStatus || "");
+    fd.set(
+      "domainRenewalDate",
+      field === "domainRenewalDate" ? value : selected.domainRenewalDate
+    );
+    fd.set(
+      "domainRenewalCost",
+      field === "domainRenewalCost" ? value : selected.domainRenewalCost
+    );
     startTransition(async () => {
       await updateSite(selected.id, fd);
       router.refresh();
@@ -112,6 +134,56 @@ export default function SitesDirectoryView({
               className="mb-1 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
             />
             {savedField === "domain" && <p className="text-xs text-green-600">Saved</p>}
+
+            <div className="mb-1 mt-3 rounded-md border border-neutral-200 p-2">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                Domain renewal
+              </p>
+              <label className="mb-1 block text-xs text-neutral-500">Status</label>
+              <select
+                key={`domain-status-${selected.id}`}
+                defaultValue={selected.domainStatus || ""}
+                onChange={(e) => saveSite("domainStatus", e.target.value)}
+                disabled={isPending}
+                className="mb-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+              >
+                <option value="">— Not checked —</option>
+                <option value="Active">Active</option>
+                <option value="Expiring soon">Expiring soon</option>
+                <option value="Expired">Expired</option>
+              </select>
+
+              <label className="mb-1 block text-xs text-neutral-500">Renewal date</label>
+              <input
+                key={`domain-renewal-date-${selected.id}`}
+                type="date"
+                defaultValue={selected.domainRenewalDate}
+                onChange={(e) => saveSite("domainRenewalDate", e.target.value)}
+                disabled={isPending}
+                className="mb-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+              />
+
+              <label className="mb-1 block text-xs text-neutral-500">Renewal cost</label>
+              <input
+                key={`domain-renewal-cost-${selected.id}`}
+                type="text"
+                inputMode="decimal"
+                defaultValue={selected.domainRenewalCost}
+                onBlur={(e) => saveSite("domainRenewalCost", e.target.value.trim())}
+                placeholder={`e.g. 12.00 ${selected.defaultCurrency}`}
+                disabled={isPending}
+                className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+              />
+
+              {(savedField === "domainStatus" ||
+                savedField === "domainRenewalDate" ||
+                savedField === "domainRenewalCost") && (
+                <p className="mt-1 text-xs text-green-600">Saved</p>
+              )}
+              <p className="mt-2 text-xs text-neutral-400">
+                Entered by hand — not synced live from Namecheap (see decisions log).
+              </p>
+            </div>
 
             <label className="mb-1 mt-3 block text-xs uppercase tracking-wide text-neutral-400">
               Default currency
