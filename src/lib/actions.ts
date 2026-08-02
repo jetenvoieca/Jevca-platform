@@ -50,7 +50,11 @@ export async function createSite(
   });
 
   revalidatePath("/");
-  redirect(`/sites/${site.id}`);
+  // Back to the Sites Directory with the new site's details panel already
+  // open, rather than into the Web Site editor — which, for a site with no
+  // pages yet, just looks blank. Domain, currency, template etc. all get
+  // filled in from right here.
+  redirect(`/?selected=${site.id}`);
 }
 
 // ---- Edit Site details (name, domain) ----
@@ -59,6 +63,7 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
   const name = (formData.get("name") as string)?.trim();
   const domainRaw = (formData.get("domain") as string)?.trim() || null;
   const defaultCurrency = (formData.get("defaultCurrency") as string)?.trim() || "GBP";
+  const template = (formData.get("template") as string)?.trim() || "Default";
   // Store domains without a leading protocol/www so they're consistent
   // however someone happens to type them in.
   const domain = domainRaw
@@ -68,7 +73,7 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
 
   await db.site.update({
     where: { id },
-    data: { name, domain, defaultCurrency },
+    data: { name, domain, defaultCurrency, template },
   });
   revalidatePath("/");
 }
@@ -80,11 +85,14 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
   const email = (formData.get("email") as string)?.trim() || null;
   const phone = (formData.get("phone") as string)?.trim() || null;
   const notes = (formData.get("notes") as string)?.trim() || null;
+  const subscriptionAmountRaw = (formData.get("subscriptionAmount") as string)?.trim();
+  const subscriptionAmount = subscriptionAmountRaw ? subscriptionAmountRaw : null;
+  const paymentMethod = (formData.get("paymentMethod") as string)?.trim() || null;
   if (!name) return;
 
   await db.artist.update({
     where: { id },
-    data: { name, email, phone, notes },
+    data: { name, email, phone, notes, subscriptionAmount, paymentMethod },
   });
   revalidatePath("/");
 }
@@ -93,7 +101,7 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
 
 export async function updateSiteStatus(
   id: string,
-  status: "DRAFT" | "LIVE" | "PAUSED"
+  status: "DRAFT" | "LIVE" | "PAUSED" | "ISYT"
 ) {
   await db.site.update({
     where: { id },
