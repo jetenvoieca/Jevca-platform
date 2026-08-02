@@ -64,6 +64,11 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
   const domainRaw = (formData.get("domain") as string)?.trim() || null;
   const defaultCurrency = (formData.get("defaultCurrency") as string)?.trim() || "GBP";
   const template = (formData.get("template") as string)?.trim() || "Default";
+  const domainStatus = (formData.get("domainStatus") as string)?.trim() || null;
+  const domainRenewalDateRaw = (formData.get("domainRenewalDate") as string)?.trim();
+  const domainRenewalDate = domainRenewalDateRaw ? new Date(domainRenewalDateRaw) : null;
+  const domainRenewalCostRaw = (formData.get("domainRenewalCost") as string)?.trim();
+  const domainRenewalCost = domainRenewalCostRaw ? domainRenewalCostRaw : null;
   // Store domains without a leading protocol/www so they're consistent
   // however someone happens to type them in.
   const domain = domainRaw
@@ -73,7 +78,15 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
 
   await db.site.update({
     where: { id },
-    data: { name, domain, defaultCurrency, template },
+    data: {
+      name,
+      domain,
+      defaultCurrency,
+      template,
+      domainStatus,
+      domainRenewalDate,
+      domainRenewalCost,
+    },
   });
   revalidatePath("/");
 }
