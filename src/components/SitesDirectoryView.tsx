@@ -95,10 +95,7 @@ export default function SitesDirectoryView({
   return (
     <AppShell
       publishEnabled={false}
-      navItems={[
-        { label: "Sites", href: "/", active: true },
-        { label: "Namecheap Sync", href: "/namecheap-sync" },
-      ]}
+      navItems={[{ label: "Sites", href: "/", active: true }]}
       preview={
         selected ? (
           <div>
@@ -316,7 +313,15 @@ export default function SitesDirectoryView({
       }
       content={
         <div>
-          <h1 className="mb-4 text-2xl font-semibold text-neutral-900">Sites</h1>
+          <div className="mb-4 flex items-center justify-between">
+            <h1 className="text-2xl font-semibold text-neutral-900">Sites</h1>
+            <Link
+              href="/namecheap-sync"
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50"
+            >
+              Namecheap Sync
+            </Link>
+          </div>
 
           <form
             method="get"
