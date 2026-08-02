@@ -64,7 +64,6 @@ export default async function SitesDirectoryPage({
     template: s.template,
     domainStatus: s.domainStatus,
     domainRenewalDate: s.domainRenewalDate ? s.domainRenewalDate.toISOString().slice(0, 10) : "",
-    domainRenewalCost: s.domainRenewalCost ? s.domainRenewalCost.toString() : "",
     ownerId: s.artist.id,
     ownerName: s.artist.name,
     ownerEmail: s.artist.email,
