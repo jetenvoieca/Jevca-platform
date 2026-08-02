@@ -10,7 +10,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "fetch-domains": "node scripts/fetch-domains.js"
   },
   "dependencies": {
     "next": "^16.2.11",
