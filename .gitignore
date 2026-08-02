@@ -69,6 +69,11 @@ web_modules/
 .env
 .env.*
 !.env.example
+!.env.namecheap.example
+
+# Namecheap Sync — generated locally by scripts/fetch-domains.js, imported
+# via the app; not meant to be committed (see namecheap-sync in decisions log)
+namecheap-domains.json
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache
