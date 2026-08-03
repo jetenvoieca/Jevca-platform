@@ -6,7 +6,7 @@ import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import StatusSelect from "@/components/StatusSelect";
 import ArchiveButton from "@/components/ArchiveButton";
-import { updateSite, updateArtist } from "@/lib/actions";
+import { updateSite, updateArtist, updateSalesEnabled } from "@/lib/actions";
 
 type SiteRow = {
   id: string;
@@ -16,6 +16,7 @@ type SiteRow = {
   createdAt: string;
   defaultCurrency: string;
   template: string;
+  salesEnabled: boolean;
   domainStatus: string | null;
   domainRenewalDate: string;
   ownerId: string;
@@ -199,6 +200,25 @@ export default function SitesDirectoryView({
             <p className="mb-1 text-xs text-neutral-400">
               Place-marker for when multiple public-site templates exist — not wired to anything
               yet.
+            </p>
+
+            <label className="mt-3 flex items-center gap-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                checked={selected.salesEnabled}
+                disabled={isPending}
+                onChange={(e) => {
+                  const enabled = e.target.checked;
+                  startTransition(async () => {
+                    await updateSalesEnabled(selected.id, enabled);
+                    router.refresh();
+                  });
+                }}
+              />
+              Show &quot;Sales&quot; menu on this site
+            </label>
+            <p className="mb-1 text-xs text-neutral-400">
+              Off by default — only needed for sites that actually sell, not portfolio-only ones.
             </p>
 
             <dl className="my-4 space-y-2 text-sm">
