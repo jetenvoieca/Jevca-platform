@@ -53,9 +53,9 @@ export async function POST(req: NextRequest) {
       // succeeding, so this one handler covers the first payment either way.
       case "payment_intent.succeeded": {
         const intent = event.data.object as Stripe.PaymentIntent;
-        const planId = intent.metadata?.planId;
-        if (planId) {
-          await handleFirstPaymentSucceeded(planId, intent.id);
+        const purchaseId = intent.metadata?.purchaseId;
+        if (purchaseId) {
+          await handleFirstPaymentSucceeded(purchaseId, intent.id);
         }
         break;
       }
