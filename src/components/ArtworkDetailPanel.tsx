@@ -493,20 +493,29 @@ export default function ArtworkDetailPanel({
                       />
                     </>
                   )}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Availability
-                    </label>
-                    <select
-                      name="availability"
-                      defaultValue={artwork.availability}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="AVAILABLE">Available</option>
-                      <option value="RESERVED">Reserved</option>
-                      <option value="SOLD">Sold</option>
-                    </select>
-                  </div>
+                  {isUniqueType ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Availability
+                      </label>
+                      <select
+                        name="availability"
+                        defaultValue={artwork.availability}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      >
+                        <option value="AVAILABLE">Available</option>
+                        <option value="RESERVED">Reserved</option>
+                        <option value="SOLD">Sold</option>
+                      </select>
+                    </div>
+                  ) : (
+                    // Editions track availability via the numeric Available
+                    // (qty) field instead — this status only makes sense
+                    // for a one-of-a-kind piece. Required/non-nullable in
+                    // the database, so preserved via hidden input rather
+                    // than left out of the submitted form.
+                    <input type="hidden" name="availability" value={artwork.availability} />
+                  )}
                   {isUniqueType ? (
                     <>
                       <div>
