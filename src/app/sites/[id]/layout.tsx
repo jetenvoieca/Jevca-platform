@@ -57,6 +57,7 @@ export default async function SiteLayout({
           <SiteNavPanel
             siteId={id}
             pages={pages.map((p) => ({ id: p.id, title: p.title, type: p.type, visible: p.visible }))}
+            salesEnabled={site.salesEnabled}
           />
         </div>
       </div>
