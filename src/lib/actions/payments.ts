@@ -40,34 +40,6 @@ export type PurchaseDetail = {
   payments: PaymentDetail[];
 };
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export async function serializePurchase(p: any): Promise<PurchaseDetail> {
-  return {
-    id: p.id,
-    status: p.status,
-    buyerName: p.buyerName,
-    buyerEmail: p.buyerEmail,
-    type: p.type,
-    totalAmount: p.totalAmount.toString(),
-    currency: p.currency,
-    instalmentCount: p.instalmentCount,
-    releaseMessage: p.releaseMessage,
-    releaseTriggerCount: p.releaseTriggerCount,
-    createdAt: p.createdAt.toISOString(),
-    closedAt: p.closedAt ? p.closedAt.toISOString() : null,
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payments: p.payments.map((pay: any) => ({
-      id: pay.id,
-      sequence: pay.sequence,
-      amount: pay.amount.toString(),
-      currency: pay.currency,
-      status: pay.status,
-      dueDate: pay.dueDate ? pay.dueDate.toISOString() : null,
-      paidDate: pay.paidDate ? pay.paidDate.toISOString() : null,
-    })),
-  };
-}
-
 // ---------- Sale Terms — autosave, no buyer info, ever ----------
 
 export async function saveSaleTerms(artworkId: string, siteId: string, formData: FormData) {
