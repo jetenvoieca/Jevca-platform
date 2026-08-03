@@ -10,9 +10,11 @@ type PageRow = { id: string; title: string; type: string; visible: boolean };
 export default function SiteNavPanel({
   siteId,
   pages,
+  salesEnabled = false,
 }: {
   siteId: string;
   pages: PageRow[];
+  salesEnabled?: boolean;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -174,6 +176,19 @@ export default function SiteNavPanel({
       >
         Settings
       </Link>
+
+      {salesEnabled && (
+        <Link
+          href={`/sites/${siteId}/sales`}
+          className={`mt-3 rounded-md px-3 py-2 font-medium ${
+            pathname.startsWith(`/sites/${siteId}/sales`)
+              ? "bg-neutral-900 text-white"
+              : "text-neutral-700 hover:bg-neutral-100"
+          }`}
+        >
+          Sales
+        </Link>
+      )}
     </nav>
   );
 }
