@@ -24,12 +24,19 @@ export default function PurchasePanel({
   terms,
   activePurchase,
   history,
+  onChanged,
 }: {
   artworkId: string;
   siteId: string;
   terms: SaleTermsDetail | null;
   activePurchase: PurchaseDetail | null;
   history: PurchaseDetail[];
+  // Called after any successful action, in addition to router.refresh().
+  // router.refresh() alone is enough when this panel's props come from a
+  // server-rendered page (the artwork editor) — but the Sales screen
+  // feeds this panel from a client-side fetch instead, which
+  // router.refresh() doesn't touch, so it needs this to know to re-fetch.
+  onChanged?: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -45,6 +52,7 @@ export default function PurchasePanel({
       await updatePurchaseRelease(activePurchase.id, siteId, formData);
       setSaved(true);
       router.refresh();
+      onChanged?.();
       setTimeout(() => setSaved(false), 2000);
     });
   };
@@ -58,6 +66,7 @@ export default function PurchasePanel({
         return;
       }
       router.refresh();
+      onChanged?.();
     });
   };
 
@@ -70,6 +79,7 @@ export default function PurchasePanel({
       const res = await abandonPurchase(activePurchase.id, siteId);
       if (!res.ok) setError(res.error);
       router.refresh();
+      onChanged?.();
     });
   };
 
@@ -235,6 +245,7 @@ export default function PurchasePanel({
                     onDone={() => {
                       setCardSecret(null);
                       router.refresh();
+                      onChanged?.();
                     }}
                   />
                   <p className="mt-2 text-xs text-neutral-400">
