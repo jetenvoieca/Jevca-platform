@@ -2,11 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import {
   updatePresentation,
   updateCatalogue,
   deleteArtwork,
+  deleteArtworkIfBlank,
   linkImagesToArtwork,
   unlinkImageFromArtwork,
 } from "@/lib/actions/artworks";
@@ -81,11 +81,7 @@ export default function ArtworkDetailPanel({
   // not "leave the page".
   onClose?: () => void;
 }) {
-  const [tab, setTab] = useState<"presentation" | "catalogue">("presentation");
-  // Sub-tab within Catalogue — Payments lives here, not as a third
-  // top-level facet, per the agreed design (it's part of the artist's
-  // private working record, not shown to the public).
-  const [catalogueSubTab, setCatalogueSubTab] = useState<"details" | "payments">("details");
+  const [tab, setTab] = useState<"presentation" | "catalogue" | "payments">("presentation");
   const [images, setImages] = useState(artwork.images);
   const [isPending, startTransition] = useTransition();
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
@@ -95,6 +91,20 @@ export default function ArtworkDetailPanel({
     if (!confirm(`Delete "${artwork.presentationTitle}"? This can't be undone.`)) return;
     startTransition(async () => {
       await deleteArtwork(siteId, artwork.id);
+    });
+  };
+
+  const handleClose = () => {
+    startTransition(async () => {
+      // Quietly removes this record if it's still exactly as it was when
+      // created (see deleteArtworkIfBlank) — a no-op if you've actually
+      // added anything, so this never touches real data.
+      await deleteArtworkIfBlank(siteId, artwork.id);
+      if (onClose) {
+        onClose();
+      } else {
+        router.push(`/sites/${siteId}/artworks`);
+      }
     });
   };
 
@@ -114,22 +124,14 @@ export default function ArtworkDetailPanel({
           >
             Delete
           </button>
-          {onClose ? (
-            <button
-              type="button"
-              onClick={onClose}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-            >
-              Close
-            </button>
-          ) : (
-            <Link
-              href={`/sites/${siteId}/artworks`}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-            >
-              Close
-            </Link>
-          )}
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isPending}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Close
+          </button>
         </div>
       </div>
 
@@ -137,8 +139,8 @@ export default function ArtworkDetailPanel({
         <h3 className="mb-2 text-sm font-medium text-neutral-700">Images</h3>
         <div className="flex flex-wrap gap-2">
           {images.map((img) => (
-            <div key={img.id} className="group relative h-16 w-16">
-              <img src={img.url} alt="" className="h-16 w-16 rounded object-cover" />
+            <div key={img.id} className="group relative h-20 w-20">
+              <img src={img.url} alt="" className="h-20 w-20 rounded object-cover" />
               <button
                 type="button"
                 onClick={() => {
@@ -153,7 +155,7 @@ export default function ArtworkDetailPanel({
               </button>
             </div>
           ))}
-          <div className="h-16 w-16">
+          <div className="h-20 w-20">
             <MediaPicker
               artistId={artistId}
               mode="multi"
@@ -197,6 +199,17 @@ export default function ArtworkDetailPanel({
           }`}
         >
           Catalogue
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("payments")}
+          className={`px-3 py-2 text-sm font-medium ${
+            tab === "payments"
+              ? "border-b-2 border-neutral-900 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Payments
         </button>
       </div>
 
@@ -325,50 +338,12 @@ export default function ArtworkDetailPanel({
                 </div>
               </form>
             </>
-          ) : (
+          ) : tab === "catalogue" ? (
             <>
               <p className="mb-3 text-xs text-neutral-400">
                 Your private working record — never shown on the public site.
               </p>
 
-              <div className="mb-4 flex gap-2 border-b border-neutral-200">
-                <button
-                  type="button"
-                  onClick={() => setCatalogueSubTab("details")}
-                  className={`px-3 py-1.5 text-sm font-medium ${
-                    catalogueSubTab === "details"
-                      ? "border-b-2 border-neutral-900 text-neutral-900"
-                      : "text-neutral-400 hover:text-neutral-600"
-                  }`}
-                >
-                  Details
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setCatalogueSubTab("payments")}
-                  className={`px-3 py-1.5 text-sm font-medium ${
-                    catalogueSubTab === "payments"
-                      ? "border-b-2 border-neutral-900 text-neutral-900"
-                      : "text-neutral-400 hover:text-neutral-600"
-                  }`}
-                >
-                  Payments
-                </button>
-              </div>
-
-              {catalogueSubTab === "payments" ? (
-                <PaymentsPanel
-                  artworkId={artwork.id}
-                  siteId={siteId}
-                  siteDefaultCurrency={siteDefaultCurrency}
-                  plan={artwork.paymentPlan}
-                  defaults={{
-                    defaultInstalmentCount: settings.defaultInstalmentCount,
-                    defaultReleaseMessage: settings.defaultReleaseMessage,
-                    defaultReleaseTriggerCount: settings.defaultReleaseTriggerCount,
-                  }}
-                />
-              ) : (
               <form
                 action={async (formData) => {
                   await updateCatalogue(artwork.id, siteId, formData);
@@ -538,8 +513,19 @@ export default function ArtworkDetailPanel({
                   )}
                 </div>
               </form>
-              )}
             </>
+          ) : (
+            <PaymentsPanel
+              artworkId={artwork.id}
+              siteId={siteId}
+              siteDefaultCurrency={siteDefaultCurrency}
+              plan={artwork.paymentPlan}
+              defaults={{
+                defaultInstalmentCount: settings.defaultInstalmentCount,
+                defaultReleaseMessage: settings.defaultReleaseMessage,
+                defaultReleaseTriggerCount: settings.defaultReleaseTriggerCount,
+              }}
+            />
         )}
       </div>
     </div>
