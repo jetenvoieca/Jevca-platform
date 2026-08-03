@@ -85,7 +85,7 @@ export default function ArtworkDetailPanel({
   onClose?: () => void;
 }) {
   const [tab, setTab] = useState<"presentation" | "catalogue" | "saleterms" | "payment">(
-    "presentation"
+    "catalogue"
   );
   const [images, setImages] = useState(artwork.images);
   const [isPending, startTransition] = useTransition();
@@ -185,17 +185,6 @@ export default function ArtworkDetailPanel({
       <div className="mb-6 flex gap-2 border-b border-neutral-200">
         <button
           type="button"
-          onClick={() => setTab("presentation")}
-          className={`px-3 py-2 text-sm font-medium ${
-            tab === "presentation"
-              ? "border-b-2 border-neutral-900 text-neutral-900"
-              : "text-neutral-400 hover:text-neutral-600"
-          }`}
-        >
-          Presentation
-        </button>
-        <button
-          type="button"
           onClick={() => setTab("catalogue")}
           className={`px-3 py-2 text-sm font-medium ${
             tab === "catalogue"
@@ -204,6 +193,17 @@ export default function ArtworkDetailPanel({
           }`}
         >
           Catalogue
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("presentation")}
+          className={`px-3 py-2 text-sm font-medium ${
+            tab === "presentation"
+              ? "border-b-2 border-neutral-900 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Presentation
         </button>
         <button
           type="button"
@@ -326,20 +326,6 @@ export default function ArtworkDetailPanel({
                       ))}
                     </select>
                   </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Availability
-                  </label>
-                  <select
-                    name="availability"
-                    defaultValue={artwork.availability}
-                    className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  >
-                    <option value="AVAILABLE">Available</option>
-                    <option value="RESERVED">Reserved</option>
-                    <option value="SOLD">Sold</option>
-                  </select>
                 </div>
                 <div className="flex items-center gap-3">
                   <button
@@ -482,6 +468,20 @@ export default function ArtworkDetailPanel({
                       defaultValue={artwork.availableQty ?? ""}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Availability
+                    </label>
+                    <select
+                      name="availability"
+                      defaultValue={artwork.availability}
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="AVAILABLE">Available</option>
+                      <option value="RESERVED">Reserved</option>
+                      <option value="SOLD">Sold</option>
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
