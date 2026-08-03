@@ -46,9 +46,15 @@ enum ImageKind {
   VIDEO
 }
 
-enum PaymentPlanType {
+enum PurchaseType {
   FULL
   INSTALMENTS
+}
+
+enum PurchaseStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
 }
 
 enum PaymentStatus {
@@ -91,10 +97,10 @@ model Artist {
   // artwork instead, so doesn't need tags).
   mediaTags String[] @default([])
 
-  // Global defaults for the Payments panel. Each PaymentPlan copies these
-  // in once, at creation (same "seed once, then independent" pattern as
-  // Presentation being seeded from Catalogue) — changing a default here
-  // does not retroactively change a plan already created.
+  // Global defaults for the Payments panel. Each SaleTerms record copies
+  // these in once, at creation (same "seed once, then independent"
+  // pattern as Presentation being seeded from Catalogue) — changing a
+  // default here does not retroactively change terms already created.
   defaultInstalmentCount     Int    @default(5)
   defaultReleaseMessage      String @default("Available for collection/delivery once 2 payments have been made.")
   defaultReleaseTriggerCount Int    @default(2)
@@ -109,7 +115,7 @@ model Site {
   status               SiteStatus @default(DRAFT)
   multiLanguageEnabled Boolean    @default(false)
   // Most artworks sell through a single site and inherit this — a
-  // per-artwork override lives on PaymentPlan.currency for the rare
+  // per-artwork override lives on SaleTerms.currency for the rare
   // cross-currency sale.
   defaultCurrency      String     @default("GBP")
   // Place-marker for when the public renderer supports multiple
@@ -247,11 +253,14 @@ model Artwork {
 
   images Image[]
 
-  // One active plan per artwork at a time — a deliberate v1 simplification
-  // (same spirit as the other 80/20 calls in this project). The rare case
-  // of an artwork being re-sold after a cancelled/failed plan is handled
-  // manually: delete the old plan, start a new one.
-  paymentPlan PaymentPlan?
+  // Sale terms are the artwork's own pricing/instalment defaults —
+  // independent of any actual sale. Purchases are the real, specific sale
+  // attempts against those terms; only one is ACTIVE at a time (enforced
+  // in application code, not a DB constraint — a deliberate 80/20 call,
+  // same spirit as other simplifications in this project), with past
+  // ones kept as history (COMPLETED or ABANDONED) rather than deleted.
+  saleTerms SaleTerms?
+  purchases Purchase[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -260,40 +269,71 @@ model Artwork {
   @@index([artistId])
 }
 
-// The sale terms for one artwork: full payment or instalments, currency,
-// the buyer, and the editable release message/trigger. Actual Stripe
-// objects (Customer, Checkout Session, Subscription) are referenced by ID
-// only — Stripe itself remains the source of truth for whether money has
-// actually moved (see Payment.status, updated only via webhook).
-model PaymentPlan {
+// What this artwork sells for and how — a property of the artwork
+// itself, nothing to do with any particular buyer. Autosaves like the
+// rest of the app; editing it never affects a Purchase already in
+// progress, since Purchase snapshots these values at the moment it's
+// created (see below).
+model SaleTerms {
   id        String  @id @default(cuid())
   artworkId String  @unique
   artwork   Artwork @relation(fields: [artworkId], references: [id])
 
-  type        PaymentPlanType @default(FULL)
-  totalAmount Decimal         @db.Decimal(10, 2)
-  currency    String          @default("GBP")
+  totalAmount Decimal @db.Decimal(10, 2)
+  currency    String  @default("GBP")
 
-  // Only meaningful when type = INSTALMENTS.
-  instalmentCount Int?
+  // The default number of instalments offered, if a buyer chooses to pay
+  // that way. Whether THIS particular sale actually uses instalments is a
+  // decision made per Purchase, not fixed here.
+  instalmentCount Int @default(5)
 
-  // Seeded from the Artist's global defaults at creation, then fully
-  // independent and editable per artwork from that point on.
+  // Seeded from the Artist's global defaults at creation, then
+  // independent — the starting point copied onto each new Purchase, not a
+  // live link to it.
   releaseMessage      String?
   releaseTriggerCount Int?
 
-  buyerName  String?
-  buyerEmail String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
 
-  stripeCustomerId             String?
-  stripeCheckoutSessionId      String?
-  stripeSubscriptionScheduleId String?
-  stripeSubscriptionId         String?
+// A real, specific sale attempt — created only when you actually start
+// taking payment (an explicit action, not autosaved). Either it completes
+// or it's abandoned; there's no "remove" of a plan because there's no
+// plan to remove — SaleTerms stays untouched regardless of what happens
+// here, ready for the next buyer.
+model Purchase {
+  id        String  @id @default(cuid())
+  artworkId String
+  artwork   Artwork @relation(fields: [artworkId], references: [id])
+
+  status PurchaseStatus @default(ACTIVE)
+
+  buyerName  String?
+  buyerEmail String
+
+  type PurchaseType
+
+  // Snapshot of SaleTerms at the moment this Purchase was started — so
+  // editing Terms later never rewrites what this buyer actually agreed
+  // to. Only meaningful for the price this buyer is actually paying.
+  totalAmount         Decimal @db.Decimal(10, 2)
+  currency            String
+  instalmentCount     Int?
+  releaseMessage      String?
+  releaseTriggerCount Int?
+
+  stripeCustomerId              String?
+  stripeCheckoutSessionId       String?
+  stripeSubscriptionScheduleId  String?
+  stripeSubscriptionId          String?
 
   payments Payment[]
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  // Set when a Purchase leaves ACTIVE (either direction) — when it
+  // happened, for the history list.
+  closedAt DateTime?
 
   @@index([artworkId])
 }
@@ -303,9 +343,9 @@ model PaymentPlan {
 // set optimistically from the admin UI — so it always reflects what
 // Stripe actually confirms happened.
 model Payment {
-  id     String      @id @default(cuid())
-  planId String
-  plan   PaymentPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  id         String   @id @default(cuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   sequence Int // 1st payment, 2nd, etc. — 1 for a Full payment.
   amount   Decimal       @db.Decimal(10, 2)
@@ -321,7 +361,7 @@ model Payment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([planId])
+  @@index([purchaseId])
 }
 
 model Image {
