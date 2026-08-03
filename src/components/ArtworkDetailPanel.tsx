@@ -11,7 +11,8 @@ import {
   unlinkImageFromArtwork,
 } from "@/lib/actions/artworks";
 import MediaPicker from "@/components/MediaPicker";
-import PaymentsPanel from "@/components/PaymentsPanel";
+import SaleTermsPanel from "@/components/SaleTermsPanel";
+import PurchasePanel from "@/components/PurchasePanel";
 import type { SaleTermsDetail, PurchaseDetail } from "@/lib/actions/payments";
 
 export type ArtworkDetail = {
@@ -83,7 +84,9 @@ export default function ArtworkDetailPanel({
   // not "leave the page".
   onClose?: () => void;
 }) {
-  const [tab, setTab] = useState<"presentation" | "catalogue" | "payments">("presentation");
+  const [tab, setTab] = useState<"presentation" | "catalogue" | "saleterms" | "payment">(
+    "presentation"
+  );
   const [images, setImages] = useState(artwork.images);
   const [isPending, startTransition] = useTransition();
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
@@ -204,14 +207,25 @@ export default function ArtworkDetailPanel({
         </button>
         <button
           type="button"
-          onClick={() => setTab("payments")}
+          onClick={() => setTab("saleterms")}
           className={`px-3 py-2 text-sm font-medium ${
-            tab === "payments"
+            tab === "saleterms"
               ? "border-b-2 border-neutral-900 text-neutral-900"
               : "text-neutral-400 hover:text-neutral-600"
           }`}
         >
-          Payments
+          Sale Terms
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("payment")}
+          className={`px-3 py-2 text-sm font-medium ${
+            tab === "payment"
+              ? "border-b-2 border-neutral-900 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Payment
         </button>
       </div>
 
@@ -516,19 +530,25 @@ export default function ArtworkDetailPanel({
                 </div>
               </form>
             </>
-          ) : (
-            <PaymentsPanel
+          ) : tab === "saleterms" ? (
+            <SaleTermsPanel
               artworkId={artwork.id}
               siteId={siteId}
               siteDefaultCurrency={siteDefaultCurrency}
               terms={artwork.saleTerms}
-              activePurchase={artwork.activePurchase}
-              history={artwork.purchaseHistory}
               defaults={{
                 defaultInstalmentCount: settings.defaultInstalmentCount,
                 defaultReleaseMessage: settings.defaultReleaseMessage,
                 defaultReleaseTriggerCount: settings.defaultReleaseTriggerCount,
               }}
+            />
+          ) : (
+            <PurchasePanel
+              artworkId={artwork.id}
+              siteId={siteId}
+              terms={artwork.saleTerms}
+              activePurchase={artwork.activePurchase}
+              history={artwork.purchaseHistory}
             />
         )}
       </div>
