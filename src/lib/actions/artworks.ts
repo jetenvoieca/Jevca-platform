@@ -127,7 +127,14 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
 export async function getArtworkDetail(id: string) {
   return db.artwork.findUnique({
     where: { id },
-    include: { images: true, paymentPlan: { include: { payments: { orderBy: { sequence: "asc" } } } } },
+    include: {
+      images: true,
+      saleTerms: true,
+      purchases: {
+        include: { payments: { orderBy: { sequence: "asc" } } },
+        orderBy: { createdAt: "desc" },
+      },
+    },
   });
 }
 
@@ -141,6 +148,31 @@ export async function getArtworkDetail(id: string) {
 export async function getArtworkDetailForClient(id: string) {
   const artwork = await getArtworkDetail(id);
   if (!artwork) return null;
+
+  const purchases = artwork.purchases.map((p) => ({
+    id: p.id,
+    status: p.status,
+    buyerName: p.buyerName,
+    buyerEmail: p.buyerEmail,
+    type: p.type,
+    totalAmount: p.totalAmount.toString(),
+    currency: p.currency,
+    instalmentCount: p.instalmentCount,
+    releaseMessage: p.releaseMessage,
+    releaseTriggerCount: p.releaseTriggerCount,
+    createdAt: p.createdAt.toISOString(),
+    closedAt: p.closedAt ? p.closedAt.toISOString() : null,
+    payments: p.payments.map((pay) => ({
+      id: pay.id,
+      sequence: pay.sequence,
+      amount: pay.amount.toString(),
+      currency: pay.currency,
+      status: pay.status,
+      dueDate: pay.dueDate ? pay.dueDate.toISOString() : null,
+      paidDate: pay.paidDate ? pay.paidDate.toISOString() : null,
+    })),
+  }));
+
   return {
     id: artwork.id,
     artistId: artwork.artistId,
@@ -165,28 +197,17 @@ export async function getArtworkDetailForClient(id: string) {
     priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
     studioNotes: artwork.studioNotes,
     images: artwork.images.map((img) => ({ id: img.id, url: img.url })),
-    paymentPlan: artwork.paymentPlan
+    saleTerms: artwork.saleTerms
       ? {
-          id: artwork.paymentPlan.id,
-          type: artwork.paymentPlan.type,
-          totalAmount: artwork.paymentPlan.totalAmount.toString(),
-          currency: artwork.paymentPlan.currency,
-          instalmentCount: artwork.paymentPlan.instalmentCount,
-          releaseMessage: artwork.paymentPlan.releaseMessage,
-          releaseTriggerCount: artwork.paymentPlan.releaseTriggerCount,
-          buyerName: artwork.paymentPlan.buyerName,
-          buyerEmail: artwork.paymentPlan.buyerEmail,
-          payments: artwork.paymentPlan.payments.map((p) => ({
-            id: p.id,
-            sequence: p.sequence,
-            amount: p.amount.toString(),
-            currency: p.currency,
-            status: p.status,
-            dueDate: p.dueDate ? p.dueDate.toISOString() : null,
-            paidDate: p.paidDate ? p.paidDate.toISOString() : null,
-          })),
+          totalAmount: artwork.saleTerms.totalAmount.toString(),
+          currency: artwork.saleTerms.currency,
+          instalmentCount: artwork.saleTerms.instalmentCount,
+          releaseMessage: artwork.saleTerms.releaseMessage,
+          releaseTriggerCount: artwork.saleTerms.releaseTriggerCount,
         }
       : null,
+    activePurchase: purchases.find((p) => p.status === "ACTIVE") || null,
+    purchaseHistory: purchases.filter((p) => p.status !== "ACTIVE"),
   };
 }
 
@@ -275,7 +296,7 @@ export async function updateCatalogue(
 export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
   const artwork = await db.artwork.findUnique({
     where: { id: artworkId },
-    include: { images: true, paymentPlan: true },
+    include: { images: true, saleTerms: true, purchases: true },
   });
   if (!artwork) return;
 
@@ -283,7 +304,8 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
     artwork.presentationTitle === "Untitled" &&
     artwork.catalogueName === "Untitled" &&
     artwork.images.length === 0 &&
-    !artwork.paymentPlan &&
+    !artwork.saleTerms &&
+    artwork.purchases.length === 0 &&
     !artwork.presentationPrice &&
     !artwork.dimensions &&
     !artwork.description &&
