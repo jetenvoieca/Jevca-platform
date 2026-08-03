@@ -22,19 +22,29 @@ export default function AppShell({
   navItems: AppShellNavItem[];
 }) {
   return (
-    <div className="grid min-h-screen grid-cols-[340px_1fr_220px]">
-      <div className="border-r border-neutral-200 bg-neutral-50 p-6">{preview}</div>
-      <div className="p-6">{content}</div>
-      <div className="flex flex-col gap-2 border-l border-neutral-200 p-4">
-        <button
-          type="button"
-          disabled={!publishEnabled}
-          className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:hover:bg-neutral-200"
-        >
-          Publish to live site
-        </button>
+    <div className="grid h-screen grid-cols-[340px_1fr_220px] overflow-hidden">
+      {/* Each column scrolls independently — a caller that wants its own
+          fixed header (title, filters, table header row) structures its
+          content as a flex column with a non-scrolling header and a
+          flex-1 overflow-y-auto body, same pattern as the menu column
+          below. A caller with nothing to pin can just render plain
+          content and this column's own scrolling handles it. */}
+      <div className="h-full overflow-y-auto border-r border-neutral-200 bg-neutral-50">
+        {preview}
+      </div>
+      <div className="h-full overflow-y-auto">{content}</div>
+      <div className="flex h-full flex-col border-l border-neutral-200">
+        <div className="border-b border-neutral-200 p-4">
+          <button
+            type="button"
+            disabled={!publishEnabled}
+            className="w-full rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:hover:bg-neutral-200"
+          >
+            Publish to live site
+          </button>
+        </div>
 
-        <nav className="mt-2 flex flex-col gap-1">
+        <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
           {navItems.map((item) =>
             item.disabled ? (
               <span
