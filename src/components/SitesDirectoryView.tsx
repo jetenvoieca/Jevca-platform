@@ -108,18 +108,20 @@ export default function SitesDirectoryView({
       navItems={[{ label: "Sites", href: "/", active: true }]}
       preview={
         selected ? (
-          <div>
-            <input
-              key={`name-${selected.id}`}
-              type="text"
-              defaultValue={selected.name}
-              onBlur={(e) => e.target.value.trim() && saveSite("name", e.target.value.trim())}
-              disabled={isPending}
-              className="mb-1 w-full rounded-md border border-transparent px-1 py-0.5 -mx-1 text-lg font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300 disabled:opacity-50"
-            />
-            {savedField === "name" && <p className="mb-1 text-xs text-green-600">Saved</p>}
-
-            <label className="mb-1 mt-3 block text-xs uppercase tracking-wide text-neutral-400">
+          <div className="flex h-full flex-col">
+            <div className="border-b border-neutral-200 bg-neutral-50 px-6 py-4">
+              <input
+                key={`name-${selected.id}`}
+                type="text"
+                defaultValue={selected.name}
+                onBlur={(e) => e.target.value.trim() && saveSite("name", e.target.value.trim())}
+                disabled={isPending}
+                className="w-full rounded-md border border-transparent px-1 py-0.5 -mx-1 text-lg font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300 disabled:opacity-50"
+              />
+              {savedField === "name" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+            </div>
+            <div className="flex-1 overflow-y-auto px-6 py-4">
+            <label className="mb-1 block text-xs uppercase tracking-wide text-neutral-400">
               Domain
             </label>
             <input
@@ -345,117 +347,119 @@ export default function SitesDirectoryView({
                 Preview coming soon
               </div>
             </div>
+            </div>
           </div>
         ) : (
-          <p className="text-sm text-neutral-400">Select a site to preview it here.</p>
+          <p className="p-6 text-sm text-neutral-400">Select a site to preview it here.</p>
         )
       }
       content={
-        <div>
-          <div className="mb-4 flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-neutral-900">Sites</h1>
-            <Link
-              href="/namecheap-sync"
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50"
-            >
-              Namecheap Sync
-            </Link>
+        <div className="flex h-full flex-col">
+          <div className="border-b border-neutral-200 px-6 pb-4 pt-6">
+            <div className="mb-4 flex items-center justify-between">
+              <h1 className="text-2xl font-semibold text-neutral-900">Sites</h1>
+              <Link
+                href="/namecheap-sync"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600 hover:bg-neutral-50"
+              >
+                Namecheap Sync
+              </Link>
+            </div>
+
+            <form method="get" className="mb-4 flex flex-wrap items-center gap-3">
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="Search by owner or site name"
+                className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <select
+                name="sort"
+                defaultValue={sort}
+                className="rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              >
+                <option value="owner">Sort: Owner</option>
+                <option value="date">Sort: Date created</option>
+              </select>
+              {showArchived && <input type="hidden" name="archived" value="1" />}
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50"
+              >
+                Apply
+              </button>
+
+              <label className="flex items-center gap-2 text-sm text-neutral-600">
+                <input
+                  type="checkbox"
+                  name="archived"
+                  value="1"
+                  defaultChecked={showArchived}
+                  onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                />
+                Show archived
+              </label>
+
+              <Link
+                href="/sites/new"
+                className="ml-auto rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+              >
+                + Add New Site
+              </Link>
+            </form>
+
+            <p className="text-xs text-neutral-400">
+              {sites.length} site{sites.length === 1 ? "" : "s"}
+            </p>
           </div>
 
-          <form
-            method="get"
-            className="mb-4 flex flex-wrap items-center gap-3"
-          >
-            <input
-              type="text"
-              name="q"
-              defaultValue={q}
-              placeholder="Search by owner or site name"
-              className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <select
-              name="sort"
-              defaultValue={sort}
-              className="rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="owner">Sort: Owner</option>
-              <option value="date">Sort: Date created</option>
-            </select>
-            {showArchived && <input type="hidden" name="archived" value="1" />}
-            <button
-              type="submit"
-              className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50"
-            >
-              Apply
-            </button>
-
-            <label className="flex items-center gap-2 text-sm text-neutral-600">
-              <input
-                type="checkbox"
-                name="archived"
-                value="1"
-                defaultChecked={showArchived}
-                onChange={(e) => e.currentTarget.form?.requestSubmit()}
-              />
-              Show archived
-            </label>
-
-            <Link
-              href="/sites/new"
-              className="ml-auto rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-            >
-              + Add New Site
-            </Link>
-          </form>
-
-          <p className="mb-2 text-xs text-neutral-400">
-            {sites.length} site{sites.length === 1 ? "" : "s"}
-          </p>
-
-          {sites.length === 0 ? (
-            <p className="text-sm text-neutral-500">No sites match.</p>
-          ) : (
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                  <th className="py-2 font-medium">Owner</th>
-                  <th className="py-2 font-medium">Site name</th>
-                  <th className="py-2 font-medium">Domain</th>
-                  <th className="py-2 font-medium">Status</th>
-                  <th className="py-2 font-medium">Created</th>
-                  <th className="py-2 font-medium"></th>
-                </tr>
-              </thead>
-              <tbody>
-                {sites.map((site) => (
-                  <tr
-                    key={site.id}
-                    onClick={() => setSelectedId(site.id)}
-                    className={`cursor-pointer border-b border-neutral-100 ${
-                      selectedId === site.id ? "bg-neutral-100" : "hover:bg-neutral-50"
-                    }`}
-                  >
-                    <td className="py-3">{site.ownerName}</td>
-                    <td className="py-3 font-medium text-neutral-900">{site.name}</td>
-                    <td className="py-3 text-neutral-500">{site.domain || "—"}</td>
-                    <td className="py-3" onClick={(e) => e.stopPropagation()}>
-                      {site.status === "ARCHIVED" ? (
-                        <span className="text-neutral-400">Archived</span>
-                      ) : (
-                        <StatusSelect siteId={site.id} status={site.status} />
-                      )}
-                    </td>
-                    <td className="py-3 text-neutral-500">
-                      {new Date(site.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="py-3 text-right" onClick={(e) => e.stopPropagation()}>
-                      <ArchiveButton siteId={site.id} isArchived={site.status === "ARCHIVED"} />
-                    </td>
+          <div className="flex-1 overflow-y-auto px-6 pb-6">
+            {sites.length === 0 ? (
+              <p className="pt-4 text-sm text-neutral-500">No sites match.</p>
+            ) : (
+              <table className="w-full border-collapse text-sm">
+                <thead className="sticky top-0 z-10 bg-white">
+                  <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                    <th className="py-2 font-medium">Owner</th>
+                    <th className="py-2 font-medium">Site name</th>
+                    <th className="py-2 font-medium">Domain</th>
+                    <th className="py-2 font-medium">Status</th>
+                    <th className="py-2 font-medium">Created</th>
+                    <th className="py-2 font-medium"></th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
+                </thead>
+                <tbody>
+                  {sites.map((site) => (
+                    <tr
+                      key={site.id}
+                      onClick={() => setSelectedId(site.id)}
+                      className={`cursor-pointer border-b border-neutral-100 ${
+                        selectedId === site.id ? "bg-neutral-100" : "hover:bg-neutral-50"
+                      }`}
+                    >
+                      <td className="py-3">{site.ownerName}</td>
+                      <td className="py-3 font-medium text-neutral-900">{site.name}</td>
+                      <td className="py-3 text-neutral-500">{site.domain || "—"}</td>
+                      <td className="py-3" onClick={(e) => e.stopPropagation()}>
+                        {site.status === "ARCHIVED" ? (
+                          <span className="text-neutral-400">Archived</span>
+                        ) : (
+                          <StatusSelect siteId={site.id} status={site.status} />
+                        )}
+                      </td>
+                      <td className="py-3 text-neutral-500">
+                        {new Date(site.createdAt).toLocaleDateString()}
+                      </td>
+                      <td className="py-3 text-right" onClick={(e) => e.stopPropagation()}>
+                        <ArchiveButton siteId={site.id} isArchived={site.status === "ARCHIVED"} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
         </div>
       }
     />
