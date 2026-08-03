@@ -4,7 +4,15 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { stripe, toMinorUnits, splitIntoInstalments, APP_URL } from "@/lib/stripe";
 
-// ---------- Reading ----------
+// ---------- Types ----------
+
+export type SaleTermsDetail = {
+  totalAmount: string;
+  currency: string;
+  instalmentCount: number;
+  releaseMessage: string | null;
+  releaseTriggerCount: number | null;
+};
 
 export type PaymentDetail = {
   id: string;
@@ -16,115 +24,131 @@ export type PaymentDetail = {
   paidDate: string | null;
 };
 
-export type PaymentPlanDetail = {
+export type PurchaseDetail = {
   id: string;
+  status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+  buyerName: string | null;
+  buyerEmail: string;
   type: "FULL" | "INSTALMENTS";
   totalAmount: string;
   currency: string;
   instalmentCount: number | null;
   releaseMessage: string | null;
   releaseTriggerCount: number | null;
-  buyerName: string | null;
-  buyerEmail: string | null;
+  createdAt: string;
+  closedAt: string | null;
   payments: PaymentDetail[];
 };
 
-export async function getPaymentPlan(artworkId: string): Promise<PaymentPlanDetail | null> {
-  const plan = await db.paymentPlan.findUnique({
-    where: { artworkId },
-    include: { payments: { orderBy: { sequence: "asc" } } },
-  });
-  if (!plan) return null;
-  return serializePlan(plan);
-}
-
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function serializePlan(plan: any): PaymentPlanDetail {
+export async function serializePurchase(p: any): Promise<PurchaseDetail> {
   return {
-    id: plan.id,
-    type: plan.type,
-    totalAmount: plan.totalAmount.toString(),
-    currency: plan.currency,
-    instalmentCount: plan.instalmentCount,
-    releaseMessage: plan.releaseMessage,
-    releaseTriggerCount: plan.releaseTriggerCount,
-    buyerName: plan.buyerName,
-    buyerEmail: plan.buyerEmail,
+    id: p.id,
+    status: p.status,
+    buyerName: p.buyerName,
+    buyerEmail: p.buyerEmail,
+    type: p.type,
+    totalAmount: p.totalAmount.toString(),
+    currency: p.currency,
+    instalmentCount: p.instalmentCount,
+    releaseMessage: p.releaseMessage,
+    releaseTriggerCount: p.releaseTriggerCount,
+    createdAt: p.createdAt.toISOString(),
+    closedAt: p.closedAt ? p.closedAt.toISOString() : null,
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    payments: plan.payments.map((p: any) => ({
-      id: p.id,
-      sequence: p.sequence,
-      amount: p.amount.toString(),
-      currency: p.currency,
-      status: p.status,
-      dueDate: p.dueDate ? p.dueDate.toISOString() : null,
-      paidDate: p.paidDate ? p.paidDate.toISOString() : null,
+    payments: p.payments.map((pay: any) => ({
+      id: pay.id,
+      sequence: pay.sequence,
+      amount: pay.amount.toString(),
+      currency: pay.currency,
+      status: pay.status,
+      dueDate: pay.dueDate ? pay.dueDate.toISOString() : null,
+      paidDate: pay.paidDate ? pay.paidDate.toISOString() : null,
     })),
   };
 }
 
-// ---------- Create / update plan terms ----------
+// ---------- Sale Terms — autosave, no buyer info, ever ----------
 
-// Creates the plan on first save, or updates its terms if called again.
-// The panel only shows this form while no payment has been taken yet
-// (payments.length === 0) — once a real Stripe Customer/Checkout/
-// Subscription exists behind a plan, changing the total or instalment
-// count here would no longer match what Stripe actually has on file, so
-// the UI locks the terms at that point (see updateReleaseSettings for
-// what stays editable afterwards).
-export async function savePaymentPlan(artworkId: string, siteId: string, formData: FormData) {
-  const type = (formData.get("type") as string) === "INSTALMENTS" ? "INSTALMENTS" : "FULL";
+export async function saveSaleTerms(artworkId: string, siteId: string, formData: FormData) {
   const totalAmount = (formData.get("totalAmount") as string)?.trim();
   const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
-  const instalmentCountRaw = (formData.get("instalmentCount") as string)?.trim();
+  const instalmentCount = parseInt((formData.get("instalmentCount") as string) || "5", 10);
   const releaseMessage = (formData.get("releaseMessage") as string)?.trim() || null;
   const releaseTriggerCountRaw = (formData.get("releaseTriggerCount") as string)?.trim();
-  const buyerName = (formData.get("buyerName") as string)?.trim() || null;
-  const buyerEmail = (formData.get("buyerEmail") as string)?.trim() || null;
+  const releaseTriggerCount = releaseTriggerCountRaw ? parseInt(releaseTriggerCountRaw, 10) : null;
 
   if (!totalAmount) return;
 
-  const instalmentCount =
-    type === "INSTALMENTS" ? parseInt(instalmentCountRaw || "5", 10) : null;
-  const releaseTriggerCount = releaseTriggerCountRaw ? parseInt(releaseTriggerCountRaw, 10) : null;
-
-  await db.paymentPlan.upsert({
+  await db.saleTerms.upsert({
     where: { artworkId },
     create: {
       artworkId,
-      type,
       totalAmount,
       currency,
       instalmentCount,
       releaseMessage,
       releaseTriggerCount,
-      buyerName,
-      buyerEmail,
     },
-    update: {
-      type,
-      totalAmount,
-      currency,
-      instalmentCount,
-      releaseMessage,
-      releaseTriggerCount,
-      buyerName,
-      buyerEmail,
-    },
+    update: { totalAmount, currency, instalmentCount, releaseMessage, releaseTriggerCount },
   });
 
   revalidatePath(`/sites/${siteId}/artworks`);
 }
 
-// Editable at any time, even after payment has started — this is
-// deliberately separate from savePaymentPlan, which is locked once a real
-// payment exists.
-export async function updateReleaseSettings(artworkId: string, siteId: string, formData: FormData) {
+// ---------- Starting a sale — explicit action, not autosaved ----------
+
+// Creates the actual Purchase, snapshotting SaleTerms at this moment.
+// Refuses if there's already an ACTIVE purchase for this artwork — only
+// one at a time (see schema comment).
+export async function startPurchase(
+  artworkId: string,
+  siteId: string,
+  formData: FormData
+): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
+  const terms = await db.saleTerms.findUnique({ where: { artworkId } });
+  if (!terms) return { ok: false, error: "Set the sale terms first." };
+
+  const existingActive = await db.purchase.findFirst({
+    where: { artworkId, status: "ACTIVE" },
+  });
+  if (existingActive) {
+    return { ok: false, error: "There's already an active sale in progress for this artwork." };
+  }
+
+  const buyerName = (formData.get("buyerName") as string)?.trim() || null;
+  const buyerEmail = (formData.get("buyerEmail") as string)?.trim();
+  const type = (formData.get("type") as string) === "INSTALMENTS" ? "INSTALMENTS" : "FULL";
+
+  if (!buyerEmail) return { ok: false, error: "Buyer email is required to start a sale." };
+
+  const purchase = await db.purchase.create({
+    data: {
+      artworkId,
+      buyerName,
+      buyerEmail,
+      type,
+      totalAmount: terms.totalAmount,
+      currency: terms.currency,
+      instalmentCount: type === "INSTALMENTS" ? terms.instalmentCount : null,
+      releaseMessage: terms.releaseMessage,
+      releaseTriggerCount: terms.releaseTriggerCount,
+    },
+  });
+
+  revalidatePath(`/sites/${siteId}/artworks`);
+  return { ok: true, purchaseId: purchase.id };
+}
+
+// Editable while a Purchase is active — e.g. correcting the release
+// wording for this specific buyer. Autosaved (low-stakes, descriptive),
+// unlike starting/abandoning the purchase itself.
+export async function updatePurchaseRelease(purchaseId: string, siteId: string, formData: FormData) {
   const releaseMessage = (formData.get("releaseMessage") as string)?.trim() || null;
   const releaseTriggerCountRaw = (formData.get("releaseTriggerCount") as string)?.trim();
 
-  await db.paymentPlan.update({
-    where: { artworkId },
+  await db.purchase.update({
+    where: { id: purchaseId },
     data: {
       releaseMessage,
       releaseTriggerCount: releaseTriggerCountRaw ? parseInt(releaseTriggerCountRaw, 10) : null,
@@ -134,88 +158,111 @@ export async function updateReleaseSettings(artworkId: string, siteId: string, f
   revalidatePath(`/sites/${siteId}/artworks`);
 }
 
-// The rare "artwork is being sold again after a previous plan fell
-// through" case — deliberately manual, not automated (see
-// payments-design.md).
-export async function deletePaymentPlan(artworkId: string, siteId: string) {
-  await db.paymentPlan.delete({ where: { artworkId } }).catch(() => {});
+// The sale didn't go ahead. Kept as history (status ABANDONED), not
+// deleted — SaleTerms is completely untouched, ready for the next buyer.
+// If instalments had already started, also cancels the Stripe schedule so
+// nothing keeps auto-charging a sale that isn't happening.
+export async function abandonPurchase(
+  purchaseId: string,
+  siteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase) return { ok: false, error: "Purchase not found." };
+
+  try {
+    if (purchase.stripeSubscriptionId) {
+      await stripe.subscriptions.cancel(purchase.stripeSubscriptionId);
+    } else if (purchase.stripeSubscriptionScheduleId) {
+      await stripe.subscriptionSchedules.cancel(purchase.stripeSubscriptionScheduleId);
+    }
+  } catch (err) {
+    // Don't block marking it abandoned locally just because Stripe's side
+    // failed to cancel (e.g. it already finished/cancelled) — but the
+    // caller should still know, in case it needs a manual check in Stripe.
+    await db.purchase.update({
+      where: { id: purchaseId },
+      data: { status: "ABANDONED", closedAt: new Date() },
+    });
+    revalidatePath(`/sites/${siteId}/artworks`);
+    return { ok: false, error: stripeErrorMessage(err) };
+  }
+
+  await db.purchase.update({
+    where: { id: purchaseId },
+    data: { status: "ABANDONED", closedAt: new Date() },
+  });
+
   revalidatePath(`/sites/${siteId}/artworks`);
+  return { ok: true };
 }
 
 // ---------- Shared helpers ----------
 
-async function getOrCreateStripeCustomer(plan: {
+async function getOrCreateStripeCustomer(purchase: {
   id: string;
   stripeCustomerId: string | null;
   buyerName: string | null;
-  buyerEmail: string | null;
+  buyerEmail: string;
 }) {
-  if (plan.stripeCustomerId) return plan.stripeCustomerId;
-  if (!plan.buyerEmail) {
-    throw new Error("Add the buyer's email before taking a payment.");
-  }
+  if (purchase.stripeCustomerId) return purchase.stripeCustomerId;
 
   const customer = await stripe.customers.create({
-    email: plan.buyerEmail,
-    name: plan.buyerName || undefined,
+    email: purchase.buyerEmail,
+    name: purchase.buyerName || undefined,
   });
 
-  await db.paymentPlan.update({ where: { id: plan.id }, data: { stripeCustomerId: customer.id } });
+  await db.purchase.update({
+    where: { id: purchase.id },
+    data: { stripeCustomerId: customer.id },
+  });
   return customer.id;
 }
 
-// The amount charged right now — the first instalment if this is an
-// instalment plan, or the full amount otherwise.
-function firstChargeAmount(plan: {
+// The amount charged right now — the first instalment if this Purchase is
+// an instalment sale, or the full amount otherwise.
+function firstChargeAmount(purchase: {
   type: string;
   totalAmount: unknown;
   instalmentCount: number | null;
 }) {
-  const total = parseFloat(plan.totalAmount as string);
-  if (plan.type === "INSTALMENTS" && plan.instalmentCount) {
-    return splitIntoInstalments(total, plan.instalmentCount)[0];
+  const total = parseFloat(purchase.totalAmount as string);
+  if (purchase.type === "INSTALMENTS" && purchase.instalmentCount) {
+    return splitIntoInstalments(total, purchase.instalmentCount)[0];
   }
   return total;
 }
 
 // ---------- Take payment: hosted Stripe payment link ----------
 
-// Returns a result object rather than throwing. Next.js redacts the
-// message of anything *thrown* inside a Server Action in production
-// builds (shown to the user as a generic "digest" error) — since these
-// messages are meant to be read by the person taking the payment (a
-// missing buyer email, a declined Stripe key, etc.), they need to travel
-// back as normal data instead.
 export async function createPaymentLink(
-  artworkId: string,
-  siteId: string
+  purchaseId: string,
+  siteId: string,
+  artworkId: string
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   try {
-    const plan = await db.paymentPlan.findUnique({
-      where: { artworkId },
+    const purchase = await db.purchase.findUnique({
+      where: { id: purchaseId },
       include: { artwork: true },
     });
-    if (!plan) return { ok: false, error: "Set up the payment terms first." };
+    if (!purchase) return { ok: false, error: "Purchase not found." };
 
-    const customerId = await getOrCreateStripeCustomer(plan);
-    const amount = firstChargeAmount(plan);
+    const customerId = await getOrCreateStripeCustomer(purchase);
+    const amount = firstChargeAmount(purchase);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer: customerId,
       payment_intent_data: {
-        // Saves the card against the Customer so later instalments can be
-        // auto-charged with no buyer present — see handleFirstPaymentSucceeded.
         setup_future_usage: "off_session",
-        metadata: { planId: plan.id, sequence: "1" },
+        metadata: { purchaseId: purchase.id, sequence: "1" },
       },
       line_items: [
         {
           quantity: 1,
           price_data: {
-            currency: plan.currency.toLowerCase(),
+            currency: purchase.currency.toLowerCase(),
             unit_amount: toMinorUnits(amount),
-            product_data: { name: plan.artwork.presentationTitle },
+            product_data: { name: purchase.artwork.presentationTitle },
           },
         },
       ],
@@ -223,8 +270,8 @@ export async function createPaymentLink(
       cancel_url: `${APP_URL}/sites/${siteId}/artworks/${artworkId}?payment=cancelled`,
     });
 
-    await db.paymentPlan.update({
-      where: { id: plan.id },
+    await db.purchase.update({
+      where: { id: purchase.id },
       data: { stripeCheckoutSessionId: session.id },
     });
 
@@ -237,27 +284,23 @@ export async function createPaymentLink(
 
 // ---------- Take payment: card entered directly in the app ----------
 
-// Returns a PaymentIntent client secret for the StripeCardForm component
-// (Stripe Elements) to confirm against — the card details themselves
-// never pass through our server. Same result-object pattern as
-// createPaymentLink, for the same reason.
 export async function createCardEntryIntent(
-  artworkId: string,
+  purchaseId: string,
   siteId: string
 ): Promise<{ ok: true; clientSecret: string } | { ok: false; error: string }> {
   try {
-    const plan = await db.paymentPlan.findUnique({ where: { artworkId } });
-    if (!plan) return { ok: false, error: "Set up the payment terms first." };
+    const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+    if (!purchase) return { ok: false, error: "Purchase not found." };
 
-    const customerId = await getOrCreateStripeCustomer(plan);
-    const amount = firstChargeAmount(plan);
+    const customerId = await getOrCreateStripeCustomer(purchase);
+    const amount = firstChargeAmount(purchase);
 
     const intent = await stripe.paymentIntents.create({
       amount: toMinorUnits(amount),
-      currency: plan.currency.toLowerCase(),
+      currency: purchase.currency.toLowerCase(),
       customer: customerId,
       setup_future_usage: "off_session",
-      metadata: { planId: plan.id, sequence: "1", siteId },
+      metadata: { purchaseId: purchase.id, sequence: "1", siteId },
     });
 
     if (!intent.client_secret) {
@@ -269,11 +312,6 @@ export async function createCardEntryIntent(
   }
 }
 
-// Stripe's own SDK errors (bad API key, declined card set-up, invalid
-// request, etc.) carry a genuinely useful .message — surfaced as-is.
-// Anything else (a plain thrown Error, e.g. the "add buyer's email"
-// checks above) also has a usable .message. Only a truly unknown thrown
-// value falls back to a generic string.
 function stripeErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return "Something went wrong talking to Stripe. Check the Netlify function logs for details.";
@@ -281,53 +319,63 @@ function stripeErrorMessage(err: unknown): string {
 
 // ---------- Webhook-side handlers (called from /api/stripe/webhook) ----------
 
-// Fires once the first payment (Payment Link or in-app card entry)
-// actually clears, confirmed by Stripe — never called optimistically from
-// the UI. Records Payment #1 as Paid, and — for an instalment plan —
-// sets up a Stripe Subscription Schedule to auto-charge the remainder
-// monthly against the card just saved on the Customer.
-export async function handleFirstPaymentSucceeded(planId: string, stripePaymentIntentId: string) {
-  const plan = await db.paymentPlan.findUnique({
-    where: { id: planId },
+// Marks a Purchase COMPLETED once every one of its Payments is Paid — a
+// Full sale completes immediately (one payment); an Instalment sale
+// completes once the last one clears.
+async function completeIfAllPaid(purchaseId: string) {
+  const remaining = await db.payment.count({
+    where: { purchaseId, status: { not: "PAID" } },
+  });
+  if (remaining === 0) {
+    await db.purchase.update({
+      where: { id: purchaseId },
+      data: { status: "COMPLETED", closedAt: new Date() },
+    });
+  }
+}
+
+export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaymentIntentId: string) {
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
     include: { artwork: true, payments: true },
   });
-  if (!plan) return;
+  if (!purchase) return;
 
   // Idempotent — Stripe can deliver the same webhook event more than once.
-  if (plan.payments.some((p) => p.sequence === 1)) return;
+  if (purchase.payments.some((p) => p.sequence === 1)) return;
 
-  const total = parseFloat(plan.totalAmount.toString());
-  const count = plan.type === "INSTALMENTS" && plan.instalmentCount ? plan.instalmentCount : 1;
+  const total = parseFloat(purchase.totalAmount.toString());
+  const count = purchase.type === "INSTALMENTS" && purchase.instalmentCount ? purchase.instalmentCount : 1;
   const amounts = splitIntoInstalments(total, count);
 
   await db.payment.create({
     data: {
-      planId: plan.id,
+      purchaseId: purchase.id,
       sequence: 1,
       amount: amounts[0],
-      currency: plan.currency,
+      currency: purchase.currency,
       status: "PAID",
       paidDate: new Date(),
       stripePaymentIntentId,
     },
   });
 
-  if (plan.type !== "INSTALMENTS" || count <= 1) return;
+  if (purchase.type !== "INSTALMENTS" || count <= 1) {
+    await completeIfAllPaid(purchase.id);
+    return;
+  }
 
   const remaining = amounts.slice(1);
 
-  // A fresh Product/Price per remaining instalment — lets the final
-  // instalment carry the rounding remainder exactly, rather than forcing
-  // every instalment to an identical flat amount.
   const product = await stripe.products.create({
-    name: `${plan.artwork.presentationTitle} — instalment plan`,
+    name: `${purchase.artwork.presentationTitle} — instalment plan`,
   });
 
   const phases = [];
   for (const amt of remaining) {
     const price = await stripe.prices.create({
       unit_amount: toMinorUnits(amt),
-      currency: plan.currency.toLowerCase(),
+      currency: purchase.currency.toLowerCase(),
       recurring: { interval: "month" },
       product: product.id,
     });
@@ -337,35 +385,30 @@ export async function handleFirstPaymentSucceeded(planId: string, stripePaymentI
     });
   }
 
-  // Starts ~1 month from now (approximated as 30 days) — instalment 1 was
-  // already taken above, this schedule only covers what's left.
   const startDate = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
 
   const schedule = await stripe.subscriptionSchedules.create({
-    customer: plan.stripeCustomerId!,
+    customer: purchase.stripeCustomerId!,
     start_date: startDate,
     end_behavior: "cancel",
     phases,
   });
 
-  await db.paymentPlan.update({
-    where: { id: plan.id },
+  await db.purchase.update({
+    where: { id: purchase.id },
     data: { stripeSubscriptionScheduleId: schedule.id },
   });
 
-  // Due-dated rows so the panel shows the full schedule ahead of time —
-  // status only ever flips away from DUE via the webhook handlers below,
-  // once Stripe confirms the charge actually happened.
   let dueDate = new Date();
   for (let i = 0; i < remaining.length; i++) {
     dueDate = new Date(dueDate);
     dueDate.setMonth(dueDate.getMonth() + 1);
     await db.payment.create({
       data: {
-        planId: plan.id,
+        purchaseId: purchase.id,
         sequence: i + 2,
         amount: remaining[i],
-        currency: plan.currency,
+        currency: purchase.currency,
         status: "DUE",
         dueDate,
       },
@@ -373,22 +416,18 @@ export async function handleFirstPaymentSucceeded(planId: string, stripePaymentI
   }
 }
 
-// The Subscription behind a schedule doesn't exist until start_date
-// arrives — this links it back to the plan once Stripe creates it, so
-// later invoice events (which only carry a subscription ID) can find the
-// right plan.
 export async function linkSubscriptionToSchedule(scheduleId: string, subscriptionId: string) {
-  await db.paymentPlan.updateMany({
+  await db.purchase.updateMany({
     where: { stripeSubscriptionScheduleId: scheduleId },
     data: { stripeSubscriptionId: subscriptionId },
   });
 }
 
 export async function handleInstalmentInvoicePaid(subscriptionId: string, invoiceId: string) {
-  const plan = await db.paymentPlan.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
-  if (!plan) return;
+  const purchase = await db.purchase.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
+  if (!purchase) return;
   const next = await db.payment.findFirst({
-    where: { planId: plan.id, status: "DUE" },
+    where: { purchaseId: purchase.id, status: "DUE" },
     orderBy: { sequence: "asc" },
   });
   if (!next) return;
@@ -396,13 +435,14 @@ export async function handleInstalmentInvoicePaid(subscriptionId: string, invoic
     where: { id: next.id },
     data: { status: "PAID", paidDate: new Date(), stripeInvoiceId: invoiceId },
   });
+  await completeIfAllPaid(purchase.id);
 }
 
 export async function handleInstalmentInvoiceFailed(subscriptionId: string, invoiceId: string) {
-  const plan = await db.paymentPlan.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
-  if (!plan) return;
+  const purchase = await db.purchase.findFirst({ where: { stripeSubscriptionId: subscriptionId } });
+  if (!purchase) return;
   const next = await db.payment.findFirst({
-    where: { planId: plan.id, status: "DUE" },
+    where: { purchaseId: purchase.id, status: "DUE" },
     orderBy: { sequence: "asc" },
   });
   if (!next) return;
