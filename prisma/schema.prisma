@@ -120,6 +120,10 @@ model Site {
   domain               String?
   status               SiteStatus @default(DRAFT)
   multiLanguageEnabled Boolean    @default(false)
+  // Off by default — plenty of sites are portfolio-only and never sell
+  // from the site, so the Sales menu item only appears once switched on
+  // per site (toggled from the Sites Directory panel).
+  salesEnabled         Boolean    @default(false)
   // Most artworks sell through a single site and inherit this — a
   // per-artwork override lives on SaleTerms.currency for the rare
   // cross-currency sale.
