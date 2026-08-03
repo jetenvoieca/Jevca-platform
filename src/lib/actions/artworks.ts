@@ -263,6 +263,49 @@ export async function updateCatalogue(
   revalidatePath(`/sites/${siteId}/artworks`);
 }
 
+// Called when leaving the editor (Close) rather than on every keystroke —
+// deletes the record only if absolutely nothing has been added since
+// creation (still "Untitled", no image, no facet fields, no payment
+// plan). This is what actually prevents blank artworks accumulating: the
+// "+ Add New" tile has to create a real row immediately (same
+// zero-friction pattern used everywhere else — Sites, Pages), so the only
+// way to keep the catalogue clean is to quietly remove it again if you
+// close without ever touching it, rather than asking for a title upfront
+// and breaking that pattern.
+export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
+  const artwork = await db.artwork.findUnique({
+    where: { id: artworkId },
+    include: { images: true, paymentPlan: true },
+  });
+  if (!artwork) return;
+
+  const isBlank =
+    artwork.presentationTitle === "Untitled" &&
+    artwork.catalogueName === "Untitled" &&
+    artwork.images.length === 0 &&
+    !artwork.paymentPlan &&
+    !artwork.presentationPrice &&
+    !artwork.dimensions &&
+    !artwork.description &&
+    !artwork.medium &&
+    !artwork.presentationGroup &&
+    !artwork.year &&
+    !artwork.type &&
+    !artwork.catalogueGroup &&
+    !artwork.size &&
+    !artwork.location &&
+    !artwork.edition &&
+    !artwork.availableQty &&
+    !artwork.priceUnframed &&
+    !artwork.priceFramed &&
+    !artwork.studioNotes;
+
+  if (!isBlank) return;
+
+  await db.artwork.delete({ where: { id: artworkId } });
+  revalidatePath(`/sites/${siteId}/artworks`);
+}
+
 export async function deleteArtwork(siteId: string, id: string) {
   await db.artwork.delete({ where: { id } });
   revalidatePath(`/sites/${siteId}/artworks`);
