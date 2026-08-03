@@ -90,6 +90,12 @@ export default function ArtworkDetailPanel({
   const [images, setImages] = useState(artwork.images);
   const [isPending, startTransition] = useTransition();
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
+  // Original/Unique pieces don't have editions or framed-vs-unframed
+  // pricing the way prints do — Catalogue shows a simpler set of fields
+  // for them. Tracked live (not just at load) so switching Type updates
+  // the form immediately, without needing to save and reopen.
+  const [typeValue, setTypeValue] = useState(artwork.type || "");
+  const isUniqueType = ["original", "unique"].includes(typeValue.trim().toLowerCase());
   const router = useRouter();
 
   const handleDelete = () => {
@@ -385,7 +391,8 @@ export default function ArtworkDetailPanel({
                     </label>
                     <select
                       name="type"
-                      defaultValue={artwork.type || ""}
+                      value={typeValue}
+                      onChange={(e) => setTypeValue(e.target.value)}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
                       <option value="">Choose from list…</option>
@@ -447,28 +454,45 @@ export default function ArtworkDetailPanel({
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Edition
-                    </label>
-                    <input
-                      type="text"
-                      name="edition"
-                      defaultValue={artwork.edition || ""}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Available (qty)
-                    </label>
-                    <input
-                      type="number"
-                      name="availableQty"
-                      defaultValue={artwork.availableQty ?? ""}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
+                  {!isUniqueType && (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Edition
+                      </label>
+                      <input
+                        type="text"
+                        name="edition"
+                        defaultValue={artwork.edition || ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  )}
+                  {!isUniqueType && (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Available (qty)
+                      </label>
+                      <input
+                        type="number"
+                        name="availableQty"
+                        defaultValue={artwork.availableQty ?? ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  )}
+                  {isUniqueType && (
+                    <>
+                      {/* Preserve any Edition/Available values already on
+                          record rather than wiping them out just because
+                          Type changed — they'll reappear if switched back. */}
+                      <input type="hidden" name="edition" value={artwork.edition || ""} />
+                      <input
+                        type="hidden"
+                        name="availableQty"
+                        value={artwork.availableQty ?? ""}
+                      />
+                    </>
+                  )}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Availability
@@ -483,28 +507,49 @@ export default function ArtworkDetailPanel({
                       <option value="SOLD">Sold</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Price unframed (£)
-                    </label>
-                    <input
-                      type="text"
-                      name="priceUnframed"
-                      defaultValue={artwork.priceUnframed || ""}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Price framed (£)
-                    </label>
-                    <input
-                      type="text"
-                      name="priceFramed"
-                      defaultValue={artwork.priceFramed || ""}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
+                  {isUniqueType ? (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-neutral-700">
+                          Price (£)
+                        </label>
+                        <input
+                          type="text"
+                          name="priceUnframed"
+                          defaultValue={artwork.priceUnframed || ""}
+                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      {/* Preserve an existing framed price rather than
+                          wiping it out just because Type changed. */}
+                      <input type="hidden" name="priceFramed" value={artwork.priceFramed || ""} />
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-neutral-700">
+                          Price unframed (£)
+                        </label>
+                        <input
+                          type="text"
+                          name="priceUnframed"
+                          defaultValue={artwork.priceUnframed || ""}
+                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-neutral-700">
+                          Price framed (£)
+                        </label>
+                        <input
+                          type="text"
+                          name="priceFramed"
+                          defaultValue={artwork.priceFramed || ""}
+                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
