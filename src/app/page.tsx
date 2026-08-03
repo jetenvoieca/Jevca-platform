@@ -66,6 +66,7 @@ export default async function SitesDirectoryPage({
     domainRenewalDate: s.domainRenewalDate ? s.domainRenewalDate.toISOString().slice(0, 10) : "",
     ownerId: s.artist.id,
     ownerName: s.artist.name,
+    ownerFirstName: s.artist.firstName,
     ownerEmail: s.artist.email,
     ownerPhone: s.artist.phone,
     ownerNotes: s.artist.notes,
