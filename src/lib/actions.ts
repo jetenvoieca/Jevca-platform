@@ -92,6 +92,7 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
 
 export async function updateArtist(id: string, formData: FormData): Promise<void> {
   const name = (formData.get("name") as string)?.trim();
+  const firstName = (formData.get("firstName") as string)?.trim() || null;
   const email = (formData.get("email") as string)?.trim() || null;
   const phone = (formData.get("phone") as string)?.trim() || null;
   const notes = (formData.get("notes") as string)?.trim() || null;
@@ -102,7 +103,7 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
 
   await db.artist.update({
     where: { id },
-    data: { name, email, phone, notes, subscriptionAmount, paymentMethod },
+    data: { name, firstName, email, phone, notes, subscriptionAmount, paymentMethod },
   });
   revalidatePath("/");
 }
