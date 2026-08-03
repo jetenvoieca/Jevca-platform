@@ -224,7 +224,6 @@ export async function updatePresentation(
   const description = (formData.get("description") as string)?.trim() || null;
   const medium = (formData.get("medium") as string)?.trim() || null;
   const presentationGroup = (formData.get("presentationGroup") as string)?.trim() || null;
-  const availability = formData.get("availability") as Availability;
 
   await db.artwork.update({
     where: { id },
@@ -235,12 +234,14 @@ export async function updatePresentation(
       description,
       medium,
       presentationGroup,
-      availability,
-      // Visibility is deliberately not set here anymore — it'll be
-      // governed by which pages feature the artwork, not a manual toggle
-      // on this screen. The column stays in the database (untouched,
-      // whatever it was) rather than being dropped, to avoid a
-      // destructive migration for a field that may be wanted again.
+      // Availability moved to the Catalogue tab — it's part of the
+      // artist's own working record, not something typed while looking at
+      // "what customers see." Visibility is deliberately not set here
+      // either — it'll be governed by which pages feature the artwork,
+      // not a manual toggle on this screen. The column stays in the
+      // database (untouched, whatever it was) rather than being dropped,
+      // to avoid a destructive migration for a field that may be wanted
+      // again.
     },
   });
 
@@ -263,6 +264,27 @@ export async function updateCatalogue(
   const priceUnframedRaw = (formData.get("priceUnframed") as string)?.trim();
   const priceFramedRaw = (formData.get("priceFramed") as string)?.trim();
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
+  const availability = formData.get("availability") as Availability;
+
+  // Presentation's Title and Price default from Catalogue's Name and
+  // Price unframed — but only the first time Catalogue is actually filled
+  // in, and only while Presentation is still at its untouched default
+  // ("Untitled" / no price). The moment someone types something different
+  // directly into Presentation, it's considered overridden and this stops
+  // touching it — same "seed once, then independent" pattern already used
+  // for Presentation being seeded from Catalogue at creation.
+  const current = await db.artwork.findUnique({
+    where: { id },
+    select: { presentationTitle: true, presentationPrice: true },
+  });
+
+  const presentationUpdate: { presentationTitle?: string; presentationPrice?: string | null } = {};
+  if (current?.presentationTitle === "Untitled" && catalogueName) {
+    presentationUpdate.presentationTitle = catalogueName;
+  }
+  if (current?.presentationPrice == null && priceUnframedRaw) {
+    presentationUpdate.presentationPrice = priceUnframedRaw;
+  }
 
   await db.artwork.update({
     where: { id },
@@ -278,6 +300,8 @@ export async function updateCatalogue(
       priceUnframed: priceUnframedRaw || null,
       priceFramed: priceFramedRaw || null,
       studioNotes,
+      availability,
+      ...presentationUpdate,
     },
   });
 
