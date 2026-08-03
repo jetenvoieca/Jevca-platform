@@ -20,6 +20,7 @@ type SiteRow = {
   domainRenewalDate: string;
   ownerId: string;
   ownerName: string;
+  ownerFirstName: string | null;
   ownerEmail: string | null;
   ownerPhone: string | null;
   ownerNotes: string | null;
@@ -70,12 +71,20 @@ export default function SitesDirectoryView({
   };
 
   const saveOwner = (
-    field: "name" | "email" | "phone" | "notes" | "subscriptionAmount" | "paymentMethod",
+    field:
+      | "name"
+      | "firstName"
+      | "email"
+      | "phone"
+      | "notes"
+      | "subscriptionAmount"
+      | "paymentMethod",
     value: string
   ) => {
     if (!selected) return;
     const fd = new FormData();
     fd.set("name", field === "name" ? value : selected.ownerName);
+    fd.set("firstName", field === "firstName" ? value : selected.ownerFirstName || "");
     fd.set("email", field === "email" ? value : selected.ownerEmail || "");
     fd.set("phone", field === "phone" ? value : selected.ownerPhone || "");
     fd.set("notes", field === "notes" ? value : selected.ownerNotes || "");
@@ -229,6 +238,15 @@ export default function SitesDirectoryView({
                   className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
                 />
                 <input
+                  key={`owner-firstname-${selected.ownerId}`}
+                  type="text"
+                  defaultValue={selected.ownerFirstName || ""}
+                  onBlur={(e) => saveOwner("firstName", e.target.value.trim())}
+                  disabled={isPending}
+                  placeholder="First name (for personalised emails)"
+                  className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                />
+                <input
                   key={`owner-email-${selected.ownerId}`}
                   type="email"
                   defaultValue={selected.ownerEmail || ""}
@@ -286,7 +304,8 @@ export default function SitesDirectoryView({
                   <option value="DD">DD</option>
                 </select>
 
-                {(savedField === "email" ||
+                {(savedField === "firstName" ||
+                  savedField === "email" ||
                   savedField === "phone" ||
                   savedField === "notes" ||
                   savedField === "subscriptionAmount" ||
