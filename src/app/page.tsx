@@ -62,6 +62,7 @@ export default async function SitesDirectoryPage({
     createdAt: s.createdAt.toISOString(),
     defaultCurrency: s.defaultCurrency,
     template: s.template,
+    salesEnabled: s.salesEnabled,
     domainStatus: s.domainStatus,
     domainRenewalDate: s.domainRenewalDate ? s.domainRenewalDate.toISOString().slice(0, 10) : "",
     ownerId: s.artist.id,
