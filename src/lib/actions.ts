@@ -121,6 +121,16 @@ export async function updateSiteStatus(
   revalidatePath("/");
 }
 
+// ---- Sales menu toggle ----
+
+export async function updateSalesEnabled(id: string, enabled: boolean) {
+  await db.site.update({
+    where: { id },
+    data: { salesEnabled: enabled },
+  });
+  revalidatePath("/");
+}
+
 // ---- Archive (soft delete) / Restore ----
 
 export async function archiveSite(id: string) {
