@@ -63,7 +63,8 @@ export default function PurchasePanel({
 
   const handleAbandon = () => {
     if (!activePurchase) return;
-    if (!confirm("Mark this sale as not going ahead? It'll be kept in the history below.")) return;
+    if (!confirm("Cancel this sale? It'll be kept in the history below, marked as abandoned."))
+      return;
     setError(null);
     startTransition(async () => {
       const res = await abandonPurchase(activePurchase.id, siteId);
@@ -323,7 +324,7 @@ export default function PurchasePanel({
                 disabled={isPending}
                 className="ml-auto text-sm text-red-600 hover:underline disabled:opacity-50"
               >
-                This sale isn&apos;t going ahead
+                Cancel sale
               </button>
             </div>
           </form>
