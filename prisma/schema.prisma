@@ -66,6 +66,12 @@ enum PaymentStatus {
 model Artist {
   id        String       @id @default(cuid())
   name      String
+  // Separate from `name` deliberately — `name` is free text (could be
+  // "Dr Jane Smith", initials, a studio/collective name, etc.), which
+  // makes it unsafe to derive a greeting from programmatically. This is
+  // typed once, correctly, specifically for personalised
+  // emails/messages later.
+  firstName String?
   email     String?
   phone     String?
   notes     String?
