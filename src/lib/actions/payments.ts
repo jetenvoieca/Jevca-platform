@@ -30,6 +30,7 @@ export type PurchaseDetail = {
   buyerName: string | null;
   buyerEmail: string;
   type: "FULL" | "INSTALMENTS";
+  source: string | null;
   totalAmount: string;
   currency: string;
   instalmentCount: number | null;
@@ -91,6 +92,7 @@ export async function startPurchase(
   const buyerName = (formData.get("buyerName") as string)?.trim() || null;
   const buyerEmail = (formData.get("buyerEmail") as string)?.trim();
   const type = (formData.get("type") as string) === "INSTALMENTS" ? "INSTALMENTS" : "FULL";
+  const source = (formData.get("source") as string)?.trim() || null;
 
   if (!buyerEmail) return { ok: false, error: "Buyer email is required to start a sale." };
 
@@ -100,6 +102,7 @@ export async function startPurchase(
       buyerName,
       buyerEmail,
       type,
+      source,
       totalAmount: terms.totalAmount,
       currency: terms.currency,
       instalmentCount: type === "INSTALMENTS" ? terms.instalmentCount : null,
