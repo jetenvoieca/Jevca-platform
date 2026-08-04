@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getSalesForArtist } from "@/lib/actions/sales";
+import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SalesView from "@/components/SalesView";
 
 export default async function SalesPage({ params }: { params: Promise<{ id: string }> }) {
@@ -25,7 +26,10 @@ export default async function SalesPage({ params }: { params: Promise<{ id: stri
     );
   }
 
-  const sales = await getSalesForArtist(site.artistId);
+  const [sales, settings] = await Promise.all([
+    getSalesForArtist(site.artistId),
+    getArtworkSettings(site.artistId),
+  ]);
 
-  return <SalesView siteId={id} sales={sales} />;
+  return <SalesView siteId={id} sales={sales} saleSources={settings.saleSources} />;
 }
