@@ -45,9 +45,7 @@ export default function SaleDetailCard({
         <Field label="Type" value={artworkType} />
         <Field label="Size" value={artworkSize} />
         <Field label="Group" value={artworkGroup} />
-        <div className="col-span-2">
-          <Field label="Medium" value={artworkMedium} />
-        </div>
+        <Field label="Medium" value={artworkMedium} />
 
         <div className="col-span-2 border-t border-neutral-100 pt-3">
           <dt className="text-xs uppercase tracking-wide text-neutral-400">
@@ -74,6 +72,9 @@ export default function SaleDetailCard({
         </div>
         <div className="col-span-2">
           <Field label="Customer email" value={purchase.buyerEmail} />
+        </div>
+        <div className="col-span-2">
+          <Field label="Sale source" value={purchase.source} />
         </div>
       </dl>
 
