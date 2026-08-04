@@ -24,6 +24,7 @@ export default function PurchasePanel({
   terms,
   activePurchase,
   history,
+  saleSources = [],
   onChanged,
 }: {
   artworkId: string;
@@ -31,6 +32,10 @@ export default function PurchasePanel({
   terms: SaleTermsDetail | null;
   activePurchase: PurchaseDetail | null;
   history: PurchaseDetail[];
+  // Options for the Sale source dropdown when starting a sale — from the
+  // Artist's Settings. Defaults to empty rather than required, so this
+  // panel still works before any sources have been set up.
+  saleSources?: string[];
   // Called after any successful action, in addition to router.refresh().
   // router.refresh() alone is enough when this panel's props come from a
   // server-rendered page (the artwork editor) — but the Sales screen
@@ -154,19 +159,38 @@ export default function PurchasePanel({
                 />
               </div>
             </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Payment type
-              </label>
-              <select
-                name="type"
-                value={purchaseType}
-                onChange={(e) => setPurchaseType(e.target.value as "FULL" | "INSTALMENTS")}
-                className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              >
-                <option value="FULL">Full payment</option>
-                <option value="INSTALMENTS">Instalments ({terms.instalmentCount})</option>
-              </select>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Payment type
+                </label>
+                <select
+                  name="type"
+                  value={purchaseType}
+                  onChange={(e) => setPurchaseType(e.target.value as "FULL" | "INSTALMENTS")}
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                >
+                  <option value="FULL">Full payment</option>
+                  <option value="INSTALMENTS">Instalments ({terms.instalmentCount})</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Sale source
+                </label>
+                <select
+                  name="source"
+                  defaultValue=""
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                >
+                  <option value="">— Not set —</option>
+                  {saleSources.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <button
               type="submit"
@@ -196,6 +220,7 @@ export default function PurchasePanel({
             {activePurchase.buyerName}
             {activePurchase.buyerName ? " · " : ""}
             {activePurchase.buyerEmail}
+            {activePurchase.source ? ` · ${activePurchase.source}` : ""}
           </p>
 
           {activePurchase.payments.length === 0 ? (
