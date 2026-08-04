@@ -9,7 +9,7 @@ export async function GET(
 
   try {
     const { bytes, filename } = await generateInvoicePdf(purchaseId);
-    return new Response(bytes, {
+    return new Response(new Blob([bytes]), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
