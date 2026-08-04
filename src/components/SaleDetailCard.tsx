@@ -15,6 +15,10 @@ function Field({ label, value }: { label: string; value: string | null | undefin
   );
 }
 
+function downloadInvoice(purchaseId: string) {
+  window.open(`/api/invoice/${purchaseId}`, "_blank");
+}
+
 export default function SaleDetailCard({
   purchase,
   artworkType,
@@ -35,11 +39,20 @@ export default function SaleDetailCard({
 
   return (
     <div className="space-y-4">
-      <p className="text-xs text-neutral-400">
-        {purchase.status === "COMPLETED" ? "Completed" : "Abandoned"}
-        {purchase.closedAt ? ` on ${new Date(purchase.closedAt).toLocaleDateString()}` : ""} — a
-        past transaction, shown for reference only.
-      </p>
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-neutral-400">
+          {purchase.status === "COMPLETED" ? "Completed" : "Abandoned"}
+          {purchase.closedAt ? ` on ${new Date(purchase.closedAt).toLocaleDateString()}` : ""} — a
+          past transaction, shown for reference only.
+        </p>
+        <button
+          type="button"
+          onClick={() => downloadInvoice(purchase.id)}
+          className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+        >
+          Download invoice
+        </button>
+      </div>
 
       <dl className="grid grid-cols-2 gap-3">
         <Field label="Type" value={artworkType} />
@@ -49,13 +62,30 @@ export default function SaleDetailCard({
 
         <div className="col-span-2 border-t border-neutral-100 pt-3">
           <dt className="text-xs uppercase tracking-wide text-neutral-400">
-            {purchase.type === "FULL" ? "Price paid" : "Total price"}
+            {purchase.channel === "GALLERY" ? "Sale price" : purchase.type === "FULL" ? "Price paid" : "Total price"}
           </dt>
           <dd className="text-sm text-neutral-800">
             {formatMoney(purchase.totalAmount, purchase.currency)}
             {purchase.type === "INSTALMENTS" ? ` (${purchase.instalmentCount} instalments)` : ""}
           </dd>
         </div>
+
+        {purchase.channel === "GALLERY" && purchase.commissionPercent && (
+          <div className="col-span-2">
+            <dt className="text-xs uppercase tracking-wide text-neutral-400">
+              Commission ({purchase.commissionPercent}%) — net paid
+            </dt>
+            <dd className="text-sm text-neutral-800">
+              {formatMoney(
+                (
+                  parseFloat(purchase.totalAmount) *
+                  (1 - parseFloat(purchase.commissionPercent) / 100)
+                ).toFixed(2),
+                purchase.currency
+              )}
+            </dd>
+          </div>
+        )}
 
         {nextDue && (
           <>
@@ -75,6 +105,9 @@ export default function SaleDetailCard({
         </div>
         <div className="col-span-2">
           <Field label="Sale source" value={purchase.source} />
+        </div>
+        <div className="col-span-2">
+          <Field label="Sold via" value={purchase.channel === "GALLERY" ? "Gallery" : "Stripe"} />
         </div>
       </dl>
 
