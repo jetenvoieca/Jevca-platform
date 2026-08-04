@@ -8,7 +8,7 @@ export type SaleRow = {
   artworkTitle: string;
   artworkThumbnail: string | null;
   buyerName: string | null;
-  buyerEmail: string;
+  buyerEmail: string | null;
   type: "FULL" | "INSTALMENTS";
   totalAmount: string;
   currency: string;
