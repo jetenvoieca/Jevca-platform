@@ -16,12 +16,19 @@ export default function SaleTermsPanel({
   siteId,
   siteDefaultCurrency,
   terms,
+  // What the customer sees on the public site — used only as the
+  // starting value the first time Sale Terms is set up (no terms saved
+  // yet). Once terms exist, this is never consulted again, so the price
+  // here can always be discounted or otherwise adjusted for a specific
+  // sale without Presentation's price fighting back on the next save.
+  presentationPrice,
   defaults,
 }: {
   artworkId: string;
   siteId: string;
   siteDefaultCurrency: string;
   terms: SaleTermsDetail | null;
+  presentationPrice: string | null;
   defaults: {
     defaultInstalmentCount: number;
     defaultReleaseMessage: string;
@@ -34,7 +41,7 @@ export default function SaleTermsPanel({
 
   // Calculated, not stored — always Total ÷ Number of instalments, kept in
   // sync with whatever's currently typed rather than editable separately.
-  const [liveTotal, setLiveTotal] = useState(terms?.totalAmount ?? "");
+  const [liveTotal, setLiveTotal] = useState(terms?.totalAmount ?? presentationPrice ?? "");
   const [liveCount, setLiveCount] = useState(terms?.instalmentCount ?? defaults.defaultInstalmentCount);
   const instalmentPrice = (() => {
     const t = parseFloat(liveTotal);
@@ -65,12 +72,18 @@ export default function SaleTermsPanel({
             <input
               type="text"
               name="totalAmount"
-              defaultValue={terms?.totalAmount ?? ""}
+              defaultValue={terms?.totalAmount ?? presentationPrice ?? ""}
               onChange={(e) => setLiveTotal(e.target.value)}
               required
               placeholder="e.g. 1200.00"
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             />
+            {!terms && presentationPrice && (
+              <p className="mt-1 text-xs text-neutral-400">
+                Starts at Presentation&apos;s price — change it here for a discount or different
+                sale price, without affecting what customers see.
+              </p>
+            )}
           </div>
           <div>
             <label className="mb-1 block text-sm font-medium text-neutral-700">
