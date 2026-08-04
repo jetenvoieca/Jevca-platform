@@ -2,169 +2,617 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { saveSaleTerms, type SaleTermsDetail } from "@/lib/actions/payments";
+import {
+  updatePresentation,
+  updateCatalogue,
+  deleteArtwork,
+  deleteArtworkIfBlank,
+  linkImagesToArtwork,
+  unlinkImageFromArtwork,
+} from "@/lib/actions/artworks";
+import MediaPicker from "@/components/MediaPicker";
+import SaleTermsPanel from "@/components/SaleTermsPanel";
+import PurchasePanel from "@/components/PurchasePanel";
+import type { SaleTermsDetail, PurchaseDetail } from "@/lib/actions/payments";
 
-const CURRENCIES = ["GBP", "EUR"];
+export type ArtworkDetail = {
+  id: string;
+  artistId: string;
+  catalogueNumber: string;
+  presentationTitle: string;
+  presentationPrice: string | null;
+  dimensions: string | null;
+  description: string | null;
+  medium: string | null;
+  presentationGroup: string | null;
+  availability: string;
+  visible: boolean;
+  catalogueName: string;
+  year: number | null;
+  type: string | null;
+  catalogueGroup: string | null;
+  size: string | null;
+  location: string | null;
+  edition: string | null;
+  availableQty: number | null;
+  priceUnframed: string | null;
+  priceFramed: string | null;
+  studioNotes: string | null;
+  images: { id: string; url: string }[];
+  saleTerms: SaleTermsDetail | null;
+  activePurchase: PurchaseDetail | null;
+  purchaseHistory: PurchaseDetail[];
+};
 
-function formatMoney(amount: string, currency: string) {
-  const n = parseFloat(amount);
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
+export type ArtworkSettings = {
+  artworkGroups: string[];
+  artworkTypes: string[];
+  artworkLocations: string[];
+  mediumPresets: string[];
+  sizePresets: string[];
+  saleSources: string[];
+  defaultInstalmentCount: number;
+  defaultReleaseMessage: string;
+  defaultReleaseTriggerCount: number;
+};
+
+// Keeps a select from silently dropping an existing value that isn't (yet)
+// in the preset list — e.g. legacy data typed in before Settings existed.
+function withCurrent(presets: string[], current: string | null) {
+  if (!current || presets.includes(current)) return presets;
+  return [current, ...presets];
 }
 
-export default function SaleTermsPanel({
-  artworkId,
+export default function ArtworkDetailPanel({
   siteId,
-  siteDefaultCurrency,
-  terms,
-  // What the customer sees on the public site — used only as the
-  // starting value the first time Sale Terms is set up (no terms saved
-  // yet). Once terms exist, this is never consulted again, so the price
-  // here can always be discounted or otherwise adjusted for a specific
-  // sale without Presentation's price fighting back on the next save.
-  presentationPrice,
-  defaults,
+  artistId,
+  artwork,
+  settings,
+  siteDefaultCurrency = "GBP",
+  onClose,
 }: {
-  artworkId: string;
   siteId: string;
-  siteDefaultCurrency: string;
-  terms: SaleTermsDetail | null;
-  presentationPrice: string | null;
-  defaults: {
-    defaultInstalmentCount: number;
-    defaultReleaseMessage: string;
-    defaultReleaseTriggerCount: number;
-  };
+  artistId: string;
+  artwork: ArtworkDetail;
+  settings: ArtworkSettings;
+  // Used to default the currency when a new Payment plan is first set up.
+  // Optional (falls back to GBP) since not every caller has easy access
+  // to the site record — see decisions-log.md.
+  siteDefaultCurrency?: string;
+  // When provided, Close calls this instead of navigating to the Artworks
+  // Catalogue — used when this panel is embedded somewhere else (e.g. the
+  // Section editor), where "close" means "go back to what I was doing",
+  // not "leave the page".
+  onClose?: () => void;
 }) {
-  const router = useRouter();
+  const [tab, setTab] = useState<"presentation" | "catalogue" | "saleterms" | "payment">(
+    "catalogue"
+  );
+  const [images, setImages] = useState(artwork.images);
   const [isPending, startTransition] = useTransition();
-  const [saved, setSaved] = useState(false);
+  const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
+  // Original/Unique pieces don't have editions or framed-vs-unframed
+  // pricing the way prints do — Catalogue shows a simpler set of fields
+  // for them. Tracked live (not just at load) so switching Type updates
+  // the form immediately, without needing to save and reopen.
+  const [typeValue, setTypeValue] = useState(artwork.type || "");
+  const isUniqueType = ["original", "unique"].includes(typeValue.trim().toLowerCase());
+  const router = useRouter();
 
-  // Calculated, not stored — always Total ÷ Number of instalments, kept in
-  // sync with whatever's currently typed rather than editable separately.
-  const [liveTotal, setLiveTotal] = useState(terms?.totalAmount ?? presentationPrice ?? "");
-  const [liveCount, setLiveCount] = useState(terms?.instalmentCount ?? defaults.defaultInstalmentCount);
-  const instalmentPrice = (() => {
-    const t = parseFloat(liveTotal);
-    const c = Number(liveCount);
-    if (!t || !c) return "";
-    return (t / c).toFixed(2);
-  })();
-
-  const handleSaveTerms = (formData: FormData) => {
+  const handleDelete = () => {
+    if (!confirm(`Delete "${artwork.presentationTitle}"? This can't be undone.`)) return;
     startTransition(async () => {
-      await saveSaleTerms(artworkId, siteId, formData);
-      setSaved(true);
-      router.refresh();
-      setTimeout(() => setSaved(false), 2000);
+      await deleteArtwork(siteId, artwork.id);
+    });
+  };
+
+  const handleClose = () => {
+    startTransition(async () => {
+      // Quietly removes this record if it's still exactly as it was when
+      // created (see deleteArtworkIfBlank) — a no-op if you've actually
+      // added anything, so this never touches real data.
+      await deleteArtworkIfBlank(siteId, artwork.id);
+      if (onClose) {
+        onClose();
+      } else {
+        router.push(`/sites/${siteId}/artworks`);
+      }
     });
   };
 
   return (
-    <div>
-      <p className="mb-3 text-xs text-neutral-400">
-        What this artwork sells for — nothing here is tied to any particular buyer. Set this up
-        first, then use the Payment tab to actually take a sale.
-      </p>
-      <form action={handleSaveTerms} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Total price</label>
-            <input
-              type="text"
-              name="totalAmount"
-              defaultValue={terms?.totalAmount ?? presentationPrice ?? ""}
-              onChange={(e) => setLiveTotal(e.target.value)}
-              required
-              placeholder="e.g. 1200.00"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-            {!terms && presentationPrice && (
-              <p className="mt-1 text-xs text-neutral-400">
-                Starts at Presentation&apos;s price — change it here for a discount or different
-                sale price, without affecting what customers see.
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">
-              Instalment price
-            </label>
-            <input
-              type="text"
-              readOnly
-              value={instalmentPrice ? formatMoney(instalmentPrice, terms?.currency ?? siteDefaultCurrency) : "—"}
-              className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
-            />
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">
-              Number of instalments
-            </label>
-            <input
-              type="number"
-              name="instalmentCount"
-              min={1}
-              defaultValue={terms?.instalmentCount ?? defaults.defaultInstalmentCount}
-              onChange={(e) => setLiveCount(parseInt(e.target.value || "0", 10))}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-neutral-400">
-              Offered as an option — a buyer can still choose to pay in full instead.
-            </p>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">
-              Release after
-            </label>
-            <input
-              type="number"
-              name="releaseTriggerCount"
-              min={1}
-              defaultValue={terms?.releaseTriggerCount ?? defaults.defaultReleaseTriggerCount}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <p className="mt-1 text-xs text-neutral-400">payments</p>
-          </div>
-        </div>
-
+    <div className="rounded-lg border border-neutral-200 bg-white p-6">
+      <div className="mb-4 flex items-start justify-between">
         <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">
-            Release message
-          </label>
-          <textarea
-            name="releaseMessage"
-            defaultValue={terms?.releaseMessage ?? defaults.defaultReleaseMessage}
-            rows={2}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
+          <h2 className="text-xl font-semibold text-neutral-900">{artwork.presentationTitle}</h2>
+          <p className="text-sm text-neutral-500">Catalogue #{artwork.catalogueNumber}</p>
         </div>
-
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Currency</label>
-          <select
-            name="currency"
-            defaultValue={terms?.currency ?? siteDefaultCurrency}
-            className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
           <button
-            type="submit"
+            type="button"
+            onClick={handleDelete}
             disabled={isPending}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+            className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
           >
-            Save terms
+            Delete
           </button>
-          {saved && <span className="text-sm text-green-600">Saved</span>}
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isPending}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Close
+          </button>
         </div>
-      </form>
+      </div>
+
+      <div className="mb-6">
+        <h3 className="mb-2 text-sm font-medium text-neutral-700">Images</h3>
+        <div className="flex flex-wrap gap-2">
+          {images.map((img) => (
+            <div key={img.id} className="group relative h-20 w-20">
+              <img src={img.url} alt="" className="h-20 w-20 rounded object-cover" />
+              <button
+                type="button"
+                onClick={() => {
+                  startTransition(async () => {
+                    await unlinkImageFromArtwork(artwork.id, img.id, siteId);
+                    setImages((prev) => prev.filter((i) => i.id !== img.id));
+                  });
+                }}
+                className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+          <div className="h-20 w-20">
+            <MediaPicker
+              artistId={artistId}
+              mode="multi"
+              label="Add"
+              onSelect={(imgs) => {
+                const ids = imgs.map((i) => i.id);
+                startTransition(async () => {
+                  await linkImagesToArtwork(artwork.id, ids, siteId);
+                  setImages((prev) => [
+                    ...prev,
+                    ...imgs
+                      .filter((img) => !prev.some((p) => p.id === img.id))
+                      .map((img) => ({ id: img.id, url: img.url })),
+                  ]);
+                });
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      <div className="mb-6 flex gap-2 border-b border-neutral-200">
+        <button
+          type="button"
+          onClick={() => setTab("catalogue")}
+          className={`px-3 py-2 text-sm font-medium ${
+            tab === "catalogue"
+              ? "border-b-2 border-neutral-900 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Catalogue
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("presentation")}
+          className={`px-3 py-2 text-sm font-medium ${
+            tab === "presentation"
+              ? "border-b-2 border-neutral-900 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Presentation
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("saleterms")}
+          className={`px-3 py-2 text-sm font-medium ${
+            tab === "saleterms"
+              ? "border-b-2 border-neutral-900 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Sale Terms
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("payment")}
+          className={`px-3 py-2 text-sm font-medium ${
+            tab === "payment"
+              ? "border-b-2 border-neutral-900 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Payment
+        </button>
+      </div>
+
+      <div>
+        {tab === "presentation" ? (
+            <>
+              <p className="mb-3 text-xs text-neutral-400">
+                What customers see on the public site.
+              </p>
+              <form
+                action={async (formData) => {
+                  await updatePresentation(artwork.id, siteId, formData);
+                  setSavedTab("presentation");
+                  router.refresh();
+                  setTimeout(() => setSavedTab(null), 2000);
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">Title</label>
+                  <input
+                    type="text"
+                    name="presentationTitle"
+                    defaultValue={artwork.presentationTitle}
+                    required
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Price (£)
+                    </label>
+                    <input
+                      type="text"
+                      name="presentationPrice"
+                      defaultValue={artwork.presentationPrice || ""}
+                      placeholder="e.g. 450.00"
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Dimensions
+                    </label>
+                    <input
+                      type="text"
+                      name="dimensions"
+                      defaultValue={artwork.dimensions || ""}
+                      placeholder="e.g. 100 x 100 cm"
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Description
+                  </label>
+                  <textarea
+                    name="description"
+                    defaultValue={artwork.description || ""}
+                    rows={4}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Medium{" "}
+                    <span className="font-normal text-neutral-400">(from Catalogue)</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={artwork.medium || ""}
+                    className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Group <span className="font-normal text-neutral-400">(from Catalogue)</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={artwork.catalogueGroup || ""}
+                    className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+                  >
+                    Save
+                  </button>
+                  {savedTab === "presentation" && (
+                    <span className="text-sm text-green-600">Saved</span>
+                  )}
+                </div>
+              </form>
+            </>
+          ) : tab === "catalogue" ? (
+            <>
+              <p className="mb-3 text-xs text-neutral-400">
+                Your private working record — never shown on the public site.
+              </p>
+
+              <form
+                action={async (formData) => {
+                  await updateCatalogue(artwork.id, siteId, formData);
+                  setSavedTab("catalogue");
+                  router.refresh();
+                  setTimeout(() => setSavedTab(null), 2000);
+                }}
+                className="space-y-4"
+              >
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Name
+                    </label>
+                    <input
+                      type="text"
+                      name="catalogueName"
+                      defaultValue={artwork.catalogueName}
+                      required
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Year
+                    </label>
+                    <input
+                      type="number"
+                      name="year"
+                      defaultValue={artwork.year ?? ""}
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Type
+                    </label>
+                    <select
+                      name="type"
+                      value={typeValue}
+                      onChange={(e) => setTypeValue(e.target.value)}
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.artworkTypes, artwork.type).map((t) => (
+                        <option key={t} value={t}>
+                          {t}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Group
+                    </label>
+                    <select
+                      name="catalogueGroup"
+                      defaultValue={artwork.catalogueGroup || ""}
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.artworkGroups, artwork.catalogueGroup).map((g) => (
+                        <option key={g} value={g}>
+                          {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="col-span-2">
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Medium
+                    </label>
+                    <select
+                      name="medium"
+                      defaultValue={artwork.medium || ""}
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.mediumPresets, artwork.medium).map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Size
+                    </label>
+                    <select
+                      name="size"
+                      defaultValue={artwork.size || ""}
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.sizePresets, artwork.size).map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Location
+                    </label>
+                    <select
+                      name="location"
+                      defaultValue={artwork.location || ""}
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.artworkLocations, artwork.location).map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  {!isUniqueType && (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Edition
+                      </label>
+                      <input
+                        type="text"
+                        name="edition"
+                        defaultValue={artwork.edition || ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  )}
+                  {!isUniqueType && (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Available (qty)
+                      </label>
+                      <input
+                        type="number"
+                        name="availableQty"
+                        defaultValue={artwork.availableQty ?? ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  )}
+                  {isUniqueType && (
+                    <>
+                      {/* Preserve any Edition/Available values already on
+                          record rather than wiping them out just because
+                          Type changed — they'll reappear if switched back. */}
+                      <input type="hidden" name="edition" value={artwork.edition || ""} />
+                      <input
+                        type="hidden"
+                        name="availableQty"
+                        value={artwork.availableQty ?? ""}
+                      />
+                    </>
+                  )}
+                  {isUniqueType ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Availability
+                      </label>
+                      <select
+                        name="availability"
+                        defaultValue={artwork.availability}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      >
+                        <option value="AVAILABLE">Available</option>
+                        <option value="RESERVED">Reserved</option>
+                        <option value="SOLD">Sold</option>
+                      </select>
+                    </div>
+                  ) : (
+                    // Editions track availability via the numeric Available
+                    // (qty) field instead — this status only makes sense
+                    // for a one-of-a-kind piece. Required/non-nullable in
+                    // the database, so preserved via hidden input rather
+                    // than left out of the submitted form.
+                    <input type="hidden" name="availability" value={artwork.availability} />
+                  )}
+                  {isUniqueType ? (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-neutral-700">
+                          Price (£)
+                        </label>
+                        <input
+                          type="text"
+                          name="priceUnframed"
+                          defaultValue={artwork.priceUnframed || ""}
+                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      {/* Preserve an existing framed price rather than
+                          wiping it out just because Type changed. */}
+                      <input type="hidden" name="priceFramed" value={artwork.priceFramed || ""} />
+                    </>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-neutral-700">
+                          Price unframed (£)
+                        </label>
+                        <input
+                          type="text"
+                          name="priceUnframed"
+                          defaultValue={artwork.priceUnframed || ""}
+                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-neutral-700">
+                          Price framed (£)
+                        </label>
+                        <input
+                          type="text"
+                          name="priceFramed"
+                          defaultValue={artwork.priceFramed || ""}
+                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Studio notes <span className="font-normal text-neutral-400">(private)</span>
+                  </label>
+                  <textarea
+                    name="studioNotes"
+                    defaultValue={artwork.studioNotes || ""}
+                    rows={3}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="submit"
+                    className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+                  >
+                    Save
+                  </button>
+                  {savedTab === "catalogue" && (
+                    <span className="text-sm text-green-600">Saved</span>
+                  )}
+                </div>
+              </form>
+            </>
+          ) : tab === "saleterms" ? (
+            <SaleTermsPanel
+              artworkId={artwork.id}
+              siteId={siteId}
+              siteDefaultCurrency={siteDefaultCurrency}
+              terms={artwork.saleTerms}
+              presentationPrice={artwork.presentationPrice}
+              defaults={{
+                defaultInstalmentCount: settings.defaultInstalmentCount,
+                defaultReleaseMessage: settings.defaultReleaseMessage,
+                defaultReleaseTriggerCount: settings.defaultReleaseTriggerCount,
+              }}
+            />
+          ) : (
+            <PurchasePanel
+              artworkId={artwork.id}
+              siteId={siteId}
+              terms={artwork.saleTerms}
+              activePurchase={artwork.activePurchase}
+              history={artwork.purchaseHistory}
+              saleSources={settings.saleSources}
+            />
+        )}
+      </div>
     </div>
   );
 }
