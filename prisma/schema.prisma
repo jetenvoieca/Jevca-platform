@@ -103,6 +103,11 @@ model Artist {
   // artwork instead, so doesn't need tags).
   mediaTags String[] @default([])
 
+  // Offered in the Sale source dropdown when starting a sale — records who
+  // actually initiated it (e.g. "Website enquiry", "Instagram", "Studio
+  // visit"), for the artist's own reference.
+  saleSources String[] @default([])
+
   // Global defaults for the Payments panel. Each SaleTerms record copies
   // these in once, at creation (same "seed once, then independent"
   // pattern as Presentation being seeded from Catalogue) — changing a
@@ -323,6 +328,12 @@ model Purchase {
   buyerEmail String
 
   type PurchaseType
+
+  // Who actually initiated this sale (Website enquiry, Instagram, studio
+  // visit, etc.) — free-standing reference info, not tied to Stripe or
+  // payment mechanics. Options come from the Artist's saleSources preset
+  // list, same pattern as Group/Type/Medium.
+  source String?
 
   // Snapshot of SaleTerms at the moment this Purchase was started — so
   // editing Terms later never rewrites what this buyer actually agreed
