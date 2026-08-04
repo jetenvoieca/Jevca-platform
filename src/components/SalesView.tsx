@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import Link from "next/link";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
@@ -194,12 +193,6 @@ export default function SalesView({
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Link
-                      href={`/sites/${siteId}/artworks/${selectedArtworkId}`}
-                      className="text-xs text-neutral-500 hover:underline"
-                    >
-                      Open full editor →
-                    </Link>
                     <button
                       type="button"
                       onClick={() => {
