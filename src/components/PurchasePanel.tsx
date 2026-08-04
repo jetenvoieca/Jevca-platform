@@ -533,48 +533,53 @@ export default function PurchasePanel({
 
           {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
 
-          <form action={handleSaveRelease} className="mt-4 space-y-3 border-t border-neutral-100 pt-4">
-            <h5 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-              Release message for this sale
-            </h5>
-            {releaseReached && (
-              <p className="rounded bg-green-50 px-2 py-1 text-xs text-green-700">
-                Trigger reached — this message now applies.
-              </p>
-            )}
-            <textarea
-              name="releaseMessage"
-              defaultValue={activePurchase.releaseMessage ?? ""}
-              rows={2}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <input
-              type="number"
-              name="releaseTriggerCount"
-              min={1}
-              defaultValue={activePurchase.releaseTriggerCount ?? ""}
-              placeholder="Release after this many payments"
-              className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <div className="flex items-center gap-3">
-              <button
-                type="submit"
-                disabled={isPending}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-              >
-                Save
-              </button>
-              {saved && <span className="text-sm text-green-600">Saved</span>}
-              <button
-                type="button"
-                onClick={handleAbandon}
-                disabled={isPending}
-                className="ml-auto text-sm text-red-600 hover:underline disabled:opacity-50"
-              >
-                Cancel sale
-              </button>
-            </div>
-          </form>
+          {activePurchase.type === "INSTALMENTS" && (
+            <form action={handleSaveRelease} className="mt-4 space-y-3 border-t border-neutral-100 pt-4">
+              <h5 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                Release message for this sale
+              </h5>
+              {releaseReached && (
+                <p className="rounded bg-green-50 px-2 py-1 text-xs text-green-700">
+                  Trigger reached — this message now applies.
+                </p>
+              )}
+              <textarea
+                name="releaseMessage"
+                defaultValue={activePurchase.releaseMessage ?? ""}
+                rows={2}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <input
+                type="number"
+                name="releaseTriggerCount"
+                min={1}
+                defaultValue={activePurchase.releaseTriggerCount ?? ""}
+                placeholder="Release after this many payments"
+                className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <div className="flex items-center gap-3">
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  Save
+                </button>
+                {saved && <span className="text-sm text-green-600">Saved</span>}
+              </div>
+            </form>
+          )}
+
+          <div className={activePurchase.type === "INSTALMENTS" ? "mt-3" : "mt-4 border-t border-neutral-100 pt-4"}>
+            <button
+              type="button"
+              onClick={handleAbandon}
+              disabled={isPending}
+              className="text-sm text-red-600 hover:underline disabled:opacity-50"
+            >
+              Cancel sale
+            </button>
+          </div>
         </div>
       )}
 
