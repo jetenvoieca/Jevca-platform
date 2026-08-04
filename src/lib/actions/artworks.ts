@@ -155,6 +155,7 @@ export async function getArtworkDetailForClient(id: string) {
     buyerName: p.buyerName,
     buyerEmail: p.buyerEmail,
     type: p.type,
+    source: p.source,
     totalAmount: p.totalAmount.toString(),
     currency: p.currency,
     instalmentCount: p.instalmentCount,
@@ -222,8 +223,6 @@ export async function updatePresentation(
   const priceRaw = (formData.get("presentationPrice") as string)?.trim();
   const dimensions = (formData.get("dimensions") as string)?.trim() || null;
   const description = (formData.get("description") as string)?.trim() || null;
-  const medium = (formData.get("medium") as string)?.trim() || null;
-  const presentationGroup = (formData.get("presentationGroup") as string)?.trim() || null;
 
   await db.artwork.update({
     where: { id },
@@ -232,8 +231,14 @@ export async function updatePresentation(
       presentationPrice: priceRaw || null,
       dimensions,
       description,
-      medium,
-      presentationGroup,
+      // Medium and Group are no longer editable from here — both now
+      // read-only, live-mirroring Catalogue's `medium` and
+      // `catalogueGroup` (edited only from the Catalogue tab). The
+      // `presentationGroup` column itself is left in the database
+      // untouched rather than dropped, in case a genuinely independent
+      // public-facing Group value is ever wanted again — same reasoning
+      // as the kept-but-unused `visible` column.
+      //
       // Availability moved to the Catalogue tab — it's part of the
       // artist's own working record, not something typed while looking at
       // "what customers see." Visibility is deliberately not set here
