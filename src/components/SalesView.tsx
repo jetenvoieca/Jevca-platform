@@ -15,7 +15,15 @@ function formatMoney(amount: string, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
 }
 
-export default function SalesView({ siteId, sales }: { siteId: string; sales: SaleRow[] }) {
+export default function SalesView({
+  siteId,
+  sales,
+  saleSources,
+}: {
+  siteId: string;
+  sales: SaleRow[];
+  saleSources: string[];
+}) {
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("ALL");
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
@@ -214,6 +222,7 @@ export default function SalesView({ siteId, sales }: { siteId: string; sales: Sa
                     terms={selectedDetail.saleTerms}
                     activePurchase={selectedDetail.activePurchase}
                     history={selectedDetail.purchaseHistory}
+                    saleSources={saleSources}
                     onChanged={() => openRow(selectedArtworkId!, selectedPurchaseId)}
                   />
                 ) : selectedPurchase ? (
