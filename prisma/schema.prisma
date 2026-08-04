@@ -51,6 +51,17 @@ enum PurchaseType {
   INSTALMENTS
 }
 
+// STRIPE: the buyer paid online, card processed automatically — invoices
+// for these are just a record of what already happened.
+// GALLERY: sold through a third party (a gallery, consignment) — no card
+// payment at all, an invoice is raised for the net amount owed (sale
+// price less commission) and marked paid manually once it's actually
+// been received, e.g. by bank transfer outside this system.
+enum SaleChannel {
+  STRIPE
+  GALLERY
+}
+
 enum PurchaseStatus {
   ACTIVE
   COMPLETED
@@ -107,6 +118,21 @@ model Artist {
   // actually initiated it (e.g. "Website enquiry", "Instagram", "Studio
   // visit"), for the artist's own reference.
   saleSources String[] @default([])
+
+  // Invoicing identity — used to generate the PDF invoice for a sale.
+  // Kept on Artist (not Site), same reasoning as Subscription/Payment:
+  // this is business identity, not a per-website setting.
+  logoUrl           String?
+  invoiceAddress    String?
+  // Blank vatNumber means "not VAT registered" — the invoice simply
+  // shows the total with no VAT breakdown in that case.
+  vatNumber         String?
+  vatRate           Decimal? @db.Decimal(5, 2)
+  invoiceFooterText String?
+  // The number the *next* invoice generated will receive — settable once
+  // as a starting point, then incremented automatically each time an
+  // invoice is actually generated (see getOrAssignInvoiceNumber).
+  nextInvoiceNumber Int      @default(1)
 
   // Global defaults for the Payments panel. Each SaleTerms record copies
   // these in once, at creation (same "seed once, then independent"
@@ -324,8 +350,13 @@ model Purchase {
 
   status PurchaseStatus @default(ACTIVE)
 
-  buyerName  String?
-  buyerEmail String
+  channel SaleChannel @default(STRIPE)
+
+  buyerName    String?
+  buyerEmail   String?
+  // Only really used for Gallery invoices ("Bill to") — harmless to leave
+  // available for any channel.
+  buyerAddress String?
 
   type PurchaseType
 
@@ -334,6 +365,17 @@ model Purchase {
   // payment mechanics. Options come from the Artist's saleSources preset
   // list, same pattern as Group/Type/Medium.
   source String?
+
+  // Only set for channel = GALLERY. The invoice shows totalAmount, this
+  // percentage, and the resulting net amount owed to the artist — not
+  // stored as a separate figure, always computed from these two so it
+  // can never drift out of sync.
+  commissionPercent Decimal? @db.Decimal(5, 2)
+
+  // Assigned once, lazily, the first time an invoice PDF is actually
+  // generated for this Purchase (see getOrAssignInvoiceNumber) — so
+  // re-downloading the same invoice later never changes its number.
+  invoiceNumber Int?
 
   // Snapshot of SaleTerms at the moment this Purchase was started — so
   // editing Terms later never rewrites what this buyer actually agreed
