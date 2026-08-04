@@ -50,6 +50,7 @@ export type ArtworkSettings = {
   artworkLocations: string[];
   mediumPresets: string[];
   sizePresets: string[];
+  saleSources: string[];
   defaultInstalmentCount: number;
   defaultReleaseMessage: string;
   defaultReleaseTriggerCount: number;
@@ -297,41 +298,28 @@ export default function ArtworkDetailPanel({
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Medium
-                    </label>
-                    <select
-                      name="medium"
-                      defaultValue={artwork.medium || ""}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">Choose from list…</option>
-                      {withCurrent(settings.mediumPresets, artwork.medium).map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Group
-                    </label>
-                    <select
-                      name="presentationGroup"
-                      defaultValue={artwork.presentationGroup || ""}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">Choose from list…</option>
-                      {withCurrent(settings.artworkGroups, artwork.presentationGroup).map((g) => (
-                        <option key={g} value={g}>
-                          {g}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Medium{" "}
+                    <span className="font-normal text-neutral-400">(from Catalogue)</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={artwork.medium || ""}
+                    className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Group <span className="font-normal text-neutral-400">(from Catalogue)</span>
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={artwork.catalogueGroup || ""}
+                    className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                  />
                 </div>
                 <div className="flex items-center gap-3">
                   <button
@@ -424,12 +412,18 @@ export default function ArtworkDetailPanel({
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Medium
                     </label>
-                    <textarea
+                    <select
                       name="medium"
                       defaultValue={artwork.medium || ""}
-                      rows={2}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
+                    >
+                      <option value="">Choose from list…</option>
+                      {withCurrent(settings.mediumPresets, artwork.medium).map((m) => (
+                        <option key={m} value={m}>
+                          {m}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -614,6 +608,7 @@ export default function ArtworkDetailPanel({
               terms={artwork.saleTerms}
               activePurchase={artwork.activePurchase}
               history={artwork.purchaseHistory}
+              saleSources={settings.saleSources}
             />
         )}
       </div>
