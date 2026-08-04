@@ -27,10 +27,14 @@ export type PaymentDetail = {
 export type PurchaseDetail = {
   id: string;
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+  channel: "STRIPE" | "GALLERY";
   buyerName: string | null;
-  buyerEmail: string;
+  buyerEmail: string | null;
+  buyerAddress: string | null;
   type: "FULL" | "INSTALMENTS";
   source: string | null;
+  commissionPercent: string | null;
+  invoiceNumber: number | null;
   totalAmount: string;
   currency: string;
   instalmentCount: number | null;
@@ -115,7 +119,93 @@ export async function startPurchase(
   return { ok: true, purchaseId: purchase.id };
 }
 
-// Editable while a Purchase is active — e.g. correcting the release
+// ---------- Gallery sales — no Stripe involved at all ----------
+
+// Sold through a third party rather than paid online — raises an invoice
+// for the net amount owed (sale price less commission), which starts out
+// unpaid. Unlike a Stripe sale, the price isn't locked to Sale Terms —
+// a gallery sale can be negotiated at a different figure, so it's typed
+// in directly here.
+export async function startGallerySale(
+  artworkId: string,
+  siteId: string,
+  formData: FormData
+): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
+  const existingActive = await db.purchase.findFirst({
+    where: { artworkId, status: "ACTIVE" },
+  });
+  if (existingActive) {
+    return { ok: false, error: "There's already an active sale in progress for this artwork." };
+  }
+
+  const buyerName = (formData.get("buyerName") as string)?.trim() || null;
+  const buyerEmail = (formData.get("buyerEmail") as string)?.trim() || null;
+  const buyerAddress = (formData.get("buyerAddress") as string)?.trim() || null;
+  const totalAmount = (formData.get("totalAmount") as string)?.trim();
+  const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
+  const commissionPercent = (formData.get("commissionPercent") as string)?.trim() || null;
+  const source = (formData.get("source") as string)?.trim() || null;
+
+  if (!buyerName) return { ok: false, error: "The gallery/buyer name is required." };
+  if (!totalAmount) return { ok: false, error: "The sale price is required." };
+
+  const purchase = await db.purchase.create({
+    data: {
+      artworkId,
+      channel: "GALLERY",
+      buyerName,
+      buyerEmail,
+      buyerAddress,
+      type: "FULL",
+      source,
+      totalAmount,
+      currency,
+      commissionPercent,
+    },
+  });
+
+  revalidatePath(`/sites/${siteId}/artworks`);
+  return { ok: true, purchaseId: purchase.id };
+}
+
+// The manual equivalent of a Stripe webhook confirming payment — you
+// click this once the gallery has actually paid (e.g. by bank transfer),
+// since nothing in this flow can confirm that automatically.
+export async function markGallerySalePaid(
+  purchaseId: string,
+  siteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase) return { ok: false, error: "Purchase not found." };
+  if (purchase.channel !== "GALLERY") {
+    return { ok: false, error: "This isn't a gallery sale." };
+  }
+
+  const total = parseFloat(purchase.totalAmount.toString());
+  const commissionPercent = purchase.commissionPercent
+    ? parseFloat(purchase.commissionPercent.toString())
+    : 0;
+  const net = total - total * (commissionPercent / 100);
+
+  await db.payment.create({
+    data: {
+      purchaseId: purchase.id,
+      sequence: 1,
+      amount: net,
+      currency: purchase.currency,
+      status: "PAID",
+      paidDate: new Date(),
+    },
+  });
+
+  await db.purchase.update({
+    where: { id: purchaseId },
+    data: { status: "COMPLETED", closedAt: new Date() },
+  });
+
+  revalidatePath(`/sites/${siteId}/artworks`);
+  return { ok: true };
+}
 // wording for this specific buyer. Autosaved (low-stakes, descriptive),
 // unlike starting/abandoning the purchase itself.
 export async function updatePurchaseRelease(purchaseId: string, siteId: string, formData: FormData) {
