@@ -276,24 +276,32 @@ export async function updateCatalogue(
   const medium = (formData.get("medium") as string)?.trim() || null;
   const availability = formData.get("availability") as Availability;
 
-  // Presentation's Title and Price default from Catalogue's Name and
-  // Price unframed — but only the first time Catalogue is actually filled
-  // in, and only while Presentation is still at its untouched default
-  // ("Untitled" / no price). The moment someone types something different
+  // Presentation's Title, Price, and Dimensions default from Catalogue's
+  // Name, Price unframed, and Size — but only the first time Catalogue is
+  // actually filled in, and only while Presentation is still at its
+  // untouched default. The moment someone types something different
   // directly into Presentation, it's considered overridden and this stops
-  // touching it — same "seed once, then independent" pattern already used
-  // for Presentation being seeded from Catalogue at creation.
+  // touching that field — same "seed once, then independent" pattern
+  // already used for Presentation being seeded from Catalogue at
+  // creation.
   const current = await db.artwork.findUnique({
     where: { id },
-    select: { presentationTitle: true, presentationPrice: true },
+    select: { presentationTitle: true, presentationPrice: true, dimensions: true },
   });
 
-  const presentationUpdate: { presentationTitle?: string; presentationPrice?: string | null } = {};
+  const presentationUpdate: {
+    presentationTitle?: string;
+    presentationPrice?: string | null;
+    dimensions?: string;
+  } = {};
   if (current?.presentationTitle === "Untitled" && catalogueName) {
     presentationUpdate.presentationTitle = catalogueName;
   }
   if (current?.presentationPrice == null && priceUnframedRaw) {
     presentationUpdate.presentationPrice = priceUnframedRaw;
+  }
+  if (!current?.dimensions && size) {
+    presentationUpdate.dimensions = size;
   }
 
   await db.artwork.update({
