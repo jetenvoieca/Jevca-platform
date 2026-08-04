@@ -9,7 +9,13 @@ export async function GET(
 
   try {
     const { bytes, filename } = await generateInvoicePdf(purchaseId);
-    return new Response(new Blob([bytes]), {
+    // pdf-lib's return type is a Uint8Array<ArrayBufferLike>, which newer
+    // TypeScript lib definitions no longer accept as a BlobPart directly
+    // (ArrayBufferLike also covers SharedArrayBuffer, which Blob can't
+    // take). Copying into a fresh Uint8Array guarantees a plain
+    // ArrayBuffer underneath.
+    const safeBytes = new Uint8Array(bytes);
+    return new Response(new Blob([safeBytes]), {
       headers: {
         "Content-Type": "application/pdf",
         "Content-Disposition": `attachment; filename="${filename}"`,
