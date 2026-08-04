@@ -5,6 +5,7 @@ import Link from "next/link";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
+import SaleDetailCard from "@/components/SaleDetailCard";
 import type { SaleRow } from "@/lib/actions/sales";
 
 const STATUS_FILTERS = ["ALL", "ACTIVE", "COMPLETED", "ABANDONED"] as const;
@@ -17,6 +18,7 @@ function formatMoney(amount: string, currency: string) {
 export default function SalesView({ siteId, sales }: { siteId: string; sales: SaleRow[] }) {
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("ALL");
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
+  const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<ArtworkDetail | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -39,8 +41,9 @@ export default function SalesView({ siteId, sales }: { siteId: string; sales: Sa
     return { count, byCurrency };
   }, [sales]);
 
-  const openRow = (artworkId: string) => {
+  const openRow = (artworkId: string, purchaseId: string) => {
     setSelectedArtworkId(artworkId);
+    setSelectedPurchaseId(purchaseId);
     setSelectedDetail(null);
     setLoading(true);
     getArtworkDetailForClient(artworkId).then((detail) => {
@@ -48,6 +51,15 @@ export default function SalesView({ siteId, sales }: { siteId: string; sales: Sa
       setLoading(false);
     });
   };
+
+  // The one specific row that was actually clicked — an artwork can have
+  // several Purchases (an active one plus history), and only one of them
+  // is what the person asked to see.
+  const selectedPurchase = selectedDetail
+    ? [selectedDetail.activePurchase, ...selectedDetail.purchaseHistory].find(
+        (p) => p?.id === selectedPurchaseId
+      ) || null
+    : null;
 
   return (
     <div className="p-6">
@@ -79,7 +91,7 @@ export default function SalesView({ siteId, sales }: { siteId: string; sales: Sa
         ))}
       </div>
 
-      <div className={selectedArtworkId ? "grid gap-6" : ""} style={selectedArtworkId ? { gridTemplateColumns: "1fr 480px" } : undefined}>
+      <div className={selectedPurchaseId ? "grid gap-6" : ""} style={selectedPurchaseId ? { gridTemplateColumns: "1fr 480px" } : undefined}>
         <div className="overflow-hidden rounded-lg border border-neutral-200">
           <table className="w-full text-sm">
             <thead>
@@ -103,9 +115,9 @@ export default function SalesView({ siteId, sales }: { siteId: string; sales: Sa
               {filtered.map((s) => (
                 <tr
                   key={s.purchaseId}
-                  onClick={() => openRow(s.artworkId)}
+                  onClick={() => openRow(s.artworkId, s.purchaseId)}
                   className={`cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 ${
-                    selectedArtworkId === s.artworkId ? "bg-neutral-50" : ""
+                    selectedPurchaseId === s.purchaseId ? "bg-neutral-50" : ""
                   }`}
                 >
                   <td className="flex items-center gap-2 px-3 py-2">
@@ -147,7 +159,7 @@ export default function SalesView({ siteId, sales }: { siteId: string; sales: Sa
           </table>
         </div>
 
-        {selectedArtworkId && (
+        {selectedPurchaseId && (
           <div className="sticky top-4 self-start rounded-lg border border-neutral-200 bg-white p-5">
             {loading || !selectedDetail ? (
               <p className="text-sm text-neutral-400">Loading…</p>
@@ -182,21 +194,43 @@ export default function SalesView({ siteId, sales }: { siteId: string; sales: Sa
                     </Link>
                     <button
                       type="button"
-                      onClick={() => setSelectedArtworkId(null)}
+                      onClick={() => {
+                        setSelectedArtworkId(null);
+                        setSelectedPurchaseId(null);
+                      }}
                       className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
                     >
                       Close
                     </button>
                   </div>
                 </div>
-                <PurchasePanel
-                  artworkId={selectedArtworkId}
-                  siteId={siteId}
-                  terms={selectedDetail.saleTerms}
-                  activePurchase={selectedDetail.activePurchase}
-                  history={selectedDetail.purchaseHistory}
-                  onChanged={() => openRow(selectedArtworkId)}
-                />
+
+                {selectedPurchase?.status === "ACTIVE" ? (
+                  // Only an in-progress sale gets the interactive panel —
+                  // take payment, cancel, etc. all still make sense here.
+                  <PurchasePanel
+                    artworkId={selectedArtworkId!}
+                    siteId={siteId}
+                    terms={selectedDetail.saleTerms}
+                    activePurchase={selectedDetail.activePurchase}
+                    history={selectedDetail.purchaseHistory}
+                    onChanged={() => openRow(selectedArtworkId!, selectedPurchaseId)}
+                  />
+                ) : selectedPurchase ? (
+                  // Completed or Abandoned — a past transaction, shown
+                  // read-only rather than as an editable form.
+                  <SaleDetailCard
+                    purchase={selectedPurchase}
+                    artworkType={selectedDetail.type}
+                    artworkSize={selectedDetail.size}
+                    artworkGroup={selectedDetail.catalogueGroup}
+                    artworkMedium={selectedDetail.medium}
+                  />
+                ) : (
+                  <p className="text-sm text-neutral-400">
+                    This sale couldn&apos;t be found — it may have changed since the list loaded.
+                  </p>
+                )}
               </>
             )}
           </div>
