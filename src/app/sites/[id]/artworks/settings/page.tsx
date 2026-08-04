@@ -70,6 +70,15 @@ export default async function ArtworkSettingsPage({
           options={settings.sizePresets}
           placeholder="e.g. 60 x 60 cm"
         />
+        <SettingsListCard
+          artistId={artistId}
+          siteId={id}
+          field="saleSources"
+          title="Sale Sources"
+          description="Offered when starting a sale — records who actually initiated it, for your own reference."
+          options={settings.saleSources}
+          placeholder="e.g. Instagram, Studio visit…"
+        />
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
