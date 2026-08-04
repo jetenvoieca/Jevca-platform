@@ -8,7 +8,8 @@ export type SettingsField =
   | "artworkTypes"
   | "artworkLocations"
   | "mediumPresets"
-  | "sizePresets";
+  | "sizePresets"
+  | "saleSources";
 
 // These presets belong to the Artist now (same reasoning as Artwork
 // ownership) — shared across all of that artist's sites, not duplicated
@@ -22,6 +23,7 @@ export async function getArtworkSettings(artistId: string) {
       artworkLocations: true,
       mediumPresets: true,
       sizePresets: true,
+      saleSources: true,
       defaultInstalmentCount: true,
       defaultReleaseMessage: true,
       defaultReleaseTriggerCount: true,
@@ -34,6 +36,7 @@ export async function getArtworkSettings(artistId: string) {
       artworkLocations: [],
       mediumPresets: [],
       sizePresets: [],
+      saleSources: [],
       defaultInstalmentCount: 5,
       defaultReleaseMessage: "Available for collection/delivery once 2 payments have been made.",
       defaultReleaseTriggerCount: 2,
@@ -90,6 +93,9 @@ async function updateList(
       break;
     case "sizePresets":
       await db.artist.update({ where: { id: artistId }, data: { sizePresets: next } });
+      break;
+    case "saleSources":
+      await db.artist.update({ where: { id: artistId }, data: { saleSources: next } });
       break;
   }
   revalidatePath(`/sites/${siteId}/artworks/settings`);
