@@ -310,8 +310,11 @@ export async function createPaymentLink(
       include: { artwork: true },
     });
     if (!purchase) return { ok: false, error: "Purchase not found." };
+    if (!purchase.buyerEmail) {
+      return { ok: false, error: "This purchase has no buyer email on file." };
+    }
 
-    const customerId = await getOrCreateStripeCustomer(purchase);
+    const customerId = await getOrCreateStripeCustomer({ ...purchase, buyerEmail: purchase.buyerEmail });
     const amount = firstChargeAmount(purchase);
 
     const session = await stripe.checkout.sessions.create({
@@ -356,8 +359,11 @@ export async function createCardEntryIntent(
   try {
     const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
     if (!purchase) return { ok: false, error: "Purchase not found." };
+    if (!purchase.buyerEmail) {
+      return { ok: false, error: "This purchase has no buyer email on file." };
+    }
 
-    const customerId = await getOrCreateStripeCustomer(purchase);
+    const customerId = await getOrCreateStripeCustomer({ ...purchase, buyerEmail: purchase.buyerEmail });
     const amount = firstChargeAmount(purchase);
 
     const intent = await stripe.paymentIntents.create({
