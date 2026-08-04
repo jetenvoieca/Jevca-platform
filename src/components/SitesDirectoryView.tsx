@@ -6,7 +6,8 @@ import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import StatusSelect from "@/components/StatusSelect";
 import ArchiveButton from "@/components/ArchiveButton";
-import { updateSite, updateArtist, updateSalesEnabled } from "@/lib/actions";
+import { updateSite, updateArtist, updateSalesEnabled, saveArtistLogo } from "@/lib/actions";
+import { requestUploadUrl } from "@/lib/actions/media";
 
 type SiteRow = {
   id: string;
@@ -27,6 +28,12 @@ type SiteRow = {
   ownerNotes: string | null;
   ownerSubscriptionAmount: string;
   ownerPaymentMethod: string | null;
+  ownerLogoUrl: string | null;
+  ownerInvoiceAddress: string | null;
+  ownerVatNumber: string | null;
+  ownerVatRate: string;
+  ownerInvoiceFooterText: string | null;
+  ownerNextInvoiceNumber: number;
 };
 
 export default function SitesDirectoryView({
@@ -46,7 +53,33 @@ export default function SitesDirectoryView({
   const selected = sites.find((s) => s.id === selectedId) || null;
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
+  const [logoUploading, setLogoUploading] = useState(false);
   const router = useRouter();
+
+  const handleLogoUpload = async (file: File) => {
+    if (!selected) return;
+    setLogoUploading(true);
+    try {
+      const result = await requestUploadUrl(selected.ownerId, file.name, file.type);
+      if ("error" in result) {
+        alert(result.error);
+        return;
+      }
+      const putRes = await fetch(result.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putRes.ok) {
+        alert("Upload failed — please try again.");
+        return;
+      }
+      await saveArtistLogo(selected.ownerId, result.key);
+      router.refresh();
+    } finally {
+      setLogoUploading(false);
+    }
+  };
 
   const saveSite = (
     field: "name" | "domain" | "defaultCurrency" | "template" | "domainStatus" | "domainRenewalDate",
@@ -79,7 +112,12 @@ export default function SitesDirectoryView({
       | "phone"
       | "notes"
       | "subscriptionAmount"
-      | "paymentMethod",
+      | "paymentMethod"
+      | "invoiceAddress"
+      | "vatNumber"
+      | "vatRate"
+      | "invoiceFooterText"
+      | "nextInvoiceNumber",
     value: string
   ) => {
     if (!selected) return;
@@ -94,6 +132,21 @@ export default function SitesDirectoryView({
       field === "subscriptionAmount" ? value : selected.ownerSubscriptionAmount
     );
     fd.set("paymentMethod", field === "paymentMethod" ? value : selected.ownerPaymentMethod || "");
+    fd.set(
+      "invoiceAddress",
+      field === "invoiceAddress" ? value : selected.ownerInvoiceAddress || ""
+    );
+    fd.set("vatNumber", field === "vatNumber" ? value : selected.ownerVatNumber || "");
+    fd.set("vatRate", field === "vatRate" ? value : selected.ownerVatRate || "");
+    fd.set(
+      "invoiceFooterText",
+      field === "invoiceFooterText" ? value : selected.ownerInvoiceFooterText || ""
+    );
+    // Deliberately NOT always sent — only when this field is the one
+    // actually being edited, so every other unrelated save (email, notes,
+    // etc.) never accidentally resets the invoice counter back to its
+    // current value mid-sequence.
+    if (field === "nextInvoiceNumber") fd.set("nextInvoiceNumber", value);
     startTransition(async () => {
       await updateArtist(selected.ownerId, fd);
       router.refresh();
@@ -334,6 +387,115 @@ export default function SitesDirectoryView({
                   savedField === "paymentMethod") && (
                   <p className="text-xs text-green-600">Saved</p>
                 )}
+
+                <div className="mt-4 rounded-md border border-neutral-200 p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                    Invoicing
+                  </p>
+
+                  <label className="mb-1 block text-xs text-neutral-500">Logo</label>
+                  <div className="mb-2 flex items-center gap-2">
+                    {selected.ownerLogoUrl ? (
+                      <img
+                        src={selected.ownerLogoUrl}
+                        alt=""
+                        className="h-10 w-10 rounded border border-neutral-200 object-contain"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded border border-dashed border-neutral-300" />
+                    )}
+                    <label className="cursor-pointer rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">
+                      {logoUploading ? "Uploading…" : "Upload…"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={logoUploading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleLogoUpload(file);
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
+                  <label className="mb-1 block text-xs text-neutral-500">
+                    Artist address (for invoices)
+                  </label>
+                  <textarea
+                    key={`owner-invoice-address-${selected.ownerId}`}
+                    defaultValue={selected.ownerInvoiceAddress || ""}
+                    onBlur={(e) => saveOwner("invoiceAddress", e.target.value.trim())}
+                    disabled={isPending}
+                    rows={2}
+                    className="mb-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                  />
+
+                  <div className="mb-2 grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-neutral-500">VAT number</label>
+                      <input
+                        key={`owner-vat-number-${selected.ownerId}`}
+                        type="text"
+                        defaultValue={selected.ownerVatNumber || ""}
+                        onBlur={(e) => saveOwner("vatNumber", e.target.value.trim())}
+                        disabled={isPending}
+                        placeholder="Blank = not VAT registered"
+                        className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-neutral-500">VAT rate %</label>
+                      <input
+                        key={`owner-vat-rate-${selected.ownerId}`}
+                        type="text"
+                        inputMode="decimal"
+                        defaultValue={selected.ownerVatRate}
+                        onBlur={(e) => saveOwner("vatRate", e.target.value.trim())}
+                        disabled={isPending}
+                        placeholder="e.g. 20"
+                        className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                      />
+                    </div>
+                  </div>
+
+                  <label className="mb-1 block text-xs text-neutral-500">
+                    Invoice footer text
+                  </label>
+                  <textarea
+                    key={`owner-invoice-footer-${selected.ownerId}`}
+                    defaultValue={selected.ownerInvoiceFooterText || ""}
+                    onBlur={(e) => saveOwner("invoiceFooterText", e.target.value.trim())}
+                    disabled={isPending}
+                    placeholder="e.g. VAT exemption note, bank details, thank-you message…"
+                    rows={3}
+                    className="mb-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                  />
+
+                  <label className="mb-1 block text-xs text-neutral-500">
+                    Next invoice number
+                  </label>
+                  <input
+                    key={`owner-next-invoice-${selected.ownerId}`}
+                    type="number"
+                    defaultValue={selected.ownerNextInvoiceNumber}
+                    onBlur={(e) => e.target.value.trim() && saveOwner("nextInvoiceNumber", e.target.value.trim())}
+                    disabled={isPending}
+                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                  />
+                  <p className="mt-1 text-xs text-neutral-400">
+                    Set once as a starting point — increments automatically after that each time an
+                    invoice is actually generated.
+                  </p>
+
+                  {(savedField === "invoiceAddress" ||
+                    savedField === "vatNumber" ||
+                    savedField === "vatRate" ||
+                    savedField === "invoiceFooterText" ||
+                    savedField === "nextInvoiceNumber") && (
+                    <p className="text-xs text-green-600">Saved</p>
+                  )}
+                </div>
               </div>
             </div>
 
