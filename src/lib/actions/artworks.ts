@@ -264,6 +264,7 @@ export async function updateCatalogue(
   const priceUnframedRaw = (formData.get("priceUnframed") as string)?.trim();
   const priceFramedRaw = (formData.get("priceFramed") as string)?.trim();
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
+  const medium = (formData.get("medium") as string)?.trim() || null;
   const availability = formData.get("availability") as Availability;
 
   // Presentation's Title and Price default from Catalogue's Name and
@@ -300,6 +301,7 @@ export async function updateCatalogue(
       priceUnframed: priceUnframedRaw || null,
       priceFramed: priceFramedRaw || null,
       studioNotes,
+      medium,
       availability,
       ...presentationUpdate,
     },
