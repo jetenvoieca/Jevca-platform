@@ -73,6 +73,12 @@ export default async function SitesDirectoryPage({
     ownerNotes: s.artist.notes,
     ownerSubscriptionAmount: s.artist.subscriptionAmount ? s.artist.subscriptionAmount.toString() : "",
     ownerPaymentMethod: s.artist.paymentMethod,
+    ownerLogoUrl: s.artist.logoUrl,
+    ownerInvoiceAddress: s.artist.invoiceAddress,
+    ownerVatNumber: s.artist.vatNumber,
+    ownerVatRate: s.artist.vatRate ? s.artist.vatRate.toString() : "",
+    ownerInvoiceFooterText: s.artist.invoiceFooterText,
+    ownerNextInvoiceNumber: s.artist.nextInvoiceNumber,
   }));
 
   return (
