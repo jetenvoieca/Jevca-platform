@@ -17,7 +17,17 @@ async function putToR2(uploadUrl: string, body: File | Blob, contentType: string
 // instead of sending the file through a server action. For videos, also
 // grabs a still frame client-side and uploads that alongside as the
 // catalogue thumbnail.
-export async function uploadFileDirect(file: File, artistId: string) {
+//
+// status/source default to exactly today's behaviour (SORTED, no source)
+// so every existing caller — MediaPicker, MediaCatalogueView — is
+// unaffected. The Hopper's "Add from folder"/"Add media" buttons are the
+// only callers that pass status: "HOPPER".
+export async function uploadFileDirect(
+  file: File,
+  artistId: string,
+  status: "SORTED" | "HOPPER" = "SORTED",
+  source?: string
+) {
   const step1 = await requestUploadUrl(artistId, file.name, file.type);
   if ("error" in step1) {
     throw new Error(step1.error);
@@ -46,6 +56,14 @@ export async function uploadFileDirect(file: File, artistId: string) {
     }
   }
 
-  const step2 = await finalizeUpload(artistId, step1.key, file.type, step1.kind, posterUrl);
+  const step2 = await finalizeUpload(
+    artistId,
+    step1.key,
+    file.type,
+    step1.kind,
+    posterUrl,
+    status,
+    source
+  );
   return step2.image;
 }
