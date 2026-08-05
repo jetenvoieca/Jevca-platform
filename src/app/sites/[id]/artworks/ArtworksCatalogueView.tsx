@@ -2,47 +2,50 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { uploadFileDirect } from "@/lib/uploadDirect";
-import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
+import { createArtwork } from "@/lib/actions/artworks";
+import ArtworkDetailPanel, {
+  type ArtworkDetail,
+  type ArtworkSettings,
+} from "@/components/ArtworkDetailPanel";
 
-type MediaRow = {
+type ArtworkRow = {
   id: string;
-  url: string;
-  posterUrl: string | null;
-  kind: string;
-  caption: string | null;
-  artwork: { id: string; presentationTitle: string } | null;
+  presentationTitle: string;
+  presentationPrice: string | null;
+  catalogueNumber: string;
+  availability: string;
+  imageUrl: string | null;
 };
 
 const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
-const DENSITY_STORAGE_KEY = "jevca:media-density";
+const DENSITY_STORAGE_KEY = "jevca:artworks-density";
 
-export default function MediaCatalogueView({
+export default function ArtworksCatalogueView({
   siteId,
   artistId,
-  media,
-  purpose,
+  artworks,
   q,
-  tag,
-  artworkId,
+  availability,
+  location,
+  type,
+  group,
   sort,
-  counts,
-  tagPresets,
-  artistArtworks,
   selected,
+  settings,
+  siteDefaultCurrency = "GBP",
 }: {
   siteId: string;
   artistId: string;
-  media: MediaRow[];
-  purpose: "marketing" | "related";
+  artworks: ArtworkRow[];
   q: string;
-  tag: string;
-  artworkId: string;
+  availability: string;
+  location: string;
+  type: string;
+  group: string;
   sort: string;
-  counts: { marketing: number; related: number };
-  tagPresets: string[];
-  artistArtworks: { id: string; presentationTitle: string }[];
-  selected: MediaDetail | null;
+  selected: ArtworkDetail | null;
+  settings: ArtworkSettings;
+  siteDefaultCurrency?: string;
 }) {
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
@@ -60,25 +63,39 @@ export default function MediaCatalogueView({
     window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
   };
 
-  const toggleHref = (nextPurpose: "marketing" | "related") =>
-    `/sites/${siteId}/media?purpose=${nextPurpose}`;
-
-  const tileHref = (mediaId: string) => {
-    const sp = new URLSearchParams({ purpose });
-    if (q) sp.set("q", q);
-    if (tag) sp.set("tag", tag);
-    if (artworkId) sp.set("artworkId", artworkId);
-    return `/sites/${siteId}/media/${mediaId}?${sp.toString()}`;
+  const chipHref = (nextAvailability: string) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (sort) params.set("sort", sort);
+    if (location) params.set("location", location);
+    if (type) params.set("type", type);
+    if (group) params.set("group", group);
+    if (nextAvailability) params.set("availability", nextAvailability);
+    const qs = params.toString();
+    return `/sites/${siteId}/artworks${qs ? `?${qs}` : ""}`;
   };
+
+  const soldCount = artworks.filter((a) => a.availability === "SOLD").length;
+
+  const addNewTile = (
+    <form action={createArtwork.bind(null, artistId, siteId)}>
+      <button
+        type="submit"
+        className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
+      >
+        + Add New
+      </button>
+    </form>
+  );
 
   return (
     <div className="px-6 py-4">
       <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
         <div>
-          {/* Row 1: title + view controls — same pattern as the Artwork
-              Catalogue, both govern how the whole catalogue displays. */}
+          {/* Row 1: title + view controls, together since they both govern
+              how the whole catalogue displays. */}
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
+            <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
             <div className="flex items-center gap-3">
               <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
@@ -124,72 +141,95 @@ export default function MediaCatalogueView({
             </div>
           </div>
 
-          {/* Row 2: Marketing/Related toggle + filtering. */}
+          {/* Row 2: filtering/search — a separate functional group from
+              the view controls above. */}
           <div className="mb-3 flex flex-wrap items-center gap-3">
-            <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
+            <div className="flex gap-2">
               <Link
-                href={toggleHref("marketing")}
-                className={`px-4 py-1.5 ${
-                  purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                href={chipHref("")}
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  !availability
+                    ? "bg-neutral-900 text-white"
+                    : "border border-neutral-300 hover:bg-neutral-50"
                 }`}
               >
-                Marketing
+                All
               </Link>
               <Link
-                href={toggleHref("related")}
-                className={`px-4 py-1.5 font-medium ${
-                  purpose === "related"
+                href={chipHref("AVAILABLE")}
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  availability === "AVAILABLE"
                     ? "bg-neutral-900 text-white"
-                    : "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                    : "border border-neutral-300 hover:bg-neutral-50"
                 }`}
               >
-                Related ({counts.related})
+                Available
+              </Link>
+              <Link
+                href={chipHref("SOLD")}
+                className={`rounded-full px-3 py-1.5 text-sm ${
+                  availability === "SOLD"
+                    ? "bg-neutral-900 text-white"
+                    : "border border-neutral-300 hover:bg-neutral-50"
+                }`}
+              >
+                Sold
               </Link>
             </div>
 
             <form method="get" className="flex flex-wrap items-center gap-2">
-              <input type="hidden" name="purpose" value={purpose} />
               <input
                 type="text"
                 name="q"
                 defaultValue={q}
-                placeholder="Search caption, alt text"
+                placeholder="Search title, catalogue #, medium"
                 className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
               />
-              {purpose === "marketing" ? (
-                <select
-                  name="tag"
-                  defaultValue={tag}
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="">All tags</option>
-                  {tagPresets.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <select
-                  name="artworkId"
-                  defaultValue={artworkId}
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="">All artworks</option>
-                  {artistArtworks.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.presentationTitle}
-                    </option>
-                  ))}
-                </select>
-              )}
+              <input type="hidden" name="availability" value={availability} />
+              <select
+                name="location"
+                defaultValue={location}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">All locations</option>
+                {settings.artworkLocations.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+              <select
+                name="type"
+                defaultValue={type}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">All types</option>
+                {settings.artworkTypes.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+              <select
+                name="group"
+                defaultValue={group}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">All groups</option>
+                {settings.artworkGroups.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
               <select
                 name="sort"
                 defaultValue={sort}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
                 <option value="">Sort: Date added</option>
-                <option value="caption">Sort: Caption</option>
+                <option value="title">Sort: Title</option>
+                <option value="price">Sort: Price</option>
               </select>
               <button
                 type="submit"
@@ -201,7 +241,7 @@ export default function MediaCatalogueView({
           </div>
 
           <p className="mb-3 text-sm text-neutral-400">
-            {media.length} item{media.length === 1 ? "" : "s"}
+            {artworks.length} work{artworks.length === 1 ? "" : "s"} · {soldCount} sold
           </p>
 
           {view === "tile" ? (
@@ -209,99 +249,96 @@ export default function MediaCatalogueView({
               className="grid gap-3"
               style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
             >
-              {media.map((m) => (
+              {artworks.map((a) => (
                 <Link
-                  key={m.id}
-                  href={tileHref(m.id)}
+                  key={a.id}
+                  href={`/sites/${siteId}/artworks/${a.id}`}
                   className={`block rounded-md border-2 p-1 ${
-                    selected?.id === m.id ? "border-neutral-900" : "border-transparent"
+                    selected?.id === a.id ? "border-neutral-900" : "border-transparent"
                   }`}
                 >
-                  {m.kind === "VIDEO" ? (
-                    m.posterUrl ? (
-                      <div className="relative">
-                        <img
-                          src={m.posterUrl}
-                          alt=""
-                          className="aspect-square w-full rounded-md object-cover"
-                        />
-                        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                          ▶ Video
-                        </span>
-                      </div>
+                  <div className="relative">
+                    {a.imageUrl ? (
+                      <img
+                        src={a.imageUrl}
+                        alt=""
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
                     ) : (
-                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-200 text-xs text-neutral-500">
-                        Video
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
+                        No image
                       </div>
-                    )
-                  ) : (
-                    <img
-                      src={m.url}
-                      alt=""
-                      className="aspect-square w-full rounded-md object-cover"
-                    />
-                  )}
+                    )}
+                    {a.availability === "SOLD" && (
+                      <span className="absolute right-1.5 top-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
+                        Sold
+                      </span>
+                    )}
+                  </div>
                   <p className="mt-1 truncate text-sm font-medium text-neutral-900">
-                    {m.caption || "Untitled"}
+                    {a.presentationTitle}
                   </p>
-                  {m.artwork && (
-                    <p className="truncate text-xs font-medium text-rose-600">
-                      → {m.artwork.presentationTitle}
-                    </p>
-                  )}
+                  <p className="text-xs text-neutral-500">
+                    {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
+                  </p>
                 </Link>
               ))}
-              <AddNewTile artistId={artistId} siteId={siteId} />
+              {addNewTile}
             </div>
           ) : (
             <table className="w-full border-collapse text-sm">
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-neutral-500">
                   <th className="py-2 font-medium"></th>
-                  <th className="py-2 font-medium">Caption</th>
-                  <th className="py-2 font-medium">Kind</th>
-                  <th className="py-2 font-medium">Related Artwork</th>
+                  <th className="py-2 font-medium">Title</th>
+                  <th className="py-2 font-medium">Catalogue #</th>
+                  <th className="py-2 font-medium">Price</th>
+                  <th className="py-2 font-medium">Availability</th>
                 </tr>
               </thead>
               <tbody>
-                {media.map((m) => (
+                {artworks.map((a) => (
                   <tr
-                    key={m.id}
+                    key={a.id}
                     className={`border-b border-neutral-100 ${
-                      selected?.id === m.id ? "bg-neutral-100" : "hover:bg-neutral-50"
+                      selected?.id === a.id ? "bg-neutral-100" : "hover:bg-neutral-50"
                     }`}
                   >
                     <td className="py-2">
-                      <Link href={tileHref(m.id)}>
-                        {m.kind === "VIDEO" ? (
-                          m.posterUrl ? (
-                            <img
-                              src={m.posterUrl}
-                              alt=""
-                              className="h-10 w-10 rounded object-cover"
-                            />
-                          ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
-                              Video
-                            </div>
-                          )
+                      <Link href={`/sites/${siteId}/artworks/${a.id}`}>
+                        {a.imageUrl ? (
+                          <img
+                            src={a.imageUrl}
+                            alt=""
+                            className="h-10 w-10 rounded object-cover"
+                          />
                         ) : (
-                          <img src={m.url} alt="" className="h-10 w-10 rounded object-cover" />
+                          <div className="h-10 w-10 rounded bg-neutral-100" />
                         )}
                       </Link>
                     </td>
                     <td className="py-2 font-medium text-neutral-900">
-                      <Link href={tileHref(m.id)}>{m.caption || "Untitled"}</Link>
+                      <Link href={`/sites/${siteId}/artworks/${a.id}`}>
+                        {a.presentationTitle}
+                      </Link>
                     </td>
-                    <td className="py-2 text-neutral-500">{m.kind === "VIDEO" ? "Video" : "Photo"}</td>
-                    <td className="py-2 text-rose-600">
-                      {m.artwork ? m.artwork.presentationTitle : "—"}
+                    <td className="py-2 text-neutral-500">{a.catalogueNumber}</td>
+                    <td className="py-2 text-neutral-500">
+                      {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
                     </td>
+                    <td className="py-2 text-neutral-500">{a.availability}</td>
                   </tr>
                 ))}
                 <tr className="border-b border-neutral-100">
-                  <td colSpan={4} className="py-2">
-                    <AddNewRow artistId={artistId} siteId={siteId} />
+                  <td colSpan={5} className="py-2">
+                    <form action={createArtwork.bind(null, artistId, siteId)}>
+                      <button
+                        type="submit"
+                        className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
+                      >
+                        + Add New
+                      </button>
+                    </form>
                   </td>
                 </tr>
               </tbody>
@@ -311,107 +348,20 @@ export default function MediaCatalogueView({
 
         <div className="sticky top-4">
           {selected ? (
-            <MediaDetailPanel
+            <ArtworkDetailPanel
               siteId={siteId}
-              media={selected}
-              tagPresets={tagPresets}
-              artistArtworks={artistArtworks}
+              artistId={artistId}
+              artwork={selected}
+              settings={settings}
+              siteDefaultCurrency={siteDefaultCurrency}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
-              Select an item to see its details.
+              Select an artwork to see its details.
             </div>
           )}
         </div>
       </div>
     </div>
-  );
-}
-
-async function handleFileUpload(
-  file: File,
-  artistId: string,
-  siteId: string,
-  onDone: (error: string | null) => void
-) {
-  try {
-    await uploadFileDirect(file, artistId);
-    window.location.href = `/sites/${siteId}/media`;
-  } catch (err) {
-    // A network error, a dropped connection, or the upload step itself
-    // failing all land here — surfaced now instead of going silent.
-    onDone(err instanceof Error ? err.message : "Upload failed. Try again.");
-  }
-}
-
-// Replaces the old toolbar "+ Upload" button — sits as the last grid tile
-// instead, same "click straight in, no form fields first" pattern as
-// Artworks' "+ Add New" tile. Still needs a real file picked (unlike an
-// artwork, media can't exist without one), so this opens the file dialog
-// directly rather than creating anything blank first.
-function AddNewTile({ artistId, siteId }: { artistId: string; siteId: string }) {
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  return (
-    <label
-      className={`flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed text-center text-sm ${
-        uploading
-          ? "cursor-wait border-neutral-300 text-neutral-400"
-          : "cursor-pointer border-neutral-300 text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-      }`}
-    >
-      {uploading ? "Uploading…" : error ? <span className="px-2 text-red-500">{error}</span> : "+ Add New"}
-      <input
-        type="file"
-        accept="image/*,video/*"
-        className="hidden"
-        disabled={uploading}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          setError(null);
-          setUploading(true);
-          handleFileUpload(file, artistId, siteId, (err) => {
-            setUploading(false);
-            if (err) setError(err);
-          });
-        }}
-      />
-    </label>
-  );
-}
-
-// Same "+ Add New" action, as a row for List view.
-function AddNewRow({ artistId, siteId }: { artistId: string; siteId: string }) {
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  return (
-    <label
-      className={`text-sm ${
-        uploading
-          ? "cursor-wait text-neutral-400"
-          : "cursor-pointer text-neutral-500 hover:text-neutral-900 hover:underline"
-      }`}
-    >
-      {uploading ? "Uploading…" : error ? <span className="text-red-500">{error}</span> : "+ Add New"}
-      <input
-        type="file"
-        accept="image/*,video/*"
-        className="hidden"
-        disabled={uploading}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          setError(null);
-          setUploading(true);
-          handleFileUpload(file, artistId, siteId, (err) => {
-            setUploading(false);
-            if (err) setError(err);
-          });
-        }}
-      />
-    </label>
   );
 }
