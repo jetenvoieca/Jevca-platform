@@ -8,6 +8,7 @@ import {
   addHopperItemToArtwork,
   updateHopperCaption,
 } from "@/lib/actions/hopper";
+import { quickCreateArtwork } from "@/lib/actions/media";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import ArtworkPicker from "@/components/ArtworkPicker";
 
@@ -22,6 +23,16 @@ export type HopperItem = {
   createdAt: string;
 };
 
+// A running, session-only log of what's just been done — pure visual
+// confirmation ("did that just work"), not persisted anywhere. Cleared
+// on refresh or via the "Clear list" button.
+type ProcessedEntry = {
+  key: string;
+  thumbUrl: string;
+  kind: string;
+  label: string;
+};
+
 export default function HopperView({
   siteId,
   artistId,
@@ -34,9 +45,9 @@ export default function HopperView({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [setAsMain, setSetAsMain] = useState(false);
   const [addUploading, setAddUploading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [processedLog, setProcessedLog] = useState<ProcessedEntry[]>([]);
   const folderInputRef = useRef<HTMLInputElement>(null);
 
   // webkitdirectory/directory aren't part of React's typed HTML
@@ -52,6 +63,18 @@ export default function HopperView({
   const current = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null;
   const remaining = queue.filter((i) => i.id !== current?.id);
 
+  const logProcessed = (item: HopperItem, label: string) => {
+    setProcessedLog((prev) => [
+      {
+        key: `${item.id}-${Date.now()}`,
+        thumbUrl: item.kind === "VIDEO" ? item.posterUrl || "" : item.url,
+        kind: item.kind,
+        label,
+      },
+      ...prev,
+    ]);
+  };
+
   // After any sort action, drop back to "no explicit selection" so the
   // next render (post-refresh, with this item now gone from the queue)
   // naturally falls forward to the new oldest item — the auto-advance
@@ -59,27 +82,48 @@ export default function HopperView({
   // track index positions by hand.
   const advanceAfterAction = () => {
     setSelectedId(null);
-    setSetAsMain(false);
     router.refresh();
   };
 
-  const handleBin = (id: string) => {
+  const handleBin = (item: HopperItem) => {
     startTransition(async () => {
-      await binHopperItem(id, siteId);
+      await binHopperItem(item.id, siteId);
+      logProcessed(item, "Binned");
       advanceAfterAction();
     });
   };
 
-  const handleAddToMedia = (id: string) => {
+  const handleAddToMedia = (item: HopperItem) => {
     startTransition(async () => {
-      await addHopperItemToMedia(id, siteId);
+      await addHopperItemToMedia(item.id, siteId);
+      logProcessed(item, "Added to Media Catalogue");
       advanceAfterAction();
     });
   };
 
-  const handleAddToArtwork = (id: string, artworkId: string) => {
+  // Existing artwork → always ancillary, never touches that artwork's
+  // main image (per 2026-08-05 decision — changing an existing artwork's
+  // main image is a separate action, done from the Artwork editor).
+  const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
     startTransition(async () => {
-      await addHopperItemToArtwork(id, siteId, artworkId, setAsMain);
+      await addHopperItemToArtwork(item.id, siteId, artworkId, false);
+      logProcessed(item, `Linked to ${artworkTitle}`);
+      advanceAfterAction();
+    });
+  };
+
+  // New artwork → always becomes its main image, since it's the only
+  // image the artwork has at the point of creation.
+  const handleAddNewArtwork = (item: HopperItem, title: string) => {
+    startTransition(async () => {
+      const finalTitle = title.trim() || "Untitled";
+      const result = await quickCreateArtwork(artistId, finalTitle);
+      if ("error" in result || !result.artwork) {
+        setAddError(result.error || "Couldn't create the artwork. Try again.");
+        return;
+      }
+      await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
+      logProcessed(item, `New artwork: ${finalTitle}`);
       advanceAfterAction();
     });
   };
@@ -155,25 +199,76 @@ export default function HopperView({
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
       )}
 
-      {!current ? (
-        <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-          Hopper is empty — nothing waiting to be sorted.
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "300px 1fr 280px" }}>
+        {/* Processed — a visual confirmation trail, not part of the
+            sorting flow itself, so it stays put even once the queue on
+            the right runs out. */}
+        <div className="sticky top-4">
+          {processedLog.length > 0 && (
+            <>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  Processed
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setProcessedLog([])}
+                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
+                >
+                  Clear list
+                </button>
+              </div>
+              <div className="space-y-2">
+                {processedLog.map((entry) => (
+                  <div
+                    key={entry.key}
+                    className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
+                  >
+                    {entry.thumbUrl ? (
+                      <img
+                        src={entry.thumbUrl}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
+                        Video
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
+                      <p className="text-xs text-neutral-400">
+                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </div>
-      ) : (
-        <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 280px" }}>
+
+        {!current ? (
+          <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
+            Hopper is empty — nothing waiting to be sorted.
+          </div>
+        ) : (
           <SortingCard
             key={current.id}
             siteId={siteId}
             artistId={artistId}
             item={current}
             isPending={isPending}
-            setAsMain={setAsMain}
-            onSetAsMainChange={setSetAsMain}
-            onBin={() => handleBin(current.id)}
-            onAddToMedia={() => handleAddToMedia(current.id)}
-            onAddToArtwork={(artworkId) => handleAddToArtwork(current.id, artworkId)}
+            onBin={() => handleBin(current)}
+            onAddToMedia={() => handleAddToMedia(current)}
+            onAddToExistingArtwork={(artworkId, artworkTitle) =>
+              handleAddToExistingArtwork(current, artworkId, artworkTitle)
+            }
+            onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
           />
+        )}
 
+        {current && (
           <div className="sticky top-4">
             <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
               Up next ({remaining.length})
@@ -209,8 +304,8 @@ export default function HopperView({
               </div>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
@@ -220,21 +315,19 @@ function SortingCard({
   artistId,
   item,
   isPending,
-  setAsMain,
-  onSetAsMainChange,
   onBin,
   onAddToMedia,
-  onAddToArtwork,
+  onAddToExistingArtwork,
+  onAddNewArtwork,
 }: {
   siteId: string;
   artistId: string;
   item: HopperItem;
   isPending: boolean;
-  setAsMain: boolean;
-  onSetAsMainChange: (v: boolean) => void;
   onBin: () => void;
   onAddToMedia: () => void;
-  onAddToArtwork: (artworkId: string) => void;
+  onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
+  onAddNewArtwork: (title: string) => void;
 }) {
   // Local state, reset automatically each time this card remounts (the
   // parent keys it by item.id) — no stale-caption bug when moving
@@ -309,7 +402,11 @@ function SortingCard({
         </div>
       </div>
 
-      <div className="flex flex-wrap items-end gap-4 border-t border-neutral-200 pt-4">
+      {/* Four plain, equal-weight buttons — not the dashed "+ Add" tile.
+          This screen assigns/routes an existing item rather than adding
+          new media, so the tile's "click to add something new" implication
+          would be misleading here. See decisions-log, 2026-08-05. */}
+      <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
         <button
           type="button"
           onClick={onBin}
@@ -324,34 +421,32 @@ function SortingCard({
           disabled={isPending}
           className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
         >
-          + Add to Media
+          Add to Media
         </button>
-
-        <div>
-          <label className="mb-1.5 flex items-center gap-1.5 text-sm text-neutral-600">
-            <input
-              type="checkbox"
-              checked={setAsMain}
-              onChange={(e) => onSetAsMainChange(e.target.checked)}
-            />
-            Set as main image
-          </label>
-          {/* Same dashed-tile trigger as everywhere else an artwork can be
-              picked — see decisions-log.md, 2026-07-31 (universal "add"
-              pattern). Wrapped narrower here since this is an actions row,
-              not a grid, but the component itself is unchanged. */}
-          <div className="w-32">
-            <ArtworkPicker
-              artistId={artistId}
-              mode="single"
-              label="Add to Artwork"
-              onSelect={(artworks) => {
-                if (artworks[0]) onAddToArtwork(artworks[0].id);
-              }}
-            />
-          </div>
-        </div>
+        <ArtworkPicker
+          artistId={artistId}
+          mode="single"
+          variant="button"
+          label="Add to Existing Artwork"
+          onSelect={(artworks) => {
+            if (artworks[0]) {
+              onAddToExistingArtwork(artworks[0].id, artworks[0].presentationTitle);
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => onAddNewArtwork(caption)}
+          disabled={isPending}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        >
+          Add New Artwork
+        </button>
       </div>
+      <p className="mt-2 text-xs text-neutral-400">
+        &quot;Add New Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
+        blank), and this image becomes its main image automatically.
+      </p>
     </div>
   );
 }
