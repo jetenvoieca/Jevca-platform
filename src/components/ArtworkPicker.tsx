@@ -15,11 +15,19 @@ export default function ArtworkPicker({
   artistId,
   mode = "single",
   label = "Add Artwork",
+  variant = "tile",
   onSelect,
 }: {
   artistId: string;
   mode?: "single" | "multi";
   label?: string;
+  // "tile": the universal dashed-tile trigger used everywhere media/
+  // artworks get ADDED to a grid (default, unchanged).
+  // "button": a plain standard button — for places like the Hopper where
+  // the action is assigning/routing an existing item, not adding new
+  // media, so the "+ Add" tile's implication (this creates something new)
+  // would be misleading. See decisions-log, 2026-08-05.
+  variant?: "tile" | "button";
   onSelect: (artworks: PickedArtwork[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -91,9 +99,22 @@ export default function ArtworkPicker({
     });
   };
 
-  // Same trigger as MediaPicker — a blank dashed tile, not a button. See
-  // decisions-log.md, 2026-07-31.
+  // Same trigger as MediaPicker by default — a blank dashed tile, not a
+  // button. See decisions-log.md, 2026-07-31. The "button" variant opts
+  // out of that for contexts where a dashed "+ Add" tile would mislead
+  // (see prop comment above).
   if (!open) {
+    if (variant === "button") {
+      return (
+        <button
+          type="button"
+          onClick={handleOpen}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50"
+        >
+          {label}
+        </button>
+      );
+    }
     return (
       <button
         type="button"
