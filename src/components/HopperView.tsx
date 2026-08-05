@@ -33,14 +33,22 @@ type ProcessedEntry = {
   label: string;
 };
 
+// Persisted per artist so the Processed trail survives navigating away
+// and back (it was previously plain component state, which reset on
+// unmount — see decisions log, 2026-08-05). Same localStorage pattern
+// already used for the Media Catalogue's density preference.
+const processedLogKey = (artistId: string) => `jevca:hopper-processed:${artistId}`;
+
 export default function HopperView({
   siteId,
   artistId,
   queue,
+  tagPresets,
 }: {
   siteId: string;
   artistId: string;
   queue: HopperItem[];
+  tagPresets: string[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -59,6 +67,29 @@ export default function HopperView({
     folderInputRef.current?.setAttribute("webkitdirectory", "true");
     folderInputRef.current?.setAttribute("directory", "true");
   }, []);
+
+  // Load whatever was left from a previous visit, once, on mount — kept
+  // as a separate effect (rather than reading localStorage directly in
+  // useState's initializer) so this stays SSR-safe: the server render
+  // and the client's first render both start from [], avoiding a
+  // hydration mismatch, then this fills it in immediately after.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(processedLogKey(artistId));
+      if (stored) setProcessedLog(JSON.parse(stored));
+    } catch {
+      // Corrupt or unavailable storage — just start with an empty log.
+    }
+  }, [artistId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(processedLogKey(artistId), JSON.stringify(processedLog));
+    } catch {
+      // Storage full/unavailable — non-critical, the log just won't
+      // persist this time.
+    }
+  }, [processedLog, artistId]);
 
   const current = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null;
   const remaining = queue.filter((i) => i.id !== current?.id);
@@ -258,6 +289,7 @@ export default function HopperView({
             siteId={siteId}
             artistId={artistId}
             item={current}
+            tagPresets={tagPresets}
             isPending={isPending}
             onBin={() => handleBin(current)}
             onAddToMedia={() => handleAddToMedia(current)}
@@ -314,6 +346,7 @@ function SortingCard({
   siteId,
   artistId,
   item,
+  tagPresets,
   isPending,
   onBin,
   onAddToMedia,
@@ -323,6 +356,7 @@ function SortingCard({
   siteId: string;
   artistId: string;
   item: HopperItem;
+  tagPresets: string[];
   isPending: boolean;
   onBin: () => void;
   onAddToMedia: () => void;
@@ -334,16 +368,27 @@ function SortingCard({
   // between queue items.
   const [caption, setCaption] = useState(item.caption || "");
   const [altText, setAltText] = useState(item.altText || "");
-  const [tags, setTags] = useState(item.tags.join(", "));
+  const [tags, setTags] = useState<string[]>(item.tags);
 
-  const saveFields = () => {
+  const saveFields = (nextTags?: string[]) => {
     const fd = new FormData();
     fd.set("caption", caption);
     fd.set("altText", altText);
-    fd.set("tags", tags);
+    fd.set("tags", (nextTags ?? tags).join(", "));
     // Fire-and-forget — this is a background autosave, not the action
     // that advances the queue, so it doesn't need its own pending state.
     updateHopperCaption(item.id, siteId, fd);
+  };
+
+  // Tags are click-to-toggle from the artist's preset list (Media
+  // Catalogue → Settings), not typed — per 2026-08-05 decision, so tags
+  // stay consistent/searchable rather than drifting into one-off typos.
+  // Saves immediately on click, since there's no "blur" moment the way
+  // there is for a text field.
+  const toggleTag = (tag: string) => {
+    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
+    setTags(next);
+    saveFields(next);
   };
 
   return (
@@ -374,7 +419,7 @@ function SortingCard({
             type="text"
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
-            onBlur={saveFields}
+            onBlur={() => saveFields()}
             className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
         </div>
@@ -384,21 +429,37 @@ function SortingCard({
             type="text"
             value={altText}
             onChange={(e) => setAltText(e.target.value)}
-            onBlur={saveFields}
+            onBlur={() => saveFields()}
             className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
         </div>
         <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">
-            Tags <span className="font-normal text-neutral-400">(comma separated)</span>
-          </label>
-          <input
-            type="text"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            onBlur={saveFields}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
+          {tagPresets.length === 0 ? (
+            <p className="text-xs text-neutral-400">
+              No tags set up yet — add some under Media Catalogue → Settings.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {tagPresets.map((tag) => {
+                const active = tags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleTag(tag)}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      active
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 
