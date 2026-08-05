@@ -187,6 +187,7 @@ export default function ArtworkDetailPanel({
               mode="multi"
               label="Add"
               linkedArtworkId={artwork.id}
+              mediaKinds={["PHOTO", "VIDEO"]}
               onSelect={(imgs) => {
                 const ids = imgs.map((i) => i.id);
                 startTransition(async () => {
