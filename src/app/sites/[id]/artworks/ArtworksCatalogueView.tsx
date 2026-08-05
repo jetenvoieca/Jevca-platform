@@ -1,513 +1,417 @@
 "use client";
 
-import { useState, useTransition, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import {
-  binHopperItem,
-  addHopperItemToMedia,
-  addHopperItemToArtwork,
-  updateHopperCaption,
-} from "@/lib/actions/hopper";
-import { quickCreateArtwork } from "@/lib/actions/media";
+import { useState, useEffect } from "react";
+import Link from "next/link";
 import { uploadFileDirect } from "@/lib/uploadDirect";
-import ArtworkPicker from "@/components/ArtworkPicker";
+import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 
-export type HopperItem = {
+type MediaRow = {
   id: string;
   url: string;
   posterUrl: string | null;
   kind: string;
   caption: string | null;
-  altText: string | null;
-  tags: string[];
-  createdAt: string;
+  artwork: { id: string; presentationTitle: string } | null;
 };
 
-// A running, session-only log of what's just been done — pure visual
-// confirmation ("did that just work"), not persisted anywhere. Cleared
-// on refresh or via the "Clear list" button.
-type ProcessedEntry = {
-  key: string;
-  thumbUrl: string;
-  kind: string;
-  label: string;
-};
+const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
+const DENSITY_STORAGE_KEY = "jevca:media-density";
 
-// Persisted per artist so the Processed trail survives navigating away
-// and back (it was previously plain component state, which reset on
-// unmount — see decisions log, 2026-08-05). Same localStorage pattern
-// already used for the Media Catalogue's density preference.
-const processedLogKey = (artistId: string) => `jevca:hopper-processed:${artistId}`;
-
-export default function HopperView({
+export default function MediaCatalogueView({
   siteId,
   artistId,
-  queue,
+  media,
+  purpose,
+  q,
+  tag,
+  artworkId,
+  sort,
+  counts,
   tagPresets,
+  artistArtworks,
+  selected,
 }: {
   siteId: string;
   artistId: string;
-  queue: HopperItem[];
+  media: MediaRow[];
+  purpose: "marketing" | "related";
+  q: string;
+  tag: string;
+  artworkId: string;
+  sort: string;
+  counts: { marketing: number; related: number };
   tagPresets: string[];
+  artistArtworks: { id: string; presentationTitle: string }[];
+  selected: MediaDetail | null;
 }) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [addUploading, setAddUploading] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-  const [processedLog, setProcessedLog] = useState<ProcessedEntry[]>([]);
-  const folderInputRef = useRef<HTMLInputElement>(null);
+  const [view, setView] = useState<"tile" | "list">("tile");
+  const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
 
-  // webkitdirectory/directory aren't part of React's typed HTML
-  // attributes, so they're set imperatively here rather than as JSX
-  // props — sidesteps any TypeScript strict-mode complaint about an
-  // unrecognised attribute (this project has hit real strict-mode build
-  // failures before over exactly this category of thing).
   useEffect(() => {
-    folderInputRef.current?.setAttribute("webkitdirectory", "true");
-    folderInputRef.current?.setAttribute("directory", "true");
+    const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
+    const parsed = stored ? parseInt(stored, 10) : NaN;
+    if (DENSITY_OPTIONS.includes(parsed as (typeof DENSITY_OPTIONS)[number])) {
+      setDensity(parsed as (typeof DENSITY_OPTIONS)[number]);
+    }
   }, []);
 
-  // Load whatever was left from a previous visit, once, on mount — kept
-  // as a separate effect (rather than reading localStorage directly in
-  // useState's initializer) so this stays SSR-safe: the server render
-  // and the client's first render both start from [], avoiding a
-  // hydration mismatch, then this fills it in immediately after.
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(processedLogKey(artistId));
-      if (stored) setProcessedLog(JSON.parse(stored));
-    } catch {
-      // Corrupt or unavailable storage — just start with an empty log.
-    }
-  }, [artistId]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(processedLogKey(artistId), JSON.stringify(processedLog));
-    } catch {
-      // Storage full/unavailable — non-critical, the log just won't
-      // persist this time.
-    }
-  }, [processedLog, artistId]);
-
-  const current = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null;
-  const remaining = queue.filter((i) => i.id !== current?.id);
-
-  const logProcessed = (item: HopperItem, label: string) => {
-    setProcessedLog((prev) => [
-      {
-        key: `${item.id}-${Date.now()}`,
-        thumbUrl: item.kind === "VIDEO" ? item.posterUrl || "" : item.url,
-        kind: item.kind,
-        label,
-      },
-      ...prev,
-    ]);
+  const setDensityAndStore = (n: (typeof DENSITY_OPTIONS)[number]) => {
+    setDensity(n);
+    window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
   };
 
-  // After any sort action, drop back to "no explicit selection" so the
-  // next render (post-refresh, with this item now gone from the queue)
-  // naturally falls forward to the new oldest item — the auto-advance
-  // flick-through rhythm from the original spec, without needing to
-  // track index positions by hand.
-  const advanceAfterAction = () => {
-    setSelectedId(null);
-    router.refresh();
-  };
+  const toggleHref = (nextPurpose: "marketing" | "related") =>
+    `/sites/${siteId}/media?purpose=${nextPurpose}`;
 
-  const handleBin = (item: HopperItem) => {
-    startTransition(async () => {
-      await binHopperItem(item.id, siteId);
-      logProcessed(item, "Binned");
-      advanceAfterAction();
-    });
-  };
-
-  const handleAddToMedia = (item: HopperItem) => {
-    startTransition(async () => {
-      await addHopperItemToMedia(item.id, siteId);
-      logProcessed(item, "Added to Media Catalogue");
-      advanceAfterAction();
-    });
-  };
-
-  // Existing artwork → always ancillary, never touches that artwork's
-  // main image (per 2026-08-05 decision — changing an existing artwork's
-  // main image is a separate action, done from the Artwork editor).
-  const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
-    startTransition(async () => {
-      await addHopperItemToArtwork(item.id, siteId, artworkId, false);
-      logProcessed(item, `Linked to ${artworkTitle}`);
-      advanceAfterAction();
-    });
-  };
-
-  // New artwork → always becomes its main image, since it's the only
-  // image the artwork has at the point of creation.
-  const handleAddNewArtwork = (item: HopperItem, title: string) => {
-    startTransition(async () => {
-      const finalTitle = title.trim() || "Untitled";
-      const result = await quickCreateArtwork(artistId, finalTitle);
-      if ("error" in result || !result.artwork) {
-        setAddError(result.error || "Couldn't create the artwork. Try again.");
-        return;
-      }
-      await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
-      logProcessed(item, `New artwork: ${finalTitle}`);
-      advanceAfterAction();
-    });
-  };
-
-  const handleUploadFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    setAddError(null);
-    setAddUploading(true);
-    try {
-      for (const file of Array.from(files)) {
-        // Folder picks can include non-media files (.DS_Store, etc.) —
-        // silently skip anything that isn't an image or video rather
-        // than erroring the whole batch out.
-        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
-        await uploadFileDirect(file, artistId, "HOPPER", "Manual upload");
-      }
-      router.refresh();
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : "Upload failed. Try again.");
-    } finally {
-      setAddUploading(false);
-    }
+  const tileHref = (mediaId: string) => {
+    const sp = new URLSearchParams({ purpose });
+    if (q) sp.set("q", q);
+    if (tag) sp.set("tag", tag);
+    if (artworkId) sp.set("artworkId", artworkId);
+    return `/sites/${siteId}/media/${mediaId}?${sp.toString()}`;
   };
 
   return (
     <div className="px-6 py-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-neutral-900">
-          Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
-        </h1>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => router.refresh()}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-          >
-            Check Incoming
-          </button>
-          <label
-            className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
-              addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
-            }`}
-          >
-            Add from folder
-            <input
-              ref={folderInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              disabled={addUploading}
-              onChange={(e) => handleUploadFiles(e.target.files)}
-            />
-          </label>
-          <label
-            className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
-              addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
-            }`}
-          >
-            Add media
-            <input
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              className="hidden"
-              disabled={addUploading}
-              onChange={(e) => handleUploadFiles(e.target.files)}
-            />
-          </label>
-        </div>
-      </div>
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
+        <div>
+          {/* Row 1: title + view controls — same pattern as the Artwork
+              Catalogue, both govern how the whole catalogue displays. */}
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+            <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
 
-      {addError && (
-        <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
-      )}
-
-      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "300px 1fr 280px" }}>
-        {/* Processed — a visual confirmation trail, not part of the
-            sorting flow itself, so it stays put even once the queue on
-            the right runs out. */}
-        <div className="sticky top-4">
-          {processedLog.length > 0 && (
-            <>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  Processed
-                </p>
+            <div className="flex items-center gap-3">
+              <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
                 <button
                   type="button"
-                  onClick={() => setProcessedLog([])}
-                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
+                  onClick={() => setView("tile")}
+                  className={`px-3 py-1.5 ${
+                    view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                  }`}
                 >
-                  Clear list
+                  Tile
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setView("list")}
+                  className={`px-3 py-1.5 ${
+                    view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                  }`}
+                >
+                  List
                 </button>
               </div>
-              <div className="space-y-2">
-                {processedLog.map((entry) => (
-                  <div
-                    key={entry.key}
-                    className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
-                  >
-                    {entry.thumbUrl ? (
-                      <img
-                        src={entry.thumbUrl}
-                        alt=""
-                        className="h-10 w-10 shrink-0 rounded object-cover"
-                      />
+
+              {view === "tile" && (
+                <div className="flex items-center gap-1 text-sm text-neutral-500">
+                  <span>Per row</span>
+                  {DENSITY_OPTIONS.map((n) => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setDensityAndStore(n)}
+                      className={`h-7 w-7 rounded-md text-sm ${
+                        density === n
+                          ? "bg-neutral-900 text-white"
+                          : "border border-neutral-300 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {n}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Row 2: Marketing/Related toggle + filtering. */}
+          <div className="mb-3 flex flex-wrap items-center gap-3">
+            <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
+              <Link
+                href={toggleHref("marketing")}
+                className={`px-4 py-1.5 ${
+                  purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                }`}
+              >
+                Marketing
+              </Link>
+              <Link
+                href={toggleHref("related")}
+                className={`px-4 py-1.5 font-medium ${
+                  purpose === "related"
+                    ? "bg-neutral-900 text-white"
+                    : "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                }`}
+              >
+                Related ({counts.related})
+              </Link>
+            </div>
+
+            <form method="get" className="flex flex-wrap items-center gap-2">
+              <input type="hidden" name="purpose" value={purpose} />
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="Search caption, alt text"
+                className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+              />
+              {purpose === "marketing" ? (
+                <select
+                  name="tag"
+                  defaultValue={tag}
+                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">All tags</option>
+                  {tagPresets.map((t) => (
+                    <option key={t} value={t}>
+                      {t}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <select
+                  name="artworkId"
+                  defaultValue={artworkId}
+                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                >
+                  <option value="">All artworks</option>
+                  {artistArtworks.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.presentationTitle}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <select
+                name="sort"
+                defaultValue={sort}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">Sort: Date added</option>
+                <option value="caption">Sort: Caption</option>
+              </select>
+              <button
+                type="submit"
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                Apply
+              </button>
+            </form>
+          </div>
+
+          <p className="mb-3 text-sm text-neutral-400">
+            {media.length} item{media.length === 1 ? "" : "s"}
+          </p>
+
+          {view === "tile" ? (
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
+            >
+              {media.map((m) => (
+                <Link
+                  key={m.id}
+                  href={tileHref(m.id)}
+                  className={`block rounded-md border-2 p-1 ${
+                    selected?.id === m.id ? "border-neutral-900" : "border-transparent"
+                  }`}
+                >
+                  {m.kind === "VIDEO" ? (
+                    m.posterUrl ? (
+                      <div className="relative">
+                        <img
+                          src={m.posterUrl}
+                          alt=""
+                          className="aspect-square w-full rounded-md object-cover"
+                        />
+                        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                          ▶ Video
+                        </span>
+                      </div>
                     ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-200 text-xs text-neutral-500">
                         Video
                       </div>
-                    )}
-                    <div className="min-w-0">
-                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
-                      <p className="text-xs text-neutral-400">
-                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
-                      </p>
-                    </div>
-                  </div>
+                    )
+                  ) : (
+                    <img
+                      src={m.url}
+                      alt=""
+                      className="aspect-square w-full rounded-md object-cover"
+                    />
+                  )}
+                  <p className="mt-1 truncate text-sm font-medium text-neutral-900">
+                    {m.caption || "Untitled"}
+                  </p>
+                  {m.artwork && (
+                    <p className="truncate text-xs font-medium text-rose-600">
+                      → {m.artwork.presentationTitle}
+                    </p>
+                  )}
+                </Link>
+              ))}
+              <AddNewTile artistId={artistId} siteId={siteId} />
+            </div>
+          ) : (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                  <th className="py-2 font-medium"></th>
+                  <th className="py-2 font-medium">Caption</th>
+                  <th className="py-2 font-medium">Kind</th>
+                  <th className="py-2 font-medium">Related Artwork</th>
+                </tr>
+              </thead>
+              <tbody>
+                {media.map((m) => (
+                  <tr
+                    key={m.id}
+                    className={`border-b border-neutral-100 ${
+                      selected?.id === m.id ? "bg-neutral-100" : "hover:bg-neutral-50"
+                    }`}
+                  >
+                    <td className="py-2">
+                      <Link href={tileHref(m.id)}>
+                        {m.kind === "VIDEO" ? (
+                          m.posterUrl ? (
+                            <img
+                              src={m.posterUrl}
+                              alt=""
+                              className="h-10 w-10 rounded object-cover"
+                            />
+                          ) : (
+                            <div className="flex h-10 w-10 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
+                              Video
+                            </div>
+                          )
+                        ) : (
+                          <img src={m.url} alt="" className="h-10 w-10 rounded object-cover" />
+                        )}
+                      </Link>
+                    </td>
+                    <td className="py-2 font-medium text-neutral-900">
+                      <Link href={tileHref(m.id)}>{m.caption || "Untitled"}</Link>
+                    </td>
+                    <td className="py-2 text-neutral-500">{m.kind === "VIDEO" ? "Video" : "Photo"}</td>
+                    <td className="py-2 text-rose-600">
+                      {m.artwork ? m.artwork.presentationTitle : "—"}
+                    </td>
+                  </tr>
                 ))}
-              </div>
-            </>
+                <tr className="border-b border-neutral-100">
+                  <td colSpan={4} className="py-2">
+                    <AddNewRow artistId={artistId} siteId={siteId} />
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           )}
         </div>
 
-        {!current ? (
-          <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-            Hopper is empty — nothing waiting to be sorted.
-          </div>
-        ) : (
-          <SortingCard
-            key={current.id}
-            siteId={siteId}
-            artistId={artistId}
-            item={current}
-            tagPresets={tagPresets}
-            isPending={isPending}
-            onBin={() => handleBin(current)}
-            onAddToMedia={() => handleAddToMedia(current)}
-            onAddToExistingArtwork={(artworkId, artworkTitle) =>
-              handleAddToExistingArtwork(current, artworkId, artworkTitle)
-            }
-            onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
-          />
-        )}
-
-        {current && (
-          <div className="sticky top-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-              Up next ({remaining.length})
-            </p>
-            {remaining.length === 0 ? (
-              <p className="text-xs text-neutral-400">This is the last one.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {remaining.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
-                  >
-                    {item.kind === "VIDEO" ? (
-                      item.posterUrl ? (
-                        <img
-                          src={item.posterUrl}
-                          alt=""
-                          className="aspect-square w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-[10px] text-neutral-500">
-                          Video
-                        </div>
-                      )
-                    ) : (
-                      <img src={item.url} alt="" className="aspect-square w-full object-cover" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+        <div className="sticky top-4">
+          {selected ? (
+            <MediaDetailPanel
+              siteId={siteId}
+              media={selected}
+              tagPresets={tagPresets}
+              artistArtworks={artistArtworks}
+            />
+          ) : (
+            <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
+              Select an item to see its details.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-function SortingCard({
-  siteId,
-  artistId,
-  item,
-  tagPresets,
-  isPending,
-  onBin,
-  onAddToMedia,
-  onAddToExistingArtwork,
-  onAddNewArtwork,
-}: {
-  siteId: string;
-  artistId: string;
-  item: HopperItem;
-  tagPresets: string[];
-  isPending: boolean;
-  onBin: () => void;
-  onAddToMedia: () => void;
-  onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
-  onAddNewArtwork: (title: string) => void;
-}) {
-  // Local state, reset automatically each time this card remounts (the
-  // parent keys it by item.id) — no stale-caption bug when moving
-  // between queue items.
-  const [caption, setCaption] = useState(item.caption || "");
-  const [altText, setAltText] = useState(item.altText || "");
-  const [tags, setTags] = useState<string[]>(item.tags);
+async function handleFileUpload(
+  file: File,
+  artistId: string,
+  siteId: string,
+  onDone: (error: string | null) => void
+) {
+  try {
+    await uploadFileDirect(file, artistId);
+    window.location.href = `/sites/${siteId}/media`;
+  } catch (err) {
+    // A network error, a dropped connection, or the upload step itself
+    // failing all land here — surfaced now instead of going silent.
+    onDone(err instanceof Error ? err.message : "Upload failed. Try again.");
+  }
+}
 
-  const saveFields = (nextTags?: string[]) => {
-    const fd = new FormData();
-    fd.set("caption", caption);
-    fd.set("altText", altText);
-    fd.set("tags", (nextTags ?? tags).join(", "));
-    // Fire-and-forget — this is a background autosave, not the action
-    // that advances the queue, so it doesn't need its own pending state.
-    updateHopperCaption(item.id, siteId, fd);
-  };
-
-  // Tags are click-to-toggle from the artist's preset list (Media
-  // Catalogue → Settings), not typed — per 2026-08-05 decision, so tags
-  // stay consistent/searchable rather than drifting into one-off typos.
-  // Saves immediately on click, since there's no "blur" moment the way
-  // there is for a text field.
-  const toggleTag = (tag: string) => {
-    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
-    setTags(next);
-    saveFields(next);
-  };
+// Replaces the old toolbar "+ Upload" button — sits as the last grid tile
+// instead, same "click straight in, no form fields first" pattern as
+// Artworks' "+ Add New" tile. Still needs a real file picked (unlike an
+// artwork, media can't exist without one), so this opens the file dialog
+// directly rather than creating anything blank first.
+function AddNewTile({ artistId, siteId }: { artistId: string; siteId: string }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      <p className="mb-3 text-xs text-neutral-400">
-        Received {new Date(item.createdAt).toLocaleString()}
-      </p>
+    <label
+      className={`flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed text-center text-sm ${
+        uploading
+          ? "cursor-wait border-neutral-300 text-neutral-400"
+          : "cursor-pointer border-neutral-300 text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
+      }`}
+    >
+      {uploading ? "Uploading…" : error ? <span className="px-2 text-red-500">{error}</span> : "+ Add New"}
+      <input
+        type="file"
+        accept="image/*,video/*"
+        className="hidden"
+        disabled={uploading}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setError(null);
+          setUploading(true);
+          handleFileUpload(file, artistId, siteId, (err) => {
+            setUploading(false);
+            if (err) setError(err);
+          });
+        }}
+      />
+    </label>
+  );
+}
 
-      {item.kind === "VIDEO" ? (
-        <video
-          src={item.url}
-          poster={item.posterUrl || undefined}
-          controls
-          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
-        />
-      ) : (
-        <img
-          src={item.url}
-          alt=""
-          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
-        />
-      )}
+// Same "+ Add New" action, as a row for List view.
+function AddNewRow({ artistId, siteId }: { artistId: string; siteId: string }) {
+  const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-      <div className="mb-4 space-y-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
-          <input
-            type="text"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            onBlur={() => saveFields()}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Alt text</label>
-          <input
-            type="text"
-            value={altText}
-            onChange={(e) => setAltText(e.target.value)}
-            onBlur={() => saveFields()}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
-          {tagPresets.length === 0 ? (
-            <p className="text-xs text-neutral-400">
-              No tags set up yet — add some under Media Catalogue → Settings.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {tagPresets.map((tag) => {
-                const active = tags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleTag(tag)}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      active
-                        ? "border-neutral-900 bg-neutral-900 text-white"
-                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Four plain, equal-weight buttons — not the dashed "+ Add" tile.
-          This screen assigns/routes an existing item rather than adding
-          new media, so the tile's "click to add something new" implication
-          would be misleading here. See decisions-log, 2026-08-05. */}
-      <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
-        <button
-          type="button"
-          onClick={onBin}
-          disabled={isPending}
-          className="rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-        >
-          Bin
-        </button>
-        <button
-          type="button"
-          onClick={onAddToMedia}
-          disabled={isPending}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Add to Media
-        </button>
-        <ArtworkPicker
-          artistId={artistId}
-          mode="single"
-          variant="button"
-          label="Add to Existing Artwork"
-          onSelect={(artworks) => {
-            if (artworks[0]) {
-              onAddToExistingArtwork(artworks[0].id, artworks[0].presentationTitle);
-            }
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => onAddNewArtwork(caption)}
-          disabled={isPending}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Add New Artwork
-        </button>
-      </div>
-      <p className="mt-2 text-xs text-neutral-400">
-        &quot;Add New Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
-        blank), and this image becomes its main image automatically.
-      </p>
-    </div>
+  return (
+    <label
+      className={`text-sm ${
+        uploading
+          ? "cursor-wait text-neutral-400"
+          : "cursor-pointer text-neutral-500 hover:text-neutral-900 hover:underline"
+      }`}
+    >
+      {uploading ? "Uploading…" : error ? <span className="text-red-500">{error}</span> : "+ Add New"}
+      <input
+        type="file"
+        accept="image/*,video/*"
+        className="hidden"
+        disabled={uploading}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+          setError(null);
+          setUploading(true);
+          handleFileUpload(file, artistId, siteId, (err) => {
+            setUploading(false);
+            if (err) setError(err);
+          });
+        }}
+      />
+    </label>
   );
 }
