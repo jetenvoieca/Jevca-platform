@@ -11,10 +11,12 @@ export default function SiteNavPanel({
   siteId,
   pages,
   salesEnabled = false,
+  hopperCount = 0,
 }: {
   siteId: string;
   pages: PageRow[];
   salesEnabled?: boolean;
+  hopperCount?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -26,7 +28,9 @@ export default function SiteNavPanel({
     pathname.startsWith(`/sites/${siteId}/artworks`) && !artworkSettingsActive;
 
   const mediaSettingsActive = pathname === `/sites/${siteId}/media/settings`;
-  const mediaActive = pathname.startsWith(`/sites/${siteId}/media`) && !mediaSettingsActive;
+  const hopperActive = pathname === `/sites/${siteId}/hopper`;
+  const mediaActive =
+    pathname.startsWith(`/sites/${siteId}/media`) && !mediaSettingsActive;
 
   return (
     <nav className="flex flex-col gap-1 text-sm">
@@ -165,6 +169,18 @@ export default function SiteNavPanel({
         }`}
       >
         Media Catalogue
+      </Link>
+      <Link
+        href={`/sites/${siteId}/hopper`}
+        className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
+          hopperActive
+            ? "bg-neutral-200 font-medium text-neutral-900"
+            : hopperCount > 0
+              ? "font-medium text-rose-600 hover:bg-neutral-100"
+              : "text-neutral-500 hover:bg-neutral-100"
+        }`}
+      >
+        Hopper{hopperCount > 0 ? ` (${hopperCount})` : ""}
       </Link>
       <Link
         href={`/sites/${siteId}/media/settings`}
