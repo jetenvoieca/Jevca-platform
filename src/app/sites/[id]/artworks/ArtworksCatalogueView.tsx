@@ -1,366 +1,513 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import Link from "next/link";
-import { createArtwork } from "@/lib/actions/artworks";
-import ArtworkDetailPanel, {
-  type ArtworkDetail,
-  type ArtworkSettings,
-} from "@/components/ArtworkDetailPanel";
+import { useState, useTransition, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import {
+  binHopperItem,
+  addHopperItemToMedia,
+  addHopperItemToArtwork,
+  updateHopperCaption,
+} from "@/lib/actions/hopper";
+import { quickCreateArtwork } from "@/lib/actions/media";
+import { uploadFileDirect } from "@/lib/uploadDirect";
+import ArtworkPicker from "@/components/ArtworkPicker";
 
-type ArtworkRow = {
+export type HopperItem = {
   id: string;
-  presentationTitle: string;
-  presentationPrice: string | null;
-  catalogueNumber: string;
-  availability: string;
-  imageUrl: string | null;
+  url: string;
+  posterUrl: string | null;
+  kind: string;
+  caption: string | null;
+  altText: string | null;
+  tags: string[];
+  createdAt: string;
 };
 
-const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
-const DENSITY_STORAGE_KEY = "jevca:artworks-density";
+// A running, session-only log of what's just been done — pure visual
+// confirmation ("did that just work"), not persisted anywhere. Cleared
+// on refresh or via the "Clear list" button.
+type ProcessedEntry = {
+  key: string;
+  thumbUrl: string;
+  kind: string;
+  label: string;
+};
 
-export default function ArtworksCatalogueView({
+// Persisted per artist so the Processed trail survives navigating away
+// and back (it was previously plain component state, which reset on
+// unmount — see decisions log, 2026-08-05). Same localStorage pattern
+// already used for the Media Catalogue's density preference.
+const processedLogKey = (artistId: string) => `jevca:hopper-processed:${artistId}`;
+
+export default function HopperView({
   siteId,
   artistId,
-  artworks,
-  q,
-  availability,
-  location,
-  type,
-  group,
-  sort,
-  selected,
-  settings,
-  siteDefaultCurrency = "GBP",
+  queue,
+  tagPresets,
 }: {
   siteId: string;
   artistId: string;
-  artworks: ArtworkRow[];
-  q: string;
-  availability: string;
-  location: string;
-  type: string;
-  group: string;
-  sort: string;
-  selected: ArtworkDetail | null;
-  settings: ArtworkSettings;
-  siteDefaultCurrency?: string;
+  queue: HopperItem[];
+  tagPresets: string[];
 }) {
-  const [view, setView] = useState<"tile" | "list">("tile");
-  const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [addUploading, setAddUploading] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [processedLog, setProcessedLog] = useState<ProcessedEntry[]>([]);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
+  // webkitdirectory/directory aren't part of React's typed HTML
+  // attributes, so they're set imperatively here rather than as JSX
+  // props — sidesteps any TypeScript strict-mode complaint about an
+  // unrecognised attribute (this project has hit real strict-mode build
+  // failures before over exactly this category of thing).
   useEffect(() => {
-    const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
-    const parsed = stored ? parseInt(stored, 10) : NaN;
-    if (DENSITY_OPTIONS.includes(parsed as (typeof DENSITY_OPTIONS)[number])) {
-      setDensity(parsed as (typeof DENSITY_OPTIONS)[number]);
-    }
+    folderInputRef.current?.setAttribute("webkitdirectory", "true");
+    folderInputRef.current?.setAttribute("directory", "true");
   }, []);
 
-  const setDensityAndStore = (n: (typeof DENSITY_OPTIONS)[number]) => {
-    setDensity(n);
-    window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
+  // Load whatever was left from a previous visit, once, on mount — kept
+  // as a separate effect (rather than reading localStorage directly in
+  // useState's initializer) so this stays SSR-safe: the server render
+  // and the client's first render both start from [], avoiding a
+  // hydration mismatch, then this fills it in immediately after.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(processedLogKey(artistId));
+      if (stored) setProcessedLog(JSON.parse(stored));
+    } catch {
+      // Corrupt or unavailable storage — just start with an empty log.
+    }
+  }, [artistId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(processedLogKey(artistId), JSON.stringify(processedLog));
+    } catch {
+      // Storage full/unavailable — non-critical, the log just won't
+      // persist this time.
+    }
+  }, [processedLog, artistId]);
+
+  const current = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null;
+  const remaining = queue.filter((i) => i.id !== current?.id);
+
+  const logProcessed = (item: HopperItem, label: string) => {
+    setProcessedLog((prev) => [
+      {
+        key: `${item.id}-${Date.now()}`,
+        thumbUrl: item.kind === "VIDEO" ? item.posterUrl || "" : item.url,
+        kind: item.kind,
+        label,
+      },
+      ...prev,
+    ]);
   };
 
-  const chipHref = (nextAvailability: string) => {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (sort) params.set("sort", sort);
-    if (location) params.set("location", location);
-    if (type) params.set("type", type);
-    if (group) params.set("group", group);
-    if (nextAvailability) params.set("availability", nextAvailability);
-    const qs = params.toString();
-    return `/sites/${siteId}/artworks${qs ? `?${qs}` : ""}`;
+  // After any sort action, drop back to "no explicit selection" so the
+  // next render (post-refresh, with this item now gone from the queue)
+  // naturally falls forward to the new oldest item — the auto-advance
+  // flick-through rhythm from the original spec, without needing to
+  // track index positions by hand.
+  const advanceAfterAction = () => {
+    setSelectedId(null);
+    router.refresh();
   };
 
-  const soldCount = artworks.filter((a) => a.availability === "SOLD").length;
+  const handleBin = (item: HopperItem) => {
+    startTransition(async () => {
+      await binHopperItem(item.id, siteId);
+      logProcessed(item, "Binned");
+      advanceAfterAction();
+    });
+  };
 
-  const addNewTile = (
-    <form action={createArtwork.bind(null, artistId, siteId)}>
-      <button
-        type="submit"
-        className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-      >
-        + Add New
-      </button>
-    </form>
-  );
+  const handleAddToMedia = (item: HopperItem) => {
+    startTransition(async () => {
+      await addHopperItemToMedia(item.id, siteId);
+      logProcessed(item, "Added to Media Catalogue");
+      advanceAfterAction();
+    });
+  };
+
+  // Existing artwork → always ancillary, never touches that artwork's
+  // main image (per 2026-08-05 decision — changing an existing artwork's
+  // main image is a separate action, done from the Artwork editor).
+  const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
+    startTransition(async () => {
+      await addHopperItemToArtwork(item.id, siteId, artworkId, false);
+      logProcessed(item, `Linked to ${artworkTitle}`);
+      advanceAfterAction();
+    });
+  };
+
+  // New artwork → always becomes its main image, since it's the only
+  // image the artwork has at the point of creation.
+  const handleAddNewArtwork = (item: HopperItem, title: string) => {
+    startTransition(async () => {
+      const finalTitle = title.trim() || "Untitled";
+      const result = await quickCreateArtwork(artistId, finalTitle);
+      if ("error" in result || !result.artwork) {
+        setAddError(result.error || "Couldn't create the artwork. Try again.");
+        return;
+      }
+      await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
+      logProcessed(item, `New artwork: ${finalTitle}`);
+      advanceAfterAction();
+    });
+  };
+
+  const handleUploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setAddError(null);
+    setAddUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        // Folder picks can include non-media files (.DS_Store, etc.) —
+        // silently skip anything that isn't an image or video rather
+        // than erroring the whole batch out.
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
+        await uploadFileDirect(file, artistId, "HOPPER", "Manual upload");
+      }
+      router.refresh();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Upload failed. Try again.");
+    } finally {
+      setAddUploading(false);
+    }
+  };
 
   return (
     <div className="px-6 py-4">
-      <div
-        className={selected ? "grid items-start gap-6" : ""}
-        style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
-      >
-        <div>
-          {/* Row 1: title + view controls, together since they both govern
-              how the whole catalogue displays. */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-neutral-900">
+          Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
+        </h1>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => router.refresh()}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+          >
+            Check Incoming
+          </button>
+          <label
+            className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
+              addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
+            }`}
+          >
+            Add from folder
+            <input
+              ref={folderInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              disabled={addUploading}
+              onChange={(e) => handleUploadFiles(e.target.files)}
+            />
+          </label>
+          <label
+            className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
+              addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
+            }`}
+          >
+            Add media
+            <input
+              type="file"
+              accept="image/*,video/*"
+              multiple
+              className="hidden"
+              disabled={addUploading}
+              onChange={(e) => handleUploadFiles(e.target.files)}
+            />
+          </label>
+        </div>
+      </div>
 
-            <div className="flex items-center gap-3">
-              <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+      {addError && (
+        <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
+      )}
+
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "300px 1fr 280px" }}>
+        {/* Processed — a visual confirmation trail, not part of the
+            sorting flow itself, so it stays put even once the queue on
+            the right runs out. */}
+        <div className="sticky top-4">
+          {processedLog.length > 0 && (
+            <>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  Processed
+                </p>
                 <button
                   type="button"
-                  onClick={() => setView("tile")}
-                  className={`px-3 py-1.5 ${
-                    view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                  }`}
+                  onClick={() => setProcessedLog([])}
+                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
                 >
-                  Tile
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("list")}
-                  className={`px-3 py-1.5 ${
-                    view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                  }`}
-                >
-                  List
+                  Clear list
                 </button>
               </div>
-
-              {view === "tile" && (
-                <div className="flex items-center gap-1 text-sm text-neutral-500">
-                  <span>Per row</span>
-                  {DENSITY_OPTIONS.map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setDensityAndStore(n)}
-                      className={`h-7 w-7 rounded-md text-sm ${
-                        density === n
-                          ? "bg-neutral-900 text-white"
-                          : "border border-neutral-300 hover:bg-neutral-50"
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Row 2: filtering/search — a separate functional group from
-              the view controls above. */}
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            <div className="flex gap-2">
-              <Link
-                href={chipHref("")}
-                className={`rounded-full px-3 py-1.5 text-sm ${
-                  !availability
-                    ? "bg-neutral-900 text-white"
-                    : "border border-neutral-300 hover:bg-neutral-50"
-                }`}
-              >
-                All
-              </Link>
-              <Link
-                href={chipHref("AVAILABLE")}
-                className={`rounded-full px-3 py-1.5 text-sm ${
-                  availability === "AVAILABLE"
-                    ? "bg-neutral-900 text-white"
-                    : "border border-neutral-300 hover:bg-neutral-50"
-                }`}
-              >
-                Available
-              </Link>
-              <Link
-                href={chipHref("SOLD")}
-                className={`rounded-full px-3 py-1.5 text-sm ${
-                  availability === "SOLD"
-                    ? "bg-neutral-900 text-white"
-                    : "border border-neutral-300 hover:bg-neutral-50"
-                }`}
-              >
-                Sold
-              </Link>
-            </div>
-
-            <form method="get" className="flex flex-wrap items-center gap-2">
-              <input
-                type="text"
-                name="q"
-                defaultValue={q}
-                placeholder="Search title, catalogue #, medium"
-                className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-              />
-              <input type="hidden" name="availability" value={availability} />
-              <select
-                name="location"
-                defaultValue={location}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">All locations</option>
-                {settings.artworkLocations.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
-                  </option>
-                ))}
-              </select>
-              <select
-                name="type"
-                defaultValue={type}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">All types</option>
-                {settings.artworkTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-              <select
-                name="group"
-                defaultValue={group}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">All groups</option>
-                {settings.artworkGroups.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
-              <select
-                name="sort"
-                defaultValue={sort}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">Sort: Date added</option>
-                <option value="title">Sort: Title</option>
-                <option value="price">Sort: Price</option>
-              </select>
-              <button
-                type="submit"
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-              >
-                Apply
-              </button>
-            </form>
-          </div>
-
-          <p className="mb-3 text-sm text-neutral-400">
-            {artworks.length} work{artworks.length === 1 ? "" : "s"} · {soldCount} sold
-          </p>
-
-          {view === "tile" ? (
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
-            >
-              {artworks.map((a) => (
-                <Link
-                  key={a.id}
-                  href={`/sites/${siteId}/artworks/${a.id}`}
-                  className={`block rounded-md border-2 p-1 ${
-                    selected?.id === a.id ? "border-neutral-900" : "border-transparent"
-                  }`}
-                >
-                  <div className="relative">
-                    {a.imageUrl ? (
+              <div className="space-y-2">
+                {processedLog.map((entry) => (
+                  <div
+                    key={entry.key}
+                    className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
+                  >
+                    {entry.thumbUrl ? (
                       <img
-                        src={a.imageUrl}
+                        src={entry.thumbUrl}
                         alt=""
-                        className="aspect-square w-full rounded-md object-cover"
+                        className="h-10 w-10 shrink-0 rounded object-cover"
                       />
                     ) : (
-                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                        No image
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
+                        Video
                       </div>
                     )}
-                    {a.availability === "SOLD" && (
-                      <span className="absolute right-1.5 top-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
-                        Sold
-                      </span>
-                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
+                      <p className="text-xs text-neutral-400">
+                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
+                      </p>
+                    </div>
                   </div>
-                  <p className="mt-1 truncate text-sm font-medium text-neutral-900">
-                    {a.presentationTitle}
-                  </p>
-                  <p className="text-xs text-neutral-500">
-                    {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
-                  </p>
-                </Link>
-              ))}
-              {addNewTile}
-            </div>
-          ) : (
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                  <th className="py-2 font-medium"></th>
-                  <th className="py-2 font-medium">Title</th>
-                  <th className="py-2 font-medium">Catalogue #</th>
-                  <th className="py-2 font-medium">Price</th>
-                  <th className="py-2 font-medium">Availability</th>
-                </tr>
-              </thead>
-              <tbody>
-                {artworks.map((a) => (
-                  <tr
-                    key={a.id}
-                    className={`border-b border-neutral-100 ${
-                      selected?.id === a.id ? "bg-neutral-100" : "hover:bg-neutral-50"
-                    }`}
-                  >
-                    <td className="py-2">
-                      <Link href={`/sites/${siteId}/artworks/${a.id}`}>
-                        {a.imageUrl ? (
-                          <img
-                            src={a.imageUrl}
-                            alt=""
-                            className="h-10 w-10 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded bg-neutral-100" />
-                        )}
-                      </Link>
-                    </td>
-                    <td className="py-2 font-medium text-neutral-900">
-                      <Link href={`/sites/${siteId}/artworks/${a.id}`}>
-                        {a.presentationTitle}
-                      </Link>
-                    </td>
-                    <td className="py-2 text-neutral-500">{a.catalogueNumber}</td>
-                    <td className="py-2 text-neutral-500">
-                      {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
-                    </td>
-                    <td className="py-2 text-neutral-500">{a.availability}</td>
-                  </tr>
                 ))}
-                <tr className="border-b border-neutral-100">
-                  <td colSpan={5} className="py-2">
-                    <form action={createArtwork.bind(null, artistId, siteId)}>
-                      <button
-                        type="submit"
-                        className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
-                      >
-                        + Add New
-                      </button>
-                    </form>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
+              </div>
+            </>
           )}
         </div>
 
-        {selected && (
+        {!current ? (
+          <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
+            Hopper is empty — nothing waiting to be sorted.
+          </div>
+        ) : (
+          <SortingCard
+            key={current.id}
+            siteId={siteId}
+            artistId={artistId}
+            item={current}
+            tagPresets={tagPresets}
+            isPending={isPending}
+            onBin={() => handleBin(current)}
+            onAddToMedia={() => handleAddToMedia(current)}
+            onAddToExistingArtwork={(artworkId, artworkTitle) =>
+              handleAddToExistingArtwork(current, artworkId, artworkTitle)
+            }
+            onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
+          />
+        )}
+
+        {current && (
           <div className="sticky top-4">
-            <ArtworkDetailPanel
-              siteId={siteId}
-              artistId={artistId}
-              artwork={selected}
-              settings={settings}
-              siteDefaultCurrency={siteDefaultCurrency}
-            />
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+              Up next ({remaining.length})
+            </p>
+            {remaining.length === 0 ? (
+              <p className="text-xs text-neutral-400">This is the last one.</p>
+            ) : (
+              <div className="grid grid-cols-3 gap-2">
+                {remaining.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedId(item.id)}
+                    className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
+                  >
+                    {item.kind === "VIDEO" ? (
+                      item.posterUrl ? (
+                        <img
+                          src={item.posterUrl}
+                          alt=""
+                          className="aspect-square w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-[10px] text-neutral-500">
+                          Video
+                        </div>
+                      )
+                    ) : (
+                      <img src={item.url} alt="" className="aspect-square w-full object-cover" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
+    </div>
+  );
+}
+
+function SortingCard({
+  siteId,
+  artistId,
+  item,
+  tagPresets,
+  isPending,
+  onBin,
+  onAddToMedia,
+  onAddToExistingArtwork,
+  onAddNewArtwork,
+}: {
+  siteId: string;
+  artistId: string;
+  item: HopperItem;
+  tagPresets: string[];
+  isPending: boolean;
+  onBin: () => void;
+  onAddToMedia: () => void;
+  onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
+  onAddNewArtwork: (title: string) => void;
+}) {
+  // Local state, reset automatically each time this card remounts (the
+  // parent keys it by item.id) — no stale-caption bug when moving
+  // between queue items.
+  const [caption, setCaption] = useState(item.caption || "");
+  const [altText, setAltText] = useState(item.altText || "");
+  const [tags, setTags] = useState<string[]>(item.tags);
+
+  const saveFields = (nextTags?: string[]) => {
+    const fd = new FormData();
+    fd.set("caption", caption);
+    fd.set("altText", altText);
+    fd.set("tags", (nextTags ?? tags).join(", "));
+    // Fire-and-forget — this is a background autosave, not the action
+    // that advances the queue, so it doesn't need its own pending state.
+    updateHopperCaption(item.id, siteId, fd);
+  };
+
+  // Tags are click-to-toggle from the artist's preset list (Media
+  // Catalogue → Settings), not typed — per 2026-08-05 decision, so tags
+  // stay consistent/searchable rather than drifting into one-off typos.
+  // Saves immediately on click, since there's no "blur" moment the way
+  // there is for a text field.
+  const toggleTag = (tag: string) => {
+    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
+    setTags(next);
+    saveFields(next);
+  };
+
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white p-6">
+      <p className="mb-3 text-xs text-neutral-400">
+        Received {new Date(item.createdAt).toLocaleString()}
+      </p>
+
+      {item.kind === "VIDEO" ? (
+        <video
+          src={item.url}
+          poster={item.posterUrl || undefined}
+          controls
+          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
+        />
+      ) : (
+        <img
+          src={item.url}
+          alt=""
+          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
+        />
+      )}
+
+      <div className="mb-4 space-y-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
+          <input
+            type="text"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            onBlur={() => saveFields()}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Alt text</label>
+          <input
+            type="text"
+            value={altText}
+            onChange={(e) => setAltText(e.target.value)}
+            onBlur={() => saveFields()}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
+          {tagPresets.length === 0 ? (
+            <p className="text-xs text-neutral-400">
+              No tags set up yet — add some under Media Catalogue → Settings.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {tagPresets.map((tag) => {
+                const active = tags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleTag(tag)}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      active
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Four plain, equal-weight buttons — not the dashed "+ Add" tile.
+          This screen assigns/routes an existing item rather than adding
+          new media, so the tile's "click to add something new" implication
+          would be misleading here. See decisions-log, 2026-08-05. */}
+      <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
+        <button
+          type="button"
+          onClick={onBin}
+          disabled={isPending}
+          className="rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+        >
+          Bin
+        </button>
+        <button
+          type="button"
+          onClick={onAddToMedia}
+          disabled={isPending}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        >
+          Add to Media
+        </button>
+        <ArtworkPicker
+          artistId={artistId}
+          mode="single"
+          variant="button"
+          label="Add to Existing Artwork"
+          onSelect={(artworks) => {
+            if (artworks[0]) {
+              onAddToExistingArtwork(artworks[0].id, artworks[0].presentationTitle);
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => onAddNewArtwork(caption)}
+          disabled={isPending}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        >
+          Add New Artwork
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-neutral-400">
+        &quot;Add New Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
+        blank), and this image becomes its main image automatically.
+      </p>
     </div>
   );
 }
