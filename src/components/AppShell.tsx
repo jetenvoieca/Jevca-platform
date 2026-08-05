@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { logout } from "@/lib/actions/auth";
 
 export type AppShellNavItem = {
   label: string;
@@ -68,6 +69,18 @@ export default function AppShell({
             )
           )}
         </nav>
+
+        {/* Fixed footer, same non-scrolling treatment as the Publish
+            header above — sits outside the scrolling <nav>, not inside
+            it, so it stays visible regardless of list length. */}
+        <form action={logout} className="border-t border-neutral-200 p-4">
+          <button
+            type="submit"
+            className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
+          >
+            Log out
+          </button>
+        </form>
       </div>
     </div>
   );
