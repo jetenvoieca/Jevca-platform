@@ -98,7 +98,7 @@ export default function SalesView({
         ))}
       </div>
 
-      <div className={selectedPurchaseId ? "grid gap-6" : ""} style={selectedPurchaseId ? { gridTemplateColumns: "1fr 480px" } : undefined}>
+      <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
         <div className="overflow-hidden rounded-lg border border-neutral-200">
           <table className="w-full text-sm">
             <thead>
@@ -166,13 +166,14 @@ export default function SalesView({
           </table>
         </div>
 
-        {selectedPurchaseId && (
-          <div className="sticky top-4 self-start rounded-lg border border-neutral-200 bg-white p-5">
-            {loading || !selectedDetail ? (
-              <p className="text-sm text-neutral-400">Loading…</p>
-            ) : (
-              <>
-                <div className="mb-4 flex items-center justify-between">
+        <div className="sticky top-4 self-start rounded-lg border border-neutral-200 bg-white p-5">
+          {!selectedPurchaseId ? (
+            <p className="text-center text-sm text-neutral-400">Select a sale to see its details.</p>
+          ) : loading || !selectedDetail ? (
+            <p className="text-sm text-neutral-400">Loading…</p>
+          ) : (
+            <>
+              <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {selectedDetail.images[0] ? (
                       <img
@@ -236,7 +237,6 @@ export default function SalesView({
               </>
             )}
           </div>
-        )}
       </div>
     </div>
   );
