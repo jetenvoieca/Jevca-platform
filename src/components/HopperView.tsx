@@ -318,7 +318,7 @@ export default function HopperView({
         </div>
 
         <div>
-          <div className="mb-3">{importButtonsSpacer}</div>
+          <div className="mb-3">{importButtons}</div>
           {/* Invisible, but occupies exactly the same height as the
               "Processed"/"Up next" header rows either side of it — so
               the content below it (this empty-state box, or the
@@ -353,11 +353,10 @@ export default function HopperView({
         </div>
 
         {/* Up next — always rendered (not just while there's a current
-            item), since the import buttons now live here and need to
-            stay reachable even when the Hopper is empty, which is
-            exactly when you're most likely to want them. */}
+            item), so "Up next (0)" and this column's place in the layout
+            stay visible and stable even once the queue empties out. */}
         <div className="sticky top-4">
-          <div className="mb-3">{importButtons}</div>
+          <div className="mb-3">{importButtonsSpacer}</div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
             Up next ({remaining.length})
           </p>
