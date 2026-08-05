@@ -73,10 +73,7 @@ export default function MediaCatalogueView({
 
   return (
     <div className="px-6 py-4">
-      <div
-        className={selected ? "grid items-start gap-6" : ""}
-        style={selected ? { gridTemplateColumns: "1fr 480px" } : undefined}
-      >
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
         <div>
           {/* Row 1: title + view controls — same pattern as the Artwork
               Catalogue, both govern how the whole catalogue displays. */}
@@ -312,16 +309,20 @@ export default function MediaCatalogueView({
           )}
         </div>
 
-        {selected && (
-          <div className="sticky top-4">
+        <div className="sticky top-4">
+          {selected ? (
             <MediaDetailPanel
               siteId={siteId}
               media={selected}
               tagPresets={tagPresets}
               artistArtworks={artistArtworks}
             />
-          </div>
-        )}
+          ) : (
+            <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
+              Select an item to see its details.
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
