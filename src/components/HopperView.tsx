@@ -402,7 +402,7 @@ function SortingCard({
           src={item.url}
           poster={item.posterUrl || undefined}
           controls
-          className="mb-4 w-full rounded-md"
+          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
         />
       ) : (
         <img
