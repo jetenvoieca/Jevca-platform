@@ -38,7 +38,7 @@ export type ArtworkDetail = {
   priceUnframed: string | null;
   priceFramed: string | null;
   studioNotes: string | null;
-  images: { id: string; url: string }[];
+  images: { id: string; url: string; kind: string; posterUrl: string | null }[];
   saleTerms: SaleTermsDetail | null;
   activePurchase: PurchaseDetail | null;
   purchaseHistory: PurchaseDetail[];
@@ -152,7 +152,21 @@ export default function ArtworkDetailPanel({
         <div className="flex flex-wrap gap-2">
           {images.map((img) => (
             <div key={img.id} className="group relative h-20 w-20">
-              <img src={img.url} alt="" className="h-20 w-20 rounded object-cover" />
+              {img.kind === "VIDEO" ? (
+                img.posterUrl ? (
+                  <img
+                    src={img.posterUrl}
+                    alt=""
+                    className="h-20 w-20 rounded object-cover"
+                  />
+                ) : (
+                  <div className="flex h-20 w-20 items-center justify-center rounded bg-neutral-200 text-[10px] text-neutral-500">
+                    Video
+                  </div>
+                )
+              ) : (
+                <img src={img.url} alt="" className="h-20 w-20 rounded object-cover" />
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -181,7 +195,12 @@ export default function ArtworkDetailPanel({
                     ...prev,
                     ...imgs
                       .filter((img) => !prev.some((p) => p.id === img.id))
-                      .map((img) => ({ id: img.id, url: img.url })),
+                      .map((img) => ({
+                        id: img.id,
+                        url: img.url,
+                        kind: img.kind,
+                        posterUrl: img.posterUrl,
+                      })),
                   ]);
                 });
               }}
