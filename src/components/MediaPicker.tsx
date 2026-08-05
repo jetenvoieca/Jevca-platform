@@ -21,9 +21,24 @@ type MediaRow = {
   kind: string;
 };
 
-function toPicked(rows: MediaRow[], videoOnly: boolean): PickedImage[] {
+// videoOnly stays exactly as it was (used by the Video content block) —
+// mediaKinds is the new, more general option, for pickers that want both
+// kinds together (e.g. an artwork's Related Images, since ancillary media
+// was always meant to include video — see the original Hopper spec).
+// When mediaKinds is given it takes over entirely; otherwise videoOnly's
+// old true/false logic applies unchanged.
+function matchesKind(kind: string, videoOnly: boolean, mediaKinds?: ("PHOTO" | "VIDEO")[]): boolean {
+  if (mediaKinds) return mediaKinds.includes(kind as "PHOTO" | "VIDEO");
+  return videoOnly ? kind === "VIDEO" : kind === "PHOTO";
+}
+
+function toPicked(
+  rows: MediaRow[],
+  videoOnly: boolean,
+  mediaKinds?: ("PHOTO" | "VIDEO")[]
+): PickedImage[] {
   return rows
-    .filter((img) => (videoOnly ? img.kind === "VIDEO" : img.kind === "PHOTO"))
+    .filter((img) => matchesKind(img.kind, videoOnly, mediaKinds))
     .map((img) => ({
       id: img.id,
       url: img.url,
@@ -37,6 +52,7 @@ export default function MediaPicker({
   artistId,
   mode = "single",
   videoOnly = false,
+  mediaKinds,
   label = "Add Image",
   linkedArtworkId,
   onSelect,
@@ -44,6 +60,9 @@ export default function MediaPicker({
   artistId: string;
   mode?: "single" | "multi";
   videoOnly?: boolean;
+  // Overrides videoOnly when given — lets a picker show both kinds
+  // together, e.g. ["PHOTO", "VIDEO"] for an artwork's Related Images.
+  mediaKinds?: ("PHOTO" | "VIDEO")[];
   label?: string;
   // When set, this picker is being used to add images to one specific
   // artwork (the Artwork editor's own Images section) — shows the same
@@ -74,11 +93,11 @@ export default function MediaPicker({
           q: q || undefined,
           artworkId: p === "related" ? linkedArtworkId : undefined,
         });
-        setImages(toPicked(results, videoOnly));
+        setImages(toPicked(results, videoOnly, mediaKinds));
         if (p === "related") setRelatedCount(results.length);
       } else {
         const results = await listImages(artistId, q || undefined);
-        setImages(toPicked(results, videoOnly));
+        setImages(toPicked(results, videoOnly, mediaKinds));
       }
     });
   };
@@ -177,7 +196,13 @@ export default function MediaPicker({
               setQuery(e.target.value);
               load(e.target.value, purpose);
             }}
-            placeholder={videoOnly ? "Search videos…" : "Search images…"}
+            placeholder={
+              mediaKinds && mediaKinds.length > 1
+                ? "Search images and videos…"
+                : videoOnly
+                  ? "Search videos…"
+                  : "Search images…"
+            }
             autoFocus
             className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
@@ -186,7 +211,13 @@ export default function MediaPicker({
             <input
               ref={fileInputRef}
               type="file"
-              accept={videoOnly ? "video/*" : "image/*"}
+              accept={
+                mediaKinds && mediaKinds.length > 1
+                  ? "image/*,video/*"
+                  : videoOnly
+                    ? "video/*"
+                    : "image/*"
+              }
               className="hidden"
               onChange={(e) => {
                 const file = e.target.files?.[0];
