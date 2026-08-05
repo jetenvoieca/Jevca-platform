@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   binHopperItem,
   addHopperItemToMedia,
@@ -31,6 +32,10 @@ type ProcessedEntry = {
   thumbUrl: string;
   kind: string;
   label: string;
+  // Where this item actually ended up — its own Media Catalogue page, or
+  // the artwork it was linked to/created. Null for "Binned", since an
+  // archived item has no edit panel to jump to.
+  href: string | null;
 };
 
 // Persisted per artist so the Processed trail survives navigating away
@@ -94,13 +99,14 @@ export default function HopperView({
   const current = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null;
   const remaining = queue.filter((i) => i.id !== current?.id);
 
-  const logProcessed = (item: HopperItem, label: string) => {
+  const logProcessed = (item: HopperItem, label: string, href: string | null) => {
     setProcessedLog((prev) => [
       {
         key: `${item.id}-${Date.now()}`,
         thumbUrl: item.kind === "VIDEO" ? item.posterUrl || "" : item.url,
         kind: item.kind,
         label,
+        href,
       },
       ...prev,
     ]);
@@ -119,7 +125,7 @@ export default function HopperView({
   const handleBin = (item: HopperItem) => {
     startTransition(async () => {
       await binHopperItem(item.id, siteId);
-      logProcessed(item, "Binned");
+      logProcessed(item, "Binned", null);
       advanceAfterAction();
     });
   };
@@ -127,7 +133,7 @@ export default function HopperView({
   const handleAddToMedia = (item: HopperItem) => {
     startTransition(async () => {
       await addHopperItemToMedia(item.id, siteId);
-      logProcessed(item, "Added to Media Catalogue");
+      logProcessed(item, "Added to Media Catalogue", `/sites/${siteId}/media/${item.id}`);
       advanceAfterAction();
     });
   };
@@ -138,7 +144,7 @@ export default function HopperView({
   const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
     startTransition(async () => {
       await addHopperItemToArtwork(item.id, siteId, artworkId, false);
-      logProcessed(item, `Linked to ${artworkTitle}`);
+      logProcessed(item, `Linked to ${artworkTitle}`, `/sites/${siteId}/artworks/${artworkId}`);
       advanceAfterAction();
     });
   };
@@ -154,7 +160,7 @@ export default function HopperView({
         return;
       }
       await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
-      logProcessed(item, `New artwork: ${finalTitle}`);
+      logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks/${result.artwork.id}`);
       advanceAfterAction();
     });
   };
@@ -250,30 +256,45 @@ export default function HopperView({
                 </button>
               </div>
               <div className="space-y-2">
-                {processedLog.map((entry) => (
-                  <div
-                    key={entry.key}
-                    className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
-                  >
-                    {entry.thumbUrl ? (
-                      <img
-                        src={entry.thumbUrl}
-                        alt=""
-                        className="h-10 w-10 shrink-0 rounded object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
-                        Video
-                      </div>
-                    )}
+                {processedLog.map((entry) => {
+                  const thumb = entry.thumbUrl ? (
+                    <img
+                      src={entry.thumbUrl}
+                      alt=""
+                      className="h-10 w-10 shrink-0 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
+                      Video
+                    </div>
+                  );
+                  const text = (
                     <div className="min-w-0">
                       <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
                       <p className="text-xs text-neutral-400">
                         {entry.kind === "VIDEO" ? "Video" : "Photo"}
                       </p>
                     </div>
-                  </div>
-                ))}
+                  );
+                  return entry.href ? (
+                    <Link
+                      key={entry.key}
+                      href={entry.href}
+                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2 hover:border-neutral-300 hover:bg-neutral-50"
+                    >
+                      {thumb}
+                      {text}
+                    </Link>
+                  ) : (
+                    <div
+                      key={entry.key}
+                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
+                    >
+                      {thumb}
+                      {text}
+                    </div>
+                  );
+                })}
               </div>
             </>
           )}
