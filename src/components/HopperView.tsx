@@ -185,52 +185,68 @@ export default function HopperView({
     }
   };
 
+  // Rendered for real above "Up next" (where these buttons conceptually
+  // belong — they're what feeds that queue), and as an inert visual
+  // spacer above the other two columns so all three still start their
+  // actual content at the same height. The spacer is deliberately plain
+  // <span>s, not a second copy of the real buttons/inputs — reusing the
+  // interactive version (with its ref and handlers) in three places at
+  // once would fight over which DOM node the ref actually points to.
+  const importButtons = (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => router.refresh()}
+        className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+      >
+        Check Incoming
+      </button>
+      <label
+        className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
+          addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
+        }`}
+      >
+        Add from folder
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          disabled={addUploading}
+          onChange={(e) => handleUploadFiles(e.target.files)}
+        />
+      </label>
+      <label
+        className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
+          addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
+        }`}
+      >
+        Add media
+        <input
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          disabled={addUploading}
+          onChange={(e) => handleUploadFiles(e.target.files)}
+        />
+      </label>
+    </div>
+  );
+
+  const importButtonsSpacer = (
+    <div className="invisible flex flex-wrap items-center gap-2" aria-hidden="true">
+      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
+      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
+      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
+    </div>
+  );
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-4">
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-neutral-900">
-          Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
-        </h1>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => router.refresh()}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-          >
-            Check Incoming
-          </button>
-          <label
-            className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
-              addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
-            }`}
-          >
-            Add from folder
-            <input
-              ref={folderInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              disabled={addUploading}
-              onChange={(e) => handleUploadFiles(e.target.files)}
-            />
-          </label>
-          <label
-            className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
-              addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
-            }`}
-          >
-            Add media
-            <input
-              type="file"
-              accept="image/*,video/*"
-              multiple
-              className="hidden"
-              disabled={addUploading}
-              onChange={(e) => handleUploadFiles(e.target.files)}
-            />
-          </label>
-        </div>
-      </div>
+      <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
+        Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
+      </h1>
 
       {addError && (
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
@@ -241,6 +257,7 @@ export default function HopperView({
             sorting flow itself, so it stays put even once the queue on
             the right runs out. */}
         <div className="sticky top-4">
+          <div className="mb-3">{importButtonsSpacer}</div>
           {processedLog.length > 0 && (
             <>
               <div className="mb-2 flex items-center justify-between">
@@ -301,13 +318,13 @@ export default function HopperView({
         </div>
 
         <div>
+          <div className="mb-3">{importButtonsSpacer}</div>
           {/* Invisible, but occupies exactly the same height as the
-              "Processed" header to its left — so the content below it
-              (this empty-state box, or the SortingCard) lines up with
-              the top of the first Processed *item*, not with the
-              "PROCESSED" label itself. Same markup as that header,
-              deliberately, so the heights always match exactly rather
-              than relying on a guessed pixel value. */}
+              "Processed"/"Up next" header rows either side of it — so
+              the content below it (this empty-state box, or the
+              SortingCard) lines up with the top of the first Processed
+              *item* and the thumbnail grid, not with the labels above
+              them. */}
           <div className="invisible mb-2 flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wide">Spacer</p>
             <span className="text-xs">Spacer</span>
@@ -335,43 +352,46 @@ export default function HopperView({
           )}
         </div>
 
-        {current && (
-          <div className="sticky top-4">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-              Up next ({remaining.length})
-            </p>
-            {remaining.length === 0 ? (
-              <p className="text-xs text-neutral-400">This is the last one.</p>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {remaining.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
-                  >
-                    {item.kind === "VIDEO" ? (
-                      item.posterUrl ? (
-                        <img
-                          src={item.posterUrl}
-                          alt=""
-                          className="aspect-square w-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-[10px] text-neutral-500">
-                          Video
-                        </div>
-                      )
+        {/* Up next — always rendered (not just while there's a current
+            item), since the import buttons now live here and need to
+            stay reachable even when the Hopper is empty, which is
+            exactly when you're most likely to want them. */}
+        <div className="sticky top-4">
+          <div className="mb-3">{importButtons}</div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+            Up next ({remaining.length})
+          </p>
+          {!current ? null : remaining.length === 0 ? (
+            <p className="text-xs text-neutral-400">This is the last one.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {remaining.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedId(item.id)}
+                  className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
+                >
+                  {item.kind === "VIDEO" ? (
+                    item.posterUrl ? (
+                      <img
+                        src={item.posterUrl}
+                        alt=""
+                        className="aspect-square w-full object-cover"
+                      />
                     ) : (
-                      <img src={item.url} alt="" className="aspect-square w-full object-cover" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
+                      <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-[10px] text-neutral-500">
+                        Video
+                      </div>
+                    )
+                  ) : (
+                    <img src={item.url} alt="" className="aspect-square w-full object-cover" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
