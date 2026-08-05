@@ -86,6 +86,12 @@ model Artist {
   email     String?
   phone     String?
   notes     String?
+
+  // Authenticates the iPhone Shortcut's uploads into this artist's Hopper
+  // — a machine credential, unrelated to the app's own shared login
+  // password. Shown/regenerable from the Owner panel; regenerating
+  // invalidates any Shortcut still configured with the old value.
+  hopperToken String @unique @default(cuid())
   // What the artist pays Jevca for site management, and how — plain
   // record-keeping alongside notes, not connected to Stripe or any billing
   // automation (that's what the Artwork Payments panel is for — a
@@ -294,6 +300,15 @@ model Artwork {
 
   images Image[]
 
+  // The formal "main image" designation (2026-08-05, Hopper design) —
+  // previously there was no real concept of this, just whichever linked
+  // image happened to sort first. Nullable and backward compatible: any
+  // artwork without one set (i.e. every artwork created before this)
+  // falls back to that same earlier-image behaviour wherever a
+  // representative thumbnail is needed, rather than needing a backfill.
+  mainImageId String? @unique
+  mainImage   Image?  @relation("ArtworkMainImage", fields: [mainImageId], references: [id])
+
   // Sale terms are the artwork's own pricing/instalment defaults —
   // independent of any actual sale. Purchases are the real, specific sale
   // attempts against those terms; only one is ACTIVE at a time (enforced
@@ -446,6 +461,12 @@ model Image {
   source    String?
   artworkId String?
   artwork   Artwork?    @relation(fields: [artworkId], references: [id])
+
+  // Back-relation only (no fields/references here — those live on
+  // Artwork.mainImageId) so this Image can be looked up as "the main
+  // image of X" if ever needed; in practice always read from the
+  // Artwork side (artwork.mainImage).
+  mainImageOfArtwork Artwork? @relation("ArtworkMainImage")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
