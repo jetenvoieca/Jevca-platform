@@ -34,15 +34,23 @@ export async function requestUploadUrl(
   return { uploadUrl, key, kind: isVideo ? ("VIDEO" as const) : ("PHOTO" as const) };
 }
 
-// Step 2 of 2: once the browser has PUT the file straight to R2 using the
-// URL above, this creates the actual database record — again a tiny
-// request, just the key and a couple of strings.
+// Step 2 of 2: once the browser (or the iPhone Shortcut, for the Hopper —
+// see src/app/api/hopper/finalize/route.ts) has PUT the file straight to
+// R2 using the URL above, this creates the actual database record —
+// again a tiny request, just the key and a couple of strings.
+//
+// status/source default to exactly today's behaviour (SORTED, no
+// source) so every existing caller — MediaPicker, uploadDirect.ts — is
+// unaffected. The Hopper route is the only caller that passes
+// status: "HOPPER" and source: "iPhone Shortcut".
 export async function finalizeUpload(
   artistId: string,
   key: string,
   contentType: string,
   kind: "PHOTO" | "VIDEO",
-  posterUrl?: string
+  posterUrl?: string,
+  status: "SORTED" | "HOPPER" = "SORTED",
+  source?: string
 ) {
   const image = await db.image.create({
     data: {
@@ -52,7 +60,8 @@ export async function finalizeUpload(
       posterUrl: posterUrl || null,
       kind,
       mimeType: contentType,
-      status: "SORTED", // uploaded directly = already sorted, not in the Hopper
+      status,
+      source: source || null,
     },
   });
   return { image };
