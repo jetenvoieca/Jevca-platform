@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useRef } from "react";
 import { listImages } from "@/lib/actions/media";
+import { listMedia } from "@/lib/actions/mediaCatalogue";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 
 type PickedImage = {
@@ -12,48 +13,97 @@ type PickedImage = {
   kind: string;
 };
 
+type MediaRow = {
+  id: string;
+  url: string;
+  posterUrl: string | null;
+  caption: string | null;
+  kind: string;
+};
+
+function toPicked(rows: MediaRow[], videoOnly: boolean): PickedImage[] {
+  return rows
+    .filter((img) => (videoOnly ? img.kind === "VIDEO" : img.kind === "PHOTO"))
+    .map((img) => ({
+      id: img.id,
+      url: img.url,
+      posterUrl: img.posterUrl,
+      caption: img.caption,
+      kind: img.kind,
+    }));
+}
+
 export default function MediaPicker({
   artistId,
   mode = "single",
   videoOnly = false,
   label = "Add Image",
+  linkedArtworkId,
   onSelect,
 }: {
   artistId: string;
   mode?: "single" | "multi";
   videoOnly?: boolean;
   label?: string;
+  // When set, this picker is being used to add images to one specific
+  // artwork (the Artwork editor's own Images section) — shows the same
+  // Marketing/Related toggle as the Media Catalogue, with "Related"
+  // scoped strictly to this one artwork's own images, never any other
+  // artwork's, so you can never accidentally pick something already
+  // belonging to a different piece. Terminology settled on "Related",
+  // replacing "ancillary"/"secondary"/"connected" — see decisions-log,
+  // 2026-08-05.
+  linkedArtworkId?: string;
   onSelect: (images: PickedImage[]) => void;
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  const [purpose, setPurpose] = useState<"marketing" | "related">("marketing");
   const [images, setImages] = useState<PickedImage[]>([]);
+  const [relatedCount, setRelatedCount] = useState(0);
   const [selected, setSelected] = useState<PickedImage[]>([]);
   const [isPending, startTransition] = useTransition();
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const load = (q: string) => {
+  const load = (q: string, p: "marketing" | "related") => {
     startTransition(async () => {
-      const results = await listImages(artistId, q || undefined);
-      setImages(
-        results
-          .filter((img) => (videoOnly ? img.kind === "VIDEO" : img.kind === "PHOTO"))
-          .map((img) => ({
-            id: img.id,
-            url: img.url,
-            posterUrl: img.posterUrl,
-            caption: img.caption,
-            kind: img.kind,
-          }))
-      );
+      if (linkedArtworkId) {
+        const results = await listMedia(artistId, {
+          purpose: p,
+          q: q || undefined,
+          artworkId: p === "related" ? linkedArtworkId : undefined,
+        });
+        setImages(toPicked(results, videoOnly));
+        if (p === "related") setRelatedCount(results.length);
+      } else {
+        const results = await listImages(artistId, q || undefined);
+        setImages(toPicked(results, videoOnly));
+      }
     });
   };
 
   const handleOpen = () => {
     setOpen(true);
     setSelected([]);
-    load(query);
+    load(query, purpose);
+    // Fetch the Related count up front too, so the tab badge is correct
+    // even before switching to it — otherwise it'd read "Related (0)"
+    // until clicked once.
+    if (linkedArtworkId && purpose !== "related") {
+      startTransition(async () => {
+        const relatedResults = await listMedia(artistId, {
+          purpose: "related",
+          artworkId: linkedArtworkId,
+        });
+        setRelatedCount(relatedResults.length);
+      });
+    }
+  };
+
+  const handlePurposeChange = (p: "marketing" | "related") => {
+    setPurpose(p);
+    load(query, p);
   };
 
   const handleUpload = (file: File) => {
@@ -125,7 +175,7 @@ export default function MediaPicker({
             value={query}
             onChange={(e) => {
               setQuery(e.target.value);
-              load(e.target.value);
+              load(e.target.value, purpose);
             }}
             placeholder={videoOnly ? "Search videos…" : "Search images…"}
             autoFocus
@@ -153,6 +203,35 @@ export default function MediaPicker({
             Close
           </button>
         </div>
+
+        {linkedArtworkId && (
+          <div className="border-b border-neutral-200 p-4 pt-0">
+            {/* Same pill style as the Media Catalogue's own Marketing/
+                Related toggle, for visual consistency. */}
+            <div className="mt-3 flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
+              <button
+                type="button"
+                onClick={() => handlePurposeChange("marketing")}
+                className={`px-4 py-1.5 ${
+                  purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                }`}
+              >
+                Marketing
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePurposeChange("related")}
+                className={`px-4 py-1.5 font-medium ${
+                  purpose === "related"
+                    ? "bg-neutral-900 text-white"
+                    : "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                }`}
+              >
+                Related ({relatedCount})
+              </button>
+            </div>
+          </div>
+        )}
 
         {uploadError && (
           <p className="border-b border-neutral-200 bg-red-50 px-4 py-2 text-xs text-red-600">
@@ -194,7 +273,9 @@ export default function MediaPicker({
           </div>
           {images.length === 0 && (
             <p className="py-12 text-center text-sm text-neutral-400">
-              No matches. Upload one above.
+              {linkedArtworkId && purpose === "related"
+                ? "No images related to this artwork yet."
+                : "No matches. Upload one above."}
             </p>
           )}
         </div>
