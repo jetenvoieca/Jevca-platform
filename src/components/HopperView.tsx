@@ -236,7 +236,10 @@ export default function HopperView({
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
       )}
 
-      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "300px 1fr 280px" }}>
+      <div
+        className="grid items-start gap-6"
+        style={{ gridTemplateColumns: current ? "300px 1fr 280px" : "300px 1fr" }}
+      >
         {/* Processed — a visual confirmation trail, not part of the
             sorting flow itself, so it stays put even once the queue on
             the right runs out. */}
