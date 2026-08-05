@@ -186,7 +186,7 @@ export default function HopperView({
   };
 
   return (
-    <div className="px-6 py-4">
+    <div className="mx-auto max-w-6xl px-6 py-4">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-neutral-900">
           Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
@@ -236,10 +236,7 @@ export default function HopperView({
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
       )}
 
-      <div
-        className="grid items-start gap-6"
-        style={{ gridTemplateColumns: current ? "300px 1fr 280px" : "300px 1fr" }}
-      >
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "300px 1fr 280px" }}>
         {/* Processed — a visual confirmation trail, not part of the
             sorting flow itself, so it stays put even once the queue on
             the right runs out. */}
@@ -303,26 +300,40 @@ export default function HopperView({
           )}
         </div>
 
-        {!current ? (
-          <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-            Hopper is empty — nothing waiting to be sorted.
+        <div>
+          {/* Invisible, but occupies exactly the same height as the
+              "Processed" header to its left — so the content below it
+              (this empty-state box, or the SortingCard) lines up with
+              the top of the first Processed *item*, not with the
+              "PROCESSED" label itself. Same markup as that header,
+              deliberately, so the heights always match exactly rather
+              than relying on a guessed pixel value. */}
+          <div className="invisible mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide">Spacer</p>
+            <span className="text-xs">Spacer</span>
           </div>
-        ) : (
-          <SortingCard
-            key={current.id}
-            siteId={siteId}
-            artistId={artistId}
-            item={current}
-            tagPresets={tagPresets}
-            isPending={isPending}
-            onBin={() => handleBin(current)}
-            onAddToMedia={() => handleAddToMedia(current)}
-            onAddToExistingArtwork={(artworkId, artworkTitle) =>
-              handleAddToExistingArtwork(current, artworkId, artworkTitle)
-            }
-            onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
-          />
-        )}
+
+          {!current ? (
+            <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
+              Hopper is empty — nothing waiting to be sorted.
+            </div>
+          ) : (
+            <SortingCard
+              key={current.id}
+              siteId={siteId}
+              artistId={artistId}
+              item={current}
+              tagPresets={tagPresets}
+              isPending={isPending}
+              onBin={() => handleBin(current)}
+              onAddToMedia={() => handleAddToMedia(current)}
+              onAddToExistingArtwork={(artworkId, artworkTitle) =>
+                handleAddToExistingArtwork(current, artworkId, artworkTitle)
+              }
+              onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
+            />
+          )}
+        </div>
 
         {current && (
           <div className="sticky top-4">
