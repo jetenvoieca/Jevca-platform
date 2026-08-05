@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { randomUUID } from "crypto";
 
 // ---- Reading data for the "Add New Site" picker ----
 
@@ -142,6 +143,21 @@ export async function saveArtistLogo(artistId: string, key: string): Promise<voi
     data: { logoUrl: `/api/media/${key}` },
   });
   revalidatePath("/");
+}
+
+// Deliberately its own action, not folded into the autosave updateArtist
+// above — regenerating this immediately breaks any copy of the iPhone
+// Shortcut still configured with the old value, so it needs to be a
+// conscious button click with its own confirmation, not something that
+// could fire from a stray text-field edit.
+export async function regenerateHopperToken(artistId: string): Promise<{ token: string }> {
+  const token = randomUUID();
+  await db.artist.update({
+    where: { id: artistId },
+    data: { hopperToken: token },
+  });
+  revalidatePath("/");
+  return { token };
 }
 
 // ---- Status toggle (Draft / Live / Paused) ----
