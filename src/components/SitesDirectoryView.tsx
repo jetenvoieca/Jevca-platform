@@ -6,7 +6,13 @@ import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import StatusSelect from "@/components/StatusSelect";
 import ArchiveButton from "@/components/ArchiveButton";
-import { updateSite, updateArtist, updateSalesEnabled, saveArtistLogo } from "@/lib/actions";
+import {
+  updateSite,
+  updateArtist,
+  updateSalesEnabled,
+  saveArtistLogo,
+  regenerateHopperToken,
+} from "@/lib/actions";
 import { requestUploadUrl } from "@/lib/actions/media";
 
 type SiteRow = {
@@ -34,6 +40,7 @@ type SiteRow = {
   ownerVatRate: string;
   ownerInvoiceFooterText: string | null;
   ownerNextInvoiceNumber: number;
+  ownerHopperToken: string;
 };
 
 export default function SitesDirectoryView({
@@ -54,7 +61,31 @@ export default function SitesDirectoryView({
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [tokenCopied, setTokenCopied] = useState(false);
+  const [regeneratingToken, setRegeneratingToken] = useState(false);
   const router = useRouter();
+
+  const handleCopyToken = async (token: string) => {
+    await navigator.clipboard.writeText(token);
+    setTokenCopied(true);
+    setTimeout(() => setTokenCopied(false), 1500);
+  };
+
+  const handleRegenerateToken = (artistId: string) => {
+    if (
+      !confirm(
+        "Regenerate this artist's Hopper token? Any copy of their iPhone Shortcut still using the old token will stop working until it's updated with the new one."
+      )
+    ) {
+      return;
+    }
+    setRegeneratingToken(true);
+    startTransition(async () => {
+      await regenerateHopperToken(artistId);
+      router.refresh();
+      setRegeneratingToken(false);
+    });
+  };
 
   const handleLogoUpload = async (file: File) => {
     if (!selected) return;
@@ -495,6 +526,41 @@ export default function SitesDirectoryView({
                     savedField === "nextInvoiceNumber") && (
                     <p className="text-xs text-green-600">Saved</p>
                   )}
+                </div>
+
+                <div className="mt-4 rounded-md border border-neutral-200 p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                    Hopper Token
+                  </p>
+                  <p className="mb-2 text-xs text-neutral-400">
+                    Paste this into this artist&apos;s copy of the iPhone Shortcut, so photos and
+                    video they share land in their Hopper.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <input
+                      key={`owner-hopper-token-${selected.ownerId}`}
+                      type="text"
+                      readOnly
+                      value={selected.ownerHopperToken}
+                      onFocus={(e) => e.target.select()}
+                      className="w-full rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 font-mono text-xs text-neutral-700"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyToken(selected.ownerHopperToken)}
+                      className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                    >
+                      {tokenCopied ? "Copied" : "Copy"}
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={regeneratingToken}
+                    onClick={() => handleRegenerateToken(selected.ownerId)}
+                    className="mt-2 text-xs text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {regeneratingToken ? "Regenerating…" : "Regenerate token"}
+                  </button>
                 </div>
               </div>
             </div>
