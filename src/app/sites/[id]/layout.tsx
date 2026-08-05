@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { publishSite } from "@/lib/actions/pages";
+import { logout } from "@/lib/actions/auth";
 import SiteNavPanel from "@/components/SiteNavPanel";
 
 export default async function SiteLayout({
@@ -40,15 +41,25 @@ export default async function SiteLayout({
           <h1 className="text-xl font-semibold text-neutral-900">{site.name}</h1>
           <p className="text-sm text-neutral-500">Owner: {site.artist.name}</p>
         </div>
-        <form action={publishSite.bind(null, id)}>
-          <button
-            type="submit"
-            disabled={!hasUnpublished}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:hover:bg-neutral-200"
-          >
-            Publish to live site
-          </button>
-        </form>
+        <div className="flex items-center gap-3">
+          <form action={publishSite.bind(null, id)}>
+            <button
+              type="submit"
+              disabled={!hasUnpublished}
+              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:hover:bg-neutral-200"
+            >
+              Publish to live site
+            </button>
+          </form>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="rounded-md px-3 py-2 text-sm text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
+            >
+              Log out
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="grid grid-cols-[1fr_220px]">
