@@ -201,7 +201,12 @@ export async function getArtworkDetailForClient(id: string) {
     priceUnframed: artwork.priceUnframed != null ? artwork.priceUnframed.toString() : null,
     priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
     studioNotes: artwork.studioNotes,
-    images: artwork.images.map((img) => ({ id: img.id, url: img.url })),
+    images: artwork.images.map((img) => ({
+      id: img.id,
+      url: img.url,
+      kind: img.kind,
+      posterUrl: img.posterUrl,
+    })),
     saleTerms: artwork.saleTerms
       ? {
           totalAmount: artwork.saleTerms.totalAmount.toString(),
