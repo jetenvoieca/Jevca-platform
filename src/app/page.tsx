@@ -79,6 +79,7 @@ export default async function SitesDirectoryPage({
     ownerVatRate: s.artist.vatRate ? s.artist.vatRate.toString() : "",
     ownerInvoiceFooterText: s.artist.invoiceFooterText,
     ownerNextInvoiceNumber: s.artist.nextInvoiceNumber,
+    ownerHopperToken: s.artist.hopperToken,
   }));
 
   return (
