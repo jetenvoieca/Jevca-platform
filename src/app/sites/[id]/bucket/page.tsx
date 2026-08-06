@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { getDraftTimeline, getRenderStatus } from "@/lib/actions/render";
+import { getDraftTimeline } from "@/lib/actions/videoEditor";
+import { getRenderStatus } from "@/lib/actions/render";
 import VideoEditorView from "@/components/VideoEditorView";
 
 export const dynamic = "force-dynamic";
