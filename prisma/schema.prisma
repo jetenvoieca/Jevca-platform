@@ -39,6 +39,7 @@ enum ImageStatus {
   HOPPER
   SORTED
   ARCHIVED
+  BUCKET
 }
 
 enum ImageKind {
@@ -149,9 +150,8 @@ model Artist {
   defaultReleaseTriggerCount Int    @default(2)
 
   images Image[]
+  videoRenders VideoRender[]
 }
-
-model Site {
   id                   String     @id @default(cuid())
   name                 String
   domain               String?
@@ -473,4 +473,37 @@ model Image {
 
   @@index([artistId])
   @@index([artworkId])
+}
+
+enum VideoRenderStatus {
+  PENDING
+  RENDERING
+  DONE
+  FAILED
+}
+
+// Tracks one render job sent to Shotstack — needed because rendering is
+// asynchronous (seconds to low minutes), so the Video Editor needs
+// somewhere to poll/display progress. See bucket-video-editor-design.md.
+model VideoRender {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  // Set once you name it, after the render completes — null while
+  // PENDING/RENDERING, since naming happens after you see the result.
+  name String?
+
+  status           VideoRenderStatus @default(PENDING)
+  shotstackRenderId String?
+
+  // The finished video, once downloaded from Shotstack and saved into
+  // this app's own R2 storage as a normal Image row. Null until DONE.
+  resultImageId String? @unique
+  resultImage   Image?  @relation(fields: [resultImageId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
 }
