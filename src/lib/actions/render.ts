@@ -58,7 +58,14 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
         ? { type: "image" as const, src: url }
         : { type: "video" as const, src: url, trim: clip.trimIn ?? 0 };
 
-    return { asset, start, length, fit: "cover" as const };
+    // Shotstack's naming is the reverse of the usual CSS convention:
+    // their "cover" STRETCHES the asset to fill the frame, distorting
+    // it — their "crop" fills the frame while preserving aspect ratio
+    // and cropping any overflow, which is what "fill the frame properly"
+    // actually means here. "crop" is also confirmed as Shotstack's own
+    // default, so this could be omitted entirely — left explicit so the
+    // choice is documented rather than relying on an unstated default.
+    return { asset, start, length, fit: "crop" as const };
   });
 
   return {
