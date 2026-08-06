@@ -470,6 +470,12 @@ model Image {
   // Artwork side (artwork.mainImage).
   mainImageOfArtwork Artwork? @relation("ArtworkMainImage")
 
+  // Back-relation only (fields/references live on
+  // VideoRender.resultImageId) — this Image is the finished output of a
+  // render, if it came from the Video Editor rather than a direct
+  // upload.
+  sourceVideoRender VideoRender?
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
