@@ -61,6 +61,40 @@ export async function addHopperItemToMedia(id: string, siteId: string): Promise<
   revalidatePath(`/sites/${siteId}/hopper`);
 }
 
+export async function countBucket(artistId: string): Promise<number> {
+  return db.image.count({ where: { artistId, status: "BUCKET" } });
+}
+
+// Takes an item out of the Bucket without archiving it — becomes an
+// ordinary Sorted Media Catalogue item, same "nothing destroyed" default
+// as everywhere else. See bucket-video-editor-design.md.
+export async function removeFromBucket(id: string, siteId: string): Promise<void> {
+  await db.image.update({ where: { id }, data: { status: "SORTED" } });
+  revalidatePath(`/sites/${siteId}/bucket`);
+}
+  return db.image.findMany({
+    where: { artistId, status: "BUCKET" },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      url: true,
+      posterUrl: true,
+      kind: true,
+      caption: true,
+      createdAt: true,
+    },
+  });
+}
+
+// Moves an item into the Bucket — the Video Editor's staging area, not a
+// finished destination the way Media/Artwork are. See
+// bucket-video-editor-design.md.
+export async function addHopperItemToBucket(id: string, siteId: string): Promise<void> {
+  await db.image.update({ where: { id }, data: { status: "BUCKET" } });
+  revalidatePath(`/sites/${siteId}/hopper`);
+  revalidatePath(`/sites/${siteId}/bucket`);
+}
+
 // Links the image to an artwork (becomes Related media / an ancillary
 // image), and — only if the sorter explicitly checked "Set as main
 // image" — also updates that artwork's formal mainImageId. Both writes
