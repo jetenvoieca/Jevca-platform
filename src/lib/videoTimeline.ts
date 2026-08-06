@@ -13,11 +13,16 @@ export type TimelineClip = {
   kind: "PHOTO" | "VIDEO";
   // Photos only. Seconds on screen. Defaults to 2 when first added.
   duration?: number;
-  // Video only. Seconds into the source file. Undefined until the
-  // browser has loaded the source video's real duration and the editor
-  // has recorded 0 → full-length as the initial default.
+  // Video only. Seconds into the source file — the current trim points.
   trimIn?: number;
   trimOut?: number;
+  // Video only. The source file's TRUE full duration, captured once from
+  // the browser and never changed afterwards — independent of
+  // trimIn/trimOut, which move as you trim. Without this, once a clip is
+  // trimmed down there'd be no way to know how far it could be trimmed
+  // back out again, and a mid-clip cut wouldn't know the real bounds for
+  // either resulting half.
+  sourceDuration?: number;
 };
 
 export type Timeline = {
