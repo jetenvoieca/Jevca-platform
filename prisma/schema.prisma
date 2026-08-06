@@ -509,6 +509,14 @@ model VideoRender {
 
   status           VideoRenderStatus @default(DRAFT)
   shotstackRenderId String?
+  // Which Shotstack environment ("stage" or "v1") this specific render was
+  // submitted to — recorded at submit time so status checks and the
+  // webhook always query back against the same environment even if the
+  // app-wide SHOTSTACK_ENV setting changes later.
+  renderEnv         String?
+  // Populated from Shotstack's own confirmed status if a render fails,
+  // so the Video Editor can show a real reason rather than just "Failed".
+  renderError       String?
 
   // The ordered list of clips making up this video — reorder, per-photo
   // duration, per-video trim in/out, all live here as JSON while status
