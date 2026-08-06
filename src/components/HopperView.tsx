@@ -1,598 +1,122 @@
-"use client";
+"use server";
 
-import { useState, useTransition, useRef, useEffect } from "react";
-import { useRouter } from "next/navigation";
-import Link from "next/link";
-import {
-  binHopperItem,
-  addHopperItemToMedia,
-  addHopperItemToArtwork,
-  addHopperItemToBucket,
-  updateHopperCaption,
-} from "@/lib/actions/hopper";
-import { quickCreateArtwork } from "@/lib/actions/media";
-import { uploadFileDirect } from "@/lib/uploadDirect";
-import ArtworkPicker from "@/components/ArtworkPicker";
-import VideoThumb from "@/components/VideoThumb";
+import { db } from "@/lib/db";
+import { revalidatePath } from "next/cache";
 
-export type HopperItem = {
-  id: string;
-  url: string;
-  posterUrl: string | null;
-  kind: string;
-  caption: string | null;
-  altText: string | null;
-  tags: string[];
-  createdAt: string;
-};
+// The Hopper is simply the set of Images with status HOPPER for a given
+// artist — no new table, reuses the Image model exactly as designed in
+// hopper-design.md.
 
-// A running, session-only log of what's just been done — pure visual
-// confirmation ("did that just work"), not persisted anywhere. Cleared
-// on refresh or via the "Clear list" button.
-type ProcessedEntry = {
-  key: string;
-  url: string;
-  posterUrl: string | null;
-  kind: string;
-  label: string;
-  // Where this item actually ended up — its own Media Catalogue page, or
-  // the artwork it was linked to/created. Null for "Binned", since an
-  // archived item has no edit panel to jump to.
-  href: string | null;
-};
-
-// Persisted per artist so the Processed trail survives navigating away
-// and back (it was previously plain component state, which reset on
-// unmount — see decisions log, 2026-08-05). Same localStorage pattern
-// already used for the Media Catalogue's density preference.
-const processedLogKey = (artistId: string) => `jevca:hopper-processed:${artistId}`;
-
-export default function HopperView({
-  siteId,
-  artistId,
-  queue,
-  tagPresets,
-}: {
-  siteId: string;
-  artistId: string;
-  queue: HopperItem[];
-  tagPresets: string[];
-}) {
-  const router = useRouter();
-  const [isPending, startTransition] = useTransition();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [addUploading, setAddUploading] = useState(false);
-  const [addError, setAddError] = useState<string | null>(null);
-  const [processedLog, setProcessedLog] = useState<ProcessedEntry[]>([]);
-  const folderInputRef = useRef<HTMLInputElement>(null);
-
-  // webkitdirectory/directory aren't part of React's typed HTML
-  // attributes, so they're set imperatively here rather than as JSX
-  // props — sidesteps any TypeScript strict-mode complaint about an
-  // unrecognised attribute (this project has hit real strict-mode build
-  // failures before over exactly this category of thing).
-  useEffect(() => {
-    folderInputRef.current?.setAttribute("webkitdirectory", "true");
-    folderInputRef.current?.setAttribute("directory", "true");
-  }, []);
-
-  // Load whatever was left from a previous visit, once, on mount — kept
-  // as a separate effect (rather than reading localStorage directly in
-  // useState's initializer) so this stays SSR-safe: the server render
-  // and the client's first render both start from [], avoiding a
-  // hydration mismatch, then this fills it in immediately after.
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(processedLogKey(artistId));
-      if (stored) setProcessedLog(JSON.parse(stored));
-    } catch {
-      // Corrupt or unavailable storage — just start with an empty log.
-    }
-  }, [artistId]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(processedLogKey(artistId), JSON.stringify(processedLog));
-    } catch {
-      // Storage full/unavailable — non-critical, the log just won't
-      // persist this time.
-    }
-  }, [processedLog, artistId]);
-
-  const current = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null;
-  const remaining = queue.filter((i) => i.id !== current?.id);
-
-  const logProcessed = (item: HopperItem, label: string, href: string | null) => {
-    setProcessedLog((prev) => [
-      {
-        key: `${item.id}-${Date.now()}`,
-        url: item.url,
-        posterUrl: item.posterUrl,
-        kind: item.kind,
-        label,
-        href,
-      },
-      ...prev,
-    ]);
-  };
-
-  // After any sort action, drop back to "no explicit selection" so the
-  // next render (post-refresh, with this item now gone from the queue)
-  // naturally falls forward to the new oldest item — the auto-advance
-  // flick-through rhythm from the original spec, without needing to
-  // track index positions by hand.
-  const advanceAfterAction = () => {
-    setSelectedId(null);
-    router.refresh();
-  };
-
-  const handleBin = (item: HopperItem) => {
-    startTransition(async () => {
-      await binHopperItem(item.id, siteId);
-      logProcessed(item, "Binned", null);
-      advanceAfterAction();
-    });
-  };
-
-  const handleAddToMedia = (item: HopperItem) => {
-    startTransition(async () => {
-      await addHopperItemToMedia(item.id, siteId);
-      logProcessed(item, "Added to Media Catalogue", `/sites/${siteId}/media/${item.id}`);
-      advanceAfterAction();
-    });
-  };
-
-  const handleAddToBucket = (item: HopperItem) => {
-    startTransition(async () => {
-      await addHopperItemToBucket(item.id, siteId);
-      logProcessed(item, "Added to Bucket", `/sites/${siteId}/bucket`);
-      advanceAfterAction();
-    });
-  };
-
-  // Existing artwork → always ancillary, never touches that artwork's
-  // main image (per 2026-08-05 decision — changing an existing artwork's
-  // main image is a separate action, done from the Artwork editor).
-  const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
-    startTransition(async () => {
-      await addHopperItemToArtwork(item.id, siteId, artworkId, false);
-      logProcessed(item, `Linked to ${artworkTitle}`, `/sites/${siteId}/artworks/${artworkId}`);
-      advanceAfterAction();
-    });
-  };
-
-  // New artwork → always becomes its main image, since it's the only
-  // image the artwork has at the point of creation.
-  const handleAddNewArtwork = (item: HopperItem, title: string) => {
-    startTransition(async () => {
-      const finalTitle = title.trim() || "Untitled";
-      const result = await quickCreateArtwork(artistId, finalTitle);
-      if ("error" in result || !result.artwork) {
-        setAddError(result.error || "Couldn't create the artwork. Try again.");
-        return;
-      }
-      await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
-      logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks/${result.artwork.id}`);
-      advanceAfterAction();
-    });
-  };
-
-  const handleUploadFiles = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    setAddError(null);
-    setAddUploading(true);
-    try {
-      for (const file of Array.from(files)) {
-        // Folder picks can include non-media files (.DS_Store, etc.) —
-        // silently skip anything that isn't an image or video rather
-        // than erroring the whole batch out.
-        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
-        await uploadFileDirect(file, artistId, "HOPPER", "Manual upload");
-      }
-      router.refresh();
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : "Upload failed. Try again.");
-    } finally {
-      setAddUploading(false);
-    }
-  };
-
-  // Rendered for real above "Up next" (where these buttons conceptually
-  // belong — they're what feeds that queue), and as an inert visual
-  // spacer above the other two columns so all three still start their
-  // actual content at the same height. The spacer is deliberately plain
-  // <span>s, not a second copy of the real buttons/inputs — reusing the
-  // interactive version (with its ref and handlers) in three places at
-  // once would fight over which DOM node the ref actually points to.
-  const importButtons = (
-    <div className="flex flex-wrap items-center gap-2">
-      <button
-        type="button"
-        onClick={() => router.refresh()}
-        className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-      >
-        Check Incoming
-      </button>
-      <label
-        className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
-          addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
-        }`}
-      >
-        Add from folder
-        <input
-          ref={folderInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          disabled={addUploading}
-          onChange={(e) => handleUploadFiles(e.target.files)}
-        />
-      </label>
-      <label
-        className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
-          addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
-        }`}
-      >
-        Add media
-        <input
-          type="file"
-          accept="image/*,video/*"
-          multiple
-          className="hidden"
-          disabled={addUploading}
-          onChange={(e) => handleUploadFiles(e.target.files)}
-        />
-      </label>
-    </div>
-  );
-
-  const importButtonsSpacer = (
-    <div className="invisible flex flex-wrap items-center gap-2" aria-hidden="true">
-      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
-      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
-      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
-    </div>
-  );
-
-  return (
-    <div className="mx-auto max-w-6xl px-6 py-4">
-      <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
-        Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
-      </h1>
-
-      {addError && (
-        <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
-      )}
-
-      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "300px 1fr 280px" }}>
-        {/* Processed — a visual confirmation trail, not part of the
-            sorting flow itself, so it stays put even once the queue on
-            the right runs out. */}
-        <div className="sticky top-4">
-          <div className="mb-3">{importButtonsSpacer}</div>
-          {processedLog.length > 0 && (
-            <>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  Processed
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setProcessedLog([])}
-                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
-                >
-                  Clear list
-                </button>
-              </div>
-              <div className="space-y-2">
-                {processedLog.map((entry) => {
-                  const thumb =
-                    entry.kind === "VIDEO" ? (
-                      entry.posterUrl ? (
-                        <img
-                          src={entry.posterUrl}
-                          alt=""
-                          className="h-10 w-10 shrink-0 rounded object-cover"
-                        />
-                      ) : (
-                        <VideoThumb
-                          src={entry.url}
-                          className="h-10 w-10 shrink-0 rounded object-cover"
-                        />
-                      )
-                    ) : (
-                      <img
-                        src={entry.url}
-                        alt=""
-                        className="h-10 w-10 shrink-0 rounded object-cover"
-                      />
-                    );
-                  const text = (
-                    <div className="min-w-0">
-                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
-                      <p className="text-xs text-neutral-400">
-                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
-                      </p>
-                    </div>
-                  );
-                  return entry.href ? (
-                    <Link
-                      key={entry.key}
-                      href={entry.href}
-                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2 hover:border-neutral-300 hover:bg-neutral-50"
-                    >
-                      {thumb}
-                      {text}
-                    </Link>
-                  ) : (
-                    <div
-                      key={entry.key}
-                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
-                    >
-                      {thumb}
-                      {text}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div>
-          <div className="mb-3">{importButtons}</div>
-          {/* Invisible, but occupies exactly the same height as the
-              "Processed"/"Up next" header rows either side of it — so
-              the content below it (this empty-state box, or the
-              SortingCard) lines up with the top of the first Processed
-              *item* and the thumbnail grid, not with the labels above
-              them. */}
-          <div className="invisible mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wide">Spacer</p>
-            <span className="text-xs">Spacer</span>
-          </div>
-
-          {!current ? (
-            <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-              Hopper is empty — nothing waiting to be sorted.
-            </div>
-          ) : (
-            <SortingCard
-              key={current.id}
-              siteId={siteId}
-              artistId={artistId}
-              item={current}
-              tagPresets={tagPresets}
-              isPending={isPending}
-              onBin={() => handleBin(current)}
-              onAddToMedia={() => handleAddToMedia(current)}
-              onAddToBucket={() => handleAddToBucket(current)}
-              onAddToExistingArtwork={(artworkId, artworkTitle) =>
-                handleAddToExistingArtwork(current, artworkId, artworkTitle)
-              }
-              onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
-            />
-          )}
-        </div>
-
-        {/* Up next — always rendered (not just while there's a current
-            item), so "Up next (0)" and this column's place in the layout
-            stay visible and stable even once the queue empties out. */}
-        <div className="sticky top-4">
-          <div className="mb-3">{importButtonsSpacer}</div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-            Up next ({remaining.length})
-          </p>
-          {!current ? null : remaining.length === 0 ? (
-            <p className="text-xs text-neutral-400">This is the last one.</p>
-          ) : (
-            <div className="grid grid-cols-3 gap-2">
-              {remaining.map((item) => (
-                <button
-                  key={item.id}
-                  type="button"
-                  onClick={() => setSelectedId(item.id)}
-                  className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
-                >
-                  {item.kind === "VIDEO" ? (
-                    item.posterUrl ? (
-                      <img
-                        src={item.posterUrl}
-                        alt=""
-                        className="aspect-square w-full object-cover"
-                      />
-                    ) : (
-                      <VideoThumb src={item.url} className="aspect-square w-full object-cover" />
-                    )
-                  ) : (
-                    <img src={item.url} alt="" className="aspect-square w-full object-cover" />
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
+export async function countHopper(artistId: string): Promise<number> {
+  return db.image.count({ where: { artistId, status: "HOPPER" } });
 }
 
-function SortingCard({
-  siteId,
-  artistId,
-  item,
-  tagPresets,
-  isPending,
-  onBin,
-  onAddToMedia,
-  onAddToBucket,
-  onAddToExistingArtwork,
-  onAddNewArtwork,
-}: {
-  siteId: string;
-  artistId: string;
-  item: HopperItem;
-  tagPresets: string[];
-  isPending: boolean;
-  onBin: () => void;
-  onAddToMedia: () => void;
-  onAddToBucket: () => void;
-  onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
-  onAddNewArtwork: (title: string) => void;
-}) {
-  // Local state, reset automatically each time this card remounts (the
-  // parent keys it by item.id) — no stale-caption bug when moving
-  // between queue items.
-  const [caption, setCaption] = useState(item.caption || "");
-  const [altText, setAltText] = useState(item.altText || "");
-  const [tags, setTags] = useState<string[]>(item.tags);
+// Oldest-first — matches the "receive order" flick-through rhythm from
+// the original spec, and matches the rest of the app's "new item lands
+// at the end" convention (Media Catalogue's own default sort).
+export async function listHopperQueue(artistId: string) {
+  return db.image.findMany({
+    where: { artistId, status: "HOPPER" },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      url: true,
+      posterUrl: true,
+      kind: true,
+      caption: true,
+      altText: true,
+      tags: true,
+      createdAt: true,
+    },
+  });
+}
 
-  const saveFields = (nextTags?: string[]) => {
-    const fd = new FormData();
-    fd.set("caption", caption);
-    fd.set("altText", altText);
-    fd.set("tags", (nextTags ?? tags).join(", "));
-    // Fire-and-forget — this is a background autosave, not the action
-    // that advances the queue, so it doesn't need its own pending state.
-    updateHopperCaption(item.id, siteId, fd);
-  };
+// Autosaves while sorting — caption/tags are now added here rather than
+// from the Shortcut (see hopper-design.md, "caption only in the Hopper").
+export async function updateHopperCaption(
+  id: string,
+  siteId: string,
+  formData: FormData
+): Promise<void> {
+  const caption = (formData.get("caption") as string)?.trim() || null;
+  const altText = (formData.get("altText") as string)?.trim() || null;
+  const tagsRaw = (formData.get("tags") as string)?.trim() || "";
+  const tags = tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [];
 
-  // Tags are click-to-toggle from the artist's preset list (Media
-  // Catalogue → Settings), not typed — per 2026-08-05 decision, so tags
-  // stay consistent/searchable rather than drifting into one-off typos.
-  // Saves immediately on click, since there's no "blur" moment the way
-  // there is for a text field.
-  const toggleTag = (tag: string) => {
-    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
-    setTags(next);
-    saveFields(next);
-  };
+  await db.image.update({ where: { id }, data: { caption, altText, tags } });
+  revalidatePath(`/sites/${siteId}/hopper`);
+}
 
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      <p className="mb-3 text-xs text-neutral-400">
-        Received {new Date(item.createdAt).toLocaleString()}
-      </p>
+// "Bin" = archive, same as every other delete in this app — reversible,
+// not a hard delete (confirmed in hopper-design.md, §4).
+export async function binHopperItem(id: string, siteId: string): Promise<void> {
+  await db.image.update({ where: { id }, data: { status: "ARCHIVED" } });
+  revalidatePath(`/sites/${siteId}/hopper`);
+}
 
-      {item.kind === "VIDEO" ? (
-        <video
-          src={item.url}
-          poster={item.posterUrl || undefined}
-          controls
-          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
-        />
-      ) : (
-        <img
-          src={item.url}
-          alt=""
-          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
-        />
-      )}
+// Leaves it unlinked from any artwork — shows up as Marketing media in
+// the Media Catalogue, per the existing "Marketing = no artworkId" rule.
+export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {
+  await db.image.update({ where: { id }, data: { status: "SORTED" } });
+  revalidatePath(`/sites/${siteId}/hopper`);
+}
 
-      <div className="mb-4 space-y-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
-          <input
-            type="text"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            onBlur={() => saveFields()}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Alt text</label>
-          <input
-            type="text"
-            value={altText}
-            onChange={(e) => setAltText(e.target.value)}
-            onBlur={() => saveFields()}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
-          {tagPresets.length === 0 ? (
-            <p className="text-xs text-neutral-400">
-              No tags set up yet — add some under Media Catalogue → Settings.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {tagPresets.map((tag) => {
-                const active = tags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleTag(tag)}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      active
-                        ? "border-neutral-900 bg-neutral-900 text-white"
-                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      </div>
+export async function countBucket(artistId: string): Promise<number> {
+  return db.image.count({ where: { artistId, status: "BUCKET" } });
+}
 
-      {/* Four plain, equal-weight buttons — not the dashed "+ Add" tile.
-          This screen assigns/routes an existing item rather than adding
-          new media, so the tile's "click to add something new" implication
-          would be misleading here. See decisions-log, 2026-08-05. */}
-      <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
-        <button
-          type="button"
-          onClick={onBin}
-          disabled={isPending}
-          className="rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-        >
-          Bin
-        </button>
-        <button
-          type="button"
-          onClick={onAddToMedia}
-          disabled={isPending}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Add to Media
-        </button>
-        <button
-          type="button"
-          onClick={onAddToBucket}
-          disabled={isPending}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Add to Bucket
-        </button>
-        <ArtworkPicker
-          artistId={artistId}
-          mode="single"
-          variant="button"
-          label="Add to Existing Artwork"
-          onSelect={(artworks) => {
-            if (artworks[0]) {
-              onAddToExistingArtwork(artworks[0].id, artworks[0].presentationTitle);
-            }
-          }}
-        />
-        <button
-          type="button"
-          onClick={() => onAddNewArtwork(caption)}
-          disabled={isPending}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Add New Artwork
-        </button>
-      </div>
-      <p className="mt-2 text-xs text-neutral-400">
-        &quot;Add New Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
-        blank), and this image becomes its main image automatically.
-      </p>
-    </div>
-  );
+// Takes an item out of the Bucket without archiving it — becomes an
+// ordinary Sorted Media Catalogue item, same "nothing destroyed" default
+// as everywhere else. See bucket-video-editor-design.md.
+export async function removeFromBucket(id: string, siteId: string): Promise<void> {
+  await db.image.update({ where: { id }, data: { status: "SORTED" } });
+  revalidatePath(`/sites/${siteId}/bucket`);
+}
+
+// Oldest-first, matching the Hopper's own convention — the actual
+// reorderable sequence (for the real Video Editor strip) is a follow-up
+// build; this is the plain listing used until then.
+export async function listBucket(artistId: string) {
+  return db.image.findMany({
+    where: { artistId, status: "BUCKET" },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      url: true,
+      posterUrl: true,
+      kind: true,
+      caption: true,
+      createdAt: true,
+    },
+  });
+}
+
+// Moves an item into the Bucket — the Video Editor's staging area, not a
+// finished destination the way Media/Artwork are. See
+// bucket-video-editor-design.md.
+export async function addHopperItemToBucket(id: string, siteId: string): Promise<void> {
+  await db.image.update({ where: { id }, data: { status: "BUCKET" } });
+  revalidatePath(`/sites/${siteId}/hopper`);
+  revalidatePath(`/sites/${siteId}/bucket`);
+}
+
+// Links the image to an artwork (becomes Related media / an ancillary
+// image), and — only if the sorter explicitly checked "Set as main
+// image" — also updates that artwork's formal mainImageId. Both writes
+// happen together so an artwork can never briefly point at a
+// still-HOPPER image.
+export async function addHopperItemToArtwork(
+  id: string,
+  siteId: string,
+  artworkId: string,
+  setAsMain: boolean
+): Promise<void> {
+  await db.$transaction(async (tx) => {
+    await tx.image.update({ where: { id }, data: { status: "SORTED", artworkId } });
+    if (setAsMain) {
+      await tx.artwork.update({ where: { id: artworkId }, data: { mainImageId: id } });
+    }
+  });
+  revalidatePath(`/sites/${siteId}/hopper`);
+  revalidatePath(`/sites/${siteId}/artworks`);
 }
