@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getDraftTimeline } from "@/lib/actions/videoEditor";
+import { getDraftTimeline, getRenderStatus } from "@/lib/actions/render";
 import VideoEditorView from "@/components/VideoEditorView";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +13,12 @@ export default async function BucketPage({
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
 
-  const { renderId, clips } = await getDraftTimeline(artistId);
+  const [{ renderId, clips }, renderStatus] = await Promise.all([
+    getDraftTimeline(artistId),
+    getRenderStatus(artistId),
+  ]);
 
-  return <VideoEditorView siteId={id} renderId={renderId} initialClips={clips} />;
+  return (
+    <VideoEditorView siteId={id} renderId={renderId} initialClips={clips} renderStatus={renderStatus} />
+  );
 }
