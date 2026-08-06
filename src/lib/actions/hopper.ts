@@ -72,6 +72,11 @@ export async function removeFromBucket(id: string, siteId: string): Promise<void
   await db.image.update({ where: { id }, data: { status: "SORTED" } });
   revalidatePath(`/sites/${siteId}/bucket`);
 }
+
+// Oldest-first, matching the Hopper's own convention — the actual
+// reorderable sequence (for the real Video Editor strip) is a follow-up
+// build; this is the plain listing used until then.
+export async function listBucket(artistId: string) {
   return db.image.findMany({
     where: { artistId, status: "BUCKET" },
     orderBy: { createdAt: "asc" },
