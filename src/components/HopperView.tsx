@@ -12,6 +12,7 @@ import {
 import { quickCreateArtwork } from "@/lib/actions/media";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import ArtworkPicker from "@/components/ArtworkPicker";
+import VideoThumb from "@/components/VideoThumb";
 
 export type HopperItem = {
   id: string;
@@ -29,7 +30,8 @@ export type HopperItem = {
 // on refresh or via the "Clear list" button.
 type ProcessedEntry = {
   key: string;
-  thumbUrl: string;
+  url: string;
+  posterUrl: string | null;
   kind: string;
   label: string;
   // Where this item actually ended up — its own Media Catalogue page, or
@@ -103,7 +105,8 @@ export default function HopperView({
     setProcessedLog((prev) => [
       {
         key: `${item.id}-${Date.now()}`,
-        thumbUrl: item.kind === "VIDEO" ? item.posterUrl || "" : item.url,
+        url: item.url,
+        posterUrl: item.posterUrl,
         kind: item.kind,
         label,
         href,
@@ -274,17 +277,27 @@ export default function HopperView({
               </div>
               <div className="space-y-2">
                 {processedLog.map((entry) => {
-                  const thumb = entry.thumbUrl ? (
-                    <img
-                      src={entry.thumbUrl}
-                      alt=""
-                      className="h-10 w-10 shrink-0 rounded object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
-                      Video
-                    </div>
-                  );
+                  const thumb =
+                    entry.kind === "VIDEO" ? (
+                      entry.posterUrl ? (
+                        <img
+                          src={entry.posterUrl}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                      ) : (
+                        <VideoThumb
+                          src={entry.url}
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                      )
+                    ) : (
+                      <img
+                        src={entry.url}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded object-cover"
+                      />
+                    );
                   const text = (
                     <div className="min-w-0">
                       <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
@@ -379,9 +392,7 @@ export default function HopperView({
                         className="aspect-square w-full object-cover"
                       />
                     ) : (
-                      <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-[10px] text-neutral-500">
-                        Video
-                      </div>
+                      <VideoThumb src={item.url} className="aspect-square w-full object-cover" />
                     )
                   ) : (
                     <img src={item.url} alt="" className="aspect-square w-full object-cover" />
