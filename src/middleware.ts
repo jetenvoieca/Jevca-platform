@@ -3,11 +3,21 @@ import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 
 // Paths that authenticate themselves separately and must stay reachable
 // without the app's shared password:
-// - /api/hopper/*        — the iPhone Shortcut, authenticated by its own
+// - /api/hopper/*         — the iPhone Shortcut, authenticated by its own
 //   per-artist hopperToken (see hopper-design.md)
-// - /api/stripe/webhook  — authenticated by Stripe's own signature check
-// - /login               — has to be reachable before you're logged in
-const PUBLIC_PATH_PREFIXES = ["/api/hopper", "/api/stripe/webhook", "/login"];
+// - /api/stripe/webhook   — authenticated by Stripe's own signature check
+// - /api/shotstack/render-webhook — Shotstack doesn't sign its webhooks,
+//   so this endpoint authenticates itself differently: it never trusts
+//   the POST body, only uses it to know which render to re-check via a
+//   direct, API-key-authenticated call back to Shotstack (see the route
+//   itself for the full reasoning)
+// - /login                — has to be reachable before you're logged in
+const PUBLIC_PATH_PREFIXES = [
+  "/api/hopper",
+  "/api/stripe/webhook",
+  "/api/shotstack/render-webhook",
+  "/login",
+];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
