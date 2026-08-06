@@ -7,6 +7,7 @@ import {
   binHopperItem,
   addHopperItemToMedia,
   addHopperItemToArtwork,
+  addHopperItemToBucket,
   updateHopperCaption,
 } from "@/lib/actions/hopper";
 import { quickCreateArtwork } from "@/lib/actions/media";
@@ -137,6 +138,14 @@ export default function HopperView({
     startTransition(async () => {
       await addHopperItemToMedia(item.id, siteId);
       logProcessed(item, "Added to Media Catalogue", `/sites/${siteId}/media/${item.id}`);
+      advanceAfterAction();
+    });
+  };
+
+  const handleAddToBucket = (item: HopperItem) => {
+    startTransition(async () => {
+      await addHopperItemToBucket(item.id, siteId);
+      logProcessed(item, "Added to Bucket", `/sites/${siteId}/bucket`);
       advanceAfterAction();
     });
   };
@@ -357,6 +366,7 @@ export default function HopperView({
               isPending={isPending}
               onBin={() => handleBin(current)}
               onAddToMedia={() => handleAddToMedia(current)}
+              onAddToBucket={() => handleAddToBucket(current)}
               onAddToExistingArtwork={(artworkId, artworkTitle) =>
                 handleAddToExistingArtwork(current, artworkId, artworkTitle)
               }
@@ -415,6 +425,7 @@ function SortingCard({
   isPending,
   onBin,
   onAddToMedia,
+  onAddToBucket,
   onAddToExistingArtwork,
   onAddNewArtwork,
 }: {
@@ -425,6 +436,7 @@ function SortingCard({
   isPending: boolean;
   onBin: () => void;
   onAddToMedia: () => void;
+  onAddToBucket: () => void;
   onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
   onAddNewArtwork: (title: string) => void;
 }) {
@@ -548,6 +560,14 @@ function SortingCard({
           className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
         >
           Add to Media
+        </button>
+        <button
+          type="button"
+          onClick={onAddToBucket}
+          disabled={isPending}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        >
+          Add to Bucket
         </button>
         <ArtworkPicker
           artistId={artistId}
