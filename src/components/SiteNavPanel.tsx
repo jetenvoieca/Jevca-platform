@@ -12,11 +12,13 @@ export default function SiteNavPanel({
   pages,
   salesEnabled = false,
   hopperCount = 0,
+  bucketCount = 0,
 }: {
   siteId: string;
   pages: PageRow[];
   salesEnabled?: boolean;
   hopperCount?: number;
+  bucketCount?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -29,6 +31,7 @@ export default function SiteNavPanel({
 
   const mediaSettingsActive = pathname === `/sites/${siteId}/media/settings`;
   const hopperActive = pathname === `/sites/${siteId}/hopper`;
+  const bucketActive = pathname === `/sites/${siteId}/bucket`;
   const mediaActive =
     pathname.startsWith(`/sites/${siteId}/media`) && !mediaSettingsActive;
 
@@ -181,6 +184,16 @@ export default function SiteNavPanel({
         }`}
       >
         Hopper{hopperCount > 0 ? ` (${hopperCount})` : ""}
+      </Link>
+      <Link
+        href={`/sites/${siteId}/bucket`}
+        className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
+          bucketActive
+            ? "bg-neutral-200 font-medium text-neutral-900"
+            : "text-neutral-500 hover:bg-neutral-100"
+        }`}
+      >
+        Bucket{bucketCount > 0 ? ` (${bucketCount})` : ""}
       </Link>
       <Link
         href={`/sites/${siteId}/media/settings`}
