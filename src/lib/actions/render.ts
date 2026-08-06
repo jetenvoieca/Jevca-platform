@@ -159,7 +159,10 @@ export async function getRenderStatus(artistId: string) {
 
   return {
     id: render.id,
-    status: render.status,
+    // The `where` clause above already excludes DRAFT — this cast just
+    // tells TypeScript what it can't infer from the query itself, so it
+    // matches the narrower type VideoEditorView expects.
+    status: render.status as "PENDING" | "RENDERING" | "DONE" | "FAILED",
     error: render.renderError,
     resultImage: render.resultImage
       ? { id: render.resultImage.id, url: render.resultImage.url }
