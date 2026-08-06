@@ -484,26 +484,41 @@ model Image {
 }
 
 enum VideoRenderStatus {
+  // A render not yet submitted to Shotstack — this IS the Bucket/Video
+  // Editor's working state. Exactly one DRAFT per artist represents "the
+  // video currently being put together" (enforced in application code,
+  // not a DB constraint — same 80/20 pattern as Purchase.ACTIVE).
+  DRAFT
   PENDING
   RENDERING
   DONE
   FAILED
 }
 
-// Tracks one render job sent to Shotstack — needed because rendering is
-// asynchronous (seconds to low minutes), so the Video Editor needs
-// somewhere to poll/display progress. See bucket-video-editor-design.md.
+// Tracks one video, from first being assembled in the Video Editor through
+// to a finished Shotstack render. See bucket-video-editor-design.md.
 model VideoRender {
   id       String @id @default(cuid())
   artistId String
   artist   Artist @relation(fields: [artistId], references: [id])
 
   // Set once you name it, after the render completes — null while
-  // PENDING/RENDERING, since naming happens after you see the result.
+  // DRAFT/PENDING/RENDERING, since naming happens after you see the
+  // result.
   name String?
 
-  status           VideoRenderStatus @default(PENDING)
+  status           VideoRenderStatus @default(DRAFT)
   shotstackRenderId String?
+
+  // The ordered list of clips making up this video — reorder, per-photo
+  // duration, per-video trim in/out, all live here as JSON while status
+  // is DRAFT. Shape: { clips: [{ id, imageId, kind, duration?, trimIn?,
+  // trimOut? }] }. See src/lib/videoTimeline.ts for the authoritative
+  // TypeScript type. Kept as JSON (not a relational table) for the same
+  // reason Content Blocks are — this isn't queried relationally
+  // elsewhere, and it mirrors an already-established pattern in this
+  // codebase rather than introducing a new one.
+  timeline Json?
 
   // The finished video, once downloaded from Shotstack and saved into
   // this app's own R2 storage as a normal Image row. Null until DONE.
