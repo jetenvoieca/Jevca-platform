@@ -10,6 +10,7 @@ import {
   initializeClipDuration,
   splitClip,
 } from "@/lib/actions/videoEditor";
+import { renderVideo, nameRenderedVideo } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
 import type { TimelineClip } from "@/lib/videoTimeline";
@@ -23,22 +24,34 @@ type ImageInfo = {
 };
 type Clip = TimelineClip & { image: ImageInfo };
 
+type RenderStatus = {
+  id: string;
+  status: "PENDING" | "RENDERING" | "DONE" | "FAILED";
+  error: string | null;
+  resultImage: { id: string; url: string } | null;
+} | null;
+
 export default function VideoEditorView({
   siteId,
   renderId,
   initialClips,
+  renderStatus,
 }: {
   siteId: string;
   renderId: string;
   initialClips: Clip[];
+  renderStatus: RenderStatus;
 }) {
   const [clips, setClips] = useState<Clip[]>(initialClips);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [rendering, setRendering] = useState(false);
+  const [renderError, setRenderError] = useState<string | null>(null);
   const router = useRouter();
 
-  // Resyncs after a router.refresh() (used after a split, which creates
-  // new clip ids the client can't derive on its own).
+  // Resyncs after a router.refresh() — used after a split (new clip ids
+  // the client can't derive on its own) and after submitting a render
+  // (the draft becomes empty again for the next video).
   useEffect(() => {
     setClips(initialClips);
   }, [initialClips]);
@@ -55,17 +68,24 @@ export default function VideoEditorView({
     }
     if (reorderDebounce.current) clearTimeout(reorderDebounce.current);
     reorderDebounce.current = setTimeout(() => {
-      reorderTimeline(
-        siteId,
-        renderId,
-        idsKey.split(",").filter(Boolean)
-      );
+      reorderTimeline(siteId, renderId, idsKey.split(",").filter(Boolean));
     }, 500);
     return () => {
       if (reorderDebounce.current) clearTimeout(reorderDebounce.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey]);
+
+  // Polls while a render is in progress — a render can take from seconds
+  // to a couple of minutes, and the webhook updates the database in the
+  // background, so this just needs to notice when that's happened.
+  useEffect(() => {
+    if (!renderStatus) return;
+    if (renderStatus.status !== "PENDING" && renderStatus.status !== "RENDERING") return;
+    const interval = setInterval(() => router.refresh(), 4000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [renderStatus?.status]);
 
   const selected = clips.find((c) => c.id === selectedId) ?? null;
 
@@ -121,6 +141,18 @@ export default function VideoEditorView({
     router.refresh();
   };
 
+  const handleRenderClick = async () => {
+    setRendering(true);
+    setRenderError(null);
+    const result = await renderVideo(siteId, renderId);
+    setRendering(false);
+    if (!result.ok) {
+      setRenderError(result.error);
+      return;
+    }
+    router.refresh();
+  };
+
   return (
     <div className="px-6 py-4">
       <div className="mb-4 flex items-center justify-between">
@@ -131,15 +163,40 @@ export default function VideoEditorView({
             {totalSeconds > 90 && <span className="ml-2 text-amber-600">— over the 90s target</span>}
           </p>
         </div>
-        <button
-          type="button"
-          disabled
-          title="Shotstack isn't set up yet — coming next"
-          className="cursor-not-allowed rounded-md bg-neutral-200 px-4 py-2 text-sm font-medium text-neutral-400"
-        >
-          Render Video
-        </button>
+        <div className="text-right">
+          <button
+            type="button"
+            onClick={handleRenderClick}
+            disabled={clips.length === 0 || rendering}
+            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+          >
+            {rendering ? "Sending…" : "Render Video"}
+          </button>
+          {renderError && <p className="mt-1 max-w-xs text-xs text-red-600">{renderError}</p>}
+        </div>
       </div>
+
+      {renderStatus && (
+        <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
+          {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
+            <p className="text-sm text-neutral-600">
+              Rendering your video… this can take a minute or two. Feel free to keep working —
+              this will update on its own.
+            </p>
+          ) : renderStatus.status === "FAILED" ? (
+            <p className="text-sm text-red-600">
+              Render failed{renderStatus.error ? `: ${renderStatus.error}` : "."}
+            </p>
+          ) : renderStatus.status === "DONE" && renderStatus.resultImage ? (
+            <NameVideoForm
+              siteId={siteId}
+              imageId={renderStatus.resultImage.id}
+              videoUrl={renderStatus.resultImage.url}
+              onSaved={() => router.refresh()}
+            />
+          ) : null}
+        </div>
+      )}
 
       {clips.length === 0 ? (
         <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
@@ -231,6 +288,58 @@ export default function VideoEditorView({
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+function NameVideoForm({
+  siteId,
+  imageId,
+  videoUrl,
+  onSaved,
+}: {
+  siteId: string;
+  imageId: string;
+  videoUrl: string;
+  onSaved: () => void;
+}) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+
+  const handleSave = async () => {
+    setSaving(true);
+    await nameRenderedVideo(siteId, imageId, name);
+    setSaving(false);
+    setSaved(true);
+    onSaved();
+  };
+
+  if (saved) return <p className="text-sm text-green-700">Saved to the Media Catalogue.</p>;
+
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-neutral-700">
+        Your video is ready — name it to save it to the Media Catalogue:
+      </p>
+      <video src={videoUrl} controls className="mb-3 max-h-64 w-full rounded-md bg-black" />
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="e.g. Studio walkthrough — August"
+          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+        />
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={saving}
+          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:bg-neutral-200"
+        >
+          {saving ? "Saving…" : "Save"}
+        </button>
+      </div>
     </div>
   );
 }
