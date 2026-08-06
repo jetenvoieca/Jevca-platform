@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { appendImageToTimeline, removeImageFromBucketEntirely } from "./videoEditor";
 
 // The Hopper is simply the set of Images with status HOPPER for a given
 // artist — no new table, reuses the Image model exactly as designed in
@@ -67,15 +68,19 @@ export async function countBucket(artistId: string): Promise<number> {
 
 // Takes an item out of the Bucket without archiving it — becomes an
 // ordinary Sorted Media Catalogue item, same "nothing destroyed" default
-// as everywhere else. See bucket-video-editor-design.md.
+// as everywhere else. Also strips it out of the draft Video Editor
+// timeline if it was placed in the strip, so the two never drift apart.
+// See bucket-video-editor-design.md.
 export async function removeFromBucket(id: string, siteId: string): Promise<void> {
-  await db.image.update({ where: { id }, data: { status: "SORTED" } });
-  revalidatePath(`/sites/${siteId}/bucket`);
+  const image = await db.image.findUnique({ where: { id }, select: { artistId: true } });
+  if (!image) return;
+  await removeImageFromBucketEntirely(image.artistId, siteId, id);
 }
 
 // Oldest-first, matching the Hopper's own convention — the actual
-// reorderable sequence (for the real Video Editor strip) is a follow-up
-// build; this is the plain listing used until then.
+// reorderable sequence lives in the draft VideoRender's timeline now
+// (see videoEditor.ts); this plain listing remains as the fallback view
+// until the real strip UI replaces this page.
 export async function listBucket(artistId: string) {
   return db.image.findMany({
     where: { artistId, status: "BUCKET" },
@@ -91,11 +96,13 @@ export async function listBucket(artistId: string) {
   });
 }
 
-// Moves an item into the Bucket — the Video Editor's staging area, not a
-// finished destination the way Media/Artwork are. See
+// Moves an item into the Bucket AND appends it to the artist's draft
+// Video Editor timeline in one go. See videoEditor.ts and
 // bucket-video-editor-design.md.
 export async function addHopperItemToBucket(id: string, siteId: string): Promise<void> {
-  await db.image.update({ where: { id }, data: { status: "BUCKET" } });
+  const image = await db.image.findUnique({ where: { id }, select: { artistId: true } });
+  if (!image) return;
+  await appendImageToTimeline(image.artistId, siteId, id);
   revalidatePath(`/sites/${siteId}/hopper`);
   revalidatePath(`/sites/${siteId}/bucket`);
 }
