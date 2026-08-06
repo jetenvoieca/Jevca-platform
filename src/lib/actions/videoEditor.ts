@@ -25,12 +25,34 @@ async function saveTimeline(renderId: string, timeline: Timeline): Promise<void>
 }
 
 // The draft's timeline with each clip's Image data joined in — what the
-// Video Editor screen actually renders. Filters out any clip whose Image
-// no longer exists (shouldn't normally happen — Images aren't hard-deleted
-// in this app — but keeps the screen robust rather than crashing on it).
+// Video Editor screen actually renders.
+//
+// Also self-heals a real gap: any Image already sitting at status BUCKET
+// that isn't yet referenced by any clip in the current draft — e.g. one
+// added via the Hopper before this timeline system existed, back when
+// "Add to Bucket" only set the status flag — gets folded into the draft
+// here. Without this, such an item is invisible in the strip forever
+// while still counting toward the Bucket nav badge, which is exactly
+// the mismatch (badge showing more than the strip shows) this fixes.
 export async function getDraftTimeline(artistId: string) {
   const draft = await getOrCreateDraft(artistId);
-  const timeline = readTimeline(draft.timeline);
+  let timeline = readTimeline(draft.timeline);
+
+  const referencedIds = new Set(timeline.clips.map((c) => c.imageId));
+  const orphaned = await db.image.findMany({
+    where: { artistId, status: "BUCKET", id: { notIn: [...referencedIds] } },
+    select: { id: true, kind: true },
+    orderBy: { createdAt: "asc" },
+  });
+  if (orphaned.length > 0) {
+    const healedClips: TimelineClip[] = orphaned.map((img) =>
+      img.kind === "PHOTO"
+        ? { id: randomUUID(), imageId: img.id, kind: "PHOTO", duration: 2 }
+        : { id: randomUUID(), imageId: img.id, kind: "VIDEO" }
+    );
+    timeline = { clips: [...timeline.clips, ...healedClips] };
+    await saveTimeline(draft.id, timeline);
+  }
 
   const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
   const images = await db.image.findMany({
