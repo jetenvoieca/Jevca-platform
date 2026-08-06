@@ -152,6 +152,8 @@ model Artist {
   images Image[]
   videoRenders VideoRender[]
 }
+
+model Site {
   id                   String     @id @default(cuid())
   name                 String
   domain               String?
