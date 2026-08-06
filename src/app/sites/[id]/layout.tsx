@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { publishSite } from "@/lib/actions/pages";
 import { logout } from "@/lib/actions/auth";
-import { countHopper } from "@/lib/actions/hopper";
+import { countHopper, countBucket } from "@/lib/actions/hopper";
 import SiteNavPanel from "@/components/SiteNavPanel";
 
 export default async function SiteLayout({
@@ -19,7 +19,7 @@ export default async function SiteLayout({
   });
   if (!site) notFound();
 
-  const [pages, hopperCount] = await Promise.all([
+  const [pages, hopperCount, bucketCount] = await Promise.all([
     db.page.findMany({
       where: { siteId: id },
       orderBy: { position: "asc" },
@@ -33,6 +33,7 @@ export default async function SiteLayout({
       },
     }),
     countHopper(site.artistId),
+    countBucket(site.artistId),
   ]);
   const hasUnpublished = pages.some(
     (p) => JSON.stringify(p.draftBlocks) !== JSON.stringify(p.liveBlocks)
@@ -74,6 +75,7 @@ export default async function SiteLayout({
             pages={pages.map((p) => ({ id: p.id, title: p.title, type: p.type, visible: p.visible }))}
             salesEnabled={site.salesEnabled}
             hopperCount={hopperCount}
+            bucketCount={bucketCount}
           />
         </div>
       </div>
