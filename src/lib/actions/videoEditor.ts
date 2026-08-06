@@ -68,7 +68,7 @@ export async function appendImageToTimeline(
   const clip: TimelineClip =
     image.kind === "PHOTO"
       ? { id: randomUUID(), imageId, kind: "PHOTO", duration: 2 }
-      : { id: randomUUID(), imageId, kind: "VIDEO" }; // trimIn/trimOut set once the browser loads its duration
+      : { id: randomUUID(), imageId, kind: "VIDEO" }; // trim/sourceDuration set once the browser loads its metadata
 
   timeline.clips.push(clip);
   await saveTimeline(draft.id, timeline);
@@ -109,7 +109,8 @@ export async function removeClipFromTimeline(
 // Coarser version of the above for when you only have an Image id, not a
 // specific clip id — removes every clip referencing that Image and
 // returns it to Sorted. Used by the plain Bucket grid's "Remove" button
-// (kept working during the transition to the real strip UI).
+// during the transition; kept for robustness even now the real strip is
+// the primary screen.
 export async function removeImageFromBucketEntirely(
   artistId: string,
   siteId: string,
@@ -166,9 +167,32 @@ export async function setClipDuration(
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// Sets a video clip's trim in/out points, in seconds. Also used once, on
-// first load of a clip with no trim set yet, to record the source's full
-// duration as the initial default (trimIn 0 → trimOut = full length).
+// Records the source video's real duration the first time the browser
+// loads its metadata, and — only if not already known — seeds
+// trimIn=0/trimOut=full length as the starting default. Safe to call
+// repeatedly; a no-op once sourceDuration is already recorded.
+export async function initializeClipDuration(
+  siteId: string,
+  renderId: string,
+  clipId: string,
+  sourceDuration: number
+): Promise<void> {
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft) return;
+  const timeline = readTimeline(draft.timeline);
+  const clip = timeline.clips.find((c) => c.id === clipId);
+  if (!clip || clip.sourceDuration != null) return;
+  clip.sourceDuration = sourceDuration;
+  if (clip.trimIn == null || clip.trimOut == null) {
+    clip.trimIn = 0;
+    clip.trimOut = sourceDuration;
+  }
+  await saveTimeline(renderId, timeline);
+  revalidatePath(`/sites/${siteId}/bucket`);
+}
+
+// Sets a video clip's trim in/out points, in seconds. Clamped against
+// sourceDuration when known, so trim can never exceed the real source.
 export async function setClipTrim(
   siteId: string,
   renderId: string,
@@ -181,8 +205,9 @@ export async function setClipTrim(
   const timeline = readTimeline(draft.timeline);
   const clip = timeline.clips.find((c) => c.id === clipId);
   if (!clip) return;
-  clip.trimIn = Math.max(0, trimIn);
-  clip.trimOut = Math.max(clip.trimIn + 0.1, trimOut);
+  const maxOut = clip.sourceDuration ?? Infinity;
+  clip.trimIn = Math.max(0, Math.min(trimIn, maxOut));
+  clip.trimOut = Math.min(maxOut, Math.max(clip.trimIn + 0.1, trimOut));
   await saveTimeline(renderId, timeline);
   revalidatePath(`/sites/${siteId}/bucket`);
 }
@@ -190,8 +215,9 @@ export async function setClipTrim(
 // Mid-clip cut: marks [cutStart, cutEnd] within a video clip's current
 // trim range for removal, splitting it into two adjacent clips — Part A
 // (original trimIn → cutStart) and Part B (cutEnd → original trimOut) —
-// in place of the original, both pointing at the same source Image. See
-// bucket-video-editor-design.md, §4.
+// in place of the original, both pointing at the same source Image and
+// carrying the same sourceDuration so each can still be trimmed further
+// independently. See bucket-video-editor-design.md, §4.
 export async function splitClip(
   siteId: string,
   renderId: string,
@@ -213,6 +239,7 @@ export async function splitClip(
     kind: "VIDEO",
     trimIn: clip.trimIn,
     trimOut: Math.max(clip.trimIn, cutStart),
+    sourceDuration: clip.sourceDuration,
   };
   const partB: TimelineClip = {
     id: randomUUID(),
@@ -220,6 +247,7 @@ export async function splitClip(
     kind: "VIDEO",
     trimIn: Math.min(clip.trimOut, cutEnd),
     trimOut: clip.trimOut,
+    sourceDuration: clip.sourceDuration,
   };
 
   const nextClips = [...timeline.clips];
