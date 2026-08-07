@@ -221,11 +221,27 @@ export async function renderVideo(
 }
 
 export async function getRenderStatus(artistId: string) {
-  const render = await db.videoRender.findFirst({
-    where: { artistId, status: { in: ["PENDING", "RENDERING", "DONE", "FAILED"] } },
-    orderBy: { updatedAt: "desc" },
-    include: { resultImage: true },
-  });
+  const [render, queueCount] = await Promise.all([
+    db.videoRender.findFirst({
+      where: { artistId, status: { in: ["PENDING", "RENDERING", "DONE", "FAILED"] } },
+      orderBy: { updatedAt: "desc" },
+      include: { resultImage: true },
+    }),
+    // Genuine count of leftover renders — either still failed, or DONE
+    // but never named/saved. This is what tells us whether "still
+    // showing after discard" means the discard didn't work, or just
+    // that there's more than one queued up behind it.
+    db.videoRender.count({
+      where: {
+        artistId,
+        OR: [
+          { status: "FAILED" },
+          { status: "DONE", resultImage: { caption: null } },
+        ],
+      },
+    }),
+  ]);
+
   if (!render) return null;
   if (render.status === "DONE" && render.resultImage?.caption) return null;
 
@@ -234,6 +250,7 @@ export async function getRenderStatus(artistId: string) {
     status: render.status as "PENDING" | "RENDERING" | "DONE" | "FAILED",
     error: render.renderError,
     createdAt: render.createdAt.toISOString(),
+    queueCount,
     resultImage: render.resultImage
       ? { id: render.resultImage.id, url: render.resultImage.url }
       : null,
@@ -254,11 +271,9 @@ export async function nameRenderedVideo(
   revalidatePath(`/sites/${siteId}/media`);
 }
 
-// Permanently discards a finished render you don't want to keep — deletes
-// both the temporary Image row and the VideoRender record. A genuine
-// destructive action (not a soft "hide"), since an unnamed render isn't
-// referenced anywhere else yet, unlike everything else in the Media
-// Catalogue.
+// Permanently discards a single finished render you don't want to keep —
+// deletes both the temporary Image row and the VideoRender record. A
+// genuine destructive action, not a soft "hide".
 export async function discardRenderResult(siteId: string, renderId: string): Promise<void> {
   const render = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!render) return;
@@ -269,4 +284,43 @@ export async function discardRenderResult(siteId: string, renderId: string): Pro
   }
 
   revalidatePath(`/sites/${siteId}/bucket`);
+}
+
+// Clears the entire backlog of leftover renders for an artist in one go
+// — everything FAILED, and everything DONE that was never named/saved.
+// Deliberately safe: a DONE render with a real caption (i.e. actually
+// saved to the Media Catalogue) is never matched by this query, so
+// nothing you've kept is ever at risk. Resolves the artist from the
+// current draft rather than needing a new prop threaded through the
+// component.
+export async function discardAllPreviousRenders(
+  siteId: string,
+  currentDraftRenderId: string
+): Promise<number> {
+  const draft = await db.videoRender.findUnique({
+    where: { id: currentDraftRenderId },
+    select: { artistId: true },
+  });
+  if (!draft) return 0;
+
+  const toDelete = await db.videoRender.findMany({
+    where: {
+      artistId: draft.artistId,
+      OR: [
+        { status: "FAILED" },
+        { status: "DONE", resultImage: { caption: null } },
+      ],
+    },
+    select: { id: true, resultImageId: true },
+  });
+
+  const imageIds = toDelete.map((r) => r.resultImageId).filter((id): id is string => !!id);
+
+  await db.videoRender.deleteMany({ where: { id: { in: toDelete.map((r) => r.id) } } });
+  if (imageIds.length > 0) {
+    await db.image.deleteMany({ where: { id: { in: imageIds } } });
+  }
+
+  revalidatePath(`/sites/${siteId}/bucket`);
+  return toDelete.length;
 }
