@@ -29,13 +29,12 @@ function activeEnv(): ShotstackEnv {
   return process.env.SHOTSTACK_ENV === "v1" ? "v1" : "stage";
 }
 
-// Formats Shotstack is confirmed to handle. HEIC/HEIF in particular is a
-// real, common gap — that's an iPhone's *default* photo format (not JPEG)
-// unless Camera settings are switched to "Most Compatible", so older
-// items sent before that was understood, or from a phone still on
-// default settings, can easily be HEIC without anyone realising.
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]);
 const SUPPORTED_VIDEO_TYPES = new Set(["video/mp4", "video/quicktime"]);
+
+function toAbsoluteUrl(url: string): string {
+  return url.startsWith("http") ? url : `${HOST}${url}`;
+}
 
 function formatError(caption: string | null, mimeType: string): string {
   const label = caption || "One of the clips";
@@ -43,6 +42,33 @@ function formatError(caption: string | null, mimeType: string): string {
     return `"${label}" is a HEIC photo, which Shotstack can't render. Remove it from the strip (the ✕ on its thumbnail), or re-save it as a JPEG and re-add it, then try again.`;
   }
   return `"${label}" is in a format Shotstack can't render (${mimeType}). Remove it from the strip and try again.`;
+}
+
+// Actually fetches the first bit of each file to confirm it's real and
+// reachable — catches the case a stored mimeType looks fine but the
+// underlying R2 object is missing, empty, or was never fully uploaded
+// (a real risk for older items, especially anything from before direct-
+// to-R2 upload was solid). Returns null if all good, or a specific,
+// nameable problem if not.
+async function verifyAssetReachable(url: string, kind: "PHOTO" | "VIDEO"): Promise<string | null> {
+  try {
+    const res = await fetch(url, { headers: { Range: "bytes=0-2048" } });
+    if (!res.ok && res.status !== 206) {
+      return `couldn't be loaded (server returned ${res.status})`;
+    }
+    const contentType = res.headers.get("content-type") || "";
+    const expectedPrefix = kind === "PHOTO" ? "image/" : "video/";
+    if (!contentType.startsWith(expectedPrefix)) {
+      return `doesn't look like a real ${kind === "PHOTO" ? "image" : "video"} file`;
+    }
+    const contentLength = res.headers.get("content-length");
+    if (contentLength !== null && Number(contentLength) === 0) {
+      return "is an empty file (0 bytes) — the original upload likely never completed";
+    }
+  } catch {
+    return "couldn't be reached";
+  }
+  return null;
 }
 
 type ClipWithImage = {
@@ -67,7 +93,7 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
     const start = cursor;
     cursor += length;
 
-    const url = clip.image.url.startsWith("http") ? clip.image.url : `${HOST}${clip.image.url}`;
+    const url = toAbsoluteUrl(clip.image.url);
 
     const asset =
       clip.kind === "PHOTO"
@@ -136,6 +162,16 @@ export async function renderVideo(
           "One of the video clips hasn't finished loading yet — open it in the strip first, then try again.",
       };
     }
+
+    const problem = await verifyAssetReachable(toAbsoluteUrl(image.url), clip.kind);
+    if (problem) {
+      const label = image.caption || "One of the clips";
+      return {
+        ok: false,
+        error: `"${label}" ${problem} — remove it from the strip (the ✕ on its thumbnail) and try again.`,
+      };
+    }
+
     clipsWithImages.push({ ...clip, image });
   }
 
