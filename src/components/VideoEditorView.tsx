@@ -10,7 +10,7 @@ import {
   initializeClipDuration,
   splitClip,
 } from "@/lib/actions/videoEditor";
-import { renderVideo, nameRenderedVideo } from "@/lib/actions/render";
+import { renderVideo, nameRenderedVideo, discardRenderResult } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
 import type { TimelineClip } from "@/lib/videoTimeline";
@@ -28,6 +28,7 @@ type RenderStatus = {
   id: string;
   status: "PENDING" | "RENDERING" | "DONE" | "FAILED";
   error: string | null;
+  createdAt: string;
   resultImage: { id: string; url: string } | null;
 } | null;
 
@@ -47,23 +48,12 @@ export default function VideoEditorView({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
-  // Tracks the id of a render-status banner that's been dismissed by
-  // starting a new render, so a stale "Render failed" from a previous
-  // attempt doesn't linger on screen once you've clearly moved on.
-  const [dismissedId, setDismissedId] = useState<string | null>(null);
   const router = useRouter();
 
-  const visibleRenderStatus = renderStatus && renderStatus.id !== dismissedId ? renderStatus : null;
-
-  // Resyncs after a router.refresh() — used after a split (new clip ids
-  // the client can't derive on its own) and after submitting a render
-  // (the draft becomes empty again for the next video).
   useEffect(() => {
     setClips(initialClips);
   }, [initialClips]);
 
-  // Debounced reorder save — same "change locally, persist a moment
-  // later" pattern used for autosave elsewhere in this app.
   const idsKey = clips.map((c) => c.id).join(",");
   const isFirstRun = useRef(true);
   const reorderDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,9 +72,6 @@ export default function VideoEditorView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idsKey]);
 
-  // Polls while a render is in progress — a render can take from seconds
-  // to a couple of minutes, and the webhook updates the database in the
-  // background, so this just needs to notice when that's happened.
   useEffect(() => {
     if (!renderStatus) return;
     if (renderStatus.status !== "PENDING" && renderStatus.status !== "RENDERING") return;
@@ -148,7 +135,6 @@ export default function VideoEditorView({
   };
 
   const handleRenderClick = async () => {
-    if (renderStatus) setDismissedId(renderStatus.id);
     setRendering(true);
     setRenderError(null);
     const result = await renderVideo(siteId, renderId);
@@ -157,6 +143,15 @@ export default function VideoEditorView({
       setRenderError(result.error);
       return;
     }
+    router.refresh();
+  };
+
+  const [discarding, setDiscarding] = useState(false);
+  const handleDiscard = async (statusId: string) => {
+    if (!confirm("Discard this render? This can't be undone.")) return;
+    setDiscarding(true);
+    await discardRenderResult(siteId, statusId);
+    setDiscarding(false);
     router.refresh();
   };
 
@@ -183,22 +178,37 @@ export default function VideoEditorView({
         </div>
       </div>
 
-      {visibleRenderStatus && (
-        <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-          {visibleRenderStatus.status === "PENDING" || visibleRenderStatus.status === "RENDERING" ? (
+      {renderStatus && (
+        <div className="mb-6 rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
+              A previous render — from {new Date(renderStatus.createdAt).toLocaleString()} —
+              separate from the strip below
+            </p>
+            <button
+              type="button"
+              onClick={() => handleDiscard(renderStatus.id)}
+              disabled={discarding}
+              className="text-xs text-neutral-500 underline hover:text-neutral-800 disabled:opacity-50"
+            >
+              {discarding ? "Discarding…" : "Discard this render"}
+            </button>
+          </div>
+
+          {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
             <p className="text-sm text-neutral-600">
               Rendering your video… this can take a minute or two. Feel free to keep working —
               this will update on its own.
             </p>
-          ) : visibleRenderStatus.status === "FAILED" ? (
+          ) : renderStatus.status === "FAILED" ? (
             <p className="text-sm text-red-600">
-              Render failed{visibleRenderStatus.error ? `: ${visibleRenderStatus.error}` : "."}
+              Render failed{renderStatus.error ? `: ${renderStatus.error}` : "."}
             </p>
-          ) : visibleRenderStatus.status === "DONE" && visibleRenderStatus.resultImage ? (
+          ) : renderStatus.status === "DONE" && renderStatus.resultImage ? (
             <NameVideoForm
               siteId={siteId}
-              imageId={visibleRenderStatus.resultImage.id}
-              videoUrl={visibleRenderStatus.resultImage.url}
+              imageId={renderStatus.resultImage.id}
+              videoUrl={renderStatus.resultImage.url}
               onSaved={() => router.refresh()}
             />
           ) : null}
