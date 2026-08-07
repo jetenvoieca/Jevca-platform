@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
+import VideoThumb from "@/components/VideoThumb";
 
 type MediaRow = {
   id: string;
@@ -218,22 +219,23 @@ export default function MediaCatalogueView({
                   }`}
                 >
                   {m.kind === "VIDEO" ? (
-                    m.posterUrl ? (
-                      <div className="relative">
+                    <div className="relative">
+                      {m.posterUrl ? (
                         <img
                           src={m.posterUrl}
                           alt=""
                           className="aspect-square w-full rounded-md object-cover"
                         />
-                        <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                          ▶ Video
-                        </span>
-                      </div>
-                    ) : (
-                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-200 text-xs text-neutral-500">
-                        Video
-                      </div>
-                    )
+                      ) : (
+                        <VideoThumb
+                          src={m.url}
+                          className="aspect-square w-full rounded-md object-cover"
+                        />
+                      )}
+                      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                        ▶ Video
+                      </span>
+                    </div>
                   ) : (
                     <img
                       src={m.url}
@@ -281,9 +283,7 @@ export default function MediaCatalogueView({
                               className="h-10 w-10 rounded object-cover"
                             />
                           ) : (
-                            <div className="flex h-10 w-10 items-center justify-center rounded bg-neutral-200 text-[9px] text-neutral-500">
-                              Video
-                            </div>
+                            <VideoThumb src={m.url} className="h-10 w-10 rounded object-cover" />
                           )
                         ) : (
                           <img src={m.url} alt="" className="h-10 w-10 rounded object-cover" />
