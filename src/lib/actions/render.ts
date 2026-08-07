@@ -8,7 +8,14 @@ import { randomUUID } from "crypto";
 import sharp from "sharp";
 
 const HOST = "https://jevca.netlify.app";
-const OUTPUT_WIDTH = 1920;
+// Square by design decision (2026-08-07): most source material here is
+// phone photos and artwork close-ups, which tend toward square/portrait
+// already — a landscape 16:9 canvas was forcing unnecessary cropping on
+// nearly everything. Square is the safe universal shape for both an
+// Instagram feed post and a typical website embed. Revisit if a proper
+// per-format choice (vertical for Stories/Reels, etc.) is wanted later —
+// see bucket-video-editor-design.md.
+const OUTPUT_WIDTH = 1080;
 const OUTPUT_HEIGHT = 1080;
 
 type ShotstackEnv = "stage" | "v1";
@@ -70,6 +77,7 @@ async function prepareImageAsset(sourceUrl: string, artistId: string): Promise<s
 
   const jpeg = await sharp(original)
     .rotate()
+    .resize(OUTPUT_WIDTH, OUTPUT_HEIGHT, { fit: "cover", position: "center" })
     .flatten({ background: "#ffffff" })
     .toColourspace("srgb")
     .jpeg({ quality: 90 })
@@ -190,9 +198,6 @@ export async function renderVideo(
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
   const editJson = buildEditJson(clipsWithImages, callbackUrl);
 
-  // Saved regardless of what happens next — the single source of truth
-  // for "what did we actually ask Shotstack for", readable directly in
-  // the app rather than chased down in Netlify's function logs.
   await db.videoRender.update({ where: { id: renderId }, data: { debugPayload: editJson } });
 
   let response: Response;
