@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { readTimeline } from "@/lib/videoTimeline";
+import { readTimeline, CROSSFADE_SECONDS } from "@/lib/videoTimeline";
 import { uploadToR2, deleteFromR2 } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
@@ -92,15 +92,29 @@ type ClipWithImage = {
   image: { url: string };
 };
 
+function clipLength(clip: ClipWithImage): number {
+  return clip.kind === "PHOTO"
+    ? clip.duration ?? 2
+    : Math.max(0.1, (clip.trimOut ?? 0) - (clip.trimIn ?? 0));
+}
+
+// Builds the Shotstack Edit API JSON for a timeline. Adjacent clips now
+// crossfade into each other automatically (2026-08-07): the next clip
+// starts slightly before the previous one ends (they overlap on the
+// same track), and the earlier clip carries `transition: { out: "fade" }`
+// — Shotstack's own documented technique for a dissolve. The overlap is
+// clamped to never exceed either neighbour's own length, so a very short
+// clip can't produce a nonsensical negative start time.
 function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
+  const lengths = clips.map(clipLength);
+
   let cursor = 0;
-  const shotClips = clips.map((clip) => {
-    const length =
-      clip.kind === "PHOTO"
-        ? clip.duration ?? 2
-        : Math.max(0.1, (clip.trimOut ?? 0) - (clip.trimIn ?? 0));
+  const shotClips = clips.map((clip, i) => {
+    const length = lengths[i];
     const start = cursor;
-    cursor += length;
+    const isLast = i === clips.length - 1;
+    const overlap = isLast ? 0 : Math.min(CROSSFADE_SECONDS, length, lengths[i + 1]);
+    cursor += length - overlap;
 
     const asset =
       clip.kind === "PHOTO"
@@ -115,6 +129,7 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
       width: OUTPUT_WIDTH,
       height: OUTPUT_HEIGHT,
       position: "center" as const,
+      ...(isLast ? {} : { transition: { out: "fade" as const } }),
     };
   });
 
@@ -134,10 +149,6 @@ export async function renderVideo(
     return { ok: false, error: "This video isn't in a state that can be rendered." };
   }
 
-  // Enforced here, not just in the UI: a finished render that hasn't
-  // been named/saved or discarded must be resolved first — per Craig's
-  // explicit instruction (2026-08-07), "has to be saved or deleted, so
-  // no residual images."
   const unresolved = await db.videoRender.findFirst({
     where: {
       artistId: draft.artistId,
