@@ -10,7 +10,12 @@ import {
   initializeClipDuration,
   splitClip,
 } from "@/lib/actions/videoEditor";
-import { renderVideo, nameRenderedVideo, discardRenderResult } from "@/lib/actions/render";
+import {
+  renderVideo,
+  nameRenderedVideo,
+  discardRenderResult,
+  discardAllPreviousRenders,
+} from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
 import type { TimelineClip } from "@/lib/videoTimeline";
@@ -29,6 +34,8 @@ type RenderStatus = {
   status: "PENDING" | "RENDERING" | "DONE" | "FAILED";
   error: string | null;
   createdAt: string;
+  queueCount: number;
+  debugPayload: string | null;
   resultImage: { id: string; url: string } | null;
 } | null;
 
@@ -155,6 +162,15 @@ export default function VideoEditorView({
     router.refresh();
   };
 
+  const [discardingAll, setDiscardingAll] = useState(false);
+  const handleDiscardAll = async () => {
+    if (!confirm("Discard every previous unnamed/failed render? This can't be undone.")) return;
+    setDiscardingAll(true);
+    await discardAllPreviousRenders(siteId, renderId);
+    setDiscardingAll(false);
+    router.refresh();
+  };
+
   return (
     <div className="px-6 py-4">
       <div className="mb-4 flex items-center justify-between">
@@ -182,8 +198,7 @@ export default function VideoEditorView({
         <div className="mb-6 rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
-              A previous render — from {new Date(renderStatus.createdAt).toLocaleString()} —
-              separate from the strip below
+              Rendered {new Date(renderStatus.createdAt).toLocaleString()}
             </p>
             <button
               type="button"
@@ -194,6 +209,21 @@ export default function VideoEditorView({
               {discarding ? "Discarding…" : "Discard this render"}
             </button>
           </div>
+
+          {renderStatus.queueCount > 1 && (
+            <p className="mb-2 text-xs text-amber-700">
+              {renderStatus.queueCount} previous renders are queued up — discarding this one
+              will reveal the next.{" "}
+              <button
+                type="button"
+                onClick={handleDiscardAll}
+                disabled={discardingAll}
+                className="underline hover:text-amber-900 disabled:opacity-50"
+              >
+                {discardingAll ? "Clearing…" : "Discard all of them at once"}
+              </button>
+            </p>
+          )}
 
           {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
             <p className="text-sm text-neutral-600">
@@ -212,6 +242,8 @@ export default function VideoEditorView({
               onSaved={() => router.refresh()}
             />
           ) : null}
+
+          {renderStatus.debugPayload && <DebugPayload json={renderStatus.debugPayload} />}
         </div>
       )}
 
@@ -303,6 +335,43 @@ export default function VideoEditorView({
               onSplit={(start, end) => handleSplit(selected.id, start, end)}
             />
           )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DebugPayload({ json }: { json: string }) {
+  const [open, setOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(json);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  };
+
+  return (
+    <div className="mt-3 border-t border-amber-200 pt-3">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="text-xs text-neutral-500 underline hover:text-neutral-800"
+      >
+        {open ? "Hide technical details" : "Show technical details"}
+      </button>
+      {open && (
+        <div className="mt-2">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="mb-1 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+          >
+            {copied ? "Copied" : "Copy"}
+          </button>
+          <pre className="max-h-64 overflow-auto rounded-md bg-neutral-900 p-3 text-xs text-neutral-100">
+            {json}
+          </pre>
         </div>
       )}
     </div>
