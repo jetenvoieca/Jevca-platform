@@ -73,7 +73,8 @@ export async function getDraftTimeline(artistId: string) {
 
 // Adds an item to the Bucket AND to the draft timeline in one go — called
 // from the Hopper's "Add to Bucket" button via hopper.ts's
-// addHopperItemToBucket.
+// addHopperItemToBucket, and from the Media Catalogue's own "Add to
+// Bucket" button via addMediaToBucket below.
 export async function appendImageToTimeline(
   artistId: string,
   siteId: string,
@@ -97,6 +98,20 @@ export async function appendImageToTimeline(
 
   revalidatePath(`/sites/${siteId}/hopper`);
   revalidatePath(`/sites/${siteId}/bucket`);
+}
+
+// Adds an already-catalogued Media item straight to the Bucket, without
+// routing it back through the Hopper's "what do you want to do with
+// this" flow — that flow exists to resolve ambiguity about a freshly
+// arrived item, and a Catalogue item has already been through that.
+// Resolves artistId from the image itself, same pattern as
+// hopper.ts's addHopperItemToBucket, so this needs no extra props
+// threaded into the calling component.
+export async function addMediaToBucket(imageId: string, siteId: string): Promise<void> {
+  const image = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true } });
+  if (!image) return;
+  await appendImageToTimeline(image.artistId, siteId, imageId);
+  revalidatePath(`/sites/${siteId}/media`);
 }
 
 // Removes a specific clip from the strip. If no other clip in the
