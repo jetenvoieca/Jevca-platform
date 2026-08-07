@@ -377,6 +377,12 @@ model VideoRender {
   // (not chased down in Netlify's function logs) if a render looks wrong.
   // Temporary/debugging-oriented; not part of the core design.
   debugPayload      Json?
+  // R2 object keys for the temporary re-encoded photo assets uploaded
+  // for this specific render (see prepareImageAsset in render.ts).
+  // Recorded so they can be deleted once Shotstack has actually fetched
+  // them — they're single-use and otherwise leak in storage forever.
+  // Cleaned up by the webhook once the render reaches DONE or FAILED.
+  tempAssetKeys     String[] @default([])
 
   timeline Json?
 
