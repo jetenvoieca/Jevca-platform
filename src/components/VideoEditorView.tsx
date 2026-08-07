@@ -47,7 +47,13 @@ export default function VideoEditorView({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
+  // Tracks the id of a render-status banner that's been dismissed by
+  // starting a new render, so a stale "Render failed" from a previous
+  // attempt doesn't linger on screen once you've clearly moved on.
+  const [dismissedId, setDismissedId] = useState<string | null>(null);
   const router = useRouter();
+
+  const visibleRenderStatus = renderStatus && renderStatus.id !== dismissedId ? renderStatus : null;
 
   // Resyncs after a router.refresh() — used after a split (new clip ids
   // the client can't derive on its own) and after submitting a render
@@ -142,6 +148,7 @@ export default function VideoEditorView({
   };
 
   const handleRenderClick = async () => {
+    if (renderStatus) setDismissedId(renderStatus.id);
     setRendering(true);
     setRenderError(null);
     const result = await renderVideo(siteId, renderId);
@@ -176,22 +183,22 @@ export default function VideoEditorView({
         </div>
       </div>
 
-      {renderStatus && (
+      {visibleRenderStatus && (
         <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-          {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
+          {visibleRenderStatus.status === "PENDING" || visibleRenderStatus.status === "RENDERING" ? (
             <p className="text-sm text-neutral-600">
               Rendering your video… this can take a minute or two. Feel free to keep working —
               this will update on its own.
             </p>
-          ) : renderStatus.status === "FAILED" ? (
+          ) : visibleRenderStatus.status === "FAILED" ? (
             <p className="text-sm text-red-600">
-              Render failed{renderStatus.error ? `: ${renderStatus.error}` : "."}
+              Render failed{visibleRenderStatus.error ? `: ${visibleRenderStatus.error}` : "."}
             </p>
-          ) : renderStatus.status === "DONE" && renderStatus.resultImage ? (
+          ) : visibleRenderStatus.status === "DONE" && visibleRenderStatus.resultImage ? (
             <NameVideoForm
               siteId={siteId}
-              imageId={renderStatus.resultImage.id}
-              videoUrl={renderStatus.resultImage.url}
+              imageId={visibleRenderStatus.resultImage.id}
+              videoUrl={visibleRenderStatus.resultImage.url}
               onSaved={() => router.refresh()}
             />
           ) : null}
