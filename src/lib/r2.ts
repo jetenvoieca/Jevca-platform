@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const accountId = process.env.R2_ACCOUNT_ID!;
@@ -26,6 +26,14 @@ export async function uploadToR2(key: string, body: Buffer, contentType: string)
 
 export async function getFromR2(key: string) {
   return r2.send(new GetObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+}
+
+// Permanently removes a file from R2. Used where "delete" genuinely means
+// delete — discarding a render result, or cleaning up a one-time-use
+// temporary asset — as opposed to the Archive pattern used elsewhere in
+// this app for things that should stay recoverable.
+export async function deleteFromR2(key: string): Promise<void> {
+  await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
 }
 
 // A short-lived URL the browser can PUT a file straight to, bypassing
