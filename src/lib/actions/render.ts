@@ -3,6 +3,9 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { readTimeline } from "@/lib/videoTimeline";
+import { uploadToR2 } from "@/lib/r2";
+import { randomUUID } from "crypto";
+import sharp from "sharp";
 
 // This app's own live URL — used to build absolute image URLs for
 // Shotstack to fetch (it can't reach a relative "/api/media/..." path)
@@ -45,11 +48,8 @@ function formatError(caption: string | null, mimeType: string): string {
 }
 
 // Actually fetches the first bit of each file to confirm it's real and
-// reachable — catches the case a stored mimeType looks fine but the
-// underlying R2 object is missing, empty, or was never fully uploaded
-// (a real risk for older items, especially anything from before direct-
-// to-R2 upload was solid). Returns null if all good, or a specific,
-// nameable problem if not.
+// reachable — catches a stored mimeType that looks fine but an
+// underlying R2 object that's missing, empty, or never fully uploaded.
 async function verifyAssetReachable(url: string, kind: "PHOTO" | "VIDEO"): Promise<string | null> {
   try {
     const res = await fetch(url, { headers: { Range: "bytes=0-2048" } });
@@ -69,6 +69,30 @@ async function verifyAssetReachable(url: string, kind: "PHOTO" | "VIDEO"): Promi
     return "couldn't be reached";
   }
   return null;
+}
+
+// Re-encodes a photo into a plain, flattened, sRGB baseline JPEG before
+// handing it to Shotstack. This is a deliberate safety net: artwork
+// exports from tools like Procreate or Photoshop can carry an alpha
+// channel or a non-standard colour profile that every browser displays
+// fine but that a video renderer can reject outright — exactly the kind
+// of thing behind a generic "not a valid media file" error. Doesn't
+// touch the original file in the Media Catalogue at all; this is a
+// disposable temp copy used only for this one render.
+async function prepareImageAsset(sourceUrl: string, artistId: string): Promise<string> {
+  const res = await fetch(sourceUrl);
+  if (!res.ok) throw new Error(`source image returned ${res.status}`);
+  const original = Buffer.from(await res.arrayBuffer());
+
+  const jpeg = await sharp(original)
+    .flatten({ background: "#ffffff" })
+    .toColourspace("srgb")
+    .jpeg({ quality: 90 })
+    .toBuffer();
+
+  const key = `${artistId}/render-tmp/${randomUUID()}.jpg`;
+  await uploadToR2(key, jpeg, "image/jpeg");
+  return `${HOST}/api/media/${key}`;
 }
 
 type ClipWithImage = {
@@ -93,12 +117,10 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
     const start = cursor;
     cursor += length;
 
-    const url = toAbsoluteUrl(clip.image.url);
-
     const asset =
       clip.kind === "PHOTO"
-        ? { type: "image" as const, src: url }
-        : { type: "video" as const, src: url, trim: clip.trimIn ?? 0 };
+        ? { type: "image" as const, src: clip.image.url }
+        : { type: "video" as const, src: clip.image.url, trim: clip.trimIn ?? 0 };
 
     // Shotstack's naming is the reverse of the usual CSS convention:
     // their "cover" STRETCHES the asset to fill the frame, distorting
@@ -141,7 +163,7 @@ export async function renderVideo(
   const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
   const images = await db.image.findMany({
     where: { id: { in: imageIds } },
-    select: { id: true, url: true, mimeType: true, caption: true },
+    select: { id: true, artistId: true, url: true, mimeType: true, caption: true },
   });
   const byId = new Map(images.map((img) => [img.id, img]));
 
@@ -163,7 +185,8 @@ export async function renderVideo(
       };
     }
 
-    const problem = await verifyAssetReachable(toAbsoluteUrl(image.url), clip.kind);
+    const absoluteUrl = toAbsoluteUrl(image.url);
+    const problem = await verifyAssetReachable(absoluteUrl, clip.kind);
     if (problem) {
       const label = image.caption || "One of the clips";
       return {
@@ -172,7 +195,20 @@ export async function renderVideo(
       };
     }
 
-    clipsWithImages.push({ ...clip, image });
+    if (clip.kind === "PHOTO") {
+      try {
+        const safeUrl = await prepareImageAsset(absoluteUrl, image.artistId);
+        clipsWithImages.push({ ...clip, image: { url: safeUrl } });
+      } catch {
+        const label = image.caption || "One of the clips";
+        return {
+          ok: false,
+          error: `"${label}" couldn't be processed as an image — the file may be corrupted. Remove it and try again.`,
+        };
+      }
+    } else {
+      clipsWithImages.push({ ...clip, image: { url: absoluteUrl } });
+    }
   }
 
   const env = activeEnv();
