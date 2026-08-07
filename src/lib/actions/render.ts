@@ -29,6 +29,22 @@ function activeEnv(): ShotstackEnv {
   return process.env.SHOTSTACK_ENV === "v1" ? "v1" : "stage";
 }
 
+// Formats Shotstack is confirmed to handle. HEIC/HEIF in particular is a
+// real, common gap — that's an iPhone's *default* photo format (not JPEG)
+// unless Camera settings are switched to "Most Compatible", so older
+// items sent before that was understood, or from a phone still on
+// default settings, can easily be HEIC without anyone realising.
+const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]);
+const SUPPORTED_VIDEO_TYPES = new Set(["video/mp4", "video/quicktime"]);
+
+function formatError(caption: string | null, mimeType: string): string {
+  const label = caption || "One of the clips";
+  if (mimeType === "image/heic" || mimeType === "image/heif") {
+    return `"${label}" is a HEIC photo, which Shotstack can't render. Remove it from the strip (the ✕ on its thumbnail), or re-save it as a JPEG and re-add it, then try again.`;
+  }
+  return `"${label}" is in a format Shotstack can't render (${mimeType}). Remove it from the strip and try again.`;
+}
+
 type ClipWithImage = {
   kind: "PHOTO" | "VIDEO";
   duration?: number;
@@ -62,9 +78,7 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
     // their "cover" STRETCHES the asset to fill the frame, distorting
     // it — their "crop" fills the frame while preserving aspect ratio
     // and cropping any overflow, which is what "fill the frame properly"
-    // actually means here. "crop" is also confirmed as Shotstack's own
-    // default, so this could be omitted entirely — left explicit so the
-    // choice is documented rather than relying on an unstated default.
+    // actually means here. Also confirmed as Shotstack's own default.
     return { asset, start, length, fit: "crop" as const };
   });
 
@@ -101,7 +115,7 @@ export async function renderVideo(
   const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
   const images = await db.image.findMany({
     where: { id: { in: imageIds } },
-    select: { id: true, url: true },
+    select: { id: true, url: true, mimeType: true, caption: true },
   });
   const byId = new Map(images.map((img) => [img.id, img]));
 
@@ -109,6 +123,12 @@ export async function renderVideo(
   for (const clip of timeline.clips) {
     const image = byId.get(clip.imageId);
     if (!image) return { ok: false, error: "One of the clips is missing its source file." };
+
+    const allowed = clip.kind === "PHOTO" ? SUPPORTED_IMAGE_TYPES : SUPPORTED_VIDEO_TYPES;
+    if (!allowed.has(image.mimeType)) {
+      return { ok: false, error: formatError(image.caption, image.mimeType) };
+    }
+
     if (clip.kind === "VIDEO" && (clip.trimIn == null || clip.trimOut == null)) {
       return {
         ok: false,
@@ -166,9 +186,6 @@ export async function getRenderStatus(artistId: string) {
 
   return {
     id: render.id,
-    // The `where` clause above already excludes DRAFT — this cast just
-    // tells TypeScript what it can't infer from the query itself, so it
-    // matches the narrower type VideoEditorView expects.
     status: render.status as "PENDING" | "RENDERING" | "DONE" | "FAILED",
     error: render.renderError,
     resultImage: render.resultImage
