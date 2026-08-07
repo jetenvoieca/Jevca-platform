@@ -5,11 +5,6 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import { readTimeline, type Timeline, type TimelineClip } from "@/lib/videoTimeline";
 
-// One active DRAFT VideoRender per artist represents "the video currently
-// being put together in the Video Editor" — enforced in application code
-// only (find-before-create), not a DB constraint. Same 80/20 pattern
-// already used for "only one ACTIVE Purchase per artwork" elsewhere in
-// this project (see decisions-log.md).
 async function getOrCreateDraft(artistId: string) {
   const existing = await db.videoRender.findFirst({
     where: { artistId, status: "DRAFT" },
@@ -24,16 +19,6 @@ async function saveTimeline(renderId: string, timeline: Timeline): Promise<void>
   await db.videoRender.update({ where: { id: renderId }, data: { timeline } });
 }
 
-// The draft's timeline with each clip's Image data joined in — what the
-// Video Editor screen actually renders.
-//
-// Also self-heals a real gap: any Image already sitting at status BUCKET
-// that isn't yet referenced by any clip in the current draft — e.g. one
-// added via the Hopper before this timeline system existed, back when
-// "Add to Bucket" only set the status flag — gets folded into the draft
-// here. Without this, such an item is invisible in the strip forever
-// while still counting toward the Bucket nav badge, which is exactly
-// the mismatch (badge showing more than the strip shows) this fixes.
 export async function getDraftTimeline(artistId: string) {
   const draft = await getOrCreateDraft(artistId);
   let timeline = readTimeline(draft.timeline);
@@ -71,10 +56,6 @@ export async function getDraftTimeline(artistId: string) {
   return { renderId: draft.id, clips };
 }
 
-// Adds an item to the Bucket AND to the draft timeline in one go — called
-// from the Hopper's "Add to Bucket" button via hopper.ts's
-// addHopperItemToBucket, and from the Media Catalogue's own "Add to
-// Bucket" button via addMediaToBucket below.
 export async function appendImageToTimeline(
   artistId: string,
   siteId: string,
@@ -91,7 +72,7 @@ export async function appendImageToTimeline(
   const clip: TimelineClip =
     image.kind === "PHOTO"
       ? { id: randomUUID(), imageId, kind: "PHOTO", duration: 2 }
-      : { id: randomUUID(), imageId, kind: "VIDEO" }; // trim/sourceDuration set once the browser loads its metadata
+      : { id: randomUUID(), imageId, kind: "VIDEO" };
 
   timeline.clips.push(clip);
   await saveTimeline(draft.id, timeline);
@@ -100,13 +81,6 @@ export async function appendImageToTimeline(
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// Adds an already-catalogued Media item straight to the Bucket, without
-// routing it back through the Hopper's "what do you want to do with
-// this" flow — that flow exists to resolve ambiguity about a freshly
-// arrived item, and a Catalogue item has already been through that.
-// Resolves artistId from the image itself, same pattern as
-// hopper.ts's addHopperItemToBucket, so this needs no extra props
-// threaded into the calling component.
 export async function addMediaToBucket(imageId: string, siteId: string): Promise<void> {
   const image = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true } });
   if (!image) return;
@@ -114,10 +88,6 @@ export async function addMediaToBucket(imageId: string, siteId: string): Promise
   revalidatePath(`/sites/${siteId}/media`);
 }
 
-// Removes a specific clip from the strip. If no other clip in the
-// timeline still references the same Image (i.e. this wasn't one half of
-// a split clip), the Image goes back to ordinary Sorted media — nothing
-// archived, per bucket-video-editor-design.md.
 export async function removeClipFromTimeline(
   siteId: string,
   renderId: string,
@@ -143,29 +113,6 @@ export async function removeClipFromTimeline(
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// Coarser version of the above for when you only have an Image id, not a
-// specific clip id — removes every clip referencing that Image and
-// returns it to Sorted. Used by the plain Bucket grid's "Remove" button
-// during the transition; kept for robustness even now the real strip is
-// the primary screen.
-export async function removeImageFromBucketEntirely(
-  artistId: string,
-  siteId: string,
-  imageId: string
-): Promise<void> {
-  const draft = await db.videoRender.findFirst({ where: { artistId, status: "DRAFT" } });
-  if (draft) {
-    const timeline = readTimeline(draft.timeline);
-    const nextClips = timeline.clips.filter((c) => c.imageId !== imageId);
-    if (nextClips.length !== timeline.clips.length) {
-      await saveTimeline(draft.id, { clips: nextClips });
-    }
-  }
-  await db.image.update({ where: { id: imageId }, data: { status: "SORTED" } });
-  revalidatePath(`/sites/${siteId}/bucket`);
-}
-
-// Persists a new strip order after a drag-and-drop reorder.
 export async function reorderTimeline(
   siteId: string,
   renderId: string,
@@ -179,15 +126,12 @@ export async function reorderTimeline(
   const reordered = orderedClipIds
     .map((id) => byId.get(id))
     .filter((c): c is TimelineClip => !!c);
-  // Safety net: if the id list somehow doesn't cover every clip, keep
-  // whatever's missing at the end rather than silently losing it.
   const missing = timeline.clips.filter((c) => !orderedClipIds.includes(c.id));
 
   await saveTimeline(renderId, { clips: [...reordered, ...missing] });
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// Sets a photo's on-screen duration, in seconds.
 export async function setClipDuration(
   siteId: string,
   renderId: string,
@@ -204,10 +148,6 @@ export async function setClipDuration(
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// Records the source video's real duration the first time the browser
-// loads its metadata, and — only if not already known — seeds
-// trimIn=0/trimOut=full length as the starting default. Safe to call
-// repeatedly; a no-op once sourceDuration is already recorded.
 export async function initializeClipDuration(
   siteId: string,
   renderId: string,
@@ -228,8 +168,6 @@ export async function initializeClipDuration(
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// Sets a video clip's trim in/out points, in seconds. Clamped against
-// sourceDuration when known, so trim can never exceed the real source.
 export async function setClipTrim(
   siteId: string,
   renderId: string,
@@ -249,12 +187,6 @@ export async function setClipTrim(
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// Mid-clip cut: marks [cutStart, cutEnd] within a video clip's current
-// trim range for removal, splitting it into two adjacent clips — Part A
-// (original trimIn → cutStart) and Part B (cutEnd → original trimOut) —
-// in place of the original, both pointing at the same source Image and
-// carrying the same sourceDuration so each can still be trimmed further
-// independently. See bucket-video-editor-design.md, §4.
 export async function splitClip(
   siteId: string,
   renderId: string,
