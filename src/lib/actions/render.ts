@@ -3,18 +3,11 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { readTimeline } from "@/lib/videoTimeline";
-import { uploadToR2 } from "@/lib/r2";
+import { uploadToR2, deleteFromR2 } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 
 const HOST = "https://jevca.netlify.app";
-// Square by design decision (2026-08-07): most source material here is
-// phone photos and artwork close-ups, which tend toward square/portrait
-// already — a landscape 16:9 canvas was forcing unnecessary cropping on
-// nearly everything. Square is the safe universal shape for both an
-// Instagram feed post and a typical website embed. Revisit if a proper
-// per-format choice (vertical for Stories/Reels, etc.) is wanted later —
-// see bucket-video-editor-design.md.
 const OUTPUT_WIDTH = 1080;
 const OUTPUT_HEIGHT = 1080;
 
@@ -70,7 +63,10 @@ async function verifyAssetReachable(url: string, kind: "PHOTO" | "VIDEO"): Promi
   return null;
 }
 
-async function prepareImageAsset(sourceUrl: string, artistId: string): Promise<string> {
+async function prepareImageAsset(
+  sourceUrl: string,
+  artistId: string
+): Promise<{ url: string; key: string }> {
   const res = await fetch(sourceUrl);
   if (!res.ok) throw new Error(`source image returned ${res.status}`);
   const original = Buffer.from(await res.arrayBuffer());
@@ -85,7 +81,7 @@ async function prepareImageAsset(sourceUrl: string, artistId: string): Promise<s
 
   const key = `${artistId}/render-tmp/${randomUUID()}.jpg`;
   await uploadToR2(key, jpeg, "image/jpeg");
-  return `${HOST}/api/media/${key}`;
+  return { url: `${HOST}/api/media/${key}`, key };
 }
 
 type ClipWithImage = {
@@ -138,6 +134,23 @@ export async function renderVideo(
     return { ok: false, error: "This video isn't in a state that can be rendered." };
   }
 
+  // Enforced here, not just in the UI: a finished render that hasn't
+  // been named/saved or discarded must be resolved first — per Craig's
+  // explicit instruction (2026-08-07), "has to be saved or deleted, so
+  // no residual images."
+  const unresolved = await db.videoRender.findFirst({
+    where: {
+      artistId: draft.artistId,
+      OR: [{ status: "FAILED" }, { status: "DONE", resultImage: { caption: null } }],
+    },
+  });
+  if (unresolved) {
+    return {
+      ok: false,
+      error: "Save or discard your previous render before starting a new one.",
+    };
+  }
+
   const timeline = readTimeline(draft.timeline);
   if (timeline.clips.length === 0) {
     return { ok: false, error: "Add at least one photo or video first." };
@@ -151,6 +164,8 @@ export async function renderVideo(
   const byId = new Map(images.map((img) => [img.id, img]));
 
   const clipsWithImages: ClipWithImage[] = [];
+  const tempKeys: string[] = [];
+
   for (const clip of timeline.clips) {
     const image = byId.get(clip.imageId);
     if (!image) return { ok: false, error: "One of the clips is missing its source file." };
@@ -180,9 +195,11 @@ export async function renderVideo(
 
     if (clip.kind === "PHOTO") {
       try {
-        const safeUrl = await prepareImageAsset(absoluteUrl, image.artistId);
-        clipsWithImages.push({ ...clip, image: { url: safeUrl } });
+        const prepared = await prepareImageAsset(absoluteUrl, image.artistId);
+        tempKeys.push(prepared.key);
+        clipsWithImages.push({ ...clip, image: { url: prepared.url } });
       } catch {
+        await Promise.all(tempKeys.map((k) => deleteFromR2(k).catch(() => {})));
         const label = image.caption || "One of the clips";
         return {
           ok: false,
@@ -198,7 +215,10 @@ export async function renderVideo(
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
   const editJson = buildEditJson(clipsWithImages, callbackUrl);
 
-  await db.videoRender.update({ where: { id: renderId }, data: { debugPayload: editJson } });
+  await db.videoRender.update({
+    where: { id: renderId },
+    data: { debugPayload: editJson, tempAssetKeys: tempKeys },
+  });
 
   let response: Response;
   try {
@@ -274,12 +294,16 @@ export async function nameRenderedVideo(
 }
 
 export async function discardRenderResult(siteId: string, renderId: string): Promise<void> {
-  const render = await db.videoRender.findUnique({ where: { id: renderId } });
+  const render = await db.videoRender.findUnique({
+    where: { id: renderId },
+    include: { resultImage: true },
+  });
   if (!render) return;
 
   await db.videoRender.delete({ where: { id: renderId } });
-  if (render.resultImageId) {
-    await db.image.delete({ where: { id: render.resultImageId } }).catch(() => {});
+  if (render.resultImage) {
+    await db.image.delete({ where: { id: render.resultImage.id } }).catch(() => {});
+    await deleteFromR2(render.resultImage.key).catch(() => {});
   }
 
   revalidatePath(`/sites/${siteId}/bucket`);
@@ -300,14 +324,15 @@ export async function discardAllPreviousRenders(
       artistId: draft.artistId,
       OR: [{ status: "FAILED" }, { status: "DONE", resultImage: { caption: null } }],
     },
-    select: { id: true, resultImageId: true },
+    include: { resultImage: true },
   });
 
-  const imageIds = toDelete.map((r) => r.resultImageId).filter((id): id is string => !!id);
-
   await db.videoRender.deleteMany({ where: { id: { in: toDelete.map((r) => r.id) } } });
-  if (imageIds.length > 0) {
-    await db.image.deleteMany({ where: { id: { in: imageIds } } });
+
+  const imagesToDelete = toDelete.map((r) => r.resultImage).filter((img): img is NonNullable<typeof img> => !!img);
+  if (imagesToDelete.length > 0) {
+    await db.image.deleteMany({ where: { id: { in: imagesToDelete.map((img) => img.id) } } });
+    await Promise.all(imagesToDelete.map((img) => deleteFromR2(img.key).catch(() => {})));
   }
 
   revalidatePath(`/sites/${siteId}/bucket`);
