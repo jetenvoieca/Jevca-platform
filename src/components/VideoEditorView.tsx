@@ -18,7 +18,7 @@ import {
 } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
-import type { TimelineClip } from "@/lib/videoTimeline";
+import { CROSSFADE_SECONDS, type TimelineClip } from "@/lib/videoTimeline";
 
 type ImageInfo = {
   id: string;
@@ -38,6 +38,10 @@ type RenderStatus = {
   debugPayload: string | null;
   resultImage: { id: string; url: string } | null;
 } | null;
+
+function clipLength(c: Clip): number {
+  return c.kind === "PHOTO" ? c.duration ?? 2 : Math.max(0, (c.trimOut ?? 0) - (c.trimIn ?? 0));
+}
 
 export default function VideoEditorView({
   siteId,
@@ -89,11 +93,14 @@ export default function VideoEditorView({
 
   const selected = clips.find((c) => c.id === selectedId) ?? null;
 
-  const totalSeconds = clips.reduce((sum, c) => {
-    if (c.kind === "PHOTO") return sum + (c.duration ?? 2);
-    const inS = c.trimIn ?? 0;
-    const outS = c.trimOut ?? inS;
-    return sum + Math.max(0, outS - inS);
+  // Accounts for the crossfade overlap between clips (2026-08-07) — every
+  // adjacent pair now overlaps by CROSSFADE_SECONDS in the actual render,
+  // so a plain sum of clip lengths would overstate the real result.
+  const totalSeconds = clips.reduce((sum, c, i) => {
+    const length = clipLength(c);
+    const isLast = i === clips.length - 1;
+    const overlap = isLast ? 0 : Math.min(CROSSFADE_SECONDS, length, clipLength(clips[i + 1]));
+    return sum + length - overlap;
   }, 0);
 
   const blockedByUnresolvedRender =
