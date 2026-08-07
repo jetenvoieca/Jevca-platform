@@ -31,6 +31,16 @@ export type Timeline = {
 
 export const emptyTimeline: Timeline = { clips: [] };
 
+// Every adjacent pair of clips now crossfades automatically at render
+// time (2026-08-07) — this is Shotstack's own fixed fade duration for
+// their basic "fade" transition (confirmed directly in their docs: it's
+// not an adjustable parameter, always exactly 1 second), so the overlap
+// between clips has to match this exactly for the fade to land cleanly.
+// Shared between the render logic (which builds the actual overlap) and
+// the editor's displayed total-duration estimate (which needs to shorten
+// its number by the same amount, or it'd overstate the real result).
+export const CROSSFADE_SECONDS = 1;
+
 export function readTimeline(raw: unknown): Timeline {
   if (
     raw &&
