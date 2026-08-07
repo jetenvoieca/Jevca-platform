@@ -96,10 +96,6 @@ export default function VideoEditorView({
     return sum + Math.max(0, outS - inS);
   }, 0);
 
-  // A finished render (DONE or FAILED) that hasn't been named/saved or
-  // discarded blocks starting a new one — per Craig's explicit
-  // instruction (2026-08-07). PENDING/RENDERING doesn't block: that one's
-  // still in progress, not "unresolved."
   const blockedByUnresolvedRender =
     renderStatus != null && (renderStatus.status === "DONE" || renderStatus.status === "FAILED");
 
@@ -193,11 +189,7 @@ export default function VideoEditorView({
             type="button"
             onClick={handleRenderClick}
             disabled={clips.length === 0 || rendering || blockedByUnresolvedRender}
-            title={
-              blockedByUnresolvedRender
-                ? "Save or discard the render below first"
-                : undefined
-            }
+            title={blockedByUnresolvedRender ? "Save or discard the render below first" : undefined}
             className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
           >
             {rendering ? "Sending…" : "Render Video"}
