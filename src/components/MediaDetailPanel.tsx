@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateMedia, archiveMedia } from "@/lib/actions/mediaCatalogue";
+import { addMediaToBucket } from "@/lib/actions/videoEditor";
 
 export type MediaDetail = {
   id: string;
@@ -30,6 +31,7 @@ export default function MediaDetailPanel({
 }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  const [addedToBucket, setAddedToBucket] = useState(false);
   const router = useRouter();
 
   const handleArchive = () => {
@@ -40,6 +42,13 @@ export default function MediaDetailPanel({
     });
   };
 
+  const handleAddToBucket = () => {
+    startTransition(async () => {
+      await addMediaToBucket(media.id, siteId);
+      setAddedToBucket(true);
+    });
+  };
+
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
       <div className="mb-4 flex items-start justify-between">
@@ -47,6 +56,14 @@ export default function MediaDetailPanel({
           {media.caption || "Untitled"}
         </h2>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleAddToBucket}
+            disabled={isPending || addedToBucket}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+          >
+            {addedToBucket ? "Added to Bucket" : "Add to Bucket"}
+          </button>
           <button
             type="button"
             onClick={handleArchive}
