@@ -18,9 +18,6 @@ enum SiteStatus {
   LIVE
   PAUSED
   ARCHIVED
-  // A site that currently exists elsewhere (a third-party/legacy site) that
-  // will be rebuilt in Studio — a holding status while it's tracked but not
-  // yet actually under construction here.
   ISYT
 }
 
@@ -52,12 +49,6 @@ enum PurchaseType {
   INSTALMENTS
 }
 
-// STRIPE: the buyer paid online, card processed automatically — invoices
-// for these are just a record of what already happened.
-// GALLERY: sold through a third party (a gallery, consignment) — no card
-// payment at all, an invoice is raised for the net amount owed (sale
-// price less commission) and marked paid manually once it's actually
-// been received, e.g. by bank transfer outside this system.
 enum SaleChannel {
   STRIPE
   GALLERY
@@ -78,25 +69,12 @@ enum PaymentStatus {
 model Artist {
   id        String       @id @default(cuid())
   name      String
-  // Separate from `name` deliberately — `name` is free text (could be
-  // "Dr Jane Smith", initials, a studio/collective name, etc.), which
-  // makes it unsafe to derive a greeting from programmatically. This is
-  // typed once, correctly, specifically for personalised
-  // emails/messages later.
   firstName String?
   email     String?
   phone     String?
   notes     String?
 
-  // Authenticates the iPhone Shortcut's uploads into this artist's Hopper
-  // — a machine credential, unrelated to the app's own shared login
-  // password. Shown/regenerable from the Owner panel; regenerating
-  // invalidates any Shortcut still configured with the old value.
   hopperToken String @unique @default(cuid())
-  // What the artist pays Jevca for site management, and how — plain
-  // record-keeping alongside notes, not connected to Stripe or any billing
-  // automation (that's what the Artwork Payments panel is for — a
-  // different thing: what a buyer pays for an artwork).
   subscriptionAmount Decimal? @db.Decimal(10, 2)
   paymentMethod      String?
   status    ArtistStatus @default(ACTIVE)
@@ -105,46 +83,23 @@ model Artist {
   sites     Site[]
   artworks  Artwork[]
 
-  // Preset option lists for the Artwork Catalogue's Settings screen. Live
-  // here rather than on Site because Artworks belong to the artist, not any
-  // one of their sites — the same piece can be featured on more than one
-  // site, so its catalogue and the presets that describe it are shared
-  // across all of that artist's sites, not duplicated per site.
   artworkGroups    String[] @default([])
   artworkTypes     String[] @default([])
   artworkLocations String[] @default([])
   mediumPresets    String[] @default([])
   sizePresets      String[] @default([])
 
-  // Preset tag list for the Media Catalogue's Settings screen — used for
-  // tagging Marketing media (Related media is found via its linked
-  // artwork instead, so doesn't need tags).
   mediaTags String[] @default([])
 
-  // Offered in the Sale source dropdown when starting a sale — records who
-  // actually initiated it (e.g. "Website enquiry", "Instagram", "Studio
-  // visit"), for the artist's own reference.
   saleSources String[] @default([])
 
-  // Invoicing identity — used to generate the PDF invoice for a sale.
-  // Kept on Artist (not Site), same reasoning as Subscription/Payment:
-  // this is business identity, not a per-website setting.
   logoUrl           String?
   invoiceAddress    String?
-  // Blank vatNumber means "not VAT registered" — the invoice simply
-  // shows the total with no VAT breakdown in that case.
   vatNumber         String?
   vatRate           Decimal? @db.Decimal(5, 2)
   invoiceFooterText String?
-  // The number the *next* invoice generated will receive — settable once
-  // as a starting point, then incremented automatically each time an
-  // invoice is actually generated (see getOrAssignInvoiceNumber).
   nextInvoiceNumber Int      @default(1)
 
-  // Global defaults for the Payments panel. Each SaleTerms record copies
-  // these in once, at creation (same "seed once, then independent"
-  // pattern as Presentation being seeded from Catalogue) — changing a
-  // default here does not retroactively change terms already created.
   defaultInstalmentCount     Int    @default(5)
   defaultReleaseMessage      String @default("Available for collection/delivery once 2 payments have been made.")
   defaultReleaseTriggerCount Int    @default(2)
@@ -159,22 +114,9 @@ model Site {
   domain               String?
   status               SiteStatus @default(DRAFT)
   multiLanguageEnabled Boolean    @default(false)
-  // Off by default — plenty of sites are portfolio-only and never sell
-  // from the site, so the Sales menu item only appears once switched on
-  // per site (toggled from the Sites Directory panel).
   salesEnabled         Boolean    @default(false)
-  // Most artworks sell through a single site and inherit this — a
-  // per-artwork override lives on SaleTerms.currency for the rare
-  // cross-currency sale.
   defaultCurrency      String     @default("GBP")
-  // Place-marker for when the public renderer supports multiple
-  // interchangeable templates (they'll all read the same underlying
-  // site/page/artwork data) — not wired to anything yet.
   template             String     @default("Default")
-  // Manual domain-renewal record-keeping — entered by hand for now rather
-  // than synced live from Namecheap, since Namecheap's API requires a
-  // fixed whitelisted IP that Netlify's serverless functions don't have.
-  // Revisit if a static-IP proxy or relay server is ever set up.
   domainStatus         String?
   domainRenewalDate    DateTime?
   artistId             String
@@ -211,9 +153,6 @@ model Page {
   @@index([siteId])
 }
 
-// A saved, named navigation arrangement. A site can have several; exactly
-// one is active (used by the live site) at a time — switching which one is
-// active is a single action, not a rebuild.
 model Menu {
   id       String  @id @default(cuid())
   siteId   String
@@ -229,8 +168,6 @@ model Menu {
   @@index([siteId])
 }
 
-// A named cluster of menu items within one Menu (e.g. "MY GALLERIES").
-// Belongs to exactly one Menu — editing one saved Menu never touches another.
 model MenuGroup {
   id       String @id @default(cuid())
   menuId   String
@@ -246,10 +183,6 @@ model MenuGroup {
   @@index([menuId])
 }
 
-// One entry in a menu group. Always points at a real Page, but carries its
-// own label and byline — fully independent of that Page's actual title, and
-// the same Page can be featured by more than one MenuItem (different
-// groups, different menus, or more than once in the same group).
 model MenuItem {
   id       String    @id @default(cuid())
   groupId  String
@@ -272,12 +205,8 @@ model Artwork {
   artistId String
   artist   Artist @relation(fields: [artistId], references: [id])
 
-  // Catalogue number is the record's identifier — auto-generated, unique
-  // per artist (not per site, since the same artwork can appear on more
-  // than one of that artist's sites).
   catalogueNumber String
 
-  // --- Presentation facet: what customers see on the public site ---
   presentationTitle String
   presentationPrice Decimal?            @db.Decimal(10, 2)
   dimensions        String?
@@ -287,7 +216,6 @@ model Artwork {
   availability      ArtworkAvailability @default(AVAILABLE)
   visible           Boolean             @default(true)
 
-  // --- Catalogue facet: the artist's private working record ---
   catalogueName  String
   year           Int?
   type           String?
@@ -302,21 +230,9 @@ model Artwork {
 
   images Image[]
 
-  // The formal "main image" designation (2026-08-05, Hopper design) —
-  // previously there was no real concept of this, just whichever linked
-  // image happened to sort first. Nullable and backward compatible: any
-  // artwork without one set (i.e. every artwork created before this)
-  // falls back to that same earlier-image behaviour wherever a
-  // representative thumbnail is needed, rather than needing a backfill.
   mainImageId String? @unique
   mainImage   Image?  @relation("ArtworkMainImage", fields: [mainImageId], references: [id])
 
-  // Sale terms are the artwork's own pricing/instalment defaults —
-  // independent of any actual sale. Purchases are the real, specific sale
-  // attempts against those terms; only one is ACTIVE at a time (enforced
-  // in application code, not a DB constraint — a deliberate 80/20 call,
-  // same spirit as other simplifications in this project), with past
-  // ones kept as history (COMPLETED or ABANDONED) rather than deleted.
   saleTerms SaleTerms?
   purchases Purchase[]
 
@@ -327,11 +243,6 @@ model Artwork {
   @@index([artistId])
 }
 
-// What this artwork sells for and how — a property of the artwork
-// itself, nothing to do with any particular buyer. Autosaves like the
-// rest of the app; editing it never affects a Purchase already in
-// progress, since Purchase snapshots these values at the moment it's
-// created (see below).
 model SaleTerms {
   id        String  @id @default(cuid())
   artworkId String  @unique
@@ -340,14 +251,8 @@ model SaleTerms {
   totalAmount Decimal @db.Decimal(10, 2)
   currency    String  @default("GBP")
 
-  // The default number of instalments offered, if a buyer chooses to pay
-  // that way. Whether THIS particular sale actually uses instalments is a
-  // decision made per Purchase, not fixed here.
   instalmentCount Int @default(5)
 
-  // Seeded from the Artist's global defaults at creation, then
-  // independent — the starting point copied onto each new Purchase, not a
-  // live link to it.
   releaseMessage      String?
   releaseTriggerCount Int?
 
@@ -355,11 +260,6 @@ model SaleTerms {
   updatedAt DateTime @updatedAt
 }
 
-// A real, specific sale attempt — created only when you actually start
-// taking payment (an explicit action, not autosaved). Either it completes
-// or it's abandoned; there's no "remove" of a plan because there's no
-// plan to remove — SaleTerms stays untouched regardless of what happens
-// here, ready for the next buyer.
 model Purchase {
   id        String  @id @default(cuid())
   artworkId String
@@ -371,32 +271,16 @@ model Purchase {
 
   buyerName    String?
   buyerEmail   String?
-  // Only really used for Gallery invoices ("Bill to") — harmless to leave
-  // available for any channel.
   buyerAddress String?
 
   type PurchaseType
 
-  // Who actually initiated this sale (Website enquiry, Instagram, studio
-  // visit, etc.) — free-standing reference info, not tied to Stripe or
-  // payment mechanics. Options come from the Artist's saleSources preset
-  // list, same pattern as Group/Type/Medium.
   source String?
 
-  // Only set for channel = GALLERY. The invoice shows totalAmount, this
-  // percentage, and the resulting net amount owed to the artist — not
-  // stored as a separate figure, always computed from these two so it
-  // can never drift out of sync.
   commissionPercent Decimal? @db.Decimal(5, 2)
 
-  // Assigned once, lazily, the first time an invoice PDF is actually
-  // generated for this Purchase (see getOrAssignInvoiceNumber) — so
-  // re-downloading the same invoice later never changes its number.
   invoiceNumber Int?
 
-  // Snapshot of SaleTerms at the moment this Purchase was started — so
-  // editing Terms later never rewrites what this buyer actually agreed
-  // to. Only meaningful for the price this buyer is actually paying.
   totalAmount         Decimal @db.Decimal(10, 2)
   currency            String
   instalmentCount     Int?
@@ -411,23 +295,17 @@ model Purchase {
   payments Payment[]
 
   createdAt DateTime  @default(now())
-  // Set when a Purchase leaves ACTIVE (either direction) — when it
-  // happened, for the history list.
   closedAt DateTime?
 
   @@index([artworkId])
 }
 
-// One row per actual instalment (or the single row for a Full payment).
-// Status only ever changes in response to a Stripe webhook event — never
-// set optimistically from the admin UI — so it always reflects what
-// Stripe actually confirms happened.
 model Payment {
   id         String   @id @default(cuid())
   purchaseId String
   purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
-  sequence Int // 1st payment, 2nd, etc. — 1 for a Full payment.
+  sequence Int
   amount   Decimal       @db.Decimal(10, 2)
   currency String
   status   PaymentStatus @default(DUE)
@@ -450,9 +328,6 @@ model Image {
   artist   Artist @relation(fields: [artistId], references: [id])
   key       String
   url       String
-  // A still frame grabbed client-side at upload time, so a video has a
-  // real thumbnail in the catalogue grid instead of a generic placeholder.
-  // Null for photos, and for any video uploaded before this existed.
   posterUrl String?
   kind      ImageKind   @default(PHOTO)
   mimeType  String
@@ -464,16 +339,8 @@ model Image {
   artworkId String?
   artwork   Artwork?    @relation(fields: [artworkId], references: [id])
 
-  // Back-relation only (no fields/references here — those live on
-  // Artwork.mainImageId) so this Image can be looked up as "the main
-  // image of X" if ever needed; in practice always read from the
-  // Artwork side (artwork.mainImage).
   mainImageOfArtwork Artwork? @relation("ArtworkMainImage")
 
-  // Back-relation only (fields/references live on
-  // VideoRender.resultImageId) — this Image is the finished output of a
-  // render, if it came from the Video Editor rather than a direct
-  // upload.
   sourceVideoRender VideoRender?
 
   createdAt DateTime @default(now())
@@ -484,10 +351,6 @@ model Image {
 }
 
 enum VideoRenderStatus {
-  // A render not yet submitted to Shotstack — this IS the Bucket/Video
-  // Editor's working state. Exactly one DRAFT per artist represents "the
-  // video currently being put together" (enforced in application code,
-  // not a DB constraint — same 80/20 pattern as Purchase.ACTIVE).
   DRAFT
   PENDING
   RENDERING
@@ -502,34 +365,21 @@ model VideoRender {
   artistId String
   artist   Artist @relation(fields: [artistId], references: [id])
 
-  // Set once you name it, after the render completes — null while
-  // DRAFT/PENDING/RENDERING, since naming happens after you see the
-  // result.
   name String?
 
   status           VideoRenderStatus @default(DRAFT)
   shotstackRenderId String?
-  // Which Shotstack environment ("stage" or "v1") this specific render was
-  // submitted to — recorded at submit time so status checks and the
-  // webhook always query back against the same environment even if the
-  // app-wide SHOTSTACK_ENV setting changes later.
   renderEnv         String?
-  // Populated from Shotstack's own confirmed status if a render fails,
-  // so the Video Editor can show a real reason rather than just "Failed".
   renderError       String?
+  // The exact JSON submitted to Shotstack for this render, saved every
+  // time regardless of success or failure — a self-contained diagnostic
+  // record so the actual request can be inspected directly in the app
+  // (not chased down in Netlify's function logs) if a render looks wrong.
+  // Temporary/debugging-oriented; not part of the core design.
+  debugPayload      Json?
 
-  // The ordered list of clips making up this video — reorder, per-photo
-  // duration, per-video trim in/out, all live here as JSON while status
-  // is DRAFT. Shape: { clips: [{ id, imageId, kind, duration?, trimIn?,
-  // trimOut? }] }. See src/lib/videoTimeline.ts for the authoritative
-  // TypeScript type. Kept as JSON (not a relational table) for the same
-  // reason Content Blocks are — this isn't queried relationally
-  // elsewhere, and it mirrors an already-established pattern in this
-  // codebase rather than introducing a new one.
   timeline Json?
 
-  // The finished video, once downloaded from Shotstack and saved into
-  // this app's own R2 storage as a normal Image row. Null until DONE.
   resultImageId String? @unique
   resultImage   Image?  @relation(fields: [resultImageId], references: [id])
 
