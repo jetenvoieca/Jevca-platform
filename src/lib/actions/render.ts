@@ -13,6 +13,12 @@ import sharp from "sharp";
 // the admin tool itself.
 const HOST = "https://jevca.netlify.app";
 
+// The output canvas for every render — referenced directly by each clip
+// too (see buildEditJson) rather than left to Shotstack's implicit
+// per-clip default.
+const OUTPUT_WIDTH = 1920;
+const OUTPUT_HEIGHT = 1080;
+
 type ShotstackEnv = "stage" | "v1";
 
 function shotstackHost(env: ShotstackEnv) {
@@ -47,9 +53,6 @@ function formatError(caption: string | null, mimeType: string): string {
   return `"${label}" is in a format Shotstack can't render (${mimeType}). Remove it from the strip and try again.`;
 }
 
-// Actually fetches the first bit of each file to confirm it's real and
-// reachable — catches a stored mimeType that looks fine but an
-// underlying R2 object that's missing, empty, or never fully uploaded.
 async function verifyAssetReachable(url: string, kind: "PHOTO" | "VIDEO"): Promise<string | null> {
   try {
     const res = await fetch(url, { headers: { Range: "bytes=0-2048" } });
@@ -72,19 +75,23 @@ async function verifyAssetReachable(url: string, kind: "PHOTO" | "VIDEO"): Promi
 }
 
 // Re-encodes a photo into a plain, flattened, sRGB baseline JPEG before
-// handing it to Shotstack. This is a deliberate safety net: artwork
-// exports from tools like Procreate or Photoshop can carry an alpha
-// channel or a non-standard colour profile that every browser displays
-// fine but that a video renderer can reject outright — exactly the kind
-// of thing behind a generic "not a valid media file" error. Doesn't
-// touch the original file in the Media Catalogue at all; this is a
-// disposable temp copy used only for this one render.
+// handing it to Shotstack. `.rotate()` with no arguments is the critical
+// piece here: many phone photos store raw sensor pixels sideways plus an
+// invisible EXIF "Orientation" tag telling viewers to rotate on display.
+// Browsers do this automatically, which is why the photo always looked
+// correct up to this point — but without calling `.rotate()` explicitly,
+// sharp does NOT apply that correction, so the file handed to Shotstack
+// was the still-sideways original with the correction silently dropped.
+// `.rotate()` bakes the correction into the actual pixels and removes
+// the now-redundant tag, so every downstream consumer (including
+// Shotstack) sees it the same way a browser always did.
 async function prepareImageAsset(sourceUrl: string, artistId: string): Promise<string> {
   const res = await fetch(sourceUrl);
   if (!res.ok) throw new Error(`source image returned ${res.status}`);
   const original = Buffer.from(await res.arrayBuffer());
 
   const jpeg = await sharp(original)
+    .rotate()
     .flatten({ background: "#ffffff" })
     .toColourspace("srgb")
     .jpeg({ quality: 90 })
@@ -103,10 +110,6 @@ type ClipWithImage = {
   image: { url: string };
 };
 
-// Builds the Shotstack Edit API JSON for a timeline — one track, clips
-// placed sequentially. Shotstack positions each clip by an explicit
-// start time rather than auto-sequencing, so we compute each one's
-// cumulative offset ourselves.
 function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
   let cursor = 0;
   const shotClips = clips.map((clip) => {
@@ -122,30 +125,24 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
         ? { type: "image" as const, src: clip.image.url }
         : { type: "video" as const, src: clip.image.url, trim: clip.trimIn ?? 0 };
 
-    // Shotstack's naming is the reverse of the usual CSS convention:
-    // their "cover" STRETCHES the asset to fill the frame, distorting
-    // it — their "crop" fills the frame while preserving aspect ratio
-    // and cropping any overflow, which is what "fill the frame properly"
-    // actually means here. Also confirmed as Shotstack's own default.
-    return { asset, start, length, fit: "crop" as const };
+    return {
+      asset,
+      start,
+      length,
+      fit: "crop" as const,
+      width: OUTPUT_WIDTH,
+      height: OUTPUT_HEIGHT,
+      position: "center" as const,
+    };
   });
 
   return {
     timeline: { tracks: [{ clips: shotClips }] },
-    // 1920x1080 is a reasonable default for now — cropping specifically
-    // for Instagram's 9:16 vs the website's likely 16:9 is flagged in
-    // bucket-video-editor-design.md as a short follow-up conversation
-    // once the core flow is proven, not something to guess at here.
-    output: { format: "mp4" as const, size: { width: 1920, height: 1080 } },
+    output: { format: "mp4" as const, size: { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT } },
     callback: callbackUrl,
   };
 }
 
-// Submits the current draft to Shotstack. Returns a plain ok/error
-// result rather than throwing — Next.js redacts thrown Server Action
-// errors in production, so anything the person needs to actually see
-// (a bad clip, a Shotstack rejection) has to come back this way, same
-// convention already used for Payments.
 export async function renderVideo(
   siteId: string,
   renderId: string
@@ -215,6 +212,13 @@ export async function renderVideo(
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
   const editJson = buildEditJson(clipsWithImages, callbackUrl);
 
+  // Temporary diagnostic: prints the exact JSON sent to Shotstack into
+  // this function's Netlify log. If anything still looks visually wrong
+  // after a render, find this invocation under Netlify's Functions tab
+  // and paste the logged JSON back — that shows exactly what was
+  // submitted rather than what we assume was submitted.
+  console.log("[shotstack] submitting edit:", JSON.stringify(editJson, null, 2));
+
   let response: Response;
   try {
     response = await fetch(`${shotstackHost(env)}/render`, {
@@ -243,10 +247,6 @@ export async function renderVideo(
   return { ok: true };
 }
 
-// The most recent render worth showing something about — in progress,
-// just failed, or just finished and not yet named. Returns null once
-// there's nothing left to show (e.g. the result has already been named
-// — see nameRenderedVideo).
 export async function getRenderStatus(artistId: string) {
   const render = await db.videoRender.findFirst({
     where: { artistId, status: { in: ["PENDING", "RENDERING", "DONE", "FAILED"] } },
@@ -266,9 +266,6 @@ export async function getRenderStatus(artistId: string) {
   };
 }
 
-// Names the finished video — this is what actually "saves" it, in the
-// sense the Media Catalogue cares about (an unnamed/uncaptioned item is
-// still perfectly real, just not yet acknowledged in the UI).
 export async function nameRenderedVideo(
   siteId: string,
   imageId: string,
