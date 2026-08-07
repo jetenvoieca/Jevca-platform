@@ -190,7 +190,10 @@ export async function renderVideo(
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
   const editJson = buildEditJson(clipsWithImages, callbackUrl);
 
-  console.log("[shotstack] submitting edit:", JSON.stringify(editJson, null, 2));
+  // Saved regardless of what happens next — the single source of truth
+  // for "what did we actually ask Shotstack for", readable directly in
+  // the app rather than chased down in Netlify's function logs.
+  await db.videoRender.update({ where: { id: renderId }, data: { debugPayload: editJson } });
 
   let response: Response;
   try {
@@ -227,17 +230,10 @@ export async function getRenderStatus(artistId: string) {
       orderBy: { updatedAt: "desc" },
       include: { resultImage: true },
     }),
-    // Genuine count of leftover renders — either still failed, or DONE
-    // but never named/saved. This is what tells us whether "still
-    // showing after discard" means the discard didn't work, or just
-    // that there's more than one queued up behind it.
     db.videoRender.count({
       where: {
         artistId,
-        OR: [
-          { status: "FAILED" },
-          { status: "DONE", resultImage: { caption: null } },
-        ],
+        OR: [{ status: "FAILED" }, { status: "DONE", resultImage: { caption: null } }],
       },
     }),
   ]);
@@ -251,6 +247,7 @@ export async function getRenderStatus(artistId: string) {
     error: render.renderError,
     createdAt: render.createdAt.toISOString(),
     queueCount,
+    debugPayload: render.debugPayload ? JSON.stringify(render.debugPayload, null, 2) : null,
     resultImage: render.resultImage
       ? { id: render.resultImage.id, url: render.resultImage.url }
       : null,
@@ -271,9 +268,6 @@ export async function nameRenderedVideo(
   revalidatePath(`/sites/${siteId}/media`);
 }
 
-// Permanently discards a single finished render you don't want to keep —
-// deletes both the temporary Image row and the VideoRender record. A
-// genuine destructive action, not a soft "hide".
 export async function discardRenderResult(siteId: string, renderId: string): Promise<void> {
   const render = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!render) return;
@@ -286,13 +280,6 @@ export async function discardRenderResult(siteId: string, renderId: string): Pro
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// Clears the entire backlog of leftover renders for an artist in one go
-// — everything FAILED, and everything DONE that was never named/saved.
-// Deliberately safe: a DONE render with a real caption (i.e. actually
-// saved to the Media Catalogue) is never matched by this query, so
-// nothing you've kept is ever at risk. Resolves the artist from the
-// current draft rather than needing a new prop threaded through the
-// component.
 export async function discardAllPreviousRenders(
   siteId: string,
   currentDraftRenderId: string
@@ -306,10 +293,7 @@ export async function discardAllPreviousRenders(
   const toDelete = await db.videoRender.findMany({
     where: {
       artistId: draft.artistId,
-      OR: [
-        { status: "FAILED" },
-        { status: "DONE", resultImage: { caption: null } },
-      ],
+      OR: [{ status: "FAILED" }, { status: "DONE", resultImage: { caption: null } }],
     },
     select: { id: true, resultImageId: true },
   });
