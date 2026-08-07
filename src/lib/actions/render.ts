@@ -7,15 +7,7 @@ import { uploadToR2 } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 
-// This app's own live URL — used to build absolute image URLs for
-// Shotstack to fetch (it can't reach a relative "/api/media/..." path)
-// and the webhook callback URL. Update if a custom domain ever fronts
-// the admin tool itself.
 const HOST = "https://jevca.netlify.app";
-
-// The output canvas for every render — referenced directly by each clip
-// too (see buildEditJson) rather than left to Shotstack's implicit
-// per-clip default.
 const OUTPUT_WIDTH = 1920;
 const OUTPUT_HEIGHT = 1080;
 
@@ -31,9 +23,6 @@ function apiKeyFor(env: ShotstackEnv): string {
     : process.env.SHOTSTACK_API_KEY_STAGE!;
 }
 
-// The one on/off switch for going live — flip SHOTSTACK_ENV in Netlify
-// from "stage" to "v1" once you're happy with render quality. No code
-// change needed either side of that.
 function activeEnv(): ShotstackEnv {
   return process.env.SHOTSTACK_ENV === "v1" ? "v1" : "stage";
 }
@@ -74,17 +63,6 @@ async function verifyAssetReachable(url: string, kind: "PHOTO" | "VIDEO"): Promi
   return null;
 }
 
-// Re-encodes a photo into a plain, flattened, sRGB baseline JPEG before
-// handing it to Shotstack. `.rotate()` with no arguments is the critical
-// piece here: many phone photos store raw sensor pixels sideways plus an
-// invisible EXIF "Orientation" tag telling viewers to rotate on display.
-// Browsers do this automatically, which is why the photo always looked
-// correct up to this point — but without calling `.rotate()` explicitly,
-// sharp does NOT apply that correction, so the file handed to Shotstack
-// was the still-sideways original with the correction silently dropped.
-// `.rotate()` bakes the correction into the actual pixels and removes
-// the now-redundant tag, so every downstream consumer (including
-// Shotstack) sees it the same way a browser always did.
 async function prepareImageAsset(sourceUrl: string, artistId: string): Promise<string> {
   const res = await fetch(sourceUrl);
   if (!res.ok) throw new Error(`source image returned ${res.status}`);
@@ -212,11 +190,6 @@ export async function renderVideo(
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
   const editJson = buildEditJson(clipsWithImages, callbackUrl);
 
-  // Temporary diagnostic: prints the exact JSON sent to Shotstack into
-  // this function's Netlify log. If anything still looks visually wrong
-  // after a render, find this invocation under Netlify's Functions tab
-  // and paste the logged JSON back — that shows exactly what was
-  // submitted rather than what we assume was submitted.
   console.log("[shotstack] submitting edit:", JSON.stringify(editJson, null, 2));
 
   let response: Response;
@@ -260,6 +233,7 @@ export async function getRenderStatus(artistId: string) {
     id: render.id,
     status: render.status as "PENDING" | "RENDERING" | "DONE" | "FAILED",
     error: render.renderError,
+    createdAt: render.createdAt.toISOString(),
     resultImage: render.resultImage
       ? { id: render.resultImage.id, url: render.resultImage.url }
       : null,
@@ -278,4 +252,21 @@ export async function nameRenderedVideo(
   });
   revalidatePath(`/sites/${siteId}/bucket`);
   revalidatePath(`/sites/${siteId}/media`);
+}
+
+// Permanently discards a finished render you don't want to keep — deletes
+// both the temporary Image row and the VideoRender record. A genuine
+// destructive action (not a soft "hide"), since an unnamed render isn't
+// referenced anywhere else yet, unlike everything else in the Media
+// Catalogue.
+export async function discardRenderResult(siteId: string, renderId: string): Promise<void> {
+  const render = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!render) return;
+
+  await db.videoRender.delete({ where: { id: renderId } });
+  if (render.resultImageId) {
+    await db.image.delete({ where: { id: render.resultImageId } }).catch(() => {});
+  }
+
+  revalidatePath(`/sites/${siteId}/bucket`);
 }
