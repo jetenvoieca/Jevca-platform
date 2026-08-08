@@ -98,17 +98,6 @@ function clipLength(clip: ClipWithImage): number {
     : Math.max(0.1, (clip.trimOut ?? 0) - (clip.trimIn ?? 0));
 }
 
-// Builds the Shotstack Edit API JSON for a timeline. Adjacent clips
-// overlap by CROSSFADE_SECONDS on the same track. Both directions of the
-// transition are set — `out: "fade"` on the outgoing clip AND
-// `in: "fade"` on the incoming one — rather than just one. Reasoning
-// (2026-08-07, after a first attempt with only `out` produced no visible
-// crossfade): on a single track, the later clip in the list most likely
-// draws on top of the earlier one during their overlap, so the earlier
-// clip fading out underneath something already fully covering it would
-// never be visible — it's the incoming clip fading IN, revealing what's
-// underneath, that actually does the work. Setting both makes this
-// robust to either z-order behaviour rather than betting on one.
 function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
   const lengths = clips.map(clipLength);
 
@@ -273,7 +262,21 @@ export async function getRenderStatus(artistId: string) {
     db.videoRender.findFirst({
       where: { artistId, status: { in: ["PENDING", "RENDERING", "DONE", "FAILED"] } },
       orderBy: { updatedAt: "desc" },
-      include: { resultImage: true },
+      include: {
+        resultImage: {
+          select: {
+            id: true,
+            url: true,
+            posterUrl: true,
+            kind: true,
+            caption: true,
+            altText: true,
+            tags: true,
+            artworkId: true,
+            artwork: { select: { id: true, presentationTitle: true } },
+          },
+        },
+      },
     }),
     db.videoRender.count({
       where: {
@@ -294,7 +297,17 @@ export async function getRenderStatus(artistId: string) {
     queueCount,
     debugPayload: render.debugPayload ? JSON.stringify(render.debugPayload, null, 2) : null,
     resultImage: render.resultImage
-      ? { id: render.resultImage.id, url: render.resultImage.url }
+      ? {
+          id: render.resultImage.id,
+          url: render.resultImage.url,
+          posterUrl: render.resultImage.posterUrl,
+          kind: render.resultImage.kind,
+          caption: render.resultImage.caption,
+          altText: render.resultImage.altText,
+          tags: render.resultImage.tags,
+          artworkId: render.resultImage.artworkId,
+          artwork: render.resultImage.artwork,
+        }
       : null,
   };
 }
