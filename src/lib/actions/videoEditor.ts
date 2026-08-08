@@ -20,21 +20,6 @@ async function saveTimeline(renderId: string, timeline: Timeline): Promise<void>
   await db.videoRender.update({ where: { id: renderId }, data: { timeline } });
 }
 
-// The draft's timeline with each clip's Image data joined in.
-//
-// Self-heals orphaned Bucket items — but, critically, checks every OTHER
-// VideoRender belonging to this artist (not just the current draft)
-// before deciding an Image is genuinely orphaned. Root-caused a real bug
-// (2026-08-08): a fresh draft created moments after submitting a render
-// would immediately "reclaim" that render's own images, because they're
-// still status BUCKET until the webhook flips them to SORTED once
-// Shotstack finishes — which can take up to a couple of minutes. Without
-// this check, those images got permanently baked into the new draft's
-// timeline during that race window, so they'd keep reappearing (looking
-// exactly like a fresh Hopper add) even long after the render finished
-// and the webhook had done its job — because by then the stale
-// reference was already sitting in the new draft's own timeline, not
-// being re-derived each time.
 export async function getDraftTimeline(artistId: string) {
   const draft = await getOrCreateDraft(artistId);
   let timeline = readTimeline(draft.timeline);
@@ -137,6 +122,36 @@ export async function removeClipFromTimeline(
     ...(stillUsed
       ? []
       : [db.image.update({ where: { id: clip.imageId }, data: { status: "SORTED" as const } })]),
+  ]);
+
+  revalidatePath(`/sites/${siteId}/bucket`);
+}
+
+// Manually resets the current draft to completely empty — every clip
+// removed, each underlying Image returned to ordinary Sorted media.
+// Needed as a genuine escape hatch (2026-08-08): a draft can end up with
+// stale clip references baked directly into its saved timeline (e.g.
+// from the self-heal race bug that existed before the fix in
+// getDraftTimeline above) — fixing the code that CAUSES corruption
+// doesn't retroactively repair a timeline that's already corrupted, so
+// this gives a reliable way back to a genuinely clean slate regardless
+// of how it got dirty.
+export async function clearDraftTimeline(siteId: string, renderId: string): Promise<void> {
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft) return;
+  const timeline = readTimeline(draft.timeline);
+  const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
+
+  await db.$transaction([
+    db.videoRender.update({ where: { id: renderId }, data: { timeline: { clips: [] } } }),
+    ...(imageIds.length > 0
+      ? [
+          db.image.updateMany({
+            where: { id: { in: imageIds }, status: "BUCKET" },
+            data: { status: "SORTED" as const },
+          }),
+        ]
+      : []),
   ]);
 
   revalidatePath(`/sites/${siteId}/bucket`);
