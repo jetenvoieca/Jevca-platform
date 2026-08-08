@@ -26,6 +26,8 @@ export default function MediaDetailPanel({
   variant = "catalogue",
   onDiscard,
   discarding = false,
+  onClose,
+  onArchived,
 }: {
   siteId: string;
   media: MediaDetail;
@@ -34,18 +36,29 @@ export default function MediaDetailPanel({
   variant?: "catalogue" | "pendingRender";
   onDiscard?: () => void;
   discarding?: boolean;
+  // Optional — when the parent manages selection as client-side state
+  // (Media Catalogue, 2026-08-08 perf pass) it passes these to update its
+  // own state directly instead of a full-page navigation. Falls back to
+  // the old Link/router.push behaviour when not provided.
+  onClose?: () => void;
+  onArchived?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [addedToBucket, setAddedToBucket] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [tags, setTags] = useState<string[]>(media.tags);
   const router = useRouter();
 
   const handleArchive = () => {
     if (!confirm("Remove this item from the catalogue? It can be restored later via Show archived.")) return;
     startTransition(async () => {
       await archiveMedia(media.id, siteId);
-      router.push(`/sites/${siteId}/media`);
+      if (onArchived) {
+        onArchived();
+      } else {
+        router.push(`/sites/${siteId}/media`);
+      }
     });
   };
 
@@ -58,11 +71,9 @@ export default function MediaDetailPanel({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      <div className="mb-4 flex items-start justify-between">
-        <h2 className="text-lg font-semibold text-neutral-900">
-          {variant === "pendingRender" ? "Name this video" : media.caption || "Untitled"}
-        </h2>
-        {variant === "catalogue" ? (
+      {variant === "catalogue" && (
+        <div className="mb-4 flex items-start justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">{media.caption || "Untitled"}</h2>
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -82,13 +93,19 @@ export default function MediaDetailPanel({
             </button>
             <Link
               href={`/sites/${siteId}/media`}
+              onClick={(e) => {
+                if (onClose) {
+                  e.preventDefault();
+                  onClose();
+                }
+              }}
               className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
             >
               Close
             </Link>
           </div>
-        ) : null}
-      </div>
+        </div>
+      )}
 
       {media.kind === "VIDEO" ? (
         <div className="group relative mb-1 cursor-zoom-in" onClick={() => setLightboxOpen(true)}>
@@ -199,16 +216,37 @@ export default function MediaDetailPanel({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">
-            Tags <span className="font-normal text-neutral-400">(comma separated)</span>
-          </label>
-          <input
-            type="text"
-            name="tags"
-            defaultValue={media.tags.join(", ")}
-            placeholder={tagPresets.slice(0, 3).join(", ") || "e.g. seasonal, campaign"}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
+          <input type="hidden" name="tags" value={tags.join(", ")} />
+          {tagPresets.length === 0 ? (
+            <p className="text-xs text-neutral-400">
+              No tags set up yet — add some under Media Catalogue → Settings.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {tagPresets.map((t) => {
+                const active = tags.includes(t);
+                return (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() =>
+                      setTags((prev) =>
+                        active ? prev.filter((x) => x !== t) : [...prev, t]
+                      )
+                    }
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      active
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {t}
+                  </button>
+                );
+              })}
+            </div>
+          )}
           <p className="mt-1 text-xs text-neutral-400">
             Mainly useful for Marketing media, to search/sort by later.
           </p>
@@ -229,7 +267,7 @@ export default function MediaDetailPanel({
               disabled={discarding}
               className="ml-auto text-sm text-red-600 underline hover:text-red-800 disabled:opacity-50"
             >
-              {discarding ? "Discarding…" : "Discard this render"}
+              {discarding ? "Discarding…" : "Discard"}
             </button>
           )}
         </div>
