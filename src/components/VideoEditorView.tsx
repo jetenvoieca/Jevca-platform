@@ -290,6 +290,7 @@ export default function VideoEditorView({
             </div>
           ) : renderStatus.status === "DONE" && renderStatus.resultImage ? (
             <MediaDetailPanel
+              key={renderStatus.resultImage.id}
               siteId={siteId}
               media={renderStatus.resultImage}
               tagPresets={tagPresets}
@@ -304,11 +305,6 @@ export default function VideoEditorView({
         </div>
       )}
 
-      {renderStatus && (
-        <p className="mb-2 text-xs font-medium text-neutral-500">
-          Your next video — build it here while the one above is being reviewed:
-        </p>
-      )}
       {clips.length === 0 ? (
         <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
           Nothing here yet — add items from the Hopper.
