@@ -12,12 +12,12 @@ import {
 } from "@/lib/actions/videoEditor";
 import {
   renderVideo,
-  nameRenderedVideo,
   discardRenderResult,
   discardAllPreviousRenders,
 } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
+import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import { CROSSFADE_SECONDS, type TimelineClip } from "@/lib/videoTimeline";
 
 type ImageInfo = {
@@ -36,7 +36,7 @@ type RenderStatus = {
   createdAt: string;
   queueCount: number;
   debugPayload: string | null;
-  resultImage: { id: string; url: string } | null;
+  resultImage: MediaDetail | null;
 } | null;
 
 function clipLength(c: Clip): number {
@@ -48,11 +48,15 @@ export default function VideoEditorView({
   renderId,
   initialClips,
   renderStatus,
+  tagPresets,
+  artistArtworks,
 }: {
   siteId: string;
   renderId: string;
   initialClips: Clip[];
   renderStatus: RenderStatus;
+  tagPresets: string[];
+  artistArtworks: { id: string; presentationTitle: string }[];
 }) {
   const [clips, setClips] = useState<Clip[]>(initialClips);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -93,9 +97,6 @@ export default function VideoEditorView({
 
   const selected = clips.find((c) => c.id === selectedId) ?? null;
 
-  // Accounts for the crossfade overlap between clips (2026-08-07) — every
-  // adjacent pair now overlaps by CROSSFADE_SECONDS in the actual render,
-  // so a plain sum of clip lengths would overstate the real result.
   const totalSeconds = clips.reduce((sum, c, i) => {
     const length = clipLength(c);
     const isLast = i === clips.length - 1;
@@ -251,12 +252,19 @@ export default function VideoEditorView({
               Render failed{renderStatus.error ? `: ${renderStatus.error}` : "."}
             </p>
           ) : renderStatus.status === "DONE" && renderStatus.resultImage ? (
-            <NameVideoForm
-              siteId={siteId}
-              imageId={renderStatus.resultImage.id}
-              videoUrl={renderStatus.resultImage.url}
-              onSaved={() => router.refresh()}
-            />
+            <>
+              <p className="mb-2 text-sm font-medium text-neutral-700">
+                Your video is ready — name and describe it below to save it to the Media
+                Catalogue:
+              </p>
+              <MediaDetailPanel
+                siteId={siteId}
+                media={renderStatus.resultImage}
+                tagPresets={tagPresets}
+                artistArtworks={artistArtworks}
+                hideActions
+              />
+            </>
           ) : null}
 
           {renderStatus.debugPayload && <DebugPayload json={renderStatus.debugPayload} />}
@@ -390,58 +398,6 @@ function DebugPayload({ json }: { json: string }) {
           </pre>
         </div>
       )}
-    </div>
-  );
-}
-
-function NameVideoForm({
-  siteId,
-  imageId,
-  videoUrl,
-  onSaved,
-}: {
-  siteId: string;
-  imageId: string;
-  videoUrl: string;
-  onSaved: () => void;
-}) {
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
-
-  const handleSave = async () => {
-    setSaving(true);
-    await nameRenderedVideo(siteId, imageId, name);
-    setSaving(false);
-    setSaved(true);
-    onSaved();
-  };
-
-  if (saved) return <p className="text-sm text-green-700">Saved to the Media Catalogue.</p>;
-
-  return (
-    <div>
-      <p className="mb-2 text-sm font-medium text-neutral-700">
-        Your video is ready — name it to save it to the Media Catalogue:
-      </p>
-      <video src={videoUrl} controls className="mb-3 max-h-64 w-full rounded-md bg-black" />
-      <div className="flex gap-2">
-        <input
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Studio walkthrough — August"
-          className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
-        />
-        <button
-          type="button"
-          onClick={handleSave}
-          disabled={saving}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:bg-neutral-200"
-        >
-          {saving ? "Saving…" : "Save"}
-        </button>
-      </div>
     </div>
   );
 }
