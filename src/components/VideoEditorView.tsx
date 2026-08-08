@@ -26,12 +26,15 @@ type ImageInfo = {
 };
 type Clip = TimelineClip & { image: ImageInfo };
 
+type SourceClip = { id: string; kind: "PHOTO" | "VIDEO"; image: ImageInfo };
+
 type RenderStatus = {
   id: string;
   status: "PENDING" | "RENDERING" | "DONE" | "FAILED";
   error: string | null;
   createdAt: string;
   debugPayload: string | null;
+  sourceClips: SourceClip[];
   resultImage: MediaDetail | null;
 } | null;
 
@@ -180,7 +183,7 @@ export default function VideoEditorView({
   };
 
   return (
-    <div className="px-6 py-4">
+    <div className="mx-auto max-w-6xl px-6 py-4">
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold text-neutral-900">Video Editor</h1>
@@ -207,7 +210,6 @@ export default function VideoEditorView({
             type="button"
             onClick={handleRenderClick}
             disabled={clips.length === 0 || rendering || blockedByUnresolvedRender}
-            title={blockedByUnresolvedRender ? "Save or discard the render below first" : undefined}
             className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
           >
             {rendering ? "Sending…" : "Render Video"}
@@ -223,6 +225,39 @@ export default function VideoEditorView({
 
       {renderStatus && (
         <div className="mb-6 max-w-md">
+          {renderStatus.sourceClips.length > 0 && (
+            <div className="mb-3">
+              <p className="mb-2 text-xs font-medium text-neutral-500">
+                Clips used in this render — check against what you uploaded:
+              </p>
+              <div className="flex gap-2 overflow-x-auto pb-1">
+                {renderStatus.sourceClips.map((clip) => (
+                  <div key={clip.id} className="w-16 flex-shrink-0">
+                    {clip.kind === "VIDEO" ? (
+                      clip.image.posterUrl ? (
+                        <img
+                          src={clip.image.posterUrl}
+                          alt=""
+                          className="aspect-square w-full rounded-md object-cover"
+                        />
+                      ) : (
+                        <VideoThumb
+                          src={clip.image.url}
+                          className="aspect-square w-full rounded-md object-cover"
+                        />
+                      )
+                    ) : (
+                      <img
+                        src={clip.image.url}
+                        alt=""
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
             <div className="rounded-lg border border-neutral-200 bg-white p-4">
               <p className="text-sm text-neutral-600">
