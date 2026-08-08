@@ -137,14 +137,19 @@ export default function HopperView({
   const handleAddToMedia = (item: HopperItem) => {
     startTransition(async () => {
       await addHopperItemToMedia(item.id, siteId);
-      logProcessed(item, "Added to Media Catalogue", `/sites/${siteId}/media/${item.id}`);
+      logProcessed(item, "Added to Media Catalogue", `/sites/${siteId}/media?selected=${item.id}`);
       advanceAfterAction();
     });
   };
 
   const handleAddToBucket = (item: HopperItem) => {
     startTransition(async () => {
-      await addHopperItemToBucket(item.id, siteId);
+      const result = await addHopperItemToBucket(item.id, siteId);
+      if (!result.ok) {
+        setAddError(result.error);
+        return;
+      }
+      setAddError(null);
       logProcessed(item, "Added to Bucket", `/sites/${siteId}/bucket`);
       advanceAfterAction();
     });
