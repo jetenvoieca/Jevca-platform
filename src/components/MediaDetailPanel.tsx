@@ -47,6 +47,7 @@ export default function MediaDetailPanel({
   const [saved, setSaved] = useState(false);
   const [addedToBucket, setAddedToBucket] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [videoPlaying, setVideoPlaying] = useState(false);
   const [tags, setTags] = useState<string[]>(media.tags);
   const router = useRouter();
 
@@ -117,25 +118,35 @@ export default function MediaDetailPanel({
       )}
 
       {media.kind === "VIDEO" ? (
-        <div className="group relative mb-1 cursor-zoom-in" onClick={() => setLightboxOpen(true)}>
+        videoPlaying ? (
           <video
             src={media.url}
-            poster={media.posterUrl || undefined}
-            muted
-            disablePictureInPicture
-            disableRemotePlayback
-            className="pointer-events-none w-full rounded-md"
+            controls
+            autoPlay
+            className="mb-1 w-full rounded-md"
+            onEnded={() => setVideoPlaying(false)}
           />
-          {/* Always-visible play badge — without this a paused video is
-              indistinguishable from a photo at rest (2026-08-08). */}
-          <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/10 transition group-hover:bg-black/30">
-            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white transition group-hover:bg-black/80">
-              <svg viewBox="0 0 24 24" fill="currentColor" className="ml-1 h-6 w-6">
-                <path d="M8 5v14l11-7z" />
-              </svg>
-            </span>
+        ) : (
+          <div className="group relative mb-1 cursor-pointer" onClick={() => setVideoPlaying(true)}>
+            <video
+              src={media.url}
+              poster={media.posterUrl || undefined}
+              muted
+              disablePictureInPicture
+              disableRemotePlayback
+              className="pointer-events-none w-full rounded-md"
+            />
+            {/* Always-visible play badge — without this a paused video is
+                indistinguishable from a photo at rest (2026-08-08). */}
+            <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/10 transition group-hover:bg-black/30">
+              <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white transition group-hover:bg-black/80">
+                <svg viewBox="0 0 24 24" fill="currentColor" className="ml-1 h-6 w-6">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              </span>
+            </div>
           </div>
-        </div>
+        )
       ) : (
         <img
           src={media.url}
@@ -145,30 +156,28 @@ export default function MediaDetailPanel({
         />
       )}
       <p className="mb-4 text-xs text-neutral-400">
-        {media.kind === "VIDEO" ? "Click to play." : "Click to view full size."}
+        {media.kind === "VIDEO"
+          ? videoPlaying
+            ? "Playing."
+            : "Click to play, right here."
+          : "Click to view full size."}
       </p>
 
+      {/* Lightbox — photos only now (2026-08-08). Video used to open here
+          too, but that was full-screen, and the actual requirement was
+          always to play inline in the editor without leaving the page —
+          see the inline video block above instead. */}
       {lightboxOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
           onClick={() => setLightboxOpen(false)}
         >
-          {media.kind === "VIDEO" ? (
-            <video
-              src={media.url}
-              controls
-              autoPlay
-              className="max-h-[90vh] max-w-[90vw] rounded-md"
-              onClick={(e) => e.stopPropagation()}
-            />
-          ) : (
-            <img
-              src={media.url}
-              alt=""
-              className="max-h-[90vh] max-w-[90vw] rounded-md object-contain"
-              onClick={(e) => e.stopPropagation()}
-            />
-          )}
+          <img
+            src={media.url}
+            alt=""
+            className="max-h-[90vh] max-w-[90vw] rounded-md object-contain"
+            onClick={(e) => e.stopPropagation()}
+          />
           <button
             type="button"
             onClick={() => setLightboxOpen(false)}
