@@ -113,7 +113,9 @@ export default function MediaDetailPanel({
             src={media.url}
             poster={media.posterUrl || undefined}
             muted
-            className="w-full rounded-md"
+            disablePictureInPicture
+            disableRemotePlayback
+            className="pointer-events-none w-full rounded-md"
           />
           {/* Always-visible play badge — without this a paused video is
               indistinguishable from a photo at rest (2026-08-08). */}
@@ -265,7 +267,7 @@ export default function MediaDetailPanel({
               type="button"
               onClick={onDiscard}
               disabled={discarding}
-              className="ml-auto text-sm text-red-600 underline hover:text-red-800 disabled:opacity-50"
+              className="ml-auto rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
               {discarding ? "Discarding…" : "Discard"}
             </button>
