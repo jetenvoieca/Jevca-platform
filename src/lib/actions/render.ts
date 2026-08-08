@@ -11,6 +11,28 @@ const HOST = "https://jevca.netlify.app";
 const OUTPUT_WIDTH = 1080;
 const OUTPUT_HEIGHT = 1080;
 
+// One video at a time, enforced completely (2026-08-08): a render counts
+// as "in the way" from the moment it's submitted until it's actually
+// resolved — PENDING and RENDERING (still in progress on Shotstack),
+// FAILED (needs discarding), or DONE but not yet saved/named. This is
+// the single definition used everywhere something could conflict with
+// an in-flight render — starting a new one, or adding more clips to the
+// next draft while this one hasn't been dealt with yet.
+export async function hasUnresolvedRender(artistId: string): Promise<boolean> {
+  const unresolved = await db.videoRender.findFirst({
+    where: {
+      artistId,
+      OR: [
+        { status: "PENDING" },
+        { status: "RENDERING" },
+        { status: "FAILED" },
+        { status: "DONE", resultImage: { caption: null } },
+      ],
+    },
+  });
+  return unresolved != null;
+}
+
 type ShotstackEnv = "stage" | "v1";
 
 function shotstackHost(env: ShotstackEnv) {
@@ -147,13 +169,7 @@ export async function renderVideo(
     return { ok: false, error: "This video isn't in a state that can be rendered." };
   }
 
-  const unresolved = await db.videoRender.findFirst({
-    where: {
-      artistId: draft.artistId,
-      OR: [{ status: "FAILED" }, { status: "DONE", resultImage: { caption: null } }],
-    },
-  });
-  if (unresolved) {
+  if (await hasUnresolvedRender(draft.artistId)) {
     return {
       ok: false,
       error: "Save or discard your previous render before starting a new one.",
