@@ -85,16 +85,24 @@ export default function MediaPicker({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // This picker searches across the whole catalogue rather than paging
+  // through it (unlike the Media Catalogue screen itself, which now
+  // paginates — 2026-08-08), so it asks for a generously high ceiling
+  // rather than the Catalogue's normal page size, to avoid silently
+  // hiding results below whatever a user searches for.
+  const PICKER_FETCH_LIMIT = 1000;
+
   const load = (q: string, p: "marketing" | "related") => {
     startTransition(async () => {
       if (linkedArtworkId) {
-        const results = await listMedia(artistId, {
+        const { rows } = await listMedia(artistId, {
           purpose: p,
           q: q || undefined,
           artworkId: p === "related" ? linkedArtworkId : undefined,
+          limit: PICKER_FETCH_LIMIT,
         });
-        setImages(toPicked(results, videoOnly, mediaKinds));
-        if (p === "related") setRelatedCount(results.length);
+        setImages(toPicked(rows, videoOnly, mediaKinds));
+        if (p === "related") setRelatedCount(rows.length);
       } else {
         const results = await listImages(artistId, q || undefined);
         setImages(toPicked(results, videoOnly, mediaKinds));
@@ -111,11 +119,12 @@ export default function MediaPicker({
     // until clicked once.
     if (linkedArtworkId && purpose !== "related") {
       startTransition(async () => {
-        const relatedResults = await listMedia(artistId, {
+        const { rows } = await listMedia(artistId, {
           purpose: "related",
           artworkId: linkedArtworkId,
+          limit: PICKER_FETCH_LIMIT,
         });
-        setRelatedCount(relatedResults.length);
+        setRelatedCount(rows.length);
       });
     }
   };
