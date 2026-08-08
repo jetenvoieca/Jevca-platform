@@ -8,6 +8,7 @@ import { readTimeline, type Timeline, type TimelineClip } from "@/lib/videoTimel
 async function getOrCreateDraft(artistId: string) {
   const existing = await db.videoRender.findFirst({
     where: { artistId, status: "DRAFT" },
+    orderBy: { createdAt: "desc" },
   });
   if (existing) return existing;
   return db.videoRender.create({
@@ -19,18 +20,46 @@ async function saveTimeline(renderId: string, timeline: Timeline): Promise<void>
   await db.videoRender.update({ where: { id: renderId }, data: { timeline } });
 }
 
+// The draft's timeline with each clip's Image data joined in.
+//
+// Self-heals orphaned Bucket items — but, critically, checks every OTHER
+// VideoRender belonging to this artist (not just the current draft)
+// before deciding an Image is genuinely orphaned. Root-caused a real bug
+// (2026-08-08): a fresh draft created moments after submitting a render
+// would immediately "reclaim" that render's own images, because they're
+// still status BUCKET until the webhook flips them to SORTED once
+// Shotstack finishes — which can take up to a couple of minutes. Without
+// this check, those images got permanently baked into the new draft's
+// timeline during that race window, so they'd keep reappearing (looking
+// exactly like a fresh Hopper add) even long after the render finished
+// and the webhook had done its job — because by then the stale
+// reference was already sitting in the new draft's own timeline, not
+// being re-derived each time.
 export async function getDraftTimeline(artistId: string) {
   const draft = await getOrCreateDraft(artistId);
   let timeline = readTimeline(draft.timeline);
 
-  const referencedIds = new Set(timeline.clips.map((c) => c.imageId));
-  const orphaned = await db.image.findMany({
-    where: { artistId, status: "BUCKET", id: { notIn: [...referencedIds] } },
+  const otherRenders = await db.videoRender.findMany({
+    where: { artistId, id: { not: draft.id } },
+    select: { timeline: true },
+  });
+  const referencedElsewhere = new Set<string>();
+  for (const r of otherRenders) {
+    for (const c of readTimeline(r.timeline).clips) {
+      referencedElsewhere.add(c.imageId);
+    }
+  }
+
+  const referencedInDraft = new Set(timeline.clips.map((c) => c.imageId));
+  const candidates = await db.image.findMany({
+    where: { artistId, status: "BUCKET", id: { notIn: [...referencedInDraft] } },
     select: { id: true, kind: true },
     orderBy: { createdAt: "asc" },
   });
-  if (orphaned.length > 0) {
-    const healedClips: TimelineClip[] = orphaned.map((img) =>
+  const trueOrphans = candidates.filter((img) => !referencedElsewhere.has(img.id));
+
+  if (trueOrphans.length > 0) {
+    const healedClips: TimelineClip[] = trueOrphans.map((img) =>
       img.kind === "PHOTO"
         ? { id: randomUUID(), imageId: img.id, kind: "PHOTO", duration: 2 }
         : { id: randomUUID(), imageId: img.id, kind: "VIDEO" }
