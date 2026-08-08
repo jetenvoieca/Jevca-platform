@@ -23,15 +23,23 @@ export default function MediaDetailPanel({
   media,
   tagPresets,
   artistArtworks,
+  hideActions = false,
 }: {
   siteId: string;
   media: MediaDetail;
   tagPresets: string[];
   artistArtworks: { id: string; presentationTitle: string }[];
+  // Used when this panel is embedded somewhere other than the Media
+  // Catalogue itself (e.g. right after a Video Editor render) — that
+  // context already has its own delete/close controls (Discard, the
+  // page you're already on), so showing a second, differently-behaved
+  // set here would be redundant and inconsistent rather than helpful.
+  hideActions?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [addedToBucket, setAddedToBucket] = useState(false);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
   const router = useRouter();
 
   const handleArchive = () => {
@@ -51,45 +59,95 @@ export default function MediaDetailPanel({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      <div className="mb-4 flex items-start justify-between">
-        <h2 className="text-lg font-semibold text-neutral-900">
-          {media.caption || "Untitled"}
-        </h2>
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleAddToBucket}
-            disabled={isPending || addedToBucket}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-          >
-            {addedToBucket ? "Added to Bucket" : "Add to Bucket"}
-          </button>
-          <button
-            type="button"
-            onClick={handleArchive}
-            disabled={isPending}
-            className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-          >
-            Remove
-          </button>
-          <Link
-            href={`/sites/${siteId}/media`}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-          >
-            Close
-          </Link>
+      {!hideActions && (
+        <div className="mb-4 flex items-start justify-between">
+          <h2 className="text-lg font-semibold text-neutral-900">
+            {media.caption || "Untitled"}
+          </h2>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleAddToBucket}
+              disabled={isPending || addedToBucket}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+            >
+              {addedToBucket ? "Added to Bucket" : "Add to Bucket"}
+            </button>
+            <button
+              type="button"
+              onClick={handleArchive}
+              disabled={isPending}
+              className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+            >
+              Remove
+            </button>
+            <Link
+              href={`/sites/${siteId}/media`}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+            >
+              Close
+            </Link>
+          </div>
         </div>
-      </div>
+      )}
 
       {media.kind === "VIDEO" ? (
-        <video
-          src={media.url}
-          poster={media.posterUrl || undefined}
-          controls
-          className="mb-4 w-full rounded-md"
-        />
+        <div className="group relative mb-1 cursor-zoom-in" onClick={() => setLightboxOpen(true)}>
+          <video
+            src={media.url}
+            poster={media.posterUrl || undefined}
+            muted
+            className="w-full rounded-md"
+          />
+          <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/0 transition group-hover:bg-black/20">
+            <span className="rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
+              Click to view larger
+            </span>
+          </div>
+        </div>
       ) : (
-        <img src={media.url} alt="" className="mb-4 w-full rounded-md object-cover" />
+        <img
+          src={media.url}
+          alt=""
+          className="mb-1 w-full cursor-zoom-in rounded-md object-cover"
+          onClick={() => setLightboxOpen(true)}
+        />
+      )}
+      <p className="mb-4 text-xs text-neutral-400">
+        {media.kind === "VIDEO"
+          ? "Click to view larger."
+          : "Click to view full size."}
+      </p>
+
+      {lightboxOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-8"
+          onClick={() => setLightboxOpen(false)}
+        >
+          {media.kind === "VIDEO" ? (
+            <video
+              src={media.url}
+              controls
+              autoPlay
+              className="max-h-[90vh] max-w-[90vw] rounded-md"
+              onClick={(e) => e.stopPropagation()}
+            />
+          ) : (
+            <img
+              src={media.url}
+              alt=""
+              className="max-h-[90vh] max-w-[90vw] rounded-md object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+          )}
+          <button
+            type="button"
+            onClick={() => setLightboxOpen(false)}
+            className="absolute right-6 top-6 rounded-full bg-white/10 px-3 py-1.5 text-sm text-white hover:bg-white/20"
+          >
+            Close ✕
+          </button>
+        </div>
       )}
 
       <form
