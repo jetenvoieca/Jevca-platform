@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getDraftTimeline } from "@/lib/actions/videoEditor";
 import { getRenderStatus } from "@/lib/actions/render";
@@ -21,6 +22,10 @@ export default async function BucketPage({
     getMediaTagPresets(artistId),
     getArtistArtworksForLinking(artistId),
   ]);
+
+  if (clips.length === 0 && !renderStatus) {
+    redirect(`/sites/${id}/media`);
+  }
 
   return (
     <VideoEditorView
