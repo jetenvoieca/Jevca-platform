@@ -161,9 +161,18 @@ export default function MediaCatalogueView({
     <div className="px-6 py-4">
       <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
         <div>
+          {/* Sticky, per the standing "fixed headers, independently-
+              scrolling columns" layout rule (2026-08-03) — never actually
+              applied here before. Only this left track needs it; the
+              detail panel on the right already has its own sticky
+              treatment below. No negative-margin full-bleed trick here
+              (unlike the Video Editor's single-column header) since this
+              sits inside a two-column grid — extending edge-to-edge would
+              overlap the detail panel column. */}
+          <div className="sticky top-0 z-10 -mt-4 space-y-3 border-b border-neutral-200 bg-white pb-3 pt-4">
           {/* Row 1: title + view controls — same pattern as the Artwork
               Catalogue, both govern how the whole catalogue displays. */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
             <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
 
             <div className="flex items-center gap-3">
@@ -211,7 +220,7 @@ export default function MediaCatalogueView({
           </div>
 
           {/* Row 2: Marketing/Related toggle + filtering. */}
-          <div className="mb-3 flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
               <Link
                 href={toggleHref("marketing")}
@@ -285,8 +294,9 @@ export default function MediaCatalogueView({
               </button>
             </form>
           </div>
+          </div>
 
-          <p className="mb-3 text-sm text-neutral-400">
+          <p className="mb-3 mt-3 text-sm text-neutral-400">
             {items.length} of {total} item{total === 1 ? "" : "s"}
           </p>
 
