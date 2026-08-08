@@ -9,37 +9,55 @@ type ListFilters = {
   tag?: string;
   artworkId?: string;
   sort?: string;
+  // Pagination — added 2026-08-08. Previously this fetched every matching
+  // row unconditionally, every time, including just to open one item's
+  // detail panel — a real, measured contributor to Media Catalogue
+  // slowness that gets worse as the catalogue grows. Defaults keep a
+  // sensible page size without every call site having to specify one.
+  offset?: number;
+  limit?: number;
 };
+
+const DEFAULT_PAGE_SIZE = 60;
 
 // "Marketing" vs "Related" isn't a stored field — it's simply whether the
 // item has a linked artwork or not. Avoids keeping a redundant flag in
 // sync with the artworkId it would just be describing.
 export async function listMedia(artistId: string, filters: ListFilters) {
-  const { purpose, q, tag, artworkId, sort } = filters;
+  const { purpose, q, tag, artworkId, sort, offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
 
-  return db.image.findMany({
-    where: {
-      artistId,
-      status: { not: "ARCHIVED" },
-      ...(purpose === "marketing" ? { artworkId: null } : {}),
-      ...(purpose === "related" ? { artworkId: { not: null } } : {}),
-      ...(artworkId ? { artworkId } : {}),
-      ...(tag ? { tags: { has: tag } } : {}),
-      ...(q
-        ? {
-            OR: [
-              { caption: { contains: q, mode: "insensitive" as const } },
-              { altText: { contains: q, mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
-    },
-    // Default is oldest-first — new uploads land at the end, matching the
-    // "add to the end of the list" expectation everywhere else in the app,
-    // rather than newest-first pushing everything else down.
-    orderBy: sort === "caption" ? { caption: "asc" } : { createdAt: "asc" },
-    include: { artwork: { select: { id: true, presentationTitle: true } } },
-  });
+  const where = {
+    artistId,
+    status: { not: "ARCHIVED" as const },
+    ...(purpose === "marketing" ? { artworkId: null } : {}),
+    ...(purpose === "related" ? { artworkId: { not: null } } : {}),
+    ...(artworkId ? { artworkId } : {}),
+    ...(tag ? { tags: { has: tag } } : {}),
+    ...(q
+      ? {
+          OR: [
+            { caption: { contains: q, mode: "insensitive" as const } },
+            { altText: { contains: q, mode: "insensitive" as const } },
+          ],
+        }
+      : {}),
+  };
+
+  const [rows, total] = await Promise.all([
+    db.image.findMany({
+      where,
+      // Default is oldest-first — new uploads land at the end, matching
+      // the "add to the end of the list" expectation everywhere else in
+      // the app, rather than newest-first pushing everything else down.
+      orderBy: sort === "caption" ? { caption: "asc" } : { createdAt: "asc" },
+      include: { artwork: { select: { id: true, presentationTitle: true } } },
+      skip: offset,
+      take: limit,
+    }),
+    db.image.count({ where }),
+  ]);
+
+  return { rows, total };
 }
 
 export async function countMediaByPurpose(artistId: string) {
