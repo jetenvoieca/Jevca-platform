@@ -1,8 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useTransition } from "react";
 import Link from "next/link";
 import { uploadFileDirect } from "@/lib/uploadDirect";
+import { listMedia, getMediaDetail } from "@/lib/actions/mediaCatalogue";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import VideoThumb from "@/components/VideoThumb";
 
@@ -18,10 +20,23 @@ type MediaRow = {
 const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
 const DENSITY_STORAGE_KEY = "jevca:media-density";
 
+// Reads the URL bar directly, bypassing Next's router, so bookmarking or
+// refreshing on a selected item still works without every click paying
+// for a full server round-trip (2026-08-08 perf pass — see below).
+function updateUrlSelected(mediaId: string | null) {
+  const params = new URLSearchParams(window.location.search);
+  if (mediaId) params.set("selected", mediaId);
+  else params.delete("selected");
+  const qs = params.toString();
+  window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+}
+
 export default function MediaCatalogueView({
   siteId,
   artistId,
   media,
+  total,
+  pageSize,
   purpose,
   q,
   tag,
@@ -30,11 +45,13 @@ export default function MediaCatalogueView({
   counts,
   tagPresets,
   artistArtworks,
-  selected,
+  initialSelected,
 }: {
   siteId: string;
   artistId: string;
   media: MediaRow[];
+  total: number;
+  pageSize: number;
   purpose: "marketing" | "related";
   q: string;
   tag: string;
@@ -43,10 +60,27 @@ export default function MediaCatalogueView({
   counts: { marketing: number; related: number };
   tagPresets: string[];
   artistArtworks: { id: string; presentationTitle: string }[];
-  selected: MediaDetail | null;
+  initialSelected: MediaDetail | null;
 }) {
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
+
+  // The visible list, appended to by "Load more" — resets from the server
+  // whenever the filters actually change (a real page load, which remounts
+  // this component with fresh props).
+  const [items, setItems] = useState<MediaRow[]>(media);
+  const [loadingMore, isLoadingMoreTransition] = useTransition();
+  const hasMore = items.length < total;
+
+  // Selecting an item no longer navigates to a separate route. Previously
+  // clicking a tile went to /media/[mediaId], which re-ran the ENTIRE
+  // catalogue query (every filtered row, unpaginated) plus three other
+  // queries, just to also fetch the one clicked item — confirmed as the
+  // real cause of the 3-5 second "whole page reloads" symptom reported
+  // 2026-08-08. Selection is now local state, fetching only the one
+  // clicked item via a direct, lightweight server-action call.
+  const [selected, setSelected] = useState<MediaDetail | null>(initialSelected);
+  const [selectingId, setSelectingId] = useState<string | null>(null);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
@@ -64,12 +98,63 @@ export default function MediaCatalogueView({
   const toggleHref = (nextPurpose: "marketing" | "related") =>
     `/sites/${siteId}/media?purpose=${nextPurpose}`;
 
-  const tileHref = (mediaId: string) => {
-    const sp = new URLSearchParams({ purpose });
-    if (q) sp.set("q", q);
-    if (tag) sp.set("tag", tag);
-    if (artworkId) sp.set("artworkId", artworkId);
-    return `/sites/${siteId}/media/${mediaId}?${sp.toString()}`;
+  const handleSelect = (mediaId: string) => {
+    if (selectingId) return;
+    setSelectingId(mediaId);
+    (async () => {
+      const item = await getMediaDetail(mediaId);
+      if (item && item.artistId === artistId) {
+        setSelected({
+          id: item.id,
+          url: item.url,
+          posterUrl: item.posterUrl,
+          kind: item.kind,
+          caption: item.caption,
+          altText: item.altText,
+          tags: item.tags,
+          artworkId: item.artworkId,
+          artwork: item.artwork,
+        });
+        updateUrlSelected(mediaId);
+      }
+      setSelectingId(null);
+    })();
+  };
+
+  const handleClose = () => {
+    setSelected(null);
+    updateUrlSelected(null);
+  };
+
+  const handleArchived = () => {
+    if (selected) setItems((prev) => prev.filter((m) => m.id !== selected.id));
+    setSelected(null);
+    updateUrlSelected(null);
+  };
+
+  const handleLoadMore = () => {
+    isLoadingMoreTransition(async () => {
+      const { rows } = await listMedia(artistId, {
+        purpose,
+        q: q || undefined,
+        tag: tag || undefined,
+        artworkId: artworkId || undefined,
+        sort: sort || undefined,
+        offset: items.length,
+        limit: pageSize,
+      });
+      setItems((prev) => [
+        ...prev,
+        ...rows.map((m) => ({
+          id: m.id,
+          url: m.url,
+          posterUrl: m.posterUrl,
+          kind: m.kind,
+          caption: m.caption,
+          artwork: m.artwork,
+        })),
+      ]);
+    });
   };
 
   return (
@@ -202,7 +287,7 @@ export default function MediaCatalogueView({
           </div>
 
           <p className="mb-3 text-sm text-neutral-400">
-            {media.length} item{media.length === 1 ? "" : "s"}
+            {items.length} of {total} item{total === 1 ? "" : "s"}
           </p>
 
           {view === "tile" ? (
@@ -210,13 +295,15 @@ export default function MediaCatalogueView({
               className="grid gap-3"
               style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
             >
-              {media.map((m) => (
-                <Link
+              {items.map((m) => (
+                <button
                   key={m.id}
-                  href={tileHref(m.id)}
-                  className={`block rounded-md border-2 p-1 ${
+                  type="button"
+                  onClick={() => handleSelect(m.id)}
+                  disabled={selectingId === m.id}
+                  className={`block w-full rounded-md border-2 p-1 text-left ${
                     selected?.id === m.id ? "border-neutral-900" : "border-transparent"
-                  }`}
+                  } ${selectingId === m.id ? "opacity-60" : ""}`}
                 >
                   {m.kind === "VIDEO" ? (
                     <div className="relative">
@@ -251,7 +338,7 @@ export default function MediaCatalogueView({
                       → {m.artwork.presentationTitle}
                     </p>
                   )}
-                </Link>
+                </button>
               ))}
               <AddNewTile artistId={artistId} siteId={siteId} />
             </div>
@@ -266,33 +353,30 @@ export default function MediaCatalogueView({
                 </tr>
               </thead>
               <tbody>
-                {media.map((m) => (
+                {items.map((m) => (
                   <tr
                     key={m.id}
-                    className={`border-b border-neutral-100 ${
+                    onClick={() => handleSelect(m.id)}
+                    className={`cursor-pointer border-b border-neutral-100 ${
                       selected?.id === m.id ? "bg-neutral-100" : "hover:bg-neutral-50"
-                    }`}
+                    } ${selectingId === m.id ? "opacity-60" : ""}`}
                   >
                     <td className="py-2">
-                      <Link href={tileHref(m.id)}>
-                        {m.kind === "VIDEO" ? (
-                          m.posterUrl ? (
-                            <img
-                              src={m.posterUrl}
-                              alt=""
-                              className="h-10 w-10 rounded object-cover"
-                            />
-                          ) : (
-                            <VideoThumb src={m.url} className="h-10 w-10 rounded object-cover" />
-                          )
+                      {m.kind === "VIDEO" ? (
+                        m.posterUrl ? (
+                          <img
+                            src={m.posterUrl}
+                            alt=""
+                            className="h-10 w-10 rounded object-cover"
+                          />
                         ) : (
-                          <img src={m.url} alt="" className="h-10 w-10 rounded object-cover" />
-                        )}
-                      </Link>
+                          <VideoThumb src={m.url} className="h-10 w-10 rounded object-cover" />
+                        )
+                      ) : (
+                        <img src={m.url} alt="" className="h-10 w-10 rounded object-cover" />
+                      )}
                     </td>
-                    <td className="py-2 font-medium text-neutral-900">
-                      <Link href={tileHref(m.id)}>{m.caption || "Untitled"}</Link>
-                    </td>
+                    <td className="py-2 font-medium text-neutral-900">{m.caption || "Untitled"}</td>
                     <td className="py-2 text-neutral-500">{m.kind === "VIDEO" ? "Video" : "Photo"}</td>
                     <td className="py-2 text-rose-600">
                       {m.artwork ? m.artwork.presentationTitle : "—"}
@@ -307,6 +391,19 @@ export default function MediaCatalogueView({
               </tbody>
             </table>
           )}
+
+          {hasMore && (
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                {loadingMore ? "Loading…" : `Load more (${total - items.length} remaining)`}
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="sticky top-4">
@@ -316,6 +413,8 @@ export default function MediaCatalogueView({
               media={selected}
               tagPresets={tagPresets}
               artistArtworks={artistArtworks}
+              onClose={handleClose}
+              onArchived={handleArchived}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
