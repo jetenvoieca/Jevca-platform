@@ -23,18 +23,17 @@ export default function MediaDetailPanel({
   media,
   tagPresets,
   artistArtworks,
-  hideActions = false,
+  variant = "catalogue",
+  onDiscard,
+  discarding = false,
 }: {
   siteId: string;
   media: MediaDetail;
   tagPresets: string[];
   artistArtworks: { id: string; presentationTitle: string }[];
-  // Used when this panel is embedded somewhere other than the Media
-  // Catalogue itself (e.g. right after a Video Editor render) — that
-  // context already has its own delete/close controls (Discard, the
-  // page you're already on), so showing a second, differently-behaved
-  // set here would be redundant and inconsistent rather than helpful.
-  hideActions?: boolean;
+  variant?: "catalogue" | "pendingRender";
+  onDiscard?: () => void;
+  discarding?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -59,11 +58,11 @@ export default function MediaDetailPanel({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      {!hideActions && (
-        <div className="mb-4 flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900">
-            {media.caption || "Untitled"}
-          </h2>
+      <div className="mb-4 flex items-start justify-between">
+        <h2 className="text-lg font-semibold text-neutral-900">
+          {variant === "pendingRender" ? "Name this video" : media.caption || "Untitled"}
+        </h2>
+        {variant === "catalogue" ? (
           <div className="flex items-center gap-2">
             <button
               type="button"
@@ -88,8 +87,19 @@ export default function MediaDetailPanel({
               Close
             </Link>
           </div>
-        </div>
-      )}
+        ) : (
+          onDiscard && (
+            <button
+              type="button"
+              onClick={onDiscard}
+              disabled={discarding}
+              className="text-sm text-red-600 underline hover:text-red-800 disabled:opacity-50"
+            >
+              {discarding ? "Discarding…" : "Discard this render"}
+            </button>
+          )
+        )}
+      </div>
 
       {media.kind === "VIDEO" ? (
         <div className="group relative mb-1 cursor-zoom-in" onClick={() => setLightboxOpen(true)}>
@@ -114,9 +124,7 @@ export default function MediaDetailPanel({
         />
       )}
       <p className="mb-4 text-xs text-neutral-400">
-        {media.kind === "VIDEO"
-          ? "Click to view larger."
-          : "Click to view full size."}
+        {media.kind === "VIDEO" ? "Click to view larger." : "Click to view full size."}
       </p>
 
       {lightboxOpen && (
