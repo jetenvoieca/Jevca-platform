@@ -419,6 +419,7 @@ export default function MediaCatalogueView({
         <div className="sticky top-4">
           {selected ? (
             <MediaDetailPanel
+              key={selected.id}
               siteId={siteId}
               media={selected}
               tagPresets={tagPresets}
