@@ -53,12 +53,18 @@ export async function countBucket(artistId: string): Promise<number> {
   return db.image.count({ where: { artistId, status: "BUCKET" } });
 }
 
-export async function addHopperItemToBucket(id: string, siteId: string): Promise<void> {
+export async function addHopperItemToBucket(
+  id: string,
+  siteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const image = await db.image.findUnique({ where: { id }, select: { artistId: true } });
-  if (!image) return;
-  await appendImageToTimeline(image.artistId, siteId, id);
-  revalidatePath(`/sites/${siteId}/hopper`);
-  revalidatePath(`/sites/${siteId}/bucket`);
+  if (!image) return { ok: false, error: "That item couldn't be found." };
+  const result = await appendImageToTimeline(image.artistId, siteId, id);
+  if (result.ok) {
+    revalidatePath(`/sites/${siteId}/hopper`);
+    revalidatePath(`/sites/${siteId}/bucket`);
+  }
+  return result;
 }
 
 export async function addHopperItemToArtwork(
