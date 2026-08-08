@@ -40,7 +40,7 @@ export default async function SiteLayout({
   );
 
   return (
-    <div>
+    <div className="flex h-screen flex-col overflow-hidden">
       <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900">{site.name}</h1>
@@ -67,9 +67,14 @@ export default async function SiteLayout({
         </div>
       </div>
 
-      <div className="grid grid-cols-[1fr_220px]">
-        <div>{children}</div>
-        <div className="border-l border-neutral-200 p-4">
+      {/* Standing layout rule (2026-08-03): independently-scrolling
+          columns, fixed headers — this per-site shell had never actually
+          been retrofitted to it (only AppShell.tsx and SitesDirectoryView
+          had). Each column below scrolls on its own; the header above
+          stays pinned regardless of how far either column scrolls. */}
+      <div className="grid flex-1 grid-cols-[1fr_220px] overflow-hidden">
+        <div className="h-full overflow-y-auto">{children}</div>
+        <div className="h-full overflow-y-auto border-l border-neutral-200 p-4">
           <SiteNavPanel
             siteId={id}
             pages={pages.map((p) => ({ id: p.id, title: p.title, type: p.type, visible: p.visible }))}
