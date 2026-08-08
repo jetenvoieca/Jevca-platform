@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import { readTimeline, type Timeline, type TimelineClip } from "@/lib/videoTimeline";
+import { hasUnresolvedRender } from "./render";
 
 async function getOrCreateDraft(artistId: string) {
   const existing = await db.videoRender.findFirst({
@@ -20,38 +21,17 @@ async function saveTimeline(renderId: string, timeline: Timeline): Promise<void>
   await db.videoRender.update({ where: { id: renderId }, data: { timeline } });
 }
 
+// One video at a time, full stop (reconfirmed emphatically 2026-08-08,
+// after this function's own self-heal logic was the actual cause of what
+// looked like "stacking"): this reads exactly what's in the current
+// draft's own saved timeline and nothing else. It never scans for other
+// images, never infers what "should" be here, never writes to the
+// timeline. Save or Discard finishing a render, followed by the user
+// explicitly choosing images in the Hopper, are the ONLY two ways
+// anything is ever supposed to land in a draft.
 export async function getDraftTimeline(artistId: string) {
   const draft = await getOrCreateDraft(artistId);
-  let timeline = readTimeline(draft.timeline);
-
-  const otherRenders = await db.videoRender.findMany({
-    where: { artistId, id: { not: draft.id } },
-    select: { timeline: true },
-  });
-  const referencedElsewhere = new Set<string>();
-  for (const r of otherRenders) {
-    for (const c of readTimeline(r.timeline).clips) {
-      referencedElsewhere.add(c.imageId);
-    }
-  }
-
-  const referencedInDraft = new Set(timeline.clips.map((c) => c.imageId));
-  const candidates = await db.image.findMany({
-    where: { artistId, status: "BUCKET", id: { notIn: [...referencedInDraft] } },
-    select: { id: true, kind: true },
-    orderBy: { createdAt: "asc" },
-  });
-  const trueOrphans = candidates.filter((img) => !referencedElsewhere.has(img.id));
-
-  if (trueOrphans.length > 0) {
-    const healedClips: TimelineClip[] = trueOrphans.map((img) =>
-      img.kind === "PHOTO"
-        ? { id: randomUUID(), imageId: img.id, kind: "PHOTO", duration: 2 }
-        : { id: randomUUID(), imageId: img.id, kind: "VIDEO" }
-    );
-    timeline = { clips: [...timeline.clips, ...healedClips] };
-    await saveTimeline(draft.id, timeline);
-  }
+  const timeline = readTimeline(draft.timeline);
 
   const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
   const images = await db.image.findMany({
@@ -74,9 +54,19 @@ export async function appendImageToTimeline(
   artistId: string,
   siteId: string,
   imageId: string
-): Promise<void> {
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  // One video at a time (2026-08-08): nothing gets added to the next
+  // draft while a previous render is still in progress or waiting to be
+  // saved/discarded — that's exactly the "stacking" that isn't wanted.
+  if (await hasUnresolvedRender(artistId)) {
+    return {
+      ok: false,
+      error: "A render is in progress — finish reviewing it (Save or Discard) before adding more.",
+    };
+  }
+
   const image = await db.image.findUnique({ where: { id: imageId }, select: { kind: true } });
-  if (!image) return;
+  if (!image) return { ok: false, error: "That item couldn't be found." };
 
   await db.image.update({ where: { id: imageId }, data: { status: "BUCKET" } });
 
@@ -93,13 +83,18 @@ export async function appendImageToTimeline(
 
   revalidatePath(`/sites/${siteId}/hopper`);
   revalidatePath(`/sites/${siteId}/bucket`);
+  return { ok: true };
 }
 
-export async function addMediaToBucket(imageId: string, siteId: string): Promise<void> {
+export async function addMediaToBucket(
+  imageId: string,
+  siteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
   const image = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true } });
-  if (!image) return;
-  await appendImageToTimeline(image.artistId, siteId, imageId);
-  revalidatePath(`/sites/${siteId}/media`);
+  if (!image) return { ok: false, error: "That item couldn't be found." };
+  const result = await appendImageToTimeline(image.artistId, siteId, imageId);
+  if (result.ok) revalidatePath(`/sites/${siteId}/media`);
+  return result;
 }
 
 export async function removeClipFromTimeline(
