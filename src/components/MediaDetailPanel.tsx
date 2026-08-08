@@ -87,18 +87,7 @@ export default function MediaDetailPanel({
               Close
             </Link>
           </div>
-        ) : (
-          onDiscard && (
-            <button
-              type="button"
-              onClick={onDiscard}
-              disabled={discarding}
-              className="text-sm text-red-600 underline hover:text-red-800 disabled:opacity-50"
-            >
-              {discarding ? "Discarding…" : "Discard this render"}
-            </button>
-          )
-        )}
+        ) : null}
       </div>
 
       {media.kind === "VIDEO" ? (
@@ -109,9 +98,13 @@ export default function MediaDetailPanel({
             muted
             className="w-full rounded-md"
           />
-          <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/0 transition group-hover:bg-black/20">
-            <span className="rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white opacity-0 transition group-hover:opacity-100">
-              Click to view larger
+          {/* Always-visible play badge — without this a paused video is
+              indistinguishable from a photo at rest (2026-08-08). */}
+          <div className="absolute inset-0 flex items-center justify-center rounded-md bg-black/10 transition group-hover:bg-black/30">
+            <span className="flex h-14 w-14 items-center justify-center rounded-full bg-black/60 text-white transition group-hover:bg-black/80">
+              <svg viewBox="0 0 24 24" fill="currentColor" className="ml-1 h-6 w-6">
+                <path d="M8 5v14l11-7z" />
+              </svg>
             </span>
           </div>
         </div>
@@ -124,7 +117,7 @@ export default function MediaDetailPanel({
         />
       )}
       <p className="mb-4 text-xs text-neutral-400">
-        {media.kind === "VIDEO" ? "Click to view larger." : "Click to view full size."}
+        {media.kind === "VIDEO" ? "Click to play." : "Click to view full size."}
       </p>
 
       {lightboxOpen && (
@@ -203,10 +196,6 @@ export default function MediaDetailPanel({
               </option>
             ))}
           </select>
-          <p className="mt-1 text-xs text-neutral-400">
-            Linking this to an artwork moves it to Related and it'll show under that artwork's
-            title in the catalogue. Set back to "None" to make it Marketing media instead.
-          </p>
         </div>
 
         <div>
@@ -233,6 +222,16 @@ export default function MediaDetailPanel({
             Save
           </button>
           {saved && <span className="text-sm text-green-600">Saved</span>}
+          {variant === "pendingRender" && onDiscard && (
+            <button
+              type="button"
+              onClick={onDiscard}
+              disabled={discarding}
+              className="ml-auto text-sm text-red-600 underline hover:text-red-800 disabled:opacity-50"
+            >
+              {discarding ? "Discarding…" : "Discard this render"}
+            </button>
+          )}
         </div>
       </form>
     </div>
