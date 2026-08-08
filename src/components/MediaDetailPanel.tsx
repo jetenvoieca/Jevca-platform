@@ -62,9 +62,15 @@ export default function MediaDetailPanel({
     });
   };
 
+  const [bucketError, setBucketError] = useState<string | null>(null);
   const handleAddToBucket = () => {
     startTransition(async () => {
-      await addMediaToBucket(media.id, siteId);
+      const result = await addMediaToBucket(media.id, siteId);
+      if (!result.ok) {
+        setBucketError(result.error);
+        return;
+      }
+      setBucketError(null);
       setAddedToBucket(true);
     });
   };
@@ -72,38 +78,41 @@ export default function MediaDetailPanel({
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
       {variant === "catalogue" && (
-        <div className="mb-4 flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900">{media.caption || "Untitled"}</h2>
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={handleAddToBucket}
-              disabled={isPending || addedToBucket}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-            >
-              {addedToBucket ? "Added to Bucket" : "Add to Bucket"}
-            </button>
-            <button
-              type="button"
-              onClick={handleArchive}
-              disabled={isPending}
-              className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-            >
-              Remove
-            </button>
-            <Link
-              href={`/sites/${siteId}/media`}
-              onClick={(e) => {
-                if (onClose) {
-                  e.preventDefault();
-                  onClose();
-                }
-              }}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-            >
-              Close
-            </Link>
+        <div className="mb-4">
+          <div className="flex items-start justify-between">
+            <h2 className="text-lg font-semibold text-neutral-900">{media.caption || "Untitled"}</h2>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleAddToBucket}
+                disabled={isPending || addedToBucket}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                {addedToBucket ? "Added to Bucket" : "Add to Bucket"}
+              </button>
+              <button
+                type="button"
+                onClick={handleArchive}
+                disabled={isPending}
+                className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                Remove
+              </button>
+              <Link
+                href={`/sites/${siteId}/media`}
+                onClick={(e) => {
+                  if (onClose) {
+                    e.preventDefault();
+                    onClose();
+                  }
+                }}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                Close
+              </Link>
+            </div>
           </div>
+          {bucketError && <p className="mt-2 text-xs text-red-600">{bucketError}</p>}
         </div>
       )}
 
