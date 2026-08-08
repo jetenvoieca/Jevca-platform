@@ -281,12 +281,34 @@ export async function getRenderStatus(artistId: string) {
   if (!render) return null;
   if (render.status === "DONE" && render.resultImage?.caption) return null;
 
+  // The clips that actually went into this specific render, so it can be
+  // checked against what was uploaded (2026-08-08) — read from this
+  // render's own saved timeline, which is untouched by a fresh draft
+  // being created alongside it.
+  const timeline = readTimeline(render.timeline);
+  const sourceImageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
+  const sourceImages =
+    sourceImageIds.length > 0
+      ? await db.image.findMany({
+          where: { id: { in: sourceImageIds } },
+          select: { id: true, url: true, posterUrl: true, kind: true, caption: true },
+        })
+      : [];
+  const sourceImageById = new Map(sourceImages.map((img) => [img.id, img]));
+  const sourceClips = timeline.clips
+    .map((clip) => {
+      const image = sourceImageById.get(clip.imageId);
+      return image ? { id: clip.id, kind: clip.kind, image } : null;
+    })
+    .filter((c): c is { id: string; kind: "PHOTO" | "VIDEO"; image: (typeof sourceImages)[number] } => c !== null);
+
   return {
     id: render.id,
     status: render.status as "PENDING" | "RENDERING" | "DONE" | "FAILED",
     error: render.renderError,
     createdAt: render.createdAt.toISOString(),
     debugPayload: render.debugPayload ? JSON.stringify(render.debugPayload, null, 2) : null,
+    sourceClips,
     resultImage: render.resultImage
       ? {
           id: render.resultImage.id,
