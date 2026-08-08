@@ -5,16 +5,13 @@ import { useRouter } from "next/navigation";
 import {
   reorderTimeline,
   removeClipFromTimeline,
+  clearDraftTimeline,
   setClipDuration,
   setClipTrim,
   initializeClipDuration,
   splitClip,
 } from "@/lib/actions/videoEditor";
-import {
-  renderVideo,
-  discardRenderResult,
-  discardAllPreviousRenders,
-} from "@/lib/actions/render";
+import { renderVideo, discardRenderResult } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
@@ -34,7 +31,6 @@ type RenderStatus = {
   status: "PENDING" | "RENDERING" | "DONE" | "FAILED";
   error: string | null;
   createdAt: string;
-  queueCount: number;
   debugPayload: string | null;
   resultImage: MediaDetail | null;
 } | null;
@@ -63,6 +59,7 @@ export default function VideoEditorView({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [clearing, setClearing] = useState(false);
   const router = useRouter();
 
   useEffect(() => {
@@ -124,6 +121,15 @@ export default function VideoEditorView({
     if (selectedId === id) setSelectedId(null);
   };
 
+  const handleClearAll = async () => {
+    if (!confirm("Remove every clip from this strip and return them to Sorted media?")) return;
+    setClearing(true);
+    await clearDraftTimeline(siteId, renderId);
+    setClips([]);
+    setSelectedId(null);
+    setClearing(false);
+  };
+
   const handleDurationChange = (id: string, value: number) => {
     const duration = Math.max(0.1, value);
     setClips((prev) => prev.map((c) => (c.id === id ? { ...c, duration } : c)));
@@ -173,15 +179,6 @@ export default function VideoEditorView({
     router.refresh();
   };
 
-  const [discardingAll, setDiscardingAll] = useState(false);
-  const handleDiscardAll = async () => {
-    if (!confirm("Discard every previous unnamed/failed render? This can't be undone.")) return;
-    setDiscardingAll(true);
-    await discardAllPreviousRenders(siteId, renderId);
-    setDiscardingAll(false);
-    router.refresh();
-  };
-
   return (
     <div className="px-6 py-4">
       <div className="mb-4 flex items-center justify-between">
@@ -190,6 +187,19 @@ export default function VideoEditorView({
           <p className="text-sm text-neutral-500">
             {clips.length} clip{clips.length === 1 ? "" : "s"} · {formatTotal(totalSeconds)} total
             {totalSeconds > 90 && <span className="ml-2 text-amber-600">— over the 90s target</span>}
+            {clips.length > 0 && (
+              <>
+                {" · "}
+                <button
+                  type="button"
+                  onClick={handleClearAll}
+                  disabled={clearing}
+                  className="text-neutral-400 underline hover:text-neutral-700 disabled:opacity-50"
+                >
+                  {clearing ? "Clearing…" : "Clear all"}
+                </button>
+              </>
+            )}
           </p>
         </div>
         <div className="text-right">
@@ -212,59 +222,38 @@ export default function VideoEditorView({
       </div>
 
       {renderStatus && (
-        <div className="mb-6 rounded-lg border-2 border-amber-300 bg-amber-50 p-4">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wide text-amber-700">
-              Rendered {new Date(renderStatus.createdAt).toLocaleString()}
-            </p>
-            <button
-              type="button"
-              onClick={() => handleDiscard(renderStatus.id)}
-              disabled={discarding}
-              className="text-xs text-neutral-500 underline hover:text-neutral-800 disabled:opacity-50"
-            >
-              {discarding ? "Discarding…" : "Discard this render"}
-            </button>
-          </div>
-
-          {renderStatus.queueCount > 1 && (
-            <p className="mb-2 text-xs text-amber-700">
-              {renderStatus.queueCount} previous renders are queued up — discarding this one
-              will reveal the next.{" "}
-              <button
-                type="button"
-                onClick={handleDiscardAll}
-                disabled={discardingAll}
-                className="underline hover:text-amber-900 disabled:opacity-50"
-              >
-                {discardingAll ? "Clearing…" : "Discard all of them at once"}
-              </button>
-            </p>
-          )}
-
+        <div className="mb-6 max-w-md">
           {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
-            <p className="text-sm text-neutral-600">
-              Rendering your video… this can take a minute or two. Feel free to keep working —
-              this will update on its own.
-            </p>
-          ) : renderStatus.status === "FAILED" ? (
-            <p className="text-sm text-red-600">
-              Render failed{renderStatus.error ? `: ${renderStatus.error}` : "."}
-            </p>
-          ) : renderStatus.status === "DONE" && renderStatus.resultImage ? (
-            <>
-              <p className="mb-2 text-sm font-medium text-neutral-700">
-                Your video is ready — name and describe it below to save it to the Media
-                Catalogue:
+            <div className="rounded-lg border border-neutral-200 bg-white p-4">
+              <p className="text-sm text-neutral-600">
+                Rendering your video… this can take a minute or two.
               </p>
-              <MediaDetailPanel
-                siteId={siteId}
-                media={renderStatus.resultImage}
-                tagPresets={tagPresets}
-                artistArtworks={artistArtworks}
-                hideActions
-              />
-            </>
+            </div>
+          ) : renderStatus.status === "FAILED" ? (
+            <div className="rounded-lg border border-red-200 bg-white p-4">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-sm font-medium text-red-600">Render failed</p>
+                <button
+                  type="button"
+                  onClick={() => handleDiscard(renderStatus.id)}
+                  disabled={discarding}
+                  className="text-xs text-neutral-500 underline hover:text-neutral-800 disabled:opacity-50"
+                >
+                  {discarding ? "Discarding…" : "Discard"}
+                </button>
+              </div>
+              {renderStatus.error && <p className="text-sm text-red-600">{renderStatus.error}</p>}
+            </div>
+          ) : renderStatus.status === "DONE" && renderStatus.resultImage ? (
+            <MediaDetailPanel
+              siteId={siteId}
+              media={renderStatus.resultImage}
+              tagPresets={tagPresets}
+              artistArtworks={artistArtworks}
+              variant="pendingRender"
+              onDiscard={() => handleDiscard(renderStatus.id)}
+              discarding={discarding}
+            />
           ) : null}
 
           {renderStatus.debugPayload && <DebugPayload json={renderStatus.debugPayload} />}
@@ -376,7 +365,7 @@ function DebugPayload({ json }: { json: string }) {
   };
 
   return (
-    <div className="mt-3 border-t border-amber-200 pt-3">
+    <div className="mt-3 border-t border-neutral-200 pt-3">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
