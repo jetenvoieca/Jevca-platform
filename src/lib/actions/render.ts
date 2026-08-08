@@ -98,13 +98,17 @@ function clipLength(clip: ClipWithImage): number {
     : Math.max(0.1, (clip.trimOut ?? 0) - (clip.trimIn ?? 0));
 }
 
-// Builds the Shotstack Edit API JSON for a timeline. Adjacent clips now
-// crossfade into each other automatically (2026-08-07): the next clip
-// starts slightly before the previous one ends (they overlap on the
-// same track), and the earlier clip carries `transition: { out: "fade" }`
-// — Shotstack's own documented technique for a dissolve. The overlap is
-// clamped to never exceed either neighbour's own length, so a very short
-// clip can't produce a nonsensical negative start time.
+// Builds the Shotstack Edit API JSON for a timeline. Adjacent clips
+// overlap by CROSSFADE_SECONDS on the same track. Both directions of the
+// transition are set — `out: "fade"` on the outgoing clip AND
+// `in: "fade"` on the incoming one — rather than just one. Reasoning
+// (2026-08-07, after a first attempt with only `out` produced no visible
+// crossfade): on a single track, the later clip in the list most likely
+// draws on top of the earlier one during their overlap, so the earlier
+// clip fading out underneath something already fully covering it would
+// never be visible — it's the incoming clip fading IN, revealing what's
+// underneath, that actually does the work. Setting both makes this
+// robust to either z-order behaviour rather than betting on one.
 function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
   const lengths = clips.map(clipLength);
 
@@ -113,6 +117,7 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
     const length = lengths[i];
     const start = cursor;
     const isLast = i === clips.length - 1;
+    const isFirst = i === 0;
     const overlap = isLast ? 0 : Math.min(CROSSFADE_SECONDS, length, lengths[i + 1]);
     cursor += length - overlap;
 
@@ -120,6 +125,10 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
       clip.kind === "PHOTO"
         ? { type: "image" as const, src: clip.image.url }
         : { type: "video" as const, src: clip.image.url, trim: clip.trimIn ?? 0 };
+
+    const transition: { in?: "fade"; out?: "fade" } = {};
+    if (!isFirst) transition.in = "fade";
+    if (!isLast) transition.out = "fade";
 
     return {
       asset,
@@ -129,7 +138,7 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
       width: OUTPUT_WIDTH,
       height: OUTPUT_HEIGHT,
       position: "center" as const,
-      ...(isLast ? {} : { transition: { out: "fade" as const } }),
+      ...(Object.keys(transition).length > 0 ? { transition } : {}),
     };
   });
 
