@@ -258,33 +258,25 @@ export async function renderVideo(
 }
 
 export async function getRenderStatus(artistId: string) {
-  const [render, queueCount] = await Promise.all([
-    db.videoRender.findFirst({
-      where: { artistId, status: { in: ["PENDING", "RENDERING", "DONE", "FAILED"] } },
-      orderBy: { updatedAt: "desc" },
-      include: {
-        resultImage: {
-          select: {
-            id: true,
-            url: true,
-            posterUrl: true,
-            kind: true,
-            caption: true,
-            altText: true,
-            tags: true,
-            artworkId: true,
-            artwork: { select: { id: true, presentationTitle: true } },
-          },
+  const render = await db.videoRender.findFirst({
+    where: { artistId, status: { in: ["PENDING", "RENDERING", "DONE", "FAILED"] } },
+    orderBy: { updatedAt: "desc" },
+    include: {
+      resultImage: {
+        select: {
+          id: true,
+          url: true,
+          posterUrl: true,
+          kind: true,
+          caption: true,
+          altText: true,
+          tags: true,
+          artworkId: true,
+          artwork: { select: { id: true, presentationTitle: true } },
         },
       },
-    }),
-    db.videoRender.count({
-      where: {
-        artistId,
-        OR: [{ status: "FAILED" }, { status: "DONE", resultImage: { caption: null } }],
-      },
-    }),
-  ]);
+    },
+  });
 
   if (!render) return null;
   if (render.status === "DONE" && render.resultImage?.caption) return null;
@@ -294,7 +286,6 @@ export async function getRenderStatus(artistId: string) {
     status: render.status as "PENDING" | "RENDERING" | "DONE" | "FAILED",
     error: render.renderError,
     createdAt: render.createdAt.toISOString(),
-    queueCount,
     debugPayload: render.debugPayload ? JSON.stringify(render.debugPayload, null, 2) : null,
     resultImage: render.resultImage
       ? {
@@ -340,34 +331,4 @@ export async function discardRenderResult(siteId: string, renderId: string): Pro
   }
 
   revalidatePath(`/sites/${siteId}/bucket`);
-}
-
-export async function discardAllPreviousRenders(
-  siteId: string,
-  currentDraftRenderId: string
-): Promise<number> {
-  const draft = await db.videoRender.findUnique({
-    where: { id: currentDraftRenderId },
-    select: { artistId: true },
-  });
-  if (!draft) return 0;
-
-  const toDelete = await db.videoRender.findMany({
-    where: {
-      artistId: draft.artistId,
-      OR: [{ status: "FAILED" }, { status: "DONE", resultImage: { caption: null } }],
-    },
-    include: { resultImage: true },
-  });
-
-  await db.videoRender.deleteMany({ where: { id: { in: toDelete.map((r) => r.id) } } });
-
-  const imagesToDelete = toDelete.map((r) => r.resultImage).filter((img): img is NonNullable<typeof img> => !!img);
-  if (imagesToDelete.length > 0) {
-    await db.image.deleteMany({ where: { id: { in: imagesToDelete.map((img) => img.id) } } });
-    await Promise.all(imagesToDelete.map((img) => deleteFromR2(img.key).catch(() => {})));
-  }
-
-  revalidatePath(`/sites/${siteId}/bucket`);
-  return toDelete.length;
 }
