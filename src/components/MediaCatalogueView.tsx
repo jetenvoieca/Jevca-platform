@@ -99,17 +99,10 @@ export default function MediaCatalogueView({
     `/sites/${siteId}/media?purpose=${nextPurpose}`;
 
   const handleSelect = (mediaId: string) => {
-    // TEMP DEBUG (2026-08-09) — remove once the "Add to Bucket" stuck-
-    // button issue is diagnosed.
-    console.log("[DEBUG] handleSelect called with mediaId:", mediaId, "current selectingId:", selectingId, "current selected.id:", selected?.id);
-    if (selectingId) {
-      console.log("[DEBUG] BLOCKED — selectingId was already set to:", selectingId);
-      return;
-    }
+    if (selectingId) return;
     setSelectingId(mediaId);
     (async () => {
       const item = await getMediaDetail(mediaId);
-      console.log("[DEBUG] getMediaDetail resolved:", item ? { id: item.id, artistId: item.artistId } : null, "expected artistId:", artistId);
       if (item && item.artistId === artistId) {
         setSelected({
           id: item.id,
@@ -122,10 +115,7 @@ export default function MediaCatalogueView({
           artworkId: item.artworkId,
           artwork: item.artwork,
         });
-        console.log("[DEBUG] setSelected called with new id:", item.id);
         updateUrlSelected(mediaId);
-      } else {
-        console.log("[DEBUG] SKIPPED setSelected — item missing or artistId mismatch");
       }
       setSelectingId(null);
     })();
