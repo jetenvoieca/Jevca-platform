@@ -305,95 +305,104 @@ export default function VideoEditorView({
         </div>
       )}
 
-      {clips.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-          Nothing here yet — add items from the Hopper.
-        </div>
-      ) : (
-        <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
-          {clips.map((clip, i) => (
-            <div
-              key={clip.id}
-              draggable
-              onDragStart={() => setDragIndex(i)}
-              onDragOver={(e) => e.preventDefault()}
-              onDrop={() => handleDrop(i)}
-              onDragEnd={() => setDragIndex(null)}
-              onClick={() => setSelectedId(clip.id)}
-              className={`group relative w-32 flex-shrink-0 cursor-pointer rounded-lg border-2 p-1 ${
-                selectedId === clip.id
-                  ? "border-neutral-900"
-                  : dragIndex === i
-                  ? "border-neutral-900 opacity-50"
-                  : "border-transparent"
-              }`}
-            >
-              {clip.kind === "VIDEO" ? (
-                clip.image.posterUrl ? (
-                  <img src={clip.image.posterUrl} alt="" className="aspect-square w-full rounded-md object-cover" />
-                ) : (
-                  <VideoThumb src={clip.image.url} className="aspect-square w-full rounded-md object-cover" />
-                )
-              ) : (
-                <img src={clip.image.url} alt="" className="aspect-square w-full rounded-md object-cover" />
-              )}
-              <div className="mt-1 truncate text-center text-xs text-neutral-500">
-                {clip.kind === "PHOTO"
-                  ? `${(clip.duration ?? 2).toFixed(1)}s`
-                  : clip.trimIn != null && clip.trimOut != null
-                  ? `${(clip.trimOut - clip.trimIn).toFixed(1)}s`
-                  : "…"}
-              </div>
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleRemove(clip.id);
-                }}
-                className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs text-white group-hover:flex"
+      {/* Hidden entirely, not just disabled, while a render is
+          pending or unresolved — reconfirmed 2026-08-09: this must not
+          even appear to invite starting a second video until the
+          current one is Saved or Discarded. Same editor UI as always,
+          just conditionally rendered — not dead code, not CSS-hidden. */}
+      {!renderStatus && (
+        <>
+        {clips.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
+            Nothing here yet — add items from the Hopper.
+          </div>
+        ) : (
+          <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
+            {clips.map((clip, i) => (
+              <div
+                key={clip.id}
+                draggable
+                onDragStart={() => setDragIndex(i)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => handleDrop(i)}
+                onDragEnd={() => setDragIndex(null)}
+                onClick={() => setSelectedId(clip.id)}
+                className={`group relative w-32 flex-shrink-0 cursor-pointer rounded-lg border-2 p-1 ${
+                  selectedId === clip.id
+                    ? "border-neutral-900"
+                    : dragIndex === i
+                    ? "border-neutral-900 opacity-50"
+                    : "border-transparent"
+                }`}
               >
-                ×
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
+                {clip.kind === "VIDEO" ? (
+                  clip.image.posterUrl ? (
+                    <img src={clip.image.posterUrl} alt="" className="aspect-square w-full rounded-md object-cover" />
+                  ) : (
+                    <VideoThumb src={clip.image.url} className="aspect-square w-full rounded-md object-cover" />
+                  )
+                ) : (
+                  <img src={clip.image.url} alt="" className="aspect-square w-full rounded-md object-cover" />
+                )}
+                <div className="mt-1 truncate text-center text-xs text-neutral-500">
+                  {clip.kind === "PHOTO"
+                    ? `${(clip.duration ?? 2).toFixed(1)}s`
+                    : clip.trimIn != null && clip.trimOut != null
+                    ? `${(clip.trimOut - clip.trimIn).toFixed(1)}s`
+                    : "…"}
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemove(clip.id);
+                  }}
+                  className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs text-white group-hover:flex"
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
 
-      {selected && (
-        <div>
-          <h2 className="mb-2 text-sm font-medium text-neutral-700">
-            {selected.image.caption || (selected.kind === "PHOTO" ? "Photo" : "Video")}
-          </h2>
+        {selected && (
+          <div>
+            <h2 className="mb-2 text-sm font-medium text-neutral-700">
+              {selected.image.caption || (selected.kind === "PHOTO" ? "Photo" : "Video")}
+            </h2>
 
-          {selected.kind === "PHOTO" ? (
-            <div className="rounded-lg border border-neutral-200 bg-white p-4">
-              <img src={selected.image.url} alt="" className="mb-3 max-h-64 w-full rounded-md object-contain" />
-              <label className="flex items-center gap-2 text-sm text-neutral-600">
-                On screen for
-                <input
-                  type="number"
-                  step={0.1}
-                  min={0.1}
-                  value={selected.duration ?? 2}
-                  onChange={(e) => handleDurationChange(selected.id, Number(e.target.value))}
-                  className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-                seconds
-              </label>
-            </div>
-          ) : (
-            <TrimScrubber
-              key={selected.id}
-              videoUrl={selected.image.url}
-              trimIn={selected.trimIn ?? 0}
-              trimOut={selected.trimOut ?? selected.sourceDuration ?? 0}
-              sourceDuration={selected.sourceDuration ?? null}
-              onKnownDuration={(d) => handleKnownDuration(selected.id, d)}
-              onTrimChange={(inS, outS) => handleTrimChange(selected.id, inS, outS)}
-              onSplit={(start, end) => handleSplit(selected.id, start, end)}
-            />
-          )}
-        </div>
+            {selected.kind === "PHOTO" ? (
+              <div className="rounded-lg border border-neutral-200 bg-white p-4">
+                <img src={selected.image.url} alt="" className="mb-3 max-h-64 w-full rounded-md object-contain" />
+                <label className="flex items-center gap-2 text-sm text-neutral-600">
+                  On screen for
+                  <input
+                    type="number"
+                    step={0.1}
+                    min={0.1}
+                    value={selected.duration ?? 2}
+                    onChange={(e) => handleDurationChange(selected.id, Number(e.target.value))}
+                    className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                  />
+                  seconds
+                </label>
+              </div>
+            ) : (
+              <TrimScrubber
+                key={selected.id}
+                videoUrl={selected.image.url}
+                trimIn={selected.trimIn ?? 0}
+                trimOut={selected.trimOut ?? selected.sourceDuration ?? 0}
+                sourceDuration={selected.sourceDuration ?? null}
+                onKnownDuration={(d) => handleKnownDuration(selected.id, d)}
+                onTrimChange={(inS, outS) => handleTrimChange(selected.id, inS, outS)}
+                onSplit={(start, end) => handleSplit(selected.id, start, end)}
+              />
+            )}
+          </div>
+        )}
+        </>
       )}
     </div>
   );
