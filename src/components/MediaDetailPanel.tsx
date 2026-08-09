@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { updateMedia, archiveMedia } from "@/lib/actions/mediaCatalogue";
@@ -46,11 +46,6 @@ export default function MediaDetailPanel({
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [addedToBucket, setAddedToBucket] = useState(false);
-  // TEMP DEBUG (2026-08-09) — remove once diagnosed.
-  useEffect(() => {
-    console.log("[DEBUG] MediaDetailPanel MOUNTED for media.id:", media.id, "initial addedToBucket:", false);
-    return () => console.log("[DEBUG] MediaDetailPanel UNMOUNTED for media.id:", media.id);
-  }, [media.id]);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [tags, setTags] = useState<string[]>(media.tags);
@@ -70,21 +65,16 @@ export default function MediaDetailPanel({
 
   const [bucketError, setBucketError] = useState<string | null>(null);
   const handleAddToBucket = () => {
-    console.log("[DEBUG] handleAddToBucket clicked for media.id:", media.id);
     startTransition(async () => {
       const result = await addMediaToBucket(media.id, siteId);
-      console.log("[DEBUG] addMediaToBucket result for media.id:", media.id, "->", result);
       if (!result.ok) {
         setBucketError(result.error);
         return;
       }
       setBucketError(null);
       setAddedToBucket(true);
-      console.log("[DEBUG] setAddedToBucket(true) called for media.id:", media.id);
     });
   };
-
-  console.log("[DEBUG] MediaDetailPanel RENDER for media.id:", media.id, "addedToBucket:", addedToBucket, "isPending:", isPending);
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
