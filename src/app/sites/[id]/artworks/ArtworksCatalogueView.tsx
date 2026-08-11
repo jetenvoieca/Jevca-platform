@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createArtwork } from "@/lib/actions/artworks";
+import ArtworkImportPanel from "@/components/ArtworkImportPanel";
 import ArtworkDetailPanel, {
   type ArtworkDetail,
   type ArtworkSettings,
@@ -49,6 +50,7 @@ export default function ArtworksCatalogueView({
 }) {
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
+  const [showImport, setShowImport] = useState(false);
 
   useEffect(() => {
     const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
@@ -98,6 +100,14 @@ export default function ArtworksCatalogueView({
             <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
             <div className="flex items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setShowImport(true)}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                Import from CSV
+              </button>
+
               <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
                 <button
                   type="button"
@@ -362,6 +372,14 @@ export default function ArtworksCatalogueView({
           )}
         </div>
       </div>
+
+      {showImport && (
+        <ArtworkImportPanel
+          artistId={artistId}
+          siteId={siteId}
+          onClose={() => setShowImport(false)}
+        />
+      )}
     </div>
   );
 }
