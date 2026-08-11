@@ -13,6 +13,11 @@ enum ArtistStatus {
   ARCHIVED
 }
 
+enum StripeMode {
+  TEST
+  LIVE
+}
+
 enum SiteStatus {
   DRAFT
   LIVE
@@ -77,6 +82,11 @@ model Artist {
   hopperToken String @unique @default(cuid())
   subscriptionAmount Decimal? @db.Decimal(10, 2)
   paymentMethod      String?
+  // Per-artist, not global — added 2026-08-09 so one artist can go live
+  // on real Stripe charges while every other artist stays on Test,
+  // safely isolated from each other on the same shared Stripe account.
+  // Defaults TEST so nothing changes for any existing artist.
+  stripeMode StripeMode @default(TEST)
   status    ArtistStatus @default(ACTIVE)
   createdAt DateTime     @default(now())
   updatedAt DateTime     @updatedAt
