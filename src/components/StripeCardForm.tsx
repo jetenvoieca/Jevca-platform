@@ -1,13 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-
-// Loaded once per page, outside the component, per Stripe's own guidance —
-// loadStripe caches internally so calling this more than once is harmless,
-// but keeping it at module scope avoids re-fetching Stripe.js on every render.
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 function CardEntryForm({ onDone }: { onDone: () => void }) {
   const stripe = useStripe();
@@ -54,11 +49,19 @@ function CardEntryForm({ onDone }: { onDone: () => void }) {
 
 export default function StripeCardForm({
   clientSecret,
+  publishableKey,
   onDone,
 }: {
   clientSecret: string;
+  publishableKey: string;
   onDone: () => void;
 }) {
+  // loadStripe caches internally per key, so this is cheap even if it
+  // runs again on re-render — but useMemo avoids re-triggering it
+  // unnecessarily anyway. Per-artist now (2026-08-09), not a single
+  // module-level constant, since Test and Live artists use different keys.
+  const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
+
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>
       <CardEntryForm onDone={onDone} />
