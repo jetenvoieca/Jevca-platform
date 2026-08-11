@@ -8,7 +8,7 @@ import {
   type NormalizedArtworkRow,
 } from "@/lib/actions/artworkImport";
 
-type Failure = { title: string; error: string };
+type Failure = { row: NormalizedArtworkRow; error: string };
 
 export default function ArtworkImportPanel({
   artistId,
@@ -26,6 +26,7 @@ export default function ArtworkImportPanel({
 
   const [importing, setImporting] = useState(false);
   const [done, setDone] = useState(0);
+  const [runTotal, setRunTotal] = useState(0);
   const [failures, setFailures] = useState<Failure[]>([]);
   const [finished, setFinished] = useState(false);
   const router = useRouter();
@@ -47,25 +48,40 @@ export default function ArtworkImportPanel({
     }
   };
 
-  const handleStartImport = async () => {
-    if (!rows) return;
+  const runImport = async (targetRows: NormalizedArtworkRow[]) => {
     setImporting(true);
     setDone(0);
+    setRunTotal(targetRows.length);
     setFailures([]);
     // Sequential, not Promise.all — each row fetches and uploads an
     // external image, and running ~100 of those at once would hammer
     // both the source site and R2 for no real benefit, plus this gives
     // an honest, visible progress count rather than one long silent wait.
-    for (const row of rows) {
+    for (const row of targetRows) {
       const result = await importArtworkRow(artistId, siteId, row);
       if (!result.ok) {
-        setFailures((prev) => [...prev, { title: row.title, error: result.error }]);
+        setFailures((prev) => [...prev, { row, error: result.error }]);
       }
       setDone((prev) => prev + 1);
     }
     setImporting(false);
     setFinished(true);
     router.refresh();
+  };
+
+  const handleStartImport = () => {
+    if (!rows) return;
+    runImport(rows);
+  };
+
+  const handleRetryFailed = () => {
+    // Deliberately re-runs ONLY the rows that failed — re-running the
+    // whole file again would create duplicate artworks for every one
+    // that already succeeded, since imports don't check for existing
+    // matches. This is why each failure keeps its own row, not just its
+    // title/error.
+    const retryRows = failures.map((f) => f.row);
+    runImport(retryRows);
   };
 
   const priceless = rows?.filter((r) => r.price === null).length ?? 0;
@@ -160,32 +176,43 @@ export default function ArtworkImportPanel({
           <div>
             <p className="mb-2 text-sm text-neutral-700">
               {finished ? "Done — " : "Importing… "}
-              {done} of {rows.length}
+              {done} of {runTotal}
               {failures.length > 0 && `, ${failures.length} failed`}
             </p>
             <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-neutral-100">
               <div
                 className="h-full bg-neutral-900 transition-all"
-                style={{ width: `${(done / rows.length) * 100}%` }}
+                style={{ width: `${(done / runTotal) * 100}%` }}
               />
             </div>
             {failures.length > 0 && (
               <div className="mb-3 max-h-40 overflow-y-auto rounded-md bg-red-50 p-2 text-xs text-red-700">
                 {failures.map((f, i) => (
                   <p key={i}>
-                    <span className="font-medium">{f.title}:</span> {f.error}
+                    <span className="font-medium">{f.row.title}:</span> {f.error}
                   </p>
                 ))}
               </div>
             )}
             {finished && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-              >
-                Done
-              </button>
+              <div className="flex gap-2">
+                {failures.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={handleRetryFailed}
+                    className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+                  >
+                    Retry {failures.length} failed
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+                >
+                  Done
+                </button>
+              </div>
             )}
           </div>
         )}
