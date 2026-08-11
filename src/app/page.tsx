@@ -80,6 +80,7 @@ export default async function SitesDirectoryPage({
     ownerInvoiceFooterText: s.artist.invoiceFooterText,
     ownerNextInvoiceNumber: s.artist.nextInvoiceNumber,
     ownerHopperToken: s.artist.hopperToken,
+    ownerStripeMode: s.artist.stripeMode,
   }));
 
   return (
