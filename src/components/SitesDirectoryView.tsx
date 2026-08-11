@@ -9,6 +9,7 @@ import ArchiveButton from "@/components/ArchiveButton";
 import {
   updateSite,
   updateArtist,
+  updateArtistStripeMode,
   updateSalesEnabled,
   saveArtistLogo,
   regenerateHopperToken,
@@ -42,6 +43,7 @@ type SiteRow = {
   ownerInvoiceFooterText: string | null;
   ownerNextInvoiceNumber: number;
   ownerHopperToken: string;
+  ownerStripeMode: "TEST" | "LIVE";
 };
 
 export default function SitesDirectoryView({
@@ -66,7 +68,25 @@ export default function SitesDirectoryView({
   const [regeneratingToken, setRegeneratingToken] = useState(false);
   const [resettingSales, setResettingSales] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
+  const [switchingStripeMode, setSwitchingStripeMode] = useState(false);
   const router = useRouter();
+
+  const handleStripeModeChange = (artistId: string, artistName: string, mode: "TEST" | "LIVE") => {
+    if (mode === "LIVE") {
+      const confirmed = confirm(
+        `Switch ${artistName} to LIVE Stripe payments?\n\n` +
+          `Every sale taken for this artist from now on will charge a real card. ` +
+          `Make sure you've already cleared out any test sales data first.`
+      );
+      if (!confirmed) return;
+    }
+    setSwitchingStripeMode(true);
+    startTransition(async () => {
+      await updateArtistStripeMode(artistId, mode);
+      router.refresh();
+      setSwitchingStripeMode(false);
+    });
+  };
 
   const handleResetSalesData = async (artistId: string) => {
     setResetError(null);
@@ -559,6 +579,37 @@ export default function SitesDirectoryView({
                     savedField === "invoiceFooterText" ||
                     savedField === "nextInvoiceNumber") && (
                     <p className="text-xs text-green-600">Saved</p>
+                  )}
+                </div>
+
+                <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-600">
+                    Stripe Mode
+                  </p>
+                  <p className="mb-2 text-xs text-neutral-500">
+                    Test mode uses Stripe's fake test cards — nothing is ever actually charged.
+                    Live mode charges real cards. Every other artist stays independent of this
+                    change.
+                  </p>
+                  <select
+                    value={selected.ownerStripeMode}
+                    disabled={switchingStripeMode}
+                    onChange={(e) =>
+                      handleStripeModeChange(
+                        selected.ownerId,
+                        selected.ownerName,
+                        e.target.value as "TEST" | "LIVE"
+                      )
+                    }
+                    className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm font-medium disabled:opacity-50"
+                  >
+                    <option value="TEST">Test — no real charges</option>
+                    <option value="LIVE">Live — real payments</option>
+                  </select>
+                  {selected.ownerStripeMode === "LIVE" && (
+                    <p className="mt-2 text-xs font-medium text-amber-700">
+                      ⚠ This artist is live. Real cards will be charged.
+                    </p>
                   )}
                 </div>
 
