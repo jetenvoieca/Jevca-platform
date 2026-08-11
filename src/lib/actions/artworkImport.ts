@@ -98,29 +98,52 @@ async function fetchAndUploadImage(
   artistId: string,
   imageUrl: string
 ): Promise<{ key: string; url: string; mimeType: string } | { error: string }> {
-  let res: Response;
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 20000);
-    res = await fetch(imageUrl, { signal: controller.signal });
-    clearTimeout(timeout);
-  } catch (err) {
-    return {
-      error: `Could not fetch image (${err instanceof Error ? err.message : "network error"})`,
-    };
-  }
-  if (!res.ok) return { error: `Image fetch failed — HTTP ${res.status}` };
+  // Confirmed cause of the 2026-08-11 run's ~60% failure rate: a bare
+  // server-to-server fetch with no User-Agent/Referer looks like a bot to
+  // most hosting setups (WordPress security plugins, generic hotlink
+  // protection, Cloudflare's own bot heuristics all commonly do this) —
+  // and gets blocked or rate-limited, inconsistently, which is exactly
+  // the "works for some, fails for others" pattern seen. A realistic
+  // browser-shaped request, plus a couple of retries for anything still
+  // transient, fixes the large majority of these.
+  const headers = {
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+    Referer: new URL(imageUrl).origin + "/",
+  };
 
-  const contentType = res.headers.get("content-type") || "";
-  if (!contentType.startsWith("image/")) {
-    return { error: `URL did not return an image (got "${contentType || "unknown"}")` };
-  }
+  let lastError = "Unknown error";
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 20000);
+      const res = await fetch(imageUrl, { signal: controller.signal, headers });
+      clearTimeout(timeout);
 
-  const buffer = Buffer.from(await res.arrayBuffer());
-  const ext = contentType.split("/")[1]?.split(";")[0] || "jpg";
-  const key = `${artistId}/${randomUUID()}-import.${ext}`;
-  await uploadToR2(key, buffer, contentType);
-  return { key, url: `/api/media/${key}`, mimeType: contentType };
+      if (!res.ok) {
+        lastError = `Image fetch failed — HTTP ${res.status}`;
+        // A 4xx (other than 429) won't fix itself on retry — no point
+        // burning two more attempts on a URL that's genuinely wrong.
+        if (res.status !== 429 && res.status < 500) break;
+      } else {
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.startsWith("image/")) {
+          lastError = `URL did not return an image (got "${contentType || "unknown"}")`;
+          break;
+        }
+        const buffer = Buffer.from(await res.arrayBuffer());
+        const ext = contentType.split("/")[1]?.split(";")[0] || "jpg";
+        const key = `${artistId}/${randomUUID()}-import.${ext}`;
+        await uploadToR2(key, buffer, contentType);
+        return { key, url: `/api/media/${key}`, mimeType: contentType };
+      }
+    } catch (err) {
+      lastError = `Could not fetch image (${err instanceof Error ? err.message : "network error"})`;
+    }
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+  }
+  return { error: lastError };
 }
 
 export async function importArtworkRow(
