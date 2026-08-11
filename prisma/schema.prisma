@@ -223,6 +223,13 @@ model Artwork {
   description       String?
   medium            String?
   presentationGroup String?
+  // Flagged in the Artwork Catalogue design doc as "seen in the reference
+  // screenshot but not yet built" — added 2026-08-11 once the CSV import
+  // brought in real Tier data (Collectible/Signature/Statement) that
+  // needed somewhere to live. Free text rather than an enum since this
+  // is Louise Dear's own vocabulary, not necessarily universal to every
+  // future artist.
+  tier              String?
   availability      ArtworkAvailability @default(AVAILABLE)
   visible           Boolean             @default(true)
 
