@@ -50,6 +50,7 @@ export default function PurchasePanel({
   const [error, setError] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [cardSecret, setCardSecret] = useState<string | null>(null);
+  const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
   const [purchaseType, setPurchaseType] = useState<"FULL" | "INSTALMENTS">("FULL");
   const [channel, setChannel] = useState<"STRIPE" | "GALLERY">("STRIPE");
   const [commissionPercent, setCommissionPercent] = useState("");
@@ -135,10 +136,12 @@ export default function PurchasePanel({
     if (!activePurchase) return;
     setError(null);
     setCardSecret(null);
+    setCardPublishableKey(null);
     startTransition(async () => {
       const result = await createCardEntryIntent(activePurchase.id, siteId);
       if (result.ok) {
         setCardSecret(result.clientSecret);
+        setCardPublishableKey(result.publishableKey);
       } else {
         setError(result.error);
       }
@@ -465,12 +468,14 @@ export default function PurchasePanel({
                 </div>
               )}
 
-              {cardSecret && (
+              {cardSecret && cardPublishableKey && (
                 <div className="mt-3">
                   <StripeCardForm
                     clientSecret={cardSecret}
+                    publishableKey={cardPublishableKey}
                     onDone={() => {
                       setCardSecret(null);
+                      setCardPublishableKey(null);
                       router.refresh();
                       onChanged?.();
                     }}
