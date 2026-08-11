@@ -14,6 +14,7 @@ import {
   regenerateHopperToken,
 } from "@/lib/actions";
 import { requestUploadUrl } from "@/lib/actions/media";
+import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales";
 
 type SiteRow = {
   id: string;
@@ -63,7 +64,40 @@ export default function SitesDirectoryView({
   const [logoUploading, setLogoUploading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [regeneratingToken, setRegeneratingToken] = useState(false);
+  const [resettingSales, setResettingSales] = useState(false);
+  const [resetError, setResetError] = useState<string | null>(null);
   const router = useRouter();
+
+  const handleResetSalesData = async (artistId: string) => {
+    setResetError(null);
+    setResettingSales(true);
+    try {
+      const preview = await getSalesResetPreview(artistId);
+      const totalRecords = preview.purchaseCount + preview.paymentCount + preview.saleTermsCount;
+      if (totalRecords === 0 && preview.artworksToResetCount === 0) {
+        alert(`${preview.artistName} has no sales data to reset — nothing to do.`);
+        return;
+      }
+      const confirmed = confirm(
+        `Permanently delete ALL sales data for ${preview.artistName}?\n\n` +
+          `• ${preview.purchaseCount} purchase${preview.purchaseCount === 1 ? "" : "s"}\n` +
+          `• ${preview.paymentCount} payment${preview.paymentCount === 1 ? "" : "s"}\n` +
+          `• ${preview.saleTermsCount} sale terms (pricing) record${preview.saleTermsCount === 1 ? "" : "s"}\n` +
+          `• ${preview.artworksToResetCount} artwork${preview.artworksToResetCount === 1 ? "" : "s"} reset to Available\n\n` +
+          `This cannot be undone. Real sales made after this point are unaffected.`
+      );
+      if (!confirmed) return;
+      const result = await resetArtistSalesData(artistId);
+      if (!result.ok) {
+        setResetError(result.error);
+        return;
+      }
+      router.refresh();
+      alert(`Done — ${preview.artistName}'s sales data has been reset.`);
+    } finally {
+      setResettingSales(false);
+    }
+  };
 
   const handleCopyToken = async (token: string) => {
     await navigator.clipboard.writeText(token);
@@ -526,6 +560,27 @@ export default function SitesDirectoryView({
                     savedField === "nextInvoiceNumber") && (
                     <p className="text-xs text-green-600">Saved</p>
                   )}
+                </div>
+
+                <div className="mt-4 rounded-md border border-red-200 p-3">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-red-400">
+                    Danger Zone
+                  </p>
+                  <p className="mb-2 text-xs text-neutral-500">
+                    Permanently deletes every purchase, payment, and sale-terms (pricing) record
+                    for this artist, and resets any Sold/Reserved artwork back to Available. Use
+                    this to clear out test sales before starting to take real payments — it
+                    cannot be undone.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => handleResetSalesData(selected.ownerId)}
+                    disabled={resettingSales}
+                    className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {resettingSales ? "Checking…" : "Reset all sales data…"}
+                  </button>
+                  {resetError && <p className="mt-2 text-xs text-red-600">{resetError}</p>}
                 </div>
 
                 <div className="mt-4 rounded-md border border-neutral-200 p-3">
