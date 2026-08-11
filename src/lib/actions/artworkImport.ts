@@ -42,6 +42,19 @@ export type NormalizedArtworkRow = {
   studioNotes: string;
 };
 
+// Confirmed 2026-08-11, from the actual data — not a bot-blocking or
+// network issue as first (wrongly) assumed: 58 of this export's 100
+// Image URL values are two complete URLs concatenated with no
+// separator, e.g. "https://louisedear.comhttps://pub-xxxx.r2.dev/...".
+// A bug in the old site's own export, not anything server-side here.
+// Every single one of the 58 follows this exact shape (verified — no
+// partial/different variants), so this is a safe, complete repair
+// rather than a guess at a fix.
+function repairDoubledUrl(raw: string): string {
+  const match = raw.match(/^https?:\/\/[^/]+(https?:\/\/.+)$/);
+  return match ? match[1] : raw;
+}
+
 function cleanPrice(raw: string): number | null {
   const trimmed = raw.trim();
   if (!trimmed || /^enquire$/i.test(trimmed)) return null;
@@ -77,7 +90,7 @@ export async function parseArtworkImportCsv(
     .filter((r) => (r["Title"] || "").trim())
     .map((r) => ({
       title: (r["Title"] || "").trim(),
-      imageUrl: (r["Image URL"] || "").trim(),
+      imageUrl: repairDoubledUrl((r["Image URL"] || "").trim()),
       price: cleanPrice(r["Price"] || ""),
       priceRaw: (r["Price"] || "").trim(),
       dimensions: (r["Dimensions"] || "").trim(),
