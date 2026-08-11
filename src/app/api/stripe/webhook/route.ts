@@ -1,6 +1,6 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
-import { stripe } from "@/lib/stripe";
+import { getWebhookSecret, type StripeMode } from "@/lib/stripe";
 import {
   handleFirstPaymentSucceeded,
   linkSubscriptionToSchedule,
@@ -30,6 +30,17 @@ function extractInvoiceSubscriptionId(invoice: Stripe.Invoice): string | null {
   return null;
 }
 
+// Signature verification is pure HMAC against the webhook's own signing
+// secret — it doesn't touch the account's actual API key — so any
+// instantiated client can perform it. Using whichever secret key happens
+// to be configured is fine here; this client is never used to make an
+// actual Stripe API call.
+function getVerifierClient(): Stripe {
+  const key = process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY_TEST;
+  if (!key) throw new Error("No Stripe secret key configured in either mode.");
+  return new Stripe(key);
+}
+
 // Stripe requires the raw, unparsed request body to verify a webhook's
 // signature — req.text() below reads exactly that, so no extra route
 // config is needed in the App Router (unlike the old Pages Router, which
@@ -38,13 +49,37 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get("stripe-signature");
   const body = await req.text();
 
-  let event: Stripe.Event;
+  // Per-artist Test/Live isolation (2026-08-09): Test and Live webhooks
+  // are entirely separate destinations in Stripe, each with its own
+  // signing secret, and this single endpoint has to accept both — there's
+  // no way to know which mode an incoming request is until a secret
+  // actually verifies it. Tried in both directions rather than assuming;
+  // whichever one matches tells us the mode.
+  let event: Stripe.Event | null = null;
+  let verifiedMode: StripeMode | null = null;
   try {
-    event = stripe.webhooks.constructEvent(body, signature!, process.env.STRIPE_WEBHOOK_SECRET!);
+    const verifier = getVerifierClient();
+    for (const mode of ["LIVE", "TEST"] as const) {
+      const secret = getWebhookSecret(mode);
+      if (!secret) continue;
+      try {
+        event = verifier.webhooks.constructEvent(body, signature!, secret);
+        verifiedMode = mode;
+        break;
+      } catch {
+        // Doesn't match this mode's secret — try the other one.
+        continue;
+      }
+    }
   } catch (err) {
-    console.error("Stripe webhook signature verification failed", err);
+    console.error("Stripe webhook verifier could not be constructed", err);
     return new Response("Invalid signature", { status: 400 });
   }
+  if (!event) {
+    console.error("Stripe webhook signature did not match either configured secret");
+    return new Response("Invalid signature", { status: 400 });
+  }
+  console.log(`Stripe webhook verified as ${verifiedMode} mode:`, event.type);
 
   try {
     switch (event.type) {
