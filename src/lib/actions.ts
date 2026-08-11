@@ -132,6 +132,16 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
   revalidatePath("/");
 }
 
+// Deliberately its own action, not folded into the general updateArtist
+// autosave above (2026-08-09) — switching to Live means every sale this
+// artist takes from that point starts charging real cards, so this is a
+// standalone, explicit action rather than something that could fire
+// silently as a side effect of saving an unrelated field.
+export async function updateArtistStripeMode(id: string, mode: "TEST" | "LIVE"): Promise<void> {
+  await db.artist.update({ where: { id }, data: { stripeMode: mode } });
+  revalidatePath("/");
+}
+
 // The logo needs its own action rather than folding into updateArtist —
 // it arrives via the direct-to-R2 upload flow (see requestUploadUrl in
 // media.ts, reused here since it's already generic), not a plain form
