@@ -30,10 +30,28 @@ async function nextCatalogueNumber(artistId: string) {
 
 // Wraps a create attempt with a short retry in case two artworks are
 // created at the exact same instant and both compute the same next
-// number — rare, but cheap to guard against.
-async function createArtworkWithRetry(
+// number — rare, but cheap to guard against. Exported (2026-08-11) so the
+// CSV import reuses the exact same numbering logic — one shared counter,
+// so manually-added and imported artworks can never collide.
+export async function createArtworkWithRetry(
   artistId: string,
-  data: { presentationTitle: string; catalogueName: string }
+  data: Partial<{
+    presentationTitle: string;
+    catalogueName: string;
+    presentationPrice: number | null;
+    dimensions: string | null;
+    description: string | null;
+    medium: string | null;
+    presentationGroup: string | null;
+    tier: string | null;
+    availability: Availability;
+    type: string | null;
+    catalogueGroup: string | null;
+    size: string | null;
+    location: string | null;
+    priceUnframed: number | null;
+    studioNotes: string | null;
+  }> & { presentationTitle: string; catalogueName: string }
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const catalogueNumber = await nextCatalogueNumber(artistId);
