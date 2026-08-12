@@ -58,6 +58,7 @@ export default function AppShell({
               <Link
                 key={item.href}
                 href={item.href}
+                prefetch={false}
                 className={`rounded-md px-3 py-2 text-sm font-medium ${
                   item.active
                     ? "bg-neutral-900 text-white"
