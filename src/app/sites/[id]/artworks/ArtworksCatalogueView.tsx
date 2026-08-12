@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { createArtwork } from "@/lib/actions/artworks";
+import { createArtwork, getArtworkDetailForClient } from "@/lib/actions/artworks";
 import ArtworkImportPanel from "@/components/ArtworkImportPanel";
 import ArtworkDetailPanel, {
   type ArtworkDetail,
@@ -24,14 +24,14 @@ const DENSITY_STORAGE_KEY = "jevca:artworks-density";
 export default function ArtworksCatalogueView({
   siteId,
   artistId,
-  artworks,
+  artworks: initialArtworks,
   q,
   availability,
   location,
   type,
   group,
   sort,
-  selected,
+  initialSelected,
   settings,
   siteDefaultCurrency = "GBP",
 }: {
@@ -44,13 +44,56 @@ export default function ArtworksCatalogueView({
   type: string;
   group: string;
   sort: string;
-  selected: ArtworkDetail | null;
+  initialSelected: ArtworkDetail | null;
   settings: ArtworkSettings;
   siteDefaultCurrency?: string;
 }) {
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
   const [showImport, setShowImport] = useState(false);
+  const [artworks, setArtworks] = useState<ArtworkRow[]>(initialArtworks);
+
+  // Selecting an artwork used to navigate to a whole separate route,
+  // which re-ran this component from scratch on every click — the direct
+  // cause of the density flicker reported 2026-08-11 (density starts at
+  // its default and only catches up to the real, stored value after a
+  // fresh mount's effect runs), on top of being needlessly slow. Fixed
+  // exactly like the same issue on Media Catalogue: selection is now
+  // local state, fetching only the one clicked artwork.
+  const [selected, setSelected] = useState<ArtworkDetail | null>(initialSelected);
+  const [selectingId, setSelectingId] = useState<string | null>(null);
+
+  const updateUrlSelected = (artworkId: string | null) => {
+    const params = new URLSearchParams(window.location.search);
+    if (artworkId) params.set("selected", artworkId);
+    else params.delete("selected");
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  };
+
+  const handleSelect = (artworkId: string) => {
+    if (selectingId) return;
+    setSelectingId(artworkId);
+    (async () => {
+      const item = await getArtworkDetailForClient(artworkId);
+      if (item && item.artistId === artistId) {
+        setSelected(item);
+        updateUrlSelected(artworkId);
+      }
+      setSelectingId(null);
+    })();
+  };
+
+  const handleClosePanel = () => {
+    setSelected(null);
+    updateUrlSelected(null);
+  };
+
+  const handleDeletedPanel = () => {
+    if (selected) setArtworks((prev) => prev.filter((a) => a.id !== selected.id));
+    setSelected(null);
+    updateUrlSelected(null);
+  };
 
   useEffect(() => {
     const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
@@ -260,12 +303,14 @@ export default function ArtworksCatalogueView({
               style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
             >
               {artworks.map((a) => (
-                <Link
+                <button
                   key={a.id}
-                  href={`/sites/${siteId}/artworks/${a.id}`}
-                  className={`block rounded-md border-2 p-1 ${
+                  type="button"
+                  onClick={() => handleSelect(a.id)}
+                  disabled={selectingId === a.id}
+                  className={`block w-full rounded-md border-2 p-1 text-left ${
                     selected?.id === a.id ? "border-neutral-900" : "border-transparent"
-                  }`}
+                  } ${selectingId === a.id ? "opacity-60" : ""}`}
                 >
                   <div className="relative">
                     {a.imageUrl ? (
@@ -291,7 +336,7 @@ export default function ArtworksCatalogueView({
                   <p className="text-xs text-neutral-500">
                     {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
                   </p>
-                </Link>
+                </button>
               ))}
               {addNewTile}
             </div>
@@ -310,28 +355,23 @@ export default function ArtworksCatalogueView({
                 {artworks.map((a) => (
                   <tr
                     key={a.id}
-                    className={`border-b border-neutral-100 ${
+                    onClick={() => handleSelect(a.id)}
+                    className={`cursor-pointer border-b border-neutral-100 ${
                       selected?.id === a.id ? "bg-neutral-100" : "hover:bg-neutral-50"
-                    }`}
+                    } ${selectingId === a.id ? "opacity-60" : ""}`}
                   >
                     <td className="py-2">
-                      <Link href={`/sites/${siteId}/artworks/${a.id}`}>
-                        {a.imageUrl ? (
-                          <img
-                            src={a.imageUrl}
-                            alt=""
-                            className="h-10 w-10 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="h-10 w-10 rounded bg-neutral-100" />
-                        )}
-                      </Link>
+                      {a.imageUrl ? (
+                        <img
+                          src={a.imageUrl}
+                          alt=""
+                          className="h-10 w-10 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded bg-neutral-100" />
+                      )}
                     </td>
-                    <td className="py-2 font-medium text-neutral-900">
-                      <Link href={`/sites/${siteId}/artworks/${a.id}`}>
-                        {a.presentationTitle}
-                      </Link>
-                    </td>
+                    <td className="py-2 font-medium text-neutral-900">{a.presentationTitle}</td>
                     <td className="py-2 text-neutral-500">{a.catalogueNumber}</td>
                     <td className="py-2 text-neutral-500">
                       {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
@@ -359,11 +399,14 @@ export default function ArtworksCatalogueView({
         <div className="sticky top-4">
           {selected ? (
             <ArtworkDetailPanel
+              key={selected.id}
               siteId={siteId}
               artistId={artistId}
               artwork={selected}
               settings={settings}
               siteDefaultCurrency={siteDefaultCurrency}
+              onClose={handleClosePanel}
+              onDeleted={handleDeletedPanel}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
