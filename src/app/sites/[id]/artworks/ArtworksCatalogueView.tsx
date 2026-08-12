@@ -180,6 +180,19 @@ export default function ArtworksCatalogueView({
     </form>
   );
 
+  const loadMoreRow = hasMore && (
+    <div className="mt-4 flex justify-center">
+      <button
+        type="button"
+        onClick={handleLoadMore}
+        disabled={loadingMore}
+        className="rounded-md border border-neutral-300 px-4 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+      >
+        {loadingMore ? "Loading…" : "Load more"}
+      </button>
+    </div>
+  );
+
   return (
     <div className="px-6 py-4">
       <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
@@ -328,7 +341,6 @@ export default function ArtworksCatalogueView({
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
                 <option value="">Sort: Date added</option>
-                <option value="">Sort: Date added</option>
                 <option value="title">Sort: Title</option>
                 <option value="price">Sort: Price</option>
               </select>
@@ -368,3 +380,112 @@ export default function ArtworksCatalogueView({
                         className="aspect-square w-full rounded-md object-cover"
                       />
                     ) : (
+                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
+                        No image
+                      </div>
+                    )}
+                    {a.availability === "SOLD" && (
+                      <span className="absolute right-1.5 top-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
+                        Sold
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 truncate text-sm font-medium text-neutral-900">
+                    {a.presentationTitle}
+                  </p>
+                  <p className="text-xs text-neutral-500">
+                    {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
+                  </p>
+                </button>
+              ))}
+              {addNewTile}
+            </div>
+          ) : (
+            <table className="w-full border-collapse text-sm">
+              <thead>
+                <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                  <th className="py-2 font-medium"></th>
+                  <th className="py-2 font-medium">Title</th>
+                  <th className="py-2 font-medium">Catalogue #</th>
+                  <th className="py-2 font-medium">Price</th>
+                  <th className="py-2 font-medium">Availability</th>
+                </tr>
+              </thead>
+              <tbody>
+                {artworks.map((a) => (
+                  <tr
+                    key={a.id}
+                    onClick={() => handleSelect(a.id)}
+                    className={`cursor-pointer border-b border-neutral-100 ${
+                      selected?.id === a.id ? "bg-neutral-100" : "hover:bg-neutral-50"
+                    } ${selectingId === a.id ? "opacity-60" : ""}`}
+                  >
+                    <td className="py-2">
+                      {a.imageUrl ? (
+                        <img
+                          src={a.imageUrl}
+                          alt=""
+                          className="h-10 w-10 rounded object-cover"
+                        />
+                      ) : (
+                        <div className="h-10 w-10 rounded bg-neutral-100" />
+                      )}
+                    </td>
+                    <td className="py-2 font-medium text-neutral-900">{a.presentationTitle}</td>
+                    <td className="py-2 text-neutral-500">{a.catalogueNumber}</td>
+                    <td className="py-2 text-neutral-500">
+                      {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
+                    </td>
+                    <td className="py-2 text-neutral-500">{a.availability}</td>
+                  </tr>
+                ))}
+                <tr className="border-b border-neutral-100">
+                  <td colSpan={5} className="py-2">
+                    <form action={createArtwork.bind(null, artistId, siteId)}>
+                      <button
+                        type="submit"
+                        className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
+                      >
+                        + Add New
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          )}
+
+          {loadMoreRow}
+        </div>
+
+        <div className="sticky top-4">
+          {selected ? (
+            <ArtworkDetailPanel
+              key={selected.id}
+              siteId={siteId}
+              artistId={artistId}
+              artwork={selected}
+              settings={settings}
+              siteDefaultCurrency={siteDefaultCurrency}
+              onClose={handleClosePanel}
+              onDeleted={handleDeletedPanel}
+              onDataChanged={refreshSelected}
+            />
+          ) : (
+            <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
+              Select an artwork to see its details.
+            </div>
+          )}
+        </div>
+      </div>
+
+      {showImport && (
+        <ArtworkImportPanel
+          artistId={artistId}
+          siteId={siteId}
+          onClose={() => setShowImport(false)}
+        />
+      )}
+    </div>
+  );
+}
