@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import {
   parseArtworkImportCsv,
   importArtworkRow,
+  getCsvImportedArtworkIds,
+  deleteArtworksByIds,
   type NormalizedArtworkRow,
 } from "@/lib/actions/artworkImport";
 
@@ -29,7 +31,40 @@ export default function ArtworkImportPanel({
   const [runTotal, setRunTotal] = useState(0);
   const [failures, setFailures] = useState<Failure[]>([]);
   const [finished, setFinished] = useState(false);
+  const [cleaningUp, setCleaningUp] = useState(false);
   const router = useRouter();
+
+  const handleCleanUp = async () => {
+    setCleaningUp(true);
+    try {
+      const ids = await getCsvImportedArtworkIds(artistId);
+      if (ids.length === 0) {
+        alert("No CSV-imported artworks found — nothing to delete.");
+        return;
+      }
+      const confirmed = confirm(
+        `Permanently delete all ${ids.length} artworks previously brought in by this CSV import ` +
+          `(including their images)?\n\n` +
+          `This only ever touches artworks this import feature created — nothing added any ` +
+          `other way is affected. Use this to clear out duplicates from repeated import attempts ` +
+          `before importing fresh.\n\nThis cannot be undone.`
+      );
+      if (!confirmed) return;
+      const result = await deleteArtworksByIds(siteId, ids);
+      router.refresh();
+      if (result.failed.length > 0) {
+        alert(
+          `Deleted ${result.deleted}. ${result.failed.length} couldn't be deleted (likely ` +
+            `already linked to a real sale) — left in place rather than risk removing something real.`
+        );
+      } else {
+        alert(`Deleted ${result.deleted} artworks. Ready for a fresh import.`);
+      }
+    } finally {
+      setCleaningUp(false);
+    }
+  };
+
 
   const handleFile = async (file: File) => {
     setFileName(file.name);
@@ -57,12 +92,17 @@ export default function ArtworkImportPanel({
     // external image, and running ~100 of those at once would hammer
     // both the source site and R2 for no real benefit, plus this gives
     // an honest, visible progress count rather than one long silent wait.
+    // The extra pause between rows (on top of the retry-with-backoff
+    // inside a single row's fetch) is deliberately gentle on the source
+    // site — confirmed 2026-08-11 that enough rapid requests in a row
+    // triggers what looks like temporary rate-limiting/blocking there.
     for (const row of targetRows) {
       const result = await importArtworkRow(artistId, siteId, row);
       if (!result.ok) {
         setFailures((prev) => [...prev, { row, error: result.error }]);
       }
       setDone((prev) => prev + 1);
+      await new Promise((r) => setTimeout(r, 400));
     }
     setImporting(false);
     setFinished(true);
@@ -117,6 +157,25 @@ export default function ArtworkImportPanel({
               }}
               className="text-sm"
             />
+
+            <div className="mt-4 rounded-md border border-red-200 p-3">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-red-400">
+                Danger Zone
+              </p>
+              <p className="mb-2 text-xs text-neutral-500">
+                Had a repeated or restarted import leave duplicates behind? This deletes every
+                artwork this import feature has ever created for this artist, so you can re-run
+                the CSV fresh. Never touches artworks added any other way.
+              </p>
+              <button
+                type="button"
+                onClick={handleCleanUp}
+                disabled={cleaningUp}
+                className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+              >
+                {cleaningUp ? "Checking…" : "Delete all CSV-imported artworks…"}
+              </button>
+            </div>
           </div>
         )}
 
