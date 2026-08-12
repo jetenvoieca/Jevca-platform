@@ -1,435 +1,603 @@
-"use server";
+"use client";
 
-import { db } from "@/lib/db";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
+import { useState, useTransition, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
+import Link from "next/link";
+import {
+  binHopperItem,
+  addHopperItemToMedia,
+  addHopperItemToArtwork,
+  addHopperItemToBucket,
+  updateHopperCaption,
+} from "@/lib/actions/hopper";
+import { quickCreateArtwork } from "@/lib/actions/media";
+import { uploadFileDirect } from "@/lib/uploadDirect";
+import ArtworkPicker from "@/components/ArtworkPicker";
+import VideoThumb from "@/components/VideoThumb";
 
-type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
-
-// Artworks belong to the Artist, not any one Site — the same piece can be
-// featured on more than one of that artist's sites. Actions here take an
-// explicit `siteId` only where it's needed to know which site's URL to
-// redirect to or revalidate — never to scope which artworks are returned.
-
-async function nextCatalogueNumber(artistId: string) {
-  // Based on the highest catalogue number actually in use, not the row
-  // count — count() breaks the moment any artwork is ever deleted, since
-  // the count drops but a surviving artwork can still hold a higher
-  // number, causing the next "count + 1" guess to collide with it.
-  const rows = await db.artwork.findMany({
-    where: { artistId },
-    select: { catalogueNumber: true },
-  });
-  const highest = rows.reduce((max, r) => {
-    const match = r.catalogueNumber.match(/(\d+)$/);
-    const n = match ? parseInt(match[1], 10) : 0;
-    return Math.max(max, n);
-  }, 0);
-  return `AW-${String(highest + 1).padStart(4, "0")}`;
-}
-
-// Wraps a create attempt with a short retry in case two artworks are
-// created at the exact same instant and both compute the same next
-// number — rare, but cheap to guard against. Exported (2026-08-11) so the
-// CSV import reuses the exact same numbering logic — one shared counter,
-// so manually-added and imported artworks can never collide.
-export async function createArtworkWithRetry(
-  artistId: string,
-  data: Partial<{
-    presentationTitle: string;
-    catalogueName: string;
-    presentationPrice: number | null;
-    dimensions: string | null;
-    description: string | null;
-    medium: string | null;
-    presentationGroup: string | null;
-    tier: string | null;
-    availability: Availability;
-    type: string | null;
-    catalogueGroup: string | null;
-    size: string | null;
-    location: string | null;
-    priceUnframed: number | null;
-    studioNotes: string | null;
-  }> & { presentationTitle: string; catalogueName: string }
-) {
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const catalogueNumber = await nextCatalogueNumber(artistId);
-    try {
-      return await db.artwork.create({
-        data: { artistId, catalogueNumber, ...data },
-      });
-    } catch (err: unknown) {
-      const isUniqueViolation =
-        typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
-      if (!isUniqueViolation || attempt === 2) throw err;
-    }
-  }
-  throw new Error("Could not generate a unique catalogue number.");
-}
-
-// "+ New" — a Title is optional. If left blank the record is created as
-// "Untitled" so you can jump straight in and upload an image first, name
-// it later. Whatever title it ends up with seeds both facets
-// (presentationTitle and catalogueName) as a starting point; from this
-// point on the two are independent.
-// `siteId` here is only which site you're currently working in, so the
-// new artwork's editor opens back on that site's URL — it doesn't scope
-// ownership, `artistId` does.
-export async function createArtwork(artistId: string, siteId: string, formData: FormData) {
-  const title = (formData.get("title") as string)?.trim() || "Untitled";
-
-  const artwork = await createArtworkWithRetry(artistId, {
-    presentationTitle: title,
-    catalogueName: title,
-  });
-
-  revalidatePath(`/sites/${siteId}/artworks`);
-  redirect(`/sites/${siteId}/artworks?selected=${artwork.id}`);
-}
-
-type ListFilters = {
-  q?: string;
-  availability?: string;
-  location?: string;
-  type?: string;
-  group?: string;
-  sort?: string;
+export type HopperItem = {
+  id: string;
+  url: string;
+  posterUrl: string | null;
+  kind: string;
+  caption: string | null;
+  altText: string | null;
+  tags: string[];
+  createdAt: string;
 };
 
-// Lightweight rows for the grid — only what a tile needs to render.
-// Full detail is fetched separately (getArtworkDetail) when a tile is opened.
-export async function listArtworks(artistId: string, filters: ListFilters) {
-  const { q, availability, location, type, group, sort } = filters;
+// A running, session-only log of what's just been done — pure visual
+// confirmation ("did that just work"), not persisted anywhere. Cleared
+// on refresh or via the "Clear list" button.
+type ProcessedEntry = {
+  key: string;
+  url: string;
+  posterUrl: string | null;
+  kind: string;
+  label: string;
+  // Where this item actually ended up — its own Media Catalogue page, or
+  // the artwork it was linked to/created. Null for "Binned", since an
+  // archived item has no edit panel to jump to.
+  href: string | null;
+};
 
-  const orderBy = {
-    presentationPrice: sort === "price" ? ("desc" as const) : undefined,
-    presentationTitle: sort === "title" ? ("asc" as const) : undefined,
-    createdAt: sort === "price" || sort === "title" ? undefined : ("desc" as const),
-  };
+// Persisted per artist so the Processed trail survives navigating away
+// and back (it was previously plain component state, which reset on
+// unmount — see decisions log, 2026-08-05). Same localStorage pattern
+// already used for the Media Catalogue's density preference.
+const processedLogKey = (artistId: string) => `jevca:hopper-processed:${artistId}`;
 
-  return db.artwork.findMany({
-    where: {
-      artistId,
-      ...(q
-        ? {
-            OR: [
-              { presentationTitle: { contains: q, mode: "insensitive" as const } },
-              { catalogueName: { contains: q, mode: "insensitive" as const } },
-              { catalogueNumber: { contains: q, mode: "insensitive" as const } },
-              { medium: { contains: q, mode: "insensitive" as const } },
-            ],
-          }
-        : {}),
-      ...(availability ? { availability: availability as Availability } : {}),
-      ...(location ? { location } : {}),
-      ...(type ? { type } : {}),
-      // A Group filter matches either facet's Group, since the same preset
-      // list feeds both and it's not obvious to the user which one a given
-      // artwork was tagged under.
-      ...(group ? { OR: [{ catalogueGroup: group }, { presentationGroup: group }] } : {}),
-    },
-    orderBy,
-    select: {
-      id: true,
-      presentationTitle: true,
-      presentationPrice: true,
-      catalogueNumber: true,
-      availability: true,
-      images: { take: 1, select: { url: true } },
-    },
-  });
-}
+export default function HopperView({
+  siteId,
+  artistId,
+  queue,
+  tagPresets,
+}: {
+  siteId: string;
+  artistId: string;
+  queue: HopperItem[];
+  tagPresets: string[];
+}) {
+  const router = useRouter();
+  const [isPending, startTransition] = useTransition();
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [addUploading, setAddUploading] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
+  const [processedLog, setProcessedLog] = useState<ProcessedEntry[]>([]);
+  const folderInputRef = useRef<HTMLInputElement>(null);
 
-// Full record for the slide-in detail panel — both facets, all images.
-export async function getArtworkDetail(id: string) {
-  return db.artwork.findUnique({
-    where: { id },
-    include: {
-      images: true,
-      saleTerms: true,
-      purchases: {
-        include: { payments: { orderBy: { sequence: "asc" } } },
-        orderBy: { createdAt: "desc" },
+  // webkitdirectory/directory aren't part of React's typed HTML
+  // attributes, so they're set imperatively here rather than as JSX
+  // props — sidesteps any TypeScript strict-mode complaint about an
+  // unrecognised attribute (this project has hit real strict-mode build
+  // failures before over exactly this category of thing).
+  useEffect(() => {
+    folderInputRef.current?.setAttribute("webkitdirectory", "true");
+    folderInputRef.current?.setAttribute("directory", "true");
+  }, []);
+
+  // Load whatever was left from a previous visit, once, on mount — kept
+  // as a separate effect (rather than reading localStorage directly in
+  // useState's initializer) so this stays SSR-safe: the server render
+  // and the client's first render both start from [], avoiding a
+  // hydration mismatch, then this fills it in immediately after.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(processedLogKey(artistId));
+      if (stored) setProcessedLog(JSON.parse(stored));
+    } catch {
+      // Corrupt or unavailable storage — just start with an empty log.
+    }
+  }, [artistId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(processedLogKey(artistId), JSON.stringify(processedLog));
+    } catch {
+      // Storage full/unavailable — non-critical, the log just won't
+      // persist this time.
+    }
+  }, [processedLog, artistId]);
+
+  const current = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null;
+  const remaining = queue.filter((i) => i.id !== current?.id);
+
+  const logProcessed = (item: HopperItem, label: string, href: string | null) => {
+    setProcessedLog((prev) => [
+      {
+        key: `${item.id}-${Date.now()}`,
+        url: item.url,
+        posterUrl: item.posterUrl,
+        kind: item.kind,
+        label,
+        href,
       },
-    },
-  });
-}
-
-// getArtworkDetail returns raw Prisma data, including Decimal price
-// fields — fine when a Server Component converts them before handing off
-// as props (the existing routes already do this), but Decimal isn't safely
-// serializable across a direct client-to-server-action call. This is that
-// same data, pre-converted, for callers that need to fetch it straight
-// from a client component (e.g. clicking an artwork tile to edit it
-// in-place, as the Section editor does).
-export async function getArtworkDetailForClient(id: string) {
-  const artwork = await getArtworkDetail(id);
-  if (!artwork) return null;
-
-  const purchases = artwork.purchases.map((p) => ({
-    id: p.id,
-    status: p.status,
-    channel: p.channel,
-    buyerName: p.buyerName,
-    buyerEmail: p.buyerEmail,
-    buyerAddress: p.buyerAddress,
-    type: p.type,
-    source: p.source,
-    commissionPercent: p.commissionPercent != null ? p.commissionPercent.toString() : null,
-    invoiceNumber: p.invoiceNumber,
-    totalAmount: p.totalAmount.toString(),
-    currency: p.currency,
-    instalmentCount: p.instalmentCount,
-    releaseMessage: p.releaseMessage,
-    releaseTriggerCount: p.releaseTriggerCount,
-    createdAt: p.createdAt.toISOString(),
-    closedAt: p.closedAt ? p.closedAt.toISOString() : null,
-    payments: p.payments.map((pay) => ({
-      id: pay.id,
-      sequence: pay.sequence,
-      amount: pay.amount.toString(),
-      currency: pay.currency,
-      status: pay.status,
-      dueDate: pay.dueDate ? pay.dueDate.toISOString() : null,
-      paidDate: pay.paidDate ? pay.paidDate.toISOString() : null,
-    })),
-  }));
-
-  return {
-    id: artwork.id,
-    artistId: artwork.artistId,
-    catalogueNumber: artwork.catalogueNumber,
-    presentationTitle: artwork.presentationTitle,
-    presentationPrice: artwork.presentationPrice != null ? artwork.presentationPrice.toString() : null,
-    dimensions: artwork.dimensions,
-    description: artwork.description,
-    medium: artwork.medium,
-    presentationGroup: artwork.presentationGroup,
-    availability: artwork.availability,
-    visible: artwork.visible,
-    catalogueName: artwork.catalogueName,
-    year: artwork.year,
-    type: artwork.type,
-    catalogueGroup: artwork.catalogueGroup,
-    size: artwork.size,
-    location: artwork.location,
-    edition: artwork.edition,
-    availableQty: artwork.availableQty,
-    priceUnframed: artwork.priceUnframed != null ? artwork.priceUnframed.toString() : null,
-    priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
-    studioNotes: artwork.studioNotes,
-    images: artwork.images.map((img) => ({
-      id: img.id,
-      url: img.url,
-      kind: img.kind,
-      posterUrl: img.posterUrl,
-    })),
-    saleTerms: artwork.saleTerms
-      ? {
-          totalAmount: artwork.saleTerms.totalAmount.toString(),
-          currency: artwork.saleTerms.currency,
-          instalmentCount: artwork.saleTerms.instalmentCount,
-          releaseMessage: artwork.saleTerms.releaseMessage,
-          releaseTriggerCount: artwork.saleTerms.releaseTriggerCount,
-        }
-      : null,
-    activePurchase: purchases.find((p) => p.status === "ACTIVE") || null,
-    purchaseHistory: purchases.filter((p) => p.status !== "ACTIVE"),
+      ...prev,
+    ]);
   };
+
+  // After any sort action, drop back to "no explicit selection" so the
+  // next render (post-refresh, with this item now gone from the queue)
+  // naturally falls forward to the new oldest item — the auto-advance
+  // flick-through rhythm from the original spec, without needing to
+  // track index positions by hand.
+  const advanceAfterAction = () => {
+    setSelectedId(null);
+    router.refresh();
+  };
+
+  const handleBin = (item: HopperItem) => {
+    startTransition(async () => {
+      await binHopperItem(item.id, siteId);
+      logProcessed(item, "Binned", null);
+      advanceAfterAction();
+    });
+  };
+
+  const handleAddToMedia = (item: HopperItem) => {
+    startTransition(async () => {
+      await addHopperItemToMedia(item.id, siteId);
+      logProcessed(item, "Added to Media Catalogue", `/sites/${siteId}/media?selected=${item.id}`);
+      advanceAfterAction();
+    });
+  };
+
+  const handleAddToBucket = (item: HopperItem) => {
+    startTransition(async () => {
+      const result = await addHopperItemToBucket(item.id, siteId);
+      if (!result.ok) {
+        setAddError(result.error);
+        return;
+      }
+      setAddError(null);
+      logProcessed(item, "Added to Bucket", `/sites/${siteId}/bucket`);
+      advanceAfterAction();
+    });
+  };
+
+  // Existing artwork → always ancillary, never touches that artwork's
+  // main image (per 2026-08-05 decision — changing an existing artwork's
+  // main image is a separate action, done from the Artwork editor).
+  const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
+    startTransition(async () => {
+      await addHopperItemToArtwork(item.id, siteId, artworkId, false);
+      logProcessed(item, `Linked to ${artworkTitle}`, `/sites/${siteId}/artworks?selected=${artworkId}`);
+      advanceAfterAction();
+    });
+  };
+
+  // New artwork → always becomes its main image, since it's the only
+  // image the artwork has at the point of creation.
+  const handleAddNewArtwork = (item: HopperItem, title: string) => {
+    startTransition(async () => {
+      const finalTitle = title.trim() || "Untitled";
+      const result = await quickCreateArtwork(artistId, finalTitle);
+      if ("error" in result || !result.artwork) {
+        setAddError(result.error || "Couldn't create the artwork. Try again.");
+        return;
+      }
+      await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
+      logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks?selected=${result.artwork.id}`);
+      advanceAfterAction();
+    });
+  };
+
+  const handleUploadFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    setAddError(null);
+    setAddUploading(true);
+    try {
+      for (const file of Array.from(files)) {
+        // Folder picks can include non-media files (.DS_Store, etc.) —
+        // silently skip anything that isn't an image or video rather
+        // than erroring the whole batch out.
+        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
+        await uploadFileDirect(file, artistId, "HOPPER", "Manual upload");
+      }
+      router.refresh();
+    } catch (err) {
+      setAddError(err instanceof Error ? err.message : "Upload failed. Try again.");
+    } finally {
+      setAddUploading(false);
+    }
+  };
+
+  // Rendered for real above "Up next" (where these buttons conceptually
+  // belong — they're what feeds that queue), and as an inert visual
+  // spacer above the other two columns so all three still start their
+  // actual content at the same height. The spacer is deliberately plain
+  // <span>s, not a second copy of the real buttons/inputs — reusing the
+  // interactive version (with its ref and handlers) in three places at
+  // once would fight over which DOM node the ref actually points to.
+  const importButtons = (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => router.refresh()}
+        className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+      >
+        Check Incoming
+      </button>
+      <label
+        className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
+          addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
+        }`}
+      >
+        Add from folder
+        <input
+          ref={folderInputRef}
+          type="file"
+          multiple
+          className="hidden"
+          disabled={addUploading}
+          onChange={(e) => handleUploadFiles(e.target.files)}
+        />
+      </label>
+      <label
+        className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
+          addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
+        }`}
+      >
+        Add media
+        <input
+          type="file"
+          accept="image/*,video/*"
+          multiple
+          className="hidden"
+          disabled={addUploading}
+          onChange={(e) => handleUploadFiles(e.target.files)}
+        />
+      </label>
+    </div>
+  );
+
+  const importButtonsSpacer = (
+    <div className="invisible flex flex-wrap items-center gap-2" aria-hidden="true">
+      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
+      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
+      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
+    </div>
+  );
+
+  return (
+    <div className="mx-auto max-w-6xl px-6 py-4">
+      <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
+        Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
+      </h1>
+
+      {addError && (
+        <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
+      )}
+
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "300px 1fr 280px" }}>
+        {/* Processed — a visual confirmation trail, not part of the
+            sorting flow itself, so it stays put even once the queue on
+            the right runs out. */}
+        <div className="sticky top-4">
+          <div className="mb-3">{importButtonsSpacer}</div>
+          {processedLog.length > 0 && (
+            <>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  Processed
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setProcessedLog([])}
+                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
+                >
+                  Clear list
+                </button>
+              </div>
+              <div className="space-y-2">
+                {processedLog.map((entry) => {
+                  const thumb =
+                    entry.kind === "VIDEO" ? (
+                      entry.posterUrl ? (
+                        <img
+                          src={entry.posterUrl}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                      ) : (
+                        <VideoThumb
+                          src={entry.url}
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                      )
+                    ) : (
+                      <img
+                        src={entry.url}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded object-cover"
+                      />
+                    );
+                  const text = (
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
+                      <p className="text-xs text-neutral-400">
+                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
+                      </p>
+                    </div>
+                  );
+                  return entry.href ? (
+                    <Link
+                      key={entry.key}
+                      href={entry.href}
+                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2 hover:border-neutral-300 hover:bg-neutral-50"
+                    >
+                      {thumb}
+                      {text}
+                    </Link>
+                  ) : (
+                    <div
+                      key={entry.key}
+                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
+                    >
+                      {thumb}
+                      {text}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div>
+          <div className="mb-3">{importButtons}</div>
+          {/* Invisible, but occupies exactly the same height as the
+              "Processed"/"Up next" header rows either side of it — so
+              the content below it (this empty-state box, or the
+              SortingCard) lines up with the top of the first Processed
+              *item* and the thumbnail grid, not with the labels above
+              them. */}
+          <div className="invisible mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide">Spacer</p>
+            <span className="text-xs">Spacer</span>
+          </div>
+
+          {!current ? (
+            <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
+              Hopper is empty — nothing waiting to be sorted.
+            </div>
+          ) : (
+            <SortingCard
+              key={current.id}
+              siteId={siteId}
+              artistId={artistId}
+              item={current}
+              tagPresets={tagPresets}
+              isPending={isPending}
+              onBin={() => handleBin(current)}
+              onAddToMedia={() => handleAddToMedia(current)}
+              onAddToBucket={() => handleAddToBucket(current)}
+              onAddToExistingArtwork={(artworkId, artworkTitle) =>
+                handleAddToExistingArtwork(current, artworkId, artworkTitle)
+              }
+              onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
+            />
+          )}
+        </div>
+
+        {/* Up next — always rendered (not just while there's a current
+            item), so "Up next (0)" and this column's place in the layout
+            stay visible and stable even once the queue empties out. */}
+        <div className="sticky top-4">
+          <div className="mb-3">{importButtonsSpacer}</div>
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+            Up next ({remaining.length})
+          </p>
+          {!current ? null : remaining.length === 0 ? (
+            <p className="text-xs text-neutral-400">This is the last one.</p>
+          ) : (
+            <div className="grid grid-cols-3 gap-2">
+              {remaining.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => setSelectedId(item.id)}
+                  className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
+                >
+                  {item.kind === "VIDEO" ? (
+                    item.posterUrl ? (
+                      <img
+                        src={item.posterUrl}
+                        alt=""
+                        className="aspect-square w-full object-cover"
+                      />
+                    ) : (
+                      <VideoThumb src={item.url} className="aspect-square w-full object-cover" />
+                    )
+                  ) : (
+                    <img src={item.url} alt="" className="aspect-square w-full object-cover" />
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 }
 
-// `siteId` is only used to revalidate/redirect back to whichever site's
-// screen you were editing from — it no longer scopes the artwork itself.
-export async function updatePresentation(
-  id: string,
-  siteId: string,
-  formData: FormData
-): Promise<void> {
-  const presentationTitle = (formData.get("presentationTitle") as string)?.trim();
-  const priceRaw = (formData.get("presentationPrice") as string)?.trim();
-  const dimensions = (formData.get("dimensions") as string)?.trim() || null;
-  const description = (formData.get("description") as string)?.trim() || null;
+function SortingCard({
+  siteId,
+  artistId,
+  item,
+  tagPresets,
+  isPending,
+  onBin,
+  onAddToMedia,
+  onAddToBucket,
+  onAddToExistingArtwork,
+  onAddNewArtwork,
+}: {
+  siteId: string;
+  artistId: string;
+  item: HopperItem;
+  tagPresets: string[];
+  isPending: boolean;
+  onBin: () => void;
+  onAddToMedia: () => void;
+  onAddToBucket: () => void;
+  onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
+  onAddNewArtwork: (title: string) => void;
+}) {
+  // Local state, reset automatically each time this card remounts (the
+  // parent keys it by item.id) — no stale-caption bug when moving
+  // between queue items.
+  const [caption, setCaption] = useState(item.caption || "");
+  const [altText, setAltText] = useState(item.altText || "");
+  const [tags, setTags] = useState<string[]>(item.tags);
 
-  await db.artwork.update({
-    where: { id },
-    data: {
-      presentationTitle,
-      presentationPrice: priceRaw || null,
-      dimensions,
-      description,
-      // Medium and Group are no longer editable from here — both now
-      // read-only, live-mirroring Catalogue's `medium` and
-      // `catalogueGroup` (edited only from the Catalogue tab). The
-      // `presentationGroup` column itself is left in the database
-      // untouched rather than dropped, in case a genuinely independent
-      // public-facing Group value is ever wanted again — same reasoning
-      // as the kept-but-unused `visible` column.
-      //
-      // Availability moved to the Catalogue tab — it's part of the
-      // artist's own working record, not something typed while looking at
-      // "what customers see." Visibility is deliberately not set here
-      // either — it'll be governed by which pages feature the artwork,
-      // not a manual toggle on this screen. The column stays in the
-      // database (untouched, whatever it was) rather than being dropped,
-      // to avoid a destructive migration for a field that may be wanted
-      // again.
-    },
-  });
+  const saveFields = (nextTags?: string[]) => {
+    const fd = new FormData();
+    fd.set("caption", caption);
+    fd.set("altText", altText);
+    fd.set("tags", (nextTags ?? tags).join(", "));
+    // Fire-and-forget — this is a background autosave, not the action
+    // that advances the queue, so it doesn't need its own pending state.
+    updateHopperCaption(item.id, siteId, fd);
+  };
 
-  revalidatePath(`/sites/${siteId}/artworks`);
-}
+  // Tags are click-to-toggle from the artist's preset list (Media
+  // Catalogue → Settings), not typed — per 2026-08-05 decision, so tags
+  // stay consistent/searchable rather than drifting into one-off typos.
+  // Saves immediately on click, since there's no "blur" moment the way
+  // there is for a text field.
+  const toggleTag = (tag: string) => {
+    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
+    setTags(next);
+    saveFields(next);
+  };
 
-export async function updateCatalogue(
-  id: string,
-  siteId: string,
-  formData: FormData
-): Promise<void> {
-  const catalogueName = (formData.get("catalogueName") as string)?.trim();
-  const yearRaw = (formData.get("year") as string)?.trim();
-  const type = (formData.get("type") as string)?.trim() || null;
-  const catalogueGroup = (formData.get("catalogueGroup") as string)?.trim() || null;
-  const size = (formData.get("size") as string)?.trim() || null;
-  const location = (formData.get("location") as string)?.trim() || null;
-  const edition = (formData.get("edition") as string)?.trim() || null;
-  const availableQtyRaw = (formData.get("availableQty") as string)?.trim();
-  const priceUnframedRaw = (formData.get("priceUnframed") as string)?.trim();
-  const priceFramedRaw = (formData.get("priceFramed") as string)?.trim();
-  const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
-  const medium = (formData.get("medium") as string)?.trim() || null;
-  const availability = formData.get("availability") as Availability;
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white p-6">
+      <p className="mb-3 text-xs text-neutral-400">
+        Received {new Date(item.createdAt).toLocaleString()}
+      </p>
 
-  // Presentation's Title, Price, and Dimensions default from Catalogue's
-  // Name, Price unframed, and Size — but only the first time Catalogue is
-  // actually filled in, and only while Presentation is still at its
-  // untouched default. The moment someone types something different
-  // directly into Presentation, it's considered overridden and this stops
-  // touching that field — same "seed once, then independent" pattern
-  // already used for Presentation being seeded from Catalogue at
-  // creation.
-  const current = await db.artwork.findUnique({
-    where: { id },
-    select: { presentationTitle: true, presentationPrice: true, dimensions: true },
-  });
+      {item.kind === "VIDEO" ? (
+        <video
+          src={item.url}
+          poster={item.posterUrl || undefined}
+          controls
+          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
+        />
+      ) : (
+        <img
+          src={item.url}
+          alt=""
+          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
+        />
+      )}
 
-  const presentationUpdate: {
-    presentationTitle?: string;
-    presentationPrice?: string | null;
-    dimensions?: string;
-  } = {};
-  if (current?.presentationTitle === "Untitled" && catalogueName) {
-    presentationUpdate.presentationTitle = catalogueName;
-  }
-  if (current?.presentationPrice == null && priceUnframedRaw) {
-    presentationUpdate.presentationPrice = priceUnframedRaw;
-  }
-  if (!current?.dimensions && size) {
-    presentationUpdate.dimensions = size;
-  }
+      <div className="mb-4 space-y-3">
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
+          <input
+            type="text"
+            value={caption}
+            onChange={(e) => setCaption(e.target.value)}
+            onBlur={() => saveFields()}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Alt text</label>
+          <input
+            type="text"
+            value={altText}
+            onChange={(e) => setAltText(e.target.value)}
+            onBlur={() => saveFields()}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
+          {tagPresets.length === 0 ? (
+            <p className="text-xs text-neutral-400">
+              No tags set up yet — add some under Media Catalogue → Settings.
+            </p>
+          ) : (
+            <div className="flex flex-wrap gap-1.5">
+              {tagPresets.map((tag) => {
+                const active = tags.includes(tag);
+                return (
+                  <button
+                    key={tag}
+                    type="button"
+                    onClick={() => toggleTag(tag)}
+                    className={`rounded-full border px-3 py-1 text-xs ${
+                      active
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {tag}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
 
-  await db.artwork.update({
-    where: { id },
-    data: {
-      catalogueName,
-      year: yearRaw ? parseInt(yearRaw, 10) : null,
-      type,
-      catalogueGroup,
-      size,
-      location,
-      edition,
-      availableQty: availableQtyRaw ? parseInt(availableQtyRaw, 10) : null,
-      priceUnframed: priceUnframedRaw || null,
-      priceFramed: priceFramedRaw || null,
-      studioNotes,
-      medium,
-      availability,
-      ...presentationUpdate,
-    },
-  });
-
-  revalidatePath(`/sites/${siteId}/artworks`);
-}
-
-// Called when leaving the editor (Close) rather than on every keystroke —
-// deletes the record only if absolutely nothing has been added since
-// creation (still "Untitled", no image, no facet fields, no payment
-// plan). This is what actually prevents blank artworks accumulating: the
-// "+ Add New" tile has to create a real row immediately (same
-// zero-friction pattern used everywhere else — Sites, Pages), so the only
-// way to keep the catalogue clean is to quietly remove it again if you
-// close without ever touching it, rather than asking for a title upfront
-// and breaking that pattern.
-export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
-  const artwork = await db.artwork.findUnique({
-    where: { id: artworkId },
-    include: { images: true, saleTerms: true, purchases: true },
-  });
-  if (!artwork) return;
-
-  const isBlank =
-    artwork.presentationTitle === "Untitled" &&
-    artwork.catalogueName === "Untitled" &&
-    artwork.images.length === 0 &&
-    !artwork.saleTerms &&
-    artwork.purchases.length === 0 &&
-    !artwork.presentationPrice &&
-    !artwork.dimensions &&
-    !artwork.description &&
-    !artwork.medium &&
-    !artwork.presentationGroup &&
-    !artwork.year &&
-    !artwork.type &&
-    !artwork.catalogueGroup &&
-    !artwork.size &&
-    !artwork.location &&
-    !artwork.edition &&
-    !artwork.availableQty &&
-    !artwork.priceUnframed &&
-    !artwork.priceFramed &&
-    !artwork.studioNotes;
-
-  if (!isBlank) return;
-
-  await db.artwork.delete({ where: { id: artworkId } });
-  revalidatePath(`/sites/${siteId}/artworks`);
-}
-
-export async function deleteArtwork(siteId: string, id: string) {
-  await db.artwork.delete({ where: { id } });
-  revalidatePath(`/sites/${siteId}/artworks`);
-}
-
-export async function linkImagesToArtwork(artworkId: string, imageIds: string[], siteId: string) {
-  await db.image.updateMany({
-    where: { id: { in: imageIds } },
-    data: { artworkId },
-  });
-  revalidatePath(`/sites/${siteId}/artworks`);
-}
-
-export async function unlinkImageFromArtwork(artworkId: string, imageId: string, siteId: string) {
-  await db.image.update({
-    where: { id: imageId },
-    data: { artworkId: null },
-  });
-  revalidatePath(`/sites/${siteId}/artworks`);
-}
-
-// Used to hydrate a Section's saved artwork grid — Prisma's `in` filter
-// doesn't preserve order, so the results are re-sorted to match the saved
-// artworkIds order before returning.
-export async function getArtworksByIds(ids: string[]) {
-  if (ids.length === 0) return [];
-  const rows = await db.artwork.findMany({
-    where: { id: { in: ids } },
-    include: { images: { take: 1 } },
-  });
-  const byId = new Map(rows.map((a) => [a.id, a]));
-  return ids
-    .map((id) => byId.get(id))
-    .filter((a): a is NonNullable<typeof a> => Boolean(a))
-    .map((a) => ({
-      ...a,
-      presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-    }));
+      {/* Four plain, equal-weight buttons — not the dashed "+ Add" tile.
+          This screen assigns/routes an existing item rather than adding
+          new media, so the tile's "click to add something new" implication
+          would be misleading here. See decisions-log, 2026-08-05. */}
+      <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
+        <button
+          type="button"
+          onClick={onBin}
+          disabled={isPending}
+          className="rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+        >
+          Bin
+        </button>
+        <button
+          type="button"
+          onClick={onAddToMedia}
+          disabled={isPending}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        >
+          Add to Media
+        </button>
+        <button
+          type="button"
+          onClick={onAddToBucket}
+          disabled={isPending}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        >
+          Add to Bucket
+        </button>
+        <ArtworkPicker
+          artistId={artistId}
+          mode="single"
+          variant="button"
+          label="Add to Existing Artwork"
+          onSelect={(artworks) => {
+            if (artworks[0]) {
+              onAddToExistingArtwork(artworks[0].id, artworks[0].presentationTitle);
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => onAddNewArtwork(caption)}
+          disabled={isPending}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        >
+          Add New Artwork
+        </button>
+      </div>
+      <p className="mt-2 text-xs text-neutral-400">
+        &quot;Add New Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
+        blank), and this image becomes its main image automatically.
+      </p>
+    </div>
+  );
 }
