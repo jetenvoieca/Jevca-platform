@@ -38,6 +38,7 @@ export default function SiteNavPanel({
   return (
     <nav className="flex flex-col gap-1 text-sm">
       <Link
+        prefetch={false}
         href="/"
         className="rounded-md px-3 py-2 font-medium text-neutral-700 hover:bg-neutral-100"
       >
@@ -50,6 +51,7 @@ export default function SiteNavPanel({
           return (
             <div key={p.id} className="flex items-center gap-1">
               <Link
+                prefetch={false}
                 href={`/sites/${siteId}/pages/${p.id}`}
                 className={`flex-1 truncate rounded-md px-3 py-1.5 ${
                   active
@@ -136,6 +138,8 @@ export default function SiteNavPanel({
       </div>
 
       <Link
+
+        prefetch={false}
         href={`/sites/${siteId}/menus`}
         className={`rounded-md px-3 py-2 font-medium ${
           pathname.startsWith(`/sites/${siteId}/menus`)
@@ -147,6 +151,8 @@ export default function SiteNavPanel({
       </Link>
 
       <Link
+
+        prefetch={false}
         href={`/sites/${siteId}/artworks`}
         className={`mt-3 rounded-md px-3 py-2 font-medium ${
           artworksActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
@@ -155,6 +161,7 @@ export default function SiteNavPanel({
         Artwork Catalogue
       </Link>
       <Link
+        prefetch={false}
         href={`/sites/${siteId}/artworks/settings`}
         className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
           artworkSettingsActive
@@ -166,6 +173,8 @@ export default function SiteNavPanel({
       </Link>
 
       <Link
+
+        prefetch={false}
         href={`/sites/${siteId}/media`}
         className={`mt-3 rounded-md px-3 py-2 font-medium ${
           mediaActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
@@ -174,6 +183,7 @@ export default function SiteNavPanel({
         Media Catalogue
       </Link>
       <Link
+        prefetch={false}
         href={`/sites/${siteId}/hopper`}
         className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
           hopperActive
@@ -186,6 +196,7 @@ export default function SiteNavPanel({
         Hopper{hopperCount > 0 ? ` (${hopperCount})` : ""}
       </Link>
       <Link
+        prefetch={false}
         href={`/sites/${siteId}/bucket`}
         className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
           bucketActive
@@ -196,6 +207,7 @@ export default function SiteNavPanel({
         Bucket{bucketCount > 0 ? ` (${bucketCount})` : ""}
       </Link>
       <Link
+        prefetch={false}
         href={`/sites/${siteId}/media/settings`}
         className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
           mediaSettingsActive
@@ -208,6 +220,7 @@ export default function SiteNavPanel({
 
       {salesEnabled && (
         <Link
+          prefetch={false}
           href={`/sites/${siteId}/sales`}
           className={`mt-3 rounded-md px-3 py-2 font-medium ${
             pathname.startsWith(`/sites/${siteId}/sales`)
