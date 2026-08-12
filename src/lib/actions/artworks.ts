@@ -85,7 +85,7 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
   });
 
   revalidatePath(`/sites/${siteId}/artworks`);
-  redirect(`/sites/${siteId}/artworks/${artwork.id}`);
+  redirect(`/sites/${siteId}/artworks?selected=${artwork.id}`);
 }
 
 type ListFilters = {
@@ -397,7 +397,6 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
 export async function deleteArtwork(siteId: string, id: string) {
   await db.artwork.delete({ where: { id } });
   revalidatePath(`/sites/${siteId}/artworks`);
-  redirect(`/sites/${siteId}/artworks`);
 }
 
 export async function linkImagesToArtwork(artworkId: string, imageIds: string[], siteId: string) {
