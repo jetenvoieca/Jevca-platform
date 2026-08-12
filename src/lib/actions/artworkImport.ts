@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import Papa from "papaparse";
-import { uploadToR2 } from "@/lib/r2";
+import { uploadToR2, deleteFromR2 } from "@/lib/r2";
 import { createArtworkWithRetry } from "./artworks";
 
 // Generic CSV artwork import (2026-08-11) — built for Louise Dear's
@@ -213,4 +213,73 @@ export async function importArtworkRow(
     // Artwork Catalogue reflects progress if it's checked mid-import.
     revalidatePath(`/sites/${siteId}/artworks`);
   }
+}
+
+// ---------- Bulk cleanup: every artwork this import feature created ----------
+//
+// Added 2026-08-11 after several repeated/restarted import attempts (the
+// broken-URL rows caused genuine retries) left duplicate copies of
+// whatever had already succeeded, since imports don't check for existing
+// matches — see importArtworkRow above. Rather than try to detect which
+// copies are "real" duplicates vs legitimate variants (this export has
+// genuine duplicate titles — confirmed by the artist, "same base image
+// produced in different ways" — so that's a real risk of getting wrong),
+// this instead offers a clean slate: delete every artwork this import
+// feature has ever created for the artist, then re-run the import fresh
+// now that the underlying bug is fixed. Strictly scoped to
+// source: "CSV import" — can never touch anything added any other way.
+
+export async function getCsvImportedArtworkIds(artistId: string): Promise<string[]> {
+  const artworks = await db.artwork.findMany({
+    where: { artistId, mainImage: { source: "CSV import" } },
+    select: { id: true },
+  });
+  return artworks.map((a) => a.id);
+}
+
+export async function deleteArtworksByIds(
+  siteId: string,
+  artworkIds: string[]
+): Promise<{ deleted: number; failed: { id: string; error: string }[] }> {
+  let deleted = 0;
+  const failed: { id: string; error: string }[] = [];
+
+  for (const id of artworkIds) {
+    try {
+      const artwork = await db.artwork.findUnique({
+        where: { id },
+        select: { images: { select: { id: true, key: true } } },
+      });
+      if (!artwork) continue;
+
+      // mainImageId is a unique FK pointing at an Image — cleared first
+      // so that Image can actually be deleted below without conflict.
+      await db.artwork.update({ where: { id }, data: { mainImageId: null } });
+
+      for (const img of artwork.images) {
+        try {
+          await deleteFromR2(img.key);
+        } catch {
+          // An already-gone R2 object shouldn't block the database
+          // cleanup — the end state (nothing left behind) is the same.
+        }
+        await db.image.delete({ where: { id: img.id } });
+      }
+
+      await db.artwork.delete({ where: { id } });
+      deleted++;
+    } catch (err) {
+      // Most likely cause: this artwork already has a real Purchase or
+      // Sale Terms attached (blocks deletion at the database level) — if
+      // so, it's not safe to silently remove, and this surfaces that
+      // rather than failing the whole batch.
+      failed.push({
+        id,
+        error: err instanceof Error ? err.message : "Could not delete this artwork.",
+      });
+    }
+  }
+
+  revalidatePath(`/sites/${siteId}/artworks`);
+  return { deleted, failed };
 }
