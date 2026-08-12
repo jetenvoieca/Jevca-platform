@@ -126,6 +126,31 @@ export default function MediaCatalogueView({
     updateUrlSelected(null);
   };
 
+  // After a save inside the panel — re-fetches this one item fresh
+  // rather than relying on router.refresh(), which re-renders the server
+  // tree but can't reach this already-mounted client state. Found and
+  // fixed on the Artwork Catalogue 2026-08-11 (a saved field could
+  // appear to silently revert); same underlying cause applies here.
+  const refreshSelected = () => {
+    if (!selected) return;
+    (async () => {
+      const item = await getMediaDetail(selected.id);
+      if (item && item.artistId === artistId) {
+        setSelected({
+          id: item.id,
+          url: item.url,
+          posterUrl: item.posterUrl,
+          kind: item.kind,
+          caption: item.caption,
+          altText: item.altText,
+          tags: item.tags,
+          artworkId: item.artworkId,
+          artwork: item.artwork,
+        });
+      }
+    })();
+  };
+
   const handleArchived = () => {
     if (selected) setItems((prev) => prev.filter((m) => m.id !== selected.id));
     setSelected(null);
@@ -426,6 +451,7 @@ export default function MediaCatalogueView({
               artistArtworks={artistArtworks}
               onClose={handleClose}
               onArchived={handleArchived}
+              onDataChanged={refreshSelected}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
