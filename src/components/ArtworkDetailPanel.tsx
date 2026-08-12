@@ -70,6 +70,7 @@ export default function ArtworkDetailPanel({
   settings,
   siteDefaultCurrency = "GBP",
   onClose,
+  onDeleted,
 }: {
   siteId: string;
   artistId: string;
@@ -84,6 +85,11 @@ export default function ArtworkDetailPanel({
   // Section editor), where "close" means "go back to what I was doing",
   // not "leave the page".
   onClose?: () => void;
+  // Same idea, for Delete (2026-08-11) — when the Catalogue manages
+  // selection as client-side state, it needs to remove this artwork from
+  // its own list and clear the panel, rather than the old hard redirect
+  // deleteArtwork used to do server-side.
+  onDeleted?: () => void;
 }) {
   const [tab, setTab] = useState<"presentation" | "catalogue" | "saleterms" | "payment">(
     "catalogue"
@@ -103,6 +109,11 @@ export default function ArtworkDetailPanel({
     if (!confirm(`Delete "${artwork.presentationTitle}"? This can't be undone.`)) return;
     startTransition(async () => {
       await deleteArtwork(siteId, artwork.id);
+      if (onDeleted) {
+        onDeleted();
+      } else {
+        router.push(`/sites/${siteId}/artworks`);
+      }
     });
   };
 
