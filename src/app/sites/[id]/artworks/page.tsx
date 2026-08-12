@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { listArtworks } from "@/lib/actions/artworks";
+import { listArtworks, getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import ArtworksCatalogueView from "./ArtworksCatalogueView";
 
@@ -12,6 +12,12 @@ type SearchParams = {
   type?: string;
   group?: string;
   sort?: string;
+  // Deep-link to a specific artwork's detail panel (e.g. right after
+  // creating one, or a link from elsewhere) — read once on first load.
+  // Selecting a *different* artwork afterwards happens client-side,
+  // without a full navigation — see ArtworksCatalogueView for why
+  // (2026-08-11 perf/flicker fix, same pattern as Media Catalogue's).
+  selected?: string;
 };
 
 export default async function ArtworksCataloguePage({
@@ -24,12 +30,16 @@ export default async function ArtworksCataloguePage({
   const { id } = await params;
   const sp = await searchParams;
 
-  const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
+  const site = await db.site.findUnique({
+    where: { id },
+    select: { artistId: true, defaultCurrency: true },
+  });
   const artistId = site!.artistId;
 
-  const [artworks, settings] = await Promise.all([
+  const [artworks, settings, selectedRaw] = await Promise.all([
     listArtworks(artistId, sp),
     getArtworkSettings(artistId),
+    sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
   ]);
 
   const rows = artworks.map((a) => ({
@@ -40,6 +50,8 @@ export default async function ArtworksCataloguePage({
     availability: a.availability,
     imageUrl: a.images[0]?.url ?? null,
   }));
+
+  const selected = selectedRaw && selectedRaw.artistId === artistId ? selectedRaw : null;
 
   return (
     <ArtworksCatalogueView
@@ -52,8 +64,9 @@ export default async function ArtworksCataloguePage({
       type={sp.type || ""}
       group={sp.group || ""}
       sort={sp.sort || ""}
-      selected={null}
+      initialSelected={selected}
       settings={settings}
+      siteDefaultCurrency={site!.defaultCurrency}
     />
   );
 }
