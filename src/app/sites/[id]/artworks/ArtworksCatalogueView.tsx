@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { createArtwork, getArtworkDetailForClient, listArtworks } from "@/lib/actions/artworks";
 import ArtworkImportPanel from "@/components/ArtworkImportPanel";
@@ -61,7 +61,7 @@ export default function ArtworksCatalogueView({
   const [loadingMore, setLoadingMore] = useState(false);
   const hasMore = artworks.length < total;
 
-  const handleLoadMore = async () => {
+  const handleLoadMore = useCallback(async () => {
     setLoadingMore(true);
     try {
       const { rows } = await listArtworks(artistId, {
@@ -88,7 +88,29 @@ export default function ArtworksCatalogueView({
     } finally {
       setLoadingMore(false);
     }
-  };
+  }, [artistId, artworks.length, q, availability, location, type, group, sort, pageSize]);
+
+  // Infinite scroll: an invisible sentinel sits just past the last row.
+  // When it enters the viewport we auto-fetch the next page — no "Load
+  // more" button, so scrolling reads as one continuous list rather than
+  // a series of manual steps (feedback 2026-08-12: a visible button felt
+  // like a template/Wix pattern, not the tighter feel wanted here).
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore) {
+          handleLoadMore();
+        }
+      },
+      { rootMargin: "400px" }, // start fetching before the sentinel is actually on-screen, so new rows are ready by the time you scroll to them
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, handleLoadMore]);
 
   // Selecting an artwork used to navigate to a whole separate route,
   // which re-ran this component from scratch on every click — the direct
@@ -181,15 +203,8 @@ export default function ArtworksCatalogueView({
   );
 
   const loadMoreRow = hasMore && (
-    <div className="mt-4 flex justify-center">
-      <button
-        type="button"
-        onClick={handleLoadMore}
-        disabled={loadingMore}
-        className="rounded-md border border-neutral-300 px-4 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-      >
-        {loadingMore ? "Loading…" : "Load more"}
-      </button>
+    <div ref={sentinelRef} className="mt-4 flex h-8 items-center justify-center">
+      {loadingMore && <span className="text-sm text-neutral-400">Loading…</span>}
     </div>
   );
 
