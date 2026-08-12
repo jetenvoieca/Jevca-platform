@@ -28,6 +28,7 @@ export default function MediaDetailPanel({
   discarding = false,
   onClose,
   onArchived,
+  onDataChanged,
 }: {
   siteId: string;
   media: MediaDetail;
@@ -42,6 +43,12 @@ export default function MediaDetailPanel({
   // the old Link/router.push behaviour when not provided.
   onClose?: () => void;
   onArchived?: () => void;
+  // Called after a successful save (2026-08-11) instead of
+  // router.refresh() alone — a plain server refresh doesn't reach data
+  // already mounted as client state on the parent, so a saved field could
+  // appear to silently revert on the next render even though the save
+  // itself worked. Same bug and fix as ArtworkDetailPanel.
+  onDataChanged?: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
@@ -192,7 +199,8 @@ export default function MediaDetailPanel({
         action={async (formData) => {
           await updateMedia(media.id, siteId, formData);
           setSaved(true);
-          router.refresh();
+          if (onDataChanged) onDataChanged();
+          else router.refresh();
           setTimeout(() => setSaved(false), 2000);
         }}
         className="space-y-4"
