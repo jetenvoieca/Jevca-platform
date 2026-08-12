@@ -161,7 +161,7 @@ export default function HopperView({
   const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
     startTransition(async () => {
       await addHopperItemToArtwork(item.id, siteId, artworkId, false);
-      logProcessed(item, `Linked to ${artworkTitle}`, `/sites/${siteId}/artworks/${artworkId}`);
+      logProcessed(item, `Linked to ${artworkTitle}`, `/sites/${siteId}/artworks?selected=${artworkId}`);
       advanceAfterAction();
     });
   };
@@ -177,7 +177,7 @@ export default function HopperView({
         return;
       }
       await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
-      logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks/${result.artwork.id}`);
+      logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks?selected=${result.artwork.id}`);
       advanceAfterAction();
     });
   };
