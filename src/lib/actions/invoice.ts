@@ -88,6 +88,7 @@ export async function generateInvoicePdf(
     relationLoadStrategy: "query",
     include: {
       artwork: { include: { artist: true } },
+      customer: true,
       payments: { orderBy: { sequence: "asc" } },
     },
   });
@@ -96,7 +97,11 @@ export async function generateInvoicePdf(
   const artist = purchase.artwork.artist;
   const invoiceNumber = await getOrAssignInvoiceNumber(purchaseId, artist.id);
   const isPaid = purchase.status === "COMPLETED";
-  const lang = artist.invoiceLanguage === "FR" ? "FR" : "EN";
+  // Customer's own preference wins if they have one set (2026-08-13);
+  // the artist's Settings default is the fallback underneath that, not
+  // overridden — most sales won't have an explicit per-customer choice.
+  const rawLang = purchase.customer?.language || artist.invoiceLanguage;
+  const lang = rawLang === "FR" ? "FR" : "EN";
   const t = LABELS[lang];
   const docTypeLabel = isPaid ? t.receipt : t.invoice;
   const dateLocale = lang === "FR" ? "fr-FR" : "en-GB";
