@@ -1,7 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { getPresignedUploadUrl } from "@/lib/r2";
+import { getPresignedUploadUrl, getFromR2, uploadToR2, publicMediaUrl } from "@/lib/r2";
+import { generateImageSizes } from "@/lib/imageSizes";
 import { randomUUID } from "crypto";
 
 function sanitizeFilename(name: string) {
@@ -52,11 +53,45 @@ export async function finalizeUpload(
   status: "SORTED" | "HOPPER" = "SORTED",
   source?: string
 ) {
+  // Generate the smaller display/thumbnail versions now, once, rather than
+  // making every future page view pay the cost of loading the full-size
+  // original (2026-08-13 — see decisions log). The browser already PUT the
+  // original straight to R2 in step 1, so it has to be read back here to
+  // do the resize — a real but one-time cost, paid at upload rather than
+  // on every view thereafter.
+  //
+  // Deliberately non-fatal: if this fails for any reason (corrupt file,
+  // unsupported format, a transient R2 hiccup), the upload itself still
+  // succeeds with thumbnailKey/displayKey left null — every place that
+  // reads them already falls back to the original url, so nothing breaks;
+  // it's just not sped up for this one image until a retry or backfill.
+  let thumbnailKey: string | null = null;
+  let displayKey: string | null = null;
+  if (kind === "PHOTO") {
+    try {
+      const original = await getFromR2(key);
+      if (original.Body) {
+        const bytes = await original.Body.transformToByteArray();
+        const sizes = await generateImageSizes(Buffer.from(bytes));
+        thumbnailKey = `${key}-thumb.jpg`;
+        displayKey = `${key}-display.jpg`;
+        await Promise.all([
+          uploadToR2(thumbnailKey, sizes.thumbnail, sizes.contentType),
+          uploadToR2(displayKey, sizes.display, sizes.contentType),
+        ]);
+      }
+    } catch (err) {
+      console.error(`[finalizeUpload] Could not generate sizes for ${key}:`, err);
+    }
+  }
+
   const image = await db.image.create({
     data: {
       artistId,
       key,
       url: `/api/media/${key}`,
+      thumbnailKey,
+      displayKey,
       posterUrl: posterUrl || null,
       kind,
       mimeType: contentType,
@@ -64,7 +99,13 @@ export async function finalizeUpload(
       source: source || null,
     },
   });
-  return { image };
+  return {
+    image: {
+      ...image,
+      thumbnailUrl: publicMediaUrl(thumbnailKey),
+      displayUrl: publicMediaUrl(displayKey),
+    },
+  };
 }
 
 export async function listImages(artistId: string, q?: string) {
