@@ -649,6 +649,7 @@ export default function ArtworkDetailPanel({
           ) : (
             <PurchasePanel
               artworkId={artwork.id}
+              artistId={artistId}
               siteId={siteId}
               terms={artwork.saleTerms}
               activePurchase={artwork.activePurchase}
