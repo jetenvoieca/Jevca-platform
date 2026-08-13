@@ -277,6 +277,7 @@ export async function getRenderStatus(artistId: string) {
   const render = await db.videoRender.findFirst({
     where: { artistId, status: { in: ["PENDING", "RENDERING", "DONE", "FAILED"] } },
     orderBy: { updatedAt: "desc" },
+    relationLoadStrategy: "query",
     include: {
       resultImage: {
         select: {
@@ -359,6 +360,7 @@ export async function discardRenderResult(siteId: string, renderId: string): Pro
   const render = await db.videoRender.findUnique({
     where: { id: renderId },
     include: { resultImage: true },
+    relationLoadStrategy: "query",
   });
   if (!render) return;
 
