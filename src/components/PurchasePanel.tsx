@@ -17,6 +17,8 @@ import {
 } from "@/lib/actions/payments";
 import StripeCardForm from "@/components/StripeCardForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import CustomerPicker from "@/components/CustomerPicker";
+import type { CustomerSummary } from "@/lib/actions/customers";
 
 // Same list as SaleTermsPanel — kept in sync deliberately, since these
 // two forms need to offer identical currency choices.
@@ -36,6 +38,7 @@ function downloadInvoice(purchaseId: string) {
 
 export default function PurchasePanel({
   artworkId,
+  artistId,
   siteId,
   terms,
   activePurchase,
@@ -44,6 +47,7 @@ export default function PurchasePanel({
   onChanged,
 }: {
   artworkId: string;
+  artistId: string;
   siteId: string;
   terms: SaleTermsDetail | null;
   activePurchase: PurchaseDetail | null;
@@ -62,6 +66,15 @@ export default function PurchasePanel({
   const [channel, setChannel] = useState<"STRIPE" | "GALLERY">("STRIPE");
   const [commissionPercent, setCommissionPercent] = useState("");
   const [gallerySalePrice, setGallerySalePrice] = useState("");
+  // Controlled rather than plain defaultValue inputs, so picking an
+  // existing customer from the search box can actually fill them in
+  // (2026-08-13). Two separate sets since Stripe and Gallery are two
+  // separate forms/tabs, not shared state.
+  const [stripeBuyerName, setStripeBuyerName] = useState("");
+  const [stripeBuyerEmail, setStripeBuyerEmail] = useState("");
+  const [galleryBuyerName, setGalleryBuyerName] = useState("");
+  const [galleryBuyerEmail, setGalleryBuyerEmail] = useState("");
+  const [galleryBuyerAddress, setGalleryBuyerAddress] = useState("");
   // Bug fixed 2026-08-13: this form had no currency field at all, so
   // every gallery sale was silently recorded in GBP regardless of what
   // currency Sale Terms actually specified — confirmed from a real sale
@@ -317,6 +330,13 @@ export default function PurchasePanel({
 
           {channel === "STRIPE" ? (
             <form action={handleStartPurchase} className="space-y-3">
+              <CustomerPicker
+                artistId={artistId}
+                onSelect={(c: CustomerSummary) => {
+                  setStripeBuyerName(c.name);
+                  setStripeBuyerEmail(c.email || "");
+                }}
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -325,6 +345,8 @@ export default function PurchasePanel({
                   <input
                     type="text"
                     name="buyerName"
+                    value={stripeBuyerName}
+                    onChange={(e) => setStripeBuyerName(e.target.value)}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -336,6 +358,8 @@ export default function PurchasePanel({
                     type="email"
                     name="buyerEmail"
                     required
+                    value={stripeBuyerEmail}
+                    onChange={(e) => setStripeBuyerEmail(e.target.value)}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -387,6 +411,14 @@ export default function PurchasePanel({
                 No card is taken here — this raises an unpaid invoice for the net amount, which
                 you mark as paid manually once the gallery actually pays.
               </p>
+              <CustomerPicker
+                artistId={artistId}
+                onSelect={(c: CustomerSummary) => {
+                  setGalleryBuyerName(c.name);
+                  setGalleryBuyerEmail(c.email || "");
+                  setGalleryBuyerAddress(c.address || "");
+                }}
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -396,6 +428,8 @@ export default function PurchasePanel({
                     type="text"
                     name="buyerName"
                     required
+                    value={galleryBuyerName}
+                    onChange={(e) => setGalleryBuyerName(e.target.value)}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -406,6 +440,8 @@ export default function PurchasePanel({
                   <input
                     type="email"
                     name="buyerEmail"
+                    value={galleryBuyerEmail}
+                    onChange={(e) => setGalleryBuyerEmail(e.target.value)}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -417,6 +453,8 @@ export default function PurchasePanel({
                 <textarea
                   name="buyerAddress"
                   rows={2}
+                  value={galleryBuyerAddress}
+                  onChange={(e) => setGalleryBuyerAddress(e.target.value)}
                   className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                 />
               </div>
