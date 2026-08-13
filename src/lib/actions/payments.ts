@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { findOrCreateCustomer } from "./customers";
 import {
   getStripeClient,
   getPublishableKey,
@@ -117,9 +118,23 @@ export async function startPurchase(
 
   if (!buyerEmail) return { ok: false, error: "Buyer email is required to start a sale." };
 
+  // Customer records added 2026-08-13 — reuses an existing customer for
+  // this artist if the email already matches one, otherwise creates a
+  // new one. Falls back to the email as the name if none was given,
+  // since Customer.name is required but buyerName here isn't.
+  const artwork = await db.artwork.findUniqueOrThrow({
+    where: { id: artworkId },
+    select: { artistId: true },
+  });
+  const customer = await findOrCreateCustomer(artwork.artistId, {
+    name: buyerName || buyerEmail,
+    email: buyerEmail,
+  });
+
   const purchase = await db.purchase.create({
     data: {
       artworkId,
+      customerId: customer.id,
       buyerName,
       buyerEmail,
       type,
@@ -175,10 +190,21 @@ export async function startGallerySale(
   if (!buyerName) return { ok: false, error: "The gallery/buyer name is required." };
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
 
+  const artwork = await db.artwork.findUniqueOrThrow({
+    where: { id: artworkId },
+    select: { artistId: true },
+  });
+  const customer = await findOrCreateCustomer(artwork.artistId, {
+    name: buyerName,
+    email: buyerEmail,
+    address: buyerAddress,
+  });
+
   const purchase = await db.purchase.create({
     data: {
       artworkId,
       channel: "GALLERY",
+      customerId: customer.id,
       buyerName,
       buyerEmail,
       buyerAddress,
