@@ -51,6 +51,7 @@ export default async function SitesDirectoryPage({
         : {}),
     },
     include: { artist: true },
+    relationLoadStrategy: "query",
     orderBy: sort === "date" ? { createdAt: "desc" } : { artist: { name: "asc" } },
   });
 
