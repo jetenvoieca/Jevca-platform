@@ -25,6 +25,7 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
   const purchases = await db.purchase.findMany({
     where: { artwork: { artistId } },
     include: { artwork: { include: { images: { take: 1 } } } },
+    relationLoadStrategy: "query",
     orderBy: { createdAt: "desc" },
   });
 
