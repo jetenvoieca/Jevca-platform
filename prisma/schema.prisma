@@ -109,6 +109,10 @@ model Artist {
   vatNumber         String?
   vatRate           Decimal? @db.Decimal(5, 2)
   invoiceFooterText String?
+  // "EN" or "FR" — deliberately independent of the sale's currency
+  // (2026-08-13): a EUR sale isn't necessarily to a French-speaking
+  // buyer, so this is the artist's own explicit choice, not inferred.
+  invoiceLanguage   String   @default("EN")
   nextInvoiceNumber Int      @default(1)
 
   defaultInstalmentCount     Int    @default(5)
