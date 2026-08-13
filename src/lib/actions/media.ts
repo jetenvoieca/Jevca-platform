@@ -98,6 +98,7 @@ export async function getArtworksForArtist(artistId: string, q?: string) {
       ...(q ? { presentationTitle: { contains: q, mode: "insensitive" } } : {}),
     },
     include: { images: { take: 1 } },
+    relationLoadStrategy: "query",
     orderBy: { createdAt: "desc" },
     take: 60,
   });
