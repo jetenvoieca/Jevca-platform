@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { publicMediaUrl } from "@/lib/r2";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
@@ -148,7 +149,7 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
         presentationPrice: true,
         catalogueNumber: true,
         availability: true,
-        images: { take: 1, select: { url: true } },
+        images: { take: 1, select: { url: true, thumbnailKey: true } },
       },
       skip: offset,
       take: limit,
@@ -160,7 +161,18 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
     db.artwork.count({ where: { ...where, availability: "SOLD" } }),
   ]);
 
-  return { rows, total, soldCount };
+  // Prefer the small thumbnail (fast, served straight from storage) —
+  // falls back to the original proxied url for any image uploaded before
+  // 2026-08-13 that hasn't been backfilled yet, so nothing breaks or goes
+  // blank in the meantime.
+  const rowsWithThumbnails = rows.map((a) => ({
+    ...a,
+    images: a.images.map((img) => ({
+      url: publicMediaUrl(img.thumbnailKey) || img.url,
+    })),
+  }));
+
+  return { rows: rowsWithThumbnails, total, soldCount };
 }
 
 // Full record for the slide-in detail panel — both facets, all images.
@@ -256,7 +268,7 @@ export async function getArtworkDetailForClient(id: string) {
     studioNotes: artwork.studioNotes,
     images: artwork.images.map((img) => ({
       id: img.id,
-      url: img.url,
+      url: publicMediaUrl(img.thumbnailKey) || img.url,
       kind: img.kind,
       posterUrl: img.posterUrl,
     })),
@@ -468,5 +480,9 @@ export async function getArtworksByIds(ids: string[]) {
     .map((a) => ({
       ...a,
       presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
+      images: a.images.map((img) => ({
+        ...img,
+        url: publicMediaUrl(img.thumbnailKey) || img.url,
+      })),
     }));
 }
