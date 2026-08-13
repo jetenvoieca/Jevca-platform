@@ -31,5 +31,12 @@ export default async function SalesPage({ params }: { params: Promise<{ id: stri
     getArtworkSettings(site.artistId),
   ]);
 
-  return <SalesView siteId={id} sales={sales} saleSources={settings.saleSources} />;
+  return (
+    <SalesView
+      siteId={id}
+      artistId={site.artistId}
+      sales={sales}
+      saleSources={settings.saleSources}
+    />
+  );
 }
