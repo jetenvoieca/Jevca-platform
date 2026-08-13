@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useTransition } from "react";
 import Link from "next/link";
 import { uploadFileDirect } from "@/lib/uploadDirect";
@@ -159,7 +159,7 @@ export default function MediaCatalogueView({
     updateUrlSelected(null);
   };
 
-  const handleLoadMore = () => {
+  const handleLoadMore = useCallback(() => {
     isLoadingMoreTransition(async () => {
       const { rows } = await listMedia(artistId, {
         purpose,
@@ -182,7 +182,28 @@ export default function MediaCatalogueView({
         })),
       ]);
     });
-  };
+  }, [artistId, purpose, q, tag, artworkId, sort, items.length, pageSize, isLoadingMoreTransition]);
+
+  // Infinite scroll (2026-08-13, matching the same change on the Artwork
+  // Catalogue) — an invisible sentinel below the last row auto-triggers
+  // the next page as it enters view, rather than requiring a "Load more"
+  // click.
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!node || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting && !loadingMore) {
+          handleLoadMore();
+        }
+      },
+      { rootMargin: "400px" },
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [hasMore, loadingMore, handleLoadMore]);
 
   return (
     <div className="px-6 py-4">
@@ -430,15 +451,8 @@ export default function MediaCatalogueView({
           )}
 
           {hasMore && (
-            <div className="mt-4 text-center">
-              <button
-                type="button"
-                onClick={handleLoadMore}
-                disabled={loadingMore}
-                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-              >
-                {loadingMore ? "Loading…" : `Load more (${total - items.length} remaining)`}
-              </button>
+            <div ref={sentinelRef} className="mt-4 flex h-8 items-center justify-center">
+              {loadingMore && <span className="text-sm text-neutral-400">Loading…</span>}
             </div>
           )}
         </div>
