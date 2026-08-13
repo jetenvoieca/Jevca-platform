@@ -16,6 +16,7 @@ export default async function SiteLayout({
   const site = await db.site.findUnique({
     where: { id },
     include: { artist: true },
+    relationLoadStrategy: "query",
   });
   if (!site) notFound();
 
