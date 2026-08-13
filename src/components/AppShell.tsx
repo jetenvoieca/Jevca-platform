@@ -11,6 +11,7 @@ export type AppShellNavItem = {
 export default function AppShell({
   preview,
   content,
+  rightPanel,
   publishEnabled = false,
   navItems,
 }: {
@@ -20,6 +21,12 @@ export default function AppShell({
   // grid collapses to two columns instead (2026-08-13).
   preview?: React.ReactNode;
   content: React.ReactNode;
+  // A persistent narrow column sitting between content and the nav —
+  // used for the Sites list, which needs to stay visible and clickable
+  // even once a site is selected and its settings fill `content`
+  // (2026-08-13, in response to direct feedback that the list
+  // disappearing was a step backward).
+  rightPanel?: React.ReactNode;
   // Publish is greyed out until there's a specific site open with pending
   // draft changes — neither of which exists at the top-level Sites screen,
   // so callers leave this false until that logic is built.
@@ -27,13 +34,21 @@ export default function AppShell({
   navItems: AppShellNavItem[];
 }) {
   const hasPreview = preview !== undefined && preview !== null;
+  const hasRightPanel = rightPanel !== undefined && rightPanel !== null;
+
+  // Tailwind only picks up class names that appear literally in the
+  // source, so this has to be an explicit lookup rather than a built-up
+  // string — an interpolated grid-cols-[...] value silently does nothing.
+  const gridColsClass = hasPreview
+    ? hasRightPanel
+      ? "grid-cols-[340px_1fr_300px_220px]"
+      : "grid-cols-[340px_1fr_220px]"
+    : hasRightPanel
+      ? "grid-cols-[1fr_300px_220px]"
+      : "grid-cols-[1fr_220px]";
 
   return (
-    <div
-      className={`grid h-screen overflow-hidden ${
-        hasPreview ? "grid-cols-[340px_1fr_220px]" : "grid-cols-[1fr_220px]"
-      }`}
-    >
+    <div className={`grid h-screen overflow-hidden ${gridColsClass}`}>
       {/* Each column scrolls independently — a caller that wants its own
           fixed header (title, filters, table header row) structures its
           content as a flex column with a non-scrolling header and a
@@ -46,6 +61,9 @@ export default function AppShell({
         </div>
       )}
       <div className="h-full overflow-y-auto">{content}</div>
+      {hasRightPanel && (
+        <div className="h-full overflow-y-auto border-l border-neutral-200">{rightPanel}</div>
+      )}
       <div className="flex h-full flex-col border-l border-neutral-200">
         <div className="border-b border-neutral-200 p-4">
           <button
