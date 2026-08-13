@@ -6,6 +6,7 @@ import {
   startPurchase,
   startGallerySale,
   deleteGallerySale,
+  forceDeleteCompletedSale,
   markGallerySalePaid,
   updatePurchaseRelease,
   abandonPurchase,
@@ -174,6 +175,31 @@ export default function PurchasePanel({
         setError(null);
         startTransition(async () => {
           const res = await deleteGallerySale(p.id, siteId);
+          if (!res.ok) setError(res.error);
+          router.refresh();
+          onChanged?.();
+        });
+      },
+    });
+  };
+
+  // Separate, deliberately harder-to-reach path for removing a genuinely
+  // completed, paid sale (2026-08-13, at the person's explicit request
+  // for cleaning up test data). Never the default option — this is the
+  // only place in the app that can do this, and the wording says
+  // plainly what it's destroying.
+  const handleForceDeleteCompleted = (p: PurchaseDetail) => {
+    setPendingConfirm({
+      title: "Force delete this completed sale?",
+      message:
+        "This sale is marked as paid — deleting it removes it as a financial record entirely, permanently, including its invoice/receipt number. Only do this for test or clearly erroneous data, never for a real transaction.",
+      confirmLabel: "Force delete",
+      danger: true,
+      onConfirm: () => {
+        setPendingConfirm(null);
+        setError(null);
+        startTransition(async () => {
+          const res = await forceDeleteCompletedSale(p.id, siteId);
           if (!res.ok) setError(res.error);
           router.refresh();
           onChanged?.();
@@ -539,14 +565,6 @@ export default function PurchasePanel({
                 >
                   Download invoice
                 </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteActiveSale}
-                  disabled={isPending}
-                  className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-                >
-                  Delete
-                </button>
               </div>
             </div>
           ) : activePurchase.payments.length === 0 ? (
@@ -705,6 +723,15 @@ export default function PurchasePanel({
             >
               Cancel sale
             </button>
+            <span className="mx-2 text-neutral-300">·</span>
+            <button
+              type="button"
+              onClick={handleDeleteActiveSale}
+              disabled={isPending}
+              className="text-sm text-red-600 hover:underline disabled:opacity-50"
+            >
+              Delete
+            </button>
           </div>
         </div>
       )}
@@ -742,13 +769,22 @@ export default function PurchasePanel({
                   >
                     {p.status === "COMPLETED" ? "Receipt" : "Invoice"}
                   </button>
-                  {p.channel === "GALLERY" && p.status !== "COMPLETED" && (
+                  {p.status !== "COMPLETED" && (
                     <button
                       type="button"
                       onClick={() => handleDeleteHistoryItem(p)}
                       className="text-red-600 hover:underline"
                     >
                       Delete
+                    </button>
+                  )}
+                  {p.status === "COMPLETED" && (
+                    <button
+                      type="button"
+                      onClick={() => handleForceDeleteCompleted(p)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Force delete
                     </button>
                   )}
                 </div>
