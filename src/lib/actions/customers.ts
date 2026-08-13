@@ -8,6 +8,7 @@ export type CustomerSummary = {
   name: string;
   email: string | null;
   phone: string | null;
+  address: string | null;
 };
 
 export type CustomerDetail = {
@@ -55,7 +56,7 @@ export async function searchCustomers(
         { email: { contains: q, mode: "insensitive" } },
       ],
     },
-    select: { id: true, name: true, email: true, phone: true },
+    select: { id: true, name: true, email: true, phone: true, address: true },
     orderBy: { name: "asc" },
     take: 10,
   });
@@ -72,6 +73,7 @@ export async function listCustomers(artistId: string): Promise<
       name: true,
       email: true,
       phone: true,
+      address: true,
       _count: { select: { purchases: true } },
     },
     orderBy: { name: "asc" },
@@ -81,6 +83,7 @@ export async function listCustomers(artistId: string): Promise<
     name: r.name,
     email: r.email,
     phone: r.phone,
+    address: r.address,
     saleCount: r._count.purchases,
   }));
 }
