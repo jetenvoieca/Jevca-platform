@@ -231,6 +231,20 @@ export default function SiteNavPanel({
           Sales
         </Link>
       )}
+
+      {salesEnabled && (
+        <Link
+          prefetch={false}
+          href={`/sites/${siteId}/customers`}
+          className={`rounded-md px-3 py-2 font-medium ${
+            pathname.startsWith(`/sites/${siteId}/customers`)
+              ? "bg-neutral-900 text-white"
+              : "text-neutral-700 hover:bg-neutral-100"
+          }`}
+        >
+          Customers
+        </Link>
+      )}
     </nav>
   );
 }
