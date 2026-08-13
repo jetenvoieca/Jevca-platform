@@ -47,3 +47,19 @@ export async function getPresignedUploadUrl(key: string, contentType: string) {
   });
   return getSignedUrl(r2, command, { expiresIn: 300 });
 }
+
+// Builds a public, directly-loadable URL for an object in the bucket —
+// used for thumbnail/display image sizes (2026-08-13), which are served
+// straight from R2 rather than proxied through a server function, so
+// they load fast and don't tie up a function invocation per image.
+//
+// The domain lives in exactly one place (this function) on purpose: it's
+// currently R2's own free public dev URL (R2_PUBLIC_URL env var), and the
+// plan is to move to a proper custom domain once that's set up — at
+// which point only this one env var changes, nothing else in the app.
+export function publicMediaUrl(key: string | null | undefined): string | null {
+  if (!key) return null;
+  const base = process.env.R2_PUBLIC_URL;
+  if (!base) return null;
+  return `${base.replace(/\/$/, "")}/${key}`;
+}
