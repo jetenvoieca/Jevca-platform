@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { readTimeline, CROSSFADE_SECONDS } from "@/lib/videoTimeline";
-import { uploadToR2, deleteFromR2 } from "@/lib/r2";
+import { uploadToR2, deleteFromR2, publicMediaUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 
@@ -283,6 +283,7 @@ export async function getRenderStatus(artistId: string) {
         select: {
           id: true,
           url: true,
+          displayKey: true,
           posterUrl: true,
           kind: true,
           caption: true,
@@ -330,6 +331,7 @@ export async function getRenderStatus(artistId: string) {
       ? {
           id: render.resultImage.id,
           url: render.resultImage.url,
+          displayUrl: publicMediaUrl(render.resultImage.displayKey) || render.resultImage.url,
           posterUrl: render.resultImage.posterUrl,
           kind: render.resultImage.kind,
           caption: render.resultImage.caption,
