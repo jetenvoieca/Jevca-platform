@@ -194,6 +194,36 @@ export async function startGallerySale(
   return { ok: true, purchaseId: purchase.id };
 }
 
+// Permanent delete, not just marking abandoned — for a genuinely wrong
+// gallery sale (mistyped commission, wrong artwork, wrong buyer entirely),
+// not just one that didn't go through. Deliberately restricted to gallery
+// sales that were never actually paid: a completed sale is a real
+// financial record and should never simply vanish, even if it later turns
+// out to be wrong — that's a correction, not a deletion, and needs a
+// different, more careful process. Cascades to delete any Payment rows
+// too (schema-level onDelete: Cascade).
+export async function deleteGallerySale(
+  purchaseId: string,
+  siteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase) return { ok: false, error: "Sale not found." };
+  if (purchase.channel !== "GALLERY") {
+    return { ok: false, error: "Only gallery sales can be deleted this way." };
+  }
+  if (purchase.status === "COMPLETED") {
+    return {
+      ok: false,
+      error: "This sale has already been marked paid and can't be deleted — it's a real financial record.",
+    };
+  }
+
+  await db.purchase.delete({ where: { id: purchaseId } });
+
+  revalidatePath(`/sites/${siteId}/artworks`);
+  return { ok: true };
+}
+
 // The manual equivalent of a Stripe webhook confirming payment — you
 // click this once the gallery has actually paid (e.g. by bank transfer),
 // since nothing in this flow can confirm that automatically.
