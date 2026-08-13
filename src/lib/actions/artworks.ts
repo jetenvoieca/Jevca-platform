@@ -171,6 +171,7 @@ export async function getArtworkDetail(id: string) {
   const t0 = Date.now();
   const result = await db.artwork.findUnique({
     where: { id },
+    relationLoadStrategy: "join",
     include: {
       images: true,
       saleTerms: true,
@@ -397,6 +398,7 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
   const artwork = await db.artwork.findUnique({
     where: { id: artworkId },
     include: { images: true, saleTerms: true, purchases: true },
+    relationLoadStrategy: "query",
   });
   if (!artwork) return;
 
@@ -457,6 +459,7 @@ export async function getArtworksByIds(ids: string[]) {
   const rows = await db.artwork.findMany({
     where: { id: { in: ids } },
     include: { images: { take: 1 } },
+    relationLoadStrategy: "query",
   });
   const byId = new Map(rows.map((a) => [a.id, a]));
   return ids
