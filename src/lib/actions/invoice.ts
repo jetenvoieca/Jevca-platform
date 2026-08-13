@@ -38,6 +38,7 @@ export async function generateInvoicePdf(
 ): Promise<{ bytes: Uint8Array; filename: string }> {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
+    relationLoadStrategy: "query",
     include: {
       artwork: { include: { artist: true } },
       payments: { orderBy: { sequence: "asc" } },
