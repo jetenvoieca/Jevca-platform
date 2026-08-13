@@ -53,6 +53,7 @@ export default async function PreviewPage({
     ? await db.artwork.findMany({
         where: { id: { in: artworkIds } },
         include: { images: { take: 1 } },
+        relationLoadStrategy: "query",
       })
     : [];
 
