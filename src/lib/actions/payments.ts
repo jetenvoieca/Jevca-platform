@@ -159,7 +159,16 @@ export async function startGallerySale(
   const buyerEmail = (formData.get("buyerEmail") as string)?.trim() || null;
   const buyerAddress = (formData.get("buyerAddress") as string)?.trim() || null;
   const totalAmount = (formData.get("totalAmount") as string)?.trim();
-  const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
+  const currencyRaw = (formData.get("currency") as string)?.trim().toUpperCase();
+  // Bug fixed 2026-08-13: this used to fall straight back to a hard-coded
+  // "GBP" whenever the form didn't submit a currency — which it never
+  // did, since the form had no currency field at all (see PurchasePanel).
+  // A real sale was recorded and invoiced in GBP despite Sale Terms
+  // being set to EUR. The form now always submits an explicit value, so
+  // this fallback is a safety net, not the normal path — but it now
+  // checks Sale Terms first rather than silently assuming GBP again.
+  const currency =
+    currencyRaw || (await db.saleTerms.findUnique({ where: { artworkId } }))?.currency || "GBP";
   const commissionPercent = (formData.get("commissionPercent") as string)?.trim() || null;
   const source = (formData.get("source") as string)?.trim() || null;
 
