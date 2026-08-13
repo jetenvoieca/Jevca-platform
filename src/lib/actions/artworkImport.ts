@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import Papa from "papaparse";
 import { uploadToR2, deleteFromR2 } from "@/lib/r2";
+import { generateImageSizes } from "@/lib/imageSizes";
 import { createArtworkWithRetry } from "./artworks";
 
 // Generic CSV artwork import (2026-08-11) — built for Louise Dear's
@@ -110,7 +111,10 @@ export async function parseArtworkImportCsv(
 async function fetchAndUploadImage(
   artistId: string,
   imageUrl: string
-): Promise<{ key: string; url: string; mimeType: string } | { error: string }> {
+): Promise<
+  | { key: string; url: string; mimeType: string; thumbnailKey: string | null; displayKey: string | null }
+  | { error: string }
+> {
   // Confirmed cause of the 2026-08-11 run's ~60% failure rate: a bare
   // server-to-server fetch with no User-Agent/Referer looks like a bot to
   // most hosting setups (WordPress security plugins, generic hotlink
@@ -149,7 +153,29 @@ async function fetchAndUploadImage(
         const ext = contentType.split("/")[1]?.split(";")[0] || "jpg";
         const key = `${artistId}/${randomUUID()}-import.${ext}`;
         await uploadToR2(key, buffer, contentType);
-        return { key, url: `/api/media/${key}`, mimeType: contentType };
+
+        // Same as the direct-upload path (see finalizeUpload in media.ts)
+        // — generated once here, at import time, rather than costing
+        // every future page view. Already have the buffer in hand, so
+        // no extra R2 round trip is needed to fetch it back, unlike the
+        // direct-upload path. Non-fatal on failure, same reasoning as
+        // there: the row still gets created, just without the sped-up
+        // sizes until a retry or backfill.
+        let thumbnailKey: string | null = null;
+        let displayKey: string | null = null;
+        try {
+          const sizes = await generateImageSizes(buffer);
+          thumbnailKey = `${key}-thumb.jpg`;
+          displayKey = `${key}-display.jpg`;
+          await Promise.all([
+            uploadToR2(thumbnailKey, sizes.thumbnail, sizes.contentType),
+            uploadToR2(displayKey, sizes.display, sizes.contentType),
+          ]);
+        } catch (err) {
+          console.error(`[fetchAndUploadImage] Could not generate sizes for ${key}:`, err);
+        }
+
+        return { key, url: `/api/media/${key}`, mimeType: contentType, thumbnailKey, displayKey };
       }
     } catch (err) {
       lastError = `Could not fetch image (${err instanceof Error ? err.message : "network error"})`;
@@ -191,6 +217,8 @@ export async function importArtworkRow(
         artistId,
         key: imageResult.key,
         url: imageResult.url,
+        thumbnailKey: imageResult.thumbnailKey,
+        displayKey: imageResult.displayKey,
         kind: "PHOTO",
         mimeType: imageResult.mimeType,
         status: "SORTED",
