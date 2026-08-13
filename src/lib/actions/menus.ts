@@ -14,6 +14,7 @@ export async function listMenus(siteId: string) {
 export async function getMenu(menuId: string) {
   return db.menu.findUnique({
     where: { id: menuId },
+    relationLoadStrategy: "query",
     include: {
       groups: {
         orderBy: { position: "asc" },
@@ -182,6 +183,7 @@ export async function moveMenuItem(itemId: string, direction: -1 | 1) {
   const group = await db.menuGroup.findUnique({
     where: { id: item.groupId },
     include: { menu: true },
+    relationLoadStrategy: "query",
   });
   if (group) revalidatePath(`/sites/${group.menu.siteId}/menus/${group.menuId}`);
 }
