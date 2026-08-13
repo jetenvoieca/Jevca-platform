@@ -93,6 +93,7 @@ model Artist {
   updatedAt DateTime     @updatedAt
   sites     Site[]
   artworks  Artwork[]
+  customers Customer[]
 
   artworkGroups    String[] @default([])
   artworkTypes     String[] @default([])
@@ -121,6 +122,38 @@ model Artist {
 
   images Image[]
   videoRenders VideoRender[]
+}
+
+// Scoped to one artist, deliberately — even the same real-world gallery
+// buying from two different artists gets a separate Customer record for
+// each (2026-08-13 decision), since terms and contacts can genuinely
+// differ artist to artist. Cross-artist awareness is handled separately,
+// by matching email addresses live at read time rather than sharing or
+// merging records — see getCustomerDetail in actions/customers.ts.
+model Customer {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  name    String
+  email   String?
+  phone   String?
+  address String?
+
+  // "EN" or "FR", or null to fall back to the artist's own default
+  // (Settings → Invoice language). An explicit per-customer override,
+  // not a duplicate of the artist-level setting.
+  language String?
+
+  notes String?
+
+  purchases Purchase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
+  @@index([email])
 }
 
 model Site {
@@ -295,6 +328,16 @@ model Purchase {
   buyerEmail   String?
   buyerAddress String?
 
+  // Added 2026-08-13, alongside the snapshot fields above rather than
+  // replacing them — buyerName/buyerEmail/buyerAddress stay exactly as
+  // they were captured at the time of sale (so past invoices/receipts
+  // never change), while this link enables "list this customer's sales"
+  // and lets a customer's own language preference override the artist's
+  // default. Nullable so every sale made before Customer records existed
+  // needs no backfill or migration.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
   type PurchaseType
 
   source String?
@@ -320,6 +363,7 @@ model Purchase {
   closedAt DateTime?
 
   @@index([artworkId])
+  @@index([customerId])
 }
 
 model Payment {
