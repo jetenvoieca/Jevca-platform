@@ -107,6 +107,7 @@ export default function MediaCatalogueView({
         setSelected({
           id: item.id,
           url: item.url,
+          displayUrl: item.displayUrl,
           posterUrl: item.posterUrl,
           kind: item.kind,
           caption: item.caption,
@@ -139,6 +140,7 @@ export default function MediaCatalogueView({
         setSelected({
           id: item.id,
           url: item.url,
+          displayUrl: item.displayUrl,
           posterUrl: item.posterUrl,
           kind: item.kind,
           caption: item.caption,
