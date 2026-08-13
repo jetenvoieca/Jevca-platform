@@ -9,6 +9,7 @@ import { addMediaToBucket } from "@/lib/actions/videoEditor";
 export type MediaDetail = {
   id: string;
   url: string;
+  displayUrl: string;
   posterUrl: string | null;
   kind: string;
   caption: string | null;
@@ -156,7 +157,7 @@ export default function MediaDetailPanel({
         )
       ) : (
         <img
-          src={media.url}
+          src={media.displayUrl}
           alt=""
           className="mb-1 w-full cursor-zoom-in rounded-md object-cover"
           onClick={() => setLightboxOpen(true)}
