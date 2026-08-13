@@ -57,7 +57,7 @@ export default function SaleDetailCard({
             onClick={() => downloadInvoice(purchase.id)}
             className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
           >
-            Download invoice
+            {purchase.status === "COMPLETED" ? "Download receipt" : "Download invoice"}
           </button>
           {onDelete && (
             <button
