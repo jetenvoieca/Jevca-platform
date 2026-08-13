@@ -120,8 +120,43 @@ model Artist {
   defaultReleaseMessage      String @default("Available for collection/delivery once 2 payments have been made.")
   defaultReleaseTriggerCount Int    @default(2)
 
+  // Platform subscription (the artist paying US for their site/hosting) —
+  // deliberately separate from `stripeMode`/StripeCustomer used elsewhere,
+  // which is about THIS artist's own buyers paying THEM. This is a
+  // different Stripe account entirely (2026-08-13 decision), so a
+  // different Customer ID lives here. Linked manually (pasted in once),
+  // not auto-matched by email.
+  stripeSubscriptionCustomerId String? @unique
+  stripeSubscriptionStatus     String?
+
   images Image[]
   videoRenders VideoRender[]
+  subscriptionPayments SubscriptionPayment[]
+}
+
+// One unified ledger of "artist paid us for their subscription" rows,
+// regardless of source — a manual PayPal/DD entry and a Stripe-synced
+// invoice look identical once they land here, so the display grid never
+// needs to know which one it's showing (2026-08-13 decision).
+model SubscriptionPayment {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  source   String   // "STRIPE" | "MANUAL"
+  amount   Decimal  @db.Decimal(10, 2)
+  currency String   @default("GBP")
+  paidAt   DateTime
+
+  // Dedupe key for the Stripe webhook (Phase 2) — never set for manual
+  // rows. Ensures a re-delivered webhook event can't double-count.
+  stripeInvoiceId String? @unique
+
+  note String?
+
+  createdAt DateTime @default(now())
+
+  @@index([artistId])
 }
 
 // Scoped to one artist, deliberately — even the same real-world gallery

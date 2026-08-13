@@ -4,7 +4,7 @@ import SitesDirectoryView from "@/components/SitesDirectoryView";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = { q?: string; sort?: string; archived?: string; selected?: string };
+type SearchParams = { q?: string; sort?: string; archived?: string };
 
 export default async function SitesDirectoryPage({
   searchParams,
@@ -15,7 +15,6 @@ export default async function SitesDirectoryPage({
   const q = params.q?.trim() || "";
   const showArchived = params.archived === "1";
   const sort = params.sort === "date" ? "date" : "owner";
-  const initialSelectedId = params.selected || null;
 
   const totalSites = await db.site.count();
 
@@ -50,7 +49,12 @@ export default async function SitesDirectoryPage({
           }
         : {}),
     },
-    include: { artist: true },
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      artist: { select: { name: true } },
+    },
     relationLoadStrategy: "query",
     orderBy: sort === "date" ? { createdAt: "desc" } : { artist: { name: "asc" } },
   });
@@ -58,40 +62,9 @@ export default async function SitesDirectoryPage({
   const rows = sites.map((s) => ({
     id: s.id,
     name: s.name,
-    domain: s.domain,
     status: s.status,
-    createdAt: s.createdAt.toISOString(),
-    defaultCurrency: s.defaultCurrency,
-    template: s.template,
-    salesEnabled: s.salesEnabled,
-    domainStatus: s.domainStatus,
-    domainRenewalDate: s.domainRenewalDate ? s.domainRenewalDate.toISOString().slice(0, 10) : "",
-    ownerId: s.artist.id,
     ownerName: s.artist.name,
-    ownerFirstName: s.artist.firstName,
-    ownerEmail: s.artist.email,
-    ownerPhone: s.artist.phone,
-    ownerNotes: s.artist.notes,
-    ownerSubscriptionAmount: s.artist.subscriptionAmount ? s.artist.subscriptionAmount.toString() : "",
-    ownerPaymentMethod: s.artist.paymentMethod,
-    ownerLogoUrl: s.artist.logoUrl,
-    ownerInvoiceAddress: s.artist.invoiceAddress,
-    ownerVatNumber: s.artist.vatNumber,
-    ownerVatRate: s.artist.vatRate ? s.artist.vatRate.toString() : "",
-    ownerInvoiceFooterText: s.artist.invoiceFooterText,
-    ownerInvoiceLanguage: s.artist.invoiceLanguage,
-    ownerNextInvoiceNumber: s.artist.nextInvoiceNumber,
-    ownerHopperToken: s.artist.hopperToken,
-    ownerStripeMode: s.artist.stripeMode,
   }));
 
-  return (
-    <SitesDirectoryView
-      sites={rows}
-      q={q}
-      sort={sort}
-      showArchived={showArchived}
-      initialSelectedId={initialSelectedId}
-    />
-  );
+  return <SitesDirectoryView sites={rows} q={q} sort={sort} showArchived={showArchived} />;
 }

@@ -14,7 +14,11 @@ export default function AppShell({
   publishEnabled = false,
   navItems,
 }: {
-  preview: React.ReactNode;
+  // Omit entirely (leave as null/undefined) when a page has nothing to
+  // preview — e.g. a plain list. Reserving a fixed 340px column that just
+  // shows placeholder text is wasted space; when preview is absent the
+  // grid collapses to two columns instead (2026-08-13).
+  preview?: React.ReactNode;
   content: React.ReactNode;
   // Publish is greyed out until there's a specific site open with pending
   // draft changes — neither of which exists at the top-level Sites screen,
@@ -22,17 +26,25 @@ export default function AppShell({
   publishEnabled?: boolean;
   navItems: AppShellNavItem[];
 }) {
+  const hasPreview = preview !== undefined && preview !== null;
+
   return (
-    <div className="grid h-screen grid-cols-[340px_1fr_220px] overflow-hidden">
+    <div
+      className={`grid h-screen overflow-hidden ${
+        hasPreview ? "grid-cols-[340px_1fr_220px]" : "grid-cols-[1fr_220px]"
+      }`}
+    >
       {/* Each column scrolls independently — a caller that wants its own
           fixed header (title, filters, table header row) structures its
           content as a flex column with a non-scrolling header and a
           flex-1 overflow-y-auto body, same pattern as the menu column
           below. A caller with nothing to pin can just render plain
           content and this column's own scrolling handles it. */}
-      <div className="h-full overflow-y-auto border-r border-neutral-200 bg-neutral-50">
-        {preview}
-      </div>
+      {hasPreview && (
+        <div className="h-full overflow-y-auto border-r border-neutral-200 bg-neutral-50">
+          {preview}
+        </div>
+      )}
       <div className="h-full overflow-y-auto">{content}</div>
       <div className="flex h-full flex-col border-l border-neutral-200">
         <div className="border-b border-neutral-200 p-4">

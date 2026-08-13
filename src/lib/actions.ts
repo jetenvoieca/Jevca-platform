@@ -87,6 +87,7 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
     },
   });
   revalidatePath("/");
+  revalidatePath(`/sites/${id}`);
 }
 
 // ---- Edit Owner (Artist) details ----
@@ -184,16 +185,21 @@ export async function updateSiteStatus(
     data: { status },
   });
   revalidatePath("/");
+  revalidatePath(`/sites/${id}`);
 }
 
-// ---- Sales menu toggle ----
-
+// ---- "Take payments" toggle (was labelled "Show Sales menu on this
+// site" — same underlying field, renamed 2026-08-13). Gates both the
+// Sales/Customers nav items (SiteNavPanel) and the Invoicing panel on the
+// site's Settings page — a site that doesn't take payments has no use
+// for invoice numbering/VAT/etc.
 export async function updateSalesEnabled(id: string, enabled: boolean) {
   await db.site.update({
     where: { id },
     data: { salesEnabled: enabled },
   });
   revalidatePath("/");
+  revalidatePath(`/sites/${id}`);
 }
 
 // ---- Archive (soft delete) / Restore ----
@@ -204,6 +210,7 @@ export async function archiveSite(id: string) {
     data: { status: "ARCHIVED" },
   });
   revalidatePath("/");
+  revalidatePath(`/sites/${id}`);
 }
 
 export async function restoreSite(id: string) {
@@ -214,6 +221,7 @@ export async function restoreSite(id: string) {
     data: { status: "DRAFT" },
   });
   revalidatePath("/");
+  revalidatePath(`/sites/${id}`);
 }
 
 // ---- Sample data, for trying the screen out before real data exists ----
