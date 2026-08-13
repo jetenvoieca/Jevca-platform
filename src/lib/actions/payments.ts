@@ -221,28 +221,49 @@ export async function startGallerySale(
 }
 
 // Permanent delete, not just marking abandoned — for a genuinely wrong
-// gallery sale (mistyped commission, wrong artwork, wrong buyer entirely),
-// not just one that didn't go through. Deliberately restricted to gallery
-// sales that were never actually paid: a completed sale is a real
-// financial record and should never simply vanish, even if it later turns
-// out to be wrong — that's a correction, not a deletion, and needs a
-// different, more careful process. Cascades to delete any Payment rows
-// too (schema-level onDelete: Cascade).
+// sale (mistyped commission, wrong artwork, wrong buyer entirely, an
+// accidental Stripe sale started by mistake), not just one that didn't
+// go through. Deliberately restricted to sales that were never actually
+// paid, regardless of channel (2026-08-13 — originally gallery-only,
+// widened at request since the same tidiness need applies to an
+// accidental Stripe start too): a completed sale is a real financial
+// record and should never simply vanish via this path, even if it later
+// turns out to be wrong — see forceDeleteCompletedSale below for that
+// separate, more careful case. Cascades to delete any Payment rows too
+// (schema-level onDelete: Cascade).
 export async function deleteGallerySale(
   purchaseId: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Sale not found." };
-  if (purchase.channel !== "GALLERY") {
-    return { ok: false, error: "Only gallery sales can be deleted this way." };
-  }
   if (purchase.status === "COMPLETED") {
     return {
       ok: false,
       error: "This sale has already been marked paid and can't be deleted — it's a real financial record.",
     };
   }
+
+  await db.purchase.delete({ where: { id: purchaseId } });
+
+  revalidatePath(`/sites/${siteId}/artworks`);
+  return { ok: true };
+}
+
+// A deliberately separate, scarier action from the one above — this is
+// the only path that can remove a genuinely completed, paid sale
+// (2026-08-13, at the person's explicit request for cleaning up test
+// data). There's no per-user role system in this app to gate this by
+// "admin only" in code, so the real safeguard is entirely in the UI:
+// this is never the default "Delete" button, only a separate,
+// clearly-labelled option shown specifically for completed sales, with
+// its own stronger confirmation wording.
+export async function forceDeleteCompletedSale(
+  purchaseId: string,
+  siteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase) return { ok: false, error: "Sale not found." };
 
   await db.purchase.delete({ where: { id: purchaseId } });
 
