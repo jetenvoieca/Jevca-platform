@@ -15,6 +15,7 @@ import {
   type PurchaseDetail,
 } from "@/lib/actions/payments";
 import StripeCardForm from "@/components/StripeCardForm";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 // Same list as SaleTermsPanel — kept in sync deliberately, since these
 // two forms need to offer identical currency choices.
@@ -67,6 +68,16 @@ export default function PurchasePanel({
   // out in GBP). Defaults to the artwork's own Sale Terms currency, the
   // same source of truth SaleTermsPanel itself uses.
   const [gallerySaleCurrency, setGallerySaleCurrency] = useState(terms?.currency ?? "GBP");
+  // Drives ConfirmDialog for every sale-related confirmation on this
+  // panel (2026-08-13, replacing native confirm() — see ConfirmDialog
+  // for why).
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
 
   const handleSaveRelease = (formData: FormData) => {
     if (!activePurchase) return;
@@ -107,26 +118,40 @@ export default function PurchasePanel({
 
   const handleMarkPaid = () => {
     if (!activePurchase) return;
-    if (!confirm("Mark this sale as paid? Only do this once the gallery has actually paid.")) return;
-    setError(null);
-    startTransition(async () => {
-      const res = await markGallerySalePaid(activePurchase.id, siteId);
-      if (!res.ok) setError(res.error);
-      router.refresh();
-      onChanged?.();
+    setPendingConfirm({
+      title: "Mark this sale as paid?",
+      message: "Only do this once the gallery has actually paid.",
+      confirmLabel: "Mark as paid",
+      onConfirm: () => {
+        setPendingConfirm(null);
+        setError(null);
+        startTransition(async () => {
+          const res = await markGallerySalePaid(activePurchase.id, siteId);
+          if (!res.ok) setError(res.error);
+          router.refresh();
+          onChanged?.();
+        });
+      },
     });
   };
 
   const handleAbandon = () => {
     if (!activePurchase) return;
-    if (!confirm("Cancel this sale? It'll be kept in the history below, marked as abandoned."))
-      return;
-    setError(null);
-    startTransition(async () => {
-      const res = await abandonPurchase(activePurchase.id, siteId);
-      if (!res.ok) setError(res.error);
-      router.refresh();
-      onChanged?.();
+    setPendingConfirm({
+      title: "Cancel this sale?",
+      message: "It'll be kept in the history below, marked as abandoned.",
+      confirmLabel: "Cancel sale",
+      danger: true,
+      onConfirm: () => {
+        setPendingConfirm(null);
+        setError(null);
+        startTransition(async () => {
+          const res = await abandonPurchase(activePurchase.id, siteId);
+          if (!res.ok) setError(res.error);
+          router.refresh();
+          onChanged?.();
+        });
+      },
     });
   };
 
@@ -136,16 +161,52 @@ export default function PurchasePanel({
   // gaps, since that's the one consequence that isn't obvious from the
   // UI alone (2026-08-13).
   const handleDeleteHistoryItem = (p: PurchaseDetail) => {
-    const warning = p.invoiceNumber
-      ? `Delete this sale permanently? An invoice (#${p.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely, not just from this list.`
-      : "Delete this sale permanently? This removes it entirely, not just from this list — it cannot be undone.";
-    if (!confirm(warning)) return;
-    setError(null);
-    startTransition(async () => {
-      const res = await deleteGallerySale(p.id, siteId);
-      if (!res.ok) setError(res.error);
-      router.refresh();
-      onChanged?.();
+    const message = p.invoiceNumber
+      ? `An invoice (#${p.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely, not just from this list.`
+      : "This removes the sale entirely, not just from this list — it cannot be undone.";
+    setPendingConfirm({
+      title: "Delete this sale permanently?",
+      message,
+      confirmLabel: "Delete permanently",
+      danger: true,
+      onConfirm: () => {
+        setPendingConfirm(null);
+        setError(null);
+        startTransition(async () => {
+          const res = await deleteGallerySale(p.id, siteId);
+          if (!res.ok) setError(res.error);
+          router.refresh();
+          onChanged?.();
+        });
+      },
+    });
+  };
+
+  // Direct delete for a currently-active, unpaid gallery sale — added
+  // 2026-08-13 so a genuinely wrong transaction (mistyped commission,
+  // wrong buyer) doesn't need the extra "cancel first, then delete from
+  // history" round trip. Same restriction either way: only unpaid
+  // gallery sales, enforced again server-side regardless.
+  const handleDeleteActiveSale = () => {
+    if (!activePurchase) return;
+    const message = activePurchase.invoiceNumber
+      ? `An invoice (#${activePurchase.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely.`
+      : "This removes the sale entirely — it cannot be undone.";
+    setPendingConfirm({
+      title: "Delete this sale permanently?",
+      message,
+      confirmLabel: "Delete permanently",
+      danger: true,
+      onConfirm: () => {
+        setPendingConfirm(null);
+        setError(null);
+        startTransition(async () => {
+          const res = await deleteGallerySale(activePurchase.id, siteId);
+          if (!res.ok) setError(res.error);
+          router.refresh();
+          onChanged?.();
+        });
+      },
     });
   };
 
@@ -478,6 +539,14 @@ export default function PurchasePanel({
                 >
                   Download invoice
                 </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteActiveSale}
+                  disabled={isPending}
+                  className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  Delete
+                </button>
               </div>
             </div>
           ) : activePurchase.payments.length === 0 ? (
@@ -688,6 +757,16 @@ export default function PurchasePanel({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        title={pendingConfirm?.title ?? ""}
+        message={pendingConfirm?.message ?? ""}
+        confirmLabel={pendingConfirm?.confirmLabel ?? ""}
+        danger={pendingConfirm?.danger}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onCancel={() => setPendingConfirm(null)}
+      />
     </div>
   );
 }
