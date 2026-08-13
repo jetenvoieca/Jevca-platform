@@ -105,6 +105,8 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
   const vatRateRaw = (formData.get("vatRate") as string)?.trim();
   const vatRate = vatRateRaw ? vatRateRaw : null;
   const invoiceFooterText = (formData.get("invoiceFooterText") as string)?.trim() || null;
+  const invoiceLanguageRaw = (formData.get("invoiceLanguage") as string)?.trim().toUpperCase();
+  const invoiceLanguage = invoiceLanguageRaw === "FR" ? "FR" : "EN";
   const nextInvoiceNumberRaw = (formData.get("nextInvoiceNumber") as string)?.trim();
   if (!name) return;
 
@@ -122,6 +124,7 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
       vatNumber,
       vatRate,
       invoiceFooterText,
+      invoiceLanguage,
       // Only ever moves this forward deliberately (e.g. correcting a
       // starting point) — the actual per-invoice increment happens in
       // getOrAssignInvoiceNumber, not here, so leave it alone unless the
