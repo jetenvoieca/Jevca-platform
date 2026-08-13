@@ -346,6 +346,15 @@ model Image {
   artist   Artist @relation(fields: [artistId], references: [id])
   key       String
   url       String
+  // Smaller derived versions of the original, generated at upload time
+  // (2026-08-13 — see decisions log). Only ever set for PHOTO images;
+  // videos keep using posterUrl as before. Nullable because existing
+  // images uploaded before this change need a one-off backfill — until
+  // that runs (or for any image where it fails), every place that reads
+  // these falls back to the original `url`, so nothing breaks in the
+  // meantime, it's just not sped up yet.
+  thumbnailKey String?
+  displayKey   String?
   posterUrl String?
   kind      ImageKind   @default(PHOTO)
   mimeType  String
