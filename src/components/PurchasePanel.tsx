@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   startPurchase,
   startGallerySale,
+  deleteGallerySale,
   markGallerySalePaid,
   updatePurchaseRelease,
   abandonPurchase,
@@ -123,6 +124,25 @@ export default function PurchasePanel({
     setError(null);
     startTransition(async () => {
       const res = await abandonPurchase(activePurchase.id, siteId);
+      if (!res.ok) setError(res.error);
+      router.refresh();
+      onChanged?.();
+    });
+  };
+
+  // For a genuinely wrong gallery sale (not just one that fell through) —
+  // deliberately a separate, harder confirmation from "Cancel" above,
+  // since this can't be undone. Warns specifically about invoice number
+  // gaps, since that's the one consequence that isn't obvious from the
+  // UI alone (2026-08-13).
+  const handleDeleteHistoryItem = (p: PurchaseDetail) => {
+    const warning = p.invoiceNumber
+      ? `Delete this sale permanently? An invoice (#${p.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely, not just from this list.`
+      : "Delete this sale permanently? This removes it entirely, not just from this list — it cannot be undone.";
+    if (!confirm(warning)) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await deleteGallerySale(p.id, siteId);
       if (!res.ok) setError(res.error);
       router.refresh();
       onChanged?.();
@@ -653,6 +673,15 @@ export default function PurchasePanel({
                   >
                     Invoice
                   </button>
+                  {p.channel === "GALLERY" && p.status !== "COMPLETED" && (
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteHistoryItem(p)}
+                      className="text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
