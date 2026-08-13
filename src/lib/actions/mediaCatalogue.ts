@@ -51,6 +51,7 @@ export async function listMedia(artistId: string, filters: ListFilters) {
       // the app, rather than newest-first pushing everything else down.
       orderBy: sort === "caption" ? { caption: "asc" } : { createdAt: "asc" },
       include: { artwork: { select: { id: true, presentationTitle: true } } },
+      relationLoadStrategy: "query",
       skip: offset,
       take: limit,
     }),
@@ -72,6 +73,7 @@ export async function getMediaDetail(id: string) {
   return db.image.findUnique({
     where: { id },
     include: { artwork: { select: { id: true, presentationTitle: true } } },
+    relationLoadStrategy: "query",
   });
 }
 
