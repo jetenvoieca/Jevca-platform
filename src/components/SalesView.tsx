@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
+import { deleteGallerySale } from "@/lib/actions/payments";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
@@ -28,6 +30,8 @@ export default function SalesView({
   const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<ArtworkDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [, startTransition] = useTransition();
+  const router = useRouter();
 
   const filtered = useMemo(
     () => (filter === "ALL" ? sales : sales.filter((s) => s.status === filter)),
@@ -56,6 +60,27 @@ export default function SalesView({
     getArtworkDetailForClient(artworkId).then((detail) => {
       setSelectedDetail(detail);
       setLoading(false);
+    });
+  };
+
+  // Same warning logic as the equivalent delete inside PurchasePanel's
+  // history list — this page is the other place a past gallery sale can
+  // be viewed and needs the same capability (2026-08-13).
+  const handleDeleteSale = (purchaseId: string, invoiceNumber: number | null) => {
+    const warning = invoiceNumber
+      ? `Delete this sale permanently? An invoice (#${invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely, not just from this list.`
+      : "Delete this sale permanently? This removes it entirely, not just from this list — it cannot be undone.";
+    if (!confirm(warning)) return;
+    startTransition(async () => {
+      const res = await deleteGallerySale(purchaseId, siteId);
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      setSelectedArtworkId(null);
+      setSelectedPurchaseId(null);
+      setSelectedDetail(null);
+      router.refresh();
     });
   };
 
@@ -228,6 +253,11 @@ export default function SalesView({
                     artworkSize={selectedDetail.size}
                     artworkGroup={selectedDetail.catalogueGroup}
                     artworkMedium={selectedDetail.medium}
+                    onDelete={
+                      selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "COMPLETED"
+                        ? () => handleDeleteSale(selectedPurchase.id, selectedPurchase.invoiceNumber)
+                        : undefined
+                    }
                   />
                 ) : (
                   <p className="text-sm text-neutral-400">
