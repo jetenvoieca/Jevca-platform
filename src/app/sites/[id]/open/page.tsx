@@ -14,6 +14,7 @@ export default async function OpenSitePage({
 
   const activeMenu = await db.menu.findFirst({
     where: { siteId: id, isActive: true },
+    relationLoadStrategy: "query",
     include: {
       groups: {
         orderBy: { position: "asc" },
