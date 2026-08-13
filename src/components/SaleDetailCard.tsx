@@ -26,17 +26,21 @@ export default function SaleDetailCard({
   artworkGroup,
   artworkMedium,
   onDelete,
+  onForceDelete,
 }: {
   purchase: PurchaseDetail;
   artworkType: string | null;
   artworkSize: string | null;
   artworkGroup: string | null;
   artworkMedium: string | null;
-  // Only ever passed for a gallery sale that hasn't been marked paid —
-  // the parent decides eligibility (it already knows purchase.channel
-  // and purchase.status), this component just renders the button when
-  // asked to (2026-08-13 — see decisions log).
+  // Only ever passed for an abandoned (never-paid) sale — the parent
+  // decides eligibility, this component just renders the button when
+  // asked to (2026-08-13, widened from gallery-only to any channel).
   onDelete?: () => void;
+  // Separate, deliberately scarier option — only ever passed for a
+  // completed sale, since deleting one destroys a real financial record
+  // (2026-08-13, added for cleaning up test/erroneous completed sales).
+  onForceDelete?: () => void;
 }) {
   // The next instalment still owed, if this sale was abandoned partway
   // through an instalment plan — irrelevant (and absent) for a fully
@@ -66,6 +70,15 @@ export default function SaleDetailCard({
               className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
             >
               Delete
+            </button>
+          )}
+          {onForceDelete && (
+            <button
+              type="button"
+              onClick={onForceDelete}
+              className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+            >
+              Force delete
             </button>
           )}
         </div>
