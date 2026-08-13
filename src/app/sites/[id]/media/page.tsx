@@ -6,7 +6,9 @@ import {
   getArtistArtworksForLinking,
   getMediaDetail,
 } from "@/lib/actions/mediaCatalogue";
+import { getBackfillCount } from "@/lib/actions/imageBackfill";
 import MediaCatalogueView from "@/components/MediaCatalogueView";
+import ImageBackfillPanel from "@/components/ImageBackfillPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -40,7 +42,7 @@ export default async function MediaCataloguePage({
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
 
-  const [{ rows: mediaRows, total }, counts, tagPresets, artistArtworks, selectedItem] =
+  const [{ rows: mediaRows, total }, counts, tagPresets, artistArtworks, selectedItem, backfillCount] =
     await Promise.all([
       listMedia(artistId, {
         purpose,
@@ -54,6 +56,7 @@ export default async function MediaCataloguePage({
       getMediaTagPresets(artistId),
       getArtistArtworksForLinking(artistId),
       sp.selected ? getMediaDetail(sp.selected) : Promise.resolve(null),
+      getBackfillCount(artistId),
     ]);
 
   const media = mediaRows.map((m) => ({
@@ -70,6 +73,7 @@ export default async function MediaCataloguePage({
       ? {
           id: selectedItem.id,
           url: selectedItem.url,
+          displayUrl: selectedItem.displayUrl,
           posterUrl: selectedItem.posterUrl,
           kind: selectedItem.kind,
           caption: selectedItem.caption,
@@ -81,21 +85,26 @@ export default async function MediaCataloguePage({
       : null;
 
   return (
-    <MediaCatalogueView
-      siteId={id}
-      artistId={artistId}
-      media={media}
-      total={total}
-      pageSize={PAGE_SIZE}
-      purpose={purpose}
-      q={sp.q || ""}
-      tag={sp.tag || ""}
-      artworkId={sp.artworkId || ""}
-      sort={sp.sort || ""}
-      counts={counts}
-      tagPresets={tagPresets}
-      artistArtworks={artistArtworks}
-      initialSelected={selected}
-    />
+    <>
+      <div className="px-6 pt-4">
+        <ImageBackfillPanel artistId={artistId} siteId={id} initialCount={backfillCount} />
+      </div>
+      <MediaCatalogueView
+        siteId={id}
+        artistId={artistId}
+        media={media}
+        total={total}
+        pageSize={PAGE_SIZE}
+        purpose={purpose}
+        q={sp.q || ""}
+        tag={sp.tag || ""}
+        artworkId={sp.artworkId || ""}
+        sort={sp.sort || ""}
+        counts={counts}
+        tagPresets={tagPresets}
+        artistArtworks={artistArtworks}
+        initialSelected={selected}
+      />
+    </>
   );
 }
