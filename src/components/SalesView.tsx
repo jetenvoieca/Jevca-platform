@@ -7,6 +7,7 @@ import { deleteGallerySale } from "@/lib/actions/payments";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
+import ConfirmDialog from "@/components/ConfirmDialog";
 import type { SaleRow } from "@/lib/actions/sales";
 
 const STATUS_FILTERS = ["ALL", "ACTIVE", "COMPLETED", "ABANDONED"] as const;
@@ -66,21 +67,37 @@ export default function SalesView({
   // Same warning logic as the equivalent delete inside PurchasePanel's
   // history list — this page is the other place a past gallery sale can
   // be viewed and needs the same capability (2026-08-13).
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    title: string;
+    message: string;
+    confirmLabel: string;
+    danger?: boolean;
+    onConfirm: () => void;
+  } | null>(null);
+
   const handleDeleteSale = (purchaseId: string, invoiceNumber: number | null) => {
-    const warning = invoiceNumber
-      ? `Delete this sale permanently? An invoice (#${invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely, not just from this list.`
-      : "Delete this sale permanently? This removes it entirely, not just from this list — it cannot be undone.";
-    if (!confirm(warning)) return;
-    startTransition(async () => {
-      const res = await deleteGallerySale(purchaseId, siteId);
-      if (!res.ok) {
-        alert(res.error);
-        return;
-      }
-      setSelectedArtworkId(null);
-      setSelectedPurchaseId(null);
-      setSelectedDetail(null);
-      router.refresh();
+    const message = invoiceNumber
+      ? `An invoice (#${invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely, not just from this list.`
+      : "This removes the sale entirely, not just from this list — it cannot be undone.";
+    setPendingConfirm({
+      title: "Delete this sale permanently?",
+      message,
+      confirmLabel: "Delete permanently",
+      danger: true,
+      onConfirm: () => {
+        setPendingConfirm(null);
+        startTransition(async () => {
+          const res = await deleteGallerySale(purchaseId, siteId);
+          if (!res.ok) {
+            alert(res.error);
+            return;
+          }
+          setSelectedArtworkId(null);
+          setSelectedPurchaseId(null);
+          setSelectedDetail(null);
+          router.refresh();
+        });
+      },
     });
   };
 
@@ -268,6 +285,16 @@ export default function SalesView({
             )}
           </div>
       </div>
+
+      <ConfirmDialog
+        open={pendingConfirm !== null}
+        title={pendingConfirm?.title ?? ""}
+        message={pendingConfirm?.message ?? ""}
+        confirmLabel={pendingConfirm?.confirmLabel ?? ""}
+        danger={pendingConfirm?.danger}
+        onConfirm={() => pendingConfirm?.onConfirm()}
+        onCancel={() => setPendingConfirm(null)}
+      />
     </div>
   );
 }
