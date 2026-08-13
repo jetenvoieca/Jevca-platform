@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { publicMediaUrl } from "@/lib/r2";
 
 type ListFilters = {
   purpose?: "marketing" | "related";
@@ -58,7 +59,16 @@ export async function listMedia(artistId: string, filters: ListFilters) {
     db.image.count({ where }),
   ]);
 
-  return { rows, total };
+  // Every consumer of this list only ever shows these at small sizes, so
+  // the thumbnail (fast, served straight from storage) always wins here
+  // — falls back to the original proxied url only for images uploaded
+  // before 2026-08-13 that haven't been backfilled yet.
+  const rowsWithThumbnails = rows.map((r) => ({
+    ...r,
+    url: publicMediaUrl(r.thumbnailKey) || r.url,
+  }));
+
+  return { rows: rowsWithThumbnails, total };
 }
 
 export async function countMediaByPurpose(artistId: string) {
@@ -70,11 +80,16 @@ export async function countMediaByPurpose(artistId: string) {
 }
 
 export async function getMediaDetail(id: string) {
-  return db.image.findUnique({
+  const image = await db.image.findUnique({
     where: { id },
     include: { artwork: { select: { id: true, presentationTitle: true } } },
     relationLoadStrategy: "query",
   });
+  if (!image) return null;
+  // displayUrl is for the panel's medium preview; url stays the true
+  // original throughout, since the lightbox's "view full size" click
+  // deliberately shows the real, unresized file.
+  return { ...image, displayUrl: publicMediaUrl(image.displayKey) || image.url };
 }
 
 // Lightweight list for the "link to artwork" dropdown — every artwork this
