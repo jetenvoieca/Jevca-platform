@@ -33,6 +33,53 @@ function currencySymbol(currency: string) {
   return currency === "EUR" ? "€" : currency === "USD" ? "$" : "£";
 }
 
+// Document wording (2026-08-13). Language is the artist's own explicit
+// choice (Settings → Invoice language) — deliberately not inferred from
+// the sale's currency, since currency and the buyer's language aren't
+// the same thing. Once Customer records exist, a customer's own
+// language preference will take priority over this artist-level
+// default; this stays as the fallback underneath that.
+const LABELS = {
+  EN: {
+    invoice: "Invoice",
+    receipt: "Receipt",
+    issueDate: "Issue date",
+    billTo: "Bill to:",
+    salePrice: "Sale price",
+    commission: "Commission",
+    invoiceTotal: "Invoice total",
+    total: "Total",
+    salePriceExVat: "Sale price (ex. VAT)",
+    vat: "VAT",
+    amountPaid: "Amount paid",
+    balanceDue: "Balance due",
+    paidOn: "Paid on",
+    paid: "Paid",
+    paymentInProgress: "Payment in progress",
+    vatNo: "VAT No",
+    receivedWithThanks: "Received with Thanks",
+  },
+  FR: {
+    invoice: "Facture",
+    receipt: "Reçu",
+    issueDate: "Date d'émission",
+    billTo: "Facturé à :",
+    salePrice: "Prix de vente",
+    commission: "Commission",
+    invoiceTotal: "Total facture",
+    total: "Total",
+    salePriceExVat: "Prix de vente (HT)",
+    vat: "TVA",
+    amountPaid: "Montant payé",
+    balanceDue: "Solde dû",
+    paidOn: "Payé le",
+    paid: "Payé",
+    paymentInProgress: "Paiement en cours",
+    vatNo: "N° TVA",
+    receivedWithThanks: "Reçu avec nos remerciements",
+  },
+} as const;
+
 export async function generateInvoicePdf(
   purchaseId: string
 ): Promise<{ bytes: Uint8Array; filename: string }> {
@@ -48,6 +95,11 @@ export async function generateInvoicePdf(
 
   const artist = purchase.artwork.artist;
   const invoiceNumber = await getOrAssignInvoiceNumber(purchaseId, artist.id);
+  const isPaid = purchase.status === "COMPLETED";
+  const lang = artist.invoiceLanguage === "FR" ? "FR" : "EN";
+  const t = LABELS[lang];
+  const docTypeLabel = isPaid ? t.receipt : t.invoice;
+  const dateLocale = lang === "FR" ? "fr-FR" : "en-GB";
 
   const doc = await PDFDocument.create();
   const page = doc.addPage([595.28, 841.89]); // A4
@@ -63,7 +115,7 @@ export async function generateInvoicePdf(
   const rightAlign = (text: string, f = font, size = 10) =>
     right - f.widthOfTextAtSize(text, size);
 
-  // ---- Logo (best-effort — an invoice still generates fine without one) ----
+  // ---- Logo (best-effort — still generates fine without one) ----
   if (artist.logoUrl) {
     try {
       const url = artist.logoUrl.startsWith("http") ? artist.logoUrl : `${APP_URL}${artist.logoUrl}`;
@@ -80,15 +132,17 @@ export async function generateInvoicePdf(
       }
     } catch {
       // Fetching or embedding the logo failed — proceed without it rather
-      // than fail the whole invoice over a decorative image.
+      // than fail the whole document over a decorative image.
     }
   }
 
-  // ---- Invoice number + date, top right ----
-  const invoiceLabel = `Invoice #${String(invoiceNumber).padStart(7, "0")}`;
-  page.drawText(invoiceLabel, { x: rightAlign(invoiceLabel, bold, 16), y, size: 16, font: bold });
+  // ---- Document number + date, top right ----
+  // No "#" (2026-08-13, at the person's request) — just the type label
+  // and the padded number, e.g. "Receipt 0000005".
+  const docLabel = `${docTypeLabel} ${String(invoiceNumber).padStart(7, "0")}`;
+  page.drawText(docLabel, { x: rightAlign(docLabel, bold, 16), y, size: 16, font: bold });
   y -= 18;
-  const dateLabel = `Issue date: ${new Date().toLocaleDateString("en-GB")}`;
+  const dateLabel = `${t.issueDate}: ${new Date().toLocaleDateString(dateLocale)}`;
   page.drawText(dateLabel, { x: rightAlign(dateLabel), y, size: 10, font, color: grey });
 
   y -= 60;
@@ -105,14 +159,14 @@ export async function generateInvoicePdf(
     y -= 13;
   }
   if (artist.vatNumber) {
-    page.drawText(`VAT No: ${artist.vatNumber}`, { x: left, y, size: 10, font });
+    page.drawText(`${t.vatNo}: ${artist.vatNumber}`, { x: left, y, size: 10, font });
     y -= 13;
   }
 
   y -= 20;
 
   // ---- Bill to (the buyer) ----
-  page.drawText("Bill to:", { x: left, y, size: 9, font, color: grey });
+  page.drawText(t.billTo, { x: left, y, size: 9, font, color: grey });
   y -= 13;
   page.drawText(purchase.buyerName || purchase.buyerEmail || "—", { x: left, y, size: 11, font: bold });
   y -= 14;
@@ -158,11 +212,11 @@ export async function generateInvoicePdf(
     const commissionAmount = total * (commissionPercent / 100);
     const net = total - commissionAmount;
     invoiceTotal = net;
-    drawRow("Sale price", fmt(total));
-    drawRow(`Commission (${commissionPercent}%)`, `-${fmt(commissionAmount)}`);
+    drawRow(t.salePrice, fmt(total));
+    drawRow(`${t.commission} (${commissionPercent}%)`, `-${fmt(commissionAmount)}`);
     y -= 4;
-    drawRow("Invoice total", fmt(net), true);
-    amountPaid = purchase.status === "COMPLETED" ? net : 0;
+    drawRow(t.invoiceTotal, fmt(net), true);
+    amountPaid = isPaid ? net : 0;
   } else {
     // STRIPE — a record of what was (or will be) paid via card, not a
     // request for payment. VAT breakdown only shown if the artist has a
@@ -171,12 +225,12 @@ export async function generateInvoicePdf(
       const vatRate = parseFloat(artist.vatRate.toString());
       const net = total / (1 + vatRate / 100);
       const vat = total - net;
-      drawRow("Sale price (ex. VAT)", fmt(net));
-      drawRow(`VAT (${vatRate}%)`, fmt(vat));
+      drawRow(t.salePriceExVat, fmt(net));
+      drawRow(`${t.vat} (${vatRate}%)`, fmt(vat));
       y -= 4;
-      drawRow("Total", fmt(total), true);
+      drawRow(t.total, fmt(total), true);
     } else {
-      drawRow("Total", fmt(total), true);
+      drawRow(t.total, fmt(total), true);
     }
     amountPaid = purchase.payments
       .filter((p) => p.status === "PAID")
@@ -185,32 +239,36 @@ export async function generateInvoicePdf(
 
   const balanceDue = invoiceTotal - amountPaid;
   y -= 6;
-  drawRow("Amount paid", fmt(amountPaid));
-  drawRow("Balance due", fmt(balanceDue), true);
+  drawRow(t.amountPaid, fmt(amountPaid));
+  drawRow(t.balanceDue, fmt(balanceDue), true);
 
   y -= 20;
 
   // ---- Status note ----
-  const statusText =
-    purchase.channel === "GALLERY"
-      ? purchase.status === "COMPLETED"
-        ? `Paid${purchase.closedAt ? " on " + new Date(purchase.closedAt).toLocaleDateString("en-GB") : ""}`
-        : "UNPAID"
-      : purchase.status === "COMPLETED"
-        ? "Paid"
-        : "Payment in progress";
-  page.drawText(statusText, {
-    x: left,
-    y,
-    size: 10,
-    font: bold,
-    color: statusText === "UNPAID" ? rgb(0.7, 0.2, 0.1) : rgb(0.1, 0.5, 0.2),
-  });
+  // "UNPAID" removed entirely (2026-08-13, at the person's request) —
+  // the balance due above already makes that self-evident. A paid sale
+  // still gets a clear, positive note instead.
+  if (isPaid) {
+    const paidLabel = purchase.closedAt
+      ? `${t.paidOn} ${new Date(purchase.closedAt).toLocaleDateString(dateLocale)}`
+      : t.paid;
+    page.drawText(paidLabel, { x: left, y, size: 10, font: bold, color: rgb(0.1, 0.5, 0.2) });
+    y -= 16;
+    page.drawText(t.receivedWithThanks, { x: left, y, size: 10, font: bold, color: rgb(0.1, 0.5, 0.2) });
+    y -= 14;
+  } else if (purchase.channel !== "GALLERY") {
+    // Only the Stripe "in progress" case still shows a status line for
+    // an unpaid document — the gallery UNPAID case was the one
+    // specifically asked to be removed.
+    page.drawText(t.paymentInProgress, { x: left, y, size: 10, font: bold, color: rgb(0.5, 0.4, 0.1) });
+    y -= 16;
+  }
 
-  y -= 30;
+  y -= 14;
 
-  // ---- Footer (free text — VAT exemption notes, bank details, thank-you,
-  // whatever the artist wants; deliberately not hard-coded) ----
+  // ---- Footer (free text — VAT exemption notes, bank details, whatever
+  // the artist wants; deliberately not hard-coded or translated, since
+  // it's the artist's own words) ----
   if (artist.invoiceFooterText) {
     page.drawLine({ start: { x: left, y }, end: { x: right, y }, thickness: 0.5, color: rgb(0.92, 0.92, 0.92) });
     y -= 20;
@@ -221,5 +279,6 @@ export async function generateInvoicePdf(
   }
 
   const bytes = await doc.save();
-  return { bytes, filename: `invoice-${String(invoiceNumber).padStart(7, "0")}.pdf` };
+  const filePrefix = isPaid ? "receipt" : "invoice";
+  return { bytes, filename: `${filePrefix}-${String(invoiceNumber).padStart(7, "0")}.pdf` };
 }
