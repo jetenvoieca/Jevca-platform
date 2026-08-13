@@ -15,6 +15,10 @@ import {
 } from "@/lib/actions/payments";
 import StripeCardForm from "@/components/StripeCardForm";
 
+// Same list as SaleTermsPanel — kept in sync deliberately, since these
+// two forms need to offer identical currency choices.
+const CURRENCIES = ["GBP", "EUR"];
+
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
@@ -55,6 +59,13 @@ export default function PurchasePanel({
   const [channel, setChannel] = useState<"STRIPE" | "GALLERY">("STRIPE");
   const [commissionPercent, setCommissionPercent] = useState("");
   const [gallerySalePrice, setGallerySalePrice] = useState("");
+  // Bug fixed 2026-08-13: this form had no currency field at all, so
+  // every gallery sale was silently recorded in GBP regardless of what
+  // currency Sale Terms actually specified — confirmed from a real sale
+  // (Sale Terms in EUR, but the resulting Purchase and invoice both came
+  // out in GBP). Defaults to the artwork's own Sale Terms currency, the
+  // same source of truth SaleTermsPanel itself uses.
+  const [gallerySaleCurrency, setGallerySaleCurrency] = useState(terms?.currency ?? "GBP");
 
   const handleSaveRelease = (formData: FormData) => {
     if (!activePurchase) return;
@@ -302,7 +313,7 @@ export default function PurchasePanel({
                   className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                 />
               </div>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-4 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
                     Sale price
@@ -316,6 +327,23 @@ export default function PurchasePanel({
                     placeholder="e.g. 250.00"
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Currency
+                  </label>
+                  <select
+                    name="currency"
+                    value={gallerySaleCurrency}
+                    onChange={(e) => setGallerySaleCurrency(e.target.value)}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -337,7 +365,11 @@ export default function PurchasePanel({
                   <input
                     type="text"
                     readOnly
-                    value={gallerySalePriceNum ? formatMoney(galleryNet.toFixed(2), "GBP") : "—"}
+                    value={
+                      gallerySalePriceNum
+                        ? formatMoney(galleryNet.toFixed(2), gallerySaleCurrency)
+                        : "—"
+                    }
                     className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
                   />
                 </div>
