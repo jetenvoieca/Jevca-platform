@@ -19,10 +19,12 @@ function formatMoney(amount: string, currency: string) {
 
 export default function SalesView({
   siteId,
+  artistId,
   sales,
   saleSources,
 }: {
   siteId: string;
+  artistId: string;
   sales: SaleRow[];
   saleSources: string[];
 }) {
@@ -282,6 +284,7 @@ export default function SalesView({
                   // take payment, cancel, etc. all still make sense here.
                   <PurchasePanel
                     artworkId={selectedArtworkId!}
+                    artistId={artistId}
                     siteId={siteId}
                     terms={selectedDetail.saleTerms}
                     activePurchase={selectedDetail.activePurchase}
