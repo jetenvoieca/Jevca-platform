@@ -740,7 +740,7 @@ export default function PurchasePanel({
                     onClick={() => downloadInvoice(p.id)}
                     className="text-neutral-500 hover:underline"
                   >
-                    Invoice
+                    {p.status === "COMPLETED" ? "Receipt" : "Invoice"}
                   </button>
                   {p.channel === "GALLERY" && p.status !== "COMPLETED" && (
                     <button
