@@ -25,12 +25,18 @@ export default function SaleDetailCard({
   artworkSize,
   artworkGroup,
   artworkMedium,
+  onDelete,
 }: {
   purchase: PurchaseDetail;
   artworkType: string | null;
   artworkSize: string | null;
   artworkGroup: string | null;
   artworkMedium: string | null;
+  // Only ever passed for a gallery sale that hasn't been marked paid —
+  // the parent decides eligibility (it already knows purchase.channel
+  // and purchase.status), this component just renders the button when
+  // asked to (2026-08-13 — see decisions log).
+  onDelete?: () => void;
 }) {
   // The next instalment still owed, if this sale was abandoned partway
   // through an instalment plan — irrelevant (and absent) for a fully
@@ -45,13 +51,24 @@ export default function SaleDetailCard({
           {purchase.closedAt ? ` on ${new Date(purchase.closedAt).toLocaleDateString()}` : ""} — a
           past transaction, shown for reference only.
         </p>
-        <button
-          type="button"
-          onClick={() => downloadInvoice(purchase.id)}
-          className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-        >
-          Download invoice
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => downloadInvoice(purchase.id)}
+            className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+          >
+            Download invoice
+          </button>
+          {onDelete && (
+            <button
+              type="button"
+              onClick={onDelete}
+              className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
 
       <dl className="grid grid-cols-2 gap-3">
