@@ -41,6 +41,7 @@ type SiteRow = {
   ownerVatNumber: string | null;
   ownerVatRate: string;
   ownerInvoiceFooterText: string | null;
+  ownerInvoiceLanguage: string;
   ownerNextInvoiceNumber: number;
   ownerHopperToken: string;
   ownerStripeMode: "TEST" | "LIVE";
@@ -202,6 +203,7 @@ export default function SitesDirectoryView({
       | "vatNumber"
       | "vatRate"
       | "invoiceFooterText"
+      | "invoiceLanguage"
       | "nextInvoiceNumber",
     value: string
   ) => {
@@ -226,6 +228,10 @@ export default function SitesDirectoryView({
     fd.set(
       "invoiceFooterText",
       field === "invoiceFooterText" ? value : selected.ownerInvoiceFooterText || ""
+    );
+    fd.set(
+      "invoiceLanguage",
+      field === "invoiceLanguage" ? value : selected.ownerInvoiceLanguage || "EN"
     );
     // Deliberately NOT always sent — only when this field is the one
     // actually being edited, so every other unrelated save (email, notes,
@@ -544,6 +550,22 @@ export default function SitesDirectoryView({
                     </div>
                   </div>
 
+                  <div className="mb-2">
+                    <label className="mb-1 block text-xs text-neutral-500">
+                      Invoice language
+                    </label>
+                    <select
+                      key={`owner-invoice-language-${selected.ownerId}`}
+                      defaultValue={selected.ownerInvoiceLanguage || "EN"}
+                      onChange={(e) => saveOwner("invoiceLanguage", e.target.value)}
+                      disabled={isPending}
+                      className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                    >
+                      <option value="EN">English</option>
+                      <option value="FR">French</option>
+                    </select>
+                  </div>
+
                   <label className="mb-1 block text-xs text-neutral-500">
                     Invoice footer text
                   </label>
@@ -577,6 +599,7 @@ export default function SitesDirectoryView({
                     savedField === "vatNumber" ||
                     savedField === "vatRate" ||
                     savedField === "invoiceFooterText" ||
+                    savedField === "invoiceLanguage" ||
                     savedField === "nextInvoiceNumber") && (
                     <p className="text-xs text-green-600">Saved</p>
                   )}
