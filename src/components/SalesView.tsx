@@ -3,7 +3,7 @@
 import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
-import { deleteGallerySale } from "@/lib/actions/payments";
+import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payments";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
@@ -88,6 +88,34 @@ export default function SalesView({
         setPendingConfirm(null);
         startTransition(async () => {
           const res = await deleteGallerySale(purchaseId, siteId);
+          if (!res.ok) {
+            alert(res.error);
+            return;
+          }
+          setSelectedArtworkId(null);
+          setSelectedPurchaseId(null);
+          setSelectedDetail(null);
+          router.refresh();
+        });
+      },
+    });
+  };
+
+  // Separate, deliberately harder-to-reach path for a genuinely
+  // completed, paid sale (2026-08-13, at the person's explicit request
+  // for cleaning up test data) — see the matching handler in
+  // PurchasePanel for the full reasoning.
+  const handleForceDeleteSale = (purchaseId: string) => {
+    setPendingConfirm({
+      title: "Force delete this completed sale?",
+      message:
+        "This sale is marked as paid — deleting it removes it as a financial record entirely, permanently, including its invoice/receipt number. Only do this for test or clearly erroneous data, never for a real transaction.",
+      confirmLabel: "Force delete",
+      danger: true,
+      onConfirm: () => {
+        setPendingConfirm(null);
+        startTransition(async () => {
+          const res = await forceDeleteCompletedSale(purchaseId, siteId);
           if (!res.ok) {
             alert(res.error);
             return;
@@ -271,8 +299,13 @@ export default function SalesView({
                     artworkGroup={selectedDetail.catalogueGroup}
                     artworkMedium={selectedDetail.medium}
                     onDelete={
-                      selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "COMPLETED"
+                      selectedPurchase.status !== "COMPLETED"
                         ? () => handleDeleteSale(selectedPurchase.id, selectedPurchase.invoiceNumber)
+                        : undefined
+                    }
+                    onForceDelete={
+                      selectedPurchase.status === "COMPLETED"
+                        ? () => handleForceDeleteSale(selectedPurchase.id)
                         : undefined
                     }
                   />
