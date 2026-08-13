@@ -330,6 +330,7 @@ export async function createPaymentLink(
     const purchase = await db.purchase.findUnique({
       where: { id: purchaseId },
       include: { artwork: true },
+      relationLoadStrategy: "query",
     });
     if (!purchase) return { ok: false, error: "Purchase not found." };
     if (!purchase.buyerEmail) {
@@ -443,6 +444,7 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
     include: { artwork: true, payments: true },
+    relationLoadStrategy: "query",
   });
   if (!purchase) return;
 
