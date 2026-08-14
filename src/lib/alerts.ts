@@ -20,7 +20,7 @@ export type AlertItem = {
 };
 
 export async function getOpenAlerts(): Promise<AlertItem[]> {
-  const [stored, manualCandidates] = await Promise.all([
+  const [stored, manualCandidates, noPaymentMethodArtists] = await Promise.all([
     db.alertEvent.findMany({
       where: { resolvedAt: null },
       include: { artist: { select: { id: true, name: true, sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 } } } },
@@ -36,6 +36,20 @@ export async function getOpenAlerts(): Promise<AlertItem[]> {
         name: true,
         sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
         subscriptionPayments: { orderBy: { paidAt: "desc" }, take: 1 },
+      },
+    }),
+    // No payment method chosen at all yet — an ongoing gap, not a
+    // point-in-time event, so computed live like the overdue check below
+    // rather than stored (2026-08-13).
+    db.artist.findMany({
+      where: {
+        OR: [{ paymentMethod: null }, { paymentMethod: "" }],
+        sites: { some: { status: { not: "ARCHIVED" } } },
+      },
+      select: {
+        id: true,
+        name: true,
+        sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
       },
     }),
   ]);
@@ -73,7 +87,19 @@ export async function getOpenAlerts(): Promise<AlertItem[]> {
     }
   }
 
-  return [...storedItems, ...overdueItems].sort((a, b) => {
+  const noPaymentMethodItems: AlertItem[] = noPaymentMethodArtists.map((artist) => ({
+    id: `no-payment-method-${artist.id}`,
+    type: "SUBSCRIPTION_METHOD_MISSING",
+    severity: "WARNING",
+    message: `${artist.name}: no subscription payment method set.`,
+    artistId: artist.id,
+    artistName: artist.name,
+    siteId: artist.sites[0]?.id || null,
+    createdAt: new Date(0).toISOString(), // No natural date — sorts last within its severity.
+    dismissable: false,
+  }));
+
+  return [...storedItems, ...overdueItems, ...noPaymentMethodItems].sort((a, b) => {
     if (a.severity !== b.severity) return a.severity === "CRITICAL" ? -1 : 1;
     return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });

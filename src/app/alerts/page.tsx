@@ -9,6 +9,7 @@ const TYPE_LABELS: Record<string, string> = {
   SUBSCRIPTION_PAYMENT_FAILED: "Payment failed",
   SUBSCRIPTION_CANCELLED: "Subscription cancelled",
   SUBSCRIPTION_PAYMENT_OVERDUE: "Payment overdue",
+  SUBSCRIPTION_METHOD_MISSING: "No payment method",
 };
 
 export default async function AlertsPage() {
