@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
 import { createArtwork, getArtworkDetailForClient, listArtworks } from "@/lib/actions/artworks";
 import ArtworkImportPanel from "@/components/ArtworkImportPanel";
 import ArtworkDetailPanel, {
@@ -26,15 +25,15 @@ export default function ArtworksCatalogueView({
   siteId,
   artistId,
   artworks: initialArtworks,
-  total,
-  soldCount,
+  total: initialTotal,
+  soldCount: initialSoldCount,
   pageSize,
-  q,
-  availability,
-  location,
-  type,
-  group,
-  sort,
+  q: initialQ,
+  availability: initialAvailability,
+  location: initialLocation,
+  type: initialType,
+  group: initialGroup,
+  sort: initialSort,
   initialSelected,
   settings,
   siteDefaultCurrency = "GBP",
@@ -59,8 +58,84 @@ export default function ArtworksCatalogueView({
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
   const [showImport, setShowImport] = useState(false);
   const [artworks, setArtworks] = useState<ArtworkRow[]>(initialArtworks);
+  const [total, setTotal] = useState(initialTotal);
+  const [soldCount, setSoldCount] = useState(initialSoldCount);
   const [loadingMore, setLoadingMore] = useState(false);
   const hasMore = artworks.length < total;
+
+  // Filters (2026-08-15) — used to be a plain <form method="get"> needing
+  // an explicit Apply click, causing a full page reload. Now client
+  // state, fetched the same way "load more" already works below —
+  // applies the moment you click a chip or change a dropdown, no
+  // separate step, and the URL still updates (via replaceState, not a
+  // navigation) so filters stay bookmarkable/shareable.
+  const [q, setQ] = useState(initialQ);
+  const [availability, setAvailability] = useState(initialAvailability);
+  const [location, setLocation] = useState(initialLocation);
+  const [type, setType] = useState(initialType);
+  const [group, setGroup] = useState(initialGroup);
+  const [sort, setSort] = useState(initialSort);
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const updateUrlFilters = (next: {
+    q: string;
+    availability: string;
+    location: string;
+    type: string;
+    group: string;
+    sort: string;
+  }) => {
+    const params = new URLSearchParams(window.location.search);
+    const setOrDelete = (key: string, value: string) => {
+      if (value) params.set(key, value);
+      else params.delete(key);
+    };
+    setOrDelete("q", next.q);
+    setOrDelete("availability", next.availability);
+    setOrDelete("location", next.location);
+    setOrDelete("type", next.type);
+    setOrDelete("group", next.group);
+    setOrDelete("sort", next.sort);
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  };
+
+  const applyFilters = useCallback(
+    async (overrides: Partial<{
+      q: string;
+      availability: string;
+      location: string;
+      type: string;
+      group: string;
+      sort: string;
+    }>) => {
+      const next = { q, availability, location, type, group, sort, ...overrides };
+      const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
+        q: next.q || undefined,
+        availability: next.availability || undefined,
+        location: next.location || undefined,
+        type: next.type || undefined,
+        group: next.group || undefined,
+        sort: next.sort || undefined,
+        limit: pageSize,
+      });
+      setArtworks(
+        rows.map((a) => ({
+          id: a.id,
+          presentationTitle: a.presentationTitle,
+          presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
+          catalogueNumber: a.catalogueNumber,
+          availability: a.availability,
+          type: a.type,
+          imageUrl: a.images[0]?.url ?? null,
+        }))
+      );
+      setTotal(newTotal);
+      setSoldCount(newSoldCount);
+      updateUrlFilters(next);
+    },
+    [artistId, q, availability, location, type, group, sort, pageSize]
+  );
 
   const handleLoadMore = useCallback(async () => {
     setLoadingMore(true);
@@ -200,18 +275,6 @@ export default function ArtworksCatalogueView({
     window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
   };
 
-  const chipHref = (nextAvailability: string) => {
-    const params = new URLSearchParams();
-    if (q) params.set("q", q);
-    if (sort) params.set("sort", sort);
-    if (location) params.set("location", location);
-    if (type) params.set("type", type);
-    if (group) params.set("group", group);
-    if (nextAvailability) params.set("availability", nextAvailability);
-    const qs = params.toString();
-    return `/sites/${siteId}/artworks${qs ? `?${qs}` : ""}`;
-  };
-
   const addNewTile = (
     <form action={createArtwork.bind(null, artistId, siteId)}>
       <button
@@ -294,9 +357,12 @@ export default function ArtworksCatalogueView({
               the view controls above. */}
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <div className="flex gap-2">
-              <Link
-                href={chipHref("")}
-                prefetch={false}
+              <button
+                type="button"
+                onClick={() => {
+                  setAvailability("");
+                  applyFilters({ availability: "" });
+                }}
                 className={`rounded-full px-3 py-1.5 text-sm ${
                   !availability
                     ? "bg-neutral-900 text-white"
@@ -304,10 +370,13 @@ export default function ArtworksCatalogueView({
                 }`}
               >
                 All
-              </Link>
-              <Link
-                href={chipHref("AVAILABLE")}
-                prefetch={false}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAvailability("AVAILABLE");
+                  applyFilters({ availability: "AVAILABLE" });
+                }}
                 className={`rounded-full px-3 py-1.5 text-sm ${
                   availability === "AVAILABLE"
                     ? "bg-neutral-900 text-white"
@@ -315,10 +384,13 @@ export default function ArtworksCatalogueView({
                 }`}
               >
                 Available
-              </Link>
-              <Link
-                href={chipHref("SOLD")}
-                prefetch={false}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAvailability("SOLD");
+                  applyFilters({ availability: "SOLD" });
+                }}
                 className={`rounded-full px-3 py-1.5 text-sm ${
                   availability === "SOLD"
                     ? "bg-neutral-900 text-white"
@@ -326,21 +398,40 @@ export default function ArtworksCatalogueView({
                 }`}
               >
                 Sold
-              </Link>
+              </button>
             </div>
 
-            <form method="get" className="flex flex-wrap items-center gap-2">
+            <form
+              onSubmit={(e) => {
+                // Enter in the search box jumps the queue past the debounce
+                // below, rather than waiting it out.
+                e.preventDefault();
+                if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                applyFilters({ q });
+              }}
+              className="flex flex-wrap items-center gap-2"
+            >
               <input
                 type="text"
                 name="q"
-                defaultValue={q}
+                value={q}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setQ(v);
+                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+                  searchDebounceRef.current = setTimeout(() => applyFilters({ q: v }), 350);
+                }}
                 placeholder="Search title, catalogue #, medium"
                 className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
               />
-              <input type="hidden" name="availability" value={availability} />
               <select
                 name="location"
-                defaultValue={location}
+                value={location}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setLocation(v);
+                  applyFilters({ location: v });
+                }}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
                 <option value="">All locations</option>
@@ -352,7 +443,12 @@ export default function ArtworksCatalogueView({
               </select>
               <select
                 name="type"
-                defaultValue={type}
+                value={type}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setType(v);
+                  applyFilters({ type: v });
+                }}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
                 <option value="">All types</option>
@@ -364,7 +460,12 @@ export default function ArtworksCatalogueView({
               </select>
               <select
                 name="group"
-                defaultValue={group}
+                value={group}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setGroup(v);
+                  applyFilters({ group: v });
+                }}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
                 <option value="">All groups</option>
@@ -376,19 +477,18 @@ export default function ArtworksCatalogueView({
               </select>
               <select
                 name="sort"
-                defaultValue={sort}
+                value={sort}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setSort(v);
+                  applyFilters({ sort: v });
+                }}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
                 <option value="">Sort: Date added</option>
                 <option value="title">Sort: Title</option>
                 <option value="price">Sort: Price</option>
               </select>
-              <button
-                type="submit"
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-              >
-                Apply
-              </button>
             </form>
           </div>
 
