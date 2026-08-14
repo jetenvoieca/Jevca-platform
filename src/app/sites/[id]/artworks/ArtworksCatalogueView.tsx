@@ -160,11 +160,30 @@ export default function ArtworksCatalogueView({
   // rather than relying on router.refresh(), which re-renders the server
   // tree but can't reach this already-mounted client state (2026-08-11;
   // see the matching note on ArtworkDetailPanel's onDataChanged prop).
+  // Also patches the matching grid tile (2026-08-15 fix) — this used to
+  // only update the open detail panel, so a saved field like Type never
+  // showed up in the grid until a full page reload.
   const refreshSelected = () => {
     if (!selected) return;
     (async () => {
       const item = await getArtworkDetailForClient(selected.id);
-      if (item && item.artistId === artistId) setSelected(item);
+      if (item && item.artistId === artistId) {
+        setSelected(item);
+        setArtworks((prev) =>
+          prev.map((a) =>
+            a.id === item.id
+              ? {
+                  ...a,
+                  presentationTitle: item.presentationTitle,
+                  presentationPrice: item.presentationPrice,
+                  availability: item.availability,
+                  type: item.type,
+                  imageUrl: item.images[0]?.url ?? a.imageUrl,
+                }
+              : a
+          )
+        );
+      }
     })();
   };
 

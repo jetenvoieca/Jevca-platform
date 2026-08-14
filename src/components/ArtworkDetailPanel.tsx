@@ -112,7 +112,54 @@ export default function ArtworkDetailPanel({
   // the form immediately, without needing to save and reopen.
   const [typeValue, setTypeValue] = useState(artwork.type || "");
   const isUniqueType = ["original", "unique"].includes(typeValue.trim().toLowerCase());
+  // Substring rather than exact match (2026-08-15) — Type is free text
+  // from the artist's own preset list and can be phrased several ways
+  // ("Edition", "Giclée Edition", "Limited Edition"; "Aluminium",
+  // "Print on Aluminium"), not necessarily the bare word alone.
+  const isEditionType = typeValue.trim().toLowerCase().includes("edition");
+  const isAluminiumType = typeValue.trim().toLowerCase().includes("aluminium");
   const router = useRouter();
+
+  // ---- Autosave (2026-08-15) — Presentation and Catalogue used to be
+  // the only two forms left in this whole app still requiring a manual
+  // Save click; everywhere else (Sites, Customers, Galleries…) already
+  // autosaves on blur. Bringing these in line also directly answers
+  // "can it autosave on leaving the editor": since every field saves the
+  // moment it's left, switching to a different artwork never leaves
+  // anything unsaved behind — there's no separate "flush on navigate"
+  // step needed.
+  //
+  // Reads straight from the DOM via FormData rather than controlling
+  // every field in React state — much less code, and safe here because
+  // nothing in either form needs to react to another field's value
+  // (unlike Type, which stays its own controlled state for the
+  // conditional fields below).
+  const autosavePresentation = (form: HTMLFormElement) => {
+    const formData = new FormData(form);
+    // Title is required — never autosave it away to blank just because
+    // someone selected-all intending to retype and clicked elsewhere
+    // first (same guard already used for Site name, etc.).
+    if (!(formData.get("presentationTitle") as string)?.trim()) return;
+    startTransition(async () => {
+      await updatePresentation(artwork.id, siteId, formData);
+      setSavedTab("presentation");
+      if (onDataChanged) onDataChanged();
+      else router.refresh();
+      setTimeout(() => setSavedTab(null), 1500);
+    });
+  };
+
+  const autosaveCatalogue = (form: HTMLFormElement) => {
+    const formData = new FormData(form);
+    if (!(formData.get("catalogueName") as string)?.trim()) return;
+    startTransition(async () => {
+      await updateCatalogue(artwork.id, siteId, formData);
+      setSavedTab("catalogue");
+      if (onDataChanged) onDataChanged();
+      else router.refresh();
+      setTimeout(() => setSavedTab(null), 1500);
+    });
+  };
 
   const handleDelete = () => {
     if (!confirm(`Delete "${artwork.presentationTitle}"? This can't be undone.`)) return;
@@ -284,13 +331,7 @@ export default function ArtworkDetailPanel({
                 What customers see on the public site.
               </p>
               <form
-                action={async (formData) => {
-                  await updatePresentation(artwork.id, siteId, formData);
-                  setSavedTab("presentation");
-                  if (onDataChanged) onDataChanged();
-                  else router.refresh();
-                  setTimeout(() => setSavedTab(null), 2000);
-                }}
+                onBlur={(e) => autosavePresentation(e.currentTarget)}
                 className="space-y-4"
               >
                 <div>
@@ -364,12 +405,6 @@ export default function ArtworkDetailPanel({
                   />
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="submit"
-                    className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-                  >
-                    Save
-                  </button>
                   {savedTab === "presentation" && (
                     <span className="text-sm text-green-600">Saved</span>
                   )}
@@ -383,13 +418,7 @@ export default function ArtworkDetailPanel({
               </p>
 
               <form
-                action={async (formData) => {
-                  await updateCatalogue(artwork.id, siteId, formData);
-                  setSavedTab("catalogue");
-                  if (onDataChanged) onDataChanged();
-                  else router.refresh();
-                  setTimeout(() => setSavedTab(null), 2000);
-                }}
+                onBlur={(e) => autosaveCatalogue(e.currentTarget)}
                 className="space-y-4"
               >
                 <div className="grid grid-cols-2 gap-4">
@@ -423,7 +452,10 @@ export default function ArtworkDetailPanel({
                     <select
                       name="type"
                       value={typeValue}
-                      onChange={(e) => setTypeValue(e.target.value)}
+                      onChange={(e) => {
+                        setTypeValue(e.target.value);
+                        autosaveCatalogue(e.currentTarget.form!);
+                      }}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
                       <option value="">Choose from list…</option>
@@ -441,6 +473,7 @@ export default function ArtworkDetailPanel({
                     <select
                       name="catalogueGroup"
                       defaultValue={artwork.catalogueGroup || ""}
+                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
                       <option value="">Choose from list…</option>
@@ -458,6 +491,7 @@ export default function ArtworkDetailPanel({
                     <select
                       name="medium"
                       defaultValue={artwork.medium || ""}
+                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
                       <option value="">Choose from list…</option>
@@ -475,6 +509,7 @@ export default function ArtworkDetailPanel({
                     <select
                       name="size"
                       defaultValue={artwork.size || ""}
+                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
                       <option value="">Choose from list…</option>
@@ -492,6 +527,7 @@ export default function ArtworkDetailPanel({
                     <select
                       name="location"
                       defaultValue={artwork.location || ""}
+                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
                       <option value="">Choose from list…</option>
@@ -502,7 +538,13 @@ export default function ArtworkDetailPanel({
                       ))}
                     </select>
                   </div>
-                  {!isUniqueType && (
+                  {/* Edition/Available (qty) only apply to editioned work
+                      — Originals, Uniques, and materials like Aluminium
+                      that aren't editioned are one-offs (2026-08-15
+                      decision). Positive match on "is this an edition"
+                      rather than the old "isn't unique", since a type
+                      like Aluminium is neither. */}
+                  {isEditionType && (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
                         Edition
@@ -515,7 +557,7 @@ export default function ArtworkDetailPanel({
                       />
                     </div>
                   )}
-                  {!isUniqueType && (
+                  {isEditionType && (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
                         Available (qty)
@@ -528,7 +570,7 @@ export default function ArtworkDetailPanel({
                       />
                     </div>
                   )}
-                  {isUniqueType && (
+                  {!isEditionType && (
                     <>
                       {/* Preserve any Edition/Available values already on
                           record rather than wiping them out just because
@@ -541,7 +583,7 @@ export default function ArtworkDetailPanel({
                       />
                     </>
                   )}
-                  {isUniqueType ? (
+                  {!isEditionType ? (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
                         Availability
@@ -549,6 +591,7 @@ export default function ArtworkDetailPanel({
                       <select
                         name="availability"
                         defaultValue={artwork.availability}
+                        onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
                         className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                       >
                         <option value="AVAILABLE">Available</option>
@@ -565,47 +608,62 @@ export default function ArtworkDetailPanel({
                     <input type="hidden" name="availability" value={artwork.availability} />
                   )}
                   {isUniqueType ? (
-                    <>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-neutral-700">
-                          Price (£)
-                        </label>
-                        <input
-                          type="text"
-                          name="priceUnframed"
-                          defaultValue={artwork.priceUnframed || ""}
-                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      {/* Preserve an existing framed price rather than
-                          wiping it out just because Type changed. */}
-                      <input type="hidden" name="priceFramed" value={artwork.priceFramed || ""} />
-                    </>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Price (£)
+                      </label>
+                      <input
+                        type="text"
+                        name="priceUnframed"
+                        defaultValue={artwork.priceUnframed || ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  ) : isAluminiumType ? (
+                    // Aluminium prints aren't offered framed at all
+                    // (2026-08-15) — same single-price treatment as
+                    // Originals/Uniques, for a different reason.
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Price (£)
+                      </label>
+                      <input
+                        type="text"
+                        name="priceUnframed"
+                        defaultValue={artwork.priceUnframed || ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
                   ) : (
-                    <>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-neutral-700">
-                          Price unframed (£)
-                        </label>
-                        <input
-                          type="text"
-                          name="priceUnframed"
-                          defaultValue={artwork.priceUnframed || ""}
-                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-neutral-700">
-                          Price framed (£)
-                        </label>
-                        <input
-                          type="text"
-                          name="priceFramed"
-                          defaultValue={artwork.priceFramed || ""}
-                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                        />
-                      </div>
-                    </>
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Price unframed (£)
+                      </label>
+                      <input
+                        type="text"
+                        name="priceUnframed"
+                        defaultValue={artwork.priceUnframed || ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  )}
+                  {isUniqueType || isAluminiumType ? (
+                    // Preserve an existing framed price rather than wiping
+                    // it out just because Type changed — reappears if
+                    // switched to a type that does offer framing.
+                    <input type="hidden" name="priceFramed" value={artwork.priceFramed || ""} />
+                  ) : (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Price framed (£)
+                      </label>
+                      <input
+                        type="text"
+                        name="priceFramed"
+                        defaultValue={artwork.priceFramed || ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
                   )}
                 </div>
                 <div>
@@ -620,12 +678,6 @@ export default function ArtworkDetailPanel({
                   />
                 </div>
                 <div className="flex items-center gap-3">
-                  <button
-                    type="submit"
-                    className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-                  >
-                    Save
-                  </button>
                   {savedTab === "catalogue" && (
                     <span className="text-sm text-green-600">Saved</span>
                   )}
