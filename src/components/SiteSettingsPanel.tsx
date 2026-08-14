@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import StatusSelect from "@/components/StatusSelect";
 import ArchiveButton from "@/components/ArchiveButton";
@@ -309,12 +308,6 @@ export default function SiteSettingsPanel({
             <StatusSelect siteId={site.id} status={site.status} />
           )}
           <ArchiveButton siteId={site.id} isArchived={site.status === "ARCHIVED"} />
-          <Link
-            href={`/sites/${site.id}/open`}
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-          >
-            Open Site →
-          </Link>
         </div>
       </div>
 

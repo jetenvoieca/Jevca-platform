@@ -10,6 +10,7 @@ const TYPE_LABELS: Record<string, string> = {
   SUBSCRIPTION_CANCELLED: "Subscription cancelled",
   SUBSCRIPTION_PAYMENT_OVERDUE: "Payment overdue",
   SUBSCRIPTION_METHOD_MISSING: "No payment method",
+  SALE_INVOICE_UNPAID: "Invoice unpaid",
 };
 
 export default async function AlertsPage() {
@@ -63,12 +64,12 @@ export default async function AlertsPage() {
                       </p>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
-                      {a.siteId && (
+                      {a.linkHref && (
                         <Link
-                          href={`/sites/${a.siteId}`}
+                          href={a.linkHref}
                           className="rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-xs hover:bg-neutral-50"
                         >
-                          View site
+                          {a.linkLabel}
                         </Link>
                       )}
                       {a.dismissable && (
