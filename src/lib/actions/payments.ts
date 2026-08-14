@@ -220,7 +220,101 @@ export async function startGallerySale(
   return { ok: true, purchaseId: purchase.id };
 }
 
-// Permanent delete, not just marking abandoned — for a genuinely wrong
+// ---------- Past sales — backfilling history, already paid ----------
+
+// A sale that already happened, sometimes years ago, being entered into
+// the system for the first time (2026-08-14). Deliberately a single
+// step, not "start then mark paid": there's no live payment to collect
+// and no invoice to chase — it's already done. Completes the Purchase
+// and creates its one Payment (status PAID) immediately, backdated to
+// the actual sale date rather than today, so it lands in the right
+// month on the Accounts/Consolidated Sales pages and never shows up as
+// overdue on the Alerts dashboard.
+export async function recordPastSale(
+  artworkId: string,
+  siteId: string,
+  formData: FormData
+): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
+  const existingActive = await db.purchase.findFirst({
+    where: { artworkId, status: "ACTIVE" },
+  });
+  if (existingActive) {
+    return {
+      ok: false,
+      error: "There's an active sale in progress for this artwork — resolve that first.",
+    };
+  }
+
+  const buyerName = (formData.get("buyerName") as string)?.trim() || null;
+  const buyerEmail = (formData.get("buyerEmail") as string)?.trim() || null;
+  const buyerAddress = (formData.get("buyerAddress") as string)?.trim() || null;
+  const totalAmount = (formData.get("totalAmount") as string)?.trim();
+  const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
+  const commissionPercent = (formData.get("commissionPercent") as string)?.trim() || null;
+  const saleDateRaw = (formData.get("saleDate") as string)?.trim();
+  // Defaulted rather than left blank, so these are easy to spot and
+  // filter separately from real-time gallery sales later if that's ever
+  // useful — the person can still overwrite it with something more
+  // specific per sale.
+  const source = (formData.get("source") as string)?.trim() || "Historical";
+
+  if (!buyerName) return { ok: false, error: "The buyer/gallery name is required." };
+  if (!totalAmount) return { ok: false, error: "The sale price is required." };
+  if (!saleDateRaw) return { ok: false, error: "The date it actually sold is required." };
+  const saleDate = new Date(saleDateRaw);
+  if (Number.isNaN(saleDate.getTime())) return { ok: false, error: "That date isn't valid." };
+
+  const artwork = await db.artwork.findUniqueOrThrow({
+    where: { id: artworkId },
+    select: { artistId: true },
+  });
+  const customer = await findOrCreateCustomer(artwork.artistId, {
+    name: buyerName,
+    email: buyerEmail,
+    address: buyerAddress,
+  });
+
+  const total = parseFloat(totalAmount);
+  const commissionNum = commissionPercent ? parseFloat(commissionPercent) : 0;
+  const net = total - total * (commissionNum / 100);
+
+  const purchase = await db.purchase.create({
+    data: {
+      artworkId,
+      channel: "GALLERY",
+      status: "COMPLETED",
+      customerId: customer.id,
+      buyerName,
+      buyerEmail,
+      buyerAddress,
+      type: "FULL",
+      source,
+      totalAmount,
+      currency,
+      commissionPercent,
+      createdAt: saleDate,
+      closedAt: saleDate,
+      payments: {
+        create: {
+          sequence: 1,
+          amount: net,
+          currency,
+          status: "PAID",
+          paidDate: saleDate,
+        },
+      },
+    },
+  });
+
+  // Matches what actually recording a live sale means for the artwork —
+  // Availability doesn't update itself automatically anywhere else in
+  // this app either, so a past sale shouldn't be an exception.
+  await db.artwork.update({ where: { id: artworkId }, data: { availability: "SOLD" } });
+
+  revalidatePath(`/sites/${siteId}/artworks`);
+  revalidatePath(`/accounts/sales`);
+  return { ok: true, purchaseId: purchase.id };
+}
 // sale (mistyped commission, wrong artwork, wrong buyer entirely, an
 // accidental Stripe sale started by mistake), not just one that didn't
 // go through. Deliberately restricted to sales that were never actually

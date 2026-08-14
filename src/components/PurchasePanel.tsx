@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   startPurchase,
   startGallerySale,
+  recordPastSale,
   deleteGallerySale,
   forceDeleteCompletedSale,
   markGallerySalePaid,
@@ -63,7 +64,7 @@ export default function PurchasePanel({
   const [cardSecret, setCardSecret] = useState<string | null>(null);
   const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
   const [purchaseType, setPurchaseType] = useState<"FULL" | "INSTALMENTS">("FULL");
-  const [channel, setChannel] = useState<"STRIPE" | "GALLERY">("STRIPE");
+  const [channel, setChannel] = useState<"STRIPE" | "GALLERY" | "PAST">("STRIPE");
   const [commissionPercent, setCommissionPercent] = useState("");
   const [gallerySalePrice, setGallerySalePrice] = useState("");
   // Controlled rather than plain defaultValue inputs, so picking an
@@ -75,6 +76,15 @@ export default function PurchasePanel({
   const [galleryBuyerName, setGalleryBuyerName] = useState("");
   const [galleryBuyerEmail, setGalleryBuyerEmail] = useState("");
   const [galleryBuyerAddress, setGalleryBuyerAddress] = useState("");
+  // A third, separate set again (2026-08-14) — Past Sale is its own tab
+  // with its own price/commission/date, not a variant of the Gallery form
+  // even though the fields look similar.
+  const [pastBuyerName, setPastBuyerName] = useState("");
+  const [pastBuyerEmail, setPastBuyerEmail] = useState("");
+  const [pastBuyerAddress, setPastBuyerAddress] = useState("");
+  const [pastSalePrice, setPastSalePrice] = useState("");
+  const [pastCommissionPercent, setPastCommissionPercent] = useState("");
+  const [pastSaleCurrency, setPastSaleCurrency] = useState(terms?.currency ?? "GBP");
   // Bug fixed 2026-08-13: this form had no currency field at all, so
   // every gallery sale was silently recorded in GBP regardless of what
   // currency Sale Terms actually specified — confirmed from a real sale
@@ -125,6 +135,26 @@ export default function PurchasePanel({
         setError(res.error);
         return;
       }
+      router.refresh();
+      onChanged?.();
+    });
+  };
+
+  const handleRecordPastSale = (formData: FormData) => {
+    setError(null);
+    startTransition(async () => {
+      const res = await recordPastSale(artworkId, siteId, formData);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      // Already complete — no follow-up step needed, unlike a live
+      // Gallery sale which still needs marking paid separately.
+      setPastBuyerName("");
+      setPastBuyerEmail("");
+      setPastBuyerAddress("");
+      setPastSalePrice("");
+      setPastCommissionPercent("");
       router.refresh();
       onChanged?.();
     });
@@ -287,6 +317,10 @@ export default function PurchasePanel({
   const commissionNum = parseFloat(commissionPercent) || 0;
   const galleryNet = gallerySalePriceNum - gallerySalePriceNum * (commissionNum / 100);
 
+  const pastSalePriceNum = parseFloat(pastSalePrice) || 0;
+  const pastCommissionNum = parseFloat(pastCommissionPercent) || 0;
+  const pastNet = pastSalePriceNum - pastSalePriceNum * (pastCommissionNum / 100);
+
   return (
     <div className="space-y-6">
       {!terms && (
@@ -325,6 +359,17 @@ export default function PurchasePanel({
               }`}
             >
               Sold via Gallery
+            </button>
+            <button
+              type="button"
+              onClick={() => setChannel("PAST")}
+              className={`px-3 py-1.5 text-sm font-medium ${
+                channel === "PAST"
+                  ? "border-b-2 border-neutral-900 text-neutral-900"
+                  : "text-neutral-400 hover:text-neutral-600"
+              }`}
+            >
+              Record Past Sale
             </button>
           </div>
 
@@ -405,7 +450,7 @@ export default function PurchasePanel({
                 Start sale
               </button>
             </form>
-          ) : (
+          ) : channel === "GALLERY" ? (
             <form action={handleStartGallerySale} className="space-y-3">
               <p className="text-xs text-neutral-400">
                 No card is taken here — this raises an unpaid invoice for the net amount, which
@@ -542,6 +587,150 @@ export default function PurchasePanel({
                 className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
               >
                 Start sale
+              </button>
+            </form>
+          ) : (
+            <form action={handleRecordPastSale} className="space-y-3">
+              <p className="text-xs text-neutral-400">
+                For sales that already happened — no card is taken and nothing is left owing.
+                This records it as fully paid straight away, backdated to when it actually sold,
+                and marks the artwork Sold.
+              </p>
+              <CustomerPicker
+                artistId={artistId}
+                onSelect={(c: CustomerSummary) => {
+                  setPastBuyerName(c.name);
+                  setPastBuyerEmail(c.email || "");
+                  setPastBuyerAddress(c.address || "");
+                }}
+              />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Buyer / gallery name
+                  </label>
+                  <input
+                    type="text"
+                    name="buyerName"
+                    required
+                    value={pastBuyerName}
+                    onChange={(e) => setPastBuyerName(e.target.value)}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Email (optional)
+                  </label>
+                  <input
+                    type="email"
+                    name="buyerEmail"
+                    value={pastBuyerEmail}
+                    onChange={(e) => setPastBuyerEmail(e.target.value)}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Address <span className="font-normal text-neutral-400">(optional)</span>
+                </label>
+                <textarea
+                  name="buyerAddress"
+                  rows={2}
+                  value={pastBuyerAddress}
+                  onChange={(e) => setPastBuyerAddress(e.target.value)}
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <div className="grid grid-cols-5 gap-4">
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Sale price
+                  </label>
+                  <input
+                    type="text"
+                    name="totalAmount"
+                    required
+                    value={pastSalePrice}
+                    onChange={(e) => setPastSalePrice(e.target.value)}
+                    placeholder="e.g. 250.00"
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Currency
+                  </label>
+                  <select
+                    name="currency"
+                    value={pastSaleCurrency}
+                    onChange={(e) => setPastSaleCurrency(e.target.value)}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Commission % <span className="font-normal text-neutral-400">(if any)</span>
+                  </label>
+                  <input
+                    type="text"
+                    name="commissionPercent"
+                    value={pastCommissionPercent}
+                    onChange={(e) => setPastCommissionPercent(e.target.value)}
+                    placeholder="e.g. 45"
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Net received
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={
+                      pastSalePriceNum ? formatMoney(pastNet.toFixed(2), pastSaleCurrency) : "—"
+                    }
+                    className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Date it sold
+                  </label>
+                  <input
+                    type="date"
+                    name="saleDate"
+                    required
+                    max={new Date().toISOString().slice(0, 10)}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Sale source
+                </label>
+                <input
+                  type="text"
+                  name="source"
+                  placeholder="Historical"
+                  className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+              >
+                Record sale
               </button>
             </form>
           )}
