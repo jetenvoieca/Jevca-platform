@@ -152,13 +152,13 @@ export default function GalleriesView({
                     Nothing currently has its Location set to this gallery.
                   </p>
                 ) : (
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="flex flex-wrap gap-3">
                     {selectedDetail.consignedWorks.map((w) => (
                       <button
                         key={w.id}
                         type="button"
                         onClick={() => setSelectedWorkId(w.id)}
-                        className={`rounded-lg border-2 p-1 text-left ${
+                        className={`w-28 shrink-0 rounded-lg border-2 p-1 text-left ${
                           selectedWorkId === w.id
                             ? "border-neutral-900"
                             : "border-transparent hover:border-neutral-200"
@@ -174,7 +174,7 @@ export default function GalleriesView({
                             />
                           ) : null}
                         </div>
-                        <p className="mt-1.5 truncate text-sm font-medium text-neutral-900">
+                        <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
                           {w.presentationTitle}
                         </p>
                         <p className="text-xs text-neutral-400">
@@ -187,7 +187,7 @@ export default function GalleriesView({
               </div>
 
               {selectedWork && (
-                <div className="w-72 shrink-0 rounded-lg border border-neutral-200 p-4">
+                <div className="w-80 shrink-0 rounded-lg border border-neutral-200 p-4">
                   <p className="mb-2 text-sm font-semibold text-neutral-900">
                     {selectedWork.presentationTitle}
                   </p>

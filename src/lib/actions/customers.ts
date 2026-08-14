@@ -42,6 +42,10 @@ export type CustomerDetail = {
     id: string;
     artworkId: string;
     artworkTitle: string;
+    artworkImageUrl: string | null;
+    artworkMedium: string | null;
+    artworkDimensions: string | null;
+    artworkDescription: string | null;
     totalAmount: string;
     currency: string;
     status: "ACTIVE" | "COMPLETED" | "ABANDONED";
@@ -144,7 +148,17 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
     where: { id: customerId },
     include: {
       purchases: {
-        include: { artwork: { select: { presentationTitle: true } } },
+        include: {
+          artwork: {
+            select: {
+              presentationTitle: true,
+              medium: true,
+              dimensions: true,
+              description: true,
+              images: { take: 1, select: { url: true, thumbnailKey: true } },
+            },
+          },
+        },
         orderBy: { createdAt: "desc" },
       },
     },
@@ -190,6 +204,12 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
       id: p.id,
       artworkId: p.artworkId,
       artworkTitle: p.artwork.presentationTitle,
+      artworkImageUrl: p.artwork.images[0]
+        ? publicMediaUrl(p.artwork.images[0].thumbnailKey) || p.artwork.images[0].url
+        : null,
+      artworkMedium: p.artwork.medium,
+      artworkDimensions: p.artwork.dimensions,
+      artworkDescription: p.artwork.description,
       totalAmount: p.totalAmount.toString(),
       currency: p.currency,
       status: p.status,

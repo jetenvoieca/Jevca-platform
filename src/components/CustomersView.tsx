@@ -10,11 +10,6 @@ import {
   type CustomerDetail,
 } from "@/lib/actions/customers";
 
-function formatMoney(amount: string, currency: string) {
-  const n = parseFloat(amount);
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-}
-
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Active",
   COMPLETED: "Completed",
@@ -42,6 +37,7 @@ export default function CustomersView({
   const [savedField, setSavedField] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const router = useRouter();
 
   const filtered = customers.filter((c) => {
@@ -53,6 +49,7 @@ export default function CustomersView({
   const openRow = (customerId: string) => {
     setSelectedId(customerId);
     setSelectedDetail(null);
+    setSelectedWorkId(null);
     setLoading(true);
     getCustomerDetail(customerId).then((detail) => {
       setSelectedDetail(detail);
@@ -96,234 +93,299 @@ export default function CustomersView({
     openRow(result.id);
   };
 
+  const selectedWork = selectedDetail?.purchases.find((p) => p.id === selectedWorkId) || null;
+
   return (
-    <div className="p-6">
-      <div className="mb-1 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-neutral-900">Customers</h1>
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
-        >
-          + Add Customer
-        </button>
-      </div>
-      <p className="mb-4 text-sm text-neutral-500">
-        {customers.length === 0
-          ? "No customers yet — one is created automatically the first time a sale is started."
-          : `${customers.length} customer${customers.length === 1 ? "" : "s"}`}
-      </p>
-
-      {adding && (
-        <form
-          action={handleAddContact}
-          className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4"
-        >
-          <div>
-            <label className={labelCls}>Name</label>
-            <input type="text" name="name" required autoFocus className={inputCls} />
-          </div>
-          <div>
-            <label className={labelCls}>Email (optional)</label>
-            <input type="email" name="email" className={inputCls} />
-          </div>
-          <button
-            type="submit"
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
-          >
-            Add
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setAdding(false);
-              setAddError(null);
-            }}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-white"
-          >
-            Cancel
-          </button>
-          {addError && <p className="w-full text-xs text-red-600">{addError}</p>}
-        </form>
-      )}
-
-      <div className="mb-4">
-        <input
-          type="text"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          placeholder="Search by name or email…"
-          className="w-full max-w-xs rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-        />
-      </div>
-
-      <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
-        <div className="overflow-hidden rounded-lg border border-neutral-200">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
-                <th className="px-3 py-2 font-normal">Name</th>
-                <th className="px-3 py-2 font-normal">Email</th>
-                <th className="px-3 py-2 font-normal">Sales</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={3} className="px-3 py-6 text-center text-sm text-neutral-400">
-                    Nothing here yet.
-                  </td>
-                </tr>
-              )}
-              {filtered.map((c) => (
-                <tr
-                  key={c.id}
-                  onClick={() => openRow(c.id)}
-                  className={`cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 ${
-                    selectedId === c.id ? "bg-neutral-50" : ""
-                  }`}
-                >
-                  <td className="px-3 py-2 font-medium text-neutral-900">{c.name}</td>
-                  <td className="px-3 py-2 text-neutral-500">{c.email || "—"}</td>
-                  <td className="px-3 py-2 text-neutral-500">{c.saleCount}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        <div>
-          {!selectedId ? (
-            <p className="text-sm text-neutral-400">Select a customer to see their details.</p>
-          ) : loading || !selectedDetail ? (
-            <p className="text-sm text-neutral-400">Loading…</p>
-          ) : (
-            <div className="rounded-lg border border-neutral-200 p-5">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(null);
-                    setSelectedDetail(null);
-                  }}
-                  className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                >
-                  Close
-                </button>
-              </div>
-
-              {selectedDetail.alsoCustomerOf.length > 0 && (
-                <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                  Also a customer of: {selectedDetail.alsoCustomerOf.join(", ")}
-                </p>
-              )}
-
-              <div className="mb-4 space-y-3">
-                <div>
-                  <label className={labelCls}>Name</label>
-                  <input
-                    key={`name-${selectedDetail.id}`}
-                    type="text"
-                    defaultValue={selectedDetail.name}
-                    onBlur={(e) => saveField("name", e.target.value.trim())}
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Email</label>
-                  <input
-                    key={`email-${selectedDetail.id}`}
-                    type="email"
-                    defaultValue={selectedDetail.email || ""}
-                    onBlur={(e) => saveField("email", e.target.value.trim())}
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Phone</label>
-                  <input
-                    key={`phone-${selectedDetail.id}`}
-                    type="text"
-                    defaultValue={selectedDetail.phone || ""}
-                    onBlur={(e) => saveField("phone", e.target.value.trim())}
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Address</label>
-                  <textarea
-                    key={`address-${selectedDetail.id}`}
-                    defaultValue={selectedDetail.address || ""}
-                    onBlur={(e) => saveField("address", e.target.value.trim())}
-                    disabled={isPending}
-                    rows={2}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Invoice language</label>
-                  <select
-                    key={`language-${selectedDetail.id}`}
-                    defaultValue={selectedDetail.language || ""}
-                    onChange={(e) => saveField("language", e.target.value)}
-                    disabled={isPending}
-                    className={inputCls}
-                  >
-                    <option value="">Use artist default</option>
-                    <option value="EN">English</option>
-                    <option value="FR">French</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>Notes</label>
-                  <textarea
-                    key={`notes-${selectedDetail.id}`}
-                    defaultValue={selectedDetail.notes || ""}
-                    onBlur={(e) => saveField("notes", e.target.value.trim())}
-                    disabled={isPending}
-                    rows={2}
-                    className={inputCls}
-                  />
-                </div>
-                {savedField && <p className="text-xs text-green-600">Saved</p>}
-              </div>
-
-              <div className="border-t border-neutral-100 pt-4">
-                <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  Sales ({selectedDetail.purchases.length})
-                </h3>
+    <div className="flex h-full overflow-hidden">
+      {/* ---- Purchased Works (left) ---- */}
+      <div className="flex-1 overflow-y-auto p-6">
+        <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Purchased Works</h1>
+        {!selectedDetail ? (
+          <p className="text-sm text-neutral-400">
+            Select a customer to see the works they&apos;ve bought.
+          </p>
+        ) : (
+          <>
+            <p className="mb-4 text-sm text-neutral-500">{selectedDetail.name}</p>
+            <div className="flex gap-6">
+              <div className="flex-1">
                 {selectedDetail.purchases.length === 0 ? (
-                  <p className="text-sm text-neutral-400">No sales yet.</p>
+                  <p className="text-sm text-neutral-400">No purchases yet.</p>
                 ) : (
-                  <div className="space-y-2">
+                  <div className="flex flex-wrap gap-3">
                     {selectedDetail.purchases.map((p) => (
-                      <div
+                      <button
                         key={p.id}
-                        className="flex items-center justify-between rounded-md border border-neutral-100 px-3 py-2 text-sm"
+                        type="button"
+                        onClick={() => setSelectedWorkId(p.id)}
+                        className={`w-28 shrink-0 rounded-lg border-2 p-1 text-left ${
+                          selectedWorkId === p.id
+                            ? "border-neutral-900"
+                            : "border-transparent hover:border-neutral-200"
+                        }`}
                       >
-                        <div>
-                          <span className="text-neutral-700">{p.artworkTitle}</span>
-                          <span className="ml-2 text-neutral-400">
-                            {formatMoney(p.totalAmount, p.currency)}
-                          </span>
+                        <div className="aspect-square overflow-hidden rounded-md bg-neutral-100">
+                          {p.artworkImageUrl ? (
+                            // eslint-disable-next-line @next/next/no-img-element
+                            <img
+                              src={p.artworkImageUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                            />
+                          ) : null}
                         </div>
-                        <span
-                          className={
-                            p.status === "COMPLETED" ? "text-green-600" : "text-neutral-400"
-                          }
-                        >
-                          {STATUS_LABEL[p.status]}
-                        </span>
-                      </div>
+                        <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
+                          {p.artworkTitle}
+                        </p>
+                        <p className="text-xs text-neutral-400">
+                          {p.currency} {parseFloat(p.totalAmount).toFixed(0)}
+                        </p>
+                      </button>
                     ))}
                   </div>
                 )}
               </div>
+
+              {selectedWork && (
+                <div className="w-80 shrink-0 rounded-lg border border-neutral-200 p-4">
+                  <p className="mb-2 text-sm font-semibold text-neutral-900">
+                    {selectedWork.artworkTitle}
+                  </p>
+                  <dl className="space-y-1.5 text-xs text-neutral-500">
+                    {selectedWork.artworkMedium && (
+                      <div>
+                        <dt className="inline text-neutral-400">Medium: </dt>
+                        <dd className="inline">{selectedWork.artworkMedium}</dd>
+                      </div>
+                    )}
+                    {selectedWork.artworkDimensions && (
+                      <div>
+                        <dt className="inline text-neutral-400">Dimensions: </dt>
+                        <dd className="inline">{selectedWork.artworkDimensions}</dd>
+                      </div>
+                    )}
+                    <div>
+                      <dt className="inline text-neutral-400">Sold for: </dt>
+                      <dd className="inline">
+                        {selectedWork.currency} {parseFloat(selectedWork.totalAmount).toFixed(2)}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="inline text-neutral-400">Status: </dt>
+                      <dd className="inline">{STATUS_LABEL[selectedWork.status]}</dd>
+                    </div>
+                    <div>
+                      <dt className="inline text-neutral-400">Date: </dt>
+                      <dd className="inline">
+                        {new Date(selectedWork.createdAt).toLocaleDateString()}
+                      </dd>
+                    </div>
+                    {selectedWork.artworkDescription && (
+                      <p className="pt-2 text-neutral-600">{selectedWork.artworkDescription}</p>
+                    )}
+                  </dl>
+                </div>
+              )}
             </div>
+          </>
+        )}
+      </div>
+
+      {/* ---- Customer details (middle) ---- */}
+      <div className="w-[480px] shrink-0 overflow-y-auto border-l border-neutral-200 p-6">
+        {!selectedId ? (
+          <p className="text-sm text-neutral-400">Select a customer to see their details.</p>
+        ) : loading || !selectedDetail ? (
+          <p className="text-sm text-neutral-400">Loading…</p>
+        ) : (
+          <div>
+            <div className="mb-4 flex items-center justify-between">
+              <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedId(null);
+                  setSelectedDetail(null);
+                }}
+                className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+              >
+                Close
+              </button>
+            </div>
+
+            {selectedDetail.alsoCustomerOf.length > 0 && (
+              <p className="mb-4 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700">
+                Also a customer of: {selectedDetail.alsoCustomerOf.join(", ")}
+              </p>
+            )}
+
+            <div className="space-y-3">
+              <div>
+                <label className={labelCls}>Name</label>
+                <input
+                  key={`name-${selectedDetail.id}`}
+                  type="text"
+                  defaultValue={selectedDetail.name}
+                  onBlur={(e) => saveField("name", e.target.value.trim())}
+                  disabled={isPending}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Email</label>
+                <input
+                  key={`email-${selectedDetail.id}`}
+                  type="email"
+                  defaultValue={selectedDetail.email || ""}
+                  onBlur={(e) => saveField("email", e.target.value.trim())}
+                  disabled={isPending}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Phone</label>
+                <input
+                  key={`phone-${selectedDetail.id}`}
+                  type="text"
+                  defaultValue={selectedDetail.phone || ""}
+                  onBlur={(e) => saveField("phone", e.target.value.trim())}
+                  disabled={isPending}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Address</label>
+                <textarea
+                  key={`address-${selectedDetail.id}`}
+                  defaultValue={selectedDetail.address || ""}
+                  onBlur={(e) => saveField("address", e.target.value.trim())}
+                  disabled={isPending}
+                  rows={2}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className={labelCls}>Invoice language</label>
+                <select
+                  key={`language-${selectedDetail.id}`}
+                  defaultValue={selectedDetail.language || ""}
+                  onChange={(e) => saveField("language", e.target.value)}
+                  disabled={isPending}
+                  className={inputCls}
+                >
+                  <option value="">Use artist default</option>
+                  <option value="EN">English</option>
+                  <option value="FR">French</option>
+                </select>
+              </div>
+              <div>
+                <label className={labelCls}>Notes</label>
+                <textarea
+                  key={`notes-${selectedDetail.id}`}
+                  defaultValue={selectedDetail.notes || ""}
+                  onBlur={(e) => saveField("notes", e.target.value.trim())}
+                  disabled={isPending}
+                  rows={3}
+                  className={inputCls}
+                />
+              </div>
+              {savedField && <p className="text-xs text-green-600">Saved</p>}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* ---- Customer list (right) ---- */}
+      <div className="flex h-full w-[300px] shrink-0 flex-col overflow-y-auto border-l border-neutral-200">
+        <div className="border-b border-neutral-200 p-4">
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="mb-3 w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+          >
+            + Add Customer
+          </button>
+          <input
+            type="text"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            placeholder="Search by name or email…"
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+          />
+          <p className="mt-2 text-[11px] text-neutral-400">
+            {customers.length} customer{customers.length === 1 ? "" : "s"}
+          </p>
+        </div>
+
+        {adding && (
+          <form
+            action={handleAddContact}
+            className="space-y-2 border-b border-neutral-200 bg-neutral-50 p-3"
+          >
+            <input
+              type="text"
+              name="name"
+              placeholder="Name"
+              required
+              autoFocus
+              className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs"
+            />
+            <input
+              type="email"
+              name="email"
+              placeholder="Email (optional)"
+              className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs"
+            />
+            {addError && <p className="text-xs text-red-600">{addError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                className="flex-1 rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700"
+              >
+                Add
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAdding(false);
+                  setAddError(null);
+                }}
+                className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-white"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        )}
+
+        <div className="flex-1 overflow-y-auto">
+          {filtered.length === 0 ? (
+            <p className="p-4 text-xs text-neutral-400">Nothing here yet.</p>
+          ) : (
+            <ul className="divide-y divide-neutral-100">
+              {filtered.map((c) => (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => openRow(c.id)}
+                    className={`flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm ${
+                      selectedId === c.id
+                        ? "bg-neutral-900 text-white"
+                        : "text-neutral-800 hover:bg-neutral-50"
+                    }`}
+                  >
+                    <span className="truncate">{c.name}</span>
+                    <span
+                      className={`shrink-0 text-xs ${
+                        selectedId === c.id ? "text-neutral-300" : "text-neutral-400"
+                      }`}
+                    >
+                      {c.saleCount}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
           )}
         </div>
       </div>
