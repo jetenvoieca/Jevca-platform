@@ -71,7 +71,7 @@ export default async function ConsolidatedSalesPage() {
     if (!months.has(key)) {
       months.set(key, {
         key,
-        label: p.createdAt.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        label: p.createdAt.toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
         totalsByCurrency: {},
         rows: [],
       });
@@ -191,7 +191,9 @@ export default async function ConsolidatedSalesPage() {
                             </td>
                             <td className="px-4 py-1.5">{r.artworkTitle}</td>
                             <td className="px-4 py-1.5 text-neutral-500">{r.buyerName || "—"}</td>
-                            <td className="px-4 py-1.5">{r.createdAt.toLocaleDateString()}</td>
+                            <td className="px-4 py-1.5">
+                              {r.createdAt.toLocaleDateString("en-GB")}
+                            </td>
                             <td className="px-4 py-1.5">
                               {r.currency} {r.netAmount.toFixed(2)}
                               {r.commissionPercent != null && (

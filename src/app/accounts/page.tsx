@@ -26,7 +26,7 @@ export default async function AccountsPage() {
     if (!months.has(key)) {
       months.set(key, {
         key,
-        label: p.paidAt.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        label: p.paidAt.toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
         totalsByCurrency: {},
         rows: [],
       });
@@ -120,7 +120,9 @@ export default async function AccountsPage() {
                         {g.rows.map((r, i) => (
                           <tr key={i} className="border-t border-neutral-100">
                             <td className="px-4 py-1.5">{r.artistName}</td>
-                            <td className="px-4 py-1.5">{r.paidAt.toLocaleDateString()}</td>
+                            <td className="px-4 py-1.5">
+                              {r.paidAt.toLocaleDateString("en-GB")}
+                            </td>
                             <td className="px-4 py-1.5">
                               {r.currency} {r.amount.toFixed(2)}
                             </td>
