@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   getCustomerDetail,
   updateCustomer,
+  createCustomer,
   type CustomerKind,
   type CustomerSummary,
   type CustomerDetail,
@@ -22,6 +23,11 @@ const STATUS_LABEL: Record<string, string> = {
 };
 
 type KindFilter = "ALL" | CustomerKind;
+type RelationshipStatus = "PROSPECT" | "ACTIVE";
+
+const inputCls =
+  "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
+const labelCls = "mb-1 block text-xs text-neutral-500";
 
 export default function CustomersView({
   siteId,
@@ -34,15 +40,20 @@ export default function CustomersView({
 }) {
   const [q, setQ] = useState("");
   const [kindFilter, setKindFilter] = useState<KindFilter>("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | RelationshipStatus>("ALL");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const router = useRouter();
 
   const filtered = customers.filter((c) => {
     if (kindFilter !== "ALL" && c.kind !== kindFilter) return false;
+    if (kindFilter === "GALLERY" && statusFilter !== "ALL" && c.relationshipStatus !== statusFilter)
+      return false;
     if (!q.trim()) return true;
     const needle = q.trim().toLowerCase();
     return c.name.toLowerCase().includes(needle) || (c.email || "").toLowerCase().includes(needle);
@@ -50,6 +61,10 @@ export default function CustomersView({
 
   const galleryCount = customers.filter((c) => c.kind === "GALLERY").length;
   const individualCount = customers.length - galleryCount;
+  const prospectCount = customers.filter(
+    (c) => c.kind === "GALLERY" && c.relationshipStatus === "PROSPECT"
+  ).length;
+  const activeGalleryCount = galleryCount - prospectCount;
 
   const openRow = (customerId: string) => {
     setSelectedId(customerId);
@@ -76,7 +91,8 @@ export default function CustomersView({
       | "websiteUrl"
       | "instagramUrl"
       | "facebookUrl"
-      | "defaultCommissionPercent",
+      | "defaultCommissionPercent"
+      | "relationshipStatus",
     value: string
   ) => {
     if (!selectedDetail) return;
@@ -98,27 +114,103 @@ export default function CustomersView({
       "defaultCommissionPercent",
       field === "defaultCommissionPercent" ? value : selectedDetail.defaultCommissionPercent || ""
     );
+    // Switching an existing contact to Gallery for the first time starts
+    // it as a Prospect, same default as creating a new one — otherwise
+    // it'd land with no status at all and nowhere to show up in the
+    // Prospect/Active filter (2026-08-14).
+    const nextRelationshipStatus =
+      field === "relationshipStatus"
+        ? value
+        : field === "kind" && value === "GALLERY" && !selectedDetail.relationshipStatus
+          ? "PROSPECT"
+          : selectedDetail.relationshipStatus || "";
+    fd.set("relationshipStatus", nextRelationshipStatus);
+
     startTransition(async () => {
       await updateCustomer(selectedDetail.id, fd);
       router.refresh();
-      setSelectedDetail((prev) => (prev ? { ...prev, [field]: value || null } : prev));
+      setSelectedDetail((prev) =>
+        prev
+          ? { ...prev, [field]: value || null, relationshipStatus: nextRelationshipStatus || null }
+          : prev
+      );
       setSavedField(field);
       setTimeout(() => setSavedField(null), 1500);
     });
   };
 
-  const inputCls =
-    "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
-  const labelCls = "mb-1 block text-xs text-neutral-500";
+  const handleAddContact = async (formData: FormData) => {
+    setAddError(null);
+    const result = await createCustomer(artistId, formData);
+    if ("error" in result) {
+      setAddError(result.error);
+      return;
+    }
+    setAdding(false);
+    router.refresh();
+    openRow(result.id);
+  };
 
   return (
     <div className="p-6">
-      <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Customers</h1>
+      <div className="mb-1 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold text-neutral-900">Customers</h1>
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+        >
+          + Add Contact
+        </button>
+      </div>
       <p className="mb-4 text-sm text-neutral-500">
         {customers.length === 0
-          ? "No customers yet — one is created automatically the first time a sale is started."
-          : `${customers.length} customer${customers.length === 1 ? "" : "s"}`}
+          ? "No contacts yet — add a gallery to start tracking it, or one is created automatically the first time a sale is started."
+          : `${customers.length} contact${customers.length === 1 ? "" : "s"}`}
       </p>
+
+      {adding && (
+        <form
+          action={handleAddContact}
+          className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4"
+        >
+          <div>
+            <label className={labelCls}>Type</label>
+            <select name="kind" defaultValue="INDIVIDUAL" className={inputCls}>
+              <option value="INDIVIDUAL">Individual</option>
+              <option value="GALLERY">Gallery</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Name</label>
+            <input type="text" name="name" required autoFocus className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Email (optional)</label>
+            <input type="email" name="email" className={inputCls} />
+          </div>
+          <button
+            type="submit"
+            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+          >
+            Add
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setAdding(false);
+              setAddError(null);
+            }}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-white"
+          >
+            Cancel
+          </button>
+          {addError && <p className="w-full text-xs text-red-600">{addError}</p>}
+          <p className="w-full text-xs text-neutral-400">
+            You can fill in the rest of the details once it&apos;s added.
+          </p>
+        </form>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <input
@@ -139,7 +231,10 @@ export default function CustomersView({
             <button
               key={value}
               type="button"
-              onClick={() => setKindFilter(value)}
+              onClick={() => {
+                setKindFilter(value);
+                setStatusFilter("ALL");
+              }}
               className={`px-3 py-1.5 ${
                 kindFilter === value
                   ? "bg-neutral-900 text-white"
@@ -150,6 +245,30 @@ export default function CustomersView({
             </button>
           ))}
         </div>
+        {kindFilter === "GALLERY" && (
+          <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+            {(
+              [
+                ["ALL", `All (${galleryCount})`],
+                ["PROSPECT", `Prospect (${prospectCount})`],
+                ["ACTIVE", `Active (${activeGalleryCount})`],
+              ] as [typeof statusFilter, string][]
+            ).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setStatusFilter(value)}
+                className={`px-3 py-1.5 ${
+                  statusFilter === value
+                    ? "bg-neutral-700 text-white"
+                    : "bg-white text-neutral-600 hover:bg-neutral-50"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
@@ -181,7 +300,24 @@ export default function CustomersView({
                 >
                   <td className="px-3 py-2 font-medium text-neutral-900">{c.name}</td>
                   <td className="px-3 py-2 text-neutral-400">
-                    {c.kind === "GALLERY" ? "Gallery" : "Individual"}
+                    {c.kind === "GALLERY" ? (
+                      <span className="inline-flex items-center gap-1.5">
+                        Gallery
+                        {c.relationshipStatus && (
+                          <span
+                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
+                              c.relationshipStatus === "ACTIVE"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-amber-100 text-amber-700"
+                            }`}
+                          >
+                            {c.relationshipStatus === "ACTIVE" ? "Active" : "Prospect"}
+                          </span>
+                        )}
+                      </span>
+                    ) : (
+                      "Individual"
+                    )}
                   </td>
                   <td className="px-3 py-2 text-neutral-500">{c.email || "—"}</td>
                   <td className="px-3 py-2 text-neutral-500">{c.saleCount}</td>
@@ -193,7 +329,7 @@ export default function CustomersView({
 
         <div>
           {!selectedId ? (
-            <p className="text-sm text-neutral-400">Select a customer to see their details.</p>
+            <p className="text-sm text-neutral-400">Select a contact to see their details.</p>
           ) : loading || !selectedDetail ? (
             <p className="text-sm text-neutral-400">Loading…</p>
           ) : (
@@ -294,6 +430,28 @@ export default function CustomersView({
                     <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
                       Gallery details
                     </p>
+
+                    <div>
+                      <label className={labelCls}>Relationship</label>
+                      <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+                        {(["PROSPECT", "ACTIVE"] as RelationshipStatus[]).map((s) => (
+                          <button
+                            key={s}
+                            type="button"
+                            disabled={isPending}
+                            onClick={() => saveField("relationshipStatus", s)}
+                            className={`flex-1 px-3 py-1.5 disabled:opacity-50 ${
+                              selectedDetail.relationshipStatus === s
+                                ? "bg-neutral-700 text-white"
+                                : "bg-white text-neutral-600 hover:bg-neutral-50"
+                            }`}
+                          >
+                            {s === "ACTIVE" ? "Active" : "Prospect"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
                     <div>
                       <label className={labelCls}>Contact name</label>
                       <input

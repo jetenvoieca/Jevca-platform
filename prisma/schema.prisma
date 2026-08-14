@@ -219,7 +219,11 @@ model Customer {
   // keeps its own commissionPercent, which can still be typed/changed
   // per sale).
   defaultCommissionPercent Decimal? @db.Decimal(5, 2)
-
+  // "PROSPECT" | "ACTIVE" (2026-08-14) — gallery relationship pipeline,
+  // simple two-stage per explicit decision. Left null for Individuals
+  // (not applicable); set to "PROSPECT" when a new Gallery contact is
+  // created, moved to "ACTIVE" by hand once actually working together.
+  relationshipStatus String?
   // "EN" or "FR", or null to fall back to the artist's own default
   // (Settings → Invoice language). An explicit per-customer override,
   // not a duplicate of the artist-level setting.

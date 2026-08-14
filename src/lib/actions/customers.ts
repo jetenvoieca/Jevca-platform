@@ -12,6 +12,8 @@ export type CustomerSummary = {
   email: string | null;
   phone: string | null;
   address: string | null;
+  // "PROSPECT" | "ACTIVE" | null — gallery-only, null for Individuals.
+  relationshipStatus: string | null;
 };
 
 export type CustomerDetail = {
@@ -31,6 +33,7 @@ export type CustomerDetail = {
   instagramUrl: string | null;
   facebookUrl: string | null;
   defaultCommissionPercent: string | null;
+  relationshipStatus: string | null;
   language: string | null;
   notes: string | null;
   createdAt: string;
@@ -70,7 +73,15 @@ export async function searchCustomers(
         { email: { contains: q, mode: "insensitive" } },
       ],
     },
-    select: { id: true, kind: true, name: true, email: true, phone: true, address: true },
+    select: {
+      id: true,
+      kind: true,
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      relationshipStatus: true,
+    },
     orderBy: { name: "asc" },
     take: 10,
   });
@@ -89,6 +100,7 @@ export async function listCustomers(artistId: string): Promise<
       email: true,
       phone: true,
       address: true,
+      relationshipStatus: true,
       _count: { select: { purchases: true } },
     },
     orderBy: { name: "asc" },
@@ -100,6 +112,7 @@ export async function listCustomers(artistId: string): Promise<
     email: r.email,
     phone: r.phone,
     address: r.address,
+    relationshipStatus: r.relationshipStatus,
     saleCount: r._count.purchases,
   }));
 }
@@ -147,6 +160,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
     defaultCommissionPercent: customer.defaultCommissionPercent
       ? customer.defaultCommissionPercent.toString()
       : null,
+    relationshipStatus: customer.relationshipStatus,
     language: customer.language,
     notes: customer.notes,
     createdAt: customer.createdAt.toISOString(),
@@ -192,9 +206,12 @@ export async function findOrCreateCustomer(
   return { id: created.id };
 }
 
-export async function createCustomer(artistId: string, formData: FormData): Promise<void> {
+export async function createCustomer(
+  artistId: string,
+  formData: FormData
+): Promise<{ id: string } | { error: string }> {
   const name = (formData.get("name") as string)?.trim();
-  if (!name) return;
+  if (!name) return { error: "Name is required." };
   const kindRaw = (formData.get("kind") as string)?.trim();
   const kind = kindRaw === "GALLERY" ? "GALLERY" : "INDIVIDUAL";
   const email = (formData.get("email") as string)?.trim() || null;
@@ -210,8 +227,11 @@ export async function createCustomer(artistId: string, formData: FormData): Prom
   const facebookUrl = (formData.get("facebookUrl") as string)?.trim() || null;
   const defaultCommissionRaw = (formData.get("defaultCommissionPercent") as string)?.trim();
   const defaultCommissionPercent = defaultCommissionRaw ? parseFloat(defaultCommissionRaw) : null;
+  // New galleries start life as a Prospect — nothing to approach yet for
+  // an Individual, so left null there (2026-08-14).
+  const relationshipStatus = kind === "GALLERY" ? "PROSPECT" : null;
 
-  await db.customer.create({
+  const created = await db.customer.create({
     data: {
       artistId,
       kind,
@@ -228,9 +248,11 @@ export async function createCustomer(artistId: string, formData: FormData): Prom
       instagramUrl,
       facebookUrl,
       defaultCommissionPercent,
+      relationshipStatus,
     },
   });
   revalidatePath(`/sites`);
+  return { id: created.id };
 }
 
 export async function updateCustomer(customerId: string, formData: FormData): Promise<void> {
@@ -252,6 +274,11 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
   const facebookUrl = (formData.get("facebookUrl") as string)?.trim() || null;
   const defaultCommissionRaw = (formData.get("defaultCommissionPercent") as string)?.trim();
   const defaultCommissionPercent = defaultCommissionRaw ? parseFloat(defaultCommissionRaw) : null;
+  const relationshipStatusRaw = (formData.get("relationshipStatus") as string)?.trim();
+  const relationshipStatus =
+    relationshipStatusRaw === "PROSPECT" || relationshipStatusRaw === "ACTIVE"
+      ? relationshipStatusRaw
+      : null;
 
   await db.customer.update({
     where: { id: customerId },
@@ -270,6 +297,7 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
       instagramUrl,
       facebookUrl,
       defaultCommissionPercent,
+      relationshipStatus,
     },
   });
   revalidatePath(`/sites`);
