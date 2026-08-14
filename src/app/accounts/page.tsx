@@ -10,12 +10,19 @@ type MonthGroup = {
   key: string; // "2026-08"
   label: string; // "August 2026"
   totalsByCurrency: Record<string, number>;
-  rows: { artistName: string; amount: number; currency: string; paidAt: Date; source: string }[];
+  rows: {
+    artistName: string;
+    amount: number;
+    currency: string;
+    paidAt: Date;
+    source: string;
+    paymentMethod: string | null;
+  }[];
 };
 
 export default async function AccountsPage() {
   const payments = await db.subscriptionPayment.findMany({
-    include: { artist: { select: { name: true } } },
+    include: { artist: { select: { name: true, paymentMethod: true } } },
     orderBy: { paidAt: "desc" },
   });
   const openAlerts = await getOpenAlerts();
@@ -40,6 +47,7 @@ export default async function AccountsPage() {
       currency: p.currency,
       paidAt: p.paidAt,
       source: p.source,
+      paymentMethod: p.artist.paymentMethod,
     });
   }
   const sortedMonths = Array.from(months.values()).sort((a, b) => (a.key < b.key ? 1 : -1));
@@ -127,7 +135,11 @@ export default async function AccountsPage() {
                               {r.currency} {r.amount.toFixed(2)}
                             </td>
                             <td className="px-4 py-1.5 text-neutral-400">
-                              {r.source === "STRIPE" ? "Stripe" : "Manual"}
+                              {r.source === "STRIPE"
+                                ? "Stripe"
+                                : r.paymentMethod === "DD"
+                                  ? "Direct Debit"
+                                  : r.paymentMethod || "Manual"}
                             </td>
                           </tr>
                         ))}
