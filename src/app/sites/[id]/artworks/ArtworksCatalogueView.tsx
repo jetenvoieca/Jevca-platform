@@ -15,6 +15,7 @@ type ArtworkRow = {
   presentationPrice: string | null;
   catalogueNumber: string;
   availability: string;
+  type: string | null;
   imageUrl: string | null;
 };
 
@@ -82,6 +83,7 @@ export default function ArtworksCatalogueView({
           presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
           catalogueNumber: a.catalogueNumber,
           availability: a.availability,
+          type: a.type,
           imageUrl: a.images[0]?.url ?? null,
         })),
       ]);
@@ -411,9 +413,7 @@ export default function ArtworksCatalogueView({
                   <p className="mt-1 truncate text-sm font-medium text-neutral-900">
                     {a.presentationTitle}
                   </p>
-                  <p className="text-xs text-neutral-500">
-                    {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
-                  </p>
+                  <p className="text-xs text-neutral-500">{a.type || "—"}</p>
                 </button>
               ))}
               {addNewTile}

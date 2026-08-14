@@ -149,6 +149,7 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
         presentationPrice: true,
         catalogueNumber: true,
         availability: true,
+        type: true,
         images: { take: 1, select: { url: true, thumbnailKey: true } },
       },
       skip: offset,

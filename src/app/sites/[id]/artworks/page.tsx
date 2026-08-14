@@ -50,6 +50,7 @@ export default async function ArtworksCataloguePage({
     presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
     catalogueNumber: a.catalogueNumber,
     availability: a.availability,
+    type: a.type,
     imageUrl: a.images[0]?.url ?? null,
   }));
 
