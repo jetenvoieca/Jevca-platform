@@ -198,6 +198,16 @@ export default function ArtworksCatalogueView({
   // local state, fetching only the one clicked artwork.
   const [selected, setSelected] = useState<ArtworkDetail | null>(initialSelected);
   const [selectingId, setSelectingId] = useState<string | null>(null);
+  // Tracks which artwork is *currently* meant to be shown, independent of
+  // any in-flight fetch (2026-08-15 fix). Without this, an autosave's
+  // background refresh (refreshSelected, below) that's still in flight
+  // when you click a different artwork can resolve afterwards and
+  // clobber the new selection with the old artwork's data — the new
+  // image would flash correctly for a moment, then silently revert.
+  // A ref rather than state because it needs to be read synchronously
+  // inside already-in-flight async closures, not just on the next
+  // render.
+  const selectedIdRef = useRef<string | null>(initialSelected?.id ?? null);
 
   const updateUrlSelected = (artworkId: string | null) => {
     const params = new URLSearchParams(window.location.search);
@@ -210,9 +220,13 @@ export default function ArtworksCatalogueView({
   const handleSelect = (artworkId: string) => {
     if (selectingId) return;
     setSelectingId(artworkId);
+    selectedIdRef.current = artworkId;
     (async () => {
       const item = await getArtworkDetailForClient(artworkId);
-      if (item && item.artistId === artistId) {
+      // Only apply if this artwork is still the one actually wanted —
+      // guards against this same fetch racing a *later* click's fetch,
+      // as well as a lingering refreshSelected from before the switch.
+      if (item && item.artistId === artistId && selectedIdRef.current === artworkId) {
         setSelected(item);
         updateUrlSelected(artworkId);
       }
@@ -221,12 +235,14 @@ export default function ArtworksCatalogueView({
   };
 
   const handleClosePanel = () => {
+    selectedIdRef.current = null;
     setSelected(null);
     updateUrlSelected(null);
   };
 
   const handleDeletedPanel = () => {
     if (selected) setArtworks((prev) => prev.filter((a) => a.id !== selected.id));
+    selectedIdRef.current = null;
     setSelected(null);
     updateUrlSelected(null);
   };
@@ -240,9 +256,13 @@ export default function ArtworksCatalogueView({
   // showed up in the grid until a full page reload.
   const refreshSelected = () => {
     if (!selected) return;
+    const idAtCallTime = selected.id;
     (async () => {
-      const item = await getArtworkDetailForClient(selected.id);
-      if (item && item.artistId === artistId) {
+      const item = await getArtworkDetailForClient(idAtCallTime);
+      // Same race guard as handleSelect above — if you've since clicked
+      // a different artwork, this stale refresh must not overwrite it
+      // (2026-08-15 fix).
+      if (item && item.artistId === artistId && selectedIdRef.current === idAtCallTime) {
         setSelected(item);
         setArtworks((prev) =>
           prev.map((a) =>
