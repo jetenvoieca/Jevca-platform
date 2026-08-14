@@ -10,7 +10,23 @@ type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 // Artworks belong to the Artist, not any one Site — the same piece can be
 // featured on more than one of that artist's sites. Actions here take an
 // explicit `siteId` only where it's needed to know which site's URL to
-// redirect to or revalidate — never to scope which artworks are returned.
+// redirect to — never to scope which artworks are returned.
+//
+// Deliberately NOT calling revalidatePath(`/sites/${siteId}/artworks`)
+// from most actions below (2026-08-15 removal) — that route is already
+// force-dynamic (never statically cached, so there's nothing for
+// revalidatePath to usefully invalidate there), and Next.js triggers an
+// automatic full refresh of the current route for any Server Action
+// that revalidates a path currently being viewed, REGARDLESS of
+// whether client code calls router.refresh() itself. That auto-refresh
+// was the real cause of the Artwork Catalogue scrolling back to the top
+// on every edit — removing an explicit router.refresh() call alone
+// wasn't enough, since Next.js was doing the equivalent automatically
+// via these revalidatePath calls. The embedded Catalogue view already
+// keeps itself in sync via direct client-side fetches
+// (getArtworkDetailForClient/listArtworks), so this revalidation was
+// pure downside for that flow. createArtwork keeps its call since it's
+// immediately followed by a real redirect(), not an in-place edit.
 
 async function nextCatalogueNumber(artistId: string) {
   // Based on the highest catalogue number actually in use, not the row
@@ -326,7 +342,6 @@ export async function updatePresentation(
     },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 export async function updateCatalogue(
@@ -396,7 +411,6 @@ export async function updateCatalogue(
     },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 // Called when leaving the editor (Close) rather than on every keystroke —
@@ -441,12 +455,10 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
   if (!isBlank) return;
 
   await db.artwork.delete({ where: { id: artworkId } });
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 export async function deleteArtwork(siteId: string, id: string) {
   await db.artwork.delete({ where: { id } });
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 export async function linkImagesToArtwork(artworkId: string, imageIds: string[], siteId: string) {
@@ -454,7 +466,6 @@ export async function linkImagesToArtwork(artworkId: string, imageIds: string[],
     where: { id: { in: imageIds } },
     data: { artworkId },
   });
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 export async function unlinkImageFromArtwork(artworkId: string, imageId: string, siteId: string) {
@@ -462,7 +473,6 @@ export async function unlinkImageFromArtwork(artworkId: string, imageId: string,
     where: { id: imageId },
     data: { artworkId: null },
   });
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 // Used to hydrate a Section's saved artwork grid — Prisma's `in` filter

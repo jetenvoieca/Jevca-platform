@@ -12,6 +12,17 @@ import {
   type StripeMode,
 } from "@/lib/stripe";
 
+// No revalidatePath(`/sites/${siteId}/artworks`) calls in this file
+// (2026-08-15 removal) — that route is force-dynamic (never statically
+// cached, so there's nothing there for revalidatePath to usefully
+// invalidate), and Next.js auto-refreshes the current route for any
+// Server Action that revalidates a path currently being viewed,
+// regardless of client code. That auto-refresh was the actual cause of
+// the Artwork Catalogue scrolling to the top on every sale action —
+// PurchasePanel already keeps itself in sync via its own onChanged
+// callback, so this revalidation was pure downside. See the matching
+// note in lib/actions/artworks.ts.
+
 // ---------- Types ----------
 
 export type SaleTermsDetail = {
@@ -88,7 +99,6 @@ export async function saveSaleTerms(artworkId: string, siteId: string, formData:
     update: { totalAmount, currency, instalmentCount, releaseMessage, releaseTriggerCount },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 // ---------- Starting a sale — explicit action, not autosaved ----------
@@ -147,7 +157,6 @@ export async function startPurchase(
     },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
   return { ok: true, purchaseId: purchase.id };
 }
 
@@ -216,7 +225,6 @@ export async function startGallerySale(
     },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
   return { ok: true, purchaseId: purchase.id };
 }
 
@@ -311,7 +319,6 @@ export async function recordPastSale(
   // this app either, so a past sale shouldn't be an exception.
   await db.artwork.update({ where: { id: artworkId }, data: { availability: "SOLD" } });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
   revalidatePath(`/accounts/sales`);
   return { ok: true, purchaseId: purchase.id };
 }
@@ -340,7 +347,6 @@ export async function deleteGallerySale(
 
   await db.purchase.delete({ where: { id: purchaseId } });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
   return { ok: true };
 }
 
@@ -361,7 +367,6 @@ export async function forceDeleteCompletedSale(
 
   await db.purchase.delete({ where: { id: purchaseId } });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
   return { ok: true };
 }
 
@@ -400,7 +405,6 @@ export async function markGallerySalePaid(
     data: { status: "COMPLETED", closedAt: new Date() },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
   return { ok: true };
 }
 // wording for this specific buyer. Autosaved (low-stakes, descriptive),
@@ -417,7 +421,6 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
     },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 // The sale didn't go ahead. Kept as history (status ABANDONED), not
@@ -447,7 +450,6 @@ export async function abandonPurchase(
       where: { id: purchaseId },
       data: { status: "ABANDONED", closedAt: new Date() },
     });
-    revalidatePath(`/sites/${siteId}/artworks`);
     return { ok: false, error: stripeErrorMessage(err) };
   }
 
@@ -456,7 +458,6 @@ export async function abandonPurchase(
     data: { status: "ABANDONED", closedAt: new Date() },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks`);
   return { ok: true };
 }
 
