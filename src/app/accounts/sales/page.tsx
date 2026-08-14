@@ -166,21 +166,21 @@ export default async function ConsolidatedSalesPage() {
                         </span>
                       </span>
                     </summary>
-                    <table className="w-full border-t border-neutral-100 text-xs">
+                    <table className="w-full table-fixed border-t border-neutral-100 text-xs">
                       <thead className="bg-neutral-50 text-left text-neutral-400">
                         <tr>
-                          <th className="px-4 py-1.5 font-medium">Artist</th>
-                          <th className="px-4 py-1.5 font-medium">Artwork</th>
-                          <th className="px-4 py-1.5 font-medium">Buyer</th>
-                          <th className="px-4 py-1.5 font-medium">Date</th>
-                          <th className="px-4 py-1.5 font-medium">Amount</th>
-                          <th className="px-4 py-1.5 font-medium">Status</th>
+                          <th className="w-[18%] px-4 py-1.5 font-medium">Artist</th>
+                          <th className="w-[24%] px-4 py-1.5 font-medium">Artwork</th>
+                          <th className="w-[18%] px-4 py-1.5 font-medium">Buyer</th>
+                          <th className="w-[14%] px-4 py-1.5 font-medium">Date</th>
+                          <th className="w-[16%] px-4 py-1.5 font-medium">Amount</th>
+                          <th className="w-[10%] px-4 py-1.5 font-medium">Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {g.rows.map((r, i) => (
                           <tr key={i} className="border-t border-neutral-100">
-                            <td className="px-4 py-1.5">
+                            <td className="truncate px-4 py-1.5">
                               {r.siteId ? (
                                 <Link href={`/sites/${r.siteId}/sales`} className="hover:underline">
                                   {r.artistName}
@@ -189,8 +189,10 @@ export default async function ConsolidatedSalesPage() {
                                 r.artistName
                               )}
                             </td>
-                            <td className="px-4 py-1.5">{r.artworkTitle}</td>
-                            <td className="px-4 py-1.5 text-neutral-500">{r.buyerName || "—"}</td>
+                            <td className="truncate px-4 py-1.5">{r.artworkTitle}</td>
+                            <td className="truncate px-4 py-1.5 text-neutral-500">
+                              {r.buyerName || "—"}
+                            </td>
                             <td className="px-4 py-1.5">
                               {r.createdAt.toLocaleDateString("en-GB")}
                             </td>

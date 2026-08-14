@@ -115,19 +115,19 @@ export default async function AccountsPage() {
                         </span>
                       </span>
                     </summary>
-                    <table className="w-full border-t border-neutral-100 text-xs">
+                    <table className="w-full table-fixed border-t border-neutral-100 text-xs">
                       <thead className="bg-neutral-50 text-left text-neutral-400">
                         <tr>
-                          <th className="px-4 py-1.5 font-medium">Artist</th>
-                          <th className="px-4 py-1.5 font-medium">Date</th>
-                          <th className="px-4 py-1.5 font-medium">Amount</th>
-                          <th className="px-4 py-1.5 font-medium">Source</th>
+                          <th className="w-[38%] px-4 py-1.5 font-medium">Artist</th>
+                          <th className="w-[20%] px-4 py-1.5 font-medium">Date</th>
+                          <th className="w-[22%] px-4 py-1.5 font-medium">Amount</th>
+                          <th className="w-[20%] px-4 py-1.5 font-medium">Source</th>
                         </tr>
                       </thead>
                       <tbody>
                         {g.rows.map((r, i) => (
                           <tr key={i} className="border-t border-neutral-100">
-                            <td className="px-4 py-1.5">{r.artistName}</td>
+                            <td className="truncate px-4 py-1.5">{r.artistName}</td>
                             <td className="px-4 py-1.5">
                               {r.paidAt.toLocaleDateString("en-GB")}
                             </td>
