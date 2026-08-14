@@ -266,6 +266,21 @@ export default function SiteNavPanel({
           Customers
         </Link>
       )}
+
+      {/* Not gated on salesEnabled, unlike Sales/Customers above — a
+          gallery is worth tracking long before any sale happens
+          (2026-08-14 decision). */}
+      <Link
+        prefetch={false}
+        href={`/sites/${siteId}/galleries`}
+        className={`rounded-md px-3 py-2 font-medium ${
+          pathname.startsWith(`/sites/${siteId}/galleries`)
+            ? "bg-neutral-900 text-white"
+            : "text-neutral-700 hover:bg-neutral-100"
+        }`}
+      >
+        Galleries
+      </Link>
     </nav>
   );
 }

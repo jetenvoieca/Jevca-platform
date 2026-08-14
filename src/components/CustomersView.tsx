@@ -6,7 +6,6 @@ import {
   getCustomerDetail,
   updateCustomer,
   createCustomer,
-  type CustomerKind,
   type CustomerSummary,
   type CustomerDetail,
 } from "@/lib/actions/customers";
@@ -22,9 +21,6 @@ const STATUS_LABEL: Record<string, string> = {
   ABANDONED: "Abandoned",
 };
 
-type KindFilter = "ALL" | CustomerKind;
-type RelationshipStatus = "PROSPECT" | "ACTIVE";
-
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
 const labelCls = "mb-1 block text-xs text-neutral-500";
@@ -39,8 +35,6 @@ export default function CustomersView({
   customers: (CustomerSummary & { saleCount: number })[];
 }) {
   const [q, setQ] = useState("");
-  const [kindFilter, setKindFilter] = useState<KindFilter>("ALL");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | RelationshipStatus>("ALL");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -51,20 +45,10 @@ export default function CustomersView({
   const router = useRouter();
 
   const filtered = customers.filter((c) => {
-    if (kindFilter !== "ALL" && c.kind !== kindFilter) return false;
-    if (kindFilter === "GALLERY" && statusFilter !== "ALL" && c.relationshipStatus !== statusFilter)
-      return false;
     if (!q.trim()) return true;
     const needle = q.trim().toLowerCase();
     return c.name.toLowerCase().includes(needle) || (c.email || "").toLowerCase().includes(needle);
   });
-
-  const galleryCount = customers.filter((c) => c.kind === "GALLERY").length;
-  const individualCount = customers.length - galleryCount;
-  const prospectCount = customers.filter(
-    (c) => c.kind === "GALLERY" && c.relationshipStatus === "PROSPECT"
-  ).length;
-  const activeGalleryCount = galleryCount - prospectCount;
 
   const openRow = (customerId: string) => {
     setSelectedId(customerId);
@@ -77,63 +61,23 @@ export default function CustomersView({
   };
 
   const saveField = (
-    field:
-      | "kind"
-      | "name"
-      | "email"
-      | "phone"
-      | "address"
-      | "language"
-      | "notes"
-      | "contactName"
-      | "contactEmail"
-      | "websiteName"
-      | "websiteUrl"
-      | "instagramUrl"
-      | "facebookUrl"
-      | "defaultCommissionPercent"
-      | "relationshipStatus",
+    field: "name" | "email" | "phone" | "address" | "language" | "notes",
     value: string
   ) => {
     if (!selectedDetail) return;
     const fd = new FormData();
-    fd.set("kind", field === "kind" ? value : selectedDetail.kind);
+    fd.set("kind", "INDIVIDUAL");
     fd.set("name", field === "name" ? value : selectedDetail.name);
     fd.set("email", field === "email" ? value : selectedDetail.email || "");
     fd.set("phone", field === "phone" ? value : selectedDetail.phone || "");
     fd.set("address", field === "address" ? value : selectedDetail.address || "");
     fd.set("language", field === "language" ? value : selectedDetail.language || "");
     fd.set("notes", field === "notes" ? value : selectedDetail.notes || "");
-    fd.set("contactName", field === "contactName" ? value : selectedDetail.contactName || "");
-    fd.set("contactEmail", field === "contactEmail" ? value : selectedDetail.contactEmail || "");
-    fd.set("websiteName", field === "websiteName" ? value : selectedDetail.websiteName || "");
-    fd.set("websiteUrl", field === "websiteUrl" ? value : selectedDetail.websiteUrl || "");
-    fd.set("instagramUrl", field === "instagramUrl" ? value : selectedDetail.instagramUrl || "");
-    fd.set("facebookUrl", field === "facebookUrl" ? value : selectedDetail.facebookUrl || "");
-    fd.set(
-      "defaultCommissionPercent",
-      field === "defaultCommissionPercent" ? value : selectedDetail.defaultCommissionPercent || ""
-    );
-    // Switching an existing contact to Gallery for the first time starts
-    // it as a Prospect, same default as creating a new one — otherwise
-    // it'd land with no status at all and nowhere to show up in the
-    // Prospect/Active filter (2026-08-14).
-    const nextRelationshipStatus =
-      field === "relationshipStatus"
-        ? value
-        : field === "kind" && value === "GALLERY" && !selectedDetail.relationshipStatus
-          ? "PROSPECT"
-          : selectedDetail.relationshipStatus || "";
-    fd.set("relationshipStatus", nextRelationshipStatus);
 
     startTransition(async () => {
       await updateCustomer(selectedDetail.id, fd);
       router.refresh();
-      setSelectedDetail((prev) =>
-        prev
-          ? { ...prev, [field]: value || null, relationshipStatus: nextRelationshipStatus || null }
-          : prev
-      );
+      setSelectedDetail((prev) => (prev ? { ...prev, [field]: value || null } : prev));
       setSavedField(field);
       setTimeout(() => setSavedField(null), 1500);
     });
@@ -141,6 +85,7 @@ export default function CustomersView({
 
   const handleAddContact = async (formData: FormData) => {
     setAddError(null);
+    formData.set("kind", "INDIVIDUAL");
     const result = await createCustomer(artistId, formData);
     if ("error" in result) {
       setAddError(result.error);
@@ -160,13 +105,13 @@ export default function CustomersView({
           onClick={() => setAdding(true)}
           className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
         >
-          + Add Contact
+          + Add Customer
         </button>
       </div>
       <p className="mb-4 text-sm text-neutral-500">
         {customers.length === 0
-          ? "No contacts yet — add a gallery to start tracking it, or one is created automatically the first time a sale is started."
-          : `${customers.length} contact${customers.length === 1 ? "" : "s"}`}
+          ? "No customers yet — one is created automatically the first time a sale is started."
+          : `${customers.length} customer${customers.length === 1 ? "" : "s"}`}
       </p>
 
       {adding && (
@@ -174,13 +119,6 @@ export default function CustomersView({
           action={handleAddContact}
           className="mb-4 flex flex-wrap items-end gap-3 rounded-lg border border-neutral-200 bg-neutral-50 p-4"
         >
-          <div>
-            <label className={labelCls}>Type</label>
-            <select name="kind" defaultValue="INDIVIDUAL" className={inputCls}>
-              <option value="INDIVIDUAL">Individual</option>
-              <option value="GALLERY">Gallery</option>
-            </select>
-          </div>
           <div>
             <label className={labelCls}>Name</label>
             <input type="text" name="name" required autoFocus className={inputCls} />
@@ -206,13 +144,10 @@ export default function CustomersView({
             Cancel
           </button>
           {addError && <p className="w-full text-xs text-red-600">{addError}</p>}
-          <p className="w-full text-xs text-neutral-400">
-            You can fill in the rest of the details once it&apos;s added.
-          </p>
         </form>
       )}
 
-      <div className="mb-4 flex flex-wrap items-center gap-3">
+      <div className="mb-4">
         <input
           type="text"
           value={q}
@@ -220,55 +155,6 @@ export default function CustomersView({
           placeholder="Search by name or email…"
           className="w-full max-w-xs rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
         />
-        <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-          {(
-            [
-              ["ALL", `All (${customers.length})`],
-              ["INDIVIDUAL", `Individual (${individualCount})`],
-              ["GALLERY", `Gallery (${galleryCount})`],
-            ] as [KindFilter, string][]
-          ).map(([value, label]) => (
-            <button
-              key={value}
-              type="button"
-              onClick={() => {
-                setKindFilter(value);
-                setStatusFilter("ALL");
-              }}
-              className={`px-3 py-1.5 ${
-                kindFilter === value
-                  ? "bg-neutral-900 text-white"
-                  : "bg-white text-neutral-600 hover:bg-neutral-50"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-        {kindFilter === "GALLERY" && (
-          <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-            {(
-              [
-                ["ALL", `All (${galleryCount})`],
-                ["PROSPECT", `Prospect (${prospectCount})`],
-                ["ACTIVE", `Active (${activeGalleryCount})`],
-              ] as [typeof statusFilter, string][]
-            ).map(([value, label]) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => setStatusFilter(value)}
-                className={`px-3 py-1.5 ${
-                  statusFilter === value
-                    ? "bg-neutral-700 text-white"
-                    : "bg-white text-neutral-600 hover:bg-neutral-50"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-        )}
       </div>
 
       <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
@@ -277,7 +163,6 @@ export default function CustomersView({
             <thead>
               <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
                 <th className="px-3 py-2 font-normal">Name</th>
-                <th className="px-3 py-2 font-normal">Type</th>
                 <th className="px-3 py-2 font-normal">Email</th>
                 <th className="px-3 py-2 font-normal">Sales</th>
               </tr>
@@ -285,7 +170,7 @@ export default function CustomersView({
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
+                  <td colSpan={3} className="px-3 py-6 text-center text-sm text-neutral-400">
                     Nothing here yet.
                   </td>
                 </tr>
@@ -299,26 +184,6 @@ export default function CustomersView({
                   }`}
                 >
                   <td className="px-3 py-2 font-medium text-neutral-900">{c.name}</td>
-                  <td className="px-3 py-2 text-neutral-400">
-                    {c.kind === "GALLERY" ? (
-                      <span className="inline-flex items-center gap-1.5">
-                        Gallery
-                        {c.relationshipStatus && (
-                          <span
-                            className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                              c.relationshipStatus === "ACTIVE"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                          >
-                            {c.relationshipStatus === "ACTIVE" ? "Active" : "Prospect"}
-                          </span>
-                        )}
-                      </span>
-                    ) : (
-                      "Individual"
-                    )}
-                  </td>
                   <td className="px-3 py-2 text-neutral-500">{c.email || "—"}</td>
                   <td className="px-3 py-2 text-neutral-500">{c.saleCount}</td>
                 </tr>
@@ -329,7 +194,7 @@ export default function CustomersView({
 
         <div>
           {!selectedId ? (
-            <p className="text-sm text-neutral-400">Select a contact to see their details.</p>
+            <p className="text-sm text-neutral-400">Select a customer to see their details.</p>
           ) : loading || !selectedDetail ? (
             <p className="text-sm text-neutral-400">Loading…</p>
           ) : (
@@ -356,30 +221,7 @@ export default function CustomersView({
 
               <div className="mb-4 space-y-3">
                 <div>
-                  <label className={labelCls}>Type</label>
-                  <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                    {(["INDIVIDUAL", "GALLERY"] as CustomerKind[]).map((k) => (
-                      <button
-                        key={k}
-                        type="button"
-                        disabled={isPending}
-                        onClick={() => saveField("kind", k)}
-                        className={`flex-1 px-3 py-1.5 disabled:opacity-50 ${
-                          selectedDetail.kind === k
-                            ? "bg-neutral-900 text-white"
-                            : "bg-white text-neutral-600 hover:bg-neutral-50"
-                        }`}
-                      >
-                        {k === "GALLERY" ? "Gallery" : "Individual"}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className={labelCls}>
-                    {selectedDetail.kind === "GALLERY" ? "Gallery name" : "Name"}
-                  </label>
+                  <label className={labelCls}>Name</label>
                   <input
                     key={`name-${selectedDetail.id}`}
                     type="text"
@@ -390,9 +232,7 @@ export default function CustomersView({
                   />
                 </div>
                 <div>
-                  <label className={labelCls}>
-                    {selectedDetail.kind === "GALLERY" ? "General email" : "Email"}
-                  </label>
+                  <label className={labelCls}>Email</label>
                   <input
                     key={`email-${selectedDetail.id}`}
                     type="email"
@@ -424,130 +264,6 @@ export default function CustomersView({
                     className={inputCls}
                   />
                 </div>
-
-                {selectedDetail.kind === "GALLERY" && (
-                  <div className="space-y-3 rounded-md border border-neutral-200 p-3">
-                    <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                      Gallery details
-                    </p>
-
-                    <div>
-                      <label className={labelCls}>Relationship</label>
-                      <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                        {(["PROSPECT", "ACTIVE"] as RelationshipStatus[]).map((s) => (
-                          <button
-                            key={s}
-                            type="button"
-                            disabled={isPending}
-                            onClick={() => saveField("relationshipStatus", s)}
-                            className={`flex-1 px-3 py-1.5 disabled:opacity-50 ${
-                              selectedDetail.relationshipStatus === s
-                                ? "bg-neutral-700 text-white"
-                                : "bg-white text-neutral-600 hover:bg-neutral-50"
-                            }`}
-                          >
-                            {s === "ACTIVE" ? "Active" : "Prospect"}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className={labelCls}>Contact name</label>
-                      <input
-                        key={`contactName-${selectedDetail.id}`}
-                        type="text"
-                        defaultValue={selectedDetail.contactName || ""}
-                        onBlur={(e) => saveField("contactName", e.target.value.trim())}
-                        disabled={isPending}
-                        placeholder="The person you deal with there"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Contact email</label>
-                      <input
-                        key={`contactEmail-${selectedDetail.id}`}
-                        type="email"
-                        defaultValue={selectedDetail.contactEmail || ""}
-                        onBlur={(e) => saveField("contactEmail", e.target.value.trim())}
-                        disabled={isPending}
-                        className={inputCls}
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className={labelCls}>Website name</label>
-                        <input
-                          key={`websiteName-${selectedDetail.id}`}
-                          type="text"
-                          defaultValue={selectedDetail.websiteName || ""}
-                          onBlur={(e) => saveField("websiteName", e.target.value.trim())}
-                          disabled={isPending}
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Website URL</label>
-                        <input
-                          key={`websiteUrl-${selectedDetail.id}`}
-                          type="text"
-                          defaultValue={selectedDetail.websiteUrl || ""}
-                          onBlur={(e) => saveField("websiteUrl", e.target.value.trim())}
-                          disabled={isPending}
-                          placeholder="https://…"
-                          className={inputCls}
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className={labelCls}>Instagram</label>
-                        <input
-                          key={`instagramUrl-${selectedDetail.id}`}
-                          type="text"
-                          defaultValue={selectedDetail.instagramUrl || ""}
-                          onBlur={(e) => saveField("instagramUrl", e.target.value.trim())}
-                          disabled={isPending}
-                          placeholder="https://instagram.com/…"
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Facebook</label>
-                        <input
-                          key={`facebookUrl-${selectedDetail.id}`}
-                          type="text"
-                          defaultValue={selectedDetail.facebookUrl || ""}
-                          onBlur={(e) => saveField("facebookUrl", e.target.value.trim())}
-                          disabled={isPending}
-                          placeholder="https://facebook.com/…"
-                          className={inputCls}
-                        />
-                      </div>
-                    </div>
-                    <div>
-                      <label className={labelCls}>Default commission %</label>
-                      <input
-                        key={`defaultCommissionPercent-${selectedDetail.id}`}
-                        type="text"
-                        inputMode="decimal"
-                        defaultValue={selectedDetail.defaultCommissionPercent || ""}
-                        onBlur={(e) =>
-                          saveField("defaultCommissionPercent", e.target.value.trim())
-                        }
-                        disabled={isPending}
-                        placeholder="e.g. 30"
-                        className={inputCls}
-                      />
-                      <p className="mt-1 text-xs text-neutral-400">
-                        A starting point when recording a sale through this gallery — each sale
-                        can still have its own commission typed in if it differs.
-                      </p>
-                    </div>
-                  </div>
-                )}
-
                 <div>
                   <label className={labelCls}>Invoice language</label>
                   <select

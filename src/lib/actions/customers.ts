@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { publicMediaUrl } from "@/lib/r2";
 
 export type CustomerKind = "INDIVIDUAL" | "GALLERY";
 
@@ -92,7 +93,11 @@ export async function listCustomers(artistId: string): Promise<
   (CustomerSummary & { saleCount: number })[]
 > {
   const rows = await db.customer.findMany({
-    where: { artistId },
+    // Customers page is Individual-only now (2026-08-14) — Galleries
+    // moved to their own page/section since the two are diverging in
+    // what they need (galleries: relationship status, consignment,
+    // socials; individuals: none of that).
+    where: { artistId, kind: "INDIVIDUAL" },
     select: {
       id: true,
       kind: true,
@@ -115,6 +120,23 @@ export async function listCustomers(artistId: string): Promise<
     relationshipStatus: r.relationshipStatus,
     saleCount: r._count.purchases,
   }));
+}
+
+export async function listGalleries(artistId: string): Promise<CustomerSummary[]> {
+  const rows = await db.customer.findMany({
+    where: { artistId, kind: "GALLERY" },
+    select: {
+      id: true,
+      kind: true,
+      name: true,
+      email: true,
+      phone: true,
+      address: true,
+      relationshipStatus: true,
+    },
+    orderBy: { name: "asc" },
+  });
+  return rows.map((r) => ({ ...r, kind: r.kind as CustomerKind }));
 }
 
 export async function getCustomerDetail(customerId: string): Promise<CustomerDetail | null> {
@@ -175,6 +197,65 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
       createdAt: p.createdAt.toISOString(),
     })),
     alsoCustomerOf,
+  };
+}
+
+export type GalleryConsignedWork = {
+  id: string;
+  presentationTitle: string;
+  presentationPrice: string | null;
+  description: string | null;
+  medium: string | null;
+  dimensions: string | null;
+  imageUrl: string | null;
+};
+
+export type GalleryDetail = CustomerDetail & { consignedWorks: GalleryConsignedWork[] };
+
+// Consigned Works is a first cut (2026-08-14): matched by exact string
+// equality between this gallery's name and Artwork.location — the same
+// free-text field and matching already used by the Artwork Catalogue's
+// own Location filter, not a new mechanism. That means a typo or a
+// gallery rename can silently break the match (already visible in real
+// data — "La Galerie" vs "La Galarie"). Deliberately not fixed here per
+// explicit instruction to validate the workflow before investing more.
+export async function getGalleryDetail(customerId: string): Promise<GalleryDetail | null> {
+  const detail = await getCustomerDetail(customerId);
+  if (!detail || detail.kind !== "GALLERY") return null;
+
+  const customer = await db.customer.findUnique({
+    where: { id: customerId },
+    select: { artistId: true },
+  });
+  if (!customer) return null;
+
+  const works = await db.artwork.findMany({
+    where: { artistId: customer.artistId, location: detail.name },
+    select: {
+      id: true,
+      presentationTitle: true,
+      presentationPrice: true,
+      description: true,
+      medium: true,
+      dimensions: true,
+      images: { take: 1, select: { url: true, thumbnailKey: true } },
+    },
+    orderBy: { presentationTitle: "asc" },
+  });
+
+  return {
+    ...detail,
+    consignedWorks: works.map((w) => ({
+      id: w.id,
+      presentationTitle: w.presentationTitle,
+      presentationPrice: w.presentationPrice ? w.presentationPrice.toString() : null,
+      description: w.description,
+      medium: w.medium,
+      dimensions: w.dimensions,
+      // Same thumbnail-first-with-fallback convention as the Artwork
+      // Catalogue's own list (2026-08-13 backfill) — not a new pattern.
+      imageUrl: w.images[0] ? publicMediaUrl(w.images[0].thumbnailKey) || w.images[0].url : null,
+    })),
   };
 }
 
