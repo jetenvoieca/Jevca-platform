@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   getCustomerDetail,
   updateCustomer,
+  type CustomerKind,
   type CustomerSummary,
   type CustomerDetail,
 } from "@/lib/actions/customers";
@@ -20,6 +21,8 @@ const STATUS_LABEL: Record<string, string> = {
   ABANDONED: "Abandoned",
 };
 
+type KindFilter = "ALL" | CustomerKind;
+
 export default function CustomersView({
   siteId,
   artistId,
@@ -30,6 +33,7 @@ export default function CustomersView({
   customers: (CustomerSummary & { saleCount: number })[];
 }) {
   const [q, setQ] = useState("");
+  const [kindFilter, setKindFilter] = useState<KindFilter>("ALL");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<CustomerDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -37,13 +41,15 @@ export default function CustomersView({
   const [savedField, setSavedField] = useState<string | null>(null);
   const router = useRouter();
 
-  const filtered = q.trim()
-    ? customers.filter(
-        (c) =>
-          c.name.toLowerCase().includes(q.trim().toLowerCase()) ||
-          (c.email || "").toLowerCase().includes(q.trim().toLowerCase())
-      )
-    : customers;
+  const filtered = customers.filter((c) => {
+    if (kindFilter !== "ALL" && c.kind !== kindFilter) return false;
+    if (!q.trim()) return true;
+    const needle = q.trim().toLowerCase();
+    return c.name.toLowerCase().includes(needle) || (c.email || "").toLowerCase().includes(needle);
+  });
+
+  const galleryCount = customers.filter((c) => c.kind === "GALLERY").length;
+  const individualCount = customers.length - galleryCount;
 
   const openRow = (customerId: string) => {
     setSelectedId(customerId);
@@ -56,17 +62,42 @@ export default function CustomersView({
   };
 
   const saveField = (
-    field: "name" | "email" | "phone" | "address" | "language" | "notes",
+    field:
+      | "kind"
+      | "name"
+      | "email"
+      | "phone"
+      | "address"
+      | "language"
+      | "notes"
+      | "contactName"
+      | "contactEmail"
+      | "websiteName"
+      | "websiteUrl"
+      | "instagramUrl"
+      | "facebookUrl"
+      | "defaultCommissionPercent",
     value: string
   ) => {
     if (!selectedDetail) return;
     const fd = new FormData();
+    fd.set("kind", field === "kind" ? value : selectedDetail.kind);
     fd.set("name", field === "name" ? value : selectedDetail.name);
     fd.set("email", field === "email" ? value : selectedDetail.email || "");
     fd.set("phone", field === "phone" ? value : selectedDetail.phone || "");
     fd.set("address", field === "address" ? value : selectedDetail.address || "");
     fd.set("language", field === "language" ? value : selectedDetail.language || "");
     fd.set("notes", field === "notes" ? value : selectedDetail.notes || "");
+    fd.set("contactName", field === "contactName" ? value : selectedDetail.contactName || "");
+    fd.set("contactEmail", field === "contactEmail" ? value : selectedDetail.contactEmail || "");
+    fd.set("websiteName", field === "websiteName" ? value : selectedDetail.websiteName || "");
+    fd.set("websiteUrl", field === "websiteUrl" ? value : selectedDetail.websiteUrl || "");
+    fd.set("instagramUrl", field === "instagramUrl" ? value : selectedDetail.instagramUrl || "");
+    fd.set("facebookUrl", field === "facebookUrl" ? value : selectedDetail.facebookUrl || "");
+    fd.set(
+      "defaultCommissionPercent",
+      field === "defaultCommissionPercent" ? value : selectedDetail.defaultCommissionPercent || ""
+    );
     startTransition(async () => {
       await updateCustomer(selectedDetail.id, fd);
       router.refresh();
@@ -75,6 +106,10 @@ export default function CustomersView({
       setTimeout(() => setSavedField(null), 1500);
     });
   };
+
+  const inputCls =
+    "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
+  const labelCls = "mb-1 block text-xs text-neutral-500";
 
   return (
     <div className="p-6">
@@ -85,13 +120,37 @@ export default function CustomersView({
           : `${customers.length} customer${customers.length === 1 ? "" : "s"}`}
       </p>
 
-      <input
-        type="text"
-        value={q}
-        onChange={(e) => setQ(e.target.value)}
-        placeholder="Search by name or email…"
-        className="mb-4 w-full max-w-xs rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-      />
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <input
+          type="text"
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Search by name or email…"
+          className="w-full max-w-xs rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+        />
+        <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+          {(
+            [
+              ["ALL", `All (${customers.length})`],
+              ["INDIVIDUAL", `Individual (${individualCount})`],
+              ["GALLERY", `Gallery (${galleryCount})`],
+            ] as [KindFilter, string][]
+          ).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setKindFilter(value)}
+              className={`px-3 py-1.5 ${
+                kindFilter === value
+                  ? "bg-neutral-900 text-white"
+                  : "bg-white text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
         <div className="overflow-hidden rounded-lg border border-neutral-200">
@@ -99,6 +158,7 @@ export default function CustomersView({
             <thead>
               <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
                 <th className="px-3 py-2 font-normal">Name</th>
+                <th className="px-3 py-2 font-normal">Type</th>
                 <th className="px-3 py-2 font-normal">Email</th>
                 <th className="px-3 py-2 font-normal">Sales</th>
               </tr>
@@ -106,7 +166,7 @@ export default function CustomersView({
             <tbody>
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={3} className="px-3 py-6 text-center text-sm text-neutral-400">
+                  <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
                     Nothing here yet.
                   </td>
                 </tr>
@@ -120,6 +180,9 @@ export default function CustomersView({
                   }`}
                 >
                   <td className="px-3 py-2 font-medium text-neutral-900">{c.name}</td>
+                  <td className="px-3 py-2 text-neutral-400">
+                    {c.kind === "GALLERY" ? "Gallery" : "Individual"}
+                  </td>
                   <td className="px-3 py-2 text-neutral-500">{c.email || "—"}</td>
                   <td className="px-3 py-2 text-neutral-500">{c.saleCount}</td>
                 </tr>
@@ -157,59 +220,184 @@ export default function CustomersView({
 
               <div className="mb-4 space-y-3">
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-500">Name</label>
+                  <label className={labelCls}>Type</label>
+                  <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+                    {(["INDIVIDUAL", "GALLERY"] as CustomerKind[]).map((k) => (
+                      <button
+                        key={k}
+                        type="button"
+                        disabled={isPending}
+                        onClick={() => saveField("kind", k)}
+                        className={`flex-1 px-3 py-1.5 disabled:opacity-50 ${
+                          selectedDetail.kind === k
+                            ? "bg-neutral-900 text-white"
+                            : "bg-white text-neutral-600 hover:bg-neutral-50"
+                        }`}
+                      >
+                        {k === "GALLERY" ? "Gallery" : "Individual"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className={labelCls}>
+                    {selectedDetail.kind === "GALLERY" ? "Gallery name" : "Name"}
+                  </label>
                   <input
                     key={`name-${selectedDetail.id}`}
                     type="text"
                     defaultValue={selectedDetail.name}
                     onBlur={(e) => saveField("name", e.target.value.trim())}
                     disabled={isPending}
-                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-500">Email</label>
+                  <label className={labelCls}>
+                    {selectedDetail.kind === "GALLERY" ? "General email" : "Email"}
+                  </label>
                   <input
                     key={`email-${selectedDetail.id}`}
                     type="email"
                     defaultValue={selectedDetail.email || ""}
                     onBlur={(e) => saveField("email", e.target.value.trim())}
                     disabled={isPending}
-                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-500">Phone</label>
+                  <label className={labelCls}>Phone</label>
                   <input
                     key={`phone-${selectedDetail.id}`}
                     type="text"
                     defaultValue={selectedDetail.phone || ""}
                     onBlur={(e) => saveField("phone", e.target.value.trim())}
                     disabled={isPending}
-                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                    className={inputCls}
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-500">Address</label>
+                  <label className={labelCls}>Address</label>
                   <textarea
                     key={`address-${selectedDetail.id}`}
                     defaultValue={selectedDetail.address || ""}
                     onBlur={(e) => saveField("address", e.target.value.trim())}
                     disabled={isPending}
                     rows={2}
-                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                    className={inputCls}
                   />
                 </div>
+
+                {selectedDetail.kind === "GALLERY" && (
+                  <div className="space-y-3 rounded-md border border-neutral-200 p-3">
+                    <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                      Gallery details
+                    </p>
+                    <div>
+                      <label className={labelCls}>Contact name</label>
+                      <input
+                        key={`contactName-${selectedDetail.id}`}
+                        type="text"
+                        defaultValue={selectedDetail.contactName || ""}
+                        onBlur={(e) => saveField("contactName", e.target.value.trim())}
+                        disabled={isPending}
+                        placeholder="The person you deal with there"
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Contact email</label>
+                      <input
+                        key={`contactEmail-${selectedDetail.id}`}
+                        type="email"
+                        defaultValue={selectedDetail.contactEmail || ""}
+                        onBlur={(e) => saveField("contactEmail", e.target.value.trim())}
+                        disabled={isPending}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelCls}>Website name</label>
+                        <input
+                          key={`websiteName-${selectedDetail.id}`}
+                          type="text"
+                          defaultValue={selectedDetail.websiteName || ""}
+                          onBlur={(e) => saveField("websiteName", e.target.value.trim())}
+                          disabled={isPending}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Website URL</label>
+                        <input
+                          key={`websiteUrl-${selectedDetail.id}`}
+                          type="text"
+                          defaultValue={selectedDetail.websiteUrl || ""}
+                          onBlur={(e) => saveField("websiteUrl", e.target.value.trim())}
+                          disabled={isPending}
+                          placeholder="https://…"
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelCls}>Instagram</label>
+                        <input
+                          key={`instagramUrl-${selectedDetail.id}`}
+                          type="text"
+                          defaultValue={selectedDetail.instagramUrl || ""}
+                          onBlur={(e) => saveField("instagramUrl", e.target.value.trim())}
+                          disabled={isPending}
+                          placeholder="https://instagram.com/…"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Facebook</label>
+                        <input
+                          key={`facebookUrl-${selectedDetail.id}`}
+                          type="text"
+                          defaultValue={selectedDetail.facebookUrl || ""}
+                          onBlur={(e) => saveField("facebookUrl", e.target.value.trim())}
+                          disabled={isPending}
+                          placeholder="https://facebook.com/…"
+                          className={inputCls}
+                        />
+                      </div>
+                    </div>
+                    <div>
+                      <label className={labelCls}>Default commission %</label>
+                      <input
+                        key={`defaultCommissionPercent-${selectedDetail.id}`}
+                        type="text"
+                        inputMode="decimal"
+                        defaultValue={selectedDetail.defaultCommissionPercent || ""}
+                        onBlur={(e) =>
+                          saveField("defaultCommissionPercent", e.target.value.trim())
+                        }
+                        disabled={isPending}
+                        placeholder="e.g. 30"
+                        className={inputCls}
+                      />
+                      <p className="mt-1 text-xs text-neutral-400">
+                        A starting point when recording a sale through this gallery — each sale
+                        can still have its own commission typed in if it differs.
+                      </p>
+                    </div>
+                  </div>
+                )}
+
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-500">
-                    Invoice language
-                  </label>
+                  <label className={labelCls}>Invoice language</label>
                   <select
                     key={`language-${selectedDetail.id}`}
                     defaultValue={selectedDetail.language || ""}
                     onChange={(e) => saveField("language", e.target.value)}
                     disabled={isPending}
-                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                    className={inputCls}
                   >
                     <option value="">Use artist default</option>
                     <option value="EN">English</option>
@@ -217,14 +405,14 @@ export default function CustomersView({
                   </select>
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-neutral-500">Notes</label>
+                  <label className={labelCls}>Notes</label>
                   <textarea
                     key={`notes-${selectedDetail.id}`}
                     defaultValue={selectedDetail.notes || ""}
                     onBlur={(e) => saveField("notes", e.target.value.trim())}
                     disabled={isPending}
                     rows={2}
-                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                    className={inputCls}
                   />
                 </div>
                 {savedField && <p className="text-xs text-green-600">Saved</p>}

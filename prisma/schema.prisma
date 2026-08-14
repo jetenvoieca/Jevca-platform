@@ -194,10 +194,31 @@ model Customer {
   artistId String
   artist   Artist @relation(fields: [artistId], references: [id])
 
+  // "INDIVIDUAL" | "GALLERY" (2026-08-14) — kept as a free string, same
+  // convention as Artist.paymentMethod elsewhere, rather than an enum:
+  // this is UI-facing categorisation, not a value with referential
+  // integrity concerns.
+  kind String @default("INDIVIDUAL")
+
   name    String
   email   String?
   phone   String?
   address String?
+
+  // Gallery-only fields (2026-08-14) — a gallery is dealt with as a
+  // business, but sold to and invoiced through a named person there,
+  // hence separate from the business's own name/email above.
+  contactName  String?
+  contactEmail String?
+  websiteName  String?
+  websiteUrl   String?
+  instagramUrl String?
+  facebookUrl  String?
+  // The gallery's usual cut — a starting point to prefill with when
+  // starting a sale, not binding on any individual sale (each Purchase
+  // keeps its own commissionPercent, which can still be typed/changed
+  // per sale).
+  defaultCommissionPercent Decimal? @db.Decimal(5, 2)
 
   // "EN" or "FR", or null to fall back to the artist's own default
   // (Settings → Invoice language). An explicit per-customer override,

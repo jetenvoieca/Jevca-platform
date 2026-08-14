@@ -3,8 +3,11 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
+export type CustomerKind = "INDIVIDUAL" | "GALLERY";
+
 export type CustomerSummary = {
   id: string;
+  kind: CustomerKind;
   name: string;
   email: string | null;
   phone: string | null;
@@ -13,10 +16,21 @@ export type CustomerSummary = {
 
 export type CustomerDetail = {
   id: string;
+  kind: CustomerKind;
   name: string;
   email: string | null;
   phone: string | null;
   address: string | null;
+  // Gallery-only (2026-08-14) — always present on the type so the form
+  // doesn't need separate optional-prop plumbing, just null/empty for an
+  // Individual.
+  contactName: string | null;
+  contactEmail: string | null;
+  websiteName: string | null;
+  websiteUrl: string | null;
+  instagramUrl: string | null;
+  facebookUrl: string | null;
+  defaultCommissionPercent: string | null;
   language: string | null;
   notes: string | null;
   createdAt: string;
@@ -56,11 +70,11 @@ export async function searchCustomers(
         { email: { contains: q, mode: "insensitive" } },
       ],
     },
-    select: { id: true, name: true, email: true, phone: true, address: true },
+    select: { id: true, kind: true, name: true, email: true, phone: true, address: true },
     orderBy: { name: "asc" },
     take: 10,
   });
-  return rows;
+  return rows.map((r) => ({ ...r, kind: r.kind as CustomerKind }));
 }
 
 export async function listCustomers(artistId: string): Promise<
@@ -70,6 +84,7 @@ export async function listCustomers(artistId: string): Promise<
     where: { artistId },
     select: {
       id: true,
+      kind: true,
       name: true,
       email: true,
       phone: true,
@@ -80,6 +95,7 @@ export async function listCustomers(artistId: string): Promise<
   });
   return rows.map((r) => ({
     id: r.id,
+    kind: r.kind as CustomerKind,
     name: r.name,
     email: r.email,
     phone: r.phone,
@@ -117,10 +133,20 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
 
   return {
     id: customer.id,
+    kind: customer.kind as CustomerKind,
     name: customer.name,
     email: customer.email,
     phone: customer.phone,
     address: customer.address,
+    contactName: customer.contactName,
+    contactEmail: customer.contactEmail,
+    websiteName: customer.websiteName,
+    websiteUrl: customer.websiteUrl,
+    instagramUrl: customer.instagramUrl,
+    facebookUrl: customer.facebookUrl,
+    defaultCommissionPercent: customer.defaultCommissionPercent
+      ? customer.defaultCommissionPercent.toString()
+      : null,
     language: customer.language,
     notes: customer.notes,
     createdAt: customer.createdAt.toISOString(),
@@ -169,14 +195,40 @@ export async function findOrCreateCustomer(
 export async function createCustomer(artistId: string, formData: FormData): Promise<void> {
   const name = (formData.get("name") as string)?.trim();
   if (!name) return;
+  const kindRaw = (formData.get("kind") as string)?.trim();
+  const kind = kindRaw === "GALLERY" ? "GALLERY" : "INDIVIDUAL";
   const email = (formData.get("email") as string)?.trim() || null;
   const phone = (formData.get("phone") as string)?.trim() || null;
   const address = (formData.get("address") as string)?.trim() || null;
   const language = (formData.get("language") as string)?.trim() || null;
   const notes = (formData.get("notes") as string)?.trim() || null;
+  const contactName = (formData.get("contactName") as string)?.trim() || null;
+  const contactEmail = (formData.get("contactEmail") as string)?.trim() || null;
+  const websiteName = (formData.get("websiteName") as string)?.trim() || null;
+  const websiteUrl = (formData.get("websiteUrl") as string)?.trim() || null;
+  const instagramUrl = (formData.get("instagramUrl") as string)?.trim() || null;
+  const facebookUrl = (formData.get("facebookUrl") as string)?.trim() || null;
+  const defaultCommissionRaw = (formData.get("defaultCommissionPercent") as string)?.trim();
+  const defaultCommissionPercent = defaultCommissionRaw ? parseFloat(defaultCommissionRaw) : null;
 
   await db.customer.create({
-    data: { artistId, name, email, phone, address, language, notes },
+    data: {
+      artistId,
+      kind,
+      name,
+      email,
+      phone,
+      address,
+      language,
+      notes,
+      contactName,
+      contactEmail,
+      websiteName,
+      websiteUrl,
+      instagramUrl,
+      facebookUrl,
+      defaultCommissionPercent,
+    },
   });
   revalidatePath(`/sites`);
 }
@@ -184,16 +236,41 @@ export async function createCustomer(artistId: string, formData: FormData): Prom
 export async function updateCustomer(customerId: string, formData: FormData): Promise<void> {
   const name = (formData.get("name") as string)?.trim();
   if (!name) return;
+  const kindRaw = (formData.get("kind") as string)?.trim();
+  const kind = kindRaw === "GALLERY" ? "GALLERY" : "INDIVIDUAL";
   const email = (formData.get("email") as string)?.trim() || null;
   const phone = (formData.get("phone") as string)?.trim() || null;
   const address = (formData.get("address") as string)?.trim() || null;
   const languageRaw = (formData.get("language") as string)?.trim();
   const language = languageRaw === "EN" || languageRaw === "FR" ? languageRaw : null;
   const notes = (formData.get("notes") as string)?.trim() || null;
+  const contactName = (formData.get("contactName") as string)?.trim() || null;
+  const contactEmail = (formData.get("contactEmail") as string)?.trim() || null;
+  const websiteName = (formData.get("websiteName") as string)?.trim() || null;
+  const websiteUrl = (formData.get("websiteUrl") as string)?.trim() || null;
+  const instagramUrl = (formData.get("instagramUrl") as string)?.trim() || null;
+  const facebookUrl = (formData.get("facebookUrl") as string)?.trim() || null;
+  const defaultCommissionRaw = (formData.get("defaultCommissionPercent") as string)?.trim();
+  const defaultCommissionPercent = defaultCommissionRaw ? parseFloat(defaultCommissionRaw) : null;
 
   await db.customer.update({
     where: { id: customerId },
-    data: { name, email, phone, address, language, notes },
+    data: {
+      kind,
+      name,
+      email,
+      phone,
+      address,
+      language,
+      notes,
+      contactName,
+      contactEmail,
+      websiteName,
+      websiteUrl,
+      instagramUrl,
+      facebookUrl,
+      defaultCommissionPercent,
+    },
   });
   revalidatePath(`/sites`);
 }
