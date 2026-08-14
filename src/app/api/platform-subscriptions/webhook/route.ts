@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { getPlatformStripeClient, getPlatformStripeWebhookSecret } from "@/lib/platformStripe";
 import {
   recordPlatformInvoicePaid,
+  recordPlatformInvoiceFailed,
   updatePlatformSubscriptionStatus,
 } from "@/lib/platformSubscriptionSync";
 
@@ -43,6 +44,24 @@ export async function POST(req: NextRequest) {
             amountMinorUnits: invoice.amount_paid,
             currency: invoice.currency,
             paidAtUnixSeconds: invoice.status_transitions?.paid_at || Math.floor(Date.now() / 1000),
+          });
+        }
+        break;
+      }
+
+      // A subscription payment (the artist paying us) failing — Stripe's
+      // own Smart Retries will keep trying automatically; this just
+      // surfaces it in the Alerts dashboard so it's visible without
+      // waiting on the retry outcome.
+      case "invoice.payment_failed": {
+        const invoice = event.data.object as Stripe.Invoice;
+        const customerId =
+          typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+        if (customerId) {
+          await recordPlatformInvoiceFailed({
+            stripeCustomerId: customerId,
+            amountMinorUnits: invoice.amount_due,
+            currency: invoice.currency,
           });
         }
         break;

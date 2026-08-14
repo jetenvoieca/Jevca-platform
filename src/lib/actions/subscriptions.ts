@@ -83,3 +83,13 @@ export async function deleteManualSubscriptionPayment(id: string, siteId: string
   await db.subscriptionPayment.delete({ where: { id } });
   revalidatePath(`/sites/${siteId}`);
 }
+
+// ---- Alerts dashboard ----
+
+export async function dismissAlert(id: string) {
+  await db.alertEvent.update({
+    where: { id },
+    data: { resolvedAt: new Date() },
+  });
+  revalidatePath("/alerts");
+}

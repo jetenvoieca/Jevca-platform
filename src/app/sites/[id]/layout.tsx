@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { publishSite } from "@/lib/actions/pages";
 import { logout } from "@/lib/actions/auth";
 import { countHopper, countBucket } from "@/lib/actions/hopper";
+import { getOpenAlerts } from "@/lib/alerts";
 import SiteNavPanel from "@/components/SiteNavPanel";
 
 export default async function SiteLayout({
@@ -20,7 +21,7 @@ export default async function SiteLayout({
   });
   if (!site) notFound();
 
-  const [pages, hopperCount, bucketCount] = await Promise.all([
+  const [pages, hopperCount, bucketCount, openAlerts] = await Promise.all([
     db.page.findMany({
       where: { siteId: id },
       orderBy: { position: "asc" },
@@ -35,6 +36,7 @@ export default async function SiteLayout({
     }),
     countHopper(site.artistId),
     countBucket(site.artistId),
+    getOpenAlerts(),
   ]);
   const hasUnpublished = pages.some(
     (p) => JSON.stringify(p.draftBlocks) !== JSON.stringify(p.liveBlocks)
@@ -82,6 +84,7 @@ export default async function SiteLayout({
             salesEnabled={site.salesEnabled}
             hopperCount={hopperCount}
             bucketCount={bucketCount}
+            alertCount={openAlerts.length}
           />
         </div>
       </div>

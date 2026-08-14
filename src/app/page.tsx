@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { db } from "@/lib/db";
 import SitesDirectoryView from "@/components/SitesDirectoryView";
+import { getOpenAlerts } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
 
@@ -66,5 +67,15 @@ export default async function SitesDirectoryPage({
     ownerName: s.artist.name,
   }));
 
-  return <SitesDirectoryView sites={rows} q={q} sort={sort} showArchived={showArchived} />;
+  const openAlerts = await getOpenAlerts();
+
+  return (
+    <SitesDirectoryView
+      sites={rows}
+      q={q}
+      sort={sort}
+      showArchived={showArchived}
+      alertCount={openAlerts.length}
+    />
+  );
 }

@@ -13,12 +13,14 @@ export default function SiteNavPanel({
   salesEnabled = false,
   hopperCount = 0,
   bucketCount = 0,
+  alertCount = 0,
 }: {
   siteId: string;
   pages: PageRow[];
   salesEnabled?: boolean;
   hopperCount?: number;
   bucketCount?: number;
+  alertCount?: number;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -43,6 +45,25 @@ export default function SiteNavPanel({
         className="rounded-md px-3 py-2 font-medium text-neutral-700 hover:bg-neutral-100"
       >
         Sites
+      </Link>
+      <Link
+        prefetch={false}
+        href="/alerts"
+        className="flex items-center justify-between rounded-md px-3 py-2 font-medium text-neutral-700 hover:bg-neutral-100"
+      >
+        Alerts
+        {alertCount > 0 && (
+          <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+            {alertCount}
+          </span>
+        )}
+      </Link>
+      <Link
+        prefetch={false}
+        href="/accounts"
+        className="mb-2 rounded-md px-3 py-2 font-medium text-neutral-700 hover:bg-neutral-100"
+      >
+        Accounts
       </Link>
 
       <div className="ml-2 flex flex-col gap-1 border-l border-neutral-200 py-1 pl-2">

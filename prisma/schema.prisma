@@ -132,6 +132,7 @@ model Artist {
   images Image[]
   videoRenders VideoRender[]
   subscriptionPayments SubscriptionPayment[]
+  alertEvents AlertEvent[]
 }
 
 // One unified ledger of "artist paid us for their subscription" rows,
@@ -157,6 +158,29 @@ model SubscriptionPayment {
   createdAt DateTime @default(now())
 
   @@index([artistId])
+}
+
+// Generic "something needs your attention" record (2026-08-13) —
+// deliberately not payments-specific in shape, even though the only two
+// types today are subscription-related, since the stated intent is one
+// dashboard that can grow to cover other kinds of alerts later without a
+// schema rework. `resolvedAt` null = still open; auto-resolved by the
+// webhook handler when the underlying issue clears (e.g. a payment
+// succeeds after a prior failure), or dismissible by hand.
+model AlertEvent {
+  id       String @id @default(cuid())
+  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED"
+  severity String @default("WARNING") // "INFO" | "WARNING" | "CRITICAL"
+  message  String
+
+  artistId String?
+  artist   Artist? @relation(fields: [artistId], references: [id])
+
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([artistId])
+  @@index([resolvedAt])
 }
 
 // Scoped to one artist, deliberately — even the same real-world gallery

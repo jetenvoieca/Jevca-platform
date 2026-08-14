@@ -6,6 +6,7 @@ export type AppShellNavItem = {
   href: string;
   active?: boolean;
   disabled?: boolean;
+  badge?: number;
 };
 
 export default function AppShell({
@@ -89,13 +90,22 @@ export default function AppShell({
                 key={item.href}
                 href={item.href}
                 prefetch={false}
-                className={`rounded-md px-3 py-2 text-sm font-medium ${
+                className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium ${
                   item.active
                     ? "bg-neutral-900 text-white"
                     : "text-neutral-700 hover:bg-neutral-100"
                 }`}
               >
                 {item.label}
+                {!!item.badge && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+                      item.active ? "bg-white/20 text-white" : "bg-red-100 text-red-700"
+                    }`}
+                  >
+                    {item.badge}
+                  </span>
+                )}
               </Link>
             )
           )}

@@ -13,16 +13,22 @@ export default function SitesDirectoryView({
   q,
   sort,
   showArchived,
+  alertCount = 0,
 }: {
   sites: SiteRow[];
   q: string;
   sort: string;
   showArchived: boolean;
+  alertCount?: number;
 }) {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={[{ label: "Sites", href: "/", active: true }]}
+      navItems={[
+        { label: "Sites", href: "/", active: true },
+        { label: "Alerts", href: "/alerts", badge: alertCount },
+        { label: "Accounts", href: "/accounts" },
+      ]}
       rightPanel={
         <SitesListColumn sites={sites} q={q} sort={sort} showArchived={showArchived} />
       }
