@@ -9,6 +9,7 @@ import {
   type CustomerSummary,
   type CustomerDetail,
 } from "@/lib/actions/customers";
+import CustomerImportPanel from "@/components/CustomerImportPanel";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Active",
@@ -37,6 +38,7 @@ export default function CustomersView({
   const [savedField, setSavedField] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const router = useRouter();
 
@@ -58,13 +60,14 @@ export default function CustomersView({
   };
 
   const saveField = (
-    field: "name" | "email" | "phone" | "address" | "language" | "notes",
+    field: "firstName" | "lastName" | "email" | "phone" | "address" | "language" | "notes",
     value: string
   ) => {
     if (!selectedDetail) return;
     const fd = new FormData();
     fd.set("kind", "INDIVIDUAL");
-    fd.set("name", field === "name" ? value : selectedDetail.name);
+    fd.set("firstName", field === "firstName" ? value : selectedDetail.firstName || "");
+    fd.set("lastName", field === "lastName" ? value : selectedDetail.lastName || "");
     fd.set("email", field === "email" ? value : selectedDetail.email || "");
     fd.set("phone", field === "phone" ? value : selectedDetail.phone || "");
     fd.set("address", field === "address" ? value : selectedDetail.address || "");
@@ -74,7 +77,14 @@ export default function CustomersView({
     startTransition(async () => {
       await updateCustomer(selectedDetail.id, fd);
       router.refresh();
-      setSelectedDetail((prev) => (prev ? { ...prev, [field]: value || null } : prev));
+      setSelectedDetail((prev) => {
+        if (!prev) return prev;
+        const next = { ...prev, [field]: value || null };
+        if (field === "firstName" || field === "lastName") {
+          next.name = [next.firstName, next.lastName].filter(Boolean).join(" ") || prev.name;
+        }
+        return next;
+      });
       setSavedField(field);
       setTimeout(() => setSavedField(null), 1500);
     });
@@ -220,16 +230,29 @@ export default function CustomersView({
             )}
 
             <div className="space-y-3">
-              <div>
-                <label className={labelCls}>Name</label>
-                <input
-                  key={`name-${selectedDetail.id}`}
-                  type="text"
-                  defaultValue={selectedDetail.name}
-                  onBlur={(e) => saveField("name", e.target.value.trim())}
-                  disabled={isPending}
-                  className={inputCls}
-                />
+              <div className="grid grid-cols-2 gap-2">
+                <div>
+                  <label className={labelCls}>First name</label>
+                  <input
+                    key={`firstName-${selectedDetail.id}`}
+                    type="text"
+                    defaultValue={selectedDetail.firstName || ""}
+                    onBlur={(e) => saveField("firstName", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Last name</label>
+                  <input
+                    key={`lastName-${selectedDetail.id}`}
+                    type="text"
+                    defaultValue={selectedDetail.lastName || ""}
+                    onBlur={(e) => saveField("lastName", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
               </div>
               <div>
                 <label className={labelCls}>Email</label>
@@ -301,9 +324,16 @@ export default function CustomersView({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="mb-3 w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+            className="mb-2 w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
           >
             + Add Customer
+          </button>
+          <button
+            type="button"
+            onClick={() => setImporting(true)}
+            className="mb-3 w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+          >
+            Import from CSV
           </button>
           <input
             type="text"
@@ -324,10 +354,16 @@ export default function CustomersView({
           >
             <input
               type="text"
-              name="name"
-              placeholder="Name"
+              name="firstName"
+              placeholder="First name"
               required
               autoFocus
+              className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs"
+            />
+            <input
+              type="text"
+              name="lastName"
+              placeholder="Last name"
               className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs"
             />
             <input
@@ -389,6 +425,14 @@ export default function CustomersView({
           )}
         </div>
       </div>
+
+      {importing && (
+        <CustomerImportPanel
+          artistId={artistId}
+          onClose={() => setImporting(false)}
+          onImported={() => router.refresh()}
+        />
+      )}
     </div>
   );
 }

@@ -21,6 +21,8 @@ export type CustomerDetail = {
   id: string;
   kind: CustomerKind;
   name: string;
+  firstName: string | null;
+  lastName: string | null;
   email: string | null;
   phone: string | null;
   address: string | null;
@@ -184,6 +186,8 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
     id: customer.id,
     kind: customer.kind as CustomerKind,
     name: customer.name,
+    firstName: customer.firstName,
+    lastName: customer.lastName,
     email: customer.email,
     phone: customer.phone,
     address: customer.address,
@@ -311,10 +315,18 @@ export async function createCustomer(
   artistId: string,
   formData: FormData
 ): Promise<{ id: string } | { error: string }> {
-  const name = (formData.get("name") as string)?.trim();
-  if (!name) return { error: "Name is required." };
   const kindRaw = (formData.get("kind") as string)?.trim();
   const kind = kindRaw === "GALLERY" ? "GALLERY" : "INDIVIDUAL";
+  // Individuals submit firstName/lastName and no `name` at all; Galleries
+  // (which have no first/last concept) submit `name` directly. Whichever
+  // arrives, `name` ends up as the single source of truth used
+  // everywhere else (2026-08-14) — nothing downstream needs to know
+  // which path built it.
+  const firstName = (formData.get("firstName") as string)?.trim() || null;
+  const lastName = (formData.get("lastName") as string)?.trim() || null;
+  const nameRaw = (formData.get("name") as string)?.trim();
+  const name = firstName || lastName ? [firstName, lastName].filter(Boolean).join(" ") : nameRaw;
+  if (!name) return { error: "Name is required." };
   const email = (formData.get("email") as string)?.trim() || null;
   const phone = (formData.get("phone") as string)?.trim() || null;
   const address = (formData.get("address") as string)?.trim() || null;
@@ -337,6 +349,8 @@ export async function createCustomer(
       artistId,
       kind,
       name,
+      firstName: kind === "INDIVIDUAL" ? firstName : null,
+      lastName: kind === "INDIVIDUAL" ? lastName : null,
       email,
       phone,
       address,
@@ -357,10 +371,16 @@ export async function createCustomer(
 }
 
 export async function updateCustomer(customerId: string, formData: FormData): Promise<void> {
-  const name = (formData.get("name") as string)?.trim();
-  if (!name) return;
   const kindRaw = (formData.get("kind") as string)?.trim();
   const kind = kindRaw === "GALLERY" ? "GALLERY" : "INDIVIDUAL";
+  const firstName = (formData.get("firstName") as string)?.trim() || null;
+  const lastName = (formData.get("lastName") as string)?.trim() || null;
+  const nameRaw = (formData.get("name") as string)?.trim();
+  const name =
+    kind === "INDIVIDUAL" && (firstName || lastName)
+      ? [firstName, lastName].filter(Boolean).join(" ")
+      : nameRaw;
+  if (!name) return;
   const email = (formData.get("email") as string)?.trim() || null;
   const phone = (formData.get("phone") as string)?.trim() || null;
   const address = (formData.get("address") as string)?.trim() || null;
@@ -386,6 +406,8 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
     data: {
       kind,
       name,
+      firstName: kind === "INDIVIDUAL" ? firstName : null,
+      lastName: kind === "INDIVIDUAL" ? lastName : null,
       email,
       phone,
       address,

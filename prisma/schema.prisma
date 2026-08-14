@@ -201,6 +201,15 @@ model Customer {
   kind String @default("INDIVIDUAL")
 
   name    String
+  // Split out 2026-08-14, alongside the CSV import — kept in sync with
+  // `name` (still the single source of truth for display everywhere:
+  // sale records, invoices, the customer list) rather than replacing
+  // it, so nothing existing needs to change. Individual-only in
+  // practice; a Gallery's `name` is the gallery's own name and these
+  // stay null for it. The actual point of splitting them is future
+  // mailshots wanting "Hi Sarah," not "Hi Sarah Jenkins,".
+  firstName String?
+  lastName  String?
   email   String?
   phone   String?
   address String?
