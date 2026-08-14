@@ -146,6 +146,7 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
       select: {
         id: true,
         presentationTitle: true,
+        catalogueName: true,
         presentationPrice: true,
         catalogueNumber: true,
         availability: true,

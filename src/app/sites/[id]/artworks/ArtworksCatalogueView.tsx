@@ -11,6 +11,7 @@ import ArtworkDetailPanel, {
 type ArtworkRow = {
   id: string;
   presentationTitle: string;
+  catalogueName: string;
   presentationPrice: string | null;
   catalogueNumber: string;
   availability: string;
@@ -123,6 +124,7 @@ export default function ArtworksCatalogueView({
         rows.map((a) => ({
           id: a.id,
           presentationTitle: a.presentationTitle,
+          catalogueName: a.catalogueName,
           presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
           catalogueNumber: a.catalogueNumber,
           availability: a.availability,
@@ -155,6 +157,7 @@ export default function ArtworksCatalogueView({
         ...rows.map((a) => ({
           id: a.id,
           presentationTitle: a.presentationTitle,
+          catalogueName: a.catalogueName,
           presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
           catalogueNumber: a.catalogueNumber,
           availability: a.availability,
@@ -270,6 +273,7 @@ export default function ArtworksCatalogueView({
               ? {
                   ...a,
                   presentationTitle: item.presentationTitle,
+                  catalogueName: item.catalogueName,
                   presentationPrice: item.presentationPrice,
                   availability: item.availability,
                   type: item.type,
@@ -550,7 +554,7 @@ export default function ArtworksCatalogueView({
                     )}
                   </div>
                   <p className="mt-1 truncate text-sm font-medium text-neutral-900">
-                    {a.presentationTitle}
+                    {a.catalogueName}
                   </p>
                   <p className="text-xs text-neutral-500">{a.type || "—"}</p>
                 </button>
@@ -562,7 +566,7 @@ export default function ArtworksCatalogueView({
               <thead>
                 <tr className="border-b border-neutral-200 text-left text-neutral-500">
                   <th className="py-2 font-medium"></th>
-                  <th className="py-2 font-medium">Title</th>
+                  <th className="py-2 font-medium">Name</th>
                   <th className="py-2 font-medium">Catalogue #</th>
                   <th className="py-2 font-medium">Price</th>
                   <th className="py-2 font-medium">Availability</th>
@@ -588,7 +592,7 @@ export default function ArtworksCatalogueView({
                         <div className="h-10 w-10 rounded bg-neutral-100" />
                       )}
                     </td>
-                    <td className="py-2 font-medium text-neutral-900">{a.presentationTitle}</td>
+                    <td className="py-2 font-medium text-neutral-900">{a.catalogueName}</td>
                     <td className="py-2 text-neutral-500">{a.catalogueNumber}</td>
                     <td className="py-2 text-neutral-500">
                       {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
