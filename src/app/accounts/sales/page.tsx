@@ -11,7 +11,9 @@ type SaleRow = {
   artistName: string;
   artworkTitle: string;
   buyerName: string | null;
-  amount: number;
+  grossAmount: number;
+  netAmount: number;
+  commissionPercent: number | null;
   currency: string;
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
   createdAt: Date;
@@ -40,6 +42,7 @@ export default async function ConsolidatedSalesPage() {
       where: { status: { not: "ABANDONED" } },
       select: {
         totalAmount: true,
+        commissionPercent: true,
         currency: true,
         status: true,
         buyerName: true,
@@ -74,14 +77,23 @@ export default async function ConsolidatedSalesPage() {
       });
     }
     const group = months.get(key)!;
-    const amount = parseFloat(p.totalAmount.toString());
-    group.totalsByCurrency[p.currency] = (group.totalsByCurrency[p.currency] || 0) + amount;
+    const grossAmount = parseFloat(p.totalAmount.toString());
+    // Gallery-channel sales carry a commission taken off the top — the
+    // net (what the artist actually receives) is what should count as
+    // "the sale value" here, same convention already used on the
+    // per-sale detail card. Direct (Stripe) sales have no commission, so
+    // gross and net are the same for them.
+    const commissionPercent = p.commissionPercent ? parseFloat(p.commissionPercent.toString()) : null;
+    const netAmount = commissionPercent ? grossAmount * (1 - commissionPercent / 100) : grossAmount;
+    group.totalsByCurrency[p.currency] = (group.totalsByCurrency[p.currency] || 0) + netAmount;
     group.rows.push({
       siteId: p.artwork.artist.sites[0]?.id || null,
       artistName: p.artwork.artist.name,
       artworkTitle: p.artwork.presentationTitle,
       buyerName: p.buyerName,
-      amount,
+      grossAmount,
+      netAmount,
+      commissionPercent,
       currency: p.currency,
       status: p.status,
       createdAt: p.createdAt,
@@ -113,9 +125,11 @@ export default async function ConsolidatedSalesPage() {
           </div>
           <p className="mb-6 text-sm text-neutral-500">
             Every artist&apos;s sales to their own buyers, in one place, grouped by month —
-            individual sites still have their own Sales page for the day-to-day view.
-            Amount shown is the full agreed sale value (not yet-collected instalments are
-            included), and abandoned sales are excluded. Totals are kept separate per currency.
+            individual sites still have their own Sales page for the day-to-day view. Amount
+            shown is <strong>net of gallery commission</strong> where a commission applies (the
+            same figure as the &quot;net paid&quot; line on that sale&apos;s own record) — not
+            yet-collected instalments are still included in full, and abandoned sales are
+            excluded. Totals are kept separate per currency.
           </p>
 
           {sortedMonths.length === 0 ? (
@@ -124,7 +138,7 @@ export default async function ConsolidatedSalesPage() {
             <>
               <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
                 <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  All-time total
+                  All-time total (net of commission)
                 </p>
                 <p className="text-lg font-semibold text-neutral-900">
                   {Object.entries(grandTotalsByCurrency)
@@ -179,7 +193,13 @@ export default async function ConsolidatedSalesPage() {
                             <td className="px-4 py-1.5 text-neutral-500">{r.buyerName || "—"}</td>
                             <td className="px-4 py-1.5">{r.createdAt.toLocaleDateString()}</td>
                             <td className="px-4 py-1.5">
-                              {r.currency} {r.amount.toFixed(2)}
+                              {r.currency} {r.netAmount.toFixed(2)}
+                              {r.commissionPercent != null && (
+                                <span className="ml-1 text-neutral-400">
+                                  (net of {r.commissionPercent}%, gross {r.currency}{" "}
+                                  {r.grossAmount.toFixed(2)})
+                                </span>
+                              )}
                             </td>
                             <td className={`px-4 py-1.5 ${STATUS_STYLE[r.status]}`}>
                               {r.status.charAt(0) + r.status.slice(1).toLowerCase()}
