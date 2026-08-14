@@ -2,6 +2,7 @@ import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import { getOpenAlerts } from "@/lib/alerts";
 import { dismissAlert } from "@/lib/actions/subscriptions";
+import { buildTopNavItems } from "@/lib/topNav";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,7 @@ export default async function AlertsPage() {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={[
-        { label: "Sites", href: "/" },
-        { label: "Alerts", href: "/alerts", active: true, badge: alerts.length },
-        { label: "Accounts", href: "/accounts" },
-      ]}
+      navItems={buildTopNavItems("alerts", alerts.length)}
       content={
         <div className="mx-auto max-w-3xl px-6 py-6">
           <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Alerts</h1>

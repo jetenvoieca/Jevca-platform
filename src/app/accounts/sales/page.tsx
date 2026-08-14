@@ -6,40 +6,85 @@ import { buildTopNavItems } from "@/lib/topNav";
 
 export const dynamic = "force-dynamic";
 
-type MonthGroup = {
-  key: string; // "2026-08"
-  label: string; // "August 2026"
-  totalsByCurrency: Record<string, number>;
-  rows: { artistName: string; amount: number; currency: string; paidAt: Date; source: string }[];
+type SaleRow = {
+  siteId: string | null;
+  artistName: string;
+  artworkTitle: string;
+  buyerName: string | null;
+  amount: number;
+  currency: string;
+  status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+  createdAt: Date;
 };
 
-export default async function AccountsPage() {
-  const payments = await db.subscriptionPayment.findMany({
-    include: { artist: { select: { name: true } } },
-    orderBy: { paidAt: "desc" },
-  });
-  const openAlerts = await getOpenAlerts();
+type MonthGroup = {
+  key: string;
+  label: string;
+  totalsByCurrency: Record<string, number>;
+  rows: SaleRow[];
+};
+
+const STATUS_STYLE: Record<SaleRow["status"], string> = {
+  COMPLETED: "text-green-600",
+  ABANDONED: "text-neutral-400",
+  ACTIVE: "text-amber-600",
+};
+
+export default async function ConsolidatedSalesPage() {
+  const [purchases, openAlerts] = await Promise.all([
+    // Abandoned sales excluded — they never happened, so they'd distort
+    // both the monthly totals and the "how much did we actually sell"
+    // question this page exists to answer. Every artist's own Sales page
+    // (which does show Abandoned) remains the place for that detail.
+    db.purchase.findMany({
+      where: { status: { not: "ABANDONED" } },
+      select: {
+        totalAmount: true,
+        currency: true,
+        status: true,
+        buyerName: true,
+        createdAt: true,
+        artwork: {
+          select: {
+            presentationTitle: true,
+            artist: {
+              select: {
+                name: true,
+                sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+              },
+            },
+          },
+        },
+      },
+      relationLoadStrategy: "query",
+      orderBy: { createdAt: "desc" },
+    }),
+    getOpenAlerts(),
+  ]);
 
   const months = new Map<string, MonthGroup>();
-  for (const p of payments) {
-    const key = `${p.paidAt.getFullYear()}-${String(p.paidAt.getMonth() + 1).padStart(2, "0")}`;
+  for (const p of purchases) {
+    const key = `${p.createdAt.getFullYear()}-${String(p.createdAt.getMonth() + 1).padStart(2, "0")}`;
     if (!months.has(key)) {
       months.set(key, {
         key,
-        label: p.paidAt.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
+        label: p.createdAt.toLocaleDateString(undefined, { month: "long", year: "numeric" }),
         totalsByCurrency: {},
         rows: [],
       });
     }
     const group = months.get(key)!;
-    const amount = parseFloat(p.amount.toString());
+    const amount = parseFloat(p.totalAmount.toString());
     group.totalsByCurrency[p.currency] = (group.totalsByCurrency[p.currency] || 0) + amount;
     group.rows.push({
-      artistName: p.artist.name,
+      siteId: p.artwork.artist.sites[0]?.id || null,
+      artistName: p.artwork.artist.name,
+      artworkTitle: p.artwork.presentationTitle,
+      buyerName: p.buyerName,
       amount,
       currency: p.currency,
-      paidAt: p.paidAt,
-      source: p.source,
+      status: p.status,
+      createdAt: p.createdAt,
     });
   }
   const sortedMonths = Array.from(months.values()).sort((a, b) => (a.key < b.key ? 1 : -1));
@@ -54,27 +99,27 @@ export default async function AccountsPage() {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("accounts", openAlerts.length)}
+      navItems={buildTopNavItems("sales", openAlerts.length)}
       content={
-        <div className="mx-auto max-w-3xl px-6 py-6">
+        <div className="mx-auto max-w-4xl px-6 py-6">
           <div className="mb-1 flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-neutral-900">Accounts</h1>
+            <h1 className="text-2xl font-semibold text-neutral-900">Consolidated Sales</h1>
             <Link
-              href="/accounts/sales"
+              href="/accounts"
               className="text-sm text-neutral-500 underline-offset-2 hover:underline"
             >
-              Consolidated Sales →
+              ← Accounts
             </Link>
           </div>
           <p className="mb-6 text-sm text-neutral-500">
-            Subscription revenue by month — artists paying us. Stripe and manually-entered
-            payments together. Totals are kept separate per currency rather than combined, since
-            converting between them isn&apos;t something to do silently. For artists&apos; own
-            sales to their buyers, see Consolidated Sales.
+            Every artist&apos;s sales to their own buyers, in one place, grouped by month —
+            individual sites still have their own Sales page for the day-to-day view.
+            Amount shown is the full agreed sale value (not yet-collected instalments are
+            included), and abandoned sales are excluded. Totals are kept separate per currency.
           </p>
 
           {sortedMonths.length === 0 ? (
-            <p className="text-sm text-neutral-500">No subscription payments recorded yet.</p>
+            <p className="text-sm text-neutral-500">No sales recorded yet.</p>
           ) : (
             <>
               <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -103,7 +148,7 @@ export default async function AccountsPage() {
                             .join("  ·  ")}
                         </span>
                         <span className="text-xs text-neutral-400">
-                          {g.rows.length} payment{g.rows.length === 1 ? "" : "s"}
+                          {g.rows.length} sale{g.rows.length === 1 ? "" : "s"}
                         </span>
                       </span>
                     </summary>
@@ -111,21 +156,33 @@ export default async function AccountsPage() {
                       <thead className="bg-neutral-50 text-left text-neutral-400">
                         <tr>
                           <th className="px-4 py-1.5 font-medium">Artist</th>
+                          <th className="px-4 py-1.5 font-medium">Artwork</th>
+                          <th className="px-4 py-1.5 font-medium">Buyer</th>
                           <th className="px-4 py-1.5 font-medium">Date</th>
                           <th className="px-4 py-1.5 font-medium">Amount</th>
-                          <th className="px-4 py-1.5 font-medium">Source</th>
+                          <th className="px-4 py-1.5 font-medium">Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {g.rows.map((r, i) => (
                           <tr key={i} className="border-t border-neutral-100">
-                            <td className="px-4 py-1.5">{r.artistName}</td>
-                            <td className="px-4 py-1.5">{r.paidAt.toLocaleDateString()}</td>
+                            <td className="px-4 py-1.5">
+                              {r.siteId ? (
+                                <Link href={`/sites/${r.siteId}/sales`} className="hover:underline">
+                                  {r.artistName}
+                                </Link>
+                              ) : (
+                                r.artistName
+                              )}
+                            </td>
+                            <td className="px-4 py-1.5">{r.artworkTitle}</td>
+                            <td className="px-4 py-1.5 text-neutral-500">{r.buyerName || "—"}</td>
+                            <td className="px-4 py-1.5">{r.createdAt.toLocaleDateString()}</td>
                             <td className="px-4 py-1.5">
                               {r.currency} {r.amount.toFixed(2)}
                             </td>
-                            <td className="px-4 py-1.5 text-neutral-400">
-                              {r.source === "STRIPE" ? "Stripe" : "Manual"}
+                            <td className={`px-4 py-1.5 ${STATUS_STYLE[r.status]}`}>
+                              {r.status.charAt(0) + r.status.slice(1).toLowerCase()}
                             </td>
                           </tr>
                         ))}

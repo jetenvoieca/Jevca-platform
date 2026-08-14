@@ -1,5 +1,6 @@
 import AppShell from "@/components/AppShell";
 import SitesListColumn from "@/components/SitesListColumn";
+import { buildTopNavItems } from "@/lib/topNav";
 
 type SiteRow = {
   id: string;
@@ -24,11 +25,7 @@ export default function SitesDirectoryView({
   return (
     <AppShell
       publishEnabled={false}
-      navItems={[
-        { label: "Sites", href: "/", active: true },
-        { label: "Alerts", href: "/alerts", badge: alertCount },
-        { label: "Accounts", href: "/accounts" },
-      ]}
+      navItems={buildTopNavItems("sites", alertCount)}
       rightPanel={
         <SitesListColumn sites={sites} q={q} sort={sort} showArchived={showArchived} />
       }
