@@ -108,8 +108,8 @@ export default function PurchasePanel({
     startTransition(async () => {
       await updatePurchaseRelease(activePurchase.id, siteId, formData);
       setSaved(true);
-      router.refresh();
-      onChanged?.();
+      if (onChanged) onChanged();
+      else router.refresh();
       setTimeout(() => setSaved(false), 2000);
     });
   };
@@ -122,8 +122,8 @@ export default function PurchasePanel({
         setError(res.error);
         return;
       }
-      router.refresh();
-      onChanged?.();
+      if (onChanged) onChanged();
+      else router.refresh();
     });
   };
 
@@ -135,8 +135,8 @@ export default function PurchasePanel({
         setError(res.error);
         return;
       }
-      router.refresh();
-      onChanged?.();
+      if (onChanged) onChanged();
+      else router.refresh();
     });
   };
 
@@ -155,8 +155,8 @@ export default function PurchasePanel({
       setPastBuyerAddress("");
       setPastSalePrice("");
       setPastCommissionPercent("");
-      router.refresh();
-      onChanged?.();
+      if (onChanged) onChanged();
+      else router.refresh();
     });
   };
 
@@ -172,8 +172,8 @@ export default function PurchasePanel({
         startTransition(async () => {
           const res = await markGallerySalePaid(activePurchase.id, siteId);
           if (!res.ok) setError(res.error);
-          router.refresh();
-          onChanged?.();
+          if (onChanged) onChanged();
+          else router.refresh();
         });
       },
     });
@@ -192,8 +192,8 @@ export default function PurchasePanel({
         startTransition(async () => {
           const res = await abandonPurchase(activePurchase.id, siteId);
           if (!res.ok) setError(res.error);
-          router.refresh();
-          onChanged?.();
+          if (onChanged) onChanged();
+          else router.refresh();
         });
       },
     });
@@ -219,8 +219,8 @@ export default function PurchasePanel({
         startTransition(async () => {
           const res = await deleteGallerySale(p.id, siteId);
           if (!res.ok) setError(res.error);
-          router.refresh();
-          onChanged?.();
+          if (onChanged) onChanged();
+          else router.refresh();
         });
       },
     });
@@ -244,8 +244,8 @@ export default function PurchasePanel({
         startTransition(async () => {
           const res = await forceDeleteCompletedSale(p.id, siteId);
           if (!res.ok) setError(res.error);
-          router.refresh();
-          onChanged?.();
+          if (onChanged) onChanged();
+          else router.refresh();
         });
       },
     });
@@ -272,8 +272,8 @@ export default function PurchasePanel({
         startTransition(async () => {
           const res = await deleteGallerySale(activePurchase.id, siteId);
           if (!res.ok) setError(res.error);
-          router.refresh();
-          onChanged?.();
+          if (onChanged) onChanged();
+          else router.refresh();
         });
       },
     });
@@ -842,8 +842,8 @@ export default function PurchasePanel({
                     onDone={() => {
                       setCardSecret(null);
                       setCardPublishableKey(null);
-                      router.refresh();
-                      onChanged?.();
+                      if (onChanged) onChanged();
+                      else router.refresh();
                     }}
                   />
                   <p className="mt-2 text-xs text-neutral-400">

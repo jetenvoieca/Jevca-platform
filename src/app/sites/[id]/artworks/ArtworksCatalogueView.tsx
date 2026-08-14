@@ -1,7 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { createArtwork, getArtworkDetailForClient, listArtworks } from "@/lib/actions/artworks";
+import {
+  createArtwork,
+  getArtworkDetailForClient,
+  listArtworks,
+  deleteArtworkIfBlank,
+} from "@/lib/actions/artworks";
 import ArtworkImportPanel from "@/components/ArtworkImportPanel";
 import ArtworkDetailPanel, {
   type ArtworkDetail,
@@ -222,6 +227,16 @@ export default function ArtworksCatalogueView({
 
   const handleSelect = (artworkId: string) => {
     if (selectingId) return;
+    // Quietly cleans up the artwork you're switching away from if it's
+    // still exactly as it was when created (see deleteArtworkIfBlank) —
+    // a no-op if you've actually added anything. Previously only ran
+    // when explicitly clicking Close, which no longer exists here since
+    // the grid stays visible regardless (2026-08-15) — this preserves
+    // that safety net for an abandoned "+ Add New" without needing an
+    // extra click. Fire-and-forget: no need to block switching on it.
+    if (selected && selected.id !== artworkId) {
+      deleteArtworkIfBlank(siteId, selected.id);
+    }
     setSelectingId(artworkId);
     selectedIdRef.current = artworkId;
     (async () => {
@@ -631,6 +646,7 @@ export default function ArtworksCatalogueView({
               onClose={handleClosePanel}
               onDeleted={handleDeletedPanel}
               onDataChanged={refreshSelected}
+              showCloseButton={false}
             />
           ) : (
             <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">

@@ -72,6 +72,7 @@ export default function ArtworkDetailPanel({
   onClose,
   onDeleted,
   onDataChanged,
+  showCloseButton = true,
 }: {
   siteId: string;
   artistId: string;
@@ -99,6 +100,13 @@ export default function ArtworkDetailPanel({
   // saved field (e.g. Catalogue → Group) could appear to silently revert
   // next time this panel re-rendered, even though the save itself worked.
   onDataChanged?: () => void;
+  // Off by default only where the panel sits permanently alongside its
+  // own list (the Artwork Catalogue) — there, the grid is always visible
+  // regardless of whether this panel is open, so an explicit "close"
+  // step has nothing left to do (2026-08-15 feedback). Left on
+  // everywhere else (e.g. Section editor), where this panel is the only
+  // thing showing and closing it is the only way back.
+  showCloseButton?: boolean;
 }) {
   const [tab, setTab] = useState<"presentation" | "catalogue" | "saleterms" | "payment">(
     "catalogue"
@@ -203,14 +211,16 @@ export default function ArtworkDetailPanel({
           >
             Delete
           </button>
-          <button
-            type="button"
-            onClick={handleClose}
-            disabled={isPending}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Close
-          </button>
+          {showCloseButton && (
+            <button
+              type="button"
+              onClick={handleClose}
+              disabled={isPending}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+            >
+              Close
+            </button>
+          )}
         </div>
       </div>
 
