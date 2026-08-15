@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payments";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
+import { computeShowFramedPricing } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -287,6 +288,8 @@ export default function SalesView({
                     artistId={artistId}
                     siteId={siteId}
                     terms={selectedDetail.saleTerms}
+                    priceFramed={selectedDetail.priceFramed}
+                    showFramedPricing={computeShowFramedPricing(selectedDetail.type)}
                     activePurchase={selectedDetail.activePurchase}
                     history={selectedDetail.purchaseHistory}
                     saleSources={saleSources}

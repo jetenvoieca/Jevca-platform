@@ -63,6 +63,17 @@ function withCurrent(presets: string[], current: string | null) {
   return [current, ...presets];
 }
 
+// Shared across every consumer of Framed pricing (2026-08-15) — was
+// duplicated inline in both this file and SalesView.tsx, which is
+// exactly how they drifted out of sync and broke the build the first
+// time. Substring match on "edition" (not exact), since Type is free
+// text from the artist's own preset list and can be phrased several
+// ways ("Edition", "Giclée Edition", "Limited Edition").
+export function computeShowFramedPricing(type: string | null): boolean {
+  const normalized = (type || "").trim().toLowerCase();
+  return normalized.includes("edition") || normalized === "original - paper";
+}
+
 export default function ArtworkDetailPanel({
   siteId,
   artistId,
@@ -128,8 +139,7 @@ export default function ArtworkDetailPanel({
   // can still be sold framed (2026-08-15 correction). Kept as its own
   // condition rather than folding into isEditionType, since the two
   // genuinely diverge for this type.
-  const showFramedPricing =
-    isEditionType || typeValue.trim().toLowerCase() === "original - paper";
+  const showFramedPricing = computeShowFramedPricing(typeValue);
   const router = useRouter();
 
   // Live state for the two "instalment price" previews (2026-08-15) —
