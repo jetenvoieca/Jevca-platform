@@ -184,13 +184,47 @@ export default function PurchasePanel({
     });
   };
 
-  const handleStartPurchase = (formData: FormData) => {
+  // Combines starting the sale with immediately getting a payment
+  // link/opening card entry, in one click (2026-08-15) — the mockup put
+  // these on the same first screen rather than a separate step after
+  // "Start sale". Reuses the exact same createPaymentLink/
+  // createCardEntryIntent calls (and their linkUrl/cardSecret display)
+  // already used for a returning-later "get another link" from the
+  // active-sale card below — that fallback stays untouched, this just
+  // adds a faster path that also creates the sale.
+  const handleStartAndGetLink = (formData: FormData) => {
     setError(null);
+    setLinkUrl(null);
     startTransition(async () => {
       const res = await startPurchase(artworkId, siteId, formData);
       if (!res.ok) {
         setError(res.error);
         return;
+      }
+      const linkResult = await createPaymentLink(res.purchaseId, siteId, artworkId);
+      if (linkResult.ok) setLinkUrl(linkResult.url);
+      else setError(linkResult.error);
+      if (onChanged) onChanged();
+      else router.refresh();
+    });
+  };
+
+  const handleStartAndEnterCard = (formData: FormData) => {
+    setError(null);
+    setCardSecret(null);
+    setCardPublishableKey(null);
+    startTransition(async () => {
+      const res = await startPurchase(artworkId, siteId, formData);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      const cardResult = await createCardEntryIntent(res.purchaseId, siteId);
+      if (cardResult.ok) {
+        setCardSecret(cardResult.clientSecret);
+        setCardPublishableKey(cardResult.publishableKey);
+      } else {
+        setError(cardResult.error);
       }
       if (onChanged) onChanged();
       else router.refresh();
@@ -444,7 +478,10 @@ export default function PurchasePanel({
           </div>
 
           {channel === "STRIPE" ? (
-            <form action={handleStartPurchase} className="space-y-3">
+            <form
+              onSubmit={(e) => e.preventDefault()}
+              className="space-y-3"
+            >
               <CustomerPicker
                 artistId={artistId}
                 onSelect={(c: CustomerSummary) => {
@@ -532,13 +569,32 @@ export default function PurchasePanel({
                   ))}
                 </select>
               </div>
-              <button
-                type="submit"
-                disabled={isPending}
-                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-              >
-                Start sale
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={(e) =>
+                    handleStartAndGetLink(new FormData(e.currentTarget.form!))
+                  }
+                  disabled={isPending}
+                  className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                >
+                  Get payment link
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) =>
+                    handleStartAndEnterCard(new FormData(e.currentTarget.form!))
+                  }
+                  disabled={isPending}
+                  className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+                >
+                  Enter card now
+                </button>
+              </div>
+              <p className="text-xs text-neutral-400">
+                Either option saves the buyer&apos;s card on file, so future instalments (if any)
+                can be charged automatically without them needing to be present.
+              </p>
             </form>
           ) : channel === "GALLERY" ? (
             <form action={handleStartGallerySale} className="space-y-3">
