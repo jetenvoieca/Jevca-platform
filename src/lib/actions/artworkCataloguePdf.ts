@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
-import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/actions/artworks";
+import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
 
 export type CatalogueExportFilters = {
   q?: string;

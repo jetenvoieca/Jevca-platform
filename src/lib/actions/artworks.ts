@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
+import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
@@ -121,45 +122,6 @@ type ListFilters = {
 };
 
 const DEFAULT_PAGE_SIZE = 60;
-
-// Factored out (2026-08-15) so the PDF export uses exactly this same
-// filtering logic rather than a re-typed approximation of it — "export
-// respects filters" only actually holds if there's one source of truth
-// for what a filter means, not two.
-export function buildArtworkWhere(
-  artistId: string,
-  filters: Pick<ListFilters, "q" | "availability" | "location" | "type" | "group">
-) {
-  const { q, availability, location, type, group } = filters;
-  return {
-    artistId,
-    ...(q
-      ? {
-          OR: [
-            { presentationTitle: { contains: q, mode: "insensitive" as const } },
-            { catalogueName: { contains: q, mode: "insensitive" as const } },
-            { catalogueNumber: { contains: q, mode: "insensitive" as const } },
-            { medium: { contains: q, mode: "insensitive" as const } },
-          ],
-        }
-      : {}),
-    ...(availability ? { availability: availability as Availability } : {}),
-    ...(location ? { location } : {}),
-    ...(type ? { type } : {}),
-    // A Group filter matches either facet's Group, since the same preset
-    // list feeds both and it's not obvious to the user which one a given
-    // artwork was tagged under.
-    ...(group ? { OR: [{ catalogueGroup: group }, { presentationGroup: group }] } : {}),
-  };
-}
-
-export function buildArtworkOrderBy(sort?: string) {
-  return {
-    presentationPrice: sort === "price" ? ("desc" as const) : undefined,
-    presentationTitle: sort === "title" ? ("asc" as const) : undefined,
-    createdAt: sort === "price" || sort === "title" ? undefined : ("desc" as const),
-  };
-}
 
 // Lightweight rows for the grid — only what a tile needs to render.
 // Full detail is fetched separately (getArtworkDetail) when a tile is opened.
