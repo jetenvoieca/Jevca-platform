@@ -143,14 +143,6 @@ export default function ArtworkDetailPanel({
   };
   const unframedInstalmentPrice = computeInstalmentPrice(unframedPriceLive);
   const framedInstalmentPrice = computeInstalmentPrice(framedPriceLive);
-  const currencyForDisplay = artwork.saleTerms?.currency ?? siteDefaultCurrency;
-  const formatMoney = (amount: string) => {
-    const n = parseFloat(amount);
-    if (Number.isNaN(n)) return "—";
-    return new Intl.NumberFormat("en-GB", { style: "currency", currency: currencyForDisplay }).format(
-      n
-    );
-  };
 
   // ---- Autosave (2026-08-15) — Presentation and Catalogue used to be
   // the only two forms left in this whole app still requiring a manual
@@ -420,7 +412,7 @@ export default function ArtworkDetailPanel({
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Unframed price ({currencyForDisplay})
+                      Unframed price
                     </label>
                     <input
                       type="text"
@@ -434,7 +426,7 @@ export default function ArtworkDetailPanel({
                   {isEditionType && (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Framed price ({currencyForDisplay})
+                        Framed price
                       </label>
                       <input
                         type="text"
@@ -459,7 +451,7 @@ export default function ArtworkDetailPanel({
                     <input
                       type="text"
                       readOnly
-                      value={unframedInstalmentPrice ? formatMoney(unframedInstalmentPrice) : "—"}
+                      value={unframedInstalmentPrice || "—"}
                       className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
                     />
                   </div>
@@ -471,7 +463,7 @@ export default function ArtworkDetailPanel({
                       <input
                         type="text"
                         readOnly
-                        value={framedInstalmentPrice ? formatMoney(framedInstalmentPrice) : "—"}
+                        value={framedInstalmentPrice || "—"}
                         className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
                       />
                     </div>
@@ -481,7 +473,7 @@ export default function ArtworkDetailPanel({
                 <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Number of instalments
+                      Instalments
                     </label>
                     <input
                       type="number"
@@ -491,9 +483,6 @@ export default function ArtworkDetailPanel({
                       onChange={(e) => setInstalmentCountLive(parseInt(e.target.value || "0", 10))}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     />
-                    <p className="mt-1 text-xs text-neutral-400">
-                      A buyer can still choose to pay in full instead.
-                    </p>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
