@@ -76,14 +76,27 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 
 // ---------- Sale Terms — autosave, no buyer info, ever ----------
 
+// Sale Terms merged into the Presentation tab (2026-08-15) — there's no
+// longer a separate "Total price" the person types; Unframed price
+// (Artwork.presentationPrice) IS the sale total now, entered from
+// Presentation instead. totalAmount stays in this table only because
+// startPurchase/Purchase still snapshot it — kept in sync here rather
+// than making every future caller re-derive it. Deliberately still
+// keyed off Unframed specifically, not Framed, even for an edition —
+// wiring a Framed-vs-Unframed choice into the actual Stripe
+// sale-starting flow is its own decision, not made yet.
 export async function saveSaleTerms(artworkId: string, siteId: string, formData: FormData) {
-  const totalAmount = (formData.get("totalAmount") as string)?.trim();
   const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
   const instalmentCount = parseInt((formData.get("instalmentCount") as string) || "5", 10);
   const releaseMessage = (formData.get("releaseMessage") as string)?.trim() || null;
   const releaseTriggerCountRaw = (formData.get("releaseTriggerCount") as string)?.trim();
   const releaseTriggerCount = releaseTriggerCountRaw ? parseInt(releaseTriggerCountRaw, 10) : null;
 
+  const artwork = await db.artwork.findUniqueOrThrow({
+    where: { id: artworkId },
+    select: { presentationPrice: true },
+  });
+  const totalAmount = artwork.presentationPrice;
   if (!totalAmount) return;
 
   await db.saleTerms.upsert({

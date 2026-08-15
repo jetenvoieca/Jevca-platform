@@ -313,15 +313,20 @@ export async function updatePresentation(
 ): Promise<void> {
   const presentationTitle = (formData.get("presentationTitle") as string)?.trim();
   const priceRaw = (formData.get("presentationPrice") as string)?.trim();
-  const dimensions = (formData.get("dimensions") as string)?.trim() || null;
+  const priceFramedRaw = (formData.get("priceFramed") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
+  // Dimensions is no longer edited from this tab (2026-08-15 — dropped
+  // in favour of just showing Catalogue's Size read-only here instead),
+  // so deliberately not touched — leaving whatever was last saved there
+  // untouched rather than reading a field that no longer exists in the
+  // form and silently wiping it to null.
 
   await db.artwork.update({
     where: { id },
     data: {
       presentationTitle,
       presentationPrice: priceRaw || null,
-      dimensions,
+      priceFramed: priceFramedRaw || null,
       description,
       // Medium and Group are no longer editable from here — both now
       // read-only, live-mirroring Catalogue's `medium` and
@@ -357,38 +362,29 @@ export async function updateCatalogue(
   const location = (formData.get("location") as string)?.trim() || null;
   const edition = (formData.get("edition") as string)?.trim() || null;
   const availableQtyRaw = (formData.get("availableQty") as string)?.trim();
-  const priceUnframedRaw = (formData.get("priceUnframed") as string)?.trim();
-  const priceFramedRaw = (formData.get("priceFramed") as string)?.trim();
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
   const medium = (formData.get("medium") as string)?.trim() || null;
   const availability = formData.get("availability") as Availability;
 
-  // Presentation's Title, Price, and Dimensions default from Catalogue's
-  // Name, Price unframed, and Size — but only the first time Catalogue is
-  // actually filled in, and only while Presentation is still at its
-  // untouched default. The moment someone types something different
-  // directly into Presentation, it's considered overridden and this stops
-  // touching that field — same "seed once, then independent" pattern
-  // already used for Presentation being seeded from Catalogue at
-  // creation.
+  // Presentation's Title still defaults from Catalogue's Name — but only
+  // the first time Catalogue is actually filled in, and only while
+  // Presentation is still at its untouched default. The moment someone
+  // types something different directly into Presentation, it's
+  // considered overridden and this stops touching that field — same
+  // "seed once, then independent" pattern already used for Presentation
+  // being seeded from Catalogue at creation. Price/Dimensions no longer
+  // seed this way (2026-08-15) — price lives only on Presentation now
+  // (Catalogue holds nothing that varies), and Dimensions was dropped
+  // from Presentation entirely in favour of just showing Catalogue's
+  // Size read-only there.
   const current = await db.artwork.findUnique({
     where: { id },
-    select: { presentationTitle: true, presentationPrice: true, dimensions: true },
+    select: { presentationTitle: true },
   });
 
-  const presentationUpdate: {
-    presentationTitle?: string;
-    presentationPrice?: string | null;
-    dimensions?: string;
-  } = {};
+  const presentationUpdate: { presentationTitle?: string } = {};
   if (current?.presentationTitle === "Untitled" && catalogueName) {
     presentationUpdate.presentationTitle = catalogueName;
-  }
-  if (current?.presentationPrice == null && priceUnframedRaw) {
-    presentationUpdate.presentationPrice = priceUnframedRaw;
-  }
-  if (!current?.dimensions && size) {
-    presentationUpdate.dimensions = size;
   }
 
   await db.artwork.update({
@@ -402,8 +398,6 @@ export async function updateCatalogue(
       location,
       edition,
       availableQty: availableQtyRaw ? parseInt(availableQtyRaw, 10) : null,
-      priceUnframed: priceUnframedRaw || null,
-      priceFramed: priceFramedRaw || null,
       studioNotes,
       medium,
       availability,

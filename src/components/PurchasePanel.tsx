@@ -21,8 +21,9 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import CustomerPicker from "@/components/CustomerPicker";
 import type { CustomerSummary } from "@/lib/actions/customers";
 
-// Same list as SaleTermsPanel — kept in sync deliberately, since these
-// two forms need to offer identical currency choices.
+// Same list as the Presentation tab's Currency field (Sale Terms merged
+// into it 2026-08-15) — kept in sync deliberately, since these two forms
+// need to offer identical currency choices.
 const CURRENCIES = ["GBP", "EUR"];
 
 function formatMoney(amount: string, currency: string) {
@@ -89,8 +90,8 @@ export default function PurchasePanel({
   // every gallery sale was silently recorded in GBP regardless of what
   // currency Sale Terms actually specified — confirmed from a real sale
   // (Sale Terms in EUR, but the resulting Purchase and invoice both came
-  // out in GBP). Defaults to the artwork's own Sale Terms currency, the
-  // same source of truth SaleTermsPanel itself uses.
+  // out in GBP). Defaults to the artwork's own Sale Terms currency, now
+  // set from the Presentation tab (merged 2026-08-15).
   const [gallerySaleCurrency, setGallerySaleCurrency] = useState(terms?.currency ?? "GBP");
   // Drives ConfirmDialog for every sale-related confirmation on this
   // panel (2026-08-13, replacing native confirm() — see ConfirmDialog
@@ -325,7 +326,7 @@ export default function PurchasePanel({
     <div className="space-y-6">
       {!terms && (
         <p className="text-sm text-neutral-400">
-          Set sale terms (on the Sale Terms tab) before starting a sale.
+          Set a price on the Presentation tab before starting a sale.
         </p>
       )}
 
