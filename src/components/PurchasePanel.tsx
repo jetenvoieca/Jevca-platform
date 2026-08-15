@@ -43,6 +43,8 @@ export default function PurchasePanel({
   artistId,
   siteId,
   terms,
+  priceFramed,
+  showFramedPricing,
   activePurchase,
   history,
   saleSources = [],
@@ -52,6 +54,14 @@ export default function PurchasePanel({
   artistId: string;
   siteId: string;
   terms: SaleTermsDetail | null;
+  // Both new (2026-08-15), feeding the "which price/plan" option
+  // selector below — Framed price lives only on the Artwork, never on
+  // Sale Terms (only Unframed's total is kept in sync there), and
+  // showFramedPricing is the same Edition-or-"Original - Paper" check
+  // already computed once in ArtworkDetailPanel, passed down rather
+  // than re-derived here from Type.
+  priceFramed: string | null;
+  showFramedPricing: boolean;
   activePurchase: PurchaseDetail | null;
   history: PurchaseDetail[];
   saleSources?: string[];
@@ -64,7 +74,9 @@ export default function PurchasePanel({
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [cardSecret, setCardSecret] = useState<string | null>(null);
   const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
-  const [purchaseType, setPurchaseType] = useState<"FULL" | "INSTALMENTS">("FULL");
+  const [selectedOption, setSelectedOption] = useState<
+    "unframed-full" | "unframed-instalments" | "framed-full" | "framed-instalments"
+  >("unframed-full");
   const [channel, setChannel] = useState<"STRIPE" | "GALLERY" | "PAST">("STRIPE");
   const [commissionPercent, setCommissionPercent] = useState("");
   const [gallerySalePrice, setGallerySalePrice] = useState("");
@@ -93,6 +105,63 @@ export default function PurchasePanel({
   // out in GBP). Defaults to the artwork's own Sale Terms currency, now
   // set from the Presentation tab (merged 2026-08-15).
   const [gallerySaleCurrency, setGallerySaleCurrency] = useState(terms?.currency ?? "GBP");
+
+  // The four possible sale options (2026-08-15) — replaces the old
+  // "Payment type" dropdown, which only chose Full vs Instalments and
+  // had no way to pick Framed vs Unframed at all. Built once from
+  // Sale Terms/Framed price/instalment count rather than typed
+  // anywhere, so the amount actually charged always matches what's set
+  // on Presentation.
+  type SaleOption = {
+    key: "unframed-full" | "unframed-instalments" | "framed-full" | "framed-instalments";
+    framed: boolean;
+    type: "FULL" | "INSTALMENTS";
+    label: string;
+    amount: string;
+    perInstalment?: string;
+  };
+  const instalmentCount = terms?.instalmentCount ?? 0;
+  const saleOptions: SaleOption[] = [];
+  if (terms) {
+    saleOptions.push({
+      key: "unframed-full",
+      framed: false,
+      type: "FULL",
+      label: "Unframed — Full payment",
+      amount: terms.totalAmount,
+    });
+    if (instalmentCount > 1) {
+      saleOptions.push({
+        key: "unframed-instalments",
+        framed: false,
+        type: "INSTALMENTS",
+        label: `Unframed — ${instalmentCount} instalments`,
+        amount: terms.totalAmount,
+        perInstalment: (parseFloat(terms.totalAmount) / instalmentCount).toFixed(2),
+      });
+    }
+    if (showFramedPricing && priceFramed) {
+      saleOptions.push({
+        key: "framed-full",
+        framed: true,
+        type: "FULL",
+        label: "Framed — Full payment",
+        amount: priceFramed,
+      });
+      if (instalmentCount > 1) {
+        saleOptions.push({
+          key: "framed-instalments",
+          framed: true,
+          type: "INSTALMENTS",
+          label: `Framed — ${instalmentCount} instalments`,
+          amount: priceFramed,
+          perInstalment: (parseFloat(priceFramed) / instalmentCount).toFixed(2),
+        });
+      }
+    }
+  }
+  const activeOption =
+    saleOptions.find((o) => o.key === selectedOption) ?? saleOptions[0] ?? null;
   // Drives ConfirmDialog for every sale-related confirmation on this
   // panel (2026-08-13, replacing native confirm() — see ConfirmDialog
   // for why).
@@ -410,38 +479,58 @@ export default function PurchasePanel({
                   />
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Payment type
-                  </label>
-                  <select
-                    name="type"
-                    value={purchaseType}
-                    onChange={(e) => setPurchaseType(e.target.value as "FULL" | "INSTALMENTS")}
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  >
-                    <option value="FULL">Full payment</option>
-                    <option value="INSTALMENTS">Instalments ({terms.instalmentCount})</option>
-                  </select>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-neutral-700">
+                  Purchase option
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  {saleOptions.map((o) => (
+                    <button
+                      key={o.key}
+                      type="button"
+                      onClick={() => setSelectedOption(o.key)}
+                      className={`rounded-md border-2 p-3 text-left ${
+                        selectedOption === o.key
+                          ? "border-neutral-900 bg-neutral-50"
+                          : "border-neutral-200 hover:border-neutral-300"
+                      }`}
+                    >
+                      <p className="text-sm font-medium text-neutral-900">{o.label}</p>
+                      <p className="text-sm text-neutral-600">
+                        {formatMoney(o.amount, terms.currency)}
+                        {o.perInstalment && (
+                          <span className="text-neutral-400">
+                            {" "}
+                            ({formatMoney(o.perInstalment, terms.currency)} each)
+                          </span>
+                        )}
+                      </p>
+                    </button>
+                  ))}
                 </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Sale source
-                  </label>
-                  <select
-                    name="source"
-                    defaultValue=""
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  >
-                    <option value="">— Not set —</option>
-                    {saleSources.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                <input type="hidden" name="type" value={activeOption?.type ?? "FULL"} />
+                <input
+                  type="hidden"
+                  name="framed"
+                  value={activeOption?.framed ? "true" : "false"}
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Sale source
+                </label>
+                <select
+                  name="source"
+                  defaultValue=""
+                  className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                >
+                  <option value="">— Not set —</option>
+                  {saleSources.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
               </div>
               <button
                 type="submit"
@@ -748,6 +837,9 @@ export default function PurchasePanel({
                 : activePurchase.type === "FULL"
                   ? "Full payment"
                   : `${activePurchase.instalmentCount} instalments`}
+              {activePurchase.framed && (
+                <span className="ml-1.5 text-xs font-normal text-neutral-400">(Framed)</span>
+              )}
             </h4>
             <span className="text-sm text-neutral-900">
               {formatMoney(activePurchase.totalAmount, activePurchase.currency)}
@@ -979,6 +1071,7 @@ export default function PurchasePanel({
                   <span className="text-neutral-700">{p.buyerName || p.buyerEmail}</span>
                   <span className="ml-2 text-neutral-400">
                     {formatMoney(p.totalAmount, p.currency)}
+                    {p.framed && " (Framed)"}
                   </span>
                 </div>
                 <div className="flex items-center gap-3">

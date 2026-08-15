@@ -51,6 +51,7 @@ export type PurchaseDetail = {
   buyerEmail: string | null;
   buyerAddress: string | null;
   type: "FULL" | "INSTALMENTS";
+  framed: boolean;
   source: string | null;
   commissionPercent: string | null;
   invoiceNumber: number | null;
@@ -137,18 +138,28 @@ export async function startPurchase(
   const buyerName = (formData.get("buyerName") as string)?.trim() || null;
   const buyerEmail = (formData.get("buyerEmail") as string)?.trim();
   const type = (formData.get("type") as string) === "INSTALMENTS" ? "INSTALMENTS" : "FULL";
+  const framed = (formData.get("framed") as string) === "true";
   const source = (formData.get("source") as string)?.trim() || null;
 
   if (!buyerEmail) return { ok: false, error: "Buyer email is required to start a sale." };
+
+  // Unframed uses Sale Terms' totalAmount directly (kept in sync with
+  // Presentation's Unframed price already) — Framed needs its own fetch,
+  // since Framed price lives only on the Artwork, never on Sale Terms
+  // (2026-08-15, alongside the option selector this feeds).
+  const artwork = await db.artwork.findUniqueOrThrow({
+    where: { id: artworkId },
+    select: { artistId: true, priceFramed: true },
+  });
+  if (framed && !artwork.priceFramed) {
+    return { ok: false, error: "No Framed price is set for this artwork." };
+  }
+  const totalAmount = framed ? artwork.priceFramed! : terms.totalAmount;
 
   // Customer records added 2026-08-13 — reuses an existing customer for
   // this artist if the email already matches one, otherwise creates a
   // new one. Falls back to the email as the name if none was given,
   // since Customer.name is required but buyerName here isn't.
-  const artwork = await db.artwork.findUniqueOrThrow({
-    where: { id: artworkId },
-    select: { artistId: true },
-  });
   const customer = await findOrCreateCustomer(artwork.artistId, {
     name: buyerName || buyerEmail,
     email: buyerEmail,
@@ -161,8 +172,9 @@ export async function startPurchase(
       buyerName,
       buyerEmail,
       type,
+      framed,
       source,
-      totalAmount: terms.totalAmount,
+      totalAmount,
       currency: terms.currency,
       instalmentCount: type === "INSTALMENTS" ? terms.instalmentCount : null,
       releaseMessage: terms.releaseMessage,

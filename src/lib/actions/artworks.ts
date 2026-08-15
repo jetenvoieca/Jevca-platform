@@ -238,6 +238,7 @@ export async function getArtworkDetailForClient(id: string) {
     buyerEmail: p.buyerEmail,
     buyerAddress: p.buyerAddress,
     type: p.type,
+    framed: p.framed,
     source: p.source,
     commissionPercent: p.commissionPercent != null ? p.commissionPercent.toString() : null,
     invoiceNumber: p.invoiceNumber,

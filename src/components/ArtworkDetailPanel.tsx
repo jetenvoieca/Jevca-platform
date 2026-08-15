@@ -774,6 +774,8 @@ export default function ArtworkDetailPanel({
               artistId={artistId}
               siteId={siteId}
               terms={artwork.saleTerms}
+              priceFramed={artwork.priceFramed}
+              showFramedPricing={showFramedPricing}
               activePurchase={artwork.activePurchase}
               history={artwork.purchaseHistory}
               saleSources={settings.saleSources}

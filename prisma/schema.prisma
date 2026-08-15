@@ -433,6 +433,13 @@ model Purchase {
 
   type PurchaseType
 
+  // Which price applied to this specific sale — set at the point of sale
+  // (2026-08-15), since an edition (or Original - Paper) can be sold
+  // either way. False/unframed for anything sold before this existed —
+  // never actually mattered before this feature, since only one price
+  // existed per artwork.
+  framed Boolean @default(false)
+
   source String?
 
   commissionPercent Decimal? @db.Decimal(5, 2)
