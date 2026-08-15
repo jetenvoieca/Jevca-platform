@@ -355,6 +355,7 @@ export default function ArtworkDetailPanel({
                 Set this up first, then use the Payment tab to actually take a sale.
               </p>
               <form
+                key="presentation-form"
                 onBlur={(e) => autosavePresentation(e.currentTarget)}
                 className="space-y-4"
               >
@@ -540,6 +541,7 @@ export default function ArtworkDetailPanel({
               </p>
 
               <form
+                key="catalogue-form"
                 onBlur={(e) => autosaveCatalogue(e.currentTarget)}
                 className="space-y-4"
               >
