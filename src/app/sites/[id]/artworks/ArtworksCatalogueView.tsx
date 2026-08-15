@@ -332,15 +332,28 @@ export default function ArtworksCatalogueView({
   );
 
   return (
-    <div className="px-6 py-4">
-      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
-        <div>
-          {/* Row 1: title + view controls, together since they both govern
-              how the whole catalogue displays. */}
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
+    <div className="flex h-full flex-col">
+      <div className="shrink-0 px-6 pt-4">
+        {/* Row 1: title + view controls, together since they both govern
+            how the whole catalogue displays. */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
             <div className="flex items-center gap-3">
+              <a
+                href={`/api/artwork-catalogue-pdf?${new URLSearchParams({
+                  artistId,
+                  ...(q ? { q } : {}),
+                  ...(availability ? { availability } : {}),
+                  ...(location ? { location } : {}),
+                  ...(type ? { type } : {}),
+                  ...(group ? { group } : {}),
+                  ...(sort ? { sort } : {}),
+                }).toString()}`}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                Export PDF
+              </a>
               <button
                 type="button"
                 onClick={() => setShowImport(true)}
@@ -534,6 +547,11 @@ export default function ArtworksCatalogueView({
           <p className="mb-3 text-sm text-neutral-400">
             {artworks.length} of {total} work{total === 1 ? "" : "s"} · {soldCount} sold
           </p>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 pb-4">
+        <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
+          <div>
 
           {view === "tile" ? (
             <div
@@ -654,6 +672,7 @@ export default function ArtworksCatalogueView({
             </div>
           )}
         </div>
+      </div>
       </div>
 
       {showImport && (

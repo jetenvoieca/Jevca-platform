@@ -122,19 +122,16 @@ type ListFilters = {
 
 const DEFAULT_PAGE_SIZE = 60;
 
-// Lightweight rows for the grid — only what a tile needs to render.
-// Full detail is fetched separately (getArtworkDetail) when a tile is opened.
-export async function listArtworks(artistId: string, filters: ListFilters) {
-  const { q, availability, location, type, group, sort, offset = 0, limit = DEFAULT_PAGE_SIZE } =
-    filters;
-
-  const orderBy = {
-    presentationPrice: sort === "price" ? ("desc" as const) : undefined,
-    presentationTitle: sort === "title" ? ("asc" as const) : undefined,
-    createdAt: sort === "price" || sort === "title" ? undefined : ("desc" as const),
-  };
-
-  const where = {
+// Factored out (2026-08-15) so the PDF export uses exactly this same
+// filtering logic rather than a re-typed approximation of it — "export
+// respects filters" only actually holds if there's one source of truth
+// for what a filter means, not two.
+export function buildArtworkWhere(
+  artistId: string,
+  filters: Pick<ListFilters, "q" | "availability" | "location" | "type" | "group">
+) {
+  const { q, availability, location, type, group } = filters;
+  return {
     artistId,
     ...(q
       ? {
@@ -154,6 +151,23 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
     // artwork was tagged under.
     ...(group ? { OR: [{ catalogueGroup: group }, { presentationGroup: group }] } : {}),
   };
+}
+
+export function buildArtworkOrderBy(sort?: string) {
+  return {
+    presentationPrice: sort === "price" ? ("desc" as const) : undefined,
+    presentationTitle: sort === "title" ? ("asc" as const) : undefined,
+    createdAt: sort === "price" || sort === "title" ? undefined : ("desc" as const),
+  };
+}
+
+// Lightweight rows for the grid — only what a tile needs to render.
+// Full detail is fetched separately (getArtworkDetail) when a tile is opened.
+export async function listArtworks(artistId: string, filters: ListFilters) {
+  const { offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
+
+  const orderBy = buildArtworkOrderBy(filters.sort);
+  const where = buildArtworkWhere(artistId, filters);
 
   const [rows, total, soldCount] = await Promise.all([
     db.artwork.findMany({
