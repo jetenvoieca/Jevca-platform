@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFPage } from "pdf-lib";
+import { publicMediaUrl } from "@/lib/r2";
 import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
 
 export type CatalogueExportFilters = {
@@ -13,14 +14,16 @@ export type CatalogueExportFilters = {
   sort?: string;
 };
 
-// Printed catalogue / price list, one entry per artwork: an uncropped
-// image (scaled to fit a medium bounding box, aspect ratio preserved —
-// deliberately not the square grid thumbnail, which crops; a portrait
-// or landscape piece needs to actually look like one here) alongside
-// its name, catalogue number, type/medium/size, price(s), and
-// availability. Filters use the exact same buildArtworkWhere the
-// on-screen grid does (2026-08-15), so "export respects filters" holds
-// precisely rather than approximately.
+// Printed catalogue / price list: a 2-column grid, image on top of its
+// details in each cell (targets ~7-8 entries per A4 page - 2026-08-15,
+// tuned down from an earlier single-column version that only fit ~3).
+// Images use the derived thumbnailKey/displayKey (2026-08-15 fix) -
+// Image.url is actually a relative, session-authenticated proxy path
+// (/api/media/[key]), not a fetchable public URL, which is why no
+// images were coming through before. thumbnailKey/displayKey are
+// resized by width only with no cropping (see imageSizes.ts), so
+// they're already exactly the "uncropped, correct proportions" images
+// this needs - not a compromise standing in for the true original.
 export async function generateArtworkCataloguePdf(
   artistId: string,
   artistName: string,
@@ -41,7 +44,7 @@ export async function generateArtworkCataloguePdf(
       presentationPrice: true,
       priceFramed: true,
       availability: true,
-      images: { take: 1, select: { url: true } },
+      images: { take: 1, select: { thumbnailKey: true, displayKey: true } },
     },
   });
 
@@ -53,25 +56,30 @@ export async function generateArtworkCataloguePdf(
 
   const pageWidth = 595.28;
   const pageHeight = 841.89; // A4
-  const margin = 50;
-  const imageBoxSize = 150; // medium — the bounding box images scale to fit within
-  const textX = margin + imageBoxSize + 20;
-  const textWidth = pageWidth - margin - textX;
+  const margin = 40;
+  const columns = 2;
+  const columnGap = 20;
+  const rowGap = 14;
+  const columnWidth = (pageWidth - margin * 2 - columnGap * (columns - 1)) / columns;
+  const imageBoxHeight = 100; // "medium" - tuned for ~8 entries/page across 4 rows
+  const rowHeight = imageBoxHeight + 50; // + space for ~4 lines of text below
 
   let page!: PDFPage;
   let y = 0;
+  let col = 0;
 
   const filterSummary = describeFilters(filters);
 
   const drawHeader = () => {
     page = doc.addPage([pageWidth, pageHeight]);
     y = pageHeight - margin;
+    col = 0;
     page.drawText(artistName, { x: margin, y, size: 18, font: bold, color: black });
     y -= 22;
     page.drawText("Artwork Catalogue", { x: margin, y, size: 11, font, color: grey });
     y -= 14;
     const today = new Date().toLocaleDateString("en-GB");
-    page.drawText(filterSummary ? `${today} — ${filterSummary}` : today, {
+    page.drawText(filterSummary ? `${today} - ${filterSummary}` : today, {
       x: margin,
       y,
       size: 9,
@@ -91,22 +99,21 @@ export async function generateArtworkCataloguePdf(
   drawHeader();
 
   for (const a of artworks) {
-    // Fetch the ORIGINAL image, not the square grid thumbnail — this is
-    // the one place in the app that deliberately shows uncropped,
-    // correctly-proportioned images (2026-08-15 decision).
+    const imageUrl =
+      publicMediaUrl(a.images[0]?.displayKey) || publicMediaUrl(a.images[0]?.thumbnailKey);
     let embedded: Awaited<ReturnType<typeof doc.embedJpg>> | null = null;
     let scaledW = 0;
     let scaledH = 0;
-    if (a.images[0]?.url) {
+    if (imageUrl) {
       try {
-        const res = await fetch(a.images[0].url);
+        const res = await fetch(imageUrl);
         if (res.ok) {
           const bytes = new Uint8Array(await res.arrayBuffer());
           const contentType = res.headers.get("content-type") || "";
           embedded = contentType.includes("png")
             ? await doc.embedPng(bytes)
             : await doc.embedJpg(bytes);
-          const scale = Math.min(imageBoxSize / embedded.width, imageBoxSize / embedded.height);
+          const scale = Math.min(columnWidth / embedded.width, imageBoxHeight / embedded.height);
           scaledW = embedded.width * scale;
           scaledH = embedded.height * scale;
         }
@@ -116,47 +123,50 @@ export async function generateArtworkCataloguePdf(
       }
     }
 
-    const lines = buildTextLines(a);
-    const textHeight = lines.length * 14 + 6;
-    const entryHeight = Math.max(imageBoxSize, textHeight);
-
-    if (y - entryHeight < margin) {
+    if (col === 0 && y - rowHeight < margin) {
       drawHeader();
     }
 
-    const entryTop = y;
+    const cellX = margin + col * (columnWidth + columnGap);
+    const cellTop = y;
+
     if (embedded) {
       page.drawImage(embedded, {
-        x: margin + (imageBoxSize - scaledW) / 2,
-        y: entryTop - imageBoxSize + (imageBoxSize - scaledH) / 2,
+        x: cellX + (columnWidth - scaledW) / 2,
+        y: cellTop - imageBoxHeight + (imageBoxHeight - scaledH) / 2,
         width: scaledW,
         height: scaledH,
       });
     } else {
       page.drawRectangle({
-        x: margin,
-        y: entryTop - imageBoxSize,
-        width: imageBoxSize,
-        height: imageBoxSize,
+        x: cellX,
+        y: cellTop - imageBoxHeight,
+        width: columnWidth,
+        height: imageBoxHeight,
         borderColor: grey,
         borderWidth: 0.5,
       });
     }
 
-    let textY = entryTop - 4;
-    for (const line of lines) {
+    let textY = cellTop - imageBoxHeight - 14;
+    for (const line of buildTextLines(a)) {
       page.drawText(line.text, {
-        x: textX,
+        x: cellX,
         y: textY,
         size: line.size,
         font: line.bold ? bold : font,
         color: line.grey ? grey : black,
-        maxWidth: textWidth,
+        maxWidth: columnWidth,
       });
-      textY -= line.size + 4;
+      textY -= line.size + 3;
     }
 
-    y = entryTop - entryHeight - 24;
+    if (col === columns - 1) {
+      col = 0;
+      y -= rowHeight + rowGap;
+    } else {
+      col += 1;
+    }
   }
 
   if (artworks.length === 0) {
@@ -185,24 +195,24 @@ function buildTextLines(a: {
   availability: string;
 }): { text: string; size: number; bold?: boolean; grey?: boolean }[] {
   const lines: { text: string; size: number; bold?: boolean; grey?: boolean }[] = [
-    { text: a.catalogueName, size: 13, bold: true },
-    { text: a.catalogueNumber, size: 9, grey: true },
+    { text: a.catalogueName, size: 11, bold: true },
+    { text: a.catalogueNumber, size: 8, grey: true },
   ];
   const details = [a.type, a.medium, a.size].filter(Boolean).join(" · ");
-  if (details) lines.push({ text: details, size: 10, grey: true });
+  if (details) lines.push({ text: details, size: 9, grey: true });
 
   const unframed = a.presentationPrice != null ? a.presentationPrice.toString() : null;
   const framed = a.priceFramed != null ? a.priceFramed.toString() : null;
   if (unframed && framed) {
-    lines.push({ text: `Unframed £${unframed}  ·  Framed £${framed}`, size: 10 });
+    lines.push({ text: `Unframed £${unframed} · Framed £${framed}`, size: 9 });
   } else if (unframed) {
-    lines.push({ text: `£${unframed}`, size: 10 });
+    lines.push({ text: `£${unframed}`, size: 9 });
   }
 
   if (a.availability !== "AVAILABLE") {
     lines.push({
       text: a.availability === "SOLD" ? "Sold" : "Reserved",
-      size: 9,
+      size: 8,
       grey: true,
     });
   }
