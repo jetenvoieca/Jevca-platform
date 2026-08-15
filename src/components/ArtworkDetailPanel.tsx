@@ -123,6 +123,13 @@ export default function ArtworkDetailPanel({
   // ("Edition", "Giclée Edition", "Limited Edition"; "Aluminium",
   // "Print on Aluminium"), not necessarily the bare word alone.
   const isEditionType = typeValue.trim().toLowerCase().includes("edition");
+  // Framed pricing applies more broadly than Edition/Available (qty) —
+  // "Original - Paper" pieces are still one-offs (no edition run), but
+  // can still be sold framed (2026-08-15 correction). Kept as its own
+  // condition rather than folding into isEditionType, since the two
+  // genuinely diverge for this type.
+  const showFramedPricing =
+    isEditionType || typeValue.trim().toLowerCase() === "original - paper";
   const router = useRouter();
 
   // Live state for the two "instalment price" previews (2026-08-15) —
@@ -406,10 +413,10 @@ export default function ArtworkDetailPanel({
                   </div>
                 </div>
 
-                {/* Framed price/instalment preview only for editions
-                    (2026-08-15) — Originals, Uniques, and Aluminium are
-                    sold unframed only, same substring match already used
-                    for Edition/Available above. */}
+                {/* Framed price/instalment preview for editions and
+                    "Original - Paper" specifically (2026-08-15,
+                    corrected) — other Originals/Uniques and Aluminium
+                    are sold unframed only. */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -424,7 +431,7 @@ export default function ArtworkDetailPanel({
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     />
                   </div>
-                  {isEditionType && (
+                  {showFramedPricing && (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
                         Framed price
@@ -439,10 +446,11 @@ export default function ArtworkDetailPanel({
                       />
                     </div>
                   )}
-                  {!isEditionType && (
+                  {!showFramedPricing && (
                     // Preserved, not wiped, if Type is switched away from
-                    // an edition and back — same convention as the
-                    // Edition/Available hidden inputs in Catalogue.
+                    // a framed-eligible type and back — same convention
+                    // as the Edition/Available hidden inputs in
+                    // Catalogue.
                     <input type="hidden" name="priceFramed" value={artwork.priceFramed || ""} />
                   )}
                   <div>
@@ -456,7 +464,7 @@ export default function ArtworkDetailPanel({
                       className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
                     />
                   </div>
-                  {isEditionType && (
+                  {showFramedPricing && (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
                         Framed instalment price
