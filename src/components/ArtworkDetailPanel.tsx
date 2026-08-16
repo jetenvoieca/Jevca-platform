@@ -351,6 +351,7 @@ export default function ArtworkDetailPanel({
                   <img
                     src={img.posterUrl}
                     alt=""
+                    draggable={false}
                     className={`h-20 w-20 rounded object-cover ${
                       index === selectedImageIndex ? "ring-2 ring-neutral-900" : ""
                     }`}
@@ -369,6 +370,7 @@ export default function ArtworkDetailPanel({
                 <img
                   src={img.url}
                   alt=""
+                  draggable={false}
                   className={`h-20 w-20 rounded object-cover ${
                     index === selectedImageIndex ? "ring-2 ring-neutral-900" : ""
                   }`}
