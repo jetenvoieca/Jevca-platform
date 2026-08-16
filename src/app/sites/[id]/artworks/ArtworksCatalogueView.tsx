@@ -84,6 +84,18 @@ export default function ArtworksCatalogueView({
   const [sort, setSort] = useState(initialSort);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Declared up here, ahead of applyFilters below, specifically because
+  // applyFilters' own dependency array reads `selected` directly
+  // (2026-08-16 fix — closing the panel when a filter change takes the
+  // open artwork out of view). A block-scoped variable referenced in a
+  // dependency array has to already exist by the time that array is
+  // evaluated during render, not just by the time the callback itself
+  // runs later — declaring it after applyFilters compiled locally with
+  // esbuild's plain syntax check (no such rule) but failed Next.js's
+  // real TypeScript build with "used before its declaration". See the
+  // fuller selection-related comment further down, by selectingId.
+  const [selected, setSelected] = useState<ArtworkDetail | null>(initialSelected);
+
   const updateUrlFilters = (next: {
     q: string;
     availability: string;
@@ -219,8 +231,9 @@ export default function ArtworksCatalogueView({
   // its default and only catches up to the real, stored value after a
   // fresh mount's effect runs), on top of being needlessly slow. Fixed
   // exactly like the same issue on Media Catalogue: selection is now
-  // local state, fetching only the one clicked artwork.
-  const [selected, setSelected] = useState<ArtworkDetail | null>(initialSelected);
+  // local state, fetching only the one clicked artwork. (`selected`
+  // itself is declared further up, ahead of applyFilters — see the note
+  // there.)
   const [selectingId, setSelectingId] = useState<string | null>(null);
   // Tracks which artwork is *currently* meant to be shown, independent of
   // any in-flight fetch (2026-08-15 fix). Without this, an autosave's
