@@ -563,7 +563,7 @@ export default function PurchasePanel({
                 </button>
               </div>
             </form>
-          ) : channel === "GALLERY" ? (
+          ) : (
             <form action={handleStartGallerySale} className="space-y-3">
               <p className="text-xs text-neutral-400">
                 No card is taken here — this raises an unpaid invoice for the net amount, which
