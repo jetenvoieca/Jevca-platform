@@ -52,16 +52,22 @@ export default async function PreviewPage({
   const artworks = artworkIds.length
     ? await db.artwork.findMany({
         where: { id: { in: artworkIds } },
-        include: { images: { take: 1 } },
+        include: { images: { take: 1 }, mainImage: true },
         relationLoadStrategy: "query",
       })
     : [];
+  // Folds mainImage into the same images[0] slot BlockRenderer already
+  // reads (2026-08-16, same pattern as listArtworks).
+  const artworksWithMainImage = artworks.map(({ mainImage, images, ...a }) => ({
+    ...a,
+    images: mainImage ? [mainImage, ...images.filter((i) => i.id !== mainImage.id)] : images,
+  }));
 
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       {banner}
       <h1 className="mb-6 text-3xl font-semibold text-neutral-900">{page.title}</h1>
-      <BlockRenderer blocks={blocks} artworks={artworks} />
+      <BlockRenderer blocks={blocks} artworks={artworksWithMainImage} />
     </main>
   );
 }

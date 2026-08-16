@@ -491,19 +491,26 @@ export async function getArtworksByIds(ids: string[]) {
   if (ids.length === 0) return [];
   const rows = await db.artwork.findMany({
     where: { id: { in: ids } },
-    include: { images: { take: 1 } },
+    include: { images: { take: 1 }, mainImage: true },
     relationLoadStrategy: "query",
   });
   const byId = new Map(rows.map((a) => [a.id, a]));
   return ids
     .map((id) => byId.get(id))
     .filter((a): a is NonNullable<typeof a> => Boolean(a))
-    .map((a) => ({
-      ...a,
-      presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-      images: a.images.map((img) => ({
-        ...img,
-        url: publicMediaUrl(img.thumbnailKey) || img.url,
-      })),
-    }));
+    .map(({ mainImage, images, ...a }) => {
+      // Folds mainImage into the same images[0] slot every consumer
+      // already reads (2026-08-16, same pattern as listArtworks) — used
+      // by both the Section editor's saved artwork grid and the page
+      // preview's Section-type rendering.
+      const effectiveImages = mainImage ? [mainImage, ...images.filter((i) => i.id !== mainImage.id)] : images;
+      return {
+        ...a,
+        presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
+        images: effectiveImages.map((img) => ({
+          ...img,
+          url: publicMediaUrl(img.thumbnailKey) || img.url,
+        })),
+      };
+    });
 }

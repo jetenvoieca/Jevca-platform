@@ -133,16 +133,23 @@ export async function listImages(artistId: string, q?: string) {
 // the artist, not the site, since a page on any of that artist's sites can
 // feature any of their artworks.
 export async function getArtworksForArtist(artistId: string, q?: string) {
-  return db.artwork.findMany({
+  const rows = await db.artwork.findMany({
     where: {
       artistId,
       ...(q ? { presentationTitle: { contains: q, mode: "insensitive" } } : {}),
     },
-    include: { images: { take: 1 } },
+    include: { images: { take: 1 }, mainImage: true },
     relationLoadStrategy: "query",
     orderBy: { createdAt: "desc" },
     take: 60,
   });
+  // Folds mainImage into the same images[0] slot every consumer already
+  // reads (2026-08-16, same pattern as listArtworks) — an artwork with a
+  // chosen main image shows that one in the picker.
+  return rows.map(({ mainImage, images, ...rest }) => ({
+    ...rest,
+    images: mainImage ? [mainImage, ...images.filter((i) => i.id !== mainImage.id)] : images,
+  }));
 }
 
 async function nextCatalogueNumber(artistId: string) {

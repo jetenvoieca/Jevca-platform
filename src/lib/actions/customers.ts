@@ -157,6 +157,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
               medium: true,
               size: true,
               description: true,
+              mainImage: { select: { url: true, thumbnailKey: true } },
               images: { take: 1, select: { url: true, thumbnailKey: true } },
             },
           },
@@ -204,22 +205,27 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
     language: customer.language,
     notes: customer.notes,
     createdAt: customer.createdAt.toISOString(),
-    purchases: customer.purchases.map((p) => ({
-      id: p.id,
-      artworkId: p.artworkId,
-      artworkTitle: p.artwork.presentationTitle,
-      artworkImageUrl: p.artwork.images[0]
-        ? publicMediaUrl(p.artwork.images[0].thumbnailKey) || p.artwork.images[0].url
-        : null,
-      artworkMedium: p.artwork.medium,
-      artworkSize: p.artwork.size,
-      artworkDescription: p.artwork.description,
-      totalAmount: p.totalAmount.toString(),
-      currency: p.currency,
-      status: p.status,
-      channel: p.channel,
-      createdAt: p.createdAt.toISOString(),
-    })),
+    purchases: customer.purchases.map((p) => {
+      // Prefers the chosen main image over whatever was returned first
+      // (2026-08-16, same pattern as listArtworks).
+      const effectiveImage = p.artwork.mainImage || p.artwork.images[0];
+      return {
+        id: p.id,
+        artworkId: p.artworkId,
+        artworkTitle: p.artwork.presentationTitle,
+        artworkImageUrl: effectiveImage
+          ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
+          : null,
+        artworkMedium: p.artwork.medium,
+        artworkSize: p.artwork.size,
+        artworkDescription: p.artwork.description,
+        totalAmount: p.totalAmount.toString(),
+        currency: p.currency,
+        status: p.status,
+        channel: p.channel,
+        createdAt: p.createdAt.toISOString(),
+      };
+    }),
     alsoCustomerOf,
   };
 }
@@ -262,6 +268,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
       description: true,
       medium: true,
       size: true,
+      mainImage: { select: { url: true, thumbnailKey: true } },
       images: { take: 1, select: { url: true, thumbnailKey: true } },
     },
     orderBy: { presentationTitle: "asc" },
@@ -269,17 +276,22 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
 
   return {
     ...detail,
-    consignedWorks: works.map((w) => ({
-      id: w.id,
-      presentationTitle: w.presentationTitle,
-      presentationPrice: w.presentationPrice ? w.presentationPrice.toString() : null,
-      description: w.description,
-      medium: w.medium,
-      size: w.size,
-      // Same thumbnail-first-with-fallback convention as the Artwork
-      // Catalogue's own list (2026-08-13 backfill) — not a new pattern.
-      imageUrl: w.images[0] ? publicMediaUrl(w.images[0].thumbnailKey) || w.images[0].url : null,
-    })),
+    consignedWorks: works.map((w) => {
+      // Prefers the chosen main image over whatever was returned first
+      // (2026-08-16, same pattern as listArtworks).
+      const effectiveImage = w.mainImage || w.images[0];
+      return {
+        id: w.id,
+        presentationTitle: w.presentationTitle,
+        presentationPrice: w.presentationPrice ? w.presentationPrice.toString() : null,
+        description: w.description,
+        medium: w.medium,
+        size: w.size,
+        imageUrl: effectiveImage
+          ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
+          : null,
+      };
+    }),
   };
 }
 

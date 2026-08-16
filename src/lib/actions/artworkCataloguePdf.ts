@@ -44,6 +44,7 @@ export async function generateArtworkCataloguePdf(
       presentationPrice: true,
       priceFramed: true,
       availability: true,
+      mainImage: { select: { thumbnailKey: true, displayKey: true } },
       images: { take: 1, select: { thumbnailKey: true, displayKey: true } },
     },
   });
@@ -99,8 +100,11 @@ export async function generateArtworkCataloguePdf(
   drawHeader();
 
   for (const a of artworks) {
+    // Prefers the chosen main image over whatever was returned first
+    // (2026-08-16, same pattern as listArtworks).
+    const effectiveImage = a.mainImage || a.images[0];
     const imageUrl =
-      publicMediaUrl(a.images[0]?.displayKey) || publicMediaUrl(a.images[0]?.thumbnailKey);
+      publicMediaUrl(effectiveImage?.displayKey) || publicMediaUrl(effectiveImage?.thumbnailKey);
     let embedded: Awaited<ReturnType<typeof doc.embedJpg>> | null = null;
     let scaledW = 0;
     let scaledH = 0;
