@@ -3,6 +3,11 @@ import { db } from "@/lib/db";
 import { listCustomers } from "@/lib/actions/customers";
 import CustomersView from "@/components/CustomersView";
 
+// See the matching note on Sales' page.tsx (2026-08-16) — same fix, same
+// reason: CustomersView calls router.refresh() after edits/imports, which
+// needs this route to never be served from the Full Route Cache.
+export const dynamic = "force-dynamic";
+
 export default async function CustomersPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
