@@ -4,6 +4,15 @@ import { getSalesForArtist } from "@/lib/actions/sales";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SalesView from "@/components/SalesView";
 
+// Missing here until 2026-08-16, unlike Artworks/Media/Hopper/Bucket,
+// which all set this already. Without it, this route can be served from
+// Next's Full Route Cache — router.refresh() (used throughout SalesView
+// after deleting/marking-paid a sale) re-requests the route but doesn't
+// itself bypass that cache, so a deleted sale's row could keep showing
+// until a hard reload even though the delete succeeded. See the matching
+// fix on Customers/Galleries — same root cause, same fix.
+export const dynamic = "force-dynamic";
+
 export default async function SalesPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
