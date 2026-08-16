@@ -259,6 +259,7 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
         catalogueNumber: true,
         availability: true,
         type: true,
+        catalogueGroup: true,
         // mainImage is a direct single-row lookup (via mainImageId),
         // not a scan — cheap even across many rows. Preferred over
         // images[0] wherever both are available (2026-08-16); images
