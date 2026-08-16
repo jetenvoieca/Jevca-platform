@@ -549,7 +549,7 @@ export default function ArtworksCatalogueView({
           </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 pb-4">
+      <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-4">
         <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
           <div>
 
@@ -652,7 +652,7 @@ export default function ArtworksCatalogueView({
           {loadMoreRow}
         </div>
 
-        <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
+        <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto overscroll-contain">
           {selected ? (
             <ArtworkDetailPanel
               key={selected.id}
