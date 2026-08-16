@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updatePresentation, updateCatalogue, deleteArtwork, deleteArtworkIfBlank } from "@/lib/actions/artworks";
+import { updatePresentation, updateCatalogue, deleteArtwork, deleteArtworkIfBlank, duplicateArtwork } from "@/lib/actions/artworks";
 import { saveSaleTerms } from "@/lib/actions/payments";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
 import PurchasePanel from "@/components/PurchasePanel";
@@ -82,6 +82,7 @@ export default function ArtworkDetailPanel({
   siteDefaultCurrency = "GBP",
   onClose,
   onDeleted,
+  onDuplicated,
   onDataChanged,
   showCloseButton = true,
 }: {
@@ -103,6 +104,12 @@ export default function ArtworkDetailPanel({
   // its own list and clear the panel, rather than the old hard redirect
   // deleteArtwork used to do server-side.
   onDeleted?: () => void;
+  // Called after Create Derivative successfully creates the new artwork
+  // (2026-08-16), with its id — lets the parent Catalogue open it in the
+  // panel and refresh the grid, the same way onDeleted lets the parent
+  // manage its own list rather than this panel trying to navigate on its
+  // behalf.
+  onDuplicated?: (newArtworkId: string) => void;
   // Called after any save in this panel or its Sale Terms / Payment
   // sub-panels (2026-08-11) — replaces relying on router.refresh() alone,
   // which doesn't reach this artwork's data once the parent Catalogue
@@ -221,6 +228,14 @@ export default function ArtworkDetailPanel({
     });
   };
 
+  const handleDuplicate = () => {
+    startTransition(async () => {
+      const { id: newId } = await duplicateArtwork(artwork.id, siteId);
+      if (onDuplicated) onDuplicated(newId);
+      else router.push(`/sites/${siteId}/artworks?selected=${newId}`);
+    });
+  };
+
   const handleClose = () => {
     startTransition(async () => {
       // Quietly removes this record if it's still exactly as it was when
@@ -239,10 +254,23 @@ export default function ArtworkDetailPanel({
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
       <div className="mb-4 flex items-start justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-neutral-900">{artwork.presentationTitle}</h2>
-          <p className="text-sm text-neutral-500">Catalogue #{artwork.catalogueNumber}</p>
+          <h2 className="text-xl font-semibold text-neutral-900">{artwork.catalogueName}</h2>
+          <p className="text-sm text-neutral-500">
+            Catalogue #{artwork.catalogueNumber}
+            {artwork.presentationTitle !== artwork.catalogueName && (
+              <> · Public title: {artwork.presentationTitle}</>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={handleDuplicate}
+            disabled={isPending}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Create Derivative
+          </button>
           <button
             type="button"
             onClick={handleDelete}
