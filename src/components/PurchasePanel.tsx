@@ -98,6 +98,18 @@ export default function PurchasePanel({
   const [pastSalePrice, setPastSalePrice] = useState("");
   const [pastCommissionPercent, setPastCommissionPercent] = useState("");
   const [pastSaleCurrency, setPastSaleCurrency] = useState(terms?.currency ?? "GBP");
+  // Set only when a CustomerPicker result is actually clicked, submitted
+  // as a hidden field so the server can attach the sale to that exact
+  // record instead of re-matching by email (2026-08-16 fix — a picked
+  // customer with no email on file was silently getting a second, blank
+  // duplicate created, since email-matching had nothing to match
+  // against). Cleared the moment the name or email is hand-edited
+  // afterward, so a stale id can never get attached to text that no
+  // longer describes the customer it came from — falls back to the
+  // existing email-match-or-create behaviour in that case, unchanged.
+  const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
+  const [galleryCustomerId, setGalleryCustomerId] = useState<string | null>(null);
+  const [pastCustomerId, setPastCustomerId] = useState<string | null>(null);
   // Bug fixed 2026-08-13: this form had no currency field at all, so
   // every gallery sale was silently recorded in GBP regardless of what
   // currency Sale Terms actually specified — confirmed from a real sale
@@ -257,6 +269,7 @@ export default function PurchasePanel({
       setPastBuyerAddress("");
       setPastSalePrice("");
       setPastCommissionPercent("");
+      setPastCustomerId(null);
       if (onChanged) onChanged();
       else router.refresh();
     });
@@ -484,8 +497,10 @@ export default function PurchasePanel({
                 onSelect={(c: CustomerSummary) => {
                   setStripeBuyerName(c.name);
                   setStripeBuyerEmail(c.email || "");
+                  setStripeCustomerId(c.id);
                 }}
               />
+              <input type="hidden" name="customerId" value={stripeCustomerId ?? ""} />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -495,7 +510,10 @@ export default function PurchasePanel({
                     type="text"
                     name="buyerName"
                     value={stripeBuyerName}
-                    onChange={(e) => setStripeBuyerName(e.target.value)}
+                    onChange={(e) => {
+                      setStripeBuyerName(e.target.value);
+                      setStripeCustomerId(null);
+                    }}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -508,7 +526,10 @@ export default function PurchasePanel({
                     name="buyerEmail"
                     required
                     value={stripeBuyerEmail}
-                    onChange={(e) => setStripeBuyerEmail(e.target.value)}
+                    onChange={(e) => {
+                      setStripeBuyerEmail(e.target.value);
+                      setStripeCustomerId(null);
+                    }}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -601,8 +622,10 @@ export default function PurchasePanel({
                   setGalleryBuyerName(c.name);
                   setGalleryBuyerEmail(c.email || "");
                   setGalleryBuyerAddress(c.address || "");
+                  setGalleryCustomerId(c.id);
                 }}
               />
+              <input type="hidden" name="customerId" value={galleryCustomerId ?? ""} />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -613,7 +636,10 @@ export default function PurchasePanel({
                     name="buyerName"
                     required
                     value={galleryBuyerName}
-                    onChange={(e) => setGalleryBuyerName(e.target.value)}
+                    onChange={(e) => {
+                      setGalleryBuyerName(e.target.value);
+                      setGalleryCustomerId(null);
+                    }}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -625,7 +651,10 @@ export default function PurchasePanel({
                     type="email"
                     name="buyerEmail"
                     value={galleryBuyerEmail}
-                    onChange={(e) => setGalleryBuyerEmail(e.target.value)}
+                    onChange={(e) => {
+                      setGalleryBuyerEmail(e.target.value);
+                      setGalleryCustomerId(null);
+                    }}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -741,8 +770,10 @@ export default function PurchasePanel({
                   setPastBuyerName(c.name);
                   setPastBuyerEmail(c.email || "");
                   setPastBuyerAddress(c.address || "");
+                  setPastCustomerId(c.id);
                 }}
               />
+              <input type="hidden" name="customerId" value={pastCustomerId ?? ""} />
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -753,7 +784,10 @@ export default function PurchasePanel({
                     name="buyerName"
                     required
                     value={pastBuyerName}
-                    onChange={(e) => setPastBuyerName(e.target.value)}
+                    onChange={(e) => {
+                      setPastBuyerName(e.target.value);
+                      setPastCustomerId(null);
+                    }}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -765,7 +799,10 @@ export default function PurchasePanel({
                     type="email"
                     name="buyerEmail"
                     value={pastBuyerEmail}
-                    onChange={(e) => setPastBuyerEmail(e.target.value)}
+                    onChange={(e) => {
+                      setPastBuyerEmail(e.target.value);
+                      setPastCustomerId(null);
+                    }}
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
@@ -857,12 +894,24 @@ export default function PurchasePanel({
                 <label className="mb-1 block text-sm font-medium text-neutral-700">
                   Sale source
                 </label>
-                <input
-                  type="text"
+                {/* Was a plain free-text input until 2026-08-16 — the only
+                    one of the three sale-start forms not backed by the
+                    Settings preset list, so it silently never offered
+                    what was actually configured there. Left unset, the
+                    server still defaults this to "Historical" (see
+                    recordPastSale), so that behaviour is unchanged. */}
+                <select
                   name="source"
-                  placeholder="Historical"
+                  defaultValue=""
                   className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                />
+                >
+                  <option value="">— Not set (defaults to &quot;Historical&quot;) —</option>
+                  {saleSources.map((s) => (
+                    <option key={s} value={s}>
+                      {s}
+                    </option>
+                  ))}
+                </select>
               </div>
               <button
                 type="submit"
