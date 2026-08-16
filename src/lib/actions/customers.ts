@@ -459,3 +459,22 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
   });
   revalidatePath(`/sites`);
 }
+
+// Simple hard delete, no soft-delete/archive step — same "lower stakes,
+// simple confirm-and-remove" precedent as Artwork delete, not the
+// heavier Sites-style archive (2026-08-16, added specifically to let
+// duplicate/junk contacts be tidied up, e.g. ones created before the
+// customerId fix above existed).
+//
+// Safe by construction, not by extra checks here: `Purchase.customerId`
+// is `ON DELETE SET NULL` at the database level (see the
+// 2026-08-13_customer_records migration), and a Purchase's own
+// buyerName/buyerEmail/buyerAddress are separately snapshotted at the
+// time of sale, never read from the live Customer record — so deleting
+// a Customer can only ever unlink it from its past sales, never delete
+// or alter a sale itself. The UI still surfaces the sale count before
+// deleting so it's an informed choice, not a hidden one.
+export async function deleteCustomer(customerId: string): Promise<void> {
+  await db.customer.delete({ where: { id: customerId } });
+  revalidatePath(`/sites`);
+}
