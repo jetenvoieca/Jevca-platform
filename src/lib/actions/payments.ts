@@ -140,6 +140,10 @@ export async function startPurchase(
   const type = (formData.get("type") as string) === "INSTALMENTS" ? "INSTALMENTS" : "FULL";
   const framed = (formData.get("framed") as string) === "true";
   const source = (formData.get("source") as string)?.trim() || null;
+  // Set only when the person actually picked a result from CustomerPicker
+  // (2026-08-16) — see the matching note on findOrCreateCustomer for why
+  // this has to be authoritative rather than re-matched by email.
+  const customerId = (formData.get("customerId") as string)?.trim() || null;
 
   if (!buyerEmail) return { ok: false, error: "Buyer email is required to start a sale." };
 
@@ -163,6 +167,7 @@ export async function startPurchase(
   const customer = await findOrCreateCustomer(artwork.artistId, {
     name: buyerName || buyerEmail,
     email: buyerEmail,
+    customerId,
   });
 
   const purchase = await db.purchase.create({
@@ -220,6 +225,8 @@ export async function startGallerySale(
     currencyRaw || (await db.saleTerms.findUnique({ where: { artworkId } }))?.currency || "GBP";
   const commissionPercent = (formData.get("commissionPercent") as string)?.trim() || null;
   const source = (formData.get("source") as string)?.trim() || null;
+  // See the matching note in startPurchase above (2026-08-16).
+  const customerId = (formData.get("customerId") as string)?.trim() || null;
 
   if (!buyerName) return { ok: false, error: "The gallery/buyer name is required." };
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
@@ -232,6 +239,7 @@ export async function startGallerySale(
     name: buyerName,
     email: buyerEmail,
     address: buyerAddress,
+    customerId,
   });
 
   const purchase = await db.purchase.create({
@@ -290,6 +298,11 @@ export async function recordPastSale(
   // useful — the person can still overwrite it with something more
   // specific per sale.
   const source = (formData.get("source") as string)?.trim() || "Historical";
+  // See the matching note in startPurchase above (2026-08-16) — this is
+  // exactly the path that was creating duplicate blank customers: a
+  // picked customer with no email on file couldn't be re-matched by
+  // email, so a second record was silently created every time.
+  const customerId = (formData.get("customerId") as string)?.trim() || null;
 
   if (!buyerName) return { ok: false, error: "The buyer/gallery name is required." };
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
@@ -305,6 +318,7 @@ export async function recordPastSale(
     name: buyerName,
     email: buyerEmail,
     address: buyerAddress,
+    customerId,
   });
 
   const total = parseFloat(totalAmount);
