@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   updatePresentation,
@@ -136,6 +136,21 @@ export default function ArtworkDetailPanel({
   const [selectedImageIndex, setSelectedImageIndex] = useState(0);
   const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  // Keeps `images` synced with the server's actual order whenever this
+  // artwork's data is refetched — e.g. after any autosave elsewhere in
+  // this panel, not just an image reorder itself (2026-08-16 fix). This
+  // component's `key={artwork.id}` only forces a full remount when
+  // switching to a *different* artwork; a refetch of the *same* one
+  // (which onDataChanged triggers constantly) was leaving `images`
+  // frozen at whatever it was on first mount, so a reorder could look
+  // like it silently didn't take, or a later reorder could act on
+  // stale data — both fixed by never letting local state drift from
+  // what the server actually has.
+  useEffect(() => {
+    setImages(artwork.images);
+    setSelectedImageIndex(0);
+  }, [artwork.images]);
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
   // Original/Unique pieces don't have editions or framed-vs-unframed
   // pricing the way prints do — Catalogue shows a simpler set of fields

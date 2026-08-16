@@ -143,6 +143,12 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
         catalogueNumber: true,
         availability: true,
         type: true,
+        // mainImage is a direct single-row lookup (via mainImageId),
+        // not a scan — cheap even across many rows. Preferred over
+        // images[0] wherever both are available (2026-08-16); images
+        // stays as the fallback for artworks with no main image chosen
+        // yet, same as before.
+        mainImage: { select: { url: true, thumbnailKey: true } },
         images: { take: 1, select: { url: true, thumbnailKey: true } },
       },
       skip: offset,
@@ -159,12 +165,21 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
   // falls back to the original proxied url for any image uploaded before
   // 2026-08-13 that hasn't been backfilled yet, so nothing breaks or goes
   // blank in the meantime.
-  const rowsWithThumbnails = rows.map((a) => ({
-    ...a,
-    images: a.images.map((img) => ({
-      url: publicMediaUrl(img.thumbnailKey) || img.url,
-    })),
-  }));
+  //
+  // Folds mainImage into the same images[0] slot every existing caller
+  // already reads (2026-08-16), rather than changing what shape callers
+  // expect — an artwork with a chosen main image shows that one; anything
+  // without one falls back to whatever Prisma returned first, same as
+  // before this existed.
+  const rowsWithThumbnails = rows.map(({ mainImage, images, ...rest }) => {
+    const effectiveImage = mainImage || images[0] || null;
+    return {
+      ...rest,
+      images: effectiveImage
+        ? [{ url: publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url }]
+        : [],
+    };
+  });
 
   return { rows: rowsWithThumbnails, total, soldCount };
 }
