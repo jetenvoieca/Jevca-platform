@@ -652,7 +652,7 @@ export default function ArtworksCatalogueView({
           {loadMoreRow}
         </div>
 
-        <div className="sticky top-4">
+        <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto">
           {selected ? (
             <ArtworkDetailPanel
               key={selected.id}

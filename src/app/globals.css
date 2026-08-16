@@ -1,3 +1,14 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+/* No visible scrollbars anywhere (2026-08-16) — scrolling itself still
+   works exactly as normal (wheel, trackpad, keyboard, drag); this just
+   hides the bar itself rather than removing scroll functionality. */
+* {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* old Edge/IE */
+}
+*::-webkit-scrollbar {
+  display: none; /* Chrome, Safari, new Edge */
+}
