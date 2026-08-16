@@ -104,6 +104,124 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
   redirect(`/sites/${siteId}/artworks?selected=${artwork.id}`);
 }
 
+// "Create Derivative" (2026-08-16) — for when the same physical piece
+// legitimately exists as more than one sellable listing (e.g. an
+// Original alongside a Paper Edition of it, or the same image reused for
+// a different size/framing option). Duplicates the Catalogue fields,
+// Presentation fields (including pricing, so it's immediately sellable —
+// not left needing a re-save before Payment will accept a sale), and
+// every image currently on the artwork — main and Related alike.
+//
+// Images are duplicated as new `Image` rows pointing at the exact same
+// stored file (same `key`/`url`/thumbnailKey/displayKey), not re-uploaded
+// — `Image.artworkId` is a single foreign key (one image belongs to
+// exactly one artwork), so two artworks can never literally share one
+// row, but they can cheaply share the same underlying file. This is
+// exactly what avoids the "upload the same photo again" confusion this
+// feature exists to prevent.
+//
+// Deliberately reset rather than copied:
+// - Availability always starts AVAILABLE, regardless of the original's
+//   current status — a derivative is a distinct, not-yet-sold listing,
+//   even if the original it was copied from has since sold.
+// - No Purchase/sale history is copied — a derivative has never been
+//   sold itself.
+// - A fresh catalogueNumber is generated the normal way (nextCatalogueNumber,
+//   via createArtworkWithRetry) — never reuses the original's number.
+export async function duplicateArtwork(artworkId: string, siteId: string) {
+  const original = await db.artwork.findUniqueOrThrow({
+    where: { id: artworkId },
+    include: { images: true, saleTerms: true },
+  });
+
+  const created = await createArtworkWithRetry(original.artistId, {
+    presentationTitle: `${original.presentationTitle} Derivative`,
+    catalogueName: `${original.catalogueName} Derivative`,
+    presentationPrice:
+      original.presentationPrice != null ? Number(original.presentationPrice) : null,
+    description: original.description,
+    medium: original.medium,
+    presentationGroup: original.presentationGroup,
+    tier: original.tier,
+    availability: "AVAILABLE",
+    type: original.type,
+    catalogueGroup: original.catalogueGroup,
+    size: original.size,
+    location: original.location,
+    studioNotes: original.studioNotes,
+  });
+
+  // Fields createArtworkWithRetry's signature doesn't cover (added to the
+  // schema after that helper was written for the plain "+ New" flow) —
+  // a follow-up update rather than extending that shared signature, to
+  // avoid changing behaviour for its other caller (CSV import).
+  await db.artwork.update({
+    where: { id: created.id },
+    data: {
+      year: original.year,
+      edition: original.edition,
+      availableQty: original.availableQty,
+      priceFramed: original.priceFramed,
+    },
+  });
+
+  // Copy Sale Terms too, not just presentationPrice — so the derivative
+  // is immediately ready to sell (Payment tab checks for a SaleTerms row
+  // existing before it will start a Stripe/Gallery sale) rather than
+  // silently needing an extra visit-and-resave of Presentation first.
+  if (original.saleTerms) {
+    await db.saleTerms.create({
+      data: {
+        artworkId: created.id,
+        totalAmount: original.saleTerms.totalAmount,
+        currency: original.saleTerms.currency,
+        instalmentCount: original.saleTerms.instalmentCount,
+        releaseMessage: original.saleTerms.releaseMessage,
+        releaseTriggerCount: original.saleTerms.releaseTriggerCount,
+      },
+    });
+  }
+
+  // Duplicate every image row (main and Related alike) — Promise.all
+  // preserves input order in its results, which is what lets the
+  // mainImageId lookup below just match by array index rather than
+  // needing to re-identify anything after the fact.
+  const newImages = await Promise.all(
+    original.images.map((img) =>
+      db.image.create({
+        data: {
+          artistId: original.artistId,
+          key: img.key,
+          url: img.url,
+          thumbnailKey: img.thumbnailKey,
+          displayKey: img.displayKey,
+          posterUrl: img.posterUrl,
+          kind: img.kind,
+          mimeType: img.mimeType,
+          caption: img.caption,
+          altText: img.altText,
+          tags: img.tags,
+          status: img.status,
+          source: img.source,
+          artworkId: created.id,
+        },
+      })
+    )
+  );
+
+  if (original.mainImageId) {
+    const mainIndex = original.images.findIndex((img) => img.id === original.mainImageId);
+    if (mainIndex !== -1) {
+      await db.artwork.update({
+        where: { id: created.id },
+        data: { mainImageId: newImages[mainIndex].id },
+      });
+    }
+  }
+
+  return { id: created.id };
+}
+
 type ListFilters = {
   q?: string;
   availability?: string;
