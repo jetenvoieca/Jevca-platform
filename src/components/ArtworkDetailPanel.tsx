@@ -578,7 +578,7 @@ export default function ArtworkDetailPanel({
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     />
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Type
                     </label>
@@ -599,7 +599,7 @@ export default function ArtworkDetailPanel({
                       ))}
                     </select>
                   </div>
-                  <div className="col-span-2">
+                  <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Group
                     </label>
