@@ -22,6 +22,7 @@ type ArtworkRow = {
   catalogueNumber: string;
   availability: string;
   type: string | null;
+  catalogueGroup: string | null;
   imageUrl: string | null;
 };
 
@@ -147,6 +148,7 @@ export default function ArtworksCatalogueView({
           catalogueNumber: a.catalogueNumber,
           availability: a.availability,
           type: a.type,
+          catalogueGroup: a.catalogueGroup,
           imageUrl: a.images[0]?.url ?? null,
         }))
       );
@@ -195,6 +197,7 @@ export default function ArtworksCatalogueView({
           catalogueNumber: a.catalogueNumber,
           availability: a.availability,
           type: a.type,
+          catalogueGroup: a.catalogueGroup,
           imageUrl: a.images[0]?.url ?? null,
         })),
       ]);
@@ -324,6 +327,7 @@ export default function ArtworksCatalogueView({
           catalogueNumber: a.catalogueNumber,
           availability: a.availability,
           type: a.type,
+          catalogueGroup: a.catalogueGroup,
           imageUrl: a.images[0]?.url ?? null,
         }))
       );
@@ -381,6 +385,7 @@ export default function ArtworksCatalogueView({
                     presentationPrice: item.presentationPrice,
                     availability: item.availability,
                     type: item.type,
+                    catalogueGroup: item.catalogueGroup,
                     imageUrl: item.images[0]?.url ?? a.imageUrl,
                   }
                 : a
@@ -696,6 +701,9 @@ export default function ArtworksCatalogueView({
                     {a.catalogueName}
                   </p>
                   <p className="text-xs text-neutral-500">{a.type || "—"}</p>
+                  {a.catalogueGroup && (
+                    <p className="truncate text-xs text-neutral-400">{a.catalogueGroup}</p>
+                  )}
                 </button>
               ))}
               {addNewTile}
