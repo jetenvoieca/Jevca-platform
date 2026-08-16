@@ -549,9 +549,8 @@ export default function ArtworksCatalogueView({
           </p>
       </div>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-4">
-        <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
-          <div>
+      <div className="flex flex-1 gap-6 overflow-hidden px-6 pb-4">
+        <div className="flex-1 overflow-y-auto overscroll-contain">
 
           {view === "tile" ? (
             <div
@@ -652,7 +651,7 @@ export default function ArtworksCatalogueView({
           {loadMoreRow}
         </div>
 
-        <div className="sticky top-4 max-h-[calc(100vh-2rem)] overflow-y-auto overscroll-contain">
+        <div className="w-[480px] shrink-0 overflow-y-auto overscroll-contain">
           {selected ? (
             <ArtworkDetailPanel
               key={selected.id}
@@ -672,7 +671,6 @@ export default function ArtworksCatalogueView({
             </div>
           )}
         </div>
-      </div>
       </div>
 
       {showImport && (
