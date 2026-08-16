@@ -141,8 +141,23 @@ export default function ArtworksCatalogueView({
       setTotal(newTotal);
       setSoldCount(newSoldCount);
       updateUrlFilters(next);
+
+      // 2026-08-16 fix: whatever was open in the detail panel used to
+      // stay open regardless of a filter change, even once it no longer
+      // matched — e.g. filter by a Location, open a work, then filter by
+      // a *different* Location: the now-irrelevant work stayed sitting
+      // open in the panel with no indication it wasn't part of the list
+      // in front of it. Reuses the same artworkMatchesFilters check as
+      // the "edit takes a tile outside the active filter" fix — closes
+      // the panel only when the still-open artwork genuinely no longer
+      // belongs under the new filters, leaves it alone otherwise.
+      if (selected && !artworkMatchesFilters(selected, next)) {
+        selectedIdRef.current = null;
+        setSelected(null);
+        updateUrlSelected(null);
+      }
     },
-    [artistId, q, availability, location, type, group, sort, pageSize]
+    [artistId, q, availability, location, type, group, sort, pageSize, selected]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -264,6 +279,45 @@ export default function ArtworksCatalogueView({
     selectedIdRef.current = null;
     setSelected(null);
     updateUrlSelected(null);
+  };
+
+  // After Create Derivative (2026-08-16) — refreshes the grid under the
+  // current filters (so the new artwork shows up if it belongs there,
+  // same as any other change) and opens it in the panel. Deliberately
+  // NOT calling applyFilters for the refresh half of this: applyFilters
+  // also closes the panel if the *currently selected* artwork falls
+  // outside the active filters (see the note above it), which would
+  // immediately close the very panel this is about to open for the new
+  // derivative if the derivative doesn't happen to match the current
+  // filters (e.g. Availability defaults to AVAILABLE regardless of what
+  // the original's status was).
+  const handleDuplicated = (newArtworkId: string) => {
+    (async () => {
+      const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
+        q: q || undefined,
+        availability: availability || undefined,
+        location: location || undefined,
+        type: type || undefined,
+        group: group || undefined,
+        sort: sort || undefined,
+        limit: pageSize,
+      });
+      setArtworks(
+        rows.map((a) => ({
+          id: a.id,
+          presentationTitle: a.presentationTitle,
+          catalogueName: a.catalogueName,
+          presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
+          catalogueNumber: a.catalogueNumber,
+          availability: a.availability,
+          type: a.type,
+          imageUrl: a.images[0]?.url ?? null,
+        }))
+      );
+      setTotal(newTotal);
+      setSoldCount(newSoldCount);
+      handleSelect(newArtworkId);
+    })();
   };
 
   // After any save inside the panel — re-fetches this one artwork fresh
@@ -702,6 +756,7 @@ export default function ArtworksCatalogueView({
               siteDefaultCurrency={siteDefaultCurrency}
               onClose={handleClosePanel}
               onDeleted={handleDeletedPanel}
+              onDuplicated={handleDuplicated}
               onDataChanged={refreshSelected}
               showCloseButton={false}
             />
