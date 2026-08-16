@@ -6,6 +6,7 @@ import { updatePresentation, updateCatalogue, deleteArtwork, deleteArtworkIfBlan
 import { saveSaleTerms } from "@/lib/actions/payments";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
 import PurchasePanel from "@/components/PurchasePanel";
+import RecordPastSaleForm from "@/components/RecordPastSaleForm";
 import type { SaleTermsDetail, PurchaseDetail } from "@/lib/actions/payments";
 
 export type ArtworkDetail = {
@@ -118,7 +119,7 @@ export default function ArtworkDetailPanel({
   // thing showing and closing it is the only way back.
   showCloseButton?: boolean;
 }) {
-  const [tab, setTab] = useState<"presentation" | "catalogue" | "payment">("catalogue");
+  const [tab, setTab] = useState<"presentation" | "catalogue" | "payment" | "past">("catalogue");
   const [isPending, startTransition] = useTransition();
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
   // Original/Unique pieces don't have editions or framed-vs-unframed
@@ -305,6 +306,24 @@ export default function ArtworkDetailPanel({
           }`}
         >
           Payment
+        </button>
+        {/* Moved out of the Payment tab's own channel switcher and
+            promoted to a top-level tab (2026-08-16) — recording a past
+            sale never needed Sale Terms/a Presentation price to exist
+            first (it takes its own typed price), but living inside
+            Payment made it look and behave as if it did, since the whole
+            "Start a sale" block there only renders once terms are set.
+            This tab has no such requirement. */}
+        <button
+          type="button"
+          onClick={() => setTab("past")}
+          className={`px-3 py-2 text-sm font-medium ${
+            tab === "past"
+              ? "border-b-2 border-neutral-900 text-neutral-900"
+              : "text-neutral-400 hover:text-neutral-600"
+          }`}
+        >
+          Record Past Sale
         </button>
       </div>
 
@@ -722,7 +741,7 @@ export default function ArtworkDetailPanel({
                 </div>
               </form>
             </>
-          ) : (
+          ) : tab === "payment" ? (
             <PurchasePanel
               artworkId={artwork.id}
               artistId={artistId}
@@ -733,6 +752,15 @@ export default function ArtworkDetailPanel({
               activePurchase={artwork.activePurchase}
               history={artwork.purchaseHistory}
               saleSources={settings.saleSources}
+              onChanged={onDataChanged}
+            />
+          ) : (
+            <RecordPastSaleForm
+              artworkId={artwork.id}
+              artistId={artistId}
+              siteId={siteId}
+              saleSources={settings.saleSources}
+              defaultCurrency={artwork.saleTerms?.currency ?? siteDefaultCurrency}
               onChanged={onDataChanged}
             />
         )}
