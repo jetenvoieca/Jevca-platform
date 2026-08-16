@@ -4,6 +4,7 @@ import { useState, useTransition, useRef } from "react";
 import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
 import { uploadFileDirect } from "@/lib/uploadDirect";
+import VideoThumb from "@/components/VideoThumb";
 
 type PickedImage = {
   id: string;
@@ -300,9 +301,18 @@ export default function MediaPicker({
                         className="aspect-square w-full object-cover"
                       />
                     ) : (
-                      <div className="flex aspect-square w-full items-center justify-center bg-neutral-200 text-xs text-neutral-500">
-                        Video
-                      </div>
+                      // Same fallback as the Media Catalogue grid
+                      // (MediaCatalogueView.tsx): videos uploaded via the
+                      // iPhone Shortcut have no posterUrl at all, so show
+                      // the video's own first frame live instead of a
+                      // plain placeholder. Previously this picker was the
+                      // one place still showing a grey "Video" box —
+                      // different code rendering the same data
+                      // differently (see decisions-log, 2026-08-16).
+                      <VideoThumb
+                        src={img.url}
+                        className="aspect-square w-full object-cover"
+                      />
                     )
                   ) : (
                     <img src={img.url} alt="" className="aspect-square w-full object-cover" />
