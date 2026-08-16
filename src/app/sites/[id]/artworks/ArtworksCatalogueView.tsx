@@ -12,6 +12,7 @@ import ArtworkDetailPanel, {
   type ArtworkDetail,
   type ArtworkSettings,
 } from "@/components/ArtworkDetailPanel";
+import { artworkMatchesFilters } from "@/lib/artworkFilters";
 
 type ArtworkRow = {
   id: string;
@@ -272,6 +273,17 @@ export default function ArtworksCatalogueView({
   // Also patches the matching grid tile (2026-08-15 fix) — this used to
   // only update the open detail panel, so a saved field like Type never
   // showed up in the grid until a full page reload.
+  //
+  // 2026-08-16 fix: patching in place isn't enough when the edited field
+  // is itself one of the active filters (e.g. changing an artwork's
+  // Location away from the Location filter's current value) — the tile
+  // used to just sit there with its new value until a full page reload.
+  // Now checks whether the saved artwork still belongs under the active
+  // filters and drops the tile if not, and always refreshes total/
+  // soldCount from the server (a cheap count-only call, no rows) so both
+  // numbers stay correct regardless of whether the tile stayed, moved, or
+  // was dropped. Deliberately doesn't touch the already-loaded rows
+  // otherwise, so scrolling position from infinite scroll is preserved.
   const refreshSelected = () => {
     if (!selected) return;
     const idAtCallTime = selected.id;
@@ -282,21 +294,49 @@ export default function ArtworksCatalogueView({
       // (2026-08-15 fix).
       if (item && item.artistId === artistId && selectedIdRef.current === idAtCallTime) {
         setSelected(item);
-        setArtworks((prev) =>
-          prev.map((a) =>
-            a.id === item.id
-              ? {
-                  ...a,
-                  presentationTitle: item.presentationTitle,
-                  catalogueName: item.catalogueName,
-                  presentationPrice: item.presentationPrice,
-                  availability: item.availability,
-                  type: item.type,
-                  imageUrl: item.images[0]?.url ?? a.imageUrl,
-                }
-              : a
-          )
-        );
+
+        const stillMatches = artworkMatchesFilters(item, {
+          q,
+          availability,
+          location,
+          type,
+          group,
+        });
+
+        if (stillMatches) {
+          setArtworks((prev) =>
+            prev.map((a) =>
+              a.id === item.id
+                ? {
+                    ...a,
+                    presentationTitle: item.presentationTitle,
+                    catalogueName: item.catalogueName,
+                    presentationPrice: item.presentationPrice,
+                    availability: item.availability,
+                    type: item.type,
+                    imageUrl: item.images[0]?.url ?? a.imageUrl,
+                  }
+                : a
+            )
+          );
+        } else {
+          setArtworks((prev) => prev.filter((a) => a.id !== item.id));
+        }
+
+        // Count-only fetch (limit: 0 — no rows, just the two count
+        // queries) to keep the header's "X of Y works · Z sold" accurate,
+        // since an edit can change soldCount even when the tile stays
+        // (e.g. toggling Availability while filtered by something else).
+        const { total: freshTotal, soldCount: freshSoldCount } = await listArtworks(artistId, {
+          q: q || undefined,
+          availability: availability || undefined,
+          location: location || undefined,
+          type: type || undefined,
+          group: group || undefined,
+          limit: 0,
+        });
+        setTotal(freshTotal);
+        setSoldCount(freshSoldCount);
       }
     })();
   };
