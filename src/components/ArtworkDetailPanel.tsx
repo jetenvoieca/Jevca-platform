@@ -14,7 +14,6 @@ export type ArtworkDetail = {
   catalogueNumber: string;
   presentationTitle: string;
   presentationPrice: string | null;
-  dimensions: string | null;
   description: string | null;
   medium: string | null;
   presentationGroup: string | null;
@@ -28,7 +27,6 @@ export type ArtworkDetail = {
   location: string | null;
   edition: string | null;
   availableQty: number | null;
-  priceUnframed: string | null;
   priceFramed: string | null;
   studioNotes: string | null;
   images: {
@@ -700,7 +698,7 @@ export default function ArtworkDetailPanel({
                       working record and shouldn't hold anything that
                       varies, like price. Both moved to Presentation
                       (Unframed/Framed price), merged there with what used
-                      to be the separate Sale Terms tab. priceUnframed/
+                      to be the separate Sale Terms tab. presentationPrice/
                       priceFramed stay on the Artwork model — Presentation
                       writes to the same fields, just from a different tab
                       — so no hidden-input preservation is needed here any

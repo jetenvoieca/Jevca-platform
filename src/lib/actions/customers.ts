@@ -46,7 +46,7 @@ export type CustomerDetail = {
     artworkTitle: string;
     artworkImageUrl: string | null;
     artworkMedium: string | null;
-    artworkDimensions: string | null;
+    artworkSize: string | null;
     artworkDescription: string | null;
     totalAmount: string;
     currency: string;
@@ -155,7 +155,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
             select: {
               presentationTitle: true,
               medium: true,
-              dimensions: true,
+              size: true,
               description: true,
               images: { take: 1, select: { url: true, thumbnailKey: true } },
             },
@@ -212,7 +212,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
         ? publicMediaUrl(p.artwork.images[0].thumbnailKey) || p.artwork.images[0].url
         : null,
       artworkMedium: p.artwork.medium,
-      artworkDimensions: p.artwork.dimensions,
+      artworkSize: p.artwork.size,
       artworkDescription: p.artwork.description,
       totalAmount: p.totalAmount.toString(),
       currency: p.currency,
@@ -230,7 +230,7 @@ export type GalleryConsignedWork = {
   presentationPrice: string | null;
   description: string | null;
   medium: string | null;
-  dimensions: string | null;
+  size: string | null;
   imageUrl: string | null;
 };
 
@@ -261,7 +261,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
       presentationPrice: true,
       description: true,
       medium: true,
-      dimensions: true,
+      size: true,
       images: { take: 1, select: { url: true, thumbnailKey: true } },
     },
     orderBy: { presentationTitle: "asc" },
@@ -275,7 +275,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
       presentationPrice: w.presentationPrice ? w.presentationPrice.toString() : null,
       description: w.description,
       medium: w.medium,
-      dimensions: w.dimensions,
+      size: w.size,
       // Same thumbnail-first-with-fallback convention as the Artwork
       // Catalogue's own list (2026-08-13 backfill) — not a new pattern.
       imageUrl: w.images[0] ? publicMediaUrl(w.images[0].thumbnailKey) || w.images[0].url : null,

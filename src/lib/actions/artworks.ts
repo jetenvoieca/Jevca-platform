@@ -57,7 +57,6 @@ export async function createArtworkWithRetry(
     presentationTitle: string;
     catalogueName: string;
     presentationPrice: number | null;
-    dimensions: string | null;
     description: string | null;
     medium: string | null;
     presentationGroup: string | null;
@@ -67,7 +66,6 @@ export async function createArtworkWithRetry(
     catalogueGroup: string | null;
     size: string | null;
     location: string | null;
-    priceUnframed: number | null;
     studioNotes: string | null;
   }> & { presentationTitle: string; catalogueName: string }
 ) {
@@ -259,7 +257,6 @@ export async function getArtworkDetailForClient(id: string) {
     catalogueNumber: artwork.catalogueNumber,
     presentationTitle: artwork.presentationTitle,
     presentationPrice: artwork.presentationPrice != null ? artwork.presentationPrice.toString() : null,
-    dimensions: artwork.dimensions,
     description: artwork.description,
     medium: artwork.medium,
     presentationGroup: artwork.presentationGroup,
@@ -273,7 +270,6 @@ export async function getArtworkDetailForClient(id: string) {
     location: artwork.location,
     edition: artwork.edition,
     availableQty: artwork.availableQty,
-    priceUnframed: artwork.priceUnframed != null ? artwork.priceUnframed.toString() : null,
     priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
     studioNotes: artwork.studioNotes,
     images: artwork.images
@@ -379,11 +375,12 @@ export async function updateCatalogue(
   // types something different directly into Presentation, it's
   // considered overridden and this stops touching that field — same
   // "seed once, then independent" pattern already used for Presentation
-  // being seeded from Catalogue at creation. Price/Dimensions no longer
-  // seed this way (2026-08-15) — price lives only on Presentation now
-  // (Catalogue holds nothing that varies), and Dimensions was dropped
-  // from Presentation entirely in favour of just showing Catalogue's
-  // Size read-only there.
+  // being seeded from Catalogue at creation. Price no longer seeds this
+  // way (2026-08-15) — it lives only on Presentation now (Catalogue
+  // holds nothing that varies). Size and Dimensions are the same
+  // field (2026-08-16 clarified) — Size already holds real
+  // dimension-like values via the artist's own preset list, so there's
+  // only ever the one field, not two.
   const current = await db.artwork.findUnique({
     where: { id },
     select: { presentationTitle: true },
@@ -438,7 +435,6 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
     !artwork.saleTerms &&
     artwork.purchases.length === 0 &&
     !artwork.presentationPrice &&
-    !artwork.dimensions &&
     !artwork.description &&
     !artwork.medium &&
     !artwork.presentationGroup &&
@@ -449,7 +445,6 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
     !artwork.location &&
     !artwork.edition &&
     !artwork.availableQty &&
-    !artwork.priceUnframed &&
     !artwork.priceFramed &&
     !artwork.studioNotes;
 

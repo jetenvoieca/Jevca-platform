@@ -168,10 +168,10 @@ export default function CustomersView({
                         <dd className="inline">{selectedWork.artworkMedium}</dd>
                       </div>
                     )}
-                    {selectedWork.artworkDimensions && (
+                    {selectedWork.artworkSize && (
                       <div>
-                        <dt className="inline text-neutral-400">Dimensions: </dt>
-                        <dd className="inline">{selectedWork.artworkDimensions}</dd>
+                        <dt className="inline text-neutral-400">Size: </dt>
+                        <dd className="inline">{selectedWork.artworkSize}</dd>
                       </div>
                     )}
                     <div>

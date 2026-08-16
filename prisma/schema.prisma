@@ -350,6 +350,11 @@ model Artwork {
 
   presentationTitle String
   presentationPrice Decimal?            @db.Decimal(10, 2)
+  // Deprecated (2026-08-16) — superseded by `size` (Size and Dimensions
+  // turned out to be the same concept; `size` already holds real
+  // dimension-like values via the artist's own preset list). Column
+  // kept, not dropped, only because older CSV-imported rows may still
+  // have data here — nothing in the app reads or writes it any more.
   dimensions        String?
   description       String?
   medium            String?
@@ -372,6 +377,9 @@ model Artwork {
   location       String?
   edition        String?
   availableQty   Int?
+  // Deprecated (2026-08-15) — Catalogue no longer holds price at all
+  // (moved to Presentation's `presentationPrice`, the Unframed price).
+  // Column kept, not dropped, for the same reason as `dimensions` above.
   priceUnframed  Decimal? @db.Decimal(10, 2)
   priceFramed    Decimal? @db.Decimal(10, 2)
   studioNotes    String?

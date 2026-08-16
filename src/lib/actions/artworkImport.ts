@@ -198,7 +198,6 @@ export async function importArtworkRow(
       presentationTitle: row.title,
       catalogueName: row.title,
       presentationPrice: row.price,
-      dimensions: row.dimensions || null,
       description: row.description || null,
       medium: row.medium || null,
       presentationGroup: row.group || null,
@@ -206,9 +205,12 @@ export async function importArtworkRow(
       availability: row.sold ? "SOLD" : "AVAILABLE",
       type: row.type || null,
       catalogueGroup: row.group || null,
+      // Size and Dimensions are the same field (2026-08-16) — Size
+      // already holds real dimension-like values via the artist's own
+      // preset list, so the CSV's "Dimensions" column maps to Size,
+      // not a separate now-unused field.
       size: row.dimensions || null,
       location: row.location || null,
-      priceUnframed: row.price,
       studioNotes: row.studioNotes || null,
     });
 

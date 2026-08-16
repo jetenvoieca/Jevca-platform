@@ -198,10 +198,10 @@ export default function GalleriesView({
                         <dd className="inline">{selectedWork.medium}</dd>
                       </div>
                     )}
-                    {selectedWork.dimensions && (
+                    {selectedWork.size && (
                       <div>
-                        <dt className="inline text-neutral-400">Dimensions: </dt>
-                        <dd className="inline">{selectedWork.dimensions}</dd>
+                        <dt className="inline text-neutral-400">Size: </dt>
+                        <dd className="inline">{selectedWork.size}</dd>
                       </div>
                     )}
                     {selectedWork.presentationPrice && (
