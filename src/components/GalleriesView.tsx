@@ -6,10 +6,12 @@ import {
   getGalleryDetail,
   updateCustomer,
   createCustomer,
+  deleteCustomer,
   type CustomerSummary,
   type GalleryDetail,
   type GalleryConsignedWork,
 } from "@/lib/actions/customers";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
 type RelationshipStatus = "PROSPECT" | "ACTIVE";
 
@@ -35,6 +37,8 @@ export default function GalleriesView({
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
   const router = useRouter();
 
   const filtered = galleries.filter((g) => {
@@ -124,6 +128,19 @@ export default function GalleriesView({
     setAdding(false);
     router.refresh();
     openRow(result.id);
+  };
+
+  const handleDeleteGallery = () => {
+    if (!selectedDetail) return;
+    setDeleting(true);
+    startTransition(async () => {
+      await deleteCustomer(selectedDetail.id);
+      setDeleting(false);
+      setConfirmingDelete(false);
+      setSelectedId(null);
+      setSelectedDetail(null);
+      router.refresh();
+    });
   };
 
   const selectedWork: GalleryConsignedWork | null =
@@ -235,16 +252,25 @@ export default function GalleriesView({
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedId(null);
-                  setSelectedDetail(null);
-                }}
-                className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-              >
-                Close
-              </button>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(null);
+                    setSelectedDetail(null);
+                  }}
+                  className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="space-y-3">
@@ -546,6 +572,20 @@ export default function GalleriesView({
           )}
         </div>
       </div>
+
+      <ConfirmDialog
+        open={confirmingDelete}
+        title={`Delete ${selectedDetail?.name ?? "this gallery"}?`}
+        message={
+          selectedDetail && selectedDetail.purchases.length > 0
+            ? `This removes the contact record only — their ${selectedDetail.purchases.length} sale${selectedDetail.purchases.length === 1 ? "" : "s"} stay exactly as they are (invoices, amounts, everything), just no longer linked to a customer record. Consigned Works (matched by name, not a real link) are unaffected either way. Can't be undone.`
+            : "This removes the contact record. Can't be undone."
+        }
+        confirmLabel={deleting ? "Deleting…" : "Delete permanently"}
+        danger
+        onConfirm={handleDeleteGallery}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }
