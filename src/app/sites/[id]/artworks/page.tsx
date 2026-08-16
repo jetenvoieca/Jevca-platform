@@ -52,6 +52,7 @@ export default async function ArtworksCataloguePage({
     catalogueNumber: a.catalogueNumber,
     availability: a.availability,
     type: a.type,
+    catalogueGroup: a.catalogueGroup,
     imageUrl: a.images[0]?.url ?? null,
   }));
 
