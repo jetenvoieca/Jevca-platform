@@ -9,6 +9,7 @@ import {
   deleteArtworkIfBlank,
   linkImagesToArtwork,
   unlinkImageFromArtwork,
+  setMainImage,
 } from "@/lib/actions/artworks";
 import { saveSaleTerms } from "@/lib/actions/payments";
 import MediaPicker from "@/components/MediaPicker";
@@ -38,7 +39,15 @@ export type ArtworkDetail = {
   priceUnframed: string | null;
   priceFramed: string | null;
   studioNotes: string | null;
-  images: { id: string; url: string; kind: string; posterUrl: string | null }[];
+  images: {
+    id: string;
+    url: string;
+    // Larger version for the enlarged preview (2026-08-16) — see the
+    // matching note in getArtworkDetailForClient.
+    displayUrl: string;
+    kind: string;
+    posterUrl: string | null;
+  }[];
   saleTerms: SaleTermsDetail | null;
   activePurchase: PurchaseDetail | null;
   purchaseHistory: PurchaseDetail[];
@@ -121,6 +130,11 @@ export default function ArtworkDetailPanel({
 }) {
   const [tab, setTab] = useState<"presentation" | "catalogue" | "payment">("catalogue");
   const [images, setImages] = useState(artwork.images);
+  // Which thumbnail is showing enlarged above the strip — index into
+  // `images`, not tied to which one is "main" (2026-08-16). Clamped on
+  // render in case images are removed out from under a stale index.
+  const [selectedImageIndex, setSelectedImageIndex] = useState(0);
+  const [draggedImageId, setDraggedImageId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
   // Original/Unique pieces don't have editions or framed-vs-unframed
@@ -266,31 +280,113 @@ export default function ArtworkDetailPanel({
       </div>
 
       <div className="mb-6">
-        <h3 className="mb-2 text-sm font-medium text-neutral-700">Related Images</h3>
+        <h3 className="mb-2 text-sm font-medium text-neutral-700">Images &amp; Videos</h3>
+
+        {images.length > 0 && (
+          <div className="mb-3 flex h-96 items-center justify-center rounded-lg bg-neutral-50">
+            {(() => {
+              const active = images[Math.min(selectedImageIndex, images.length - 1)];
+              if (!active) return null;
+              return active.kind === "VIDEO" ? (
+                <video
+                  key={active.id}
+                  src={active.displayUrl}
+                  controls
+                  className="max-h-96 max-w-full rounded-lg"
+                />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  key={active.id}
+                  src={active.displayUrl}
+                  alt=""
+                  className="max-h-96 max-w-full rounded-lg object-contain"
+                />
+              );
+            })()}
+          </div>
+        )}
+
+        <p className="mb-2 text-xs text-neutral-400">
+          The first one is the main image shown in the catalogue — drag any thumbnail to the
+          front to make it the main one instead. Click a thumbnail to preview it above.
+        </p>
         <div className="flex flex-wrap gap-2">
-          {images.map((img) => (
-            <div key={img.id} className="group relative h-20 w-20">
+          {images.map((img, index) => (
+            <div
+              key={img.id}
+              draggable
+              onDragStart={() => setDraggedImageId(img.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => {
+                if (!draggedImageId || draggedImageId === img.id) return;
+                setImages((prev) => {
+                  const from = prev.findIndex((i) => i.id === draggedImageId);
+                  const to = prev.findIndex((i) => i.id === img.id);
+                  if (from === -1 || to === -1) return prev;
+                  const next = prev.slice();
+                  const [moved] = next.splice(from, 1);
+                  next.splice(to, 0, moved);
+                  // Only position 0 ("main") is actually persisted — see
+                  // the note on setMainImage. The rest of the order is
+                  // just for this editing session's convenience.
+                  if (next[0].id !== prev[0].id) {
+                    startTransition(async () => {
+                      await setMainImage(artwork.id, siteId, next[0].id);
+                      if (onDataChanged) onDataChanged();
+                    });
+                  }
+                  return next;
+                });
+                setDraggedImageId(null);
+              }}
+              onClick={() => setSelectedImageIndex(index)}
+              className={`group relative h-20 w-20 cursor-pointer ${
+                draggedImageId === img.id ? "opacity-40" : ""
+              }`}
+            >
               {img.kind === "VIDEO" ? (
                 img.posterUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
                   <img
                     src={img.posterUrl}
                     alt=""
-                    className="h-20 w-20 rounded object-cover"
+                    className={`h-20 w-20 rounded object-cover ${
+                      index === selectedImageIndex ? "ring-2 ring-neutral-900" : ""
+                    }`}
                   />
                 ) : (
-                  <div className="flex h-20 w-20 items-center justify-center rounded bg-neutral-200 text-[10px] text-neutral-500">
+                  <div
+                    className={`flex h-20 w-20 items-center justify-center rounded bg-neutral-200 text-[10px] text-neutral-500 ${
+                      index === selectedImageIndex ? "ring-2 ring-neutral-900" : ""
+                    }`}
+                  >
                     Video
                   </div>
                 )
               ) : (
-                <img src={img.url} alt="" className="h-20 w-20 rounded object-cover" />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={img.url}
+                  alt=""
+                  className={`h-20 w-20 rounded object-cover ${
+                    index === selectedImageIndex ? "ring-2 ring-neutral-900" : ""
+                  }`}
+                />
+              )}
+              {index === 0 && (
+                <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1 text-[9px] text-white">
+                  Main
+                </span>
               )}
               <button
                 type="button"
-                onClick={() => {
+                onClick={(e) => {
+                  e.stopPropagation();
                   startTransition(async () => {
                     await unlinkImageFromArtwork(artwork.id, img.id, siteId);
                     setImages((prev) => prev.filter((i) => i.id !== img.id));
+                    setSelectedImageIndex(0);
                   });
                 }}
                 className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
@@ -317,6 +413,7 @@ export default function ArtworkDetailPanel({
                       .map((img) => ({
                         id: img.id,
                         url: img.url,
+                        displayUrl: img.url,
                         kind: img.kind,
                         posterUrl: img.posterUrl,
                       })),
@@ -327,6 +424,7 @@ export default function ArtworkDetailPanel({
           </div>
         </div>
       </div>
+
 
       <div className="mb-6 flex gap-2 border-b border-neutral-200">
         <button

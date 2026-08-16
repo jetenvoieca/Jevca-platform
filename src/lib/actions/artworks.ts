@@ -261,12 +261,27 @@ export async function getArtworkDetailForClient(id: string) {
     priceUnframed: artwork.priceUnframed != null ? artwork.priceUnframed.toString() : null,
     priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
     studioNotes: artwork.studioNotes,
-    images: artwork.images.map((img) => ({
-      id: img.id,
-      url: publicMediaUrl(img.thumbnailKey) || img.url,
-      kind: img.kind,
-      posterUrl: img.posterUrl,
-    })),
+    images: artwork.images
+      .slice()
+      .sort((a, b) => {
+        // Main image first, if one is set — everything else keeps
+        // whatever order Prisma returned (2026-08-16).
+        if (a.id === artwork.mainImageId) return -1;
+        if (b.id === artwork.mainImageId) return 1;
+        return 0;
+      })
+      .map((img) => ({
+        id: img.id,
+        url: publicMediaUrl(img.thumbnailKey) || img.url,
+        // Larger version for the enlarged preview (2026-08-16) — the
+        // thumbnail above is deliberately small (600px) for a snappy
+        // strip of many of them; this is the 1800px one, still much
+        // smaller than the true original but plenty for an on-screen
+        // preview.
+        displayUrl: publicMediaUrl(img.displayKey) || publicMediaUrl(img.thumbnailKey) || img.url,
+        kind: img.kind,
+        posterUrl: img.posterUrl,
+      })),
     saleTerms: artwork.saleTerms
       ? {
           totalAmount: artwork.saleTerms.totalAmount.toString(),
@@ -443,6 +458,19 @@ export async function unlinkImageFromArtwork(artworkId: string, imageId: string,
   await db.image.update({
     where: { id: imageId },
     data: { artworkId: null },
+  });
+}
+
+// Which of an artwork's images/videos shows first everywhere it's
+// represented by a single thumbnail (2026-08-16) — set by dragging one
+// to the front of the strip in the editor. Deliberately just this one
+// field rather than persisting a full custom order for every image:
+// only "which one is the main one" has meaning outside the editor
+// itself.
+export async function setMainImage(artworkId: string, siteId: string, imageId: string) {
+  await db.artwork.update({
+    where: { id: artworkId },
+    data: { mainImageId: imageId },
   });
 }
 
