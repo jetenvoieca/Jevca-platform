@@ -5,6 +5,7 @@ import { logout } from "@/lib/actions/auth";
 import { countHopper, countBucket } from "@/lib/actions/hopper";
 import { getOpenAlerts } from "@/lib/alerts";
 import SiteNavPanel from "@/components/SiteNavPanel";
+import LastVisitedSiteTracker from "@/components/LastVisitedSiteTracker";
 
 export default async function SiteLayout({
   children,
@@ -44,6 +45,7 @@ export default async function SiteLayout({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
+      <LastVisitedSiteTracker siteId={id} />
       <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
         <div>
           <h1 className="text-xl font-semibold text-neutral-900">{site.name}</h1>
