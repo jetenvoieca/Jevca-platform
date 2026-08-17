@@ -67,6 +67,11 @@ export async function createArtworkWithRetry(
     size: string | null;
     location: string | null;
     studioNotes: string | null;
+    // Optional (2026-08-17) — only the CSV import passes this true.
+    // Regular "+ New" and duplicateArtwork both omit it, defaulting to
+    // Prisma's own schema default (false) — see the matching note on
+    // Artwork.needsReview in schema.prisma.
+    needsReview: boolean;
   }> & { presentationTitle: string; catalogueName: string }
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
