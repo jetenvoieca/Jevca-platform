@@ -104,7 +104,6 @@ export async function getArtistArtworksForLinking(artistId: string) {
 
 export async function updateMedia(id: string, siteId: string, formData: FormData): Promise<void> {
   const caption = (formData.get("caption") as string)?.trim() || null;
-  const altText = (formData.get("altText") as string)?.trim() || null;
   const tagsRaw = (formData.get("tags") as string)?.trim() || "";
   const artworkIdRaw = (formData.get("artworkId") as string)?.trim() || "";
 
@@ -112,11 +111,17 @@ export async function updateMedia(id: string, siteId: string, formData: FormData
     ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
     : [];
 
+  // Alt text removed from this form 2026-08-17 (confirmed unused
+  // anywhere in the codebase — stored, editable, searchable, but never
+  // actually rendered as an img alt attribute). Deliberately not touched
+  // here at all, rather than writing null on every save now that the
+  // client never sends it — these are real, potentially long-lived
+  // library items, not fresh Hopper uploads, so any alt text already on
+  // one stays exactly as it was rather than getting silently wiped out.
   await db.image.update({
     where: { id },
     data: {
       caption,
-      altText,
       tags,
       artworkId: artworkIdRaw || null,
     },
