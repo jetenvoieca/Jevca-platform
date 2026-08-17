@@ -65,6 +65,15 @@ export default function HopperView({
   const [addError, setAddError] = useState<string | null>(null);
   const [processedLog, setProcessedLog] = useState<ProcessedEntry[]>([]);
   const folderInputRef = useRef<HTMLInputElement>(null);
+  // Drag-and-drop, added 2026-08-17 as another way to populate the
+  // Hopper alongside the two existing file pickers and the iPhone
+  // Shortcut. dragCounterRef (not state) tracks nested enter/leave depth
+  // — dragenter/dragleave fire repeatedly as the pointer crosses any
+  // child element's boundary while dragging over the page, which without
+  // this would flicker the overlay on and off constantly rather than
+  // showing it steadily for the whole drag.
+  const [isDraggingOver, setIsDraggingOver] = useState(false);
+  const dragCounterRef = useRef(0);
 
   // webkitdirectory/directory aren't part of React's typed HTML
   // attributes, so they're set imperatively here rather than as JSX
@@ -202,6 +211,36 @@ export default function HopperView({
     }
   };
 
+  // Scoped to this page's own container, not the whole window — dragging
+  // a file in only shows the overlay while it's over the Hopper itself,
+  // not while it's still over the nav column or another screen entirely.
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    // Only react to an actual file being dragged (e.g. from Finder/
+    // Explorer or another browser tab) — not text, links, or a drag
+    // gesture from something else on the page that isn't a file.
+    if (!e.dataTransfer.types.includes("Files")) return;
+    dragCounterRef.current += 1;
+    setIsDraggingOver(true);
+  };
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = Math.max(0, dragCounterRef.current - 1);
+    if (dragCounterRef.current === 0) setIsDraggingOver(false);
+  };
+  const handleDragOver = (e: React.DragEvent) => {
+    // Required for onDrop to ever fire at all — the browser's default
+    // for dragover is to refuse the drop.
+    e.preventDefault();
+  };
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    dragCounterRef.current = 0;
+    setIsDraggingOver(false);
+    if (addUploading) return;
+    handleUploadFiles(e.dataTransfer.files);
+  };
+
   // Rendered for real above "Up next" (where these buttons conceptually
   // belong — they're what feeds that queue), and as an inert visual
   // spacer above the other two columns so all three still start their
@@ -248,6 +287,7 @@ export default function HopperView({
           onChange={(e) => handleUploadFiles(e.target.files)}
         />
       </label>
+      <span className="text-xs text-neutral-400">or drag and drop files anywhere here</span>
     </div>
   );
 
@@ -260,7 +300,21 @@ export default function HopperView({
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-4">
+    <div
+      className="relative mx-auto min-h-full max-w-6xl px-6 py-4"
+      onDragEnter={handleDragEnter}
+      onDragLeave={handleDragLeave}
+      onDragOver={handleDragOver}
+      onDrop={handleDrop}
+    >
+      {isDraggingOver && (
+        <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-4 border-dashed border-neutral-900 bg-white/90">
+          <p className="text-lg font-medium text-neutral-900">
+            Drop images or videos to add to the Hopper
+          </p>
+        </div>
+      )}
+
       <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
         Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
       </h1>
