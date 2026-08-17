@@ -51,7 +51,11 @@ export type NormalizedArtworkRow = {
 // Every single one of the 58 follows this exact shape (verified — no
 // partial/different variants), so this is a safe, complete repair
 // rather than a guess at a fix.
-function repairDoubledUrl(raw: string): string {
+//
+// Exported (2026-08-17) so the Hopper's own CSV import
+// (hopperImport.ts) can reuse it too, on the off chance the same messy
+// export is ever reused there.
+export function repairDoubledUrl(raw: string): string {
   const match = raw.match(/^https?:\/\/[^/]+(https?:\/\/.+)$/);
   return match ? match[1] : raw;
 }
@@ -108,7 +112,11 @@ export async function parseArtworkImportCsv(
   return { rows, parseErrors };
 }
 
-async function fetchAndUploadImage(
+// Exported (2026-08-17) so the Hopper's own CSV import (hopperImport.ts)
+// can reuse this instead of duplicating the retry/User-Agent-spoofing
+// logic, which is genuinely non-trivial and shouldn't drift between two
+// copies.
+export async function fetchAndUploadImage(
   artistId: string,
   imageUrl: string
 ): Promise<
