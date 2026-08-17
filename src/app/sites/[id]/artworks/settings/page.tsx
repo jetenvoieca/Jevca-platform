@@ -66,9 +66,10 @@ export default async function ArtworkSettingsPage({
           siteId={id}
           field="sizePresets"
           title="Size Presets"
-          description="Sizes offered in the Catalogue's Size dropdown — add the ones you use repeatedly, to avoid typos."
+          description="Sizes offered in the Catalogue's Size dropdown — add the ones you use repeatedly, to avoid typos. Shown here ordered by size, smallest first."
           options={settings.sizePresets}
           placeholder="e.g. 60 x 60 cm"
+          sortNumerically
         />
         <SettingsListCard
           artistId={artistId}
