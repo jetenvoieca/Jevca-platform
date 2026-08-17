@@ -1,6 +1,5 @@
 import { db } from "@/lib/db";
 import { listHopperQueue } from "@/lib/actions/hopper";
-import { getMediaTagPresets } from "@/lib/actions/mediaCatalogue";
 import HopperView from "@/components/HopperView";
 
 export const dynamic = "force-dynamic";
@@ -14,10 +13,7 @@ export default async function HopperPage({
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
 
-  const [rows, tagPresets] = await Promise.all([
-    listHopperQueue(artistId),
-    getMediaTagPresets(artistId),
-  ]);
+  const rows = await listHopperQueue(artistId);
   const queue = rows.map((i) => ({
     id: i.id,
     url: i.url,
@@ -29,5 +25,5 @@ export default async function HopperPage({
     createdAt: i.createdAt.toISOString(),
   }));
 
-  return <HopperView siteId={id} artistId={artistId} queue={queue} tagPresets={tagPresets} />;
+  return <HopperView siteId={id} artistId={artistId} queue={queue} />;
 }
