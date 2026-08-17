@@ -217,16 +217,6 @@ export default function MediaDetailPanel({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Alt text</label>
-          <input
-            type="text"
-            name="altText"
-            defaultValue={media.altText || ""}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-
-        <div>
           <label className="mb-1 block text-sm font-medium text-neutral-700">
             Related Artwork
           </label>
