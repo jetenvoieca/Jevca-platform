@@ -18,6 +18,11 @@ export async function GET(req: NextRequest) {
       type: params.get("type") || undefined,
       group: params.get("group") || undefined,
       sort: params.get("sort") || undefined,
+      // Editable per-export override (2026-08-17) — defaults to the
+      // artist's real name / "Artwork Catalogue" when absent, same as
+      // before this existed.
+      headerTitle: params.get("headerTitle") || undefined,
+      headerSubtitle: params.get("headerSubtitle") || undefined,
     });
     // Same ArrayBufferLike -> plain ArrayBuffer copy as the invoice route,
     // for the same TypeScript BlobPart reason.
