@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { publishSite } from "@/lib/actions/pages";
 import { logout } from "@/lib/actions/auth";
 import { countHopper, countBucket } from "@/lib/actions/hopper";
+import { countArtworksNeedingReview } from "@/lib/actions/artworks";
+import { countMediaNeedingReview } from "@/lib/actions/mediaCatalogue";
 import { getOpenAlerts } from "@/lib/alerts";
 import SiteNavPanel from "@/components/SiteNavPanel";
 import LastVisitedSiteTracker from "@/components/LastVisitedSiteTracker";
@@ -22,7 +24,14 @@ export default async function SiteLayout({
   });
   if (!site) notFound();
 
-  const [pages, hopperCount, bucketCount, openAlerts] = await Promise.all([
+  const [
+    pages,
+    hopperCount,
+    bucketCount,
+    artworkNeedsReviewCount,
+    mediaNeedsReviewCount,
+    openAlerts,
+  ] = await Promise.all([
     db.page.findMany({
       where: { siteId: id },
       orderBy: { position: "asc" },
@@ -37,6 +46,8 @@ export default async function SiteLayout({
     }),
     countHopper(site.artistId),
     countBucket(site.artistId),
+    countArtworksNeedingReview(site.artistId),
+    countMediaNeedingReview(site.artistId),
     getOpenAlerts(),
   ]);
   const hasUnpublished = pages.some(
@@ -86,6 +97,8 @@ export default async function SiteLayout({
             salesEnabled={site.salesEnabled}
             hopperCount={hopperCount}
             bucketCount={bucketCount}
+            artworkNeedsReviewCount={artworkNeedsReviewCount}
+            mediaNeedsReviewCount={mediaNeedsReviewCount}
             alertCount={openAlerts.length}
           />
         </div>
