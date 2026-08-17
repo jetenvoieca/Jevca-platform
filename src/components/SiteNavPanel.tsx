@@ -174,6 +174,26 @@ export default function SiteNavPanel({
       <Link
 
         prefetch={false}
+        href={`/sites/${siteId}/hopper`}
+        className={`mt-3 flex items-center justify-between rounded-md px-3 py-2 font-medium ${
+          hopperActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
+        }`}
+      >
+        Hopper
+        {hopperCount > 0 && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+              hopperActive ? "bg-white/20 text-white" : "bg-rose-100 text-rose-700"
+            }`}
+          >
+            {hopperCount}
+          </span>
+        )}
+      </Link>
+
+      <Link
+
+        prefetch={false}
         href={`/sites/${siteId}/artworks`}
         className={`mt-3 rounded-md px-3 py-2 font-medium ${
           artworksActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
@@ -202,19 +222,6 @@ export default function SiteNavPanel({
         }`}
       >
         Media Catalogue
-      </Link>
-      <Link
-        prefetch={false}
-        href={`/sites/${siteId}/hopper`}
-        className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
-          hopperActive
-            ? "bg-neutral-200 font-medium text-neutral-900"
-            : hopperCount > 0
-              ? "font-medium text-rose-600 hover:bg-neutral-100"
-              : "text-neutral-500 hover:bg-neutral-100"
-        }`}
-      >
-        Hopper{hopperCount > 0 ? ` (${hopperCount})` : ""}
       </Link>
       <Link
         prefetch={false}
