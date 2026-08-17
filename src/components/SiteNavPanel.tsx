@@ -13,6 +13,8 @@ export default function SiteNavPanel({
   salesEnabled = false,
   hopperCount = 0,
   bucketCount = 0,
+  artworkNeedsReviewCount = 0,
+  mediaNeedsReviewCount = 0,
   alertCount = 0,
 }: {
   siteId: string;
@@ -20,6 +22,8 @@ export default function SiteNavPanel({
   salesEnabled?: boolean;
   hopperCount?: number;
   bucketCount?: number;
+  artworkNeedsReviewCount?: number;
+  mediaNeedsReviewCount?: number;
   alertCount?: number;
 }) {
   const pathname = usePathname();
@@ -200,22 +204,19 @@ export default function SiteNavPanel({
         }`}
       >
         Artwork Catalogue
-        {/* Same Hopper backlog count as the Hopper's own badge above —
-            2026-08-17, at direct request. Not "how many new artworks
-            were just added from the Hopper" (that count doesn't exist
-            anywhere and nothing tracks it) — this is "how many raw,
-            not-yet-sorted imports are still sitting in the Hopper right
-            now", surfaced here too since both this catalogue and Media
-            are fed by it and a backlog is relevant context wherever
-            you're headed, not just when you're already looking at the
-            Hopper itself. */}
-        {hopperCount > 0 && (
+        {/* Raw imports needing review (2026-08-17) — items just added
+            from the Hopper that haven't been opened/edited since. Not
+            the Hopper's own backlog count (that's a different, larger
+            number — see Hopper's own badge above) and not "how many new
+            artworks were just added" in general — specifically ones that
+            came via the Hopper and are still untouched. */}
+        {artworkNeedsReviewCount > 0 && (
           <span
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
               artworksActive ? "bg-white/20 text-white" : "bg-rose-100 text-rose-700"
             }`}
           >
-            {hopperCount}
+            {artworkNeedsReviewCount}
           </span>
         )}
       </Link>
@@ -241,13 +242,13 @@ export default function SiteNavPanel({
       >
         Media Catalogue
         {/* Same note as Artwork Catalogue above. */}
-        {hopperCount > 0 && (
+        {mediaNeedsReviewCount > 0 && (
           <span
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
               mediaActive ? "bg-white/20 text-white" : "bg-rose-100 text-rose-700"
             }`}
           >
-            {hopperCount}
+            {mediaNeedsReviewCount}
           </span>
         )}
       </Link>
