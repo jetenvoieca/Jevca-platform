@@ -25,3 +25,23 @@ export function repairDoubledUrl(raw: string): string {
   const match = raw.match(/^https?:\/\/[^/]+(https?:\/\/.+)$/);
   return match ? match[1] : raw;
 }
+
+// Races a promise against a timeout — used by both CSV importers
+// (2026-08-17) to cap how long a single row is allowed to hang the whole
+// import. A slow/unresponsive source image can genuinely take close to a
+// minute server-side (fetchAndUploadImage's own three retries, each with
+// a 20-second timeout) even once that row's own exception is properly
+// caught rather than silently freezing the batch (see the fuller note in
+// both import panels) — this stops the *client* waiting anywhere near
+// that long, moving on to the next row and recording this one as a
+// timeout failure instead. Doesn't cancel the underlying server-side
+// work (there's no way to truly abort a Server Action from here) — it
+// just stops the browser waiting on it and lets the batch keep moving.
+export function withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) => {
+      setTimeout(() => reject(new Error(message)), ms);
+    }),
+  ]);
+}
