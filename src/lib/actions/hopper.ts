@@ -48,7 +48,7 @@ export async function binHopperItem(id: string, siteId: string): Promise<void> {
 }
 
 export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {
-  await db.image.update({ where: { id }, data: { status: "SORTED" } });
+  await db.image.update({ where: { id }, data: { status: "SORTED", needsReview: true } });
   revalidatePath(`/sites/${siteId}/hopper`);
 }
 
