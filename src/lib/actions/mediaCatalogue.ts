@@ -19,6 +19,13 @@ type ListFilters = {
   limit?: number;
 };
 
+// Powers the "raw import" count shown next to Media Catalogue in the
+// nav (2026-08-17) — see the matching note on Image.needsReview in
+// schema.prisma for exactly what sets/clears this.
+export async function countMediaNeedingReview(artistId: string): Promise<number> {
+  return db.image.count({ where: { artistId, needsReview: true } });
+}
+
 const DEFAULT_PAGE_SIZE = 60;
 
 // "Marketing" vs "Related" isn't a stored field — it's simply whether the
@@ -124,6 +131,11 @@ export async function updateMedia(id: string, siteId: string, formData: FormData
       caption,
       tags,
       artworkId: artworkIdRaw || null,
+      // Cleared on any real save here — matches the same "saved at all
+      // counts as reviewed" approach as Artwork's needsReview above
+      // (2026-08-17). Harmless for a media item that was never flagged
+      // in the first place.
+      needsReview: false,
     },
   });
 
