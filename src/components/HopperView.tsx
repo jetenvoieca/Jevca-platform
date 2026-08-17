@@ -248,6 +248,11 @@ export default function HopperView({
   // <span>s, not a second copy of the real buttons/inputs — reusing the
   // interactive version (with its ref and handlers) in three places at
   // once would fight over which DOM node the ref actually points to.
+  //
+  // Labels shortened 2026-08-17 (was "Check Incoming"/"Add from folder"/
+  // "Add media") — direct request, part of tidying the layout up for use
+  // at half-screen width where every extra pixel of button-row space
+  // matters.
   const importButtons = (
     <div className="flex flex-wrap items-center gap-2">
       <button
@@ -255,14 +260,14 @@ export default function HopperView({
         onClick={() => router.refresh()}
         className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
       >
-        Check Incoming
+        Incoming
       </button>
       <label
         className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
           addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
         }`}
       >
-        Add from folder
+        Folder
         <input
           ref={folderInputRef}
           type="file"
@@ -277,7 +282,7 @@ export default function HopperView({
           addUploading ? "cursor-wait opacity-50" : "cursor-pointer"
         }`}
       >
-        Add media
+        File
         <input
           type="file"
           accept="image/*,video/*"
@@ -287,7 +292,13 @@ export default function HopperView({
           onChange={(e) => handleUploadFiles(e.target.files)}
         />
       </label>
-      <span className="text-xs text-neutral-400">or drag and drop files anywhere here</span>
+      {/* Hidden below lg — at half-screen width every extra pixel of
+          this row matters more than the reminder does, and the drop
+          overlay itself (see isDraggingOver above) already makes the
+          capability obvious the moment you actually start dragging. */}
+      <span className="hidden text-xs text-neutral-400 lg:inline">
+        or drag and drop files anywhere here
+      </span>
     </div>
   );
 
@@ -323,12 +334,25 @@ export default function HopperView({
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
       )}
 
-      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "300px 1fr 280px" }}>
+      {/* Responsive layout, reworked 2026-08-17 for usability at
+          half-screen width (a real workflow here — this browser window
+          docked to half the screen, Finder/Photos or another tab open
+          on the other half, dragging files across). Below lg: a single
+          stacked column, main sorting card first via the order-*
+          classes below (that's what actually matters when you've just
+          dragged something in), Up next second, Processed last. At lg
+          and above: unchanged from before, the original fixed
+          300px / 1fr / 280px three-column layout. */}
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[300px_1fr_280px]">
         {/* Processed — a visual confirmation trail, not part of the
             sorting flow itself, so it stays put even once the queue on
-            the right runs out. */}
-        <div className="sticky top-4">
-          <div className="mb-3">{importButtonsSpacer}</div>
+            the right runs out. Sticky only at lg — stacked full-width
+            below that, sticky positioning on a block sitting inline in
+            a single column would just glue it oddly to the top while
+            scrolling past the other two, rather than the side-column
+            behaviour it's meant for. */}
+        <div className="order-3 lg:sticky lg:top-4 lg:order-none">
+          <div className="mb-3 hidden lg:block">{importButtonsSpacer}</div>
           {processedLog.length > 0 && (
             <>
               <div className="mb-2 flex items-center justify-between">
@@ -398,22 +422,24 @@ export default function HopperView({
           )}
         </div>
 
-        <div>
+        <div className="order-1 lg:order-none">
           <div className="mb-3">{importButtons}</div>
           {/* Invisible, but occupies exactly the same height as the
               "Processed"/"Up next" header rows either side of it — so
               the content below it (this empty-state box, or the
               SortingCard) lines up with the top of the first Processed
               *item* and the thumbnail grid, not with the labels above
-              them. */}
-          <div className="invisible mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wide">Spacer</p>
-            <span className="text-xs">Spacer</span>
+              them. Only relevant once those columns sit beside this one
+              at lg — hidden below that, where it would just be a blank
+              gap above this, the first section on the stacked page. */}
+          <div className="mb-2 hidden items-center justify-between lg:flex">
+            <p className="invisible text-xs font-medium uppercase tracking-wide">Spacer</p>
+            <span className="invisible text-xs">Spacer</span>
           </div>
 
           {!current ? (
             <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-              Hopper is empty — nothing waiting to be sorted.
+              Hopper is empty — drag and drop files here, or use the buttons above.
             </div>
           ) : (
             <SortingCard
@@ -437,15 +463,15 @@ export default function HopperView({
         {/* Up next — always rendered (not just while there's a current
             item), so "Up next (0)" and this column's place in the layout
             stay visible and stable even once the queue empties out. */}
-        <div className="sticky top-4">
-          <div className="mb-3">{importButtonsSpacer}</div>
+        <div className="order-2 lg:sticky lg:top-4 lg:order-none">
+          <div className="mb-3 hidden lg:block">{importButtonsSpacer}</div>
           <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
             Up next ({remaining.length})
           </p>
           {!current ? null : remaining.length === 0 ? (
             <p className="text-xs text-neutral-400">This is the last one.</p>
           ) : (
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-4 gap-2 lg:grid-cols-3">
               {remaining.map((item) => (
                 <button
                   key={item.id}
