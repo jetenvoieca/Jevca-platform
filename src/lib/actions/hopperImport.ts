@@ -3,7 +3,8 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import Papa from "papaparse";
-import { repairDoubledUrl, fetchAndUploadImage } from "./artworkImport";
+import { repairDoubledUrl } from "@/lib/importHelpers";
+import { fetchAndUploadImage } from "./artworkImport";
 
 // Import a CSV straight into the Hopper's sorting queue, rather than
 // creating finished artworks the way the Artwork Catalogue's own CSV
