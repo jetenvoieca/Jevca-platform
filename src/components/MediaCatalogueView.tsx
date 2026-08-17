@@ -64,10 +64,22 @@ export default function MediaCatalogueView({
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
 
-  // The visible list, appended to by "Load more" — resets from the server
-  // whenever the filters actually change (a real page load, which remounts
-  // this component with fresh props).
+  // The visible list, appended to by "Load more". Previously assumed a
+  // purpose/filter change was always "a real page load, which remounts
+  // this component with fresh props" — wrong: the Marketing/Related
+  // toggle and filters navigate via <Link>/<form method="get">, which in
+  // the Next.js App Router updates this component's props in place
+  // without remounting it, so useState(media)'s initial value was only
+  // ever applied once, on first mount. Switching tabs or filters then
+  // left `items` frozen at whatever was last loaded, which is what made
+  // switching tabs look like it "didn't work" without a manual browser
+  // refresh — and separately explains the reported "43 of 9" count: total
+  // (a plain prop) updated correctly and immediately on every navigation,
+  // while items stayed stale, so the two fell out of sync (2026-08-17).
   const [items, setItems] = useState<MediaRow[]>(media);
+  useEffect(() => {
+    setItems(media);
+  }, [media]);
   const [loadingMore, setLoadingMore] = useState(false);
   const hasMore = items.length < total;
 
