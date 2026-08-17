@@ -51,12 +51,10 @@ export default function HopperView({
   siteId,
   artistId,
   queue,
-  tagPresets,
 }: {
   siteId: string;
   artistId: string;
   queue: HopperItem[];
-  tagPresets: string[];
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -528,7 +526,6 @@ export default function HopperView({
               siteId={siteId}
               artistId={artistId}
               item={current}
-              tagPresets={tagPresets}
               isPending={isPending}
               onBin={() => handleBin(current)}
               onAddToMedia={() => handleAddToMedia(current)}
@@ -587,7 +584,6 @@ function SortingCard({
   siteId,
   artistId,
   item,
-  tagPresets,
   isPending,
   onBin,
   onAddToMedia,
@@ -598,7 +594,6 @@ function SortingCard({
   siteId: string;
   artistId: string;
   item: HopperItem;
-  tagPresets: string[];
   isPending: boolean;
   onBin: () => void;
   onAddToMedia: () => void;
@@ -610,28 +605,13 @@ function SortingCard({
   // parent keys it by item.id) — no stale-caption bug when moving
   // between queue items.
   const [caption, setCaption] = useState(item.caption || "");
-  const [altText, setAltText] = useState(item.altText || "");
-  const [tags, setTags] = useState<string[]>(item.tags);
 
-  const saveFields = (nextTags?: string[]) => {
+  const saveFields = () => {
     const fd = new FormData();
     fd.set("caption", caption);
-    fd.set("altText", altText);
-    fd.set("tags", (nextTags ?? tags).join(", "));
     // Fire-and-forget — this is a background autosave, not the action
     // that advances the queue, so it doesn't need its own pending state.
     updateHopperCaption(item.id, siteId, fd);
-  };
-
-  // Tags are click-to-toggle from the artist's preset list (Media
-  // Catalogue → Settings), not typed — per 2026-08-05 decision, so tags
-  // stay consistent/searchable rather than drifting into one-off typos.
-  // Saves immediately on click, since there's no "blur" moment the way
-  // there is for a text field.
-  const toggleTag = (tag: string) => {
-    const next = tags.includes(tag) ? tags.filter((t) => t !== tag) : [...tags, tag];
-    setTags(next);
-    saveFields(next);
   };
 
   return (
@@ -665,44 +645,6 @@ function SortingCard({
             onBlur={() => saveFields()}
             className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Alt text</label>
-          <input
-            type="text"
-            value={altText}
-            onChange={(e) => setAltText(e.target.value)}
-            onBlur={() => saveFields()}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
-          {tagPresets.length === 0 ? (
-            <p className="text-xs text-neutral-400">
-              No tags set up yet — add some under Media Catalogue → Settings.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {tagPresets.map((tag) => {
-                const active = tags.includes(tag);
-                return (
-                  <button
-                    key={tag}
-                    type="button"
-                    onClick={() => toggleTag(tag)}
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      active
-                        ? "border-neutral-900 bg-neutral-900 text-white"
-                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {tag}
-                  </button>
-                );
-              })}
-            </div>
-          )}
         </div>
       </div>
 
