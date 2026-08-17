@@ -123,6 +123,12 @@ export async function listImages(artistId: string, q?: string) {
         : {}),
     },
     orderBy: { createdAt: "desc" },
+    // Included 2026-08-17 so MediaPicker can show which artwork an image
+    // is already related to (previously only its caption showed, so a
+    // photo already tied to a specific piece looked no different from an
+    // unrelated one until you'd actually picked it and looked closer).
+    include: { artwork: { select: { id: true, presentationTitle: true } } },
+    relationLoadStrategy: "query",
     take: 60,
   });
 }
