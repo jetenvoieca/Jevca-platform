@@ -435,7 +435,7 @@ export default function HopperView({
           dragged something in), Up next second, Processed last. At lg
           and above: unchanged from before, the original fixed
           300px / 1fr / 280px three-column layout. */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[300px_1fr_280px]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[300px_1fr_340px]">
         {/* Processed — a visual confirmation trail, not part of the
             sorting flow itself, so it stays put even once the queue on
             the right runs out. Sticky only at lg — stacked full-width
@@ -562,7 +562,7 @@ export default function HopperView({
           {!current ? null : remaining.length === 0 ? (
             <p className="text-xs text-neutral-400">This is the last one.</p>
           ) : (
-            <div className="grid grid-cols-4 gap-2 lg:grid-cols-3">
+            <div className="grid grid-cols-4 gap-2">
               {remaining.map((item) => (
                 <button
                   key={item.id}
