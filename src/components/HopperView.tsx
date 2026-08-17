@@ -14,6 +14,7 @@ import { quickCreateArtwork } from "@/lib/actions/media";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import VideoThumb from "@/components/VideoThumb";
+import HopperImportPanel from "@/components/HopperImportPanel";
 
 export type HopperItem = {
   id: string;
@@ -78,6 +79,10 @@ export default function HopperView({
   // showing it steadily for the whole drag.
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const dragCounterRef = useRef(0);
+  // CSV import into the Hopper (2026-08-17) — a fourth way to populate
+  // it, alongside the two file pickers, drag-and-drop, and the iPhone
+  // Shortcut. See HopperImportPanel.tsx.
+  const [showCsvImport, setShowCsvImport] = useState(false);
 
   // webkitdirectory/directory aren't part of React's typed HTML
   // attributes, so they're set imperatively here rather than as JSX
@@ -357,6 +362,13 @@ export default function HopperView({
           onChange={(e) => handleUploadFiles(e.target.files)}
         />
       </label>
+      <button
+        type="button"
+        onClick={() => setShowCsvImport(true)}
+        className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+      >
+        CSV
+      </button>
       {/* Hidden below lg — at half-screen width every extra pixel of
           this row matters more than the reminder does, and the drop
           overlay itself (see isDraggingOver above) already makes the
@@ -369,6 +381,7 @@ export default function HopperView({
 
   const importButtonsSpacer = (
     <div className="invisible flex flex-wrap items-center gap-2" aria-hidden="true">
+      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
       <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
       <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
       <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
@@ -576,6 +589,14 @@ export default function HopperView({
           )}
         </div>
       </div>
+
+      {showCsvImport && (
+        <HopperImportPanel
+          artistId={artistId}
+          siteId={siteId}
+          onClose={() => setShowCsvImport(false)}
+        />
+      )}
     </div>
   );
 }
