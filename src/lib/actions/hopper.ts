@@ -4,6 +4,21 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 
+// None of these actions revalidate /sites/[id]/hopper itself (2026-08-17
+// fix) — that page is already force-dynamic (never cached to begin
+// with, so revalidatePath had no real purpose there), and every client
+// flow that wants an immediate refresh already calls router.refresh()
+// explicitly (see advanceAfterAction in HopperView.tsx). Calling
+// revalidatePath on the route someone is currently viewing triggers an
+// automatic background client refresh regardless of any explicit
+// router.refresh() elsewhere — confirmed as the actual cause of a real
+// bug: the "Add Artwork" flow's inline quick-catalogue fields (which
+// deliberately don't advance the queue right away, so they can be
+// filled in) were being wiped out by this auto-refresh moments after
+// appearing, before anyone could type into them. Revalidating other
+// routes (artworks, bucket) is still correct and kept — those aren't
+// the page currently being viewed, so they don't trigger this.
+
 export async function countHopper(artistId: string): Promise<number> {
   return db.image.count({ where: { artistId, status: "HOPPER" } });
 }
@@ -39,17 +54,14 @@ export async function updateHopperCaption(
 ): Promise<void> {
   const caption = (formData.get("caption") as string)?.trim() || null;
   await db.image.update({ where: { id }, data: { caption } });
-  revalidatePath(`/sites/${siteId}/hopper`);
 }
 
 export async function binHopperItem(id: string, siteId: string): Promise<void> {
   await db.image.update({ where: { id }, data: { status: "ARCHIVED" } });
-  revalidatePath(`/sites/${siteId}/hopper`);
 }
 
 export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {
   await db.image.update({ where: { id }, data: { status: "SORTED", needsReview: true } });
-  revalidatePath(`/sites/${siteId}/hopper`);
 }
 
 export async function countBucket(artistId: string): Promise<number> {
@@ -64,7 +76,6 @@ export async function addHopperItemToBucket(
   if (!image) return { ok: false, error: "That item couldn't be found." };
   const result = await appendImageToTimeline(image.artistId, siteId, id);
   if (result.ok) {
-    revalidatePath(`/sites/${siteId}/hopper`);
     revalidatePath(`/sites/${siteId}/bucket`);
   }
   return result;
@@ -82,6 +93,5 @@ export async function addHopperItemToArtwork(
       await tx.artwork.update({ where: { id: artworkId }, data: { mainImageId: id } });
     }
   });
-  revalidatePath(`/sites/${siteId}/hopper`);
   revalidatePath(`/sites/${siteId}/artworks`);
 }
