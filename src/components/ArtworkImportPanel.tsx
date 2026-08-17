@@ -9,6 +9,7 @@ import {
   deleteArtworksByIds,
   type NormalizedArtworkRow,
 } from "@/lib/actions/artworkImport";
+import { withTimeout } from "@/lib/importHelpers";
 
 type Failure = { row: NormalizedArtworkRow; error: string };
 
@@ -96,10 +97,39 @@ export default function ArtworkImportPanel({
     // inside a single row's fetch) is deliberately gentle on the source
     // site — confirmed 2026-08-11 that enough rapid requests in a row
     // triggers what looks like temporary rate-limiting/blocking there.
+    //
+    // Each row wrapped in its own try/catch (2026-08-17 fix, found via
+    // the same bug on the Hopper's own CSV import — see the fuller note
+    // there) — without this, any exception thrown by the row itself
+    // broke out of the whole loop and left the dialog stuck showing
+    // "Importing… N of M" forever, since setImporting(false) was only
+    // ever reached after the loop finished normally. A single row can
+    // genuinely take close to a minute in the worst case (three retries,
+    // each with its own 20-second timeout) — long enough that a slow or
+    // unresponsive source image host can get that row's function killed
+    // by Netlify's own execution limit rather than returning a clean
+    // error.
     for (const row of targetRows) {
-      const result = await importArtworkRow(artistId, siteId, row);
-      if (!result.ok) {
-        setFailures((prev) => [...prev, { row, error: result.error }]);
+      try {
+        const result = await withTimeout(
+          importArtworkRow(artistId, siteId, row),
+          35000,
+          "Timed out after 35s — the image source may be slow or unresponsive. Try again."
+        );
+        if (!result.ok) {
+          setFailures((prev) => [...prev, { row, error: result.error }]);
+        }
+      } catch (err) {
+        setFailures((prev) => [
+          ...prev,
+          {
+            row,
+            error:
+              err instanceof Error
+                ? err.message
+                : "Something went wrong fetching this image (possibly a slow/unresponsive source — try again).",
+          },
+        ]);
       }
       setDone((prev) => prev + 1);
       await new Promise((r) => setTimeout(r, 400));
