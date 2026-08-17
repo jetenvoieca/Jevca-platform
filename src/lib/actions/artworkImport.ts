@@ -212,6 +212,14 @@ export async function importArtworkRow(
       size: row.dimensions || null,
       location: row.location || null,
       studioNotes: row.studioNotes || null,
+      // A CSV-imported row is exactly as "raw" as a Hopper quick-create
+      // — real data, but never actually opened and reviewed by a person
+      // yet (2026-08-17, direct request — this was the one other place
+      // artworks get created besides the Hopper and the ordinary
+      // "+ New", and it had been missed the first time round). Cleared
+      // the same way as the Hopper's own flag, the first time this
+      // artwork is actually opened and saved.
+      needsReview: true,
     });
 
     const image = await db.image.create({
