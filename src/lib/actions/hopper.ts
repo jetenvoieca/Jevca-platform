@@ -4,20 +4,31 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 
-// None of these actions revalidate /sites/[id]/hopper itself (2026-08-17
-// fix) — that page is already force-dynamic (never cached to begin
-// with, so revalidatePath had no real purpose there), and every client
-// flow that wants an immediate refresh already calls router.refresh()
+// None of these actions revalidate /sites/[id]/hopper OR /sites/[id]/
+// artworks (2026-08-17, second pass at this same fix) — both those
+// pages are already force-dynamic (never cached to begin with, so
+// revalidatePath had no real purpose on either), and every client flow
+// that wants an immediate refresh already calls router.refresh()
 // explicitly (see advanceAfterAction in HopperView.tsx). Calling
 // revalidatePath on the route someone is currently viewing triggers an
 // automatic background client refresh regardless of any explicit
-// router.refresh() elsewhere — confirmed as the actual cause of a real
-// bug: the "Add Artwork" flow's inline quick-catalogue fields (which
-// deliberately don't advance the queue right away, so they can be
-// filled in) were being wiped out by this auto-refresh moments after
-// appearing, before anyone could type into them. Revalidating other
-// routes (artworks, bucket) is still correct and kept — those aren't
-// the page currently being viewed, so they don't trigger this.
+// router.refresh() elsewhere — that's confirmed as the actual cause of
+// a real bug (the "Add Artwork" flow's inline quick-catalogue fields
+// being wiped out before anyone could type into them). The first pass
+// at this fix only removed the /hopper call, reasoning that /artworks
+// was a genuinely different route and therefore safe — but the bug
+// persisted after that fix shipped, which means that reasoning doesn't
+// hold: /hopper and /artworks share the same parent layout
+// (src/app/sites/[id]/layout.tsx), and revalidating one apparently
+// still causes Next to refresh whatever route is actually being viewed
+// under that shared layout, not just the literal path named. Rather
+// than rely on precisely understanding Next's internal revalidation
+// mechanics here, this now follows the same rule already proven correct
+// everywhere else in this project: don't revalidate a force-dynamic
+// route from a Server Action at all — let explicit router.refresh()
+// calls do that job. /bucket is kept, since appendImageToTimeline
+// building that route's data is a genuine, different case worth
+// checking if this recurs there too.
 
 export async function countHopper(artistId: string): Promise<number> {
   return db.image.count({ where: { artistId, status: "HOPPER" } });
@@ -93,5 +104,4 @@ export async function addHopperItemToArtwork(
       await tx.artwork.update({ where: { id: artworkId }, data: { mainImageId: id } });
     }
   });
-  revalidatePath(`/sites/${siteId}/artworks`);
 }
