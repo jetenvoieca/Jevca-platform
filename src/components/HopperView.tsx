@@ -63,6 +63,12 @@ export default function HopperView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [addUploading, setAddUploading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  // { done, total } while a batch upload is in progress, null otherwise
+  // — added 2026-08-17 so uploading a folder actually shows something
+  // happening instead of the buttons just going quiet for a while.
+  const [uploadProgress, setUploadProgress] = useState<{ done: number; total: number } | null>(
+    null
+  );
   const [processedLog, setProcessedLog] = useState<ProcessedEntry[]>([]);
   const folderInputRef = useRef<HTMLInputElement>(null);
   // Drag-and-drop, added 2026-08-17 as another way to populate the
@@ -191,23 +197,84 @@ export default function HopperView({
     });
   };
 
+  // How many files upload at once. Each file is already 2-4 sequential
+  // network round trips on its own (get a presigned URL, PUT to R2,
+  // finalize — plus a second get-URL/PUT for a video's poster frame) —
+  // running them fully one-at-a-time, as this used to, meant a batch of
+  // N files took roughly N times one file's full round-trip time with no
+  // overlap at all. 4 is deliberately conservative: high enough to
+  // materially cut wall-clock time for a folder of files, not so high it
+  // risks hammering R2 or the presigned-URL endpoint if someone drops in
+  // a genuinely huge folder (2026-08-17).
+  const UPLOAD_CONCURRENCY = 4;
+
   const handleUploadFiles = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
+    // Folder picks can include non-media files (.DS_Store, etc.) —
+    // silently skip anything that isn't an image or video rather than
+    // erroring the whole batch out. Filtered up front now (rather than
+    // skipped one-by-one inside the loop) so the progress count/total
+    // below only ever reflects files that actually attempt to upload.
+    const mediaFiles = Array.from(files).filter(
+      (f) => f.type.startsWith("image/") || f.type.startsWith("video/")
+    );
+    if (mediaFiles.length === 0) return;
+
     setAddError(null);
     setAddUploading(true);
+    setUploadProgress({ done: 0, total: mediaFiles.length });
+
     try {
-      for (const file of Array.from(files)) {
-        // Folder picks can include non-media files (.DS_Store, etc.) —
-        // silently skip anything that isn't an image or video rather
-        // than erroring the whole batch out.
-        if (!file.type.startsWith("image/") && !file.type.startsWith("video/")) continue;
-        await uploadFileDirect(file, artistId, "HOPPER", "Manual upload");
+      // A small worker pool pulling from a shared index, rather than
+      // Promise.all(mediaFiles.map(...)) directly — that would fire
+      // every upload at once with no cap at all for a large folder.
+      // Each worker handles its own files strictly one after another;
+      // several workers run at the same time. Plain closure variables
+      // (not state) for the counters — safe here because JS only
+      // actually switches between these workers at an `await`, never
+      // mid-statement, so incrementing `nextIndex`/`completed` never
+      // races.
+      let nextIndex = 0;
+      let completed = 0;
+      let failedCount = 0;
+
+      const runWorker = async () => {
+        while (true) {
+          const i = nextIndex;
+          nextIndex += 1;
+          if (i >= mediaFiles.length) return;
+          try {
+            await uploadFileDirect(mediaFiles[i], artistId, "HOPPER", "Manual upload");
+          } catch {
+            // One bad file (corrupt, a network blip) used to abort the
+            // whole remaining batch — now it's just counted as a
+            // failure and every other file still gets its turn.
+            failedCount += 1;
+          } finally {
+            completed += 1;
+            setUploadProgress({ done: completed, total: mediaFiles.length });
+          }
+        }
+      };
+
+      await Promise.all(
+        Array.from({ length: Math.min(UPLOAD_CONCURRENCY, mediaFiles.length) }, runWorker)
+      );
+
+      if (failedCount > 0) {
+        setAddError(
+          `${failedCount} of ${mediaFiles.length} file${mediaFiles.length === 1 ? "" : "s"} failed to upload — the rest were added.`
+        );
       }
-      router.refresh();
     } catch (err) {
+      // Shouldn't happen (every real per-file failure is caught inside
+      // runWorker above) — kept as a fallback net rather than leaving
+      // this uncaught if something truly unexpected goes wrong.
       setAddError(err instanceof Error ? err.message : "Upload failed. Try again.");
     } finally {
+      setUploadProgress(null);
       setAddUploading(false);
+      router.refresh();
     }
   };
 
@@ -332,6 +399,20 @@ export default function HopperView({
 
       {addError && (
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
+      )}
+
+      {uploadProgress && (
+        <div className="mb-3 max-w-sm">
+          <p className="mb-1 text-xs text-neutral-500">
+            Uploading… {uploadProgress.done} of {uploadProgress.total}
+          </p>
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+            <div
+              className="h-full bg-neutral-900 transition-all"
+              style={{ width: `${(uploadProgress.done / uploadProgress.total) * 100}%` }}
+            />
+          </div>
+        </div>
       )}
 
       {/* Responsive layout, reworked 2026-08-17 for usability at
