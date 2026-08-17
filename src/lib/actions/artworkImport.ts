@@ -7,6 +7,7 @@ import Papa from "papaparse";
 import { uploadToR2, deleteFromR2 } from "@/lib/r2";
 import { generateImageSizes } from "@/lib/imageSizes";
 import { createArtworkWithRetry } from "./artworks";
+import { repairDoubledUrl } from "@/lib/importHelpers";
 
 // Generic CSV artwork import (2026-08-11) — built for Louise Dear's
 // migration off her hard-coded prototype site, deliberately written to
@@ -43,22 +44,13 @@ export type NormalizedArtworkRow = {
   studioNotes: string;
 };
 
-// Confirmed 2026-08-11, from the actual data — not a bot-blocking or
-// network issue as first (wrongly) assumed: 58 of this export's 100
-// Image URL values are two complete URLs concatenated with no
-// separator, e.g. "https://louisedear.comhttps://pub-xxxx.r2.dev/...".
-// A bug in the old site's own export, not anything server-side here.
-// Every single one of the 58 follows this exact shape (verified — no
-// partial/different variants), so this is a safe, complete repair
-// rather than a guess at a fix.
-//
-// Exported (2026-08-17) so the Hopper's own CSV import
-// (hopperImport.ts) can reuse it too, on the off chance the same messy
-// export is ever reused there.
-export function repairDoubledUrl(raw: string): string {
-  const match = raw.match(/^https?:\/\/[^/]+(https?:\/\/.+)$/);
-  return match ? match[1] : raw;
-}
+// repairDoubledUrl lives in @/lib/importHelpers, not here — this file
+// has "use server", which requires every export to be an async function
+// (Next.js Server Actions rule). Exporting it directly from here for
+// hopperImport.ts to reuse broke the Netlify build (2026-08-17,
+// "Server Actions must be async functions") — moved out, same fix as
+// artworkFilters.ts existing separately from artworks.ts for the same
+// reason.
 
 function cleanPrice(raw: string): number | null {
   const trimmed = raw.trim();
