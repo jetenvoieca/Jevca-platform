@@ -34,7 +34,7 @@ export default async function ArtworksCataloguePage({
 
   const site = await db.site.findUnique({
     where: { id },
-    select: { artistId: true, defaultCurrency: true },
+    select: { artistId: true, defaultCurrency: true, artist: { select: { name: true } } },
   });
   const artistId = site!.artistId;
 
@@ -62,6 +62,7 @@ export default async function ArtworksCataloguePage({
     <ArtworksCatalogueView
       siteId={id}
       artistId={artistId}
+      artistName={site!.artist.name}
       artworks={rows}
       total={total}
       soldCount={soldCount}
