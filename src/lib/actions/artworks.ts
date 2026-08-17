@@ -239,6 +239,13 @@ type ListFilters = {
 
 const DEFAULT_PAGE_SIZE = 60;
 
+// Powers the "raw import" count shown next to Artwork Catalogue in the
+// nav (2026-08-17) — see the matching note on Artwork.needsReview in
+// schema.prisma for exactly what sets/clears this.
+export async function countArtworksNeedingReview(artistId: string): Promise<number> {
+  return db.artwork.count({ where: { artistId, needsReview: true } });
+}
+
 // Lightweight rows for the grid — only what a tile needs to render.
 // Full detail is fetched separately (getArtworkDetail) when a tile is opened.
 export async function listArtworks(artistId: string, filters: ListFilters) {
@@ -450,6 +457,12 @@ export async function updatePresentation(
       presentationPrice: priceRaw || null,
       priceFramed: priceFramedRaw || null,
       description,
+      // Cleared on any real save here — this tab (or Catalogue) being
+      // saved at all is exactly "reviewed and edited" for the purposes
+      // of the raw-import count next to Artwork Catalogue in the nav
+      // (2026-08-17). Harmless to also clear it for an artwork that was
+      // never flagged in the first place — it's already false.
+      needsReview: false,
       // Medium and Group are no longer editable from here — both now
       // read-only, live-mirroring Catalogue's `medium` and
       // `catalogueGroup` (edited only from the Catalogue tab). The
@@ -524,6 +537,8 @@ export async function updateCatalogue(
       studioNotes,
       medium,
       availability,
+      // See the matching note in updatePresentation above.
+      needsReview: false,
       ...presentationUpdate,
     },
   });
