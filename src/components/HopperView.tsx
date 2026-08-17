@@ -184,7 +184,7 @@ export default function HopperView({
   const handleAddNewArtwork = (item: HopperItem, title: string) => {
     startTransition(async () => {
       const finalTitle = title.trim() || "Untitled";
-      const result = await quickCreateArtwork(artistId, finalTitle);
+      const result = await quickCreateArtwork(artistId, finalTitle, true);
       if ("error" in result || !result.artwork) {
         setAddError(result.error || "Couldn't create the artwork. Try again.");
         return;
