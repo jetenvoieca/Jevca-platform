@@ -167,7 +167,16 @@ async function nextCatalogueNumber(artistId: string) {
   return `AW-${String(highest + 1).padStart(4, "0")}`;
 }
 
-export async function quickCreateArtwork(artistId: string, title: string) {
+// markNeedsReview (2026-08-17): only the Hopper's "Add New Artwork" call
+// passes true — this same function is also called from ArtworkPicker's
+// own inline "create new" (used from other pickers, e.g. Related
+// Images), which is a different, deliberate action and shouldn't be
+// counted as a raw Hopper import needing review.
+export async function quickCreateArtwork(
+  artistId: string,
+  title: string,
+  markNeedsReview = false
+) {
   const trimmed = title.trim();
   if (!trimmed) return { error: "Title is required." };
 
@@ -180,6 +189,7 @@ export async function quickCreateArtwork(artistId: string, title: string) {
           catalogueNumber,
           presentationTitle: trimmed,
           catalogueName: trimmed,
+          needsReview: markNeedsReview,
         },
       });
       return { artwork };
