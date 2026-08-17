@@ -384,6 +384,16 @@ model Artwork {
   priceFramed    Decimal? @db.Decimal(10, 2)
   studioNotes    String?
 
+  // True only for artworks created via the Hopper's "Add New Artwork"
+  // button (2026-08-17) — never for the ordinary "+ New" in the Artwork
+  // Catalogue itself, and never for quick-creating an artwork from other
+  // pickers elsewhere (e.g. Related Images), even though those also call
+  // the same underlying quickCreateArtwork(). Cleared the first time
+  // either Catalogue or Presentation is actually saved — see
+  // updateCatalogue/updatePresentation. Powers the "raw import, not yet
+  // reviewed" count shown next to Artwork Catalogue in the nav.
+  needsReview Boolean @default(false)
+
   images Image[]
 
   mainImageId String? @unique
@@ -519,6 +529,16 @@ model Image {
   tags      String[]    @default([])
   status    ImageStatus @default(SORTED)
   source    String?
+  // True only when this image was just routed from the Hopper into the
+  // Media Catalogue (addHopperItemToMedia, 2026-08-17) — not for images
+  // uploaded directly to the Media Catalogue by other means. Cleared the
+  // first time it's actually saved from the Media detail panel — see
+  // updateMedia. Powers the "raw import, not yet reviewed" count shown
+  // next to Media Catalogue in the nav. Deliberately not set when a
+  // Hopper item is instead linked to an artwork (addHopperItemToArtwork)
+  // — that's an existing, already-described artwork gaining one more
+  // image, not a new, undescribed catalogue entry needing review.
+  needsReview Boolean @default(false)
   artworkId String?
   artwork   Artwork?    @relation(fields: [artworkId], references: [id])
 
