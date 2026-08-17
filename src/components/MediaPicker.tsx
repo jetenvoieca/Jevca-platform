@@ -12,6 +12,7 @@ type PickedImage = {
   posterUrl: string | null;
   caption: string | null;
   kind: string;
+  artwork: { id: string; presentationTitle: string } | null;
 };
 
 type MediaRow = {
@@ -20,6 +21,7 @@ type MediaRow = {
   posterUrl: string | null;
   caption: string | null;
   kind: string;
+  artwork: { id: string; presentationTitle: string } | null;
 };
 
 // videoOnly stays exactly as it was (used by the Video content block) —
@@ -46,6 +48,7 @@ function toPicked(
       posterUrl: img.posterUrl,
       caption: img.caption,
       kind: img.kind,
+      artwork: img.artwork,
     }));
 }
 
@@ -304,6 +307,25 @@ export default function MediaPicker({
                   {img.caption && (
                     <p className="mt-1 truncate text-xs text-neutral-500" title={img.caption}>
                       {img.caption}
+                    </p>
+                  )}
+                  {/* Only shown when this picker isn't already scoped to
+                      one specific artwork (2026-08-17) — inside a
+                      linkedArtworkId picker's Related tab, every item
+                      shown already belongs to that same one artwork by
+                      definition, so repeating its name under every tile
+                      would just be noise, not new information. This is
+                      for the general picker (e.g. a page's Gallery/
+                      Single Image block), where images from different
+                      artworks can legitimately mix in the same list and
+                      it wasn't otherwise obvious one was already tied to
+                      a specific piece. */}
+                  {!linkedArtworkId && img.artwork && (
+                    <p
+                      className="truncate text-xs font-medium text-rose-600"
+                      title={img.artwork.presentationTitle}
+                    >
+                      → {img.artwork.presentationTitle}
                     </p>
                   )}
                 </button>
