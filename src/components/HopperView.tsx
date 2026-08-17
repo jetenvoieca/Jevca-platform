@@ -11,15 +11,12 @@ import {
   updateHopperCaption,
 } from "@/lib/actions/hopper";
 import { quickCreateArtwork } from "@/lib/actions/media";
-import { getArtworkDetailForClient } from "@/lib/actions/artworks";
+import { updateCatalogue } from "@/lib/actions/artworks";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
-import ArtworkDetailPanel, {
-  type ArtworkDetail,
-  type ArtworkSettings,
-} from "@/components/ArtworkDetailPanel";
+import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 
 export type HopperItem = {
   id: string;
@@ -58,15 +55,13 @@ export default function HopperView({
   artistId,
   queue,
   artworkSettings,
-  siteDefaultCurrency,
 }: {
   siteId: string;
   artistId: string;
   queue: HopperItem[];
-  // Only needed for the optional "open the artwork panel after adding"
-  // workflow (2026-08-17) — see the note by openArtworkAfterAdding below.
+  // Used by the inline "quick catalogue" fields shown after "Add
+  // Artwork" — see the note by that button in SortingCard.
   artworkSettings: ArtworkSettings;
-  siteDefaultCurrency: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -145,20 +140,6 @@ export default function HopperView({
     ]);
   };
 
-  // "Open artwork after adding" — an alternative, non-compulsory
-  // workflow (2026-08-17, direct request, explicitly framed as an
-  // iterative first pass): off by default, so the existing quick
-  // sort-and-advance rhythm is completely unchanged unless you opt in.
-  // When on, adding to an existing artwork or creating a new one from
-  // the Hopper opens that artwork's full editor right here instead of
-  // immediately advancing to the next queue item — useful for filling in
-  // Catalogue/Presentation details on the spot rather than having to
-  // find your way back to the Artwork Catalogue separately afterwards.
-  // Closing that panel is what actually advances the queue.
-  const [openArtworkAfterAdding, setOpenArtworkAfterAdding] = useState(false);
-  const [openedArtwork, setOpenedArtwork] = useState<ArtworkDetail | null>(null);
-  const [openingArtwork, setOpeningArtwork] = useState(false);
-
   // After any sort action, drop back to "no explicit selection" so the
   // next render (post-refresh, with this item now gone from the queue)
   // naturally falls forward to the new oldest item — the auto-advance
@@ -167,40 +148,6 @@ export default function HopperView({
   const advanceAfterAction = () => {
     setSelectedId(null);
     router.refresh();
-  };
-
-  // Fetches the artwork's full detail and shows it, rather than
-  // advancing immediately — the "open after adding" alternative
-  // workflow. `logProcessed` still happens so the Processed trail on
-  // the left stays accurate regardless of which workflow was used.
-  const openArtworkPanel = async (artworkId: string) => {
-    setOpeningArtwork(true);
-    try {
-      const detail = await getArtworkDetailForClient(artworkId);
-      setOpenedArtwork(detail);
-    } finally {
-      setOpeningArtwork(false);
-    }
-  };
-
-  // Background refresh while the panel is already open (fires on every
-  // autosave inside it) — deliberately does NOT touch openingArtwork,
-  // which drives a full-screen blocking overlay only appropriate for the
-  // very first open, before there's anything to show yet. Blocking on
-  // every keystroke-blur autosave would make the panel unusable.
-  const refreshOpenedArtwork = async () => {
-    if (!openedArtwork) return;
-    const detail = await getArtworkDetailForClient(openedArtwork.id);
-    setOpenedArtwork(detail);
-  };
-
-  // Closing the panel (however it closes — the panel's own Close
-  // button, or after a delete/duplicate) is what actually advances the
-  // Hopper queue in this workflow, standing in for the immediate
-  // advanceAfterAction() call used everywhere else.
-  const closeArtworkPanelAndAdvance = () => {
-    setOpenedArtwork(null);
-    advanceAfterAction();
   };
 
   const handleBin = (item: HopperItem) => {
@@ -239,32 +186,36 @@ export default function HopperView({
     startTransition(async () => {
       await addHopperItemToArtwork(item.id, siteId, artworkId, false);
       logProcessed(item, `Linked to ${artworkTitle}`, `/sites/${siteId}/artworks?selected=${artworkId}`);
-      if (openArtworkAfterAdding) {
-        await openArtworkPanel(artworkId);
-      } else {
-        advanceAfterAction();
-      }
+      advanceAfterAction();
     });
   };
 
   // New artwork → always becomes its main image, since it's the only
   // image the artwork has at the point of creation.
-  const handleAddNewArtwork = (item: HopperItem, title: string) => {
-    startTransition(async () => {
-      const finalTitle = title.trim() || "Untitled";
-      const result = await quickCreateArtwork(artistId, finalTitle, true);
-      if ("error" in result || !result.artwork) {
-        setAddError(result.error || "Couldn't create the artwork. Try again.");
-        return;
-      }
-      await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
-      logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks?selected=${result.artwork.id}`);
-      if (openArtworkAfterAdding) {
-        await openArtworkPanel(result.artwork.id);
-      } else {
-        advanceAfterAction();
-      }
-    });
+  //
+  // Deliberately does NOT auto-advance the queue (2026-08-17, revised
+  // after a first, over-built attempt at this same idea) — it resolves
+  // with the new artwork's id instead, which SortingCard uses to reveal
+  // a small inline "quick catalogue" form right underneath the buttons
+  // (Type/Group/Medium/Size/Location/Availability/Year/Studio notes —
+  // exactly Catalogue's own fields, nothing from Presentation or
+  // Payment). Purely optional — the person can fill any of it in, or
+  // ignore it entirely and just move on; either way this same item's
+  // card stays put until they explicitly choose to continue, via the
+  // "Done, next item" button that appears alongside the fields.
+  const handleAddNewArtwork = async (
+    item: HopperItem,
+    title: string
+  ): Promise<string | null> => {
+    const finalTitle = title.trim() || "Untitled";
+    const result = await quickCreateArtwork(artistId, finalTitle, true);
+    if ("error" in result || !result.artwork) {
+      setAddError(result.error || "Couldn't create the artwork. Try again.");
+      return null;
+    }
+    await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
+    logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks?selected=${result.artwork.id}`);
+    return result.artwork.id;
   };
 
   // How many files upload at once. Each file is already 2-4 sequential
@@ -607,6 +558,7 @@ export default function HopperView({
               artistId={artistId}
               item={current}
               isPending={isPending}
+              settings={artworkSettings}
               onBin={() => handleBin(current)}
               onAddToMedia={() => handleAddToMedia(current)}
               onAddToBucket={() => handleAddToBucket(current)}
@@ -614,8 +566,7 @@ export default function HopperView({
                 handleAddToExistingArtwork(current, artworkId, artworkTitle)
               }
               onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
-              openArtworkAfterAdding={openArtworkAfterAdding}
-              onToggleOpenArtworkAfterAdding={setOpenArtworkAfterAdding}
+              onArtworkQuickCatalogueDone={advanceAfterAction}
             />
           )}
         </div>
@@ -666,33 +617,6 @@ export default function HopperView({
           onClose={() => setShowCsvImport(false)}
         />
       )}
-
-      {/* "Open the artwork editor after adding" workflow (2026-08-17) —
-          see the fuller note by openArtworkAfterAdding above. */}
-      {openingArtwork && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
-          <p className="rounded-md bg-white px-4 py-3 text-sm text-neutral-600 shadow-lg">
-            Opening artwork…
-          </p>
-        </div>
-      )}
-      {openedArtwork && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
-            <ArtworkDetailPanel
-              siteId={siteId}
-              artistId={artistId}
-              artwork={openedArtwork}
-              settings={artworkSettings}
-              siteDefaultCurrency={siteDefaultCurrency}
-              onClose={closeArtworkPanelAndAdvance}
-              onDeleted={closeArtworkPanelAndAdvance}
-              onDuplicated={closeArtworkPanelAndAdvance}
-              onDataChanged={refreshOpenedArtwork}
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 }
@@ -702,30 +626,41 @@ function SortingCard({
   artistId,
   item,
   isPending,
+  settings,
   onBin,
   onAddToMedia,
   onAddToBucket,
   onAddToExistingArtwork,
   onAddNewArtwork,
-  openArtworkAfterAdding,
-  onToggleOpenArtworkAfterAdding,
+  onArtworkQuickCatalogueDone,
 }: {
   siteId: string;
   artistId: string;
   item: HopperItem;
   isPending: boolean;
+  settings: ArtworkSettings;
   onBin: () => void;
   onAddToMedia: () => void;
   onAddToBucket: () => void;
   onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
-  onAddNewArtwork: (title: string) => void;
-  openArtworkAfterAdding: boolean;
-  onToggleOpenArtworkAfterAdding: (next: boolean) => void;
+  onAddNewArtwork: (title: string) => Promise<string | null>;
+  // Called once the person is done with the optional inline quick-
+  // catalogue fields (whether they filled anything in or not) — this is
+  // what actually advances the Hopper queue in this flow.
+  onArtworkQuickCatalogueDone: () => void;
 }) {
   // Local state, reset automatically each time this card remounts (the
   // parent keys it by item.id) — no stale-caption bug when moving
   // between queue items.
   const [caption, setCaption] = useState(item.caption || "");
+  // Set once "Add Artwork" succeeds — reveals the inline quick-catalogue
+  // fields below the buttons for that newly-created artwork. Local to
+  // this card (not lifted to the parent) since it's naturally reset the
+  // moment this card remounts for a different queue item — exactly the
+  // lifetime this needs.
+  const [creatingArtwork, setCreatingArtwork] = useState(false);
+  const [newArtworkId, setNewArtworkId] = useState<string | null>(null);
+
 
   const saveFields = () => {
     const fd = new FormData();
@@ -809,32 +744,213 @@ function SortingCard({
             }
           }}
         />
+        {/* Shortened from "Add New Artwork" (2026-08-17) specifically so
+            it fits alongside "Add to Existing Artwork" on the same row. */}
         <button
           type="button"
-          onClick={() => onAddNewArtwork(caption)}
-          disabled={isPending}
+          onClick={async () => {
+            setCreatingArtwork(true);
+            try {
+              const newId = await onAddNewArtwork(caption);
+              if (newId) setNewArtworkId(newId);
+            } finally {
+              setCreatingArtwork(false);
+            }
+          }}
+          disabled={isPending || creatingArtwork}
           className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
         >
-          Add New Artwork
+          {creatingArtwork ? "Adding…" : "Add Artwork"}
         </button>
       </div>
       <p className="mt-2 text-xs text-neutral-400">
-        &quot;Add New Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
+        &quot;Add Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
         blank), and this image becomes its main image automatically.
       </p>
-      {/* Alternative, non-compulsory workflow (2026-08-17) — off by
-          default, so the plain sort-and-advance rhythm above is
-          completely unchanged unless this is switched on. Only affects
-          the two artwork buttons; Bin/Add to Media/Add to Bucket always
-          advance immediately regardless. */}
-      <label className="mt-3 flex items-center gap-2 text-xs text-neutral-500">
-        <input
-          type="checkbox"
-          checked={openArtworkAfterAdding}
-          onChange={(e) => onToggleOpenArtworkAfterAdding(e.target.checked)}
+
+      {/* Inline "quick catalogue" fields — revealed automatically once
+          "Add Artwork" succeeds (2026-08-17, direct request, a
+          deliberately scaled-back second attempt at this same idea).
+          Exactly Catalogue's own fields, nothing from Presentation or
+          Payment, and nothing compulsory — filling any of it in is
+          entirely optional; "Done, next item" below works either way. */}
+      {newArtworkId && (
+        <QuickCatalogueFields
+          artworkId={newArtworkId}
+          siteId={siteId}
+          settings={settings}
+          onDone={() => {
+            setNewArtworkId(null);
+            onArtworkQuickCatalogueDone();
+          }}
         />
-        Open the artwork editor after adding, instead of moving on to the next item
-      </label>
+      )}
+    </div>
+  );
+}
+
+// Same field set as the full Artwork editor's Catalogue tab (see
+// ArtworkDetailPanel.tsx) and the same autosave-whole-form-on-blur
+// convention via updateCatalogue — deliberately not Name (already set at
+// creation) or Edition/Available qty (kept out to match the simpler
+// layout this was asked for; a brand-new artwork has nothing in either
+// field yet regardless, so omitting them from this form doesn't lose
+// anything — see updateCatalogue's own undefined/null-handling notes).
+function QuickCatalogueFields({
+  artworkId,
+  siteId,
+  settings,
+  onDone,
+}: {
+  artworkId: string;
+  siteId: string;
+  settings: ArtworkSettings;
+  onDone: () => void;
+}) {
+  const autosave = (form: HTMLFormElement) => {
+    updateCatalogue(artworkId, siteId, new FormData(form));
+  };
+
+  return (
+    <div className="mt-4 rounded-md border border-neutral-300 p-4">
+      <form onBlur={(e) => autosave(e.currentTarget)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Type</label>
+            <select
+              name="type"
+              defaultValue=""
+              onChange={(e) => autosave(e.currentTarget.form!)}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            >
+              <option value="">Choose from list…</option>
+              {settings.artworkTypes.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Group</label>
+            <select
+              name="catalogueGroup"
+              defaultValue=""
+              onChange={(e) => autosave(e.currentTarget.form!)}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            >
+              <option value="">Choose from list…</option>
+              {settings.artworkGroups.map((g) => (
+                <option key={g} value={g}>
+                  {g}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Medium</label>
+          <select
+            name="medium"
+            defaultValue=""
+            onChange={(e) => autosave(e.currentTarget.form!)}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          >
+            <option value="">Choose from list…</option>
+            {settings.mediumPresets.map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Size</label>
+            <select
+              name="size"
+              defaultValue=""
+              onChange={(e) => autosave(e.currentTarget.form!)}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            >
+              <option value="">Choose from list…</option>
+              {settings.sizePresets.map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Location</label>
+            <select
+              name="location"
+              defaultValue=""
+              onChange={(e) => autosave(e.currentTarget.form!)}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            >
+              <option value="">Choose from list…</option>
+              {settings.artworkLocations.map((l) => (
+                <option key={l} value={l}>
+                  {l}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+        {/* Year moved to sit alongside Availability rather than Name
+            (2026-08-17, direct request — "moved year for better fit"),
+            unlike the full editor's own layout where it's next to Name. */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">
+              Availability
+            </label>
+            <select
+              name="availability"
+              defaultValue="AVAILABLE"
+              onChange={(e) => autosave(e.currentTarget.form!)}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            >
+              <option value="AVAILABLE">Available</option>
+              <option value="RESERVED">Reserved</option>
+              <option value="SOLD">Sold</option>
+            </select>
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Year</label>
+            <input
+              type="text"
+              name="year"
+              defaultValue=""
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">
+            Studio notes <span className="font-normal text-neutral-400">(private)</span>
+          </label>
+          <textarea
+            name="studioNotes"
+            defaultValue=""
+            rows={3}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+      </form>
+      {/* Not part of the full Catalogue editor — added here (2026-08-17)
+          because this form otherwise has no explicit way to conclude:
+          filling any/none of the fields in is optional, but there needs
+          to be a clear, deliberate way to say "I'm done with this one"
+          and move the Hopper on to the next item. */}
+      <button
+        type="button"
+        onClick={onDone}
+        className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+      >
+        Done, next item
+      </button>
     </div>
   );
 }
