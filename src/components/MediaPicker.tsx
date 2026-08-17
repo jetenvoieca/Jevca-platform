@@ -309,18 +309,7 @@ export default function MediaPicker({
                       {img.caption}
                     </p>
                   )}
-                  {/* Only shown when this picker isn't already scoped to
-                      one specific artwork (2026-08-17) — inside a
-                      linkedArtworkId picker's Related tab, every item
-                      shown already belongs to that same one artwork by
-                      definition, so repeating its name under every tile
-                      would just be noise, not new information. This is
-                      for the general picker (e.g. a page's Gallery/
-                      Single Image block), where images from different
-                      artworks can legitimately mix in the same list and
-                      it wasn't otherwise obvious one was already tied to
-                      a specific piece. */}
-                  {!linkedArtworkId && img.artwork && (
+                  {img.artwork && (
                     <p
                       className="truncate text-xs font-medium text-rose-600"
                       title={img.artwork.presentationTitle}
