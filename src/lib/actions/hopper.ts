@@ -25,17 +25,20 @@ export async function listHopperQueue(artistId: string) {
   });
 }
 
+// Only caption is editable from the Hopper now (2026-08-17) — Tags and
+// Alt text were both removed from this screen (see the matching note on
+// SortingCard in HopperView.tsx for why), so this no longer touches
+// either field. Previously wrote both on every save regardless of
+// whether the client actually sent a new value, which — once the client
+// stopped sending them — would have silently overwritten whatever was
+// there with empty/null on every caption blur.
 export async function updateHopperCaption(
   id: string,
   siteId: string,
   formData: FormData
 ): Promise<void> {
   const caption = (formData.get("caption") as string)?.trim() || null;
-  const altText = (formData.get("altText") as string)?.trim() || null;
-  const tagsRaw = (formData.get("tags") as string)?.trim() || "";
-  const tags = tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [];
-
-  await db.image.update({ where: { id }, data: { caption, altText, tags } });
+  await db.image.update({ where: { id }, data: { caption } });
   revalidatePath(`/sites/${siteId}/hopper`);
 }
 
