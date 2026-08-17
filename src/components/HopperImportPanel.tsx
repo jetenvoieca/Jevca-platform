@@ -7,6 +7,7 @@ import {
   importHopperCsvRow,
   type NormalizedHopperImportRow,
 } from "@/lib/actions/hopperImport";
+import { withTimeout } from "@/lib/importHelpers";
 
 type Failure = { row: NormalizedHopperImportRow; error: string };
 
@@ -52,15 +53,47 @@ export default function HopperImportPanel({
   // each row fetches an external image, and an honest, visible progress
   // count matters more here than raw speed. The gentle pause between
   // rows is deliberately kind to whatever's hosting the source images.
+  //
+  // Each row wrapped in its own try/catch (2026-08-17 fix) — without
+  // this, any exception thrown by the row itself (not just the clean
+  // { ok: false } failure path) broke out of the whole loop and left
+  // the dialog stuck showing "Importing… N of M" forever, since
+  // setImporting(false) was only ever reached after the loop finished
+  // normally. Confirmed real, not just theoretical: a single row can
+  // take up to roughly a minute in the worst case (fetchAndUploadImage's
+  // three retries, each with its own 20-second timeout, plus backoff
+  // between them) — comfortably longer than Netlify Functions' default
+  // execution limit, so a genuinely slow or unresponsive source image
+  // host can get that row's function killed by the platform mid-request
+  // rather than returning a clean error. Now that's just one more
+  // recorded failure, same as any other — the rest of the batch keeps
+  // going and it shows up in the Retry-failed list like any other row.
   const runImport = async (targetRows: NormalizedHopperImportRow[]) => {
     setImporting(true);
     setDone(0);
     setRunTotal(targetRows.length);
     setFailures([]);
     for (const row of targetRows) {
-      const result = await importHopperCsvRow(artistId, siteId, row);
-      if (!result.ok) {
-        setFailures((prev) => [...prev, { row, error: result.error }]);
+      try {
+        const result = await withTimeout(
+          importHopperCsvRow(artistId, siteId, row),
+          35000,
+          "Timed out after 35s — the image source may be slow or unresponsive. Try again."
+        );
+        if (!result.ok) {
+          setFailures((prev) => [...prev, { row, error: result.error }]);
+        }
+      } catch (err) {
+        setFailures((prev) => [
+          ...prev,
+          {
+            row,
+            error:
+              err instanceof Error
+                ? err.message
+                : "Something went wrong fetching this image (possibly a slow/unresponsive source — try again).",
+          },
+        ]);
       }
       setDone((prev) => prev + 1);
       await new Promise((r) => setTimeout(r, 400));
