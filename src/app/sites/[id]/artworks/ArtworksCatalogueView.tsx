@@ -13,6 +13,7 @@ import ArtworkDetailPanel, {
   type ArtworkSettings,
 } from "@/components/ArtworkDetailPanel";
 import { artworkMatchesFilters } from "@/lib/artworkFilters";
+import ExportPdfDialog from "@/components/ExportPdfDialog";
 
 type ArtworkRow = {
   id: string;
@@ -32,6 +33,7 @@ const DENSITY_STORAGE_KEY = "jevca:artworks-density";
 export default function ArtworksCatalogueView({
   siteId,
   artistId,
+  artistName,
   artworks: initialArtworks,
   total: initialTotal,
   soldCount: initialSoldCount,
@@ -48,6 +50,7 @@ export default function ArtworksCatalogueView({
 }: {
   siteId: string;
   artistId: string;
+  artistName: string;
   artworks: ArtworkRow[];
   total: number;
   soldCount: number;
@@ -63,6 +66,10 @@ export default function ArtworksCatalogueView({
   siteDefaultCurrency?: string;
 }) {
   const [view, setView] = useState<"tile" | "list">("tile");
+  // Export PDF now opens a small dialog first (2026-08-17) rather than
+  // being a plain download link, so the header title/subtitle can be
+  // overridden just for this one export — see ExportPdfDialog.tsx.
+  const [showExportDialog, setShowExportDialog] = useState(false);
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
   const [showImport, setShowImport] = useState(false);
   const [artworks, setArtworks] = useState<ArtworkRow[]>(initialArtworks);
@@ -452,20 +459,13 @@ export default function ArtworksCatalogueView({
           <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
             <div className="flex items-center gap-3">
-              <a
-                href={`/api/artwork-catalogue-pdf?${new URLSearchParams({
-                  artistId,
-                  ...(q ? { q } : {}),
-                  ...(availability ? { availability } : {}),
-                  ...(location ? { location } : {}),
-                  ...(type ? { type } : {}),
-                  ...(group ? { group } : {}),
-                  ...(sort ? { sort } : {}),
-                }).toString()}`}
+              <button
+                type="button"
+                onClick={() => setShowExportDialog(true)}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
               >
                 Export PDF
-              </a>
+              </button>
               <button
                 type="button"
                 onClick={() => setShowImport(true)}
@@ -796,6 +796,32 @@ export default function ArtworksCatalogueView({
           onClose={() => setShowImport(false)}
         />
       )}
+
+      <ExportPdfDialog
+        open={showExportDialog}
+        defaultTitle={artistName}
+        defaultSubtitle="Artwork Catalogue"
+        onCancel={() => setShowExportDialog(false)}
+        onExport={(headerTitle, headerSubtitle) => {
+          setShowExportDialog(false);
+          const url = `/api/artwork-catalogue-pdf?${new URLSearchParams({
+            artistId,
+            headerTitle,
+            headerSubtitle,
+            ...(q ? { q } : {}),
+            ...(availability ? { availability } : {}),
+            ...(location ? { location } : {}),
+            ...(type ? { type } : {}),
+            ...(group ? { group } : {}),
+            ...(sort ? { sort } : {}),
+          }).toString()}`;
+          // Same as the plain link this replaces — a real navigation to
+          // the download route, not a fetch+blob dance. window.open
+          // rather than a plain href now that the trigger is a button
+          // (opening the dialog first) instead of the link itself.
+          window.open(url, "_blank");
+        }}
+      />
     </div>
   );
 }
