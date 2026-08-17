@@ -195,11 +195,29 @@ export default function SiteNavPanel({
 
         prefetch={false}
         href={`/sites/${siteId}/artworks`}
-        className={`mt-3 rounded-md px-3 py-2 font-medium ${
+        className={`mt-3 flex items-center justify-between rounded-md px-3 py-2 font-medium ${
           artworksActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
         }`}
       >
         Artwork Catalogue
+        {/* Same Hopper backlog count as the Hopper's own badge above —
+            2026-08-17, at direct request. Not "how many new artworks
+            were just added from the Hopper" (that count doesn't exist
+            anywhere and nothing tracks it) — this is "how many raw,
+            not-yet-sorted imports are still sitting in the Hopper right
+            now", surfaced here too since both this catalogue and Media
+            are fed by it and a backlog is relevant context wherever
+            you're headed, not just when you're already looking at the
+            Hopper itself. */}
+        {hopperCount > 0 && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+              artworksActive ? "bg-white/20 text-white" : "bg-rose-100 text-rose-700"
+            }`}
+          >
+            {hopperCount}
+          </span>
+        )}
       </Link>
       <Link
         prefetch={false}
@@ -217,11 +235,21 @@ export default function SiteNavPanel({
 
         prefetch={false}
         href={`/sites/${siteId}/media`}
-        className={`mt-3 rounded-md px-3 py-2 font-medium ${
+        className={`mt-3 flex items-center justify-between rounded-md px-3 py-2 font-medium ${
           mediaActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
         }`}
       >
         Media Catalogue
+        {/* Same note as Artwork Catalogue above. */}
+        {hopperCount > 0 && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+              mediaActive ? "bg-white/20 text-white" : "bg-rose-100 text-rose-700"
+            }`}
+          >
+            {hopperCount}
+          </span>
+        )}
       </Link>
       <Link
         prefetch={false}
