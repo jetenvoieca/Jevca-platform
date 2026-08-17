@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useTransition } from "react";
 import Link from "next/link";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import { listMedia, getMediaDetail } from "@/lib/actions/mediaCatalogue";
@@ -69,7 +68,7 @@ export default function MediaCatalogueView({
   // whenever the filters actually change (a real page load, which remounts
   // this component with fresh props).
   const [items, setItems] = useState<MediaRow[]>(media);
-  const [loadingMore, isLoadingMoreTransition] = useTransition();
+  const [loadingMore, setLoadingMore] = useState(false);
   const hasMore = items.length < total;
 
   // Selecting an item no longer navigates to a separate route. Previously
@@ -160,29 +159,34 @@ export default function MediaCatalogueView({
   };
 
   const handleLoadMore = useCallback(() => {
-    isLoadingMoreTransition(async () => {
-      const { rows } = await listMedia(artistId, {
-        purpose,
-        q: q || undefined,
-        tag: tag || undefined,
-        artworkId: artworkId || undefined,
-        sort: sort || undefined,
-        offset: items.length,
-        limit: pageSize,
-      });
-      setItems((prev) => [
-        ...prev,
-        ...rows.map((m) => ({
-          id: m.id,
-          url: m.url,
-          posterUrl: m.posterUrl,
-          kind: m.kind,
-          caption: m.caption,
-          artwork: m.artwork,
-        })),
-      ]);
-    });
-  }, [artistId, purpose, q, tag, artworkId, sort, items.length, pageSize, isLoadingMoreTransition]);
+    setLoadingMore(true);
+    (async () => {
+      try {
+        const { rows } = await listMedia(artistId, {
+          purpose,
+          q: q || undefined,
+          tag: tag || undefined,
+          artworkId: artworkId || undefined,
+          sort: sort || undefined,
+          offset: items.length,
+          limit: pageSize,
+        });
+        setItems((prev) => [
+          ...prev,
+          ...rows.map((m) => ({
+            id: m.id,
+            url: m.url,
+            posterUrl: m.posterUrl,
+            kind: m.kind,
+            caption: m.caption,
+            artwork: m.artwork,
+          })),
+        ]);
+      } finally {
+        setLoadingMore(false);
+      }
+    })();
+  }, [artistId, purpose, q, tag, artworkId, sort, items.length, pageSize]);
 
   // Infinite scroll (2026-08-13, matching the same change on the Artwork
   // Catalogue) — an invisible sentinel below the last row auto-triggers
