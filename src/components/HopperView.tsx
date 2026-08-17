@@ -11,10 +11,15 @@ import {
   updateHopperCaption,
 } from "@/lib/actions/hopper";
 import { quickCreateArtwork } from "@/lib/actions/media";
+import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
+import ArtworkDetailPanel, {
+  type ArtworkDetail,
+  type ArtworkSettings,
+} from "@/components/ArtworkDetailPanel";
 
 export type HopperItem = {
   id: string;
@@ -52,10 +57,16 @@ export default function HopperView({
   siteId,
   artistId,
   queue,
+  artworkSettings,
+  siteDefaultCurrency,
 }: {
   siteId: string;
   artistId: string;
   queue: HopperItem[];
+  // Only needed for the optional "open the artwork panel after adding"
+  // workflow (2026-08-17) — see the note by openArtworkAfterAdding below.
+  artworkSettings: ArtworkSettings;
+  siteDefaultCurrency: string;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -134,6 +145,20 @@ export default function HopperView({
     ]);
   };
 
+  // "Open artwork after adding" — an alternative, non-compulsory
+  // workflow (2026-08-17, direct request, explicitly framed as an
+  // iterative first pass): off by default, so the existing quick
+  // sort-and-advance rhythm is completely unchanged unless you opt in.
+  // When on, adding to an existing artwork or creating a new one from
+  // the Hopper opens that artwork's full editor right here instead of
+  // immediately advancing to the next queue item — useful for filling in
+  // Catalogue/Presentation details on the spot rather than having to
+  // find your way back to the Artwork Catalogue separately afterwards.
+  // Closing that panel is what actually advances the queue.
+  const [openArtworkAfterAdding, setOpenArtworkAfterAdding] = useState(false);
+  const [openedArtwork, setOpenedArtwork] = useState<ArtworkDetail | null>(null);
+  const [openingArtwork, setOpeningArtwork] = useState(false);
+
   // After any sort action, drop back to "no explicit selection" so the
   // next render (post-refresh, with this item now gone from the queue)
   // naturally falls forward to the new oldest item — the auto-advance
@@ -142,6 +167,40 @@ export default function HopperView({
   const advanceAfterAction = () => {
     setSelectedId(null);
     router.refresh();
+  };
+
+  // Fetches the artwork's full detail and shows it, rather than
+  // advancing immediately — the "open after adding" alternative
+  // workflow. `logProcessed` still happens so the Processed trail on
+  // the left stays accurate regardless of which workflow was used.
+  const openArtworkPanel = async (artworkId: string) => {
+    setOpeningArtwork(true);
+    try {
+      const detail = await getArtworkDetailForClient(artworkId);
+      setOpenedArtwork(detail);
+    } finally {
+      setOpeningArtwork(false);
+    }
+  };
+
+  // Background refresh while the panel is already open (fires on every
+  // autosave inside it) — deliberately does NOT touch openingArtwork,
+  // which drives a full-screen blocking overlay only appropriate for the
+  // very first open, before there's anything to show yet. Blocking on
+  // every keystroke-blur autosave would make the panel unusable.
+  const refreshOpenedArtwork = async () => {
+    if (!openedArtwork) return;
+    const detail = await getArtworkDetailForClient(openedArtwork.id);
+    setOpenedArtwork(detail);
+  };
+
+  // Closing the panel (however it closes — the panel's own Close
+  // button, or after a delete/duplicate) is what actually advances the
+  // Hopper queue in this workflow, standing in for the immediate
+  // advanceAfterAction() call used everywhere else.
+  const closeArtworkPanelAndAdvance = () => {
+    setOpenedArtwork(null);
+    advanceAfterAction();
   };
 
   const handleBin = (item: HopperItem) => {
@@ -180,7 +239,11 @@ export default function HopperView({
     startTransition(async () => {
       await addHopperItemToArtwork(item.id, siteId, artworkId, false);
       logProcessed(item, `Linked to ${artworkTitle}`, `/sites/${siteId}/artworks?selected=${artworkId}`);
-      advanceAfterAction();
+      if (openArtworkAfterAdding) {
+        await openArtworkPanel(artworkId);
+      } else {
+        advanceAfterAction();
+      }
     });
   };
 
@@ -196,7 +259,11 @@ export default function HopperView({
       }
       await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
       logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks?selected=${result.artwork.id}`);
-      advanceAfterAction();
+      if (openArtworkAfterAdding) {
+        await openArtworkPanel(result.artwork.id);
+      } else {
+        advanceAfterAction();
+      }
     });
   };
 
@@ -435,7 +502,7 @@ export default function HopperView({
           dragged something in), Up next second, Processed last. At lg
           and above: unchanged from before, the original fixed
           300px / 1fr / 280px three-column layout. */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[300px_1fr_340px]">
+      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[300px_1fr_380px]">
         {/* Processed — a visual confirmation trail, not part of the
             sorting flow itself, so it stays put even once the queue on
             the right runs out. Sticky only at lg — stacked full-width
@@ -547,6 +614,8 @@ export default function HopperView({
                 handleAddToExistingArtwork(current, artworkId, artworkTitle)
               }
               onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
+              openArtworkAfterAdding={openArtworkAfterAdding}
+              onToggleOpenArtworkAfterAdding={setOpenArtworkAfterAdding}
             />
           )}
         </div>
@@ -562,7 +631,7 @@ export default function HopperView({
           {!current ? null : remaining.length === 0 ? (
             <p className="text-xs text-neutral-400">This is the last one.</p>
           ) : (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-6 gap-2">
               {remaining.map((item) => (
                 <button
                   key={item.id}
@@ -597,6 +666,33 @@ export default function HopperView({
           onClose={() => setShowCsvImport(false)}
         />
       )}
+
+      {/* "Open the artwork editor after adding" workflow (2026-08-17) —
+          see the fuller note by openArtworkAfterAdding above. */}
+      {openingArtwork && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <p className="rounded-md bg-white px-4 py-3 text-sm text-neutral-600 shadow-lg">
+            Opening artwork…
+          </p>
+        </div>
+      )}
+      {openedArtwork && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
+            <ArtworkDetailPanel
+              siteId={siteId}
+              artistId={artistId}
+              artwork={openedArtwork}
+              settings={artworkSettings}
+              siteDefaultCurrency={siteDefaultCurrency}
+              onClose={closeArtworkPanelAndAdvance}
+              onDeleted={closeArtworkPanelAndAdvance}
+              onDuplicated={closeArtworkPanelAndAdvance}
+              onDataChanged={refreshOpenedArtwork}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -611,6 +707,8 @@ function SortingCard({
   onAddToBucket,
   onAddToExistingArtwork,
   onAddNewArtwork,
+  openArtworkAfterAdding,
+  onToggleOpenArtworkAfterAdding,
 }: {
   siteId: string;
   artistId: string;
@@ -621,6 +719,8 @@ function SortingCard({
   onAddToBucket: () => void;
   onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
   onAddNewArtwork: (title: string) => void;
+  openArtworkAfterAdding: boolean;
+  onToggleOpenArtworkAfterAdding: (next: boolean) => void;
 }) {
   // Local state, reset automatically each time this card remounts (the
   // parent keys it by item.id) — no stale-caption bug when moving
@@ -722,6 +822,19 @@ function SortingCard({
         &quot;Add New Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
         blank), and this image becomes its main image automatically.
       </p>
+      {/* Alternative, non-compulsory workflow (2026-08-17) — off by
+          default, so the plain sort-and-advance rhythm above is
+          completely unchanged unless this is switched on. Only affects
+          the two artwork buttons; Bin/Add to Media/Add to Bucket always
+          advance immediately regardless. */}
+      <label className="mt-3 flex items-center gap-2 text-xs text-neutral-500">
+        <input
+          type="checkbox"
+          checked={openArtworkAfterAdding}
+          onChange={(e) => onToggleOpenArtworkAfterAdding(e.target.checked)}
+        />
+        Open the artwork editor after adding, instead of moving on to the next item
+      </label>
     </div>
   );
 }
