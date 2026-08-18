@@ -3,6 +3,7 @@ import AppShell from "@/components/AppShell";
 import { db } from "@/lib/db";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import AccountsBackfillButton from "@/components/AccountsBackfillButton";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +82,8 @@ export default async function AccountsPage() {
             sales to their buyers, see Consolidated Sales.
           </p>
 
+          <AccountsBackfillButton />
+
           {sortedMonths.length === 0 ? (
             <p className="text-sm text-neutral-500">No subscription payments recorded yet.</p>
           ) : (
@@ -155,3 +158,4 @@ export default async function AccountsPage() {
     />
   );
 }
+
