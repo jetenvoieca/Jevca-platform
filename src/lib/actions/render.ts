@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { readTimeline, CROSSFADE_SECONDS } from "@/lib/videoTimeline";
+import { readTimeline, CROSSFADE_SECONDS, totalTimelineSeconds } from "@/lib/videoTimeline";
 import { uploadToR2, deleteFromR2, publicMediaUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
@@ -327,6 +327,14 @@ export async function getRenderStatus(artistId: string) {
     createdAt: render.createdAt.toISOString(),
     debugPayload: render.debugPayload ? JSON.stringify(render.debugPayload, null, 2) : null,
     sourceClips,
+    // 2026-08-18 fix — this render's own clip count/duration, from its
+    // own saved timeline (untouched by a fresh draft being created
+    // alongside it). Lets the header show real numbers for this render
+    // even once the live draft above has moved on and is genuinely
+    // empty, instead of "0 clips · 0s total" next to a render that
+    // plainly had clips in it.
+    clipCount: timeline.clips.length,
+    totalSeconds: totalTimelineSeconds(timeline.clips),
     resultImage: render.resultImage
       ? {
           id: render.resultImage.id,
@@ -374,3 +382,4 @@ export async function discardRenderResult(siteId: string, renderId: string): Pro
 
   revalidatePath(`/sites/${siteId}/bucket`);
 }
+
