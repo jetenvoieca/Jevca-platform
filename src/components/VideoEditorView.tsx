@@ -15,7 +15,7 @@ import { renderVideo, discardRenderResult } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
-import { CROSSFADE_SECONDS, type TimelineClip } from "@/lib/videoTimeline";
+import { totalTimelineSeconds, type TimelineClip } from "@/lib/videoTimeline";
 
 type ImageInfo = {
   id: string;
@@ -35,12 +35,13 @@ type RenderStatus = {
   createdAt: string;
   debugPayload: string | null;
   sourceClips: SourceClip[];
+  // This render's own clip count/duration (2026-08-18) — see the note by
+  // the header below for why this exists separately from the live
+  // draft's own clips/totalSeconds.
+  clipCount: number;
+  totalSeconds: number;
   resultImage: MediaDetail | null;
 } | null;
-
-function clipLength(c: Clip): number {
-  return c.kind === "PHOTO" ? c.duration ?? 2 : Math.max(0, (c.trimOut ?? 0) - (c.trimIn ?? 0));
-}
 
 export default function VideoEditorView({
   siteId,
@@ -97,12 +98,19 @@ export default function VideoEditorView({
 
   const selected = clips.find((c) => c.id === selectedId) ?? null;
 
-  const totalSeconds = clips.reduce((sum, c, i) => {
-    const length = clipLength(c);
-    const isLast = i === clips.length - 1;
-    const overlap = isLast ? 0 : Math.min(CROSSFADE_SECONDS, length, clipLength(clips[i + 1]));
-    return sum + length - overlap;
-  }, 0);
+  const totalSeconds = totalTimelineSeconds(clips);
+
+  // 2026-08-18 fix — a completed (or in-progress) render creates a fresh,
+  // separate, genuinely empty draft alongside it, so you can start a new
+  // video right away. Before this fix, the header always described that
+  // new empty draft ("0 clips · 0s total") even while a render with real
+  // clips in it was sitting right below — technically accurate for the
+  // draft, but confusing next to a render that plainly wasn't empty. Once
+  // clips are actually added to the new draft, this reverts to describing
+  // that draft, same as before.
+  const headerClipCount = clips.length > 0 || !renderStatus ? clips.length : renderStatus.clipCount;
+  const headerTotalSeconds =
+    clips.length > 0 || !renderStatus ? totalSeconds : renderStatus.totalSeconds;
 
   const blockedByUnresolvedRender =
     renderStatus != null && (renderStatus.status === "DONE" || renderStatus.status === "FAILED");
@@ -196,8 +204,11 @@ export default function VideoEditorView({
           <div>
             <h1 className="text-2xl font-semibold text-neutral-900">Video Editor</h1>
             <p className="text-sm text-neutral-500">
-              {clips.length} clip{clips.length === 1 ? "" : "s"} · {formatTotal(totalSeconds)} total
-              {totalSeconds > 90 && <span className="ml-2 text-amber-600">— over the 90s target</span>}
+              {headerClipCount} clip{headerClipCount === 1 ? "" : "s"} ·{" "}
+              {formatTotal(headerTotalSeconds)} total
+              {clips.length > 0 && totalSeconds > 90 && (
+                <span className="ml-2 text-amber-600">— over the 90s target</span>
+              )}
               {clips.length > 0 && (
                 <>
                   {" · "}
@@ -222,12 +233,14 @@ export default function VideoEditorView({
             >
               {rendering ? "Sending…" : "Render Video"}
             </button>
+            {/* The "Save or discard the render below first" hint that used
+                to live here (2026-08-18, direct request) was removed —
+                the button is already visibly greyed out via its own
+                disabled styling above, so a second, separate explanation
+                underneath it was redundant. A genuine error still shows
+                below, since that's new information, not a restatement of
+                what the greyed-out button already shows. */}
             {renderError && <p className="mt-1 max-w-xs text-xs text-red-600">{renderError}</p>}
-            {blockedByUnresolvedRender && !renderError && (
-              <p className="mt-1 max-w-xs text-xs text-amber-600">
-                Save or discard the render below first
-              </p>
-            )}
           </div>
         </div>
       </div>
@@ -269,7 +282,13 @@ export default function VideoEditorView({
           )}
           {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
             <div className="rounded-lg border border-neutral-200 bg-white p-4">
-              <p className="text-sm text-neutral-600">
+              {/* Pulses (2026-08-18, direct request) — this can sit here
+                  for a minute or two with nothing else on the page
+                  visibly changing (it polls every 4s via the effect
+                  above, but router.refresh() alone gives no visual cue
+                  in between), so a static sentence risked looking stalled
+                  or broken rather than genuinely still working. */}
+              <p className="animate-pulse text-sm text-neutral-600">
                 Rendering your video… this can take a minute or two.
               </p>
             </div>
@@ -450,3 +469,4 @@ function formatTotal(seconds: number): string {
   const s = Math.round(seconds % 60);
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
+
