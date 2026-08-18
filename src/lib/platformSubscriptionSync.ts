@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { fromMinorUnits } from "@/lib/stripe";
+import { getPlatformStripeClient } from "@/lib/platformStripe";
 
 const PAYMENT_FAILED = "SUBSCRIPTION_PAYMENT_FAILED";
 const SUBSCRIPTION_CANCELLED = "SUBSCRIPTION_CANCELLED";
@@ -132,3 +133,82 @@ export async function updatePlatformSubscriptionStatus(params: {
     await resolveOpenAlerts(artist.id, SUBSCRIPTION_CANCELLED);
   }
 }
+
+// Asks Stripe directly for paid invoices, independent of webhook delivery
+// history entirely — added 2026-08-18 after a real gap: the platform
+// webhook was silently failing for a while (first blocked by the login
+// wall, then not recognising the newer invoice_payment.paid event once
+// that was fixed), and by the time both were corrected, Stripe had
+// already marked those deliveries "succeeded" — so the dashboard's own
+// per-event Resend was no longer available for them, and this app's own
+// logs only ever recorded the event *type*, not enough detail to
+// reconstruct what was missed by hand.
+//
+// Safe to run more than once, and safe to run routinely: reuses the same
+// idempotent recordPlatformInvoicePaid as the webhook itself, keyed on
+// Stripe's own invoice ID, so an invoice already recorded is silently
+// skipped rather than double-counted. Deliberately not on a schedule —
+// this is a resync tool for when something's suspected missing, not a
+// substitute for the webhook actually working.
+export async function backfillMissingSubscriptionPayments(): Promise<{
+  checked: number;
+  created: number;
+}> {
+  const client = getPlatformStripeClient();
+  let checked = 0;
+  let created = 0;
+  let startingAfter: string | undefined;
+
+  // Paginates through every paid invoice on the platform account — no
+  // date cutoff, since a full resync is exactly the point of this tool
+  // and the volume here is small (artist subscriptions, not buyer
+  // sales).
+  for (;;) {
+    const page = await client.invoices.list({
+      status: "paid",
+      limit: 100,
+      starting_after: startingAfter,
+    });
+
+    for (const invoice of page.data) {
+      checked++;
+      if (!invoice.id) continue;
+
+      const existing = await db.subscriptionPayment.findUnique({
+        where: { stripeInvoiceId: invoice.id },
+        select: { id: true },
+      });
+      if (existing) continue;
+
+      const customerId =
+        typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+      if (!customerId) continue;
+
+      const artist = await db.artist.findUnique({
+        where: { stripeSubscriptionCustomerId: customerId },
+        select: { id: true },
+      });
+      if (!artist) continue; // Same "not linked" no-op as the webhook — not an error here either.
+
+      await db.subscriptionPayment.create({
+        data: {
+          artistId: artist.id,
+          source: "STRIPE",
+          amount: fromMinorUnits(invoice.amount_paid),
+          currency: invoice.currency.toUpperCase(),
+          paidAt: new Date(
+            (invoice.status_transitions?.paid_at || invoice.created) * 1000
+          ),
+          stripeInvoiceId: invoice.id,
+        },
+      });
+      created++;
+    }
+
+    if (!page.has_more || page.data.length === 0) break;
+    startingAfter = page.data[page.data.length - 1].id;
+  }
+
+  return { checked, created };
+}
+
