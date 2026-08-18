@@ -6,6 +6,13 @@ import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 // - /api/hopper/*         — the iPhone Shortcut, authenticated by its own
 //   per-artist hopperToken (see hopper-design.md)
 // - /api/stripe/webhook   — authenticated by Stripe's own signature check
+// - /api/platform-subscriptions/webhook — same: authenticated by Stripe's
+//   own signature check (the PLATFORM account, not an artist's — see
+//   platformStripe.ts). Missing here entirely until 2026-08-18 — every
+//   delivery from Stripe was silently redirected to /login instead of
+//   reaching the route at all, which is why every subscription payment
+//   from a linked artist's card was recorded as a 100%-failure webhook on
+//   Stripe's own side and never once created a row in the app.
 // - /api/shotstack/render-webhook — Shotstack doesn't sign its webhooks,
 //   so this endpoint authenticates itself differently: it never trusts
 //   the POST body, only uses it to know which render to re-check via a
@@ -21,6 +28,7 @@ import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 const PUBLIC_PATH_PREFIXES = [
   "/api/hopper",
   "/api/stripe/webhook",
+  "/api/platform-subscriptions/webhook",
   "/api/shotstack/render-webhook",
   "/api/media",
   "/login",
@@ -50,3 +58,4 @@ export const config = {
   // nothing sensitive and gating them just adds needless redirects.
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
+
