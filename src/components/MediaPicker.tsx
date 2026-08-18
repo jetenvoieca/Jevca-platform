@@ -178,22 +178,33 @@ export default function MediaPicker({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-6"
       onClick={(e) => {
         if (e.target === e.currentTarget) setOpen(false);
       }}
     >
-      {/* Two-column layout (2026-08-18, direct request, replaces a
-          top-strip/bottom-strip split — search+toggle+Upload/Close lived
-          above the grid, selection-count+Add lived below it). Every
-          control now lives in one right-hand panel instead, so adding,
-          removing, or reordering a control only ever touches this one
-          panel — never the grid, and never a second location. Left
-          (grid) and right (panel) scroll independently of each other,
-          same "two flex siblings, each its own overflow-y-auto" pattern
-          already used for the Artwork editor's grid/detail-panel split. */}
-      <div className="flex h-full max-h-[85vh] w-full max-w-6xl overflow-hidden rounded-lg bg-white shadow-xl">
-        <div className="flex-1 overflow-y-auto p-4">
+      {/* Centering wrapper (2026-08-18) — previously the modal box itself
+          used h-full + items-center on the fixed overlay, which could
+          leave it flush against the viewport's bottom edge with nothing
+          to visually separate it from the page underneath, especially on
+          a shorter window. This wrapper gives a real, minimum py-6 gap
+          top and bottom in every case: min-h-full still centers the
+          panel vertically on a tall viewport, but if the panel is ever
+          taller than the space available, the overlay itself scrolls
+          (overflow-y-auto above) rather than the panel bleeding past the
+          edge. */}
+      <div className="mx-auto flex min-h-full max-w-6xl items-center justify-center py-6">
+        {/* Two-column layout (2026-08-18, direct request, replaces a
+            top-strip/bottom-strip split — search+toggle+Upload/Close lived
+            above the grid, selection-count+Add lived below it). Every
+            control now lives in one right-hand panel instead, so adding,
+            removing, or reordering a control only ever touches this one
+            panel — never the grid, and never a second location. Left
+            (grid) and right (panel) scroll independently of each other,
+            same "two flex siblings, each its own overflow-y-auto" pattern
+            already used for the Artwork editor's grid/detail-panel split. */}
+        <div className="flex max-h-[85vh] w-full overflow-hidden rounded-lg bg-white shadow-xl">
+          <div className="flex-1 overflow-y-auto p-4 pb-8">
           <div className="grid grid-cols-6 gap-3">
             {images.map((img) => {
               const isSelected = selected.some((s) => s.id === img.id);
@@ -277,7 +288,7 @@ export default function MediaPicker({
             from the grid) means a long list of future controls never
             pushes Close off-screen or forces the grid to shrink. */}
         <div className="flex w-72 flex-shrink-0 flex-col border-l border-neutral-200">
-          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+          <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-8">
             <input
               type="text"
               value={query}
@@ -336,8 +347,61 @@ export default function MediaPicker({
               Upload new
             </Link>
 
+            {/* Selected items, shown as thumbnails with their own remove
+                control (2026-08-18, direct request) — previously this
+                was just a count ("N selected"), so once the grid was
+                scrolled away from a selected thumbnail, there was no way
+                to see which images were actually selected without
+                scrolling back to find the highlighted border again. This
+                list stays visible in the panel regardless of grid scroll
+                position, and doubles as the way to deselect something
+                without hunting for it in the grid. */}
             {mode === "multi" && (
-              <p className="text-sm text-neutral-500">{selected.length} selected</p>
+              <div>
+                <p className="mb-2 text-sm text-neutral-500">
+                  {selected.length} selected
+                </p>
+                {selected.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2">
+                    {selected.map((img) => (
+                      <div key={img.id} className="group relative">
+                        <div className="overflow-hidden rounded-md border border-neutral-200">
+                          {img.kind === "VIDEO" ? (
+                            img.posterUrl ? (
+                              <img
+                                src={img.posterUrl}
+                                alt=""
+                                className="aspect-square w-full object-cover"
+                              />
+                            ) : (
+                              <VideoThumb
+                                src={img.url}
+                                className="aspect-square w-full object-cover"
+                              />
+                            )
+                          ) : (
+                            <img
+                              src={img.url}
+                              alt=""
+                              className="aspect-square w-full object-cover"
+                            />
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelected((prev) => prev.filter((p) => p.id !== img.id))
+                          }
+                          aria-label={`Remove ${img.caption || "image"} from selection`}
+                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white shadow hover:bg-neutral-700"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
           </div>
 
@@ -361,6 +425,7 @@ export default function MediaPicker({
             </button>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
