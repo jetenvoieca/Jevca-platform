@@ -41,6 +41,24 @@ export const emptyTimeline: Timeline = { clips: [] };
 // its number by the same amount, or it'd overstate the real result).
 export const CROSSFADE_SECONDS = 1;
 
+// Shared with both the client (the live draft's own running total in
+// VideoEditorView's header) and the server (getRenderStatus, computing
+// the same number for a *completed* render's timeline, once the draft
+// itself has moved on to a fresh empty one — see 2026-08-18 fix, header
+// showing "0 clips" for a render that clearly had clips).
+export function clipLength(c: TimelineClip): number {
+  return c.kind === "PHOTO" ? c.duration ?? 2 : Math.max(0, (c.trimOut ?? 0) - (c.trimIn ?? 0));
+}
+
+export function totalTimelineSeconds(clips: TimelineClip[]): number {
+  return clips.reduce((sum, c, i) => {
+    const length = clipLength(c);
+    const isLast = i === clips.length - 1;
+    const overlap = isLast ? 0 : Math.min(CROSSFADE_SECONDS, length, clipLength(clips[i + 1]));
+    return sum + length - overlap;
+  }, 0);
+}
+
 export function readTimeline(raw: unknown): Timeline {
   if (
     raw &&
@@ -51,3 +69,4 @@ export function readTimeline(raw: unknown): Timeline {
   }
   return { clips: [] };
 }
+
