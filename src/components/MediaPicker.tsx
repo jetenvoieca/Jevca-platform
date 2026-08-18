@@ -183,78 +183,18 @@ export default function MediaPicker({
         if (e.target === e.currentTarget) setOpen(false);
       }}
     >
-      <div className="flex h-full max-h-[85vh] w-full max-w-6xl flex-col rounded-lg bg-white shadow-xl">
-        <div className="flex items-center gap-2 border-b border-neutral-200 p-4">
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              load(e.target.value, purpose);
-            }}
-            placeholder={
-              mediaKinds && mediaKinds.length > 1
-                ? "Search images and videos…"
-                : videoOnly
-                  ? "Search videos…"
-                  : "Search images…"
-            }
-            autoFocus
-            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-          {/* Was an inline file upload until 2026-08-17 — now links to
-              the Hopper instead. Direct request, part of a deliberate
-              move towards the Hopper being the single controlled intake
-              point for every image: adding something here used to skip
-              that entirely (no captioning, no deliberate sort/review
-              step), which worked against that goal. This picker is
-              read-only now — browse and select only. */}
-          <Link
-            href={`/sites/${siteId}/hopper`}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm hover:bg-neutral-50"
-          >
-            Upload new
-          </Link>
-          <button
-            type="button"
-            onClick={() => setOpen(false)}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50"
-          >
-            Close
-          </button>
-        </div>
-
-        {linkedArtworkId && (
-          <div className="border-b border-neutral-200 p-4 pt-0">
-            {/* Same pill style as the Media Catalogue's own Marketing/
-                Related toggle, for visual consistency. */}
-            <div className="mt-3 flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
-              <button
-                type="button"
-                onClick={() => handlePurposeChange("marketing")}
-                className={`px-4 py-1.5 ${
-                  purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                }`}
-              >
-                Marketing
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePurposeChange("related")}
-                className={`px-4 py-1.5 font-medium ${
-                  purpose === "related"
-                    ? "bg-neutral-900 text-white"
-                    : "bg-rose-100 text-rose-700 hover:bg-rose-200"
-                }`}
-              >
-                Related ({relatedCount})
-              </button>
-            </div>
-          </div>
-        )}
-
+      {/* Two-column layout (2026-08-18, direct request, replaces a
+          top-strip/bottom-strip split — search+toggle+Upload/Close lived
+          above the grid, selection-count+Add lived below it). Every
+          control now lives in one right-hand panel instead, so adding,
+          removing, or reordering a control only ever touches this one
+          panel — never the grid, and never a second location. Left
+          (grid) and right (panel) scroll independently of each other,
+          same "two flex siblings, each its own overflow-y-auto" pattern
+          already used for the Artwork editor's grid/detail-panel split. */}
+      <div className="flex h-full max-h-[85vh] w-full max-w-6xl overflow-hidden rounded-lg bg-white shadow-xl">
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="grid grid-cols-8 gap-3">
+          <div className="grid grid-cols-6 gap-3">
             {images.map((img) => {
               const isSelected = selected.some((s) => s.id === img.id);
               return (
@@ -330,20 +270,99 @@ export default function MediaPicker({
           )}
         </div>
 
-        {mode === "multi" && (
-          <div className="flex items-center justify-between border-t border-neutral-200 p-4">
-            <span className="text-sm text-neutral-500">{selected.length} selected</span>
+        {/* Right-hand control panel — everything lives here now: search,
+            the Marketing/Related toggle (when scoped to one artwork),
+            the Hopper upload link, the selection count, "Add"/"Add
+            selected", and Close. Its own independent scroll (separate
+            from the grid) means a long list of future controls never
+            pushes Close off-screen or forces the grid to shrink. */}
+        <div className="flex w-72 flex-shrink-0 flex-col border-l border-neutral-200">
+          <div className="flex-1 space-y-4 overflow-y-auto p-4">
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                load(e.target.value, purpose);
+              }}
+              placeholder={
+                mediaKinds && mediaKinds.length > 1
+                  ? "Search images and videos…"
+                  : videoOnly
+                    ? "Search videos…"
+                    : "Search images…"
+              }
+              autoFocus
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
+
+            {linkedArtworkId && (
+              // Same pill style as the Media Catalogue's own Marketing/
+              // Related toggle, for visual consistency.
+              <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
+                <button
+                  type="button"
+                  onClick={() => handlePurposeChange("marketing")}
+                  className={`px-4 py-1.5 ${
+                    purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                  }`}
+                >
+                  Marketing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handlePurposeChange("related")}
+                  className={`px-4 py-1.5 font-medium ${
+                    purpose === "related"
+                      ? "bg-neutral-900 text-white"
+                      : "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                  }`}
+                >
+                  Related ({relatedCount})
+                </button>
+              </div>
+            )}
+
+            {/* Still a link to the Hopper, not inline upload — this
+                picker stays read-only/browse-only by deliberate decision
+                (2026-08-17): every new image goes through the Hopper's
+                controlled intake, captioning, and sort step first.
+                Reconfirmed 2026-08-18 when this panel was reworked — only
+                its position moved, not what it does. */}
+            <Link
+              href={`/sites/${siteId}/hopper`}
+              className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-center text-sm hover:bg-neutral-50"
+            >
+              Upload new
+            </Link>
+
+            {mode === "multi" && (
+              <p className="text-sm text-neutral-500">{selected.length} selected</p>
+            )}
+          </div>
+
+          <div className="space-y-2 border-t border-neutral-200 p-4">
+            {mode === "multi" && (
+              <button
+                type="button"
+                onClick={confirmMulti}
+                disabled={selected.length === 0}
+                className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+              >
+                Add selected
+              </button>
+            )}
             <button
               type="button"
-              onClick={confirmMulti}
-              disabled={selected.length === 0}
-              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
+              onClick={() => setOpen(false)}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50"
             >
-              Add
+              Close
             </button>
           </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
+
