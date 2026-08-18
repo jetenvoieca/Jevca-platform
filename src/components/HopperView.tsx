@@ -48,6 +48,15 @@ type ProcessedEntry = {
 // unmount — see decisions log, 2026-08-05). Same localStorage pattern
 // already used for the Media Catalogue's density preference.
 const processedLogKey = (artistId: string) => `jevca:hopper-processed:${artistId}`;
+// Which end of the queue you're sorting from — a genuine processing-order
+// choice (2026-08-18, direct request), not just how the "Up next" list
+// looks: "newest" means the most recently uploaded item is the one you're
+// actually asked to sort, and it sits at the top of "Up next" too.
+// "oldest" is the original first-in-first-out order. Defaults to "newest"
+// per direct instruction — remembered per artist, same localStorage
+// pattern as the Processed log above.
+const sortOrderKey = (artistId: string) => `jevca:hopper-sort-order:${artistId}`;
+type HopperSortOrder = "newest" | "oldest";
 
 export default function HopperView({
   siteId,
@@ -65,6 +74,12 @@ export default function HopperView({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  // Defaults to "newest" (direct instruction) — the server always sends
+  // `queue` oldest-first (see listHopperQueue's orderBy), so this is
+  // resorted client-side below rather than requiring a fresh server
+  // fetch just to flip direction; the whole queue is already loaded at
+  // once anyway.
+  const [sortOrder, setSortOrder] = useState<HopperSortOrder>("newest");
   const [addUploading, setAddUploading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   // { done, total } while a batch upload is in progress, null otherwise
@@ -122,8 +137,39 @@ export default function HopperView({
     }
   }, [processedLog, artistId]);
 
-  const current = queue.find((i) => i.id === selectedId) ?? queue[0] ?? null;
-  const remaining = queue.filter((i) => i.id !== current?.id);
+  // Same SSR-safe "start at the default, fill in from storage right
+  // after mount" pattern as the Processed log above — starts at
+  // "newest" on both server and first client render (no hydration
+  // mismatch), then switches to whatever this browser last chose, if
+  // anything, immediately after.
+  useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(sortOrderKey(artistId));
+      if (stored === "newest" || stored === "oldest") setSortOrder(stored);
+    } catch {
+      // Corrupt or unavailable storage — just keep the "newest" default.
+    }
+  }, [artistId]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(sortOrderKey(artistId), sortOrder);
+    } catch {
+      // Storage full/unavailable — non-critical, just won't persist.
+    }
+  }, [sortOrder, artistId]);
+
+  // The server always sends `queue` oldest-first (listHopperQueue's
+  // orderBy) — sorted explicitly here by createdAt rather than just
+  // reversing that array, so this doesn't quietly break if the server
+  // order ever changes for an unrelated reason.
+  const sortedQueue =
+    sortOrder === "newest"
+      ? [...queue].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      : [...queue].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+  const current = sortedQueue.find((i) => i.id === selectedId) ?? sortedQueue[0] ?? null;
+  const remaining = sortedQueue.filter((i) => i.id !== current?.id);
 
   const logProcessed = (item: HopperItem, label: string, href: string | null) => {
     setProcessedLog((prev) => [
@@ -419,9 +465,39 @@ export default function HopperView({
         </div>
       )}
 
-      <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
-        Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
-      </h1>
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-semibold text-neutral-900">
+          Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
+        </h1>
+        {/* Sort order (2026-08-18, direct request) — genuinely changes
+            which item you're asked to sort next, not just how "Up next"
+            looks. Defaults to "newest" per instruction; remembered per
+            browser after that. */}
+        <div className="flex items-center gap-1 rounded-md border border-neutral-200 p-0.5 text-sm">
+          <button
+            type="button"
+            onClick={() => setSortOrder("newest")}
+            className={`rounded px-3 py-1 ${
+              sortOrder === "newest"
+                ? "bg-neutral-900 text-white"
+                : "text-neutral-600 hover:bg-neutral-50"
+            }`}
+          >
+            Newest first
+          </button>
+          <button
+            type="button"
+            onClick={() => setSortOrder("oldest")}
+            className={`rounded px-3 py-1 ${
+              sortOrder === "oldest"
+                ? "bg-neutral-900 text-white"
+                : "text-neutral-600 hover:bg-neutral-50"
+            }`}
+          >
+            Oldest first
+          </button>
+        </div>
+      </div>
 
       {addError && (
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
