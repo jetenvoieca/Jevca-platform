@@ -15,7 +15,8 @@ export default async function SitesDirectoryPage({
   const params = await searchParams;
   const q = params.q?.trim() || "";
   const showArchived = params.archived === "1";
-  const sort = params.sort === "date" ? "date" : "owner";
+  const sort =
+    params.sort === "date" ? "date" : params.sort === "payment" ? "payment" : "owner";
 
   const totalSites = await db.site.count();
 
@@ -54,10 +55,18 @@ export default async function SitesDirectoryPage({
       id: true,
       name: true,
       status: true,
-      artist: { select: { name: true } },
+      artist: { select: { name: true, paymentMethod: true } },
     },
     relationLoadStrategy: "query",
-    orderBy: sort === "date" ? { createdAt: "desc" } : { artist: { name: "asc" } },
+    orderBy:
+      sort === "date"
+        ? { createdAt: "desc" }
+        : sort === "payment"
+          ? // Grouped by payment type, then alphabetical by owner within
+            // each group — a bare payment-method sort with no secondary
+            // sort would still leave same-type sites in arbitrary order.
+            [{ artist: { paymentMethod: "asc" } }, { artist: { name: "asc" } }]
+          : { artist: { name: "asc" } },
   });
 
   const rows = sites.map((s) => ({
@@ -65,6 +74,7 @@ export default async function SitesDirectoryPage({
     name: s.name,
     status: s.status,
     ownerName: s.artist.name,
+    paymentMethod: s.artist.paymentMethod,
   }));
 
   const openAlerts = await getOpenAlerts();
@@ -79,3 +89,4 @@ export default async function SitesDirectoryPage({
     />
   );
 }
+
