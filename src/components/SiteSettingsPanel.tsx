@@ -2,8 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import StatusSelect from "@/components/StatusSelect";
-import ArchiveButton from "@/components/ArchiveButton";
 import {
   updateSite,
   updateArtist,
@@ -91,11 +89,14 @@ export default function SiteSettingsPanel({
   };
 
   const saveSite = (
-    field: "name" | "domain" | "defaultCurrency" | "template" | "domainStatus" | "domainRenewalDate",
+    field: "domain" | "defaultCurrency" | "template" | "domainStatus" | "domainRenewalDate",
     value: string
   ) => {
     const fd = new FormData();
-    fd.set("name", field === "name" ? value : site.name);
+    // Site renaming moved to the persistent header (2026-08-18) — this
+    // form has no name field of its own any more, so always sends the
+    // name through unchanged.
+    fd.set("name", site.name);
     fd.set("domain", field === "domain" ? value : site.domain || "");
     fd.set("defaultCurrency", field === "defaultCurrency" ? value : site.defaultCurrency);
     fd.set("template", field === "template" ? value : site.template);
@@ -286,30 +287,11 @@ export default function SiteSettingsPanel({
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-6">
-      {/* Header — name, status, open/archive controls. Not tucked inside
-          any one column since it applies to the whole site. */}
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3 border-b border-neutral-200 pb-4">
-        <div className="min-w-0 flex-1">
-          <input
-            key={`name-${site.id}`}
-            type="text"
-            defaultValue={site.name}
-            onBlur={(e) => e.target.value.trim() && saveSite("name", e.target.value.trim())}
-            disabled={isPending}
-            className="w-full max-w-md rounded-md border border-transparent px-1 py-0.5 -mx-1 text-2xl font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300 disabled:opacity-50"
-          />
-          <p className="mt-1 px-1 text-sm text-neutral-500">Owner: {artist.name}</p>
-          {savedField === "name" && <p className="px-1 text-xs text-green-600">Saved</p>}
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {site.status === "ARCHIVED" ? (
-            <span className="text-sm text-neutral-400">Archived</span>
-          ) : (
-            <StatusSelect siteId={site.id} status={site.status} />
-          )}
-          <ArchiveButton siteId={site.id} isArchived={site.status === "ARCHIVED"} />
-        </div>
-      </div>
+      {/* Former header (name/owner/status/archive) removed 2026-08-18,
+          direct request — it duplicated the persistent per-site header
+          in layout.tsx above this page, which now carries all of that
+          instead (including an editable name field, moved there so
+          renaming a site still works with this block gone). */}
 
       <div
         className={`grid gap-4 ${
@@ -878,3 +860,4 @@ export default function SiteSettingsPanel({
     </div>
   );
 }
+
