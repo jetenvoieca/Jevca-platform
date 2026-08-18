@@ -9,6 +9,7 @@ type SiteRow = {
   name: string;
   status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
   ownerName: string;
+  paymentMethod: string | null;
 };
 
 export default function SitesListColumn({
@@ -82,6 +83,7 @@ export default function SitesListColumn({
             >
               <option value="owner">Sort: Owner</option>
               <option value="date">Sort: Date</option>
+              <option value="payment">Sort: Payment</option>
             </select>
             <button
               type="submit"
@@ -159,6 +161,20 @@ export default function SitesListColumn({
                           Recent
                         </span>
                       )}
+                      {/* 2026-08-18, direct request — added alongside the
+                          new "Sort: Payment" option, so sorting by it
+                          shows what it actually grouped by rather than a
+                          silent, unlabelled reshuffle. Shown regardless of
+                          which sort is active, same as Archived/Recent. */}
+                      {site.paymentMethod && (
+                        <span
+                          className={`text-[10px] ${
+                            active ? "text-neutral-300" : "text-neutral-400"
+                          }`}
+                        >
+                          {site.paymentMethod}
+                        </span>
+                      )}
                       {site.status === "ARCHIVED" && (
                         <span
                           className={`text-[10px] ${
@@ -179,3 +195,4 @@ export default function SitesListColumn({
     </div>
   );
 }
+
