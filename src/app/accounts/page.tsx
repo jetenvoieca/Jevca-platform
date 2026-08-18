@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
 import AccountsBackfillButton from "@/components/AccountsBackfillButton";
+import AccountsPeriodView from "@/components/AccountsPeriodView";
 
 export const dynamic = "force-dynamic";
 
@@ -53,12 +54,9 @@ export default async function AccountsPage() {
   }
   const sortedMonths = Array.from(months.values()).sort((a, b) => (a.key < b.key ? 1 : -1));
 
-  const grandTotalsByCurrency: Record<string, number> = {};
-  for (const g of sortedMonths) {
-    for (const [currency, total] of Object.entries(g.totalsByCurrency)) {
-      grandTotalsByCurrency[currency] = (grandTotalsByCurrency[currency] || 0) + total;
-    }
-  }
+  // Passed to the client component rather than letting it call `new
+  // Date()` itself — keeps "This Year"/Q1–Q4 tied to the server's clock.
+  const currentYear = new Date().getFullYear();
 
   return (
     <AppShell
@@ -87,75 +85,12 @@ export default async function AccountsPage() {
           {sortedMonths.length === 0 ? (
             <p className="text-sm text-neutral-500">No subscription payments recorded yet.</p>
           ) : (
-            <>
-              <div className="mb-6 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
-                <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                  All-time total
-                </p>
-                <p className="text-lg font-semibold text-neutral-900">
-                  {Object.entries(grandTotalsByCurrency)
-                    .map(([currency, total]) => `${currency} ${total.toFixed(2)}`)
-                    .join("  ·  ")}
-                </p>
-              </div>
-
-              <div className="space-y-3">
-                {sortedMonths.map((g) => (
-                  <details
-                    key={g.key}
-                    className="group rounded-lg border border-neutral-200 bg-white"
-                  >
-                    <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">
-                      <span className="text-sm font-medium text-neutral-900">{g.label}</span>
-                      <span className="flex items-center gap-3">
-                        <span className="text-sm text-neutral-600">
-                          {Object.entries(g.totalsByCurrency)
-                            .map(([currency, total]) => `${currency} ${total.toFixed(2)}`)
-                            .join("  ·  ")}
-                        </span>
-                        <span className="text-xs text-neutral-400">
-                          {g.rows.length} payment{g.rows.length === 1 ? "" : "s"}
-                        </span>
-                      </span>
-                    </summary>
-                    <table className="w-full table-fixed border-t border-neutral-100 text-xs">
-                      <thead className="bg-neutral-50 text-left text-neutral-400">
-                        <tr>
-                          <th className="w-[38%] px-4 py-1.5 font-medium">Artist</th>
-                          <th className="w-[20%] px-4 py-1.5 font-medium">Date</th>
-                          <th className="w-[22%] px-4 py-1.5 font-medium">Amount</th>
-                          <th className="w-[20%] px-4 py-1.5 font-medium">Source</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {g.rows.map((r, i) => (
-                          <tr key={i} className="border-t border-neutral-100">
-                            <td className="truncate px-4 py-1.5">{r.artistName}</td>
-                            <td className="px-4 py-1.5">
-                              {r.paidAt.toLocaleDateString("en-GB")}
-                            </td>
-                            <td className="px-4 py-1.5">
-                              {r.currency} {r.amount.toFixed(2)}
-                            </td>
-                            <td className="px-4 py-1.5 text-neutral-400">
-                              {r.source === "STRIPE"
-                                ? "Stripe"
-                                : r.paymentMethod === "DD"
-                                  ? "Direct Debit"
-                                  : r.paymentMethod || "Manual"}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </details>
-                ))}
-              </div>
-            </>
+            <AccountsPeriodView sortedMonths={sortedMonths} currentYear={currentYear} />
           )}
         </div>
       }
     />
   );
 }
+
 
