@@ -446,7 +446,7 @@ export default function HopperView({
 
   return (
     <div
-      className="relative mx-auto min-h-full max-w-6xl px-6 py-4"
+      className="relative mx-auto min-h-full max-w-[1700px] px-6 py-4"
       onDragEnter={handleDragEnter}
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
@@ -482,170 +482,177 @@ export default function HopperView({
         </div>
       )}
 
-      {/* Responsive layout, reworked 2026-08-17 for usability at
-          half-screen width (a real workflow here — this browser window
-          docked to half the screen, Finder/Photos or another tab open
-          on the other half, dragging files across). Below lg: a single
-          stacked column, main sorting card first via the order-*
-          classes below (that's what actually matters when you've just
-          dragged something in), Up next second, Processed last. At lg
-          and above: unchanged from before, the original fixed
-          300px / 1fr / 280px three-column layout. */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[300px_1fr_380px]">
+      {/* Responsive layout, reworked 2026-08-18 — replaces a
+          position:sticky-based approach that didn't actually give
+          independent scrolling (confirmed broken: scrolling the centre
+          column moved the whole page, dragging "Processed" and its
+          header along with it, rather than the side columns staying
+          fixed in place). This now follows the same proven pattern
+          already used elsewhere in this app (the Artwork editor's
+          grid/detail split, MediaPicker's grid/panel split): a row with
+          a genuinely fixed height at lg, three independent panes each
+          scrolling only themselves via their own overflow-y-auto, each
+          pane's header living outside that scrolling area entirely (not
+          reliant on `sticky`, so there's no ancestor-scroll-context
+          question to get wrong). Below lg: unchanged — a single stacked
+          column with natural page scroll, sorting card first via the
+          order-* classes (what matters when you've just dragged
+          something in), Up next second, Processed last. */}
+      <div className="flex flex-col gap-6 lg:h-[calc(100vh-7rem)] lg:flex-row lg:items-stretch">
         {/* Processed — a visual confirmation trail, not part of the
-            sorting flow itself, so it stays put even once the queue on
-            the right runs out. Sticky only at lg — stacked full-width
-            below that, sticky positioning on a block sitting inline in
-            a single column would just glue it oddly to the top while
-            scrolling past the other two, rather than the side-column
-            behaviour it's meant for. */}
-        <div className="order-3 lg:sticky lg:top-4 lg:order-none">
-          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-            {processedLog.length > 0 && (
-              <>
-                <div className="sticky top-0 z-10 mb-2 flex items-center justify-between bg-white py-1">
-                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                    Processed
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setProcessedLog([])}
-                    className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
-                  >
-                    Clear list
-                  </button>
-                </div>
-                <div className="space-y-2">
-                  {processedLog.map((entry) => {
-                    const thumb =
-                      entry.kind === "VIDEO" ? (
-                        entry.posterUrl ? (
-                          <img
-                            src={entry.posterUrl}
-                            alt=""
-                            className="h-10 w-10 shrink-0 rounded object-cover"
-                          />
-                        ) : (
-                          <VideoThumb
-                            src={entry.url}
-                            className="h-10 w-10 shrink-0 rounded object-cover"
-                          />
-                        )
-                      ) : (
+            sorting flow itself, so it stays put once the queue on the
+            right runs out. */}
+        <div className="order-3 flex flex-col lg:order-none lg:w-[300px] lg:flex-shrink-0 lg:overflow-hidden">
+          {processedLog.length > 0 && (
+            <>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  Processed
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setProcessedLog([])}
+                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
+                >
+                  Clear list
+                </button>
+              </div>
+              <div className="space-y-2 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+                {processedLog.map((entry) => {
+                  const thumb =
+                    entry.kind === "VIDEO" ? (
+                      entry.posterUrl ? (
                         <img
-                          src={entry.url}
+                          src={entry.posterUrl}
                           alt=""
                           className="h-10 w-10 shrink-0 rounded object-cover"
                         />
-                      );
-                    const text = (
-                      <div className="min-w-0">
-                        <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
-                        <p className="text-xs text-neutral-400">
-                          {entry.kind === "VIDEO" ? "Video" : "Photo"}
-                        </p>
-                      </div>
-                    );
-                    return entry.href ? (
-                      <Link
-                        key={entry.key}
-                        href={entry.href}
-                        className="flex items-center gap-2 rounded-md border border-neutral-200 p-2 hover:border-neutral-300 hover:bg-neutral-50"
-                      >
-                        {thumb}
-                        {text}
-                      </Link>
+                      ) : (
+                        <VideoThumb
+                          src={entry.url}
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                      )
                     ) : (
-                      <div
-                        key={entry.key}
-                        className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
-                      >
-                        {thumb}
-                        {text}
-                      </div>
+                      <img
+                        src={entry.url}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded object-cover"
+                      />
                     );
-                  })}
-                </div>
-              </>
+                  const text = (
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
+                      <p className="text-xs text-neutral-400">
+                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
+                      </p>
+                    </div>
+                  );
+                  return entry.href ? (
+                    <Link
+                      key={entry.key}
+                      href={entry.href}
+                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2 hover:border-neutral-300 hover:bg-neutral-50"
+                    >
+                      {thumb}
+                      {text}
+                    </Link>
+                  ) : (
+                    <div
+                      key={entry.key}
+                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
+                    >
+                      {thumb}
+                      {text}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="order-1 flex flex-col lg:order-none lg:min-w-0 lg:flex-1 lg:overflow-hidden">
+          <div className="mb-3">{importButtons}</div>
+          <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
+            {!current ? (
+              <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
+                Hopper is empty — drag and drop files here, or use the buttons above.
+              </div>
+            ) : (
+              <SortingCard
+                key={current.id}
+                siteId={siteId}
+                artistId={artistId}
+                item={current}
+                isPending={isPending}
+                settings={artworkSettings}
+                onBin={() => handleBin(current)}
+                onAddToMedia={() => handleAddToMedia(current)}
+                onAddToBucket={() => handleAddToBucket(current)}
+                onAddToExistingArtwork={(artworkId, artworkTitle) =>
+                  handleAddToExistingArtwork(current, artworkId, artworkTitle)
+                }
+                onAddNewArtwork={(title, fields) => handleAddNewArtwork(current, title, fields)}
+              />
             )}
           </div>
         </div>
 
-        <div className="order-1 lg:order-none">
-          <div className="mb-3">{importButtons}</div>
-
-          {!current ? (
-            <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-              Hopper is empty — drag and drop files here, or use the buttons above.
-            </div>
-          ) : (
-            <SortingCard
-              key={current.id}
-              siteId={siteId}
-              artistId={artistId}
-              item={current}
-              isPending={isPending}
-              settings={artworkSettings}
-              onBin={() => handleBin(current)}
-              onAddToMedia={() => handleAddToMedia(current)}
-              onAddToBucket={() => handleAddToBucket(current)}
-              onAddToExistingArtwork={(artworkId, artworkTitle) =>
-                handleAddToExistingArtwork(current, artworkId, artworkTitle)
-              }
-              onAddNewArtwork={(title, fields) => handleAddNewArtwork(current, title, fields)}
-            />
-          )}
-        </div>
-
         {/* Up next — always rendered (not just while there's a current
             item), so "Up next (0)" and this column's place in the layout
-            stay visible and stable even once the queue empties out. */}
-        <div className="order-2 lg:sticky lg:top-4 lg:order-none">
-          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-            <div className="sticky top-0 z-10 mb-2 flex items-center justify-between bg-white py-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                Up next ({remaining.length})
-              </p>
-              {/* Sort order (2026-08-18) — small ^/v arrows, replacing an
-                  earlier pill-button toggle per direct request ("neat
-                  little arrows instead [of] ugly buttons"). Up = newest
-                  first, down = oldest first; the active direction is
-                  solid black, the inactive one pale grey. Genuinely
-                  changes which item you're asked to sort next, not just
-                  how this list looks — see sortedQueue above. */}
-              <div className="flex items-center gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => setSortOrder("newest")}
-                  aria-label="Newest first"
-                  title="Newest first"
-                  className={`px-1 text-xs leading-none ${
-                    sortOrder === "newest"
-                      ? "text-neutral-900"
-                      : "text-neutral-300 hover:text-neutral-500"
-                  }`}
-                >
-                  ▲
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSortOrder("oldest")}
-                  aria-label="Oldest first"
-                  title="Oldest first"
-                  className={`px-1 text-xs leading-none ${
-                    sortOrder === "oldest"
-                      ? "text-neutral-900"
-                      : "text-neutral-300 hover:text-neutral-500"
-                  }`}
-                >
-                  ▼
-                </button>
-              </div>
+            stay visible and stable even once the queue empties out.
+            Widened 300px → 700px and 6 → 7 columns (2026-08-18, direct
+            request) — the previous fixed 380px left a large stretch of
+            genuinely unused space on any wide screen (this page's own
+            max-width was raised to match, see the outer container
+            below), and gave meaningfully bigger thumbnails to sort by. */}
+        <div className="order-2 flex flex-col lg:order-none lg:w-[700px] lg:flex-shrink-0 lg:overflow-hidden">
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+              Up next ({remaining.length})
+            </p>
+            {/* Sort order (2026-08-18) — small ^/v arrows, replacing an
+                earlier pill-button toggle per direct request ("neat
+                little arrows instead [of] ugly buttons"). Up = newest
+                first, down = oldest first; the active direction is
+                solid black, the inactive one pale grey. Genuinely
+                changes which item you're asked to sort next, not just
+                how this list looks — see sortedQueue above. */}
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => setSortOrder("newest")}
+                aria-label="Newest first"
+                title="Newest first"
+                className={`px-1 text-xs leading-none ${
+                  sortOrder === "newest"
+                    ? "text-neutral-900"
+                    : "text-neutral-300 hover:text-neutral-500"
+                }`}
+              >
+                ▲
+              </button>
+              <button
+                type="button"
+                onClick={() => setSortOrder("oldest")}
+                aria-label="Oldest first"
+                title="Oldest first"
+                className={`px-1 text-xs leading-none ${
+                  sortOrder === "oldest"
+                    ? "text-neutral-900"
+                    : "text-neutral-300 hover:text-neutral-500"
+                }`}
+              >
+                ▼
+              </button>
             </div>
+          </div>
+          <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
             {!current ? null : remaining.length === 0 ? (
               <p className="text-xs text-neutral-400">This is the last one.</p>
             ) : (
-              <div className="grid grid-cols-6 gap-2">
+              <div className="grid grid-cols-6 gap-2 lg:grid-cols-7">
                 {remaining.map((item) => (
                   <button
                     key={item.id}
@@ -1035,5 +1042,6 @@ function QuickCatalogueFields({
     </div>
   );
 }
+
 
 
