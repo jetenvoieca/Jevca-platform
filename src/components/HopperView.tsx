@@ -372,18 +372,12 @@ export default function HopperView({
     handleUploadFiles(e.dataTransfer.files);
   };
 
-  // Rendered for real above "Up next" (where these buttons conceptually
-  // belong — they're what feeds that queue), and as an inert visual
-  // spacer above the other two columns so all three still start their
-  // actual content at the same height. The spacer is deliberately plain
-  // <span>s, not a second copy of the real buttons/inputs — reusing the
-  // interactive version (with its ref and handlers) in three places at
-  // once would fight over which DOM node the ref actually points to.
-  //
   // Labels shortened 2026-08-17 (was "Check Incoming"/"Add from folder"/
   // "Add media") — direct request, part of tidying the layout up for use
   // at half-screen width where every extra pixel of button-row space
-  // matters.
+  // matters. No longer echoed as an invisible spacer above the other two
+  // columns (removed 2026-08-18 — see the note below) — this row now only
+  // exists here, above the sorting card, where it actually belongs.
   const importButtons = (
     <div className="flex flex-wrap items-center gap-2">
       <button
@@ -440,14 +434,15 @@ export default function HopperView({
     </div>
   );
 
-  const importButtonsSpacer = (
-    <div className="invisible flex flex-wrap items-center gap-2" aria-hidden="true">
-      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
-      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
-      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
-      <span className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm">Spacer</span>
-    </div>
-  );
+  // Alignment spacers (importButtonsSpacer, and the matching invisible
+  // block in the centre column below) were removed 2026-08-18, direct
+  // request — they kept "Processed"/"Up next"'s headers level with the
+  // centre column's actual content, at the cost of a real, visible chunk
+  // of dead space at the top of both side columns doing nothing but
+  // holding a gap open. Traded away deliberately: the three columns'
+  // headers no longer sit on an exact shared baseline, but "Processed"
+  // and "Up next" now start right at the top of their own column,
+  // reclaiming that space for more visible thumbnails.
 
   return (
     <div
@@ -465,39 +460,9 @@ export default function HopperView({
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold text-neutral-900">
-          Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
-        </h1>
-        {/* Sort order (2026-08-18, direct request) — genuinely changes
-            which item you're asked to sort next, not just how "Up next"
-            looks. Defaults to "newest" per instruction; remembered per
-            browser after that. */}
-        <div className="flex items-center gap-1 rounded-md border border-neutral-200 p-0.5 text-sm">
-          <button
-            type="button"
-            onClick={() => setSortOrder("newest")}
-            className={`rounded px-3 py-1 ${
-              sortOrder === "newest"
-                ? "bg-neutral-900 text-white"
-                : "text-neutral-600 hover:bg-neutral-50"
-            }`}
-          >
-            Newest first
-          </button>
-          <button
-            type="button"
-            onClick={() => setSortOrder("oldest")}
-            className={`rounded px-3 py-1 ${
-              sortOrder === "oldest"
-                ? "bg-neutral-900 text-white"
-                : "text-neutral-600 hover:bg-neutral-50"
-            }`}
-          >
-            Oldest first
-          </button>
-        </div>
-      </div>
+      <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
+        Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
+      </h1>
 
       {addError && (
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
@@ -535,90 +500,79 @@ export default function HopperView({
             scrolling past the other two, rather than the side-column
             behaviour it's meant for. */}
         <div className="order-3 lg:sticky lg:top-4 lg:order-none">
-          <div className="mb-3 hidden lg:block">{importButtonsSpacer}</div>
-          {processedLog.length > 0 && (
-            <>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  Processed
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setProcessedLog([])}
-                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
-                >
-                  Clear list
-                </button>
-              </div>
-              <div className="space-y-2">
-                {processedLog.map((entry) => {
-                  const thumb =
-                    entry.kind === "VIDEO" ? (
-                      entry.posterUrl ? (
+          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+            {processedLog.length > 0 && (
+              <>
+                <div className="sticky top-0 z-10 mb-2 flex items-center justify-between bg-white py-1">
+                  <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                    Processed
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setProcessedLog([])}
+                    className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
+                  >
+                    Clear list
+                  </button>
+                </div>
+                <div className="space-y-2">
+                  {processedLog.map((entry) => {
+                    const thumb =
+                      entry.kind === "VIDEO" ? (
+                        entry.posterUrl ? (
+                          <img
+                            src={entry.posterUrl}
+                            alt=""
+                            className="h-10 w-10 shrink-0 rounded object-cover"
+                          />
+                        ) : (
+                          <VideoThumb
+                            src={entry.url}
+                            className="h-10 w-10 shrink-0 rounded object-cover"
+                          />
+                        )
+                      ) : (
                         <img
-                          src={entry.posterUrl}
+                          src={entry.url}
                           alt=""
                           className="h-10 w-10 shrink-0 rounded object-cover"
                         />
-                      ) : (
-                        <VideoThumb
-                          src={entry.url}
-                          className="h-10 w-10 shrink-0 rounded object-cover"
-                        />
-                      )
-                    ) : (
-                      <img
-                        src={entry.url}
-                        alt=""
-                        className="h-10 w-10 shrink-0 rounded object-cover"
-                      />
+                      );
+                    const text = (
+                      <div className="min-w-0">
+                        <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
+                        <p className="text-xs text-neutral-400">
+                          {entry.kind === "VIDEO" ? "Video" : "Photo"}
+                        </p>
+                      </div>
                     );
-                  const text = (
-                    <div className="min-w-0">
-                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
-                      <p className="text-xs text-neutral-400">
-                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
-                      </p>
-                    </div>
-                  );
-                  return entry.href ? (
-                    <Link
-                      key={entry.key}
-                      href={entry.href}
-                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2 hover:border-neutral-300 hover:bg-neutral-50"
-                    >
-                      {thumb}
-                      {text}
-                    </Link>
-                  ) : (
-                    <div
-                      key={entry.key}
-                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
-                    >
-                      {thumb}
-                      {text}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
+                    return entry.href ? (
+                      <Link
+                        key={entry.key}
+                        href={entry.href}
+                        className="flex items-center gap-2 rounded-md border border-neutral-200 p-2 hover:border-neutral-300 hover:bg-neutral-50"
+                      >
+                        {thumb}
+                        {text}
+                      </Link>
+                    ) : (
+                      <div
+                        key={entry.key}
+                        className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
+                      >
+                        {thumb}
+                        {text}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         <div className="order-1 lg:order-none">
           <div className="mb-3">{importButtons}</div>
-          {/* Invisible, but occupies exactly the same height as the
-              "Processed"/"Up next" header rows either side of it — so
-              the content below it (this empty-state box, or the
-              SortingCard) lines up with the top of the first Processed
-              *item* and the thumbnail grid, not with the labels above
-              them. Only relevant once those columns sit beside this one
-              at lg — hidden below that, where it would just be a blank
-              gap above this, the first section on the stacked page. */}
-          <div className="mb-2 hidden items-center justify-between lg:flex">
-            <p className="invisible text-xs font-medium uppercase tracking-wide">Spacer</p>
-            <span className="invisible text-xs">Spacer</span>
-          </div>
 
           {!current ? (
             <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
@@ -647,38 +601,76 @@ export default function HopperView({
             item), so "Up next (0)" and this column's place in the layout
             stay visible and stable even once the queue empties out. */}
         <div className="order-2 lg:sticky lg:top-4 lg:order-none">
-          <div className="mb-3 hidden lg:block">{importButtonsSpacer}</div>
-          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-            Up next ({remaining.length})
-          </p>
-          {!current ? null : remaining.length === 0 ? (
-            <p className="text-xs text-neutral-400">This is the last one.</p>
-          ) : (
-            <div className="grid grid-cols-6 gap-2">
-              {remaining.map((item) => (
+          <div className="lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+            <div className="sticky top-0 z-10 mb-2 flex items-center justify-between bg-white py-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                Up next ({remaining.length})
+              </p>
+              {/* Sort order (2026-08-18) — small ^/v arrows, replacing an
+                  earlier pill-button toggle per direct request ("neat
+                  little arrows instead [of] ugly buttons"). Up = newest
+                  first, down = oldest first; the active direction is
+                  solid black, the inactive one pale grey. Genuinely
+                  changes which item you're asked to sort next, not just
+                  how this list looks — see sortedQueue above. */}
+              <div className="flex items-center gap-0.5">
                 <button
-                  key={item.id}
                   type="button"
-                  onClick={() => setSelectedId(item.id)}
-                  className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
+                  onClick={() => setSortOrder("newest")}
+                  aria-label="Newest first"
+                  title="Newest first"
+                  className={`px-1 text-xs leading-none ${
+                    sortOrder === "newest"
+                      ? "text-neutral-900"
+                      : "text-neutral-300 hover:text-neutral-500"
+                  }`}
                 >
-                  {item.kind === "VIDEO" ? (
-                    item.posterUrl ? (
-                      <img
-                        src={item.posterUrl}
-                        alt=""
-                        className="aspect-square w-full object-cover"
-                      />
-                    ) : (
-                      <VideoThumb src={item.url} className="aspect-square w-full object-cover" />
-                    )
-                  ) : (
-                    <img src={item.url} alt="" className="aspect-square w-full object-cover" />
-                  )}
+                  ▲
                 </button>
-              ))}
+                <button
+                  type="button"
+                  onClick={() => setSortOrder("oldest")}
+                  aria-label="Oldest first"
+                  title="Oldest first"
+                  className={`px-1 text-xs leading-none ${
+                    sortOrder === "oldest"
+                      ? "text-neutral-900"
+                      : "text-neutral-300 hover:text-neutral-500"
+                  }`}
+                >
+                  ▼
+                </button>
+              </div>
             </div>
-          )}
+            {!current ? null : remaining.length === 0 ? (
+              <p className="text-xs text-neutral-400">This is the last one.</p>
+            ) : (
+              <div className="grid grid-cols-6 gap-2">
+                {remaining.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => setSelectedId(item.id)}
+                    className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
+                  >
+                    {item.kind === "VIDEO" ? (
+                      item.posterUrl ? (
+                        <img
+                          src={item.posterUrl}
+                          alt=""
+                          className="aspect-square w-full object-cover"
+                        />
+                      ) : (
+                        <VideoThumb src={item.url} className="aspect-square w-full object-cover" />
+                      )
+                    ) : (
+                      <img src={item.url} alt="" className="aspect-square w-full object-cover" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -1043,4 +1035,5 @@ function QuickCatalogueFields({
     </div>
   );
 }
+
 
