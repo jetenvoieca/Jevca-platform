@@ -33,6 +33,45 @@ export async function POST(req: NextRequest) {
     switch (event.type) {
       // A subscription payment (the artist paying us) succeeding —
       // covers both the very first invoice and every renewal after it.
+      //
+      // 2026-08-18 fix: this endpoint's actual event subscription in
+      // Stripe sends `invoice_payment.paid`, a newer and more granular
+      // event, not `invoice.paid` — confirmed directly from server logs
+      // (every real payment showed up as this event type, never the
+      // other one) and Stripe's own current event-type reference. Kept
+      // the invoice.paid case below too, since it's still a valid event
+      // Stripe might send depending on the account's event selection —
+      // both funnel into the same idempotent recordPlatformInvoicePaid,
+      // so receiving both for the same invoice can't double-count it.
+      //
+      // Unlike an Invoice, an InvoicePayment carries no customer field of
+      // its own — only the invoice ID it belongs to — so this needs one
+      // extra API call back to Stripe to look that up.
+      case "invoice_payment.paid": {
+        const invoicePayment = event.data.object as Stripe.InvoicePayment;
+        const invoiceId =
+          typeof invoicePayment.invoice === "string"
+            ? invoicePayment.invoice
+            : invoicePayment.invoice?.id;
+        if (invoiceId) {
+          const client = getPlatformStripeClient();
+          const invoice = await client.invoices.retrieve(invoiceId);
+          const customerId =
+            typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;
+          if (customerId) {
+            await recordPlatformInvoicePaid({
+              stripeCustomerId: customerId,
+              stripeInvoiceId: invoiceId,
+              amountMinorUnits: invoicePayment.amount_paid ?? invoicePayment.amount_requested,
+              currency: invoicePayment.currency,
+              paidAtUnixSeconds:
+                invoicePayment.status_transitions?.paid_at || Math.floor(Date.now() / 1000),
+            });
+          }
+        }
+        break;
+      }
+
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
         const customerId =
@@ -101,3 +140,4 @@ export async function POST(req: NextRequest) {
 
   return new Response("ok", { status: 200 });
 }
+
