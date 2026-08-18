@@ -30,7 +30,12 @@ export default async function SiteSettingsPage({
     // on "/" itself (2026-08-13).
     db.site.findMany({
       where: { status: { not: "ARCHIVED" } },
-      select: { id: true, name: true, status: true, artist: { select: { name: true } } },
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        artist: { select: { name: true, paymentMethod: true } },
+      },
       relationLoadStrategy: "query",
       orderBy: { artist: { name: "asc" } },
     }),
@@ -93,6 +98,7 @@ export default async function SiteSettingsPage({
             name: s.name,
             status: s.status,
             ownerName: s.artist.name,
+            paymentMethod: s.artist.paymentMethod,
           }))}
           q=""
           sort="owner"
@@ -103,3 +109,4 @@ export default async function SiteSettingsPage({
     </div>
   );
 }
+
