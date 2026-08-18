@@ -289,24 +289,8 @@ export default function MediaPicker({
             pushes Close off-screen or forces the grid to shrink. */}
         <div className="flex w-72 flex-shrink-0 flex-col border-l border-neutral-200">
           <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-8">
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                load(e.target.value, purpose);
-              }}
-              placeholder={
-                mediaKinds && mediaKinds.length > 1
-                  ? "Search images and videos…"
-                  : videoOnly
-                    ? "Search videos…"
-                    : "Search images…"
-              }
-              autoFocus
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-
+            {/* Reordered above Search (2026-08-18, direct request) —
+                matches the reference layout's tabs-then-search order. */}
             {linkedArtworkId && (
               // Same pill style as the Media Catalogue's own Marketing/
               // Related toggle, for visual consistency.
@@ -333,6 +317,24 @@ export default function MediaPicker({
                 </button>
               </div>
             )}
+
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => {
+                setQuery(e.target.value);
+                load(e.target.value, purpose);
+              }}
+              placeholder={
+                mediaKinds && mediaKinds.length > 1
+                  ? "Search images and videos…"
+                  : videoOnly
+                    ? "Search videos…"
+                    : "Search images…"
+              }
+              autoFocus
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
 
             {/* Still a link to the Hopper, not inline upload — this
                 picker stays read-only/browse-only by deliberate decision
@@ -430,4 +432,5 @@ export default function MediaPicker({
     </div>
   );
 }
+
 
