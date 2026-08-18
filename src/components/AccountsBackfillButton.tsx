@@ -18,14 +18,13 @@ export default function AccountsBackfillButton() {
     setRunning(true);
     setError(null);
     setResult(null);
-    try {
-      const outcome = await runSubscriptionPaymentsBackfill();
-      setResult(outcome);
-    } catch {
-      setError("Couldn't reach Stripe. Try again in a moment.");
-    } finally {
-      setRunning(false);
+    const outcome = await runSubscriptionPaymentsBackfill();
+    setRunning(false);
+    if (!outcome.ok) {
+      setError(outcome.error);
+      return;
     }
+    setResult({ checked: outcome.checked, created: outcome.created });
   };
 
   return (
