@@ -9,9 +9,8 @@ import {
   addHopperItemToArtwork,
   addHopperItemToBucket,
   updateHopperCaption,
+  createArtworkFromHopperQuick,
 } from "@/lib/actions/hopper";
-import { quickCreateArtwork } from "@/lib/actions/media";
-import { updateCatalogue } from "@/lib/actions/artworks";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import VideoThumb from "@/components/VideoThumb";
@@ -190,32 +189,30 @@ export default function HopperView({
     });
   };
 
-  // New artwork → always becomes its main image, since it's the only
-  // image the artwork has at the point of creation.
-  //
-  // Deliberately does NOT auto-advance the queue (2026-08-17, revised
-  // after a first, over-built attempt at this same idea) — it resolves
-  // with the new artwork's id instead, which SortingCard uses to reveal
-  // a small inline "quick catalogue" form right underneath the buttons
-  // (Type/Group/Medium/Size/Location/Availability/Year/Studio notes —
-  // exactly Catalogue's own fields, nothing from Presentation or
-  // Payment). Purely optional — the person can fill any of it in, or
-  // ignore it entirely and just move on; either way this same item's
-  // card stays put until they explicitly choose to continue, via the
-  // "Done, next item" button that appears alongside the fields.
+  // New artwork, single commit (2026-08-18, direct request — replaces a
+  // two-step version that created the artwork the moment "Add Artwork"
+  // was pressed, then saved each Catalogue field separately as it was
+  // filled in afterwards). Nothing is written to the database until this
+  // runs, fired once from SortingCard's "Done, next item" — the artwork
+  // (with title + whatever Catalogue fields were filled in), the image
+  // link, and setting it as the main image all happen together in
+  // createArtworkFromHopperQuick. Only then does the queue auto-advance,
+  // same rhythm as every other action on this screen.
   const handleAddNewArtwork = async (
     item: HopperItem,
-    title: string
-  ): Promise<string | null> => {
-    const finalTitle = title.trim() || "Untitled";
-    const result = await quickCreateArtwork(artistId, finalTitle, true);
-    if ("error" in result || !result.artwork) {
-      setAddError(result.error || "Couldn't create the artwork. Try again.");
-      return null;
+    title: string,
+    fields: FormData
+  ): Promise<boolean> => {
+    const result = await createArtworkFromHopperQuick(item.id, siteId, artistId, title, fields);
+    if (!result.ok) {
+      setAddError(result.error);
+      return false;
     }
-    await addHopperItemToArtwork(item.id, siteId, result.artwork.id, true);
+    setAddError(null);
+    const finalTitle = title.trim() || "Untitled";
     logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks?selected=${result.artwork.id}`);
-    return result.artwork.id;
+    advanceAfterAction();
+    return true;
   };
 
   // How many files upload at once. Each file is already 2-4 sequential
@@ -565,8 +562,7 @@ export default function HopperView({
               onAddToExistingArtwork={(artworkId, artworkTitle) =>
                 handleAddToExistingArtwork(current, artworkId, artworkTitle)
               }
-              onAddNewArtwork={(title) => handleAddNewArtwork(current, title)}
-              onArtworkQuickCatalogueDone={advanceAfterAction}
+              onAddNewArtwork={(title, fields) => handleAddNewArtwork(current, title, fields)}
             />
           )}
         </div>
@@ -632,7 +628,6 @@ function SortingCard({
   onAddToBucket,
   onAddToExistingArtwork,
   onAddNewArtwork,
-  onArtworkQuickCatalogueDone,
 }: {
   siteId: string;
   artistId: string;
@@ -643,23 +638,24 @@ function SortingCard({
   onAddToMedia: () => void;
   onAddToBucket: () => void;
   onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
-  onAddNewArtwork: (title: string) => Promise<string | null>;
-  // Called once the person is done with the optional inline quick-
-  // catalogue fields (whether they filled anything in or not) — this is
-  // what actually advances the Hopper queue in this flow.
-  onArtworkQuickCatalogueDone: () => void;
+  // Fires once, from the quick-catalogue form's "Done, next item" — not
+  // from "Add Artwork" any more (2026-08-18). Returns whether it
+  // succeeded so this card knows whether to keep the form open (on
+  // failure, so nothing typed is lost) or let the parent's advance take
+  // over (on success).
+  onAddNewArtwork: (title: string, fields: FormData) => Promise<boolean>;
 }) {
   // Local state, reset automatically each time this card remounts (the
   // parent keys it by item.id) — no stale-caption bug when moving
   // between queue items.
   const [caption, setCaption] = useState(item.caption || "");
-  // Set once "Add Artwork" succeeds — reveals the inline quick-catalogue
-  // fields below the buttons for that newly-created artwork. Local to
-  // this card (not lifted to the parent) since it's naturally reset the
-  // moment this card remounts for a different queue item — exactly the
-  // lifetime this needs.
+  // Whether the inline "quick catalogue" form is open. Nothing is created
+  // in the database just by opening it (2026-08-18) — closing it again,
+  // whether via Cancel or by picking a different action button entirely,
+  // discards whatever was typed with no cleanup needed, since nothing was
+  // ever saved.
+  const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
-  const [newArtworkId, setNewArtworkId] = useState<string | null>(null);
 
 
   const saveFields = () => {
@@ -745,43 +741,49 @@ function SortingCard({
           }}
         />
         {/* Shortened from "Add New Artwork" (2026-08-17) specifically so
-            it fits alongside "Add to Existing Artwork" on the same row. */}
+            it fits alongside "Add to Existing Artwork" on the same row.
+            2026-08-18: no longer creates anything on this click — it only
+            opens the form below. Nothing is saved to the database until
+            "Done, next item" inside that form. */}
         <button
           type="button"
-          onClick={async () => {
-            setCreatingArtwork(true);
-            try {
-              const newId = await onAddNewArtwork(caption);
-              if (newId) setNewArtworkId(newId);
-            } finally {
-              setCreatingArtwork(false);
-            }
-          }}
-          disabled={isPending || creatingArtwork}
+          onClick={() => setShowQuickForm(true)}
+          disabled={isPending || showQuickForm}
           className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
         >
-          {creatingArtwork ? "Adding…" : "Add Artwork"}
+          Add Artwork
         </button>
       </div>
-      <p className="mt-2 text-xs text-neutral-400">
-        &quot;Add Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot; if
-        blank), and this image becomes its main image automatically.
-      </p>
+      {!showQuickForm && (
+        <p className="mt-2 text-xs text-neutral-400">
+          &quot;Add Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot;
+          if blank), and this image becomes its main image automatically.
+        </p>
+      )}
 
-      {/* Inline "quick catalogue" fields — revealed automatically once
-          "Add Artwork" succeeds (2026-08-17, direct request, a
-          deliberately scaled-back second attempt at this same idea).
-          Exactly Catalogue's own fields, nothing from Presentation or
-          Payment, and nothing compulsory — filling any of it in is
-          entirely optional; "Done, next item" below works either way. */}
-      {newArtworkId && (
+      {/* Inline "quick catalogue" fields (2026-08-18, reworked to a true
+          one-shot flow per direct request). Opening this form no longer
+          creates the artwork — it's a plain local form, nothing is saved
+          anywhere until "Done, next item" is pressed. That single press
+          creates the artwork, fills in whatever fields were completed
+          (all optional), and links this image as its main image, all
+          together. "Cancel" (or just picking a different action button
+          instead) discards everything typed with nothing to clean up,
+          since nothing was ever written to the database. */}
+      {showQuickForm && (
         <QuickCatalogueFields
-          artworkId={newArtworkId}
-          siteId={siteId}
           settings={settings}
-          onDone={() => {
-            setNewArtworkId(null);
-            onArtworkQuickCatalogueDone();
+          creating={creatingArtwork}
+          onCancel={() => setShowQuickForm(false)}
+          onDone={async (fields) => {
+            setCreatingArtwork(true);
+            const ok = await onAddNewArtwork(caption, fields);
+            setCreatingArtwork(false);
+            // On failure, leave the form open (with whatever was typed
+            // still in it, since it's a plain uncontrolled form) so
+            // nothing is lost and the error banner above explains why —
+            // same pattern as every other action on this screen.
+            if (ok) setShowQuickForm(false);
           }}
         />
       )}
@@ -790,37 +792,39 @@ function SortingCard({
 }
 
 // Same field set as the full Artwork editor's Catalogue tab (see
-// ArtworkDetailPanel.tsx) and the same autosave-whole-form-on-blur
-// convention via updateCatalogue — deliberately not Name (already set at
-// creation) or Edition/Available qty (kept out to match the simpler
-// layout this was asked for; a brand-new artwork has nothing in either
-// field yet regardless, so omitting them from this form doesn't lose
-// anything — see updateCatalogue's own undefined/null-handling notes).
+// ArtworkDetailPanel.tsx) — deliberately not Name (comes from the
+// caption above instead) or Edition/Available qty (kept out to match the
+// simpler layout this was asked for; a brand-new artwork has nothing in
+// either field yet regardless, so omitting them from this form doesn't
+// lose anything).
+//
+// 2026-08-18: no longer autosaves field-by-field, since there's no
+// artwork to save to until "Done, next item" is pressed — the artwork
+// doesn't exist until then. This is now a plain uncontrolled form; every
+// field's current value is only read once, from a single FormData
+// snapshot taken at that moment.
 function QuickCatalogueFields({
-  artworkId,
-  siteId,
   settings,
+  creating,
+  onCancel,
   onDone,
 }: {
-  artworkId: string;
-  siteId: string;
   settings: ArtworkSettings;
-  onDone: () => void;
+  creating: boolean;
+  onCancel: () => void;
+  onDone: (fields: FormData) => void;
 }) {
-  const autosave = (form: HTMLFormElement) => {
-    updateCatalogue(artworkId, siteId, new FormData(form));
-  };
+  const formRef = useRef<HTMLFormElement>(null);
 
   return (
     <div className="mt-4 rounded-md border border-neutral-300 p-4">
-      <form onBlur={(e) => autosave(e.currentTarget)} className="space-y-4">
+      <form ref={formRef} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="mb-1 block text-sm font-medium text-neutral-700">Type</label>
             <select
               name="type"
               defaultValue=""
-              onChange={(e) => autosave(e.currentTarget.form!)}
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             >
               <option value="">Choose from list…</option>
@@ -836,7 +840,6 @@ function QuickCatalogueFields({
             <select
               name="catalogueGroup"
               defaultValue=""
-              onChange={(e) => autosave(e.currentTarget.form!)}
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             >
               <option value="">Choose from list…</option>
@@ -853,7 +856,6 @@ function QuickCatalogueFields({
           <select
             name="medium"
             defaultValue=""
-            onChange={(e) => autosave(e.currentTarget.form!)}
             className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
           >
             <option value="">Choose from list…</option>
@@ -870,7 +872,6 @@ function QuickCatalogueFields({
             <select
               name="size"
               defaultValue=""
-              onChange={(e) => autosave(e.currentTarget.form!)}
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             >
               <option value="">Choose from list…</option>
@@ -886,7 +887,6 @@ function QuickCatalogueFields({
             <select
               name="location"
               defaultValue=""
-              onChange={(e) => autosave(e.currentTarget.form!)}
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             >
               <option value="">Choose from list…</option>
@@ -909,7 +909,6 @@ function QuickCatalogueFields({
             <select
               name="availability"
               defaultValue="AVAILABLE"
-              onChange={(e) => autosave(e.currentTarget.form!)}
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             >
               <option value="AVAILABLE">Available</option>
@@ -939,18 +938,33 @@ function QuickCatalogueFields({
           />
         </div>
       </form>
-      {/* Not part of the full Catalogue editor — added here (2026-08-17)
-          because this form otherwise has no explicit way to conclude:
-          filling any/none of the fields in is optional, but there needs
-          to be a clear, deliberate way to say "I'm done with this one"
-          and move the Hopper on to the next item. */}
-      <button
-        type="button"
-        onClick={onDone}
-        className="mt-4 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-      >
-        Done, next item
-      </button>
+      {/* "Done, next item" (added 2026-08-17, since this form otherwise
+          has no explicit way to conclude) is now also the button that
+          actually creates the artwork (2026-08-18) — filling any/none of
+          the fields above is still optional, but this is the one
+          deliberate, single moment anything gets saved. "Cancel" is new
+          alongside it: since nothing exists in the database until this
+          click, backing out needs no cleanup at all — just closing the
+          form. */}
+      <div className="mt-4 flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => formRef.current && onDone(new FormData(formRef.current))}
+          disabled={creating}
+          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {creating ? "Creating…" : "Done, next item"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={creating}
+          className="text-sm text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
+
