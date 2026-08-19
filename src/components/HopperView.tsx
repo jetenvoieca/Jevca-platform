@@ -590,7 +590,7 @@ export default function HopperView({
                         setProcessedLog((prev) => prev.filter((p) => p.key !== entry.key));
                       }}
                       aria-label={`Remove ${entry.label} from the processed list`}
-                      className="shrink-0 rounded px-1.5 py-0.5 text-sm leading-none text-neutral-300 hover:bg-neutral-100 hover:text-neutral-600"
+                      className="shrink-0 rounded px-1.5 py-0.5 text-base leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
                     >
                       ×
                     </button>
@@ -1093,6 +1093,7 @@ function QuickCatalogueFields({
     </div>
   );
 }
+
 
 
 
