@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
+import { deleteImagePermanently } from "./imageDelete";
 
 type ListFilters = {
   purpose?: "marketing" | "related";
@@ -142,11 +143,22 @@ export async function updateMedia(id: string, siteId: string, formData: FormData
   revalidatePath(`/sites/${siteId}/media`);
 }
 
-// Soft delete, same as the rest of the catalogue's Status field already
-// supports — reversible via "Show archived" rather than a hard delete.
-export async function archiveMedia(id: string, siteId: string) {
-  await db.image.update({ where: { id }, data: { status: "ARCHIVED" } });
-  revalidatePath(`/sites/${siteId}/media`);
+// 2026-08-19, direct request — was `status: "ARCHIVED"` with a confirm
+// dialog that claimed it could be "restored later via Show archived,"
+// which was never actually true — no such view exists anywhere in this
+// app. Now genuinely deletes, matching the same reasoning as the
+// Hopper's Bin (see deleteImagePermanently) — a soft-delete nobody can
+// actually undo isn't more honest than a real one, just slower to find
+// out.
+export async function deleteMedia(
+  id: string,
+  siteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const result = await deleteImagePermanently(id);
+  if (result.ok) {
+    revalidatePath(`/sites/${siteId}/media`);
+  }
+  return result;
 }
 
 export async function getMediaTagPresets(artistId: string) {
@@ -176,3 +188,4 @@ export async function removeMediaTagPreset(artistId: string, siteId: string, val
   await db.artist.update({ where: { id: artistId }, data: { mediaTags: next } });
   revalidatePath(`/sites/${siteId}/media/settings`);
 }
+
