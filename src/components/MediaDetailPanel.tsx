@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { updateMedia, archiveMedia } from "@/lib/actions/mediaCatalogue";
+import { updateMedia, deleteMedia } from "@/lib/actions/mediaCatalogue";
 import { addMediaToBucket } from "@/lib/actions/videoEditor";
 
 export type MediaDetail = {
@@ -59,10 +59,19 @@ export default function MediaDetailPanel({
   const [tags, setTags] = useState<string[]>(media.tags);
   const router = useRouter();
 
-  const handleArchive = () => {
-    if (!confirm("Remove this item from the catalogue? It can be restored later via Show archived.")) return;
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const handleDelete = () => {
+    // 2026-08-19 — this used to promise the item "can be restored later
+    // via Show archived", which was never actually true (no such view
+    // exists anywhere in this app). Now says what actually happens.
+    if (!confirm("Delete this item permanently? This can't be undone.")) return;
+    setDeleteError(null);
     startTransition(async () => {
-      await archiveMedia(media.id, siteId);
+      const result = await deleteMedia(media.id, siteId);
+      if (!result.ok) {
+        setDeleteError(result.error);
+        return;
+      }
       if (onArchived) {
         onArchived();
       } else {
@@ -101,12 +110,15 @@ export default function MediaDetailPanel({
               </button>
               <button
                 type="button"
-                onClick={handleArchive}
+                onClick={handleDelete}
                 disabled={isPending}
                 className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 Remove
               </button>
+              {deleteError && (
+                <p className="w-full text-xs text-red-600">{deleteError}</p>
+              )}
               <Link
                 href={`/sites/${siteId}/media`}
                 onClick={(e) => {
@@ -294,3 +306,4 @@ export default function MediaDetailPanel({
     </div>
   );
 }
+
