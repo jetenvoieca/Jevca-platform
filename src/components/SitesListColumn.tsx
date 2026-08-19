@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { LAST_VISITED_SITE_KEY } from "@/components/LastVisitedSiteTracker";
 
 type SiteRow = {
@@ -10,7 +10,42 @@ type SiteRow = {
   status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
   ownerName: string;
   paymentMethod: string | null;
+  createdAt: string;
 };
+
+type SortValue = "owner" | "date" | "payment";
+
+// 2026-08-19, direct request — sort used to reset to "Owner" every time
+// you opened a specific site, because it lived entirely in the URL's
+// ?sort= param, and the site-detail page's own copy of this list never
+// carried that param through at all (it always asked the server for
+// "owner" order, full stop). Rather than thread ?sort= through every
+// link on every page that can render this list, sort is now a genuine
+// client-side preference — same pattern as the Hopper's newest/oldest
+// toggle — so it just works consistently everywhere this component
+// appears, with no server round-trip needed to change it, and no page
+// to forget to pass it through.
+const SORT_STORAGE_KEY = "jevca:sites-sort";
+
+function compareSites(a: SiteRow, b: SiteRow, sort: SortValue): number {
+  if (sort === "date") {
+    // Newest first — matches the server's original default ordering
+    // (orderBy createdAt desc) for this option.
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  }
+  if (sort === "payment") {
+    // No payment method set sorts last, not first — an unset value isn't
+    // "before Direct Debit alphabetically", it's just not answered yet.
+    const pa = a.paymentMethod || "\uFFFF";
+    const pb = b.paymentMethod || "\uFFFF";
+    const cmp = pa.localeCompare(pb);
+    // Same type of payment groups together, then alphabetical by owner
+    // within that group — otherwise same-type sites are left in
+    // whatever order the server happened to return them.
+    return cmp !== 0 ? cmp : a.ownerName.localeCompare(b.ownerName);
+  }
+  return a.ownerName.localeCompare(b.ownerName);
+}
 
 export default function SitesListColumn({
   sites,
@@ -25,11 +60,42 @@ export default function SitesListColumn({
   showArchived: boolean;
   selectedId?: string | null;
 }) {
+  // Starts from whatever the server rendered (so the very first paint
+  // matches exactly, no hydration mismatch), then a moment later picks
+  // up whatever this browser last actually chose — same SSR-safe
+  // "default now, override right after mount" pattern used for the
+  // pinned-recent-site lookup just below.
+  const [clientSort, setClientSort] = useState<SortValue>(
+    sort === "date" || sort === "payment" ? sort : "owner"
+  );
+
+  useEffect(() => {
+    try {
+      const stored = localStorage.getItem(SORT_STORAGE_KEY);
+      if (stored === "date" || stored === "payment" || stored === "owner") {
+        setClientSort(stored);
+      }
+    } catch {
+      // Private browsing / storage disabled — falls back to the
+      // server-provided default above, same as everywhere else this
+      // pattern is used.
+    }
+  }, []);
+
+  const handleSortChange = (value: SortValue) => {
+    setClientSort(value);
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, value);
+    } catch {
+      // Non-critical — this session's choice just won't persist.
+    }
+  };
+
   // Pins whichever site was last actually opened to the very top of the
-  // list, on top of whatever server-side sort (Owner/Date) is otherwise
-  // active — added 2026-08-17 so getting back to the site you were just
-  // working on, after a trip to Accounts or Alerts, doesn't mean
-  // re-scanning or re-searching the full list every time.
+  // list, on top of whichever sort is otherwise active — added
+  // 2026-08-17 so getting back to the site you were just working on,
+  // after a trip to Accounts or Alerts, doesn't mean re-scanning or
+  // re-searching the full list every time.
   //
   // Read from localStorage (via LastVisitedSiteTracker, mounted on every
   // site-scoped page) rather than the server, since this is a per-browser
@@ -48,61 +114,74 @@ export default function SitesListColumn({
     }
   }, []);
 
+  const sortedSites = useMemo(
+    () => [...sites].sort((a, b) => compareSites(a, b, clientSort)),
+    [sites, clientSort]
+  );
+
   // Only actually reorders if the pinned site is present in the current
   // (possibly search-filtered) list — searching or filtering to
   // "archived" always shows exactly what those controls say, never
   // force-including something that wouldn't otherwise match.
   const pinnedIndex = lastVisitedId
-    ? sites.findIndex((s) => s.id === lastVisitedId)
+    ? sortedSites.findIndex((s) => s.id === lastVisitedId)
     : -1;
   const displaySites =
     pinnedIndex > 0
-      ? [sites[pinnedIndex], ...sites.slice(0, pinnedIndex), ...sites.slice(pinnedIndex + 1)]
-      : sites;
+      ? [
+          sortedSites[pinnedIndex],
+          ...sortedSites.slice(0, pinnedIndex),
+          ...sortedSites.slice(pinnedIndex + 1),
+        ]
+      : sortedSites;
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-neutral-200 px-4 pb-3 pt-4">
         <h2 className="mb-2 text-sm font-semibold text-neutral-900">Sites</h2>
-        {/* Always posts to "/" — searching or sorting from within a
-            selected site's settings page takes you to the full list view
-            to see the results, same as clicking a row would. */}
-        <form method="get" action="/" className="flex flex-col gap-1.5">
-          <input
-            type="text"
-            name="q"
-            defaultValue={q}
-            placeholder="Search owner or site"
-            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
-          />
-          <div className="flex items-center gap-1.5">
-            <select
-              name="sort"
-              defaultValue={sort}
-              className="flex-1 rounded-md border border-neutral-300 px-1.5 py-1 text-xs"
-            >
-              <option value="owner">Sort: Owner</option>
-              <option value="date">Sort: Date</option>
-              <option value="payment">Sort: Payment</option>
-            </select>
+        {/* Sort lives outside this form now (2026-08-19) — it's an
+            instant, local re-order, not something that needs a server
+            round-trip. Search text and the archived filter still do need
+            fresh data from the server, so they're unchanged: always
+            posts to "/" — searching or filtering from within a selected
+            site's settings page takes you to the full list view to see
+            the results, same as clicking a row would. */}
+        <div className="flex flex-col gap-1.5">
+          <form method="get" action="/" className="flex flex-col gap-1.5">
+            <input
+              type="text"
+              name="q"
+              defaultValue={q}
+              placeholder="Search owner or site"
+              className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+            />
             <button
               type="submit"
               className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
             >
-              Go
+              Search
             </button>
-          </div>
-          <label className="flex items-center gap-1.5 text-xs text-neutral-600">
-            <input
-              type="checkbox"
-              name="archived"
-              value="1"
-              defaultChecked={showArchived}
-              onChange={(e) => e.currentTarget.form?.requestSubmit()}
-            />
-            Show archived
-          </label>
-        </form>
+            <label className="flex items-center gap-1.5 text-xs text-neutral-600">
+              <input
+                type="checkbox"
+                name="archived"
+                value="1"
+                defaultChecked={showArchived}
+                onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              />
+              Show archived
+            </label>
+          </form>
+          <select
+            value={clientSort}
+            onChange={(e) => handleSortChange(e.target.value as SortValue)}
+            className="w-full rounded-md border border-neutral-300 px-1.5 py-1 text-xs"
+          >
+            <option value="owner">Sort: Owner</option>
+            <option value="date">Sort: Date</option>
+            <option value="payment">Sort: Payment</option>
+          </select>
+        </div>
         <p className="mt-2 text-[11px] text-neutral-400">
           {sites.length} site{sites.length === 1 ? "" : "s"}
         </p>
@@ -195,4 +274,3 @@ export default function SitesListColumn({
     </div>
   );
 }
-
