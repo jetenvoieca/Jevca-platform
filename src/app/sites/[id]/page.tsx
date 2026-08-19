@@ -24,16 +24,21 @@ export default async function SiteSettingsPage({
       where: { artistId: site.artistId },
       orderBy: { paidAt: "desc" },
     }),
-    // Kept deliberately simple (no search/sort/archived-filter wiring) —
-    // this is the "jump to another site without losing my place" list,
-    // not a replacement for the full Sites list's filtering, which stays
-    // on "/" itself (2026-08-13).
+    // Kept deliberately simple (no search/archived-filter wiring) — this
+    // is the "jump to another site without losing my place" list, not a
+    // replacement for the full Sites list's filtering, which stays on
+    // "/" itself (2026-08-13). Sort itself no longer needs wiring here
+    // at all (2026-08-19) — it's a client-side preference now (see
+    // SitesListColumn), so this page's copy of the list stays in sync
+    // with whatever was last chosen automatically, with nothing to pass
+    // through.
     db.site.findMany({
       where: { status: { not: "ARCHIVED" } },
       select: {
         id: true,
         name: true,
         status: true,
+        createdAt: true,
         artist: { select: { name: true, paymentMethod: true } },
       },
       relationLoadStrategy: "query",
@@ -110,6 +115,7 @@ export default async function SiteSettingsPage({
             status: s.status,
             ownerName: s.artist.name,
             paymentMethod: s.artist.paymentMethod,
+            createdAt: s.createdAt.toISOString(),
           }))}
           q=""
           sort="owner"
@@ -120,4 +126,5 @@ export default async function SiteSettingsPage({
     </div>
   );
 }
+
 
