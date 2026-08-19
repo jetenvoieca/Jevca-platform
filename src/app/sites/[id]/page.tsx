@@ -87,7 +87,18 @@ export default async function SiteSettingsPage({
             source: p.source as "STRIPE" | "MANUAL",
             amount: p.amount.toString(),
             currency: p.currency,
-            paidAt: p.paidAt.toISOString(),
+            // 2026-08-19 fix — was `p.paidAt.toISOString()` unguarded,
+            // which throws for a genuinely invalid Date rather than
+            // returning anything. One bad row (root cause fixed in
+            // addManualSubscriptionPayment, but this guards against any
+            // that already exist) was enough to crash this entire page
+            // for that artist — no way to even load Settings to delete
+            // the bad row and fix it. Falls back to "" here, which the
+            // display side's `new Date(p.paidAt).toLocaleDateString()`
+            // already renders as the harmless text "Invalid Date" rather
+            // than crashing — letting the row actually show up so it can
+            // be deleted, instead of taking the whole page down with it.
+            paidAt: Number.isNaN(p.paidAt.getTime()) ? "" : p.paidAt.toISOString(),
           }))}
         />
       </div>
