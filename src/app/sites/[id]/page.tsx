@@ -1,7 +1,9 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import SiteSettingsPanel from "@/components/SiteSettingsPanel";
 import SitesListColumn from "@/components/SitesListColumn";
+import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 
 export const dynamic = "force-dynamic";
 
@@ -19,21 +21,28 @@ export default async function SiteSettingsPage({
   });
   if (!site) notFound();
 
+  // Same cookie the Sites Directory page reads (see sitesStatusFilter.ts)
+  // — 2026-08-19, direct request: the status filter used to reset to its
+  // default every time a specific site was opened, since this page's own
+  // copy of the list had it hardcoded rather than reading whatever was
+  // actually chosen.
+  const cookieStore = await cookies();
+  const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
+
   const [payments, allSites] = await Promise.all([
     db.subscriptionPayment.findMany({
       where: { artistId: site.artistId },
       orderBy: { paidAt: "desc" },
     }),
-    // Kept deliberately simple (no search/archived-filter wiring) — this
-    // is the "jump to another site without losing my place" list, not a
-    // replacement for the full Sites list's filtering, which stays on
-    // "/" itself (2026-08-13). Sort itself no longer needs wiring here
-    // at all (2026-08-19) — it's a client-side preference now (see
-    // SitesListColumn), so this page's copy of the list stays in sync
-    // with whatever was last chosen automatically, with nothing to pass
-    // through.
+    // Kept deliberately simple (no search wiring) — this is the "jump to
+    // another site without losing my place" list, not a replacement for
+    // the full Sites list's filtering, which stays on "/" itself
+    // (2026-08-13). Sort and Status both stay in sync with whatever was
+    // last chosen on the Directory page automatically now, with nothing
+    // to pass through by hand — Sort via a client-side preference (see
+    // SitesListColumn), Status via the cookie read above.
     db.site.findMany({
-      where: { status: { not: "ARCHIVED" } },
+      where: status ? { status } : { status: { not: "ARCHIVED" } },
       select: {
         id: true,
         name: true,
@@ -119,13 +128,14 @@ export default async function SiteSettingsPage({
           }))}
           q=""
           sort="owner"
-          status=""
+          status={status}
           selectedId={id}
         />
       </div>
     </div>
   );
 }
+
 
 
 
