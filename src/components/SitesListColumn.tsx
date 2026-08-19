@@ -51,13 +51,13 @@ export default function SitesListColumn({
   sites,
   q,
   sort,
-  showArchived,
+  status,
   selectedId = null,
 }: {
   sites: SiteRow[];
   q: string;
   sort: string;
-  showArchived: boolean;
+  status: string;
   selectedId?: string | null;
 }) {
   // Starts from whatever the server rendered (so the very first paint
@@ -161,16 +161,28 @@ export default function SitesListColumn({
             >
               Search
             </button>
-            <label className="flex items-center gap-1.5 text-xs text-neutral-600">
-              <input
-                type="checkbox"
-                name="archived"
-                value="1"
-                defaultChecked={showArchived}
-                onChange={(e) => e.currentTarget.form?.requestSubmit()}
-              />
-              Show archived
-            </label>
+            {/* 2026-08-19, direct request — replaces a plain "Show
+                archived" checkbox with a real status filter. Empty (the
+                default) means everything except Archived, same as the
+                checkbox's own default did; any specific status can now
+                be picked to see just that one instead of it only ever
+                being all-or-nothing. Submits the same way search text
+                does, since this genuinely changes which sites the
+                server sends back, not just how an already-loaded list
+                looks (that's what Sort, separately, now does). */}
+            <select
+              name="status"
+              defaultValue={status}
+              onChange={(e) => e.currentTarget.form?.requestSubmit()}
+              className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+            >
+              <option value="">All except Archived</option>
+              <option value="DRAFT">Draft</option>
+              <option value="LIVE">Live</option>
+              <option value="PAUSED">Paused</option>
+              <option value="ISYT">ISYT</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
           </form>
           <select
             value={clientSort}
@@ -274,3 +286,4 @@ export default function SitesListColumn({
     </div>
   );
 }
+
