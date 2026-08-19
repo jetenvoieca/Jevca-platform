@@ -62,13 +62,28 @@ export async function addManualSubscriptionPayment(
     return { ok: false, error: "Enter a date." };
   }
 
+  // 2026-08-19 fix — this used to only check that *something* was typed,
+  // not that new Date(paidAtRaw) actually parsed into a real date.
+  // `new Date("not a date")` doesn't throw; it silently produces an
+  // "Invalid Date" object, which this then saved without complaint. That
+  // one bad row was enough to crash the whole Settings page for that
+  // artist every time it tried to load — any page rendering that
+  // payment's date calls .toISOString() on it, which throws for an
+  // Invalid Date specifically. A single mistyped date shouldn't be able
+  // to take down an entire page, so this is now checked before saving,
+  // not discovered later by something else crashing.
+  const paidAt = new Date(paidAtRaw);
+  if (Number.isNaN(paidAt.getTime())) {
+    return { ok: false, error: "That date isn't valid. Try YYYY-MM-DD." };
+  }
+
   await db.subscriptionPayment.create({
     data: {
       artistId,
       source: "MANUAL",
       amount,
       currency,
-      paidAt: new Date(paidAtRaw),
+      paidAt,
     },
   });
   revalidatePath(`/sites/${siteId}`);
@@ -93,3 +108,4 @@ export async function dismissAlert(id: string) {
   });
   revalidatePath("/alerts");
 }
+
