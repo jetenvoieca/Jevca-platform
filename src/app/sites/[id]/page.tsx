@@ -119,12 +119,13 @@ export default async function SiteSettingsPage({
           }))}
           q=""
           sort="owner"
-          showArchived={false}
+          status=""
           selectedId={id}
         />
       </div>
     </div>
   );
 }
+
 
 
