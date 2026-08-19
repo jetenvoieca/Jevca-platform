@@ -4,7 +4,15 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateSiteStatus } from "@/lib/actions";
 
-const STATUS_OPTIONS = ["DRAFT", "LIVE", "PAUSED", "ISYT"] as const;
+// Archived merged in here 2026-08-19, direct request — replaces a
+// separate Archive/Restore button that did the exact same kind of
+// update (just this same status field) through a second mechanism.
+// Confirms only when switching *into* Archived specifically — that's
+// the one transition here with a real, if reversible, consequence (the
+// site disappears from the main Sites list by default); every other
+// status change is freely reversible with no such effect, so it doesn't
+// need one.
+const STATUS_OPTIONS = ["DRAFT", "LIVE", "PAUSED", "ISYT", "ARCHIVED"] as const;
 const STATUS_LABELS: Record<(typeof STATUS_OPTIONS)[number], string> = {
   DRAFT: "Draft",
   LIVE: "Live",
@@ -12,6 +20,7 @@ const STATUS_LABELS: Record<(typeof STATUS_OPTIONS)[number], string> = {
   // Third-party/legacy site being tracked here ahead of being rebuilt in
   // Studio — not one of the "real" build states.
   ISYT: "ISYT",
+  ARCHIVED: "Archived",
 };
 
 export default function StatusSelect({
@@ -29,7 +38,16 @@ export default function StatusSelect({
       defaultValue={status}
       disabled={isPending}
       onChange={(e) => {
-        const newStatus = e.target.value as "DRAFT" | "LIVE" | "PAUSED" | "ISYT";
+        const newStatus = e.target.value as (typeof STATUS_OPTIONS)[number];
+        if (
+          newStatus === "ARCHIVED" &&
+          !confirm(
+            "Archive this site? It will be hidden from the main list by default, but can be restored later by changing this back."
+          )
+        ) {
+          e.target.value = status; // Revert the select — the change didn't happen.
+          return;
+        }
         startTransition(async () => {
           await updateSiteStatus(siteId, newStatus);
           router.refresh();
