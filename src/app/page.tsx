@@ -55,6 +55,7 @@ export default async function SitesDirectoryPage({
       id: true,
       name: true,
       status: true,
+      createdAt: true,
       artist: { select: { name: true, paymentMethod: true } },
     },
     relationLoadStrategy: "query",
@@ -75,6 +76,7 @@ export default async function SitesDirectoryPage({
     status: s.status,
     ownerName: s.artist.name,
     paymentMethod: s.artist.paymentMethod,
+    createdAt: s.createdAt.toISOString(),
   }));
 
   const openAlerts = await getOpenAlerts();
@@ -89,4 +91,5 @@ export default async function SitesDirectoryPage({
     />
   );
 }
+
 
