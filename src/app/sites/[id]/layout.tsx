@@ -9,8 +9,6 @@ import { getOpenAlerts } from "@/lib/alerts";
 import SiteNavPanel from "@/components/SiteNavPanel";
 import LastVisitedSiteTracker from "@/components/LastVisitedSiteTracker";
 import SiteNameField from "@/components/SiteNameField";
-import StatusSelect from "@/components/StatusSelect";
-import ArchiveButton from "@/components/ArchiveButton";
 
 export default async function SiteLayout({
   children,
@@ -74,17 +72,6 @@ export default async function SiteLayout({
           ownerName={site.artist.name}
         />
         <div className="flex shrink-0 items-center gap-2">
-          {/* Moved here from the Settings page's own (now-removed)
-              duplicate header (2026-08-18, direct request) — status and
-              archive are whole-site concepts, so they belong in the
-              persistent per-site bar visible from every page, not tucked
-              inside one specific settings tab. */}
-          {site.status === "ARCHIVED" ? (
-            <span className="text-sm text-neutral-400">Archived</span>
-          ) : (
-            <StatusSelect siteId={site.id} status={site.status} />
-          )}
-          <ArchiveButton siteId={site.id} isArchived={site.status === "ARCHIVED"} />
           <form action={publishSite.bind(null, id)}>
             <button
               type="submit"
@@ -128,4 +115,5 @@ export default async function SiteLayout({
     </div>
   );
 }
+
 
