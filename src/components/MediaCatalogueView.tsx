@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
-import { uploadFileDirect } from "@/lib/uploadDirect";
 import { listMedia, getMediaDetail } from "@/lib/actions/mediaCatalogue";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import VideoThumb from "@/components/VideoThumb";
@@ -414,7 +413,7 @@ export default function MediaCatalogueView({
                   )}
                 </button>
               ))}
-              <AddNewTile artistId={artistId} siteId={siteId} />
+              <AddNewTile siteId={siteId} />
             </div>
           ) : (
             <table className="w-full border-collapse text-sm">
@@ -459,7 +458,7 @@ export default function MediaCatalogueView({
                 ))}
                 <tr className="border-b border-neutral-100">
                   <td colSpan={4} className="py-2">
-                    <AddNewRow artistId={artistId} siteId={siteId} />
+                    <AddNewRow siteId={siteId} />
                   </td>
                 </tr>
               </tbody>
@@ -496,90 +495,31 @@ export default function MediaCatalogueView({
   );
 }
 
-async function handleFileUpload(
-  file: File,
-  artistId: string,
-  siteId: string,
-  onDone: (error: string | null) => void
-) {
-  try {
-    await uploadFileDirect(file, artistId);
-    window.location.href = `/sites/${siteId}/media`;
-  } catch (err) {
-    // A network error, a dropped connection, or the upload step itself
-    // failing all land here — surfaced now instead of going silent.
-    onDone(err instanceof Error ? err.message : "Upload failed. Try again.");
-  }
-}
-
-// Replaces the old toolbar "+ Upload" button — sits as the last grid tile
-// instead, same "click straight in, no form fields first" pattern as
-// Artworks' "+ Add New" tile. Still needs a real file picked (unlike an
-// artwork, media can't exist without one), so this opens the file dialog
-// directly rather than creating anything blank first.
-function AddNewTile({ artistId, siteId }: { artistId: string; siteId: string }) {
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+// 2026-08-19, direct request — replaces a direct-upload flow (pick a
+// file, straight into the Media Catalogue, no Hopper involved at all)
+// with the same "goes to the Hopper instead" change already made for
+// Artworks' "+ Add New" — the Hopper is meant to be the single, primary
+// way media gets into either catalogue (see hopper-design.md); this tile
+// was a second, uncaptioned, un-sorted way in that bypassed it entirely.
+function AddNewTile({ siteId }: { siteId: string }) {
   return (
-    <label
-      className={`flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed text-center text-sm ${
-        uploading
-          ? "cursor-wait border-neutral-300 text-neutral-400"
-          : "cursor-pointer border-neutral-300 text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-      }`}
+    <Link
+      href={`/sites/${siteId}/hopper`}
+      className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
     >
-      {uploading ? "Uploading…" : error ? <span className="px-2 text-red-500">{error}</span> : "+ Add New"}
-      <input
-        type="file"
-        accept="image/*,video/*"
-        className="hidden"
-        disabled={uploading}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          setError(null);
-          setUploading(true);
-          handleFileUpload(file, artistId, siteId, (err) => {
-            setUploading(false);
-            if (err) setError(err);
-          });
-        }}
-      />
-    </label>
+      + Add New
+    </Link>
   );
 }
 
 // Same "+ Add New" action, as a row for List view.
-function AddNewRow({ artistId, siteId }: { artistId: string; siteId: string }) {
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+function AddNewRow({ siteId }: { siteId: string }) {
   return (
-    <label
-      className={`text-sm ${
-        uploading
-          ? "cursor-wait text-neutral-400"
-          : "cursor-pointer text-neutral-500 hover:text-neutral-900 hover:underline"
-      }`}
+    <Link
+      href={`/sites/${siteId}/hopper`}
+      className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
     >
-      {uploading ? "Uploading…" : error ? <span className="text-red-500">{error}</span> : "+ Add New"}
-      <input
-        type="file"
-        accept="image/*,video/*"
-        className="hidden"
-        disabled={uploading}
-        onChange={(e) => {
-          const file = e.target.files?.[0];
-          if (!file) return;
-          setError(null);
-          setUploading(true);
-          handleFileUpload(file, artistId, siteId, (err) => {
-            setUploading(false);
-            if (err) setError(err);
-          });
-        }}
-      />
-    </label>
+      + Add New
+    </Link>
   );
 }
