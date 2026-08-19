@@ -590,7 +590,17 @@ export default function HopperView({
                         setProcessedLog((prev) => prev.filter((p) => p.key !== entry.key));
                       }}
                       aria-label={`Remove ${entry.label} from the processed list`}
-                      className="shrink-0 rounded px-1.5 py-0.5 text-base leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                      // Absolutely positioned in the top-right corner
+                      // (2026-08-19, direct request) — was inline after
+                      // the text, which put it hard against a short
+                      // label ("New pump") but far to the right of a
+                      // long, truncated one ("Hats off to A…"), jumping
+                      // around from row to row instead of sitting
+                      // somewhere predictable. Matches the same
+                      // top-right-corner badge pattern already used for
+                      // the selected-thumbnail badges in the media
+                      // picker.
+                      className="absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-base leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
                     >
                       ×
                     </button>
@@ -599,7 +609,7 @@ export default function HopperView({
                     <Link
                       key={entry.key}
                       href={entry.href}
-                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2 hover:border-neutral-300 hover:bg-neutral-50"
+                      className="relative flex items-center gap-2 rounded-md border border-neutral-200 p-2 pr-8 hover:border-neutral-300 hover:bg-neutral-50"
                     >
                       {thumb}
                       {text}
@@ -608,7 +618,7 @@ export default function HopperView({
                   ) : (
                     <div
                       key={entry.key}
-                      className="flex items-center gap-2 rounded-md border border-neutral-200 p-2"
+                      className="relative flex items-center gap-2 rounded-md border border-neutral-200 p-2 pr-8"
                     >
                       {thumb}
                       {text}
