@@ -46,19 +46,9 @@ export default async function SitesDirectoryPage({
     );
   }
 
-  // 2026-08-19 — no longer filters by status in the query itself. Doing
-  // that server-side was exactly why the filter reset the moment you
-  // opened a specific site: that page has its own separate copy of this
-  // list, fetched with its own hardcoded query, with no way to know what
-  // was chosen on this page. Fetching everything once and filtering
-  // client-side (same fix already applied to Sort, for the same reason)
-  // means the choice is a genuine, localStorage-persisted preference
-  // instead — it now applies consistently everywhere this list appears,
-  // with nothing to carry through a URL. The dataset here is small
-  // (dozens, not thousands), so fetching all of it unfiltered has no
-  // real cost.
   const sites = await db.site.findMany({
     where: {
+      ...(status ? { status } : { status: { not: "ARCHIVED" } }),
       ...(q
         ? {
             OR: [
@@ -108,6 +98,7 @@ export default async function SitesDirectoryPage({
     />
   );
 }
+
 
 
 
