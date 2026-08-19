@@ -243,28 +243,53 @@ export default function MediaDetailPanel({
               No tags set up yet — add some under Media Catalogue → Settings.
             </p>
           ) : (
-            <div className="flex flex-wrap gap-1.5">
-              {tagPresets.map((t) => {
-                const active = tags.includes(t);
-                return (
-                  <button
-                    key={t}
-                    type="button"
-                    onClick={() =>
-                      setTags((prev) =>
-                        active ? prev.filter((x) => x !== t) : [...prev, t]
-                      )
-                    }
-                    className={`rounded-full border px-3 py-1 text-xs ${
-                      active
-                        ? "border-neutral-900 bg-neutral-900 text-white"
-                        : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {t}
-                  </button>
-                );
-              })}
+            <div className="space-y-2">
+              {/* 2026-08-19, direct request — used to show every preset
+                  as a toggle pill, active and inactive mixed together.
+                  With only one or two presets set up, an unapplied one
+                  sitting there unstyled read as a stray question ("Post
+                  this ?") rather than an obviously-clickable option. Now
+                  only ever shows tags actually on this item; adding one
+                  is a separate, explicit step below. */}
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {tags.map((t) => (
+                    <span
+                      key={t}
+                      className="flex items-center gap-1 rounded-full border border-neutral-900 bg-neutral-900 px-3 py-1 text-xs text-white"
+                    >
+                      {t}
+                      <button
+                        type="button"
+                        onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
+                        aria-label={`Remove tag ${t}`}
+                        className="leading-none text-white/70 hover:text-white"
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {tagPresets.some((t) => !tags.includes(t)) && (
+                <select
+                  value=""
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    if (value) setTags((prev) => [...prev, value]);
+                  }}
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-500"
+                >
+                  <option value="">+ Add a tag…</option>
+                  {tagPresets
+                    .filter((t) => !tags.includes(t))
+                    .map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                </select>
+              )}
             </div>
           )}
           <p className="mt-1 text-xs text-neutral-400">
