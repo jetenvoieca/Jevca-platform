@@ -168,7 +168,27 @@ export default function HopperView({
       ? [...queue].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       : [...queue].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-  const current = sortedQueue.find((i) => i.id === selectedId) ?? sortedQueue[0] ?? null;
+  // 2026-08-19 — separate from `current` itself: tracks whether the
+  // person has actually gotten going yet (picked something, or completed
+  // an action), so advanceAfterAction below can tell "just landed, stay
+  // blank" apart from "mid-session, auto-advance to the next item" even
+  // though both cases leave selectedId null.
+  const [hasInteracted, setHasInteracted] = useState(false);
+
+  // Blank until something is actually picked — either a thumbnail from
+  // "Up next" below, or a freshly dropped/uploaded file — but once the
+  // person has gotten going, falls back to the new oldest/newest item
+  // same as always, so the flick-through rhythm after each action (see
+  // advanceAfterAction) isn't broken by this. Matters more now that "Add
+  // New" in the Artwork Catalogue sends people here directly (2026-08-19,
+  // direct request): landing on an arbitrary existing item to sort, when
+  // what you actually came here to do was add something new, was exactly
+  // the wrong first impression.
+  const current = selectedId
+    ? sortedQueue.find((i) => i.id === selectedId) ?? null
+    : hasInteracted
+      ? sortedQueue[0] ?? null
+      : null;
   const remaining = sortedQueue.filter((i) => i.id !== current?.id);
 
   const logProcessed = (item: HopperItem, label: string, href: string | null) => {
@@ -191,6 +211,7 @@ export default function HopperView({
   // flick-through rhythm from the original spec, without needing to
   // track index positions by hand.
   const advanceAfterAction = () => {
+    setHasInteracted(true);
     setSelectedId(null);
     router.refresh();
   };
@@ -577,7 +598,9 @@ export default function HopperView({
           <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
             {!current ? (
               <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-                Hopper is empty — drag and drop files here, or use the buttons above.
+                {queue.length === 0
+                  ? "Hopper is empty — drag and drop files here, or use the buttons above."
+                  : "Drag and drop a new file in, or pick one from Up next to start sorting."}
               </div>
             ) : (
               <SortingCard
@@ -649,7 +672,7 @@ export default function HopperView({
             </div>
           </div>
           <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
-            {!current ? null : remaining.length === 0 ? (
+            {sortedQueue.length === 0 ? null : remaining.length === 0 ? (
               <p className="text-xs text-neutral-400">This is the last one.</p>
             ) : (
               <div className="grid grid-cols-6 gap-2 lg:grid-cols-7">
@@ -1042,6 +1065,7 @@ function QuickCatalogueFields({
     </div>
   );
 }
+
 
 
 
