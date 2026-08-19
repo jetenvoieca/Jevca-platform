@@ -176,9 +176,14 @@ export async function regenerateHopperToken(artistId: string): Promise<{ token: 
 
 // ---- Status toggle (Draft / Live / Paused) ----
 
+// 2026-08-19, direct request — Archived used to be a separate action
+// (archiveSite/restoreSite, a distinct button in the UI) even though
+// it's always been the exact same underlying field as every other
+// status. Folded in here so there's one action and one control for the
+// whole thing, not two mechanisms doing the same kind of update.
 export async function updateSiteStatus(
   id: string,
-  status: "DRAFT" | "LIVE" | "PAUSED" | "ISYT"
+  status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT"
 ) {
   await db.site.update({
     where: { id },
@@ -197,28 +202,6 @@ export async function updateSalesEnabled(id: string, enabled: boolean) {
   await db.site.update({
     where: { id },
     data: { salesEnabled: enabled },
-  });
-  revalidatePath("/");
-  revalidatePath(`/sites/${id}`);
-}
-
-// ---- Archive (soft delete) / Restore ----
-
-export async function archiveSite(id: string) {
-  await db.site.update({
-    where: { id },
-    data: { status: "ARCHIVED" },
-  });
-  revalidatePath("/");
-  revalidatePath(`/sites/${id}`);
-}
-
-export async function restoreSite(id: string) {
-  // Restored sites come back as Draft — a safe default.
-  // You can immediately switch it to Live/Paused with the status dropdown if needed.
-  await db.site.update({
-    where: { id },
-    data: { status: "DRAFT" },
   });
   revalidatePath("/");
   revalidatePath(`/sites/${id}`);
@@ -263,3 +246,4 @@ export async function seedSampleData() {
 
   revalidatePath("/");
 }
+
