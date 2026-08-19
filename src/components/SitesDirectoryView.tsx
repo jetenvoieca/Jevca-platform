@@ -15,13 +15,13 @@ export default function SitesDirectoryView({
   sites,
   q,
   sort,
-  showArchived,
+  status,
   alertCount = 0,
 }: {
   sites: SiteRow[];
   q: string;
   sort: string;
-  showArchived: boolean;
+  status: string;
   alertCount?: number;
 }) {
   return (
@@ -29,7 +29,7 @@ export default function SitesDirectoryView({
       publishEnabled={false}
       navItems={buildTopNavItems("sites", alertCount)}
       rightPanel={
-        <SitesListColumn sites={sites} q={q} sort={sort} showArchived={showArchived} />
+        <SitesListColumn sites={sites} q={q} sort={sort} status={status} />
       }
       content={
         <div className="flex h-full items-center justify-center p-6">
@@ -41,5 +41,6 @@ export default function SitesDirectoryView({
     />
   );
 }
+
 
 
