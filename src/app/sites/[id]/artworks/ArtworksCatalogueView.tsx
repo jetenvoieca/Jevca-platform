@@ -1,8 +1,8 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import Link from "next/link";
 import {
-  createArtwork,
   getArtworkDetailForClient,
   listArtworks,
   deleteArtworkIfBlank,
@@ -433,15 +433,20 @@ export default function ArtworksCatalogueView({
     window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
   };
 
+  // Goes straight to the Hopper now (2026-08-19, direct request) — the
+  // Hopper is the primary way media gets into the Artwork Catalogue (see
+  // hopper-design.md), so "add a new artwork" from here means starting
+  // that flow, not creating a blank row directly. Previously created an
+  // empty artwork via createArtwork and opened it in this panel; that
+  // action is untouched and still used elsewhere, just not from this
+  // button any more.
   const addNewTile = (
-    <form action={createArtwork.bind(null, artistId, siteId)}>
-      <button
-        type="submit"
-        className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-      >
-        + Add New
-      </button>
-    </form>
+    <Link
+      href={`/sites/${siteId}/hopper`}
+      className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
+    >
+      + Add New
+    </Link>
   );
 
   const loadMoreRow = hasMore && (
@@ -749,14 +754,12 @@ export default function ArtworksCatalogueView({
                 ))}
                 <tr className="border-b border-neutral-100">
                   <td colSpan={5} className="py-2">
-                    <form action={createArtwork.bind(null, artistId, siteId)}>
-                      <button
-                        type="submit"
-                        className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
-                      >
-                        + Add New
-                      </button>
-                    </form>
+                    <Link
+                      href={`/sites/${siteId}/hopper`}
+                      className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
+                    >
+                      + Add New
+                    </Link>
                   </td>
                 </tr>
               </tbody>
@@ -825,3 +828,4 @@ export default function ArtworksCatalogueView({
     </div>
   );
 }
+
