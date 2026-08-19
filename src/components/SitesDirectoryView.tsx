@@ -8,6 +8,7 @@ type SiteRow = {
   status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
   ownerName: string;
   paymentMethod: string | null;
+  createdAt: string;
 };
 
 export default function SitesDirectoryView({
@@ -40,4 +41,5 @@ export default function SitesDirectoryView({
     />
   );
 }
+
 
