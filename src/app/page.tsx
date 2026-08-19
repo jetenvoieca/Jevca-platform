@@ -5,7 +5,10 @@ import { getOpenAlerts } from "@/lib/alerts";
 
 export const dynamic = "force-dynamic";
 
-type SearchParams = { q?: string; sort?: string; archived?: string };
+type SiteStatus = "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
+const STATUS_VALUES: SiteStatus[] = ["DRAFT", "LIVE", "PAUSED", "ARCHIVED", "ISYT"];
+
+type SearchParams = { q?: string; sort?: string; status?: string };
 
 export default async function SitesDirectoryPage({
   searchParams,
@@ -14,7 +17,15 @@ export default async function SitesDirectoryPage({
 }) {
   const params = await searchParams;
   const q = params.q?.trim() || "";
-  const showArchived = params.archived === "1";
+  // 2026-08-19, direct request — replaces a plain "Show archived"
+  // checkbox with a real status filter: empty (the default) means
+  // everything except Archived, same as the checkbox's own default did,
+  // but any specific status can now be picked to see just that one,
+  // Archived included, instead of it only ever being an all-or-nothing
+  // toggle.
+  const status = STATUS_VALUES.includes(params.status as SiteStatus)
+    ? (params.status as SiteStatus)
+    : "";
   const sort =
     params.sort === "date" ? "date" : params.sort === "payment" ? "payment" : "owner";
 
@@ -41,7 +52,7 @@ export default async function SitesDirectoryPage({
 
   const sites = await db.site.findMany({
     where: {
-      ...(showArchived ? {} : { status: { not: "ARCHIVED" } }),
+      ...(status ? { status } : { status: { not: "ARCHIVED" } }),
       ...(q
         ? {
             OR: [
@@ -86,10 +97,11 @@ export default async function SitesDirectoryPage({
       sites={rows}
       q={q}
       sort={sort}
-      showArchived={showArchived}
+      status={status}
       alertCount={openAlerts.length}
     />
   );
 }
+
 
 
