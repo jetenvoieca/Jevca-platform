@@ -23,7 +23,6 @@ export default function MediaDetailPanel({
   siteId,
   media,
   tagPresets,
-  artistArtworks,
   variant = "catalogue",
   onDiscard,
   discarding = false,
@@ -34,7 +33,6 @@ export default function MediaDetailPanel({
   siteId: string;
   media: MediaDetail;
   tagPresets: string[];
-  artistArtworks: { id: string; presentationTitle: string }[];
   variant?: "catalogue" | "pendingRender";
   onDiscard?: () => void;
   discarding?: boolean;
@@ -114,7 +112,7 @@ export default function MediaDetailPanel({
                 disabled={isPending}
                 className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
-                Remove
+                Delete
               </button>
               {deleteError && (
                 <p className="w-full text-xs text-red-600">{deleteError}</p>
@@ -228,23 +226,14 @@ export default function MediaDetailPanel({
           />
         </div>
 
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">
-            Related Artwork
-          </label>
-          <select
-            name="artworkId"
-            defaultValue={media.artworkId || ""}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          >
-            <option value="">None — Marketing media</option>
-            {artistArtworks.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.presentationTitle}
-              </option>
-            ))}
-          </select>
-        </div>
+        {/* Related Artwork dropdown removed 2026-08-19, direct request —
+            this set the exact same field an artwork's own Related
+            Images picker does, just from the other direction, which
+            risked feeling like a second, meaningful-looking way to
+            manage the same relationship when it was really just a
+            confusing shortcut. Linking now only happens by actually
+            adding this image to an artwork from that artwork's own
+            editor. */}
 
         <div>
           <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
@@ -306,4 +295,5 @@ export default function MediaDetailPanel({
     </div>
   );
 }
+
 
