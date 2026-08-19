@@ -2,7 +2,9 @@
 
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { LAST_VISITED_SITE_KEY } from "@/components/LastVisitedSiteTracker";
+import { SITES_STATUS_FILTER_COOKIE } from "@/lib/sitesStatusFilter";
 
 type SiteRow = {
   id: string;
@@ -60,6 +62,8 @@ export default function SitesListColumn({
   status: string;
   selectedId?: string | null;
 }) {
+  const router = useRouter();
+
   // Starts from whatever the server rendered (so the very first paint
   // matches exactly, no hydration mismatch), then a moment later picks
   // up whatever this browser last actually chose — same SSR-safe
@@ -161,29 +165,41 @@ export default function SitesListColumn({
             >
               Search
             </button>
-            {/* 2026-08-19, direct request — replaces a plain "Show
-                archived" checkbox with a real status filter. Empty (the
-                default) means everything except Archived, same as the
-                checkbox's own default did; any specific status can now
-                be picked to see just that one instead of it only ever
-                being all-or-nothing. Submits the same way search text
-                does, since this genuinely changes which sites the
-                server sends back, not just how an already-loaded list
-                looks (that's what Sort, separately, now does). */}
-            <select
-              name="status"
-              defaultValue={status}
-              onChange={(e) => e.currentTarget.form?.requestSubmit()}
-              className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
-            >
-              <option value="">All except Archived</option>
-              <option value="DRAFT">Draft</option>
-              <option value="LIVE">Live</option>
-              <option value="PAUSED">Paused</option>
-              <option value="ISYT">ISYT</option>
-              <option value="ARCHIVED">Archived</option>
-            </select>
           </form>
+          {/* 2026-08-19, direct request — replaces a plain "Show
+              archived" checkbox with a real status filter. Empty (the
+              default) means everything except Archived, same as the
+              checkbox's own default did; any specific status can now be
+              picked to see just that one instead of it only ever being
+              all-or-nothing.
+              Sets a cookie rather than submitting a form (2026-08-19,
+              second pass) — a URL param reset to the default every time
+              a specific site was opened, since that page's own copy of
+              this list never carried it through. Deliberately not the
+              same fully-client-side approach used for Sort below,
+              though: this genuinely changes which sites the server
+              fetches, and with this list expected to grow into the
+              hundreds, always fetching everything just to filter it in
+              the browser doesn't scale the way re-sorting an
+              already-fetched page does. The cookie is read server-side
+              (see sitesStatusFilter.ts) by both this page and the
+              site-detail page's own copy, so the database query itself
+              stays properly filtered no matter which one you're on. */}
+          <select
+            defaultValue={status}
+            onChange={(e) => {
+              document.cookie = `${SITES_STATUS_FILTER_COOKIE}=${e.target.value}; path=/; max-age=31536000`;
+              router.refresh();
+            }}
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+          >
+            <option value="">All except Archived</option>
+            <option value="DRAFT">Draft</option>
+            <option value="LIVE">Live</option>
+            <option value="PAUSED">Paused</option>
+            <option value="ISYT">ISYT</option>
+            <option value="ARCHIVED">Archived</option>
+          </select>
           <select
             value={clientSort}
             onChange={(e) => handleSortChange(e.target.value as SortValue)}
@@ -286,4 +302,5 @@ export default function SitesListColumn({
     </div>
   );
 }
+
 
