@@ -113,7 +113,6 @@ export async function getArtistArtworksForLinking(artistId: string) {
 export async function updateMedia(id: string, siteId: string, formData: FormData): Promise<void> {
   const caption = (formData.get("caption") as string)?.trim() || null;
   const tagsRaw = (formData.get("tags") as string)?.trim() || "";
-  const artworkIdRaw = (formData.get("artworkId") as string)?.trim() || "";
 
   const tags = tagsRaw
     ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean)
@@ -126,12 +125,21 @@ export async function updateMedia(id: string, siteId: string, formData: FormData
   // client never sends it — these are real, potentially long-lived
   // library items, not fresh Hopper uploads, so any alt text already on
   // one stays exactly as it was rather than getting silently wiped out.
+  //
+  // artworkId removed from this form the same way, 2026-08-19, direct
+  // request — the "Related Artwork" dropdown here set the exact same
+  // field an artwork's own Related Images picker does, just from the
+  // other direction, which risked feeling like a second, weaker, easily
+  // stale-looking way to manage the same relationship. Linking now only
+  // happens from the artwork side. Also deliberately not touched here
+  // for the same reason as alt text above: this action no longer sends
+  // it, so touching it here would silently unlink every existing
+  // relationship the next time someone saved an unrelated caption edit.
   await db.image.update({
     where: { id },
     data: {
       caption,
       tags,
-      artworkId: artworkIdRaw || null,
       // Cleared on any real save here — matches the same "saved at all
       // counts as reviewed" approach as Artwork's needsReview above
       // (2026-08-17). Harmless for a media item that was never flagged
@@ -188,4 +196,5 @@ export async function removeMediaTagPreset(artistId: string, siteId: string, val
   await db.artist.update({ where: { id: artistId }, data: { mediaTags: next } });
   revalidatePath(`/sites/${siteId}/media/settings`);
 }
+
 
