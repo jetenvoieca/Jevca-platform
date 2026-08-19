@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
+import { deleteImagePermanently } from "./imageDelete";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
@@ -70,8 +71,18 @@ export async function updateHopperCaption(
   await db.image.update({ where: { id }, data: { caption } });
 }
 
-export async function binHopperItem(id: string, siteId: string): Promise<void> {
-  await db.image.update({ where: { id }, data: { status: "ARCHIVED" } });
+// 2026-08-19, direct request — was `status: "ARCHIVED"` (the same
+// reversible-delete pattern used everywhere else in this app), changed
+// specifically for Images: there was never a Trash/Archived view to
+// actually find and restore one, so "reversible" was theoretical, not
+// real. See deleteImagePermanently for the full reasoning — this stays
+// scoped to Images; Site archiving (a completely different, much bigger
+// action) is untouched.
+export async function binHopperItem(
+  id: string,
+  siteId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  return deleteImagePermanently(id);
 }
 
 export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {
@@ -175,4 +186,5 @@ export async function createArtworkFromHopperQuick(
 
   return { ok: true, artwork: { id: artwork.id } };
 }
+
 
