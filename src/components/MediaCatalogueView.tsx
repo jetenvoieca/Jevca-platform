@@ -479,7 +479,6 @@ export default function MediaCatalogueView({
               siteId={siteId}
               media={selected}
               tagPresets={tagPresets}
-              artistArtworks={artistArtworks}
               onClose={handleClose}
               onArchived={handleArchived}
               onDataChanged={refreshSelected}
@@ -523,3 +522,4 @@ function AddNewRow({ siteId }: { siteId: string }) {
     </Link>
   );
 }
+
