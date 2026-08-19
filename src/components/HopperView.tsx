@@ -218,7 +218,16 @@ export default function HopperView({
 
   const handleBin = (item: HopperItem) => {
     startTransition(async () => {
-      await binHopperItem(item.id, siteId);
+      const result = await binHopperItem(item.id, siteId);
+      if (!result.ok) {
+        // Extremely unlikely for a Hopper item specifically (it can't
+        // yet be an artwork's main image or a video render result — see
+        // deleteImagePermanently), but shouldn't silently advance and
+        // log "Binned" if the delete genuinely didn't happen.
+        setAddError(result.error);
+        return;
+      }
+      setAddError(null);
       logProcessed(item, "Binned", null);
       advanceAfterAction();
     });
