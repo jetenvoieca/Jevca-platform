@@ -569,6 +569,23 @@ export default function HopperView({
                       </p>
                     </div>
                   );
+                  const removeButton = (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        // Stops the surrounding Link (when this row has
+                        // one) from navigating — this button removing the
+                        // row is the only thing a click on it should do.
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setProcessedLog((prev) => prev.filter((p) => p.key !== entry.key));
+                      }}
+                      aria-label={`Remove ${entry.label} from the processed list`}
+                      className="shrink-0 rounded px-1.5 py-0.5 text-sm leading-none text-neutral-300 hover:bg-neutral-100 hover:text-neutral-600"
+                    >
+                      ×
+                    </button>
+                  );
                   return entry.href ? (
                     <Link
                       key={entry.key}
@@ -577,6 +594,7 @@ export default function HopperView({
                     >
                       {thumb}
                       {text}
+                      {removeButton}
                     </Link>
                   ) : (
                     <div
@@ -585,6 +603,7 @@ export default function HopperView({
                     >
                       {thumb}
                       {text}
+                      {removeButton}
                     </div>
                   );
                 })}
