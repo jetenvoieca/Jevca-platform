@@ -31,6 +31,17 @@ export default async function AccountsPage() {
 
   const months = new Map<string, MonthGroup>();
   for (const p of payments) {
+    // 2026-08-19 — a payment with an invalid paidAt won't crash this page
+    // the way it did the site-detail page (toLocaleDateString doesn't
+    // throw the way toISOString does), but without this it'd silently
+    // group under a nonsense "NaN-NaN" key labelled "Invalid Date" —
+    // confusing to land on, and it'd never show under any Q1–Q4/This
+    // Year filter either way. Skipped here instead; the row itself still
+    // exists and shows up fine on the site's own Settings page (that
+    // page's own crash is what's actually fixed, in siteDetailPage.tsx),
+    // where it can be deleted like any other manual entry.
+    if (Number.isNaN(p.paidAt.getTime())) continue;
+
     const key = `${p.paidAt.getFullYear()}-${String(p.paidAt.getMonth() + 1).padStart(2, "0")}`;
     if (!months.has(key)) {
       months.set(key, {
@@ -92,5 +103,6 @@ export default async function AccountsPage() {
     />
   );
 }
+
 
 
