@@ -1,14 +1,13 @@
 import Link from "next/link";
+import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import SitesDirectoryView from "@/components/SitesDirectoryView";
 import { getOpenAlerts } from "@/lib/alerts";
+import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 
 export const dynamic = "force-dynamic";
 
-type SiteStatus = "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
-const STATUS_VALUES: SiteStatus[] = ["DRAFT", "LIVE", "PAUSED", "ARCHIVED", "ISYT"];
-
-type SearchParams = { q?: string; sort?: string; status?: string };
+type SearchParams = { q?: string; sort?: string };
 
 export default async function SitesDirectoryPage({
   searchParams,
@@ -17,15 +16,12 @@ export default async function SitesDirectoryPage({
 }) {
   const params = await searchParams;
   const q = params.q?.trim() || "";
-  // 2026-08-19, direct request — replaces a plain "Show archived"
-  // checkbox with a real status filter: empty (the default) means
-  // everything except Archived, same as the checkbox's own default did,
-  // but any specific status can now be picked to see just that one,
-  // Archived included, instead of it only ever being an all-or-nothing
-  // toggle.
-  const status = STATUS_VALUES.includes(params.status as SiteStatus)
-    ? (params.status as SiteStatus)
-    : "";
+  // 2026-08-19 — a cookie now, not a URL param (see sitesStatusFilter.ts
+  // for the full reasoning: this needs to persist across navigating into
+  // a specific site, without fetching every site on every load just to
+  // filter client-side, which won't scale as this list grows).
+  const cookieStore = await cookies();
+  const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
   const sort =
     params.sort === "date" ? "date" : params.sort === "payment" ? "payment" : "owner";
 
@@ -50,9 +46,19 @@ export default async function SitesDirectoryPage({
     );
   }
 
+  // 2026-08-19 — no longer filters by status in the query itself. Doing
+  // that server-side was exactly why the filter reset the moment you
+  // opened a specific site: that page has its own separate copy of this
+  // list, fetched with its own hardcoded query, with no way to know what
+  // was chosen on this page. Fetching everything once and filtering
+  // client-side (same fix already applied to Sort, for the same reason)
+  // means the choice is a genuine, localStorage-persisted preference
+  // instead — it now applies consistently everywhere this list appears,
+  // with nothing to carry through a URL. The dataset here is small
+  // (dozens, not thousands), so fetching all of it unfiltered has no
+  // real cost.
   const sites = await db.site.findMany({
     where: {
-      ...(status ? { status } : { status: { not: "ARCHIVED" } }),
       ...(q
         ? {
             OR: [
@@ -102,6 +108,7 @@ export default async function SitesDirectoryPage({
     />
   );
 }
+
 
 
 
