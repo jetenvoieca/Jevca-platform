@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import StatusSelect from "@/components/StatusSelect";
 import {
   updateSite,
   updateArtist,
@@ -365,20 +366,38 @@ export default function SiteSettingsPanel({
               savedField === "notes") && <p className="text-xs text-green-600">Saved</p>}
           </div>
 
-          <div className="mt-4 border-t border-neutral-200 pt-4">
-            <label className={labelCls}>Domain</label>
-            <input
-              key={`domain-${site.id}`}
-              type="text"
-              defaultValue={site.domain || ""}
-              placeholder="e.g. janedoeartist.com"
-              onBlur={(e) => saveSite("domain", e.target.value.trim())}
-              disabled={isPending}
-              className={inputCls}
-            />
-            {savedField === "domain" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+          <div className="mt-4 flex items-end gap-3 border-t border-neutral-200 pt-4">
+            <div className="flex-1">
+              <label className={labelCls}>Domain</label>
+              <input
+                key={`domain-${site.id}`}
+                type="text"
+                defaultValue={site.domain || ""}
+                placeholder="e.g. janedoeartist.com"
+                onBlur={(e) => saveSite("domain", e.target.value.trim())}
+                disabled={isPending}
+                className={inputCls}
+              />
+            </div>
+            {/* Moved here from the persistent per-site header
+                (2026-08-19, direct request, on reflection from
+                2026-08-18's earlier move) — sits next to Domain rather
+                than in a header shown on every page, since day-to-day
+                this is checked/changed while looking at the rest of the
+                site's record, not from other screens. "Archived" is
+                labelled "Site status" here specifically to avoid reading
+                as the same thing as "Domain renewal → Status" directly
+                below, which tracks something unrelated (whether the
+                domain registration itself needs renewing). */}
+            <div>
+              <label className={labelCls}>Site status</label>
+              <StatusSelect siteId={site.id} status={site.status} />
+            </div>
+          </div>
+          {savedField === "domain" && <p className="mt-1 text-xs text-green-600">Saved</p>}
 
-            <div className="mt-3 rounded-md border border-neutral-200 p-2.5">
+          <div className="mt-4 border-t border-neutral-200 pt-4">
+            <div className="rounded-md border border-neutral-200 p-2.5">
               <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
                 Domain renewal
               </p>
@@ -860,4 +879,5 @@ export default function SiteSettingsPanel({
     </div>
   );
 }
+
 
