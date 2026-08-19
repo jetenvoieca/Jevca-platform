@@ -49,14 +49,12 @@ export default function VideoEditorView({
   initialClips,
   renderStatus,
   tagPresets,
-  artistArtworks,
 }: {
   siteId: string;
   renderId: string;
   initialClips: Clip[];
   renderStatus: RenderStatus;
   tagPresets: string[];
-  artistArtworks: { id: string; presentationTitle: string }[];
 }) {
   const [clips, setClips] = useState<Clip[]>(initialClips);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -313,7 +311,6 @@ export default function VideoEditorView({
               siteId={siteId}
               media={renderStatus.resultImage}
               tagPresets={tagPresets}
-              artistArtworks={artistArtworks}
               variant="pendingRender"
               onDiscard={() => handleDiscard(renderStatus.id)}
               discarding={discarding}
@@ -469,4 +466,5 @@ function formatTotal(seconds: number): string {
   const s = Math.round(seconds % 60);
   return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
+
 
