@@ -204,12 +204,6 @@ export default function SiteNavPanel({
         }`}
       >
         Artwork Catalogue
-        {/* Raw imports needing review (2026-08-17) — items just added
-            from the Hopper that haven't been opened/edited since. Not
-            the Hopper's own backlog count (that's a different, larger
-            number — see Hopper's own badge above) and not "how many new
-            artworks were just added" in general — specifically ones that
-            came via the Hopper and are still untouched. */}
         {artworkNeedsReviewCount > 0 && (
           <span
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
@@ -241,7 +235,6 @@ export default function SiteNavPanel({
         }`}
       >
         Media Catalogue
-        {/* Same note as Artwork Catalogue above. */}
         {mediaNeedsReviewCount > 0 && (
           <span
             className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
@@ -303,9 +296,6 @@ export default function SiteNavPanel({
         </Link>
       )}
 
-      {/* Not gated on salesEnabled, unlike Sales/Customers above — a
-          gallery is worth tracking long before any sale happens
-          (2026-08-14 decision). */}
       <Link
         prefetch={false}
         href={`/sites/${siteId}/galleries`}
@@ -318,11 +308,6 @@ export default function SiteNavPanel({
         Galleries
       </Link>
 
-      {/* Also not gated on salesEnabled (2026-08-27) — what the artist
-          spends is unrelated to whether their public site sells
-          directly. Manual entry only for now; see e-invoicing-design.md
-          for why (Pennylane API access needs a paid plan, not pursued
-          for this convenience feature). */}
       <Link
         prefetch={false}
         href={`/sites/${siteId}/purchases`}
