@@ -2,31 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-
-export type ExpenseCategory =
-  | "MATERIALS"
-  | "STUDIO"
-  | "FRAMING"
-  | "INSURANCE"
-  | "EQUIPMENT"
-  | "SHIPPING"
-  | "PROFESSIONAL_FEES"
-  | "TRAVEL"
-  | "MARKETING"
-  | "OTHER";
-
-export const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string }[] = [
-  { value: "MATERIALS", label: "Materials" },
-  { value: "STUDIO", label: "Studio" },
-  { value: "FRAMING", label: "Framing" },
-  { value: "INSURANCE", label: "Insurance" },
-  { value: "EQUIPMENT", label: "Equipment" },
-  { value: "SHIPPING", label: "Shipping" },
-  { value: "PROFESSIONAL_FEES", label: "Professional fees" },
-  { value: "TRAVEL", label: "Travel" },
-  { value: "MARKETING", label: "Marketing" },
-  { value: "OTHER", label: "Other" },
-];
+import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/expenseCategories";
 
 export type ExpenseRow = {
   id: string;

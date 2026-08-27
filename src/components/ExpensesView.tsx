@@ -6,10 +6,9 @@ import {
   createExpense,
   updateExpense,
   deleteExpense,
-  EXPENSE_CATEGORIES,
   type ExpenseRow,
-  type ExpenseCategory,
 } from "@/lib/actions/expenses";
+import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/expenseCategories";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 const inputCls =
