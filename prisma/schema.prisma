@@ -72,6 +72,22 @@ enum PaymentStatus {
   FAILED
 }
 
+// Fixed list, not free text (2026-08-27 decision) — deliberately short
+// and artist-expense-shaped rather than a general chart of accounts,
+// since this is an embryonic manual record, not full bookkeeping.
+enum ExpenseCategory {
+  MATERIALS
+  STUDIO
+  FRAMING
+  INSURANCE
+  EQUIPMENT
+  SHIPPING
+  PROFESSIONAL_FEES
+  TRAVEL
+  MARKETING
+  OTHER
+}
+
 model Artist {
   id        String       @id @default(cuid())
   name      String
@@ -133,6 +149,7 @@ model Artist {
   videoRenders VideoRender[]
   subscriptionPayments SubscriptionPayment[]
   alertEvents AlertEvent[]
+  expenses Expense[]
 }
 
 // One unified ledger of "artist paid us for their subscription" rows,
@@ -596,4 +613,34 @@ model VideoRender {
   updatedAt DateTime @updatedAt
 
   @@index([artistId])
+}
+
+// Manual record of what the artist spends — an embryonic accounts
+// feature (2026-08-27 decision), deliberately independent of Pennylane:
+// API-based auto-population from Pennylane's supplier invoices was
+// designed (see e-invoicing-design.md) but is blocked behind a paid
+// Pennylane plan, so this exists as simple manual entry instead, and can
+// be extended rather than replaced if that's ever unblocked.
+//
+// Named `Expense`, not `Purchase` — `Purchase` already means an
+// artwork sale to a buyer elsewhere in this schema; reusing the word
+// here for the opposite direction (money going out, not coming in)
+// would be actively confusing.
+model Expense {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  date        DateTime
+  payeeName   String
+  description String?
+  amount      Decimal         @db.Decimal(10, 2)
+  currency    String          @default("GBP")
+  category    ExpenseCategory @default(OTHER)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
+  @@index([date])
 }
