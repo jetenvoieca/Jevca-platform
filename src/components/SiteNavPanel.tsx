@@ -317,6 +317,23 @@ export default function SiteNavPanel({
       >
         Galleries
       </Link>
+
+      {/* Also not gated on salesEnabled (2026-08-27) — what the artist
+          spends is unrelated to whether their public site sells
+          directly. Manual entry only for now; see e-invoicing-design.md
+          for why (Pennylane API access needs a paid plan, not pursued
+          for this convenience feature). */}
+      <Link
+        prefetch={false}
+        href={`/sites/${siteId}/purchases`}
+        className={`rounded-md px-3 py-2 font-medium ${
+          pathname.startsWith(`/sites/${siteId}/purchases`)
+            ? "bg-neutral-900 text-white"
+            : "text-neutral-700 hover:bg-neutral-100"
+        }`}
+      >
+        Purchases
+      </Link>
     </nav>
   );
 }
