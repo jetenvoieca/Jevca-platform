@@ -1,13 +1,15 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createPlatformExpense,
   updatePlatformExpense,
   deletePlatformExpense,
+  importPlatformExpensesCsv,
   type PlatformExpenseRow,
+  type CsvImportResult,
 } from "@/lib/actions/platformExpenses";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -38,6 +40,10 @@ export default function PlatformExpensesView({
   const [editError, setEditError] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importPending, startImportTransition] = useTransition();
+  const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
+  const importFormRef = useRef<HTMLFormElement>(null);
 
   const totalsByCurrency = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -79,6 +85,17 @@ export default function PlatformExpensesView({
     });
   };
 
+  const handleImport = (formData: FormData) => {
+    startImportTransition(async () => {
+      const result = await importPlatformExpensesCsv(formData);
+      setImportResult(result);
+      if (result.imported > 0) {
+        importFormRef.current?.reset();
+        router.refresh();
+      }
+    });
+  };
+
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
@@ -90,6 +107,18 @@ export default function PlatformExpensesView({
           >
             Expense categories →
           </Link>
+          {!adding && (
+            <button
+              type="button"
+              onClick={() => {
+                setImporting((v) => !v);
+                setImportResult(null);
+              }}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+            >
+              Import CSV
+            </button>
+          )}
           {!adding && (
             <button
               type="button"
@@ -105,6 +134,72 @@ export default function PlatformExpensesView({
         Your own costs running the platform — hosting, domains, software. Separate from what
         each artist spends (that lives on their own Purchases page).
       </p>
+
+      {importing && (
+        <form
+          ref={importFormRef}
+          action={handleImport}
+          className="mb-6 rounded-md border border-neutral-200 bg-neutral-50 p-4"
+        >
+          <p className="mb-2 text-sm text-neutral-700">
+            CSV columns: <code className="text-xs">date, supplier, category, description, amount, currency</code>
+          </p>
+          <p className="mb-3 text-xs text-neutral-500">
+            Date must be YYYY-MM-DD. Category, description, and currency are optional — category
+            defaults to &quot;Other&quot; and gets added to your category list automatically if
+            it&apos;s new; currency defaults to GBP.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="file"
+              name="file"
+              accept=".csv,text/csv"
+              required
+              className="flex-1 text-sm"
+            />
+            <button
+              type="submit"
+              disabled={importPending}
+              className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+            >
+              {importPending ? "Importing…" : "Import"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setImporting(false);
+                setImportResult(null);
+              }}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-white"
+            >
+              Close
+            </button>
+          </div>
+
+          {importResult && (
+            <div className="mt-3 text-sm">
+              <p className={importResult.imported > 0 ? "text-green-700" : "text-neutral-600"}>
+                {importResult.imported} expense{importResult.imported === 1 ? "" : "s"} imported.
+              </p>
+              {importResult.skipped.length > 0 && (
+                <div className="mt-2 rounded-md border border-amber-200 bg-amber-50 p-2">
+                  <p className="mb-1 text-xs font-medium text-amber-800">
+                    {importResult.skipped.length} row
+                    {importResult.skipped.length === 1 ? "" : "s"} skipped:
+                  </p>
+                  <ul className="space-y-0.5 text-xs text-amber-700">
+                    {importResult.skipped.map((s, i) => (
+                      <li key={i}>
+                        Row {s.row}: {s.reason}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          )}
+        </form>
+      )}
 
       {Object.keys(totalsByCurrency).length > 0 && (
         <p className="mb-4 text-sm text-neutral-600">
