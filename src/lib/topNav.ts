@@ -6,13 +6,16 @@ export type TopNavKey =
   | "subscriptions"
   | "expenses"
   | "accountSummary"
-  | "sales";
+  | "sales"
+  | "accountSettings";
 
 // Restructured 2026-08-28 — "Accounts" is now a section header grouping
-// the five account-related pages, rather than a page in its own right.
+// the account-related pages, rather than a page in its own right.
 // "Subscriptions" is the old /accounts content (subscription revenue),
 // relabelled; "Expenses" was split out from what used to be embedded on
-// that same page; "Account" is the new Sales/Expenses/Net summary.
+// that same page; "Account" is the Sales/Expenses/Net summary; "Settings"
+// (added same day) is the expense-category editor, moved out of Expenses
+// into its own page, listed last after Consolidated Sales as requested.
 export function buildTopNavItems(active: TopNavKey, alertCount: number): AppShellNavEntry[] {
   return [
     {
@@ -24,6 +27,7 @@ export function buildTopNavItems(active: TopNavKey, alertCount: number): AppShel
         { label: "Expenses", href: "/accounts/expenses", active: active === "expenses" },
         { label: "Account", href: "/accounts/summary", active: active === "accountSummary" },
         { label: "Consolidated Sales", href: "/accounts/sales", active: active === "sales" },
+        { label: "Settings", href: "/accounts/settings", active: active === "accountSettings" },
       ],
     },
     { label: "Sites", href: "/", active: active === "sites" },

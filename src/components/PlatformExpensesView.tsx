@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createPlatformExpense,
@@ -8,10 +9,6 @@ import {
   deletePlatformExpense,
   type PlatformExpenseRow,
 } from "@/lib/actions/platformExpenses";
-import {
-  addPlatformExpenseCategory,
-  removePlatformExpenseCategory,
-} from "@/lib/actions/platformExpenseSettings";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 const inputCls =
@@ -41,8 +38,6 @@ export default function PlatformExpensesView({
   const [editError, setEditError] = useState<string | null>(null);
   const [confirmingDeleteId, setConfirmingDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-  const [categoryPending, startCategoryTransition] = useTransition();
-  const categoryFormRef = useRef<HTMLFormElement>(null);
 
   const totalsByCurrency = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -87,16 +82,24 @@ export default function PlatformExpensesView({
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <h2 className="text-lg font-semibold text-neutral-900">Business Expenses</h2>
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+        <h1 className="text-2xl font-semibold text-neutral-900">Expenses</h1>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/accounts/settings"
+            className="text-sm text-neutral-500 underline-offset-2 hover:underline"
           >
-            + Add expense
-          </button>
-        )}
+            Expense categories →
+          </Link>
+          {!adding && (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+            >
+              + Add expense
+            </button>
+          )}
+        </div>
       </div>
       <p className="mb-4 text-sm text-neutral-500">
         Your own costs running the platform — hosting, domains, software. Separate from what
@@ -322,69 +325,6 @@ export default function PlatformExpensesView({
           </table>
         </div>
       )}
-
-      <details className="rounded-lg border border-amber-100 bg-amber-50/50">
-        <summary className="cursor-pointer list-none px-4 py-3 text-xs font-medium uppercase tracking-wide text-amber-700">
-          Manage categories
-        </summary>
-        <div className="px-4 pb-4">
-          <div className="mb-3 flex flex-col gap-2">
-            {categories.map((cat) => (
-              <div
-                key={cat}
-                className="flex items-start justify-between gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm"
-              >
-                <span>{cat}</span>
-                <button
-                  type="button"
-                  disabled={categoryPending}
-                  onClick={() =>
-                    startCategoryTransition(async () => {
-                      await removePlatformExpenseCategory(cat);
-                      router.refresh();
-                    })
-                  }
-                  className="shrink-0 text-neutral-400 hover:text-red-600 disabled:opacity-50"
-                >
-                  ✕
-                </button>
-              </div>
-            ))}
-            {categories.length === 0 && (
-              <p className="text-xs text-neutral-400">
-                Nothing added yet — new expenses will default to &quot;Other&quot; until you add
-                some.
-              </p>
-            )}
-          </div>
-          <form
-            ref={categoryFormRef}
-            action={(formData) => {
-              startCategoryTransition(async () => {
-                await addPlatformExpenseCategory(formData);
-                categoryFormRef.current?.reset();
-                router.refresh();
-              });
-            }}
-            className="flex items-start gap-2"
-          >
-            <input
-              type="text"
-              name="value"
-              required
-              placeholder="e.g. Hosting"
-              className="flex-1 rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm"
-            />
-            <button
-              type="submit"
-              disabled={categoryPending}
-              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-            >
-              Add
-            </button>
-          </form>
-        </div>
-      </details>
 
       <ConfirmDialog
         open={confirmingDeleteId !== null}
