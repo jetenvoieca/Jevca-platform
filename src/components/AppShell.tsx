@@ -9,6 +9,15 @@ export type AppShellNavItem = {
   badge?: number;
 };
 
+// A top-level entry can either be a plain link (existing behaviour) or a
+// section — a non-clickable black header (2026-08-28 decision, "Accounts"
+// grouping Alerts/Subscriptions/Expenses/Account/Consolidated Sales)
+// with its own indented children below it, same visual weight as a
+// top-level item but purely organisational, not a page of its own.
+export type AppShellNavEntry =
+  | AppShellNavItem
+  | { label: string; section: true; children: AppShellNavItem[] };
+
 export default function AppShell({
   preview,
   content,
@@ -32,7 +41,7 @@ export default function AppShell({
   // draft changes — neither of which exists at the top-level Sites screen,
   // so callers leave this false until that logic is built.
   publishEnabled?: boolean;
-  navItems: AppShellNavItem[];
+  navItems: AppShellNavEntry[];
 }) {
   const hasPreview = preview !== undefined && preview !== null;
   const hasRightPanel = rightPanel !== undefined && rightPanel !== null;
@@ -47,6 +56,42 @@ export default function AppShell({
     : hasRightPanel
       ? "grid-cols-[1fr_300px_220px]"
       : "grid-cols-[1fr_220px]";
+
+  function renderLink(item: AppShellNavItem, indented: boolean) {
+    if (item.disabled) {
+      return (
+        <span
+          key={item.href}
+          className={`cursor-not-allowed rounded-md px-3 py-2 text-sm font-medium text-neutral-300 ${
+            indented ? "ml-2" : ""
+          }`}
+        >
+          {item.label}
+        </span>
+      );
+    }
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        prefetch={false}
+        className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium ${
+          indented ? "ml-2" : ""
+        } ${item.active ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"}`}
+      >
+        {item.label}
+        {!!item.badge && (
+          <span
+            className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
+              item.active ? "bg-white/20 text-white" : "bg-red-100 text-red-700"
+            }`}
+          >
+            {item.badge}
+          </span>
+        )}
+      </Link>
+    );
+  }
 
   return (
     <div className={`grid h-screen overflow-hidden ${gridColsClass}`}>
@@ -78,35 +123,17 @@ export default function AppShell({
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
           {navItems.map((item) =>
-            item.disabled ? (
-              <span
-                key={item.href}
-                className="cursor-not-allowed rounded-md px-3 py-2 text-sm font-medium text-neutral-300"
-              >
-                {item.label}
-              </span>
+            "section" in item ? (
+              <div key={item.label} className="mb-2">
+                <div className="rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white">
+                  {item.label}
+                </div>
+                <div className="mt-1 flex flex-col gap-1">
+                  {item.children.map((child) => renderLink(child, true))}
+                </div>
+              </div>
             ) : (
-              <Link
-                key={item.href}
-                href={item.href}
-                prefetch={false}
-                className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium ${
-                  item.active
-                    ? "bg-neutral-900 text-white"
-                    : "text-neutral-700 hover:bg-neutral-100"
-                }`}
-              >
-                {item.label}
-                {!!item.badge && (
-                  <span
-                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-                      item.active ? "bg-white/20 text-white" : "bg-red-100 text-red-700"
-                    }`}
-                  >
-                    {item.badge}
-                  </span>
-                )}
-              </Link>
+              renderLink(item, false)
             )
           )}
         </nav>

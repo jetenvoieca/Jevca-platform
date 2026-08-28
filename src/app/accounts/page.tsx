@@ -5,9 +5,6 @@ import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
 import AccountsBackfillButton from "@/components/AccountsBackfillButton";
 import AccountsPeriodView from "@/components/AccountsPeriodView";
-import PlatformExpensesView from "@/components/PlatformExpensesView";
-import { listPlatformExpenses } from "@/lib/actions/platformExpenses";
-import { getPlatformExpenseCategories } from "@/lib/actions/platformExpenseSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -25,16 +22,18 @@ type MonthGroup = {
   }[];
 };
 
+// Renamed from "Accounts" to "Subscriptions" (2026-08-28) — "Accounts" is
+// now the section header in the nav grouping this page alongside
+// Expenses, Account, and Consolidated Sales; this page itself is
+// specifically the subscription-revenue view. Business Expenses, which
+// used to be embedded below this content, now lives on its own page at
+// /accounts/expenses.
 export default async function AccountsPage() {
   const payments = await db.subscriptionPayment.findMany({
     include: { artist: { select: { name: true, paymentMethod: true } } },
     orderBy: { paidAt: "desc" },
   });
   const openAlerts = await getOpenAlerts();
-  const [platformExpenses, platformExpenseCategories] = await Promise.all([
-    listPlatformExpenses(),
-    getPlatformExpenseCategories(),
-  ]);
 
   const months = new Map<string, MonthGroup>();
   for (const p of payments) {
@@ -79,11 +78,11 @@ export default async function AccountsPage() {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("accounts", openAlerts.length)}
+      navItems={buildTopNavItems("subscriptions", openAlerts.length)}
       content={
         <div className="mx-auto max-w-3xl px-6 py-6">
           <div className="mb-1 flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-neutral-900">Accounts</h1>
+            <h1 className="text-2xl font-semibold text-neutral-900">Subscriptions</h1>
             <Link
               href="/accounts/sales"
               className="text-sm text-neutral-500 underline-offset-2 hover:underline"
@@ -95,7 +94,8 @@ export default async function AccountsPage() {
             Subscription revenue by month — artists paying us. Stripe and manually-entered
             payments together. Totals are kept separate per currency rather than combined, since
             converting between them isn&apos;t something to do silently. For artists&apos; own
-            sales to their buyers, see Consolidated Sales.
+            sales to their buyers, see Consolidated Sales — for your own business costs, see
+            Expenses.
           </p>
 
           <AccountsBackfillButton />
@@ -105,15 +105,8 @@ export default async function AccountsPage() {
           ) : (
             <AccountsPeriodView sortedMonths={sortedMonths} currentYear={currentYear} />
           )}
-
-          <hr className="my-8 border-neutral-200" />
-
-          <PlatformExpensesView expenses={platformExpenses} categories={platformExpenseCategories} />
         </div>
       }
     />
   );
 }
-
-
-

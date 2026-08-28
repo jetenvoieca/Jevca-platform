@@ -1,12 +1,31 @@
-import type { AppShellNavItem } from "@/components/AppShell";
+import type { AppShellNavEntry } from "@/components/AppShell";
 
-export type TopNavKey = "sites" | "alerts" | "accounts" | "sales";
+export type TopNavKey =
+  | "sites"
+  | "alerts"
+  | "subscriptions"
+  | "expenses"
+  | "accountSummary"
+  | "sales";
 
-export function buildTopNavItems(active: TopNavKey, alertCount: number): AppShellNavItem[] {
+// Restructured 2026-08-28 — "Accounts" is now a section header grouping
+// the five account-related pages, rather than a page in its own right.
+// "Subscriptions" is the old /accounts content (subscription revenue),
+// relabelled; "Expenses" was split out from what used to be embedded on
+// that same page; "Account" is the new Sales/Expenses/Net summary.
+export function buildTopNavItems(active: TopNavKey, alertCount: number): AppShellNavEntry[] {
   return [
+    {
+      label: "Accounts",
+      section: true,
+      children: [
+        { label: "Alerts", href: "/alerts", active: active === "alerts", badge: alertCount },
+        { label: "Subscriptions", href: "/accounts", active: active === "subscriptions" },
+        { label: "Expenses", href: "/accounts/expenses", active: active === "expenses" },
+        { label: "Account", href: "/accounts/summary", active: active === "accountSummary" },
+        { label: "Consolidated Sales", href: "/accounts/sales", active: active === "sales" },
+      ],
+    },
     { label: "Sites", href: "/", active: active === "sites" },
-    { label: "Alerts", href: "/alerts", active: active === "alerts", badge: alertCount },
-    { label: "Accounts", href: "/accounts", active: active === "accounts" },
-    { label: "Consolidated Sales", href: "/accounts/sales", active: active === "sales" },
   ];
 }
