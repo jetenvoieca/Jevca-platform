@@ -116,10 +116,10 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
 // "Create Derivative" (2026-08-16) — for when the same physical piece
 // legitimately exists as more than one sellable listing (e.g. an
 // Original alongside a Paper Edition of it, or the same image reused for
-// a different size/framing option). Duplicates the Catalogue fields,
-// Presentation fields (including pricing, so it's immediately sellable —
-// not left needing a re-save before Payment will accept a sale), and
-// every image currently on the artwork — main and Related alike.
+// a different size option). Duplicates the Catalogue fields, Presentation
+// fields (including pricing, so it's immediately sellable — not left
+// needing a re-save before Payment will accept a sale), and every image
+// currently on the artwork — main and Related alike.
 //
 // Images are duplicated as new `Image` rows pointing at the exact same
 // stored file (same `key`/`url`/thumbnailKey/displayKey), not re-uploaded
@@ -127,7 +127,10 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
 // exactly one artwork), so two artworks can never literally share one
 // row, but they can cheaply share the same underlying file. This is
 // exactly what avoids the "upload the same photo again" confusion this
-// feature exists to prevent.
+// feature exists to prevent — and, since 2026-08-28, is also the
+// intended way to represent the same piece offered both framed and
+// unframed: two separate Catalogue entries, each with its own single
+// price, rather than one entry with two prices.
 //
 // Deliberately reset rather than copied:
 // - Availability always starts AVAILABLE, regardless of the original's
@@ -170,7 +173,9 @@ export async function duplicateArtwork(artworkId: string, siteId: string) {
       year: original.year,
       edition: original.edition,
       availableQty: original.availableQty,
-      priceFramed: original.priceFramed,
+      offeredPrice: original.offeredPrice,
+      presentationMedium: original.presentationMedium,
+      viewingLocation: original.viewingLocation,
     },
   });
 
@@ -394,6 +399,8 @@ export async function getArtworkDetailForClient(id: string) {
     presentationPrice: artwork.presentationPrice != null ? artwork.presentationPrice.toString() : null,
     description: artwork.description,
     medium: artwork.medium,
+    presentationMedium: artwork.presentationMedium,
+    viewingLocation: artwork.viewingLocation,
     presentationGroup: artwork.presentationGroup,
     availability: artwork.availability,
     visible: artwork.visible,
@@ -405,7 +412,7 @@ export async function getArtworkDetailForClient(id: string) {
     location: artwork.location,
     edition: artwork.edition,
     availableQty: artwork.availableQty,
-    priceFramed: artwork.priceFramed != null ? artwork.priceFramed.toString() : null,
+    offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     studioNotes: artwork.studioNotes,
     images: artwork.images
       .slice()
@@ -450,44 +457,32 @@ export async function updatePresentation(
   formData: FormData
 ): Promise<void> {
   const presentationTitle = (formData.get("presentationTitle") as string)?.trim();
-  const priceRaw = (formData.get("presentationPrice") as string)?.trim();
-  const priceFramedRaw = (formData.get("priceFramed") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
-  // Dimensions is no longer edited from this tab (2026-08-15 — dropped
-  // in favour of just showing Catalogue's Size read-only here instead),
-  // so deliberately not touched — leaving whatever was last saved there
-  // untouched rather than reading a field that no longer exists in the
-  // form and silently wiping it to null.
+  // Presentation's own Medium wording and "Can be viewed at"
+  // (2026-08-28) — Medium is seeded once from Catalogue's `medium` in
+  // updateCatalogue below, then independent from here on; viewingLocation
+  // has no Catalogue equivalent to seed from at all.
+  const presentationMedium = (formData.get("presentationMedium") as string)?.trim() || null;
+  const viewingLocation = (formData.get("viewingLocation") as string)?.trim() || null;
+  // Price is no longer typed on this tab at all (2026-08-28) — it's a
+  // read-only mirror of Catalogue's Offered price, written only from
+  // updateCatalogue. Framed price and the per-artwork Release message/
+  // Release-after fields are gone from this form the same way — see the
+  // matching schema.prisma comments.
 
   await db.artwork.update({
     where: { id },
     data: {
       presentationTitle,
-      presentationPrice: priceRaw || null,
-      priceFramed: priceFramedRaw || null,
       description,
+      presentationMedium,
+      viewingLocation,
       // Cleared on any real save here — this tab (or Catalogue) being
       // saved at all is exactly "reviewed and edited" for the purposes
       // of the raw-import count next to Artwork Catalogue in the nav
       // (2026-08-17). Harmless to also clear it for an artwork that was
       // never flagged in the first place — it's already false.
       needsReview: false,
-      // Medium and Group are no longer editable from here — both now
-      // read-only, live-mirroring Catalogue's `medium` and
-      // `catalogueGroup` (edited only from the Catalogue tab). The
-      // `presentationGroup` column itself is left in the database
-      // untouched rather than dropped, in case a genuinely independent
-      // public-facing Group value is ever wanted again — same reasoning
-      // as the kept-but-unused `visible` column.
-      //
-      // Availability moved to the Catalogue tab — it's part of the
-      // artist's own working record, not something typed while looking at
-      // "what customers see." Visibility is deliberately not set here
-      // either — it'll be governed by which pages feature the artwork,
-      // not a manual toggle on this screen. The column stays in the
-      // database (untouched, whatever it was) rather than being dropped,
-      // to avoid a destructive migration for a field that may be wanted
-      // again.
     },
   });
 
@@ -509,27 +504,29 @@ export async function updateCatalogue(
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
   const medium = (formData.get("medium") as string)?.trim() || null;
   const availability = formData.get("availability") as Availability;
+  // The actual asking price (2026-08-28), replacing the old "Catalogue
+  // holds no price" rule now that Offered price is the one place price
+  // is typed at all.
+  const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
 
-  // Presentation's Title still defaults from Catalogue's Name — but only
-  // the first time Catalogue is actually filled in, and only while
-  // Presentation is still at its untouched default. The moment someone
-  // types something different directly into Presentation, it's
-  // considered overridden and this stops touching that field — same
-  // "seed once, then independent" pattern already used for Presentation
-  // being seeded from Catalogue at creation. Price no longer seeds this
-  // way (2026-08-15) — it lives only on Presentation now (Catalogue
-  // holds nothing that varies). Size and Dimensions are the same
-  // field (2026-08-16 clarified) — Size already holds real
-  // dimension-like values via the artist's own preset list, so there's
-  // only ever the one field, not two.
+  // Presentation's Title still defaults from Catalogue's Name, and (new,
+  // 2026-08-28) Presentation's own Medium defaults from Catalogue's
+  // Medium — but only the first time each is actually filled in, and
+  // only while Presentation is still at its untouched default. The
+  // moment someone types something different directly into Presentation,
+  // it's considered overridden and this stops touching that field —
+  // "seed once, then independent," same pattern used for both.
   const current = await db.artwork.findUnique({
     where: { id },
-    select: { presentationTitle: true },
+    select: { presentationTitle: true, presentationMedium: true },
   });
 
-  const presentationUpdate: { presentationTitle?: string } = {};
+  const presentationUpdate: { presentationTitle?: string; presentationMedium?: string } = {};
   if (current?.presentationTitle === "Untitled" && catalogueName) {
     presentationUpdate.presentationTitle = catalogueName;
+  }
+  if (!current?.presentationMedium && medium) {
+    presentationUpdate.presentationMedium = medium;
   }
 
   await db.artwork.update({
@@ -546,6 +543,12 @@ export async function updateCatalogue(
       studioNotes,
       medium,
       availability,
+      offeredPrice: offeredPriceRaw || null,
+      // Mirrors into Presentation's Price (2026-08-28) — see the note on
+      // Artwork.presentationPrice in schema.prisma for why this stays a
+      // real synced column rather than every consumer re-plumbed to read
+      // offeredPrice directly.
+      presentationPrice: offeredPriceRaw || null,
       // See the matching note in updatePresentation above.
       needsReview: false,
       ...presentationUpdate,
@@ -578,8 +581,11 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
     !artwork.saleTerms &&
     artwork.purchases.length === 0 &&
     !artwork.presentationPrice &&
+    !artwork.offeredPrice &&
     !artwork.description &&
     !artwork.medium &&
+    !artwork.presentationMedium &&
+    !artwork.viewingLocation &&
     !artwork.presentationGroup &&
     !artwork.year &&
     !artwork.type &&
@@ -588,7 +594,6 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
     !artwork.location &&
     !artwork.edition &&
     !artwork.availableQty &&
-    !artwork.priceFramed &&
     !artwork.studioNotes;
 
   if (!isBlank) return;
@@ -657,4 +662,3 @@ export async function getArtworksByIds(ids: string[]) {
       };
     });
 }
-
