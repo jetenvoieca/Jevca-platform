@@ -5,6 +5,9 @@ import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
 import AccountsBackfillButton from "@/components/AccountsBackfillButton";
 import AccountsPeriodView from "@/components/AccountsPeriodView";
+import PlatformExpensesView from "@/components/PlatformExpensesView";
+import { listPlatformExpenses } from "@/lib/actions/platformExpenses";
+import { getPlatformExpenseCategories } from "@/lib/actions/platformExpenseSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +31,10 @@ export default async function AccountsPage() {
     orderBy: { paidAt: "desc" },
   });
   const openAlerts = await getOpenAlerts();
+  const [platformExpenses, platformExpenseCategories] = await Promise.all([
+    listPlatformExpenses(),
+    getPlatformExpenseCategories(),
+  ]);
 
   const months = new Map<string, MonthGroup>();
   for (const p of payments) {
@@ -98,6 +105,10 @@ export default async function AccountsPage() {
           ) : (
             <AccountsPeriodView sortedMonths={sortedMonths} currentYear={currentYear} />
           )}
+
+          <hr className="my-8 border-neutral-200" />
+
+          <PlatformExpensesView expenses={platformExpenses} categories={platformExpenseCategories} />
         </div>
       }
     />

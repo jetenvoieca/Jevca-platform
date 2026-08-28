@@ -634,3 +634,38 @@ model Expense {
   @@index([artistId])
   @@index([date])
 }
+
+// The platform owner's own business expenses (Namecheap, Netlify, etc.)
+// — deliberately separate from Expense above, which is an artist's own
+// spending. This one isn't tied to any Artist at all; it sits against
+// the platform's own subscription revenue on the Accounts page
+// (2026-08-27 decision).
+model PlatformExpense {
+  id String @id @default(cuid())
+
+  date        DateTime
+  payeeName   String
+  description String?
+  amount      Decimal @db.Decimal(10, 2)
+  currency    String  @default("GBP")
+  category    String  @default("Other")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
+
+// Single-row config table for platform-wide settings — there's no
+// existing "Platform" model to hang this off (everything else is
+// Artist- or Site-scoped), so this exists purely to hold the editable
+// category list for PlatformExpense above, the same way Artist holds
+// expenseCategories for its own. Always read/written via the fixed id
+// "singleton" — see src/lib/actions/platformExpenseSettings.ts.
+model PlatformSettings {
+  id String @id @default("singleton")
+
+  expenseCategories String[] @default(["Hosting", "Domains", "Software & APIs", "Legal & Accounting", "Marketing", "Other"])
+
+  updatedAt DateTime @updatedAt
+}
