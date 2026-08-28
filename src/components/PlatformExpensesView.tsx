@@ -25,12 +25,25 @@ function formatMoney(amount: string, currency: string) {
   }
 }
 
+type Period = "all" | "thisYear" | "Q1" | "Q2" | "Q3" | "Q4";
+
+// Same quarter definitions used on the Subscriptions and Account pages —
+// always this year's quarters, no separate year picker.
+const QUARTER_MONTHS: Record<"Q1" | "Q2" | "Q3" | "Q4", [number, number]> = {
+  Q1: [1, 3],
+  Q2: [4, 6],
+  Q3: [7, 9],
+  Q4: [10, 12],
+};
+
 export default function PlatformExpensesView({
   expenses,
   categories,
+  currentYear,
 }: {
   expenses: PlatformExpenseRow[];
   categories: string[];
+  currentYear: number;
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -44,14 +57,37 @@ export default function PlatformExpensesView({
   const [importPending, startImportTransition] = useTransition();
   const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
   const importFormRef = useRef<HTMLFormElement>(null);
+  const [period, setPeriod] = useState<Period>("all");
+
+  const periods: { value: Period; label: string }[] = [
+    { value: "all", label: "All time" },
+    { value: "thisYear", label: "This Year" },
+    { value: "Q1", label: "Q1" },
+    { value: "Q2", label: "Q2" },
+    { value: "Q3", label: "Q3" },
+    { value: "Q4", label: "Q4" },
+  ];
+
+  const filteredExpenses = useMemo(() => {
+    if (period === "all") return expenses;
+    return expenses.filter((e) => {
+      const [yearStr, monthStr] = e.date.split("-");
+      const year = Number(yearStr);
+      if (year !== currentYear) return false;
+      if (period === "thisYear") return true;
+      const month = Number(monthStr);
+      const [start, end] = QUARTER_MONTHS[period];
+      return month >= start && month <= end;
+    });
+  }, [expenses, period, currentYear]);
 
   const totalsByCurrency = useMemo(() => {
     const totals: Record<string, number> = {};
-    for (const e of expenses) {
+    for (const e of filteredExpenses) {
       totals[e.currency] = (totals[e.currency] || 0) + parseFloat(e.amount);
     }
     return totals;
-  }, [expenses]);
+  }, [filteredExpenses]);
 
   const handleAdd = async (formData: FormData) => {
     setAddError(null);
@@ -201,6 +237,23 @@ export default function PlatformExpensesView({
         </form>
       )}
 
+      <div className="mb-4 flex flex-wrap gap-1.5">
+        {periods.map((p) => (
+          <button
+            key={p.value}
+            type="button"
+            onClick={() => setPeriod(p.value)}
+            className={`rounded-full border px-3 py-1 text-xs ${
+              period === p.value
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+            }`}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+
       {Object.keys(totalsByCurrency).length > 0 && (
         <p className="mb-4 text-sm text-neutral-600">
           Total:{" "}
@@ -278,8 +331,10 @@ export default function PlatformExpensesView({
         </form>
       )}
 
-      {expenses.length === 0 ? (
-        <p className="mb-4 text-sm text-neutral-400">No expenses recorded yet.</p>
+      {filteredExpenses.length === 0 ? (
+        <p className="mb-4 text-sm text-neutral-400">
+          {period === "all" ? "No expenses recorded yet." : "No expenses in this period."}
+        </p>
       ) : (
         <div className="mb-4 overflow-hidden rounded-md border border-neutral-200">
           <table className="w-full text-sm">
@@ -294,7 +349,7 @@ export default function PlatformExpensesView({
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
-              {expenses.map((e) =>
+              {filteredExpenses.map((e) =>
                 editingId === e.id ? (
                   <tr key={e.id} className="bg-neutral-50">
                     <td colSpan={6} className="p-3">

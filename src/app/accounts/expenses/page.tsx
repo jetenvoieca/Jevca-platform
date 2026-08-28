@@ -24,7 +24,11 @@ export default async function AccountsExpensesPage() {
       navItems={buildTopNavItems("expenses", openAlerts.length)}
       content={
         <div className="mx-auto max-w-3xl px-6 py-6">
-          <PlatformExpensesView expenses={expenses} categories={categories} />
+          <PlatformExpensesView
+            expenses={expenses}
+            categories={categories}
+            currentYear={new Date().getFullYear()}
+          />
         </div>
       }
     />
