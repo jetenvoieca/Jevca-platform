@@ -5,7 +5,6 @@ import { revalidatePath } from "next/cache";
 
 export type SettingsField =
   | "artworkGroups"
-  | "artworkTypes"
   | "artworkLocations"
   | "mediumPresets"
   | "sizePresets"
@@ -14,34 +13,97 @@ export type SettingsField =
 // These presets belong to the Artist now (same reasoning as Artwork
 // ownership) — shared across all of that artist's sites, not duplicated
 // per site.
+//
+// Types moved off this plain-string-list mechanism entirely (2026-08-28)
+// — a real Type now carries a numeric Ref value (see ArtworkType in
+// schema.prisma), which addSettingOption/removeSettingOption below have
+// nowhere to hold. `artworkTypes` here stays a plain string[] of just
+// the names, for the several places that only ever needed a name to
+// populate a dropdown/filter (HopperView, ArtworksCatalogueView) —
+// `artworkTypeRecords` alongside it carries the full {id, name,
+// refValue} shape for the Settings screen and the Catalogue tab's
+// Reference price calculation.
 export async function getArtworkSettings(artistId: string) {
-  const artist = await db.artist.findUnique({
-    where: { id: artistId },
-    select: {
-      artworkGroups: true,
-      artworkTypes: true,
-      artworkLocations: true,
-      mediumPresets: true,
-      sizePresets: true,
-      saleSources: true,
-      defaultInstalmentCount: true,
-      defaultReleaseMessage: true,
-      defaultReleaseTriggerCount: true,
-    },
+  const [artist, artworkTypeRows] = await Promise.all([
+    db.artist.findUnique({
+      where: { id: artistId },
+      select: {
+        artworkGroups: true,
+        artworkLocations: true,
+        mediumPresets: true,
+        sizePresets: true,
+        saleSources: true,
+        defaultInstalmentCount: true,
+        defaultReleaseMessage: true,
+        defaultReleaseTriggerCount: true,
+      },
+    }),
+    db.artworkType.findMany({ where: { artistId }, orderBy: { name: "asc" } }),
+  ]);
+
+  return {
+    artworkGroups: artist?.artworkGroups ?? [],
+    artworkTypes: artworkTypeRows.map((t) => t.name),
+    artworkTypeRecords: artworkTypeRows.map((t) => ({
+      id: t.id,
+      name: t.name,
+      refValue: t.refValue.toString(),
+    })),
+    artworkLocations: artist?.artworkLocations ?? [],
+    mediumPresets: artist?.mediumPresets ?? [],
+    sizePresets: artist?.sizePresets ?? [],
+    saleSources: artist?.saleSources ?? [],
+    defaultInstalmentCount: artist?.defaultInstalmentCount ?? 5,
+    defaultReleaseMessage:
+      artist?.defaultReleaseMessage ??
+      "Available for collection/delivery once 2 payments have been made.",
+    defaultReleaseTriggerCount: artist?.defaultReleaseTriggerCount ?? 2,
+  };
+}
+
+// ---------- Types — its own small set of actions (name + Ref value) ----------
+
+function clampRefValue(raw: string | null | undefined): number {
+  let v = parseFloat(raw || "1");
+  if (Number.isNaN(v)) v = 1;
+  return Math.min(2, Math.max(0.5, v));
+}
+
+export async function addArtworkType(artistId: string, siteId: string, formData: FormData) {
+  const name = (formData.get("name") as string)?.trim();
+  if (!name) return;
+  const refValue = clampRefValue(formData.get("refValue") as string);
+
+  await db.artworkType.upsert({
+    where: { artistId_name: { artistId, name } },
+    create: { artistId, name, refValue },
+    update: { refValue },
   });
-  return (
-    artist || {
-      artworkGroups: [],
-      artworkTypes: [],
-      artworkLocations: [],
-      mediumPresets: [],
-      sizePresets: [],
-      saleSources: [],
-      defaultInstalmentCount: 5,
-      defaultReleaseMessage: "Available for collection/delivery once 2 payments have been made.",
-      defaultReleaseTriggerCount: 2,
-    }
-  );
+
+  revalidatePath(`/sites/${siteId}/artworks/settings`);
+  revalidatePath(`/sites/${siteId}/artworks`);
+}
+
+// Called on blur from the small Ref value box next to each existing
+// Type (2026-08-28) — not part of the Add row, which only takes a name;
+// a brand-new Type starts at the neutral default (1.00) and gets tuned
+// here afterwards, same as everywhere else in this screen autosaves.
+export async function updateArtworkTypeRefValue(
+  artistId: string,
+  siteId: string,
+  typeId: string,
+  refValueRaw: string
+) {
+  const refValue = clampRefValue(refValueRaw);
+  await db.artworkType.update({ where: { id: typeId }, data: { refValue } });
+  revalidatePath(`/sites/${siteId}/artworks/settings`);
+  revalidatePath(`/sites/${siteId}/artworks`);
+}
+
+export async function removeArtworkType(artistId: string, siteId: string, typeId: string) {
+  await db.artworkType.delete({ where: { id: typeId } });
+  revalidatePath(`/sites/${siteId}/artworks/settings`);
+  revalidatePath(`/sites/${siteId}/artworks`);
 }
 
 // The three Payments defaults are single values, not preset lists, so they
@@ -81,9 +143,6 @@ async function updateList(
   switch (field) {
     case "artworkGroups":
       await db.artist.update({ where: { id: artistId }, data: { artworkGroups: next } });
-      break;
-    case "artworkTypes":
-      await db.artist.update({ where: { id: artistId }, data: { artworkTypes: next } });
       break;
     case "artworkLocations":
       await db.artist.update({ where: { id: artistId }, data: { artworkLocations: next } });
