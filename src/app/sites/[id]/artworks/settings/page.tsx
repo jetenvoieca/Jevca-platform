@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SettingsListCard from "@/components/SettingsListCard";
+import ArtworkTypesCard from "@/components/ArtworkTypesCard";
 import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
 
 export default async function ArtworkSettingsPage({
@@ -31,15 +32,7 @@ export default async function ArtworkSettingsPage({
           options={settings.artworkGroups}
           placeholder="New group…"
         />
-        <SettingsListCard
-          artistId={artistId}
-          siteId={id}
-          field="artworkTypes"
-          title="Types"
-          description="Offered in the Type dropdown on every Catalogue entry."
-          options={settings.artworkTypes}
-          placeholder="New type…"
-        />
+        <ArtworkTypesCard artistId={artistId} siteId={id} types={settings.artworkTypeRecords} />
         <SettingsListCard
           artistId={artistId}
           siteId={id}
