@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updatePresentation, updateCatalogue, deleteArtwork, deleteArtworkIfBlank, duplicateArtwork } from "@/lib/actions/artworks";
 import { saveSaleTerms } from "@/lib/actions/payments";
+import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
 import PurchasePanel from "@/components/PurchasePanel";
 import RecordPastSaleForm from "@/components/RecordPastSaleForm";
@@ -17,6 +18,8 @@ export type ArtworkDetail = {
   presentationPrice: string | null;
   description: string | null;
   medium: string | null;
+  presentationMedium: string | null;
+  viewingLocation: string | null;
   presentationGroup: string | null;
   availability: string;
   visible: boolean;
@@ -28,7 +31,7 @@ export type ArtworkDetail = {
   location: string | null;
   edition: string | null;
   availableQty: number | null;
-  priceFramed: string | null;
+  offeredPrice: string | null;
   studioNotes: string | null;
   images: {
     id: string;
@@ -47,6 +50,11 @@ export type ArtworkDetail = {
 export type ArtworkSettings = {
   artworkGroups: string[];
   artworkTypes: string[];
+  // Full {id, name, refValue} shape (2026-08-28) — used to look up the
+  // selected Type's Ref value for the Catalogue tab's live Reference
+  // price. artworkTypes above stays around for anywhere that only ever
+  // needed the plain name list.
+  artworkTypeRecords: { id: string; name: string; refValue: string }[];
   artworkLocations: string[];
   mediumPresets: string[];
   sizePresets: string[];
@@ -61,17 +69,6 @@ export type ArtworkSettings = {
 function withCurrent(presets: string[], current: string | null) {
   if (!current || presets.includes(current)) return presets;
   return [current, ...presets];
-}
-
-// Shared across every consumer of Framed pricing (2026-08-15) — was
-// duplicated inline in both this file and SalesView.tsx, which is
-// exactly how they drifted out of sync and broke the build the first
-// time. Substring match on "edition" (not exact), since Type is free
-// text from the artist's own preset list and can be phrased several
-// ways ("Edition", "Giclée Edition", "Limited Edition").
-export function computeShowFramedPricing(type: string | null): boolean {
-  const normalized = (type || "").trim().toLowerCase();
-  return normalized.includes("edition") || normalized === "original - paper";
 }
 
 export default function ArtworkDetailPanel({
@@ -129,43 +126,44 @@ export default function ArtworkDetailPanel({
   const [tab, setTab] = useState<"presentation" | "catalogue" | "payment" | "past">("catalogue");
   const [isPending, startTransition] = useTransition();
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
-  // Original/Unique pieces don't have editions or framed-vs-unframed
-  // pricing the way prints do — Catalogue shows a simpler set of fields
-  // for them. Tracked live (not just at load) so switching Type updates
-  // the form immediately, without needing to save and reopen.
+  // Original/Unique pieces don't have editions the way prints do —
+  // Catalogue shows a simpler set of fields for them. Tracked live (not
+  // just at load) so switching Type updates the form immediately,
+  // without needing to save and reopen.
   const [typeValue, setTypeValue] = useState(artwork.type || "");
-  const isUniqueType = ["original", "unique"].includes(typeValue.trim().toLowerCase());
   // Substring rather than exact match (2026-08-15) — Type is free text
   // from the artist's own preset list and can be phrased several ways
-  // ("Edition", "Giclée Edition", "Limited Edition"; "Aluminium",
-  // "Print on Aluminium"), not necessarily the bare word alone.
+  // ("Edition", "Giclée Edition", "Limited Edition").
   const isEditionType = typeValue.trim().toLowerCase().includes("edition");
-  // Framed pricing applies more broadly than Edition/Available (qty) —
-  // "Original - Paper" pieces are still one-offs (no edition run), but
-  // can still be sold framed (2026-08-15 correction). Kept as its own
-  // condition rather than folding into isEditionType, since the two
-  // genuinely diverge for this type.
-  const showFramedPricing = computeShowFramedPricing(typeValue);
   const router = useRouter();
 
-  // Live state for the two "instalment price" previews (2026-08-15) —
-  // calculated, never stored: always price ÷ instalment count, kept in
-  // sync with whatever's currently typed in either field. Same
-  // calculated-not-stored convention Sale Terms already used before
-  // being merged into this tab.
-  const [unframedPriceLive, setUnframedPriceLive] = useState(artwork.presentationPrice || "");
-  const [framedPriceLive, setFramedPriceLive] = useState(artwork.priceFramed || "");
+  // Live state for Size (2026-08-28) — needed alongside typeValue to
+  // compute the Reference price preview below as either one changes,
+  // same "tracked live, not just at load" reasoning as Type above.
+  const [sizeValue, setSizeValue] = useState(artwork.size || "");
+  const selectedTypeRecord = settings.artworkTypeRecords.find(
+    (t) => t.name.toLowerCase() === typeValue.trim().toLowerCase()
+  );
+  const referencePrice = computeReferencePrice(
+    sizeValue,
+    selectedTypeRecord ? parseFloat(selectedTypeRecord.refValue) : null
+  );
+
+  // Live state for the "Of" (per-instalment) preview on Presentation
+  // (2026-08-28) — Price itself is no longer typed there (it's a
+  // read-only mirror of Catalogue's Offered price), so this only needs
+  // to react to the Instalments count changing, not a Price field
+  // changing too. Calculated, never stored — same convention as
+  // Reference price above.
   const [instalmentCountLive, setInstalmentCountLive] = useState(
     artwork.saleTerms?.instalmentCount ?? settings.defaultInstalmentCount
   );
-  const computeInstalmentPrice = (price: string) => {
-    const p = parseFloat(price);
+  const instalmentPricePreview = (() => {
+    const p = parseFloat(artwork.presentationPrice || "");
     const c = Number(instalmentCountLive);
     if (!p || !c) return "";
     return (p / c).toFixed(2);
-  };
-  const unframedInstalmentPrice = computeInstalmentPrice(unframedPriceLive);
-  const framedInstalmentPrice = computeInstalmentPrice(framedPriceLive);
+  })();
 
   // ---- Autosave (2026-08-15) — Presentation and Catalogue used to be
   // the only two forms left in this whole app still requiring a manual
@@ -179,8 +177,8 @@ export default function ArtworkDetailPanel({
   // Reads straight from the DOM via FormData rather than controlling
   // every field in React state — much less code, and safe here because
   // nothing in either form needs to react to another field's value
-  // (unlike Type, which stays its own controlled state for the
-  // conditional fields below).
+  // (unlike Type/Size, which stay their own controlled state for the
+  // Reference price preview above).
   const autosavePresentation = (form: HTMLFormElement) => {
     const formData = new FormData(form);
     // Title is required — never autosave it away to blank just because
@@ -189,10 +187,10 @@ export default function ArtworkDetailPanel({
     if (!(formData.get("presentationTitle") as string)?.trim()) return;
     startTransition(async () => {
       // Sale Terms merged into this tab (2026-08-15) — both save from
-      // the same form. saveSaleTerms silently no-ops until Unframed
-      // price exists (it's what Sale Terms' total is now derived from),
-      // so filling in instalment settings before a price is set simply
-      // doesn't take effect yet, rather than erroring.
+      // the same form. saveSaleTerms silently no-ops until a price
+      // exists (Catalogue's Offered price, mirrored here) so filling in
+      // Instalments before a price is set simply doesn't take effect
+      // yet, rather than erroring.
       await Promise.all([
         updatePresentation(artwork.id, siteId, formData),
         saveSaleTerms(artwork.id, siteId, formData),
@@ -402,85 +400,47 @@ export default function ArtworkDetailPanel({
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Location{" "}
-                      <span className="font-normal text-neutral-400">(from Catalogue)</span>
+                      Can be viewed at
                     </label>
                     <input
                       type="text"
-                      readOnly
-                      value={artwork.location || ""}
-                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
-                    />
-                  </div>
-                </div>
-
-                {/* Framed price/instalment preview for editions and
-                    "Original - Paper" specifically (2026-08-15,
-                    corrected) — other Originals/Uniques and Aluminium
-                    are sold unframed only. */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Unframed price
-                    </label>
-                    <input
-                      type="text"
-                      name="presentationPrice"
-                      defaultValue={artwork.presentationPrice || ""}
-                      onChange={(e) => setUnframedPriceLive(e.target.value)}
-                      placeholder="e.g. 450.00"
+                      name="viewingLocation"
+                      defaultValue={artwork.viewingLocation || ""}
+                      placeholder="e.g. InspireX"
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     />
                   </div>
-                  {showFramedPricing && (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Framed price
-                      </label>
-                      <input
-                        type="text"
-                        name="priceFramed"
-                        defaultValue={artwork.priceFramed || ""}
-                        onChange={(e) => setFramedPriceLive(e.target.value)}
-                        placeholder="e.g. 550.00"
-                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                      />
-                    </div>
-                  )}
-                  {!showFramedPricing && (
-                    // Preserved, not wiped, if Type is switched away from
-                    // a framed-eligible type and back — same convention
-                    // as the Edition/Available hidden inputs in
-                    // Catalogue.
-                    <input type="hidden" name="priceFramed" value={artwork.priceFramed || ""} />
-                  )}
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Medium
+                  </label>
+                  <select
+                    name="presentationMedium"
+                    defaultValue={artwork.presentationMedium || ""}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose from list…</option>
+                    {withCurrent(settings.mediumPresets, artwork.presentationMedium).map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="grid grid-cols-4 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Unframed instalment price
+                      Price <span className="font-normal text-neutral-400">(from Catalogue)</span>
                     </label>
                     <input
                       type="text"
                       readOnly
-                      value={unframedInstalmentPrice || "—"}
+                      value={artwork.presentationPrice || ""}
                       className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
                     />
                   </div>
-                  {showFramedPricing && (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Framed instalment price
-                      </label>
-                      <input
-                        type="text"
-                        readOnly
-                        value={framedInstalmentPrice || "—"}
-                        className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
-                      />
-                    </div>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-3 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Instalments
@@ -496,18 +456,14 @@ export default function ArtworkDetailPanel({
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Release after
+                      Of
                     </label>
                     <input
-                      type="number"
-                      name="releaseTriggerCount"
-                      min={1}
-                      defaultValue={
-                        artwork.saleTerms?.releaseTriggerCount ?? settings.defaultReleaseTriggerCount
-                      }
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      type="text"
+                      readOnly
+                      value={instalmentPricePreview || "—"}
+                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
                     />
-                    <p className="mt-1 text-xs text-neutral-400">payments</p>
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -522,18 +478,6 @@ export default function ArtworkDetailPanel({
                       <option value="EUR">EUR</option>
                     </select>
                   </div>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Release message
-                  </label>
-                  <textarea
-                    name="releaseMessage"
-                    defaultValue={artwork.saleTerms?.releaseMessage ?? settings.defaultReleaseMessage}
-                    rows={2}
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -641,8 +585,11 @@ export default function ArtworkDetailPanel({
                     </label>
                     <select
                       name="size"
-                      defaultValue={artwork.size || ""}
-                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
+                      value={sizeValue}
+                      onChange={(e) => {
+                        setSizeValue(e.target.value);
+                        autosaveCatalogue(e.currentTarget.form!);
+                      }}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
                       <option value="">Choose from list…</option>
@@ -653,6 +600,31 @@ export default function ArtworkDetailPanel({
                       ))}
                     </select>
                   </div>
+                  {/* Edition only applies to editioned work — Originals
+                      and Uniques (and materials like Aluminium that
+                      aren't editioned) are one-offs (2026-08-15
+                      decision). Positive match on "is this an edition"
+                      rather than the old "isn't unique", since a type
+                      like Aluminium is neither. */}
+                  {isEditionType && (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Edition
+                      </label>
+                      <input
+                        type="text"
+                        name="edition"
+                        defaultValue={artwork.edition || ""}
+                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                      />
+                    </div>
+                  )}
+                  {!isEditionType && (
+                    // Preserve any Edition value already on record rather
+                    // than wiping it out just because Type changed — it'll
+                    // reappear if switched back.
+                    <input type="hidden" name="edition" value={artwork.edition || ""} />
+                  )}
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
                       Location
@@ -671,25 +643,6 @@ export default function ArtworkDetailPanel({
                       ))}
                     </select>
                   </div>
-                  {/* Edition/Available (qty) only apply to editioned work
-                      — Originals, Uniques, and materials like Aluminium
-                      that aren't editioned are one-offs (2026-08-15
-                      decision). Positive match on "is this an edition"
-                      rather than the old "isn't unique", since a type
-                      like Aluminium is neither. */}
-                  {isEditionType && (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Edition
-                      </label>
-                      <input
-                        type="text"
-                        name="edition"
-                        defaultValue={artwork.edition || ""}
-                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                      />
-                    </div>
-                  )}
                   {isEditionType && (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -704,18 +657,39 @@ export default function ArtworkDetailPanel({
                     </div>
                   )}
                   {!isEditionType && (
-                    <>
-                      {/* Preserve any Edition/Available values already on
-                          record rather than wiping them out just because
-                          Type changed — they'll reappear if switched back. */}
-                      <input type="hidden" name="edition" value={artwork.edition || ""} />
-                      <input
-                        type="hidden"
-                        name="availableQty"
-                        value={artwork.availableQty ?? ""}
-                      />
-                    </>
+                    <input
+                      type="hidden"
+                      name="availableQty"
+                      value={artwork.availableQty ?? ""}
+                    />
                   )}
+                  {/* Reference price is a suggestion, not typed —
+                      (Size preset's width × height) × the selected
+                      Type's Ref value, recalculated live as either
+                      changes (2026-08-28). See src/lib/pricing.ts. */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Reference price
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
+                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Offered price
+                    </label>
+                    <input
+                      type="text"
+                      name="offeredPrice"
+                      defaultValue={artwork.offeredPrice || ""}
+                      placeholder="e.g. 450.00"
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
                   {!isEditionType ? (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -740,16 +714,6 @@ export default function ArtworkDetailPanel({
                     // than left out of the submitted form.
                     <input type="hidden" name="availability" value={artwork.availability} />
                   )}
-                  {/* Price fields removed from Catalogue entirely
-                      (2026-08-15) — Catalogue is the single-source private
-                      working record and shouldn't hold anything that
-                      varies, like price. Both moved to Presentation
-                      (Unframed/Framed price), merged there with what used
-                      to be the separate Sale Terms tab. presentationPrice/
-                      priceFramed stay on the Artwork model — Presentation
-                      writes to the same fields, just from a different tab
-                      — so no hidden-input preservation is needed here any
-                      more. */}
                 </div>
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -775,8 +739,6 @@ export default function ArtworkDetailPanel({
               artistId={artistId}
               siteId={siteId}
               terms={artwork.saleTerms}
-              priceFramed={artwork.priceFramed}
-              showFramedPricing={showFramedPricing}
               activePurchase={artwork.activePurchase}
               history={artwork.purchaseHistory}
               saleSources={settings.saleSources}
