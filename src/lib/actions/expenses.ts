@@ -2,7 +2,6 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/expenseCategories";
 
 export type ExpenseRow = {
   id: string;
@@ -11,7 +10,7 @@ export type ExpenseRow = {
   description: string | null;
   amount: string;
   currency: string;
-  category: ExpenseCategory;
+  category: string;
 };
 
 // Newest first, same convention as Sales/Galleries lists elsewhere.
@@ -27,13 +26,12 @@ export async function listExpenses(artistId: string): Promise<ExpenseRow[]> {
     description: e.description,
     amount: e.amount.toString(),
     currency: e.currency,
-    category: e.category as ExpenseCategory,
+    category: e.category,
   }));
 }
 
-function parseCategory(raw: string | null): ExpenseCategory {
-  const valid = EXPENSE_CATEGORIES.map((c) => c.value);
-  return valid.includes(raw as ExpenseCategory) ? (raw as ExpenseCategory) : "OTHER";
+function parseCategory(raw: string | null): string {
+  return raw?.trim() || "Other";
 }
 
 export async function createExpense(

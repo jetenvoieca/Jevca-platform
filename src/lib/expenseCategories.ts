@@ -1,7 +1,9 @@
-// Deliberately its own file, not part of src/lib/actions/expenses.ts —
-// a "use server" file can only export async functions, and this is a
-// plain constant, imported by both the server actions and the client
-// view.
+// Superseded 2026-08-27 — expense categories are now a per-artist
+// editable list (Artist.expenseCategories), managed via
+// src/lib/actions/purchaseSettings.ts and the Purchases Settings page,
+// not a fixed constant. Nothing imports this file any more; left in
+// place rather than deleted, same convention as other dormant code in
+// this codebase, and useful as a record of the original default list.
 
 export type ExpenseCategory =
   | "MATERIALS"

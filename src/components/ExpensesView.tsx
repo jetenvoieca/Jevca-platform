@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createExpense,
@@ -8,15 +9,10 @@ import {
   deleteExpense,
   type ExpenseRow,
 } from "@/lib/actions/expenses";
-import { EXPENSE_CATEGORIES, type ExpenseCategory } from "@/lib/expenseCategories";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
-
-function categoryLabel(value: ExpenseCategory) {
-  return EXPENSE_CATEGORIES.find((c) => c.value === value)?.label ?? value;
-}
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
@@ -34,10 +30,12 @@ export default function ExpensesView({
   siteId,
   artistId,
   expenses,
+  categories,
 }: {
   siteId: string;
   artistId: string;
   expenses: ExpenseRow[];
+  categories: string[];
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -92,15 +90,23 @@ export default function ExpensesView({
     <div className="mx-auto max-w-4xl px-6 py-6">
       <div className="mb-1 flex items-center justify-between">
         <h1 className="text-2xl font-semibold text-neutral-900">Purchases</h1>
-        {!adding && (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+        <div className="flex items-center gap-3">
+          <Link
+            href={`/sites/${siteId}/purchases/settings`}
+            className="text-sm text-neutral-500 underline-offset-2 hover:underline"
           >
-            + Add purchase
-          </button>
-        )}
+            Manage categories
+          </Link>
+          {!adding && (
+            <button
+              type="button"
+              onClick={() => setAdding(true)}
+              className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+            >
+              + Add purchase
+            </button>
+          )}
+        </div>
       </div>
       <p className="mb-6 text-sm text-neutral-500">
         What you spend — materials, studio costs, framing, and so on. Recorded manually for now,
@@ -138,12 +144,13 @@ export default function ExpensesView({
           </div>
           <div>
             <label className="mb-1 block text-xs text-neutral-500">Category</label>
-            <select name="category" defaultValue="OTHER" className={inputCls}>
-              {EXPENSE_CATEGORIES.map((c) => (
-                <option key={c.value} value={c.value}>
-                  {c.label}
+            <select name="category" defaultValue="Other" className={inputCls}>
+              {categories.map((c) => (
+                <option key={c} value={c}>
+                  {c}
                 </option>
               ))}
+              {!categories.includes("Other") && <option value="Other">Other</option>}
             </select>
           </div>
           <div>
@@ -225,11 +232,14 @@ export default function ExpensesView({
                         <div>
                           <label className="mb-1 block text-xs text-neutral-500">Category</label>
                           <select name="category" defaultValue={e.category} className={inputCls}>
-                            {EXPENSE_CATEGORIES.map((c) => (
-                              <option key={c.value} value={c.value}>
-                                {c.label}
+                            {categories.map((c) => (
+                              <option key={c} value={c}>
+                                {c}
                               </option>
                             ))}
+                            {!categories.includes(e.category) && (
+                              <option value={e.category}>{e.category}</option>
+                            )}
                           </select>
                         </div>
                         <div>
@@ -290,7 +300,7 @@ export default function ExpensesView({
                   <tr key={e.id} className="hover:bg-neutral-50">
                     <td className="whitespace-nowrap px-3 py-2 text-neutral-700">{e.date}</td>
                     <td className="px-3 py-2 text-neutral-900">{e.payeeName}</td>
-                    <td className="px-3 py-2 text-neutral-600">{categoryLabel(e.category)}</td>
+                    <td className="px-3 py-2 text-neutral-600">{e.category}</td>
                     <td className="max-w-xs truncate px-3 py-2 text-neutral-500">
                       {e.description || "—"}
                     </td>

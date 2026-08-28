@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { listExpenses } from "@/lib/actions/expenses";
+import { getExpenseCategories } from "@/lib/actions/purchaseSettings";
 import ExpensesView from "@/components/ExpensesView";
 
 // Same reasoning as Sales/Galleries/Customers (see their page.tsx files,
@@ -18,7 +19,12 @@ export default async function PurchasesPage({ params }: { params: Promise<{ id: 
   });
   if (!site) notFound();
 
-  const expenses = await listExpenses(site.artistId);
+  const [expenses, categories] = await Promise.all([
+    listExpenses(site.artistId),
+    getExpenseCategories(site.artistId),
+  ]);
 
-  return <ExpensesView siteId={id} artistId={site.artistId} expenses={expenses} />;
+  return (
+    <ExpensesView siteId={id} artistId={site.artistId} expenses={expenses} categories={categories} />
+  );
 }

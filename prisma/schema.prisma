@@ -72,22 +72,6 @@ enum PaymentStatus {
   FAILED
 }
 
-// Fixed list, not free text (2026-08-27 decision) — deliberately short
-// and artist-expense-shaped rather than a general chart of accounts,
-// since this is an embryonic manual record, not full bookkeeping.
-enum ExpenseCategory {
-  MATERIALS
-  STUDIO
-  FRAMING
-  INSURANCE
-  EQUIPMENT
-  SHIPPING
-  PROFESSIONAL_FEES
-  TRAVEL
-  MARKETING
-  OTHER
-}
-
 model Artist {
   id        String       @id @default(cuid())
   name      String
@@ -120,6 +104,12 @@ model Artist {
   mediaTags String[] @default([])
 
   saleSources String[] @default([])
+
+  // Editable per artist (2026-08-27), same pattern as the preset lists
+  // above — was a fixed database enum at first, changed once it became
+  // clear it needed to be a Settings-editable list like everything else
+  // here, not something requiring a migration to change.
+  expenseCategories String[] @default(["Materials", "Studio", "Framing", "Insurance", "Equipment", "Shipping", "Professional fees", "Travel", "Marketing", "Other"])
 
   logoUrl           String?
   invoiceAddress    String?
@@ -634,9 +624,9 @@ model Expense {
   date        DateTime
   payeeName   String
   description String?
-  amount      Decimal         @db.Decimal(10, 2)
-  currency    String          @default("GBP")
-  category    ExpenseCategory @default(OTHER)
+  amount      Decimal @db.Decimal(10, 2)
+  currency    String  @default("GBP")
+  category    String  @default("Other")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

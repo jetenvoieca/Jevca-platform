@@ -41,6 +41,10 @@ export default function SiteNavPanel({
   const mediaActive =
     pathname.startsWith(`/sites/${siteId}/media`) && !mediaSettingsActive;
 
+  const purchasesSettingsActive = pathname === `/sites/${siteId}/purchases/settings`;
+  const purchasesActive =
+    pathname.startsWith(`/sites/${siteId}/purchases`) && !purchasesSettingsActive;
+
   return (
     <nav className="flex flex-col gap-1 text-sm">
       <Link
@@ -312,12 +316,21 @@ export default function SiteNavPanel({
         prefetch={false}
         href={`/sites/${siteId}/purchases`}
         className={`rounded-md px-3 py-2 font-medium ${
-          pathname.startsWith(`/sites/${siteId}/purchases`)
-            ? "bg-neutral-900 text-white"
-            : "text-neutral-700 hover:bg-neutral-100"
+          purchasesActive ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"
         }`}
       >
         Purchases
+      </Link>
+      <Link
+        prefetch={false}
+        href={`/sites/${siteId}/purchases/settings`}
+        className={`ml-2 rounded-md px-3 py-1.5 text-sm ${
+          purchasesSettingsActive
+            ? "bg-neutral-200 font-medium text-neutral-900"
+            : "text-neutral-500 hover:bg-neutral-100"
+        }`}
+      >
+        Settings
       </Link>
     </nav>
   );
