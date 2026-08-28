@@ -78,27 +78,42 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 // ---------- Sale Terms — autosave, no buyer info, ever ----------
 
 // Sale Terms merged into the Presentation tab (2026-08-15) — there's no
-// longer a separate "Total price" the person types; Unframed price
-// (Artwork.presentationPrice) IS the sale total now, entered from
-// Presentation instead. totalAmount stays in this table only because
-// startPurchase/Purchase still snapshot it — kept in sync here rather
-// than making every future caller re-derive it. Deliberately still
-// keyed off Unframed specifically, not Framed, even for an edition —
-// wiring a Framed-vs-Unframed choice into the actual Stripe
-// sale-starting flow is its own decision, not made yet.
+// longer a separate "Total price" the person types; the Artwork's own
+// price (Artwork.presentationPrice, itself a mirror of Catalogue's
+// Offered price as of 2026-08-28) IS the sale total now. totalAmount
+// stays in this table only because startPurchase/Purchase still
+// snapshot it — kept in sync here rather than making every future
+// caller re-derive it.
+//
+// Release message/trigger count are no longer typed per-artwork
+// (2026-08-28 simplification, at the person's request — repeating a
+// value that's already set once in Settings → Payment Defaults was
+// unnecessary duplication). Every save of this row takes the artist's
+// *current* Settings default fresh, so changing that default later
+// reaches every artwork's Sale Terms automatically rather than each one
+// being frozen at whatever it was when last saved. A specific
+// already-started sale can still have its own message edited afterwards
+// (PurchasePanel's "Release message for this sale" / updatePurchaseRelease
+// below) — that's a different, deliberately-kept feature for
+// personalising wording to one particular buyer, not a per-artwork
+// default.
 export async function saveSaleTerms(artworkId: string, siteId: string, formData: FormData) {
   const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
   const instalmentCount = parseInt((formData.get("instalmentCount") as string) || "5", 10);
-  const releaseMessage = (formData.get("releaseMessage") as string)?.trim() || null;
-  const releaseTriggerCountRaw = (formData.get("releaseTriggerCount") as string)?.trim();
-  const releaseTriggerCount = releaseTriggerCountRaw ? parseInt(releaseTriggerCountRaw, 10) : null;
 
   const artwork = await db.artwork.findUniqueOrThrow({
     where: { id: artworkId },
-    select: { presentationPrice: true },
+    select: { presentationPrice: true, artistId: true },
   });
   const totalAmount = artwork.presentationPrice;
   if (!totalAmount) return;
+
+  const artist = await db.artist.findUnique({
+    where: { id: artwork.artistId },
+    select: { defaultReleaseMessage: true, defaultReleaseTriggerCount: true },
+  });
+  const releaseMessage = artist?.defaultReleaseMessage ?? null;
+  const releaseTriggerCount = artist?.defaultReleaseTriggerCount ?? null;
 
   await db.saleTerms.upsert({
     where: { artworkId },
@@ -138,7 +153,6 @@ export async function startPurchase(
   const buyerName = (formData.get("buyerName") as string)?.trim() || null;
   const buyerEmail = (formData.get("buyerEmail") as string)?.trim();
   const type = (formData.get("type") as string) === "INSTALMENTS" ? "INSTALMENTS" : "FULL";
-  const framed = (formData.get("framed") as string) === "true";
   const source = (formData.get("source") as string)?.trim() || null;
   // Set only when the person actually picked a result from CustomerPicker
   // (2026-08-16) — see the matching note on findOrCreateCustomer for why
@@ -147,23 +161,20 @@ export async function startPurchase(
 
   if (!buyerEmail) return { ok: false, error: "Buyer email is required to start a sale." };
 
-  // Unframed uses Sale Terms' totalAmount directly (kept in sync with
-  // Presentation's Unframed price already) — Framed needs its own fetch,
-  // since Framed price lives only on the Artwork, never on Sale Terms
-  // (2026-08-15, alongside the option selector this feeds).
-  const artwork = await db.artwork.findUniqueOrThrow({
-    where: { id: artworkId },
-    select: { artistId: true, priceFramed: true },
-  });
-  if (framed && !artwork.priceFramed) {
-    return { ok: false, error: "No Framed price is set for this artwork." };
-  }
-  const totalAmount = framed ? artwork.priceFramed! : terms.totalAmount;
+  // Framed/Unframed is no longer a choice at point of sale (2026-08-28)
+  // — each Catalogue entry is a single listing with a single price now
+  // (see the matching note on Artwork.priceFramed in schema.prisma).
+  // Sale Terms' totalAmount is simply the amount, full stop.
+  const totalAmount = terms.totalAmount;
 
   // Customer records added 2026-08-13 — reuses an existing customer for
   // this artist if the email already matches one, otherwise creates a
   // new one. Falls back to the email as the name if none was given,
   // since Customer.name is required but buyerName here isn't.
+  const artwork = await db.artwork.findUniqueOrThrow({
+    where: { id: artworkId },
+    select: { artistId: true },
+  });
   const customer = await findOrCreateCustomer(artwork.artistId, {
     name: buyerName || buyerEmail,
     email: buyerEmail,
@@ -177,7 +188,6 @@ export async function startPurchase(
       buyerName,
       buyerEmail,
       type,
-      framed,
       source,
       totalAmount,
       currency: terms.currency,
@@ -361,7 +371,10 @@ export async function recordPastSale(
   revalidatePath(`/accounts/sales`);
   return { ok: true, purchaseId: purchase.id };
 }
-// sale (mistyped commission, wrong artwork, wrong buyer entirely, an
+
+// A deliberately separate, softer action from forceDeleteCompletedSale
+// below — this one only ever removes a sale that was never actually
+// paid (mistyped commission, wrong artwork, wrong buyer entirely, an
 // accidental Stripe sale started by mistake), not just one that didn't
 // go through. Deliberately restricted to sales that were never actually
 // paid, regardless of channel (2026-08-13 — originally gallery-only,
@@ -446,6 +459,12 @@ export async function markGallerySalePaid(
 
   return { ok: true };
 }
+
+// The active sale's own, already-started-specific release wording — a
+// deliberately kept, separate feature from Sale Terms' defaults above
+// (2026-08-28): once a real sale exists, it can still be tweaked to say
+// something more personal/specific for this particular buyer, without
+// touching the artist's general Settings default that every future
 // wording for this specific buyer. Autosaved (low-stakes, descriptive),
 // unlike starting/abandoning the purchase itself.
 export async function updatePurchaseRelease(purchaseId: string, siteId: string, formData: FormData) {
