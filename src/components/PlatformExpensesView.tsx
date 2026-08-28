@@ -7,6 +7,7 @@ import {
   createPlatformExpense,
   updatePlatformExpense,
   deletePlatformExpense,
+  deleteAllPlatformExpenses,
   importPlatformExpensesCsv,
   type PlatformExpenseRow,
   type CsvImportResult,
@@ -58,6 +59,8 @@ export default function PlatformExpensesView({
   const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
   const importFormRef = useRef<HTMLFormElement>(null);
   const [period, setPeriod] = useState<Period>("all");
+  const [confirmingClearAll, setConfirmingClearAll] = useState(false);
+  const [clearingAll, setClearingAll] = useState(false);
 
   const periods: { value: Period; label: string }[] = [
     { value: "all", label: "All time" },
@@ -129,6 +132,17 @@ export default function PlatformExpensesView({
         importFormRef.current?.reset();
         router.refresh();
       }
+    });
+  };
+
+  const handleClearAll = () => {
+    setClearingAll(true);
+    startTransition(async () => {
+      await deleteAllPlatformExpenses();
+      setClearingAll(false);
+      setConfirmingClearAll(false);
+      setImportResult(null);
+      router.refresh();
     });
   };
 
@@ -254,13 +268,24 @@ export default function PlatformExpensesView({
         ))}
       </div>
 
-      {Object.keys(totalsByCurrency).length > 0 && (
-        <p className="mb-4 text-sm text-neutral-600">
-          Total:{" "}
-          {Object.entries(totalsByCurrency)
-            .map(([currency, amount]) => formatMoney(amount.toFixed(2), currency))
-            .join(" · ")}
-        </p>
+      {expenses.length > 0 && (
+        <div className="mb-4 flex items-center justify-between">
+          <p className="text-sm text-neutral-600">
+            {Object.keys(totalsByCurrency).length > 0
+              ? "Total: " +
+                Object.entries(totalsByCurrency)
+                  .map(([currency, amount]) => formatMoney(amount.toFixed(2), currency))
+                  .join(" · ")
+              : ""}
+          </p>
+          <button
+            type="button"
+            onClick={() => setConfirmingClearAll(true)}
+            className="text-xs text-red-600 hover:underline"
+          >
+            Clear all expenses
+          </button>
+        </div>
       )}
 
       {adding && (
@@ -484,6 +509,18 @@ export default function PlatformExpensesView({
         danger
         onConfirm={() => confirmingDeleteId && handleDelete(confirmingDeleteId)}
         onCancel={() => setConfirmingDeleteId(null)}
+      />
+
+      <ConfirmDialog
+        open={confirmingClearAll}
+        title="Clear all expenses?"
+        message={`This deletes all ${expenses.length} recorded expense${
+          expenses.length === 1 ? "" : "s"
+        } permanently — can't be undone. Your category list is untouched.`}
+        confirmLabel={clearingAll ? "Clearing…" : "Delete all permanently"}
+        danger
+        onConfirm={handleClearAll}
+        onCancel={() => setConfirmingClearAll(false)}
       />
     </div>
   );

@@ -86,6 +86,18 @@ export async function deletePlatformExpense(expenseId: string): Promise<void> {
   revalidatePath(`/accounts`);
 }
 
+// Bulk clear (2026-08-28) — added specifically so a bad CSV import can be
+// wiped and retried cleanly, rather than deleting rows one at a time.
+// Deliberately doesn't touch the category list (Artist.expenseCategories
+// equivalent, PlatformSettings.expenseCategories) — categories are a
+// separate concern the person manages on the Settings page if any need
+// removing too.
+export async function deleteAllPlatformExpenses(): Promise<{ deleted: number }> {
+  const result = await db.platformExpense.deleteMany({});
+  revalidatePath(`/accounts`);
+  return { deleted: result.count };
+}
+
 export type CsvImportResult = {
   imported: number;
   skipped: { row: number; reason: string }[];
