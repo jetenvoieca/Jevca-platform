@@ -42,8 +42,6 @@ export default function PurchasePanel({
   artistId,
   siteId,
   terms,
-  priceFramed,
-  showFramedPricing,
   activePurchase,
   history,
   saleSources = [],
@@ -53,14 +51,6 @@ export default function PurchasePanel({
   artistId: string;
   siteId: string;
   terms: SaleTermsDetail | null;
-  // Both new (2026-08-15), feeding the "which price/plan" option
-  // selector below — Framed price lives only on the Artwork, never on
-  // Sale Terms (only Unframed's total is kept in sync there), and
-  // showFramedPricing is the same Edition-or-"Original - Paper" check
-  // already computed once in ArtworkDetailPanel, passed down rather
-  // than re-derived here from Type.
-  priceFramed: string | null;
-  showFramedPricing: boolean;
   activePurchase: PurchaseDetail | null;
   history: PurchaseDetail[];
   saleSources?: string[];
@@ -73,9 +63,7 @@ export default function PurchasePanel({
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [cardSecret, setCardSecret] = useState<string | null>(null);
   const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
-  const [selectedOption, setSelectedOption] = useState<
-    "unframed-full" | "unframed-instalments" | "framed-full" | "framed-instalments"
-  >("unframed-full");
+  const [selectedOption, setSelectedOption] = useState<"full" | "instalments">("full");
   const [channel, setChannel] = useState<"STRIPE" | "GALLERY">("STRIPE");
   const [commissionPercent, setCommissionPercent] = useState("");
   const [gallerySalePrice, setGallerySalePrice] = useState("");
@@ -107,15 +95,12 @@ export default function PurchasePanel({
   // set from the Presentation tab (merged 2026-08-15).
   const [gallerySaleCurrency, setGallerySaleCurrency] = useState(terms?.currency ?? "GBP");
 
-  // The four possible sale options (2026-08-15) — replaces the old
-  // "Payment type" dropdown, which only chose Full vs Instalments and
-  // had no way to pick Framed vs Unframed at all. Built once from
-  // Sale Terms/Framed price/instalment count rather than typed
-  // anywhere, so the amount actually charged always matches what's set
-  // on Presentation.
+  // The two possible sale options — Full or Instalments (2026-08-28,
+  // simplified from a four-way Framed/Unframed × Full/Instalments
+  // selector once Framed pricing was removed: each Catalogue entry is a
+  // single listing with a single price now).
   type SaleOption = {
-    key: "unframed-full" | "unframed-instalments" | "framed-full" | "framed-instalments";
-    framed: boolean;
+    key: "full" | "instalments";
     type: "FULL" | "INSTALMENTS";
     label: string;
     amount: string;
@@ -125,40 +110,19 @@ export default function PurchasePanel({
   const saleOptions: SaleOption[] = [];
   if (terms) {
     saleOptions.push({
-      key: "unframed-full",
-      framed: false,
+      key: "full",
       type: "FULL",
-      label: "Unframed — Full payment",
+      label: "Full payment",
       amount: terms.totalAmount,
     });
     if (instalmentCount > 1) {
       saleOptions.push({
-        key: "unframed-instalments",
-        framed: false,
+        key: "instalments",
         type: "INSTALMENTS",
-        label: `Unframed — ${instalmentCount} instalments`,
+        label: `${instalmentCount} instalments`,
         amount: terms.totalAmount,
         perInstalment: (parseFloat(terms.totalAmount) / instalmentCount).toFixed(2),
       });
-    }
-    if (showFramedPricing && priceFramed) {
-      saleOptions.push({
-        key: "framed-full",
-        framed: true,
-        type: "FULL",
-        label: "Framed — Full payment",
-        amount: priceFramed,
-      });
-      if (instalmentCount > 1) {
-        saleOptions.push({
-          key: "framed-instalments",
-          framed: true,
-          type: "INSTALMENTS",
-          label: `Framed — ${instalmentCount} instalments`,
-          amount: priceFramed,
-          perInstalment: (parseFloat(priceFramed) / instalmentCount).toFixed(2),
-        });
-      }
     }
   }
   const activeOption =
@@ -517,11 +481,6 @@ export default function PurchasePanel({
                   ))}
                 </div>
                 <input type="hidden" name="type" value={activeOption?.type ?? "FULL"} />
-                <input
-                  type="hidden"
-                  name="framed"
-                  value={activeOption?.framed ? "true" : "false"}
-                />
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">
