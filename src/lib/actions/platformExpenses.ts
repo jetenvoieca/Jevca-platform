@@ -161,11 +161,16 @@ export async function importPlatformExpensesCsv(formData: FormData): Promise<Csv
       skipped.push({ row: rowNumber, reason: "Missing supplier." });
       return;
     }
-    const amount = parseFloat(amountRaw);
-    if (!amountRaw || Number.isNaN(amount)) {
+    const amountParsed = parseFloat(amountRaw);
+    if (!amountRaw || Number.isNaN(amountParsed)) {
       skipped.push({ row: rowNumber, reason: `Amount "${amountRaw}" isn't a valid number.` });
       return;
     }
+    // Bank exports typically show debits as negative (e.g. "-28.78") —
+    // stored here as a positive spend amount, matching manual entry and
+    // every other total in the tool. A CSV of pure credits/refunds would
+    // need different handling, not assumed here.
+    const amount = Math.abs(amountParsed);
 
     if (categoryRaw) newCategories.add(categoryRaw);
 
