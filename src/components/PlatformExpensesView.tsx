@@ -59,6 +59,7 @@ export default function PlatformExpensesView({
   const [importResult, setImportResult] = useState<CsvImportResult | null>(null);
   const importFormRef = useRef<HTMLFormElement>(null);
   const [period, setPeriod] = useState<Period>("all");
+  const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [confirmingClearAll, setConfirmingClearAll] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
 
@@ -71,9 +72,16 @@ export default function PlatformExpensesView({
     { value: "Q4", label: "Q4" },
   ];
 
+  const categoryOptions = useMemo(() => {
+    const set = new Set(categories);
+    for (const e of expenses) set.add(e.category);
+    return Array.from(set).sort((a, b) => a.localeCompare(b));
+  }, [categories, expenses]);
+
   const filteredExpenses = useMemo(() => {
-    if (period === "all") return expenses;
     return expenses.filter((e) => {
+      if (categoryFilter !== "all" && e.category !== categoryFilter) return false;
+      if (period === "all") return true;
       const [yearStr, monthStr] = e.date.split("-");
       const year = Number(yearStr);
       if (year !== currentYear) return false;
@@ -82,7 +90,7 @@ export default function PlatformExpensesView({
       const [start, end] = QUARTER_MONTHS[period];
       return month >= start && month <= end;
     });
-  }, [expenses, period, currentYear]);
+  }, [expenses, period, categoryFilter, currentYear]);
 
   const totalsByCurrency = useMemo(() => {
     const totals: Record<string, number> = {};
@@ -251,21 +259,37 @@ export default function PlatformExpensesView({
         </form>
       )}
 
-      <div className="mb-4 flex flex-wrap gap-1.5">
-        {periods.map((p) => (
-          <button
-            key={p.value}
-            type="button"
-            onClick={() => setPeriod(p.value)}
-            className={`rounded-full border px-3 py-1 text-xs ${
-              period === p.value
-                ? "border-neutral-900 bg-neutral-900 text-white"
-                : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
-            }`}
+      <div className="mb-4 flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap gap-1.5">
+          {periods.map((p) => (
+            <button
+              key={p.value}
+              type="button"
+              onClick={() => setPeriod(p.value)}
+              className={`rounded-full border px-3 py-1 text-xs ${
+                period === p.value
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-300 text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+        {categoryOptions.length > 0 && (
+          <select
+            value={categoryFilter}
+            onChange={(e) => setCategoryFilter(e.target.value)}
+            className="rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-700"
           >
-            {p.label}
-          </button>
-        ))}
+            <option value="all">All categories</option>
+            {categoryOptions.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
 
       {expenses.length > 0 && (
@@ -358,7 +382,9 @@ export default function PlatformExpensesView({
 
       {filteredExpenses.length === 0 ? (
         <p className="mb-4 text-sm text-neutral-400">
-          {period === "all" ? "No expenses recorded yet." : "No expenses in this period."}
+          {period === "all" && categoryFilter === "all"
+            ? "No expenses recorded yet."
+            : "No expenses match this filter."}
         </p>
       ) : (
         <div className="mb-4 overflow-hidden rounded-md border border-neutral-200">
