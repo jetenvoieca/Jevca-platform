@@ -96,6 +96,11 @@ model Artist {
   customers Customer[]
 
   artworkGroups    String[] @default([])
+  // Deprecated (2026-08-28) — superseded by the real ArtworkType table
+  // below, which adds a per-type Ref value (used to compute Reference
+  // price) that a plain string list has nowhere to hold. Column kept,
+  // not dropped, only because a one-off data migration reads it once to
+  // seed ArtworkType; nothing in the app reads or writes it any more.
   artworkTypes     String[] @default([])
   artworkLocations String[] @default([])
   mediumPresets    String[] @default([])
@@ -140,6 +145,30 @@ model Artist {
   subscriptionPayments SubscriptionPayment[]
   alertEvents AlertEvent[]
   expenses Expense[]
+  artworkTypeRecords ArtworkType[]
+}
+
+// Replaces the plain-string `Artist.artworkTypes` list (2026-08-28) — a
+// real Type now carries a Ref value (0.5–2.0) used to suggest a
+// Reference price on the Catalogue tab: (Size preset's width × height)
+// × this Ref value. `type` stays free text on Artwork itself, matched by
+// name against this list, same convention already used for Group/
+// Location/Medium — not a hard foreign key, so nothing breaks if a Type
+// is later renamed or removed while artworks still reference the old
+// name.
+model ArtworkType {
+  id       String  @id @default(cuid())
+  artistId String
+  artist   Artist  @relation(fields: [artistId], references: [id])
+
+  name     String
+  refValue Decimal @default(1.00) @db.Decimal(3, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([artistId, name])
+  @@index([artistId])
 }
 
 // One unified ledger of "artist paid us for their subscription" rows,
@@ -356,6 +385,14 @@ model Artwork {
   catalogueNumber String
 
   presentationTitle String
+  // Mirrors Catalogue's `offeredPrice` (2026-08-28) — Presentation no
+  // longer has its own independently-typed price; "Price" there is a
+  // read-only display of this same figure, kept in sync from
+  // updateCatalogue every time Offered price is saved. Stays a real
+  // column (not computed on read) since Payment/Sale Terms/invoices
+  // already depend on it — re-plumbing every one of those to read a
+  // different field directly was a bigger, riskier change than just
+  // keeping this in sync underneath.
   presentationPrice Decimal?            @db.Decimal(10, 2)
   // Deprecated (2026-08-16) — superseded by `size` (Size and Dimensions
   // turned out to be the same concept; `size` already holds real
@@ -365,6 +402,14 @@ model Artwork {
   dimensions        String?
   description       String?
   medium            String?
+  // Presentation's own, independently-editable Medium wording
+  // (2026-08-28) — seeded once from Catalogue's `medium` the first time
+  // Catalogue's Medium is set, then edited separately from here on,
+  // same "seed once, then independent" pattern already used for Title.
+  presentationMedium String?
+  // "Can be viewed at" (2026-08-28) — e.g. a gallery or platform name,
+  // shown on Presentation only.
+  viewingLocation    String?
   presentationGroup String?
   // Flagged in the Artwork Catalogue design doc as "seen in the reference
   // screenshot but not yet built" — added 2026-08-11 once the CSV import
@@ -388,7 +433,18 @@ model Artwork {
   // (moved to Presentation's `presentationPrice`, the Unframed price).
   // Column kept, not dropped, for the same reason as `dimensions` above.
   priceUnframed  Decimal? @db.Decimal(10, 2)
+  // Deprecated (2026-08-28) — the Framed/Unframed dual-price mechanic is
+  // gone: each Catalogue entry is a single sellable listing with one
+  // price now (`offeredPrice`). If a piece genuinely exists both framed
+  // and unframed, that's two separate Catalogue entries (via "Create
+  // Derivative"), not two prices on one. Column kept, not dropped, for
+  // the same reason as `priceUnframed`/`dimensions` above.
   priceFramed    Decimal? @db.Decimal(10, 2)
+  // Manually entered on Catalogue (2026-08-28) — the actual asking
+  // price. Mirrored into `presentationPrice` on every save (see the
+  // note there) so the rest of the app (Payment, invoices, Sale Terms)
+  // keeps working unchanged.
+  offeredPrice   Decimal? @db.Decimal(10, 2)
   studioNotes    String?
 
   // True only for artworks created via the Hopper's "Add New Artwork"
@@ -426,6 +482,15 @@ model SaleTerms {
 
   instalmentCount Int @default(5)
 
+  // No longer typed per-artwork on Presentation (2026-08-28) — every
+  // save of this row now takes the artist's current Settings → Payment
+  // Defaults values fresh, rather than an independently-editable
+  // override, so changing the Settings default reaches every artwork
+  // automatically. Columns kept (not dropped) since Purchase still
+  // snapshots them at sale time, and a specific active sale can still
+  // have its own message edited afterwards (PurchasePanel's "Release
+  // message for this sale" — a different, already-started-sale-specific
+  // feature, left as is).
   releaseMessage      String?
   releaseTriggerCount Int?
 
@@ -458,11 +523,11 @@ model Purchase {
 
   type PurchaseType
 
-  // Which price applied to this specific sale — set at the point of sale
-  // (2026-08-15), since an edition (or Original - Paper) can be sold
-  // either way. False/unframed for anything sold before this existed —
-  // never actually mattered before this feature, since only one price
-  // existed per artwork.
+  // Deprecated (2026-08-28) — the Framed/Unframed choice at point of
+  // sale is gone, alongside Artwork.priceFramed (see the note there).
+  // Column kept, not dropped, since existing sale history still uses it
+  // for its own "(Framed)" label — never set true for a new sale going
+  // forward.
   framed Boolean @default(false)
 
   source String?
