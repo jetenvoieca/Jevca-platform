@@ -386,10 +386,27 @@ export default function ArtworkDetailPanel({
                     className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
                 </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Medium
+                  </label>
+                  <select
+                    name="presentationMedium"
+                    defaultValue={artwork.presentationMedium || ""}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  >
+                    <option value="">Choose from list…</option>
+                    {withCurrent(settings.mediumPresets, artwork.presentationMedium).map((m) => (
+                      <option key={m} value={m}>
+                        {m}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Size <span className="font-normal text-neutral-400">(from Catalogue)</span>
+                      Size
                     </label>
                     <input
                       type="text"
@@ -411,28 +428,11 @@ export default function ArtworkDetailPanel({
                     />
                   </div>
                 </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Medium
-                  </label>
-                  <select
-                    name="presentationMedium"
-                    defaultValue={artwork.presentationMedium || ""}
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  >
-                    <option value="">Choose from list…</option>
-                    {withCurrent(settings.mediumPresets, artwork.presentationMedium).map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </select>
-                </div>
 
                 <div className="grid grid-cols-4 gap-4">
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Price <span className="font-normal text-neutral-400">(from Catalogue)</span>
+                      Price
                     </label>
                     <input
                       type="text"
