@@ -459,9 +459,9 @@ export async function updatePresentation(
   const presentationTitle = (formData.get("presentationTitle") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
   // Presentation's own Medium wording and "Can be viewed at"
-  // (2026-08-28) — Medium is seeded once from Catalogue's `medium` in
-  // updateCatalogue below, then independent from here on; viewingLocation
-  // has no Catalogue equivalent to seed from at all.
+  // (2026-08-28) — both are seeded once from Catalogue (Medium from
+  // Catalogue's `medium`, Can be viewed at from Catalogue's `location`)
+  // in updateCatalogue below, then independent from here on.
   const presentationMedium = (formData.get("presentationMedium") as string)?.trim() || null;
   const viewingLocation = (formData.get("viewingLocation") as string)?.trim() || null;
   // Price is no longer typed on this tab at all (2026-08-28) — it's a
@@ -509,24 +509,33 @@ export async function updateCatalogue(
   // is typed at all.
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
 
-  // Presentation's Title still defaults from Catalogue's Name, and (new,
-  // 2026-08-28) Presentation's own Medium defaults from Catalogue's
-  // Medium — but only the first time each is actually filled in, and
-  // only while Presentation is still at its untouched default. The
-  // moment someone types something different directly into Presentation,
-  // it's considered overridden and this stops touching that field —
-  // "seed once, then independent," same pattern used for both.
+  // Presentation's Title still defaults from Catalogue's Name,
+  // Presentation's own Medium defaults from Catalogue's Medium, and (new,
+  // 2026-08-28 follow-up) Presentation's "Can be viewed at" defaults from
+  // Catalogue's Location — but only the first time each is actually
+  // filled in, and only while Presentation is still at its untouched
+  // default. The moment someone types something different directly into
+  // Presentation, it's considered overridden and this stops touching
+  // that field — "seed once, then independent," same pattern used for
+  // all three.
   const current = await db.artwork.findUnique({
     where: { id },
-    select: { presentationTitle: true, presentationMedium: true },
+    select: { presentationTitle: true, presentationMedium: true, viewingLocation: true },
   });
 
-  const presentationUpdate: { presentationTitle?: string; presentationMedium?: string } = {};
+  const presentationUpdate: {
+    presentationTitle?: string;
+    presentationMedium?: string;
+    viewingLocation?: string;
+  } = {};
   if (current?.presentationTitle === "Untitled" && catalogueName) {
     presentationUpdate.presentationTitle = catalogueName;
   }
   if (!current?.presentationMedium && medium) {
     presentationUpdate.presentationMedium = medium;
+  }
+  if (!current?.viewingLocation && location) {
+    presentationUpdate.viewingLocation = location;
   }
 
   await db.artwork.update({
