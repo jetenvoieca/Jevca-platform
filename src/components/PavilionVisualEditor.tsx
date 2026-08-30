@@ -11,7 +11,7 @@ import {
 import { nextCardPosition } from "@/lib/pavilionLayout";
 import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
-import type { PavilionCard, PavilionCurator } from "@/lib/blocks";
+import type { PavilionCard, PavilionCurator, PavilionTile } from "@/lib/blocks";
 
 const MAX_CURATORS = 9;
 
@@ -22,17 +22,16 @@ const MAX_CURATORS = 9;
 // canvas itself IS that browsing surface. Two ways in:
 //   - the pencil icon always opens a blank "Add Pavilion" form
 //   - clicking a tile on the canvas opens the panel scoped to editing
-//     just that one tile — but ONLY when the panel is already open;
-//     clicking a tile while the canvas is shown full-screen (panel
-//     closed) is a deliberate no-op for now.
+//     just that one tile — but ONLY when the panel is already open
 //
-// Curators (2026-08-30) drill one level deeper within this same panel:
-// a Pavilion's form shows a compact list of its Curators (name only);
-// clicking one, or "Add Curator", swaps the panel to that Curator's own
-// Name/Image/Description/Save/Delete form — the identical template used
-// for a Pavilion itself — with a "← Back" to return. A Curator's Save
-// only updates the in-memory list; nothing is actually persisted until
-// the Pavilion's own Save is clicked, same as every other field here.
+// Drilling into a Pavilion (2026-08-30) — clicking a tile while the
+// canvas is shown full-screen (panel closed) hides every other Pavilion
+// and shows just that one plus its Curators, all as draggable/resizable
+// cards on the same canvas. Clicking the same (highlighted) Pavilion
+// tile again exits back to the full set. Clicking a Curator's own card
+// while drilled in is a deliberate no-op for now (reserved for a future
+// "open this Curator" action) — dragging/resizing them still works,
+// since that's a separate interaction from clicking.
 export default function PavilionVisualEditor({
   siteId,
   artistId,
@@ -64,12 +63,17 @@ export default function PavilionVisualEditor({
 
   // Curator sub-editor state — "new" or an existing curator's index
   // while drilled into a Curator's own form; null while showing the
-  // Pavilion-level form.
+  // Pavilion-level fields.
   const [curatorEditingIndex, setCuratorEditingIndex] = useState<number | "new" | null>(null);
   const [draftCuratorName, setDraftCuratorName] = useState("");
   const [draftCuratorDescription, setDraftCuratorDescription] = useState("");
   const [draftCuratorImageId, setDraftCuratorImageId] = useState("");
   const [draftCuratorImageUrl, setDraftCuratorImageUrl] = useState("");
+
+  // Full-screen drill state (2026-08-30) — which Pavilion's own Curators
+  // are being shown on the canvas instead of the full set. Only
+  // meaningful while the panel is closed; see the component-level note.
+  const [drilledPavilionId, setDrilledPavilionId] = useState<string | null>(null);
 
   const isFirstRun = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -123,16 +127,64 @@ export default function PavilionVisualEditor({
     await deletePage(siteId, pageId);
   };
 
-  // Live position/size updates from the canvas — pushed straight into
-  // `cards`, which the debounced effect above then persists.
+  // The drilled Pavilion (if any) — its own tile plus its Curators'
+  // tiles are what the canvas shows while drilled in.
+  const drilledCard = drilledPavilionId ? cards.find((c) => c.id === drilledPavilionId) ?? null : null;
+
+  const visibleTiles: PavilionTile[] = drilledCard
+    ? [
+        {
+          id: drilledCard.id,
+          name: drilledCard.name,
+          description: drilledCard.description,
+          imageUrl: drilledCard.imageUrl,
+          x: drilledCard.x,
+          y: drilledCard.y,
+          width: drilledCard.width,
+          height: drilledCard.height,
+        },
+        ...drilledCard.curators.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          imageUrl: c.imageUrl,
+          x: c.x,
+          y: c.y,
+          width: c.width,
+          height: c.height,
+        })),
+      ]
+    : cards;
+
+  // Live position/size updates from the canvas — routes to the right
+  // place depending on whether we're drilled into a Pavilion's Curators
+  // or looking at the full set of Pavilions.
   const handleCardChange = (
     id: string,
-    patch: Partial<Pick<PavilionCard, "x" | "y" | "width" | "height">>
+    patch: Partial<Pick<PavilionTile, "x" | "y" | "width" | "height">>
   ) => {
+    if (drilledCard) {
+      if (id === drilledCard.id) {
+        setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+      } else {
+        setCards((prev) =>
+          prev.map((c) =>
+            c.id === drilledCard.id
+              ? {
+                  ...c,
+                  curators: c.curators.map((cur) => (cur.id === id ? { ...cur, ...patch } : cur)),
+                }
+              : c
+          )
+        );
+      }
+      return;
+    }
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   };
 
   const openNewCardForm = () => {
+    setDrilledPavilionId(null);
     setPanelOpen(true);
     setEditingId("new");
     setDraftName("");
@@ -144,9 +196,7 @@ export default function PavilionVisualEditor({
   };
 
   // The pencil icon on the canvas — always opens a blank Add Pavilion
-  // form. Editing an existing one happens by clicking its tile directly
-  // (handleCardClick below), not through this button, so pencil has
-  // exactly one job.
+  // form, and exits any drilled-into view first.
   const handlePencilClick = () => {
     if (panelOpen && editingId === "new") {
       setPanelOpen(false);
@@ -156,20 +206,34 @@ export default function PavilionVisualEditor({
     openNewCardForm();
   };
 
-  // Clicking a tile on the canvas — only does anything while the panel
-  // is already open; at that point it opens the panel scoped to just
-  // this one card's fields.
+  // Clicking a tile on the canvas — behaviour depends entirely on
+  // whether the panel is open:
+  //   - panel open: opens/updates the panel to edit that one card
+  //   - panel closed (full-screen): drills into that Pavilion's
+  //     Curators, or exits the drill if it's already the one shown, or
+  //     is a deliberate no-op if it's a Curator's own card
   const handleCardClick = (id: string) => {
-    if (!panelOpen) return;
-    const card = cards.find((c) => c.id === id);
-    if (!card) return;
-    setEditingId(id);
-    setDraftName(card.name);
-    setDraftDescription(card.description);
-    setDraftImageId(card.imageId);
-    setDraftImageUrl(card.imageUrl);
-    setDraftCurators(card.curators ?? []);
-    setCuratorEditingIndex(null);
+    if (panelOpen) {
+      const card = cards.find((c) => c.id === id);
+      if (!card) return;
+      setEditingId(id);
+      setDraftName(card.name);
+      setDraftDescription(card.description);
+      setDraftImageId(card.imageId);
+      setDraftImageUrl(card.imageUrl);
+      setDraftCurators(card.curators ?? []);
+      setCuratorEditingIndex(null);
+      return;
+    }
+
+    if (drilledCard) {
+      if (id === drilledCard.id) setDrilledPavilionId(null);
+      // else: a Curator's own card was clicked — no-op for now.
+      return;
+    }
+
+    const isPavilion = cards.some((c) => c.id === id);
+    if (isPavilion) setDrilledPavilionId(id);
   };
 
   const handleSaveCard = async () => {
@@ -263,6 +327,7 @@ export default function PavilionVisualEditor({
     const trimmedName = draftCuratorName.trim();
     if (!trimmedName) return;
     if (curatorEditingIndex === "new") {
+      const position = nextCardPosition(draftCurators.length);
       setDraftCurators((prev) => [
         ...prev,
         {
@@ -271,6 +336,7 @@ export default function PavilionVisualEditor({
           description: draftCuratorDescription.trim(),
           imageId: draftCuratorImageId,
           imageUrl: draftCuratorImageUrl,
+          ...position,
         },
       ]);
     } else if (curatorEditingIndex !== null) {
@@ -313,7 +379,17 @@ export default function PavilionVisualEditor({
         >
           ✎
         </button>
-        <PavilionCanvas cards={cards} onCardClick={handleCardClick} onCardChange={handleCardChange} />
+        <PavilionCanvas
+          cards={visibleTiles}
+          onCardClick={handleCardClick}
+          onCardChange={handleCardChange}
+          highlightId={drilledCard?.id}
+          emptyMessage={
+            drilledCard
+              ? "No Curators yet — open the panel to add one."
+              : "Add your first Pavilion using the panel on the right."
+          }
+        />
       </div>
 
       {panelOpen && (
