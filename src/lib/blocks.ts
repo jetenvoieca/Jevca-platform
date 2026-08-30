@@ -75,6 +75,11 @@ export type SectionContent = {
 // or filled in with its own content later, even though at creation it's
 // blank. x/y/width/height are percentages of the canvas (0–100), not
 // pixels, so the layout holds up across different screen sizes.
+//
+// `curators` (2026-08-30) — simple names, up to 9 per Pavilion. Just
+// plain strings for now (no image/bio of their own yet) — this is
+// deliberately the minimal shape until there's a real spec for what a
+// Curator needs beyond a name.
 export type PavilionCard = {
   id: string;
   name: string;
@@ -86,6 +91,7 @@ export type PavilionCard = {
   y: number;
   width: number;
   height: number;
+  curators: string[];
 };
 
 export type PavilionContent = {
