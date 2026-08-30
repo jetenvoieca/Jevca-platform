@@ -138,6 +138,7 @@ export default function SiteNavPanel({
             >
               <option value="SECTION">Section</option>
               <option value="PRIVATE">Private / Custom</option>
+              <option value="PAVILION">Pavilion</option>
             </select>
             <div className="flex gap-1">
               <button
