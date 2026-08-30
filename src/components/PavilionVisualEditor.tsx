@@ -31,7 +31,8 @@ const DRILL_MARKER = { left: "2%", top: "2%", width: "18%", height: "20%" };
 // different here is the panel: closed by default, and deliberately
 // never shows a list of every Pavilion to browse — the canvas itself IS
 // that browsing surface. Two ways in:
-//   - the pencil icon always opens a blank "Add Pavilion" form
+//   - the pencil icon opens a form scoped to whatever you're currently
+//     looking at (see handlePencilClick — context-aware, 2026-08-30)
 //   - clicking a tile on the canvas opens the panel scoped to editing
 //     just that one tile — but ONLY when the panel is already open
 //
@@ -223,14 +224,46 @@ export default function PavilionVisualEditor({
     setCuratorEditingIndex(null);
   };
 
-  // The pencil icon on the canvas — always opens a blank Add Pavilion
-  // form, and exits any drilled-into view first.
+  // The pencil icon on the canvas — context-aware (2026-08-30): at the
+  // top level it opens a blank Add Pavilion form as before, but if
+  // you're drilled into a Pavilion or a Curator, it opens the panel
+  // scoped directly to whatever you're looking at — landing straight in
+  // that Curator's own form (ready to Select Artists) rather than
+  // resetting everything back to a blank new Pavilion, which looked
+  // enough like a Curator form to be genuinely confusing.
   const handlePencilClick = () => {
-    if (panelOpen && editingId === "new") {
+    if (panelOpen && editingId === "new" && curatorEditingIndex === null && !drilledCard) {
       setPanelOpen(false);
       setEditingId(null);
       return;
     }
+
+    if (drilledCard) {
+      setPanelOpen(true);
+      setEditingId(drilledCard.id);
+      setDraftName(drilledCard.name);
+      setDraftDescription(drilledCard.description);
+      setDraftImageId(drilledCard.imageId);
+      setDraftImageUrl(drilledCard.imageUrl);
+      setDraftCurators(drilledCard.curators ?? []);
+
+      if (drilledCurator) {
+        const idx = drilledCard.curators.findIndex((c) => c.id === drilledCurator.id);
+        if (idx !== -1) {
+          const c = drilledCard.curators[idx];
+          setCuratorEditingIndex(idx);
+          setDraftCuratorName(c.name);
+          setDraftCuratorDescription(c.description);
+          setDraftCuratorImageId(c.imageId);
+          setDraftCuratorImageUrl(c.imageUrl);
+          setDraftCuratorArtists(c.artists ?? []);
+        }
+      } else {
+        setCuratorEditingIndex(null);
+      }
+      return;
+    }
+
     openNewCardForm();
   };
 
@@ -424,7 +457,7 @@ export default function PavilionVisualEditor({
         <button
           type="button"
           onClick={handlePencilClick}
-          title="Add Pavilion"
+          title="Edit"
           className="absolute right-9 top-9 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-white hover:bg-neutral-700"
         >
           ✎
@@ -463,9 +496,9 @@ export default function PavilionVisualEditor({
           onCardChange={handleCardChange}
           emptyMessage={
             drilledCurator
-              ? "No Artists selected yet — tick some in this Curator's edit form."
+              ? "No Artists selected yet — click the pencil to add some."
               : drilledCard
-                ? "No Curators yet — open the panel to add one."
+                ? "No Curators yet — click the pencil to add one."
                 : "Add your first Pavilion using the panel on the right."
           }
         />
