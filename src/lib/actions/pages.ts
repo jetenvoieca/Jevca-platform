@@ -3,20 +3,11 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { slugify } from "@/lib/pageSlug";
 
-// Exported (2026-08-30) so pavilions.ts can generate a slug for each
-// Pavilion's auto-created child Page the exact same way a normal
-// "+ Add New Page" does — one shared slugging convention, not two.
-export function slugify(title: string) {
-  return (
-    title
-      .toLowerCase()
-      .trim()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/(^-|-$)+/g, "") || "page"
-  );
-}
-
+// Kept as an export here (async, so valid alongside the other Server
+// Actions in this file) rather than moving to pageSlug.ts alongside
+// slugify — this one needs `db`, so it stays server-only regardless.
 export async function uniqueSlug(siteId: string, base: string) {
   let slug = base;
   let n = 2;
