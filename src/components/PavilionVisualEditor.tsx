@@ -8,7 +8,7 @@ import {
   renamePavilionChildPage,
   deletePavilionChildPage,
 } from "@/lib/actions/pavilions";
-import { nextCardPosition, nextCuratorPosition } from "@/lib/pavilionLayout";
+import { nextCardPosition, nextCuratorPosition, normalizeCards } from "@/lib/pavilionLayout";
 import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
 import ArtistSelectorModal from "@/components/ArtistSelectorModal";
@@ -57,7 +57,12 @@ export default function PavilionVisualEditor({
   pageTitle: string;
   initialCards: PavilionCard[];
 }) {
-  const [cards, setCards] = useState<PavilionCard[]>(initialCards);
+  // Normalized on load (2026-08-30) — backfills any field the shape has
+  // gained since a given card/curator/artist was last saved (e.g. an
+  // early Curator saved before `artists` existed). See
+  // normalizeCards in pavilionLayout.ts for why this matters: without
+  // it, drilling into old data can throw and crash the whole page.
+  const [cards, setCards] = useState<PavilionCard[]>(() => normalizeCards(initialCards));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [isDeleting, setIsDeleting] = useState(false);
   const [titleSaved, setTitleSaved] = useState(false);
@@ -224,13 +229,12 @@ export default function PavilionVisualEditor({
     setCuratorEditingIndex(null);
   };
 
-  // The pencil icon on the canvas — context-aware (2026-08-30): at the
-  // top level it opens a blank Add Pavilion form as before, but if
-  // you're drilled into a Pavilion or a Curator, it opens the panel
-  // scoped directly to whatever you're looking at — landing straight in
-  // that Curator's own form (ready to Select Artists) rather than
-  // resetting everything back to a blank new Pavilion, which looked
-  // enough like a Curator form to be genuinely confusing.
+  // The pencil icon on the canvas — context-aware: at the top level it
+  // opens a blank Add Pavilion form as before, but if you're drilled
+  // into a Pavilion or a Curator, it opens the panel scoped directly to
+  // whatever you're looking at — landing straight in that Curator's own
+  // form (ready to Select Artists) rather than resetting everything
+  // back to a blank new Pavilion.
   const handlePencilClick = () => {
     if (panelOpen && editingId === "new" && curatorEditingIndex === null && !drilledCard) {
       setPanelOpen(false);
