@@ -2,17 +2,17 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { slugify, uniqueSlug } from "./pages";
-import type { PavilionCard } from "@/lib/blocks";
+import { slugify } from "@/lib/pageSlug";
+import { uniqueSlug } from "./pages";
 
-// Creates one Pavilion card — and, alongside it, a real child Page for
-// that Pavilion to eventually link to (2026-08-30). The card itself
-// isn't persisted here: PavilionEditor holds the cards array as its own
-// state and saves the whole array via the existing saveDraftBlocks, the
-// same "generic autosave, page-type-specific shape" pattern already used
-// for Section pages (see SectionContent in lib/blocks.ts) — this action
-// only does the one part that MUST happen server-side and can't simply
-// be optimistic client state: creating the real child Page.
+// Creates one Pavilion card's real child Page (2026-08-30). The card
+// itself isn't persisted here: PavilionEditor holds the cards array as
+// its own state and saves the whole array via the existing
+// saveDraftBlocks, the same "generic autosave, page-type-specific shape"
+// pattern already used for Section pages (see SectionContent in
+// lib/blocks.ts) — this action only does the one part that MUST happen
+// server-side and can't simply be optimistic client state: creating the
+// real child Page.
 export async function createPavilionChildPage(
   siteId: string,
   name: string
@@ -68,14 +68,4 @@ export async function deletePavilionChildPage(childPageId: string, siteId: strin
     db.page.delete({ where: { id: childPageId } }),
   ]);
   revalidatePath(`/sites/${siteId}`);
-}
-
-// Simple auto-placement for a freshly added card so it doesn't land
-// exactly on top of an existing one — three loose columns, filled in
-// creation order. Purely a starting point: every card is freely
-// draggable/resizable on the canvas straight after this.
-export function nextCardPosition(existingCount: number): Pick<PavilionCard, "x" | "y" | "width" | "height"> {
-  const col = existingCount % 3;
-  const row = Math.floor(existingCount / 3);
-  return { x: 4 + col * 33, y: 4 + row * 36, width: 28, height: 32 };
 }
