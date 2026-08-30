@@ -64,6 +64,20 @@ export type SectionContent = {
   artworkIds: string[];
 };
 
+// A Curator attached to a Pavilion (2026-08-30, corrected — not a plain
+// name as first built) — its own full record with the same Name/Image/
+// Description shape as a Pavilion itself, edited with the identical form.
+// Purely nested data, not a linked Page of its own (unlike a Pavilion's
+// childPageId) — nothing has asked for a Curator to be a real navigable
+// destination yet.
+export type PavilionCurator = {
+  id: string;
+  name: string;
+  description: string;
+  imageId: string;
+  imageUrl: string;
+};
+
 // One card on a Pavilion page's freeform canvas (2026-08-30) — like
 // SectionContent above, a Pavilion page isn't built from Content Blocks
 // either; it's a fixed shape (an array of these cards), stored in the
@@ -76,10 +90,7 @@ export type SectionContent = {
 // blank. x/y/width/height are percentages of the canvas (0–100), not
 // pixels, so the layout holds up across different screen sizes.
 //
-// `curators` (2026-08-30) — simple names, up to 9 per Pavilion. Just
-// plain strings for now (no image/bio of their own yet) — this is
-// deliberately the minimal shape until there's a real spec for what a
-// Curator needs beyond a name.
+// `curators` — up to 9 per Pavilion, each a full PavilionCurator record.
 export type PavilionCard = {
   id: string;
   name: string;
@@ -91,7 +102,7 @@ export type PavilionCard = {
   y: number;
   width: number;
   height: number;
-  curators: string[];
+  curators: PavilionCurator[];
 };
 
 export type PavilionContent = {
