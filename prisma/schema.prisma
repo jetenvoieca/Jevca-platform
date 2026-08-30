@@ -32,10 +32,18 @@ enum SiteStatus {
 // freeform canvas of draggable/resizable cards, each one a real linked
 // child Page. See PavilionEditor.tsx / lib/blocks.ts (PavilionContent)
 // for the shape stored in draftBlocks/liveBlocks.
+//
+// PAVILION_VISUAL added 2026-08-30 (same day) — a deliberately separate,
+// parallel experiment with a different, simpler visual approach (no
+// drag/resize, panel closed by default), explicitly kept apart from
+// PAVILION so trying this out can't affect or lose the original. Reuses
+// the same PavilionCard/PavilionContent shape and child-page actions;
+// only the editor UI (PavilionVisualEditor.tsx) differs.
 enum PageType {
   SECTION
   PRIVATE
   PAVILION
+  PAVILION_VISUAL
 }
 
 enum ArtworkAvailability {
