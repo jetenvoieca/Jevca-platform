@@ -8,20 +8,22 @@ import {
   renamePavilionChildPage,
   deletePavilionChildPage,
 } from "@/lib/actions/pavilions";
+import { nextCardPosition } from "@/lib/pavilionLayout";
+import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
 import type { PavilionCard } from "@/lib/blocks";
 
-// A deliberately separate, parallel experiment from PavilionEditor.tsx
-// (2026-08-30) — same underlying data shape and child-page actions, but
-// a different, simpler visual approach: no drag/resize (cards just flow
-// in the order added), and the panel is closed by default, opened only
-// via the pencil icon on the canvas. Kept as its own component/page type
-// specifically so trying this out can never affect or lose the original
-// PAVILION implementation.
-//
-// Canvas is h-full/overflow-y-auto (2026-08-30, matching PavilionEditor's
-// own canvas) so it fills the available page height and scrolls rather
-// than sitting in a fixed-height box.
+// A parallel variant of PavilionEditor.tsx (2026-08-30) — same
+// underlying data shape, same child-page actions, and (2026-08-30,
+// corrected — there was never an actual decision to leave this out) the
+// same drag-to-reposition/drag-to-resize canvas. What's genuinely
+// different here is just the panel behaviour: closed by default, opened
+// via the pencil icon on the canvas (auto-opening the blank Add form
+// when there are no Pavilions yet), with its own explicit close button —
+// PavilionEditor's panel, by contrast, is open by default and only
+// collapses via its own expand/contract toggle. Kept as its own
+// component/page type so trying this panel behaviour out can never
+// affect the original.
 export default function PavilionVisualEditor({
   siteId,
   artistId,
@@ -52,9 +54,9 @@ export default function PavilionVisualEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
-  // Autosaves the whole cards array whenever it changes (adding, editing,
-  // or deleting a card) — same debounced pattern used everywhere else in
-  // this app.
+  // Autosaves the whole cards array — covers both drag/resize on the
+  // canvas and any card content change, same debounced pattern used
+  // everywhere else in this app.
   useEffect(() => {
     if (isFirstRun.current) {
       isFirstRun.current = false;
@@ -98,6 +100,16 @@ export default function PavilionVisualEditor({
       return;
     }
     await deletePage(siteId, pageId);
+  };
+
+  // Live position/size updates from the canvas — pushed straight into
+  // `cards`, which the debounced effect above then persists. Same as
+  // PavilionEditor's own handler.
+  const handleCardChange = (
+    id: string,
+    patch: Partial<Pick<PavilionCard, "x" | "y" | "width" | "height">>
+  ) => {
+    setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
   };
 
   const openNewCardForm = () => {
@@ -146,9 +158,7 @@ export default function PavilionVisualEditor({
         setIsSaving(false);
         return;
       }
-      // No drag/resize in this experiment — x/y/width/height are simply
-      // unused by the flow layout below, kept only to satisfy the shared
-      // PavilionCard shape.
+      const position = nextCardPosition(cards.length);
       const newCard: PavilionCard = {
         id: crypto.randomUUID(),
         name: trimmedName,
@@ -156,10 +166,7 @@ export default function PavilionVisualEditor({
         imageId: draftImageId,
         imageUrl: draftImageUrl,
         childPageId: childPage.id,
-        x: 0,
-        y: 0,
-        width: 0,
-        height: 0,
+        ...position,
       };
       setCards((prev) => [...prev, newCard]);
     } else if (editingId) {
@@ -210,10 +217,9 @@ export default function PavilionVisualEditor({
         Add Curator
       </button>
 
-      {/* Large, uncropped-to-a-tiny-box clickable preview (2026-08-30) —
-          the image itself is the trigger to change it now, via
-          MediaPicker's previewUrl prop, rather than a small thumbnail
-          plus a separate tiny "Change" button. */}
+      {/* Large, uncropped-to-a-tiny-box clickable preview — the image
+          itself is the trigger to change it, via MediaPicker's
+          previewUrl prop. */}
       <MediaPicker
         artistId={artistId}
         siteId={siteId}
@@ -258,56 +264,15 @@ export default function PavilionVisualEditor({
   return (
     <div className={`h-full ${panelOpen ? "grid grid-cols-[1fr_300px] gap-0" : "grid grid-cols-1"}`}>
       <div className="relative h-full overflow-y-auto p-6">
-        <div className="relative h-full min-h-[640px] w-full rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-6">
-          <button
-            type="button"
-            onClick={handlePencilClick}
-            title="Edit"
-            className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-white hover:bg-neutral-700"
-          >
-            ✎
-          </button>
-
-          {cards.length === 0 ? (
-            <p className="flex h-full items-center justify-center text-sm text-neutral-400">
-              Click the pencil to add your first Pavilion.
-            </p>
-          ) : (
-            <div className="flex flex-wrap gap-4">
-              {cards.map((card) => (
-                <button
-                  key={card.id}
-                  type="button"
-                  onClick={() => toggleCard(card.id)}
-                  className="flex w-64 flex-col overflow-hidden rounded-lg border border-neutral-200 bg-white text-left shadow-sm hover:shadow-md"
-                >
-                  <p className="truncate px-3 pt-2 text-center text-sm text-neutral-500">
-                    {card.name || "Untitled"}
-                  </p>
-                  <div className="px-3 py-1">
-                    {card.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img
-                        src={card.imageUrl}
-                        alt=""
-                        className="aspect-square w-full rounded-md object-cover"
-                      />
-                    ) : (
-                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                        No image
-                      </div>
-                    )}
-                  </div>
-                  {card.description && (
-                    <p className="truncate px-3 pb-2 text-center text-xs text-neutral-400">
-                      {card.description}
-                    </p>
-                  )}
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
+        <button
+          type="button"
+          onClick={handlePencilClick}
+          title="Edit"
+          className="absolute right-9 top-9 z-10 flex h-8 w-8 items-center justify-center rounded-full bg-neutral-900 text-white hover:bg-neutral-700"
+        >
+          ✎
+        </button>
+        <PavilionCanvas cards={cards} onCardClick={toggleCard} onCardChange={handleCardChange} />
       </div>
 
       {panelOpen && (
