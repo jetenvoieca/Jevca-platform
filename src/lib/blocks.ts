@@ -64,18 +64,33 @@ export type SectionContent = {
   artworkIds: string[];
 };
 
-// A Curator attached to a Pavilion (2026-08-30, corrected — not a plain
-// name as first built) — its own full record with the same Name/Image/
-// Description shape as a Pavilion itself, edited with the identical form.
-// Purely nested data, not a linked Page of its own (unlike a Pavilion's
-// childPageId) — nothing has asked for a Curator to be a real navigable
-// destination yet.
-export type PavilionCurator = {
+// The shape PavilionCanvas actually needs to render and drag/resize a
+// tile — deliberately minimal, so both a Pavilion and a Curator can be
+// drawn on the same canvas by the same component without it needing to
+// know which one it's looking at. x/y/width/height are percentages of
+// the canvas (0–100), not pixels, so layout holds up across different
+// screen sizes.
+export type PavilionTile = {
   id: string;
   name: string;
   description: string;
-  imageId: string;
   imageUrl: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+// A Curator attached to a Pavilion (2026-08-30) — its own full record
+// with the same Name/Image/Description shape as a Pavilion itself,
+// edited with the identical form. Given its own x/y/width/height
+// (2026-08-30) so Curators can be shown and freely
+// dragged/resized as cards on the canvas too, when "drilled into" a
+// specific Pavilion (clicking its tile in full-screen mode hides every
+// other Pavilion and shows this one's Curators instead). Purely nested
+// data, not a linked Page of its own (unlike a Pavilion's childPageId).
+export type PavilionCurator = PavilionTile & {
+  imageId: string;
 };
 
 // One card on a Pavilion page's freeform canvas (2026-08-30) — like
@@ -87,21 +102,12 @@ export type PavilionCurator = {
 // sourceTag: "pavilion") created automatically the moment this card is
 // added — so it's a genuine destination that can be linked from a Menu
 // or filled in with its own content later, even though at creation it's
-// blank. x/y/width/height are percentages of the canvas (0–100), not
-// pixels, so the layout holds up across different screen sizes.
+// blank.
 //
 // `curators` — up to 9 per Pavilion, each a full PavilionCurator record.
-export type PavilionCard = {
-  id: string;
-  name: string;
-  description: string;
+export type PavilionCard = PavilionTile & {
   imageId: string;
-  imageUrl: string;
   childPageId: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
   curators: PavilionCurator[];
 };
 
