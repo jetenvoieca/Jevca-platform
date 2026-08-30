@@ -8,12 +8,25 @@ import {
   renamePavilionChildPage,
   deletePavilionChildPage,
 } from "@/lib/actions/pavilions";
-import { nextCardPosition } from "@/lib/pavilionLayout";
+import { nextCardPosition, nextCuratorPosition } from "@/lib/pavilionLayout";
 import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
 import type { PavilionCard, PavilionCurator, PavilionTile } from "@/lib/blocks";
 
 const MAX_CURATORS = 9;
+
+// Fixed "you are here" spot for the drilled-into Pavilion's own marker
+// (2026-08-30) — deliberately NOT the Pavilion's real x/y/width/height
+// (that position is specific to the *main* canvas, where several
+// Pavilions sit side by side, and could be anywhere; reusing it here
+// was the bug that had the Pavilion marker turning up wherever it
+// happened to be on the main canvas instead of a predictable spot, and
+// meant its size collided with Curators using the same default
+// placement sequence). This marker is rendered as a separate, static,
+// non-draggable element outside PavilionCanvas entirely — it's context,
+// not a tile to be rearranged — while Curators are the only thing
+// PavilionCanvas itself renders/drags/resizes in the drilled view.
+const PAVILION_MARKER = { left: "2%", top: "2%", width: "18%", height: "20%" };
 
 // A parallel variant of PavilionEditor.tsx (2026-08-30) — same
 // underlying data, same drag/resize canvas, same child-page actions.
@@ -24,14 +37,13 @@ const MAX_CURATORS = 9;
 //   - clicking a tile on the canvas opens the panel scoped to editing
 //     just that one tile — but ONLY when the panel is already open
 //
-// Drilling into a Pavilion (2026-08-30) — clicking a tile while the
-// canvas is shown full-screen (panel closed) hides every other Pavilion
-// and shows just that one plus its Curators, all as draggable/resizable
-// cards on the same canvas. Clicking the same (highlighted) Pavilion
-// tile again exits back to the full set. Clicking a Curator's own card
-// while drilled in is a deliberate no-op for now (reserved for a future
-// "open this Curator" action) — dragging/resizing them still works,
-// since that's a separate interaction from clicking.
+// Drilling into a Pavilion — clicking a tile while the canvas is shown
+// full-screen (panel closed) hides every other Pavilion and shows just
+// that one (as a fixed marker, top-left) plus its Curators, as
+// draggable/resizable cards on the same canvas. Clicking the Pavilion
+// marker exits back to the full set. Clicking a Curator's own card is a
+// deliberate no-op for now (reserved for a future "open this Curator"
+// action) — dragging/resizing them still works.
 export default function PavilionVisualEditor({
   siteId,
   artistId,
@@ -70,9 +82,9 @@ export default function PavilionVisualEditor({
   const [draftCuratorImageId, setDraftCuratorImageId] = useState("");
   const [draftCuratorImageUrl, setDraftCuratorImageUrl] = useState("");
 
-  // Full-screen drill state (2026-08-30) — which Pavilion's own Curators
-  // are being shown on the canvas instead of the full set. Only
-  // meaningful while the panel is closed; see the component-level note.
+  // Full-screen drill state — which Pavilion's own Curators are being
+  // shown on the canvas instead of the full set. Only meaningful while
+  // the panel is closed; see the component-level note.
   const [drilledPavilionId, setDrilledPavilionId] = useState<string | null>(null);
 
   const isFirstRun = useRef(true);
@@ -127,57 +139,39 @@ export default function PavilionVisualEditor({
     await deletePage(siteId, pageId);
   };
 
-  // The drilled Pavilion (if any) — its own tile plus its Curators'
-  // tiles are what the canvas shows while drilled in.
+  // The drilled Pavilion (if any).
   const drilledCard = drilledPavilionId ? cards.find((c) => c.id === drilledPavilionId) ?? null : null;
 
-  const visibleTiles: PavilionTile[] = drilledCard
-    ? [
-        {
-          id: drilledCard.id,
-          name: drilledCard.name,
-          description: drilledCard.description,
-          imageUrl: drilledCard.imageUrl,
-          x: drilledCard.x,
-          y: drilledCard.y,
-          width: drilledCard.width,
-          height: drilledCard.height,
-        },
-        ...drilledCard.curators.map((c) => ({
-          id: c.id,
-          name: c.name,
-          description: c.description,
-          imageUrl: c.imageUrl,
-          x: c.x,
-          y: c.y,
-          width: c.width,
-          height: c.height,
-        })),
-      ]
-    : cards;
+  // Curators only — the Pavilion itself is rendered separately as a
+  // fixed marker (see PAVILION_MARKER), not as a canvas tile, so it can
+  // never collide with or inherit sizing from Curator placement.
+  const curatorTiles: PavilionTile[] =
+    drilledCard?.curators.map((c) => ({
+      id: c.id,
+      name: c.name,
+      description: c.description,
+      imageUrl: c.imageUrl,
+      x: c.x,
+      y: c.y,
+      width: c.width,
+      height: c.height,
+    })) ?? [];
 
-  // Live position/size updates from the canvas — routes to the right
-  // place depending on whether we're drilled into a Pavilion's Curators
-  // or looking at the full set of Pavilions.
+  const visibleTiles: PavilionTile[] = drilledCard ? curatorTiles : cards;
+
+  // Live position/size updates from the canvas.
   const handleCardChange = (
     id: string,
     patch: Partial<Pick<PavilionTile, "x" | "y" | "width" | "height">>
   ) => {
     if (drilledCard) {
-      if (id === drilledCard.id) {
-        setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-      } else {
-        setCards((prev) =>
-          prev.map((c) =>
-            c.id === drilledCard.id
-              ? {
-                  ...c,
-                  curators: c.curators.map((cur) => (cur.id === id ? { ...cur, ...patch } : cur)),
-                }
-              : c
-          )
-        );
-      }
+      setCards((prev) =>
+        prev.map((c) =>
+          c.id === drilledCard.id
+            ? { ...c, curators: c.curators.map((cur) => (cur.id === id ? { ...cur, ...patch } : cur)) }
+            : c
+        )
+      );
       return;
     }
     setCards((prev) => prev.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -206,12 +200,11 @@ export default function PavilionVisualEditor({
     openNewCardForm();
   };
 
-  // Clicking a tile on the canvas — behaviour depends entirely on
-  // whether the panel is open:
-  //   - panel open: opens/updates the panel to edit that one card
-  //   - panel closed (full-screen): drills into that Pavilion's
-  //     Curators, or exits the drill if it's already the one shown, or
-  //     is a deliberate no-op if it's a Curator's own card
+  // Clicking a Curator's own card on the canvas — while the panel is
+  // open this opens/updates the panel to edit that Pavilion's fields (a
+  // Curator card is never shown while the panel is open, since drilling
+  // only happens in full-screen mode); while drilled in full-screen,
+  // it's a deliberate no-op for now.
   const handleCardClick = (id: string) => {
     if (panelOpen) {
       const card = cards.find((c) => c.id === id);
@@ -226,14 +219,9 @@ export default function PavilionVisualEditor({
       return;
     }
 
-    if (drilledCard) {
-      if (id === drilledCard.id) setDrilledPavilionId(null);
-      // else: a Curator's own card was clicked — no-op for now.
-      return;
-    }
+    if (drilledCard) return; // Curator card clicked — no-op for now.
 
-    const isPavilion = cards.some((c) => c.id === id);
-    if (isPavilion) setDrilledPavilionId(id);
+    setDrilledPavilionId(id);
   };
 
   const handleSaveCard = async () => {
@@ -327,7 +315,7 @@ export default function PavilionVisualEditor({
     const trimmedName = draftCuratorName.trim();
     if (!trimmedName) return;
     if (curatorEditingIndex === "new") {
-      const position = nextCardPosition(draftCurators.length);
+      const position = nextCuratorPosition(draftCurators.length);
       setDraftCurators((prev) => [
         ...prev,
         {
@@ -379,11 +367,42 @@ export default function PavilionVisualEditor({
         >
           ✎
         </button>
+
+        {/* Fixed "you are here" marker for the drilled-into Pavilion —
+            not a canvas tile, so it never competes for space or drag/
+            resize with the Curator cards. Click to exit the drill. */}
+        {drilledCard && (
+          <button
+            type="button"
+            onClick={() => setDrilledPavilionId(null)}
+            title="Show all Pavilions"
+            style={PAVILION_MARKER}
+            className="absolute z-10 flex flex-col overflow-hidden rounded-lg border-2 border-neutral-900 bg-white text-left shadow-md"
+          >
+            <p className="truncate px-2 pt-1.5 text-center text-xs font-medium text-neutral-600">
+              {drilledCard.name || "Untitled"}
+            </p>
+            <div className="flex-1 overflow-hidden px-2 py-1">
+              {drilledCard.imageUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={drilledCard.imageUrl}
+                  alt=""
+                  className="h-full w-full rounded object-cover"
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center rounded bg-neutral-100 text-[10px] text-neutral-400">
+                  No image
+                </div>
+              )}
+            </div>
+          </button>
+        )}
+
         <PavilionCanvas
           cards={visibleTiles}
           onCardClick={handleCardClick}
           onCardChange={handleCardChange}
-          highlightId={drilledCard?.id}
           emptyMessage={
             drilledCard
               ? "No Curators yet — open the panel to add one."
