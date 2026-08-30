@@ -10,11 +10,17 @@ import {
   deletePavilionChildPage,
 } from "@/lib/actions/pavilions";
 import { nextCardPosition } from "@/lib/pavilionLayout";
-import ThreeColumnShell from "@/components/ThreeColumnShell";
 import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
 import type { PavilionCard } from "@/lib/blocks";
 
+// Deliberately its own two-column layout (2026-08-30), not the generic
+// ThreeColumnShell used by PageEditor/SectionEditor — the whole point of
+// this editor is the canvas, which needs as much width as possible as
+// more Pavilions are added, not a third narrower column reserved for a
+// form that's only in use some of the time. The single right-hand panel
+// below shows either the "+ Add Pavilion" trigger or the open edit form,
+// never both, matching the reference screenshots.
 export default function PavilionEditor({
   siteId,
   artistId,
@@ -33,7 +39,8 @@ export default function PavilionEditor({
   const [isDeleting, setIsDeleting] = useState(false);
   const [titleSaved, setTitleSaved] = useState(false);
   // "new" while the blank Add-Pavilion form is open; a card's own id
-  // while editing an existing one; null when neither (canvas-only view).
+  // while editing an existing one; null when neither (just the trigger
+  // button showing).
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
@@ -184,19 +191,30 @@ export default function PavilionEditor({
   };
 
   return (
-    <ThreeColumnShell
-      preview={
+    <div className="grid grid-cols-[1fr_320px] gap-0">
+      <div className="border-r border-neutral-200 bg-neutral-50 p-6">
         <PavilionCanvas cards={cards} onCardClick={openExistingCard} onCardChange={handleCardChange} />
-      }
-      edit={
-        editingId ? (
+      </div>
+
+      <div className="p-4">
+        <div className="mb-6">
+          <input
+            type="text"
+            defaultValue={pageTitle}
+            onBlur={(e) => handleRenamePage(e.target.value)}
+            className="w-full rounded-md border border-transparent px-1 py-0.5 -mx-1 text-lg font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
+          />
+          {titleSaved && <p className="mt-1 text-xs text-green-600">Saved</p>}
+        </div>
+
+        {editingId ? (
           <div className="space-y-4">
             <button
               type="button"
               onClick={closeForm}
               className="text-sm text-neutral-500 hover:underline"
             >
-              ← Back to canvas
+              ← Back
             </button>
 
             <div>
@@ -229,15 +247,15 @@ export default function PavilionEditor({
                 <img
                   src={draftImageUrl}
                   alt=""
-                  className="mb-2 max-h-48 rounded-md object-cover"
+                  className="mb-2 max-h-40 w-full rounded-md object-cover"
                 />
               )}
-              <div className="w-32">
+              <div className="w-24">
                 <MediaPicker
                   artistId={artistId}
                   siteId={siteId}
                   mode="single"
-                  label={draftImageUrl ? "Change Image" : "Add Image"}
+                  label={draftImageUrl ? "Change" : "Add"}
                   onSelect={(imgs) => {
                     setDraftImageId(imgs[0].id);
                     setDraftImageUrl(imgs[0].url);
@@ -251,7 +269,7 @@ export default function PavilionEditor({
                 type="button"
                 onClick={handleSaveCard}
                 disabled={isSaving || !draftName.trim()}
-                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                className="flex-1 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
               >
                 Save
               </button>
@@ -266,24 +284,6 @@ export default function PavilionEditor({
             </div>
           </div>
         ) : (
-          <p className="text-sm text-neutral-400">
-            Click &quot;+ Add Pavilion&quot; on the right, or click a card on the canvas to edit
-            it. Drag any card to reposition it, or its bottom-right corner to resize it.
-          </p>
-        )
-      }
-      menu={
-        <div className="space-y-6">
-          <div>
-            <input
-              type="text"
-              defaultValue={pageTitle}
-              onBlur={(e) => handleRenamePage(e.target.value)}
-              className="w-full rounded-md border border-transparent px-1 py-0.5 -mx-1 text-lg font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
-            />
-            {titleSaved && <p className="mt-1 text-xs text-green-600">Saved</p>}
-          </div>
-
           <button
             type="button"
             onClick={openNewCardForm}
@@ -291,30 +291,30 @@ export default function PavilionEditor({
           >
             + Add Pavilion
           </button>
+        )}
 
-          <div>
-            <p className="text-xs text-neutral-400">
-              {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
-            </p>
-            <Link
-              href={`/sites/${siteId}/pages/${pageId}/preview`}
-              target="_blank"
-              className="mt-2 block rounded-md border border-neutral-300 px-3 py-1.5 text-center text-sm hover:bg-neutral-50"
-            >
-              Open full preview
-            </Link>
+        <div className="mt-6">
+          <p className="text-xs text-neutral-400">
+            {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
+          </p>
+          <Link
+            href={`/sites/${siteId}/pages/${pageId}/preview`}
+            target="_blank"
+            className="mt-2 block rounded-md border border-neutral-300 px-3 py-1.5 text-center text-sm hover:bg-neutral-50"
+          >
+            Open full preview
+          </Link>
 
-            <button
-              type="button"
-              onClick={handleDeletePage}
-              disabled={isDeleting}
-              className="mt-4 block w-full rounded-md border border-red-200 px-3 py-1.5 text-center text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-            >
-              Delete Page
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleDeletePage}
+            disabled={isDeleting}
+            className="mt-4 block w-full rounded-md border border-red-200 px-3 py-1.5 text-center text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            Delete Page
+          </button>
         </div>
-      }
-    />
+      </div>
+    </div>
   );
 }
