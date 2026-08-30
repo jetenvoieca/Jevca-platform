@@ -60,6 +60,7 @@ export default function MediaPicker({
   mediaKinds,
   label = "Add Image",
   linkedArtworkId,
+  previewUrl,
   onSelect,
 }: {
   artistId: string;
@@ -82,6 +83,16 @@ export default function MediaPicker({
   // replacing "ancillary"/"secondary"/"connected" — see decisions-log,
   // 2026-08-05.
   linkedArtworkId?: string;
+  // When set (2026-08-30), the closed-state trigger renders this actual
+  // image, large and uncropped-to-a-tiny-box (object-cover on a real
+  // aspect ratio, not letterboxed), rather than the small dashed
+  // "+ Add/Change Image" placeholder tile — the image itself becomes the
+  // click target to change it, with a crosshair overlay on hover as the
+  // "click to change" affordance. Falls back to the placeholder tile
+  // when there's nothing to preview yet. Callers that pass this no
+  // longer need their own separate <img> + small MediaPicker pairing —
+  // this one picker is now both the preview and the trigger.
+  previewUrl?: string;
   onSelect: (images: PickedImage[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -164,7 +175,29 @@ export default function MediaPicker({
   // tile, not a button — so adding media looks and behaves identically
   // across the Artwork Catalogue, Media Catalogue, page Content Blocks,
   // and Section artwork grids. See decisions-log.md, 2026-07-31.
+  //
+  // When a previewUrl is given (2026-08-30), that convention still
+  // applies but scaled up: the actual image fills the tile at a real
+  // size instead of a small placeholder, with the same dashed-border
+  // language shown as a hover overlay rather than the whole tile.
   if (!open) {
+    if (previewUrl) {
+      return (
+        <button
+          type="button"
+          onClick={handleOpen}
+          className="group relative block aspect-[4/3] w-full overflow-hidden rounded-md"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+            <div className="hidden h-2/3 w-2/3 items-center justify-center border-2 border-dashed border-white group-hover:flex">
+              <span className="text-2xl leading-none text-white">+</span>
+            </div>
+          </div>
+        </button>
+      );
+    }
     return (
       <button
         type="button"
@@ -432,5 +465,3 @@ export default function MediaPicker({
     </div>
   );
 }
-
-
