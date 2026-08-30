@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { saveDraftBlocks, deletePage, menuItemCountForPage, updatePageTitle } from "@/lib/actions/pages";
 import {
   createPavilionChildPage,
@@ -14,13 +13,14 @@ import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
 import type { PavilionCard } from "@/lib/blocks";
 
-// Deliberately its own two-column layout (2026-08-30), not the generic
-// ThreeColumnShell used by PageEditor/SectionEditor — the whole point of
-// this editor is the canvas, which needs as much width as possible as
-// more Pavilions are added, not a third narrower column reserved for a
-// form that's only in use some of the time. The single right-hand panel
-// below shows either the "+ Add Pavilion" trigger or the open edit form,
-// never both, matching the reference screenshots.
+// Its own two-column layout (2026-08-30), not the generic ThreeColumnShell
+// used by PageEditor/SectionEditor — deliberately tight, since the panel
+// needs to stay compact as more content (Curators, etc.) lands in it, and
+// the canvas needs to be able to go full-width via the expand toggle.
+//
+// Right panel is a single, tight list: each Pavilion is a name row; only
+// the one currently open expands in place to show its editable fields —
+// never a separate full-panel form.
 export default function PavilionEditor({
   siteId,
   artistId,
@@ -38,22 +38,25 @@ export default function PavilionEditor({
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [isDeleting, setIsDeleting] = useState(false);
   const [titleSaved, setTitleSaved] = useState(false);
-  // "new" while the blank Add-Pavilion form is open; a card's own id
-  // while editing an existing one; null when neither (just the trigger
-  // button showing).
+  // "new" while a blank row is open ready to be filled in; a card's own
+  // id while that row is open; null when every row is collapsed.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [draftImageId, setDraftImageId] = useState("");
   const [draftImageUrl, setDraftImageUrl] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  // Collapses the right panel entirely and gives the canvas the full
+  // width — toggled from the small corner button on the canvas itself,
+  // not a separate "Open full preview" page/tab.
+  const [panelCollapsed, setPanelCollapsed] = useState(false);
   const isFirstRun = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
 
   // Autosaves the whole cards array — covers both drag/resize on the
-  // canvas (confirmed OK to autosave) and any card content change, same
-  // debounced pattern already used for Section/Content-Block pages.
+  // canvas and any card content change, same debounced pattern already
+  // used for Section/Content-Block pages.
   useEffect(() => {
     if (isFirstRun.current) {
       isFirstRun.current = false;
@@ -116,7 +119,11 @@ export default function PavilionEditor({
     setDraftImageUrl("");
   };
 
-  const openExistingCard = (id: string) => {
+  const toggleCard = (id: string) => {
+    if (editingId === id) {
+      setEditingId(null);
+      return;
+    }
     const card = cards.find((c) => c.id === id);
     if (!card) return;
     setEditingId(id);
@@ -125,8 +132,6 @@ export default function PavilionEditor({
     setDraftImageId(card.imageId);
     setDraftImageUrl(card.imageUrl);
   };
-
-  const closeForm = () => setEditingId(null);
 
   const handleSaveCard = async () => {
     const trimmedName = draftName.trim();
@@ -176,7 +181,6 @@ export default function PavilionEditor({
 
   const handleDeleteCard = async () => {
     if (!editingId || editingId === "new") {
-      // Nothing was created yet — just close the form.
       setEditingId(null);
       return;
     }
@@ -190,120 +194,138 @@ export default function PavilionEditor({
     setEditingId(null);
   };
 
-  return (
-    <div className="grid grid-cols-[1fr_320px] gap-0">
-      <div className="border-r border-neutral-200 bg-neutral-50 p-6">
-        <PavilionCanvas cards={cards} onCardClick={openExistingCard} onCardChange={handleCardChange} />
+  const renderExpandedFields = () => (
+    <div className="mt-2 space-y-3 pl-1">
+      {/* Curator functionality itself is a later step — this is a
+          placeholder link only, per that decision, so it doesn't
+          silently disappear from the layout once it's actually built. */}
+      <button type="button" className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+        Add Curator
+      </button>
+
+      <textarea
+        value={draftDescription}
+        onChange={(e) => setDraftDescription(e.target.value)}
+        placeholder="Description"
+        rows={3}
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+      />
+
+      <div>
+        {draftImageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={draftImageUrl} alt="" className="mb-2 max-h-32 w-full rounded-md object-cover" />
+        )}
+        <div className="w-20">
+          <MediaPicker
+            artistId={artistId}
+            siteId={siteId}
+            mode="single"
+            label={draftImageUrl ? "Change" : "Add"}
+            onSelect={(imgs) => {
+              setDraftImageId(imgs[0].id);
+              setDraftImageUrl(imgs[0].url);
+            }}
+          />
+        </div>
       </div>
 
-      <div className="p-4">
-        <div className="mb-6">
-          <input
-            type="text"
-            defaultValue={pageTitle}
-            onBlur={(e) => handleRenamePage(e.target.value)}
-            className="w-full rounded-md border border-transparent px-1 py-0.5 -mx-1 text-lg font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
-          />
-          {titleSaved && <p className="mt-1 text-xs text-green-600">Saved</p>}
-        </div>
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={handleSaveCard}
+          disabled={isSaving || !draftName.trim()}
+          className="flex-1 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={handleDeleteCard}
+          disabled={isSaving}
+          className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
 
-        {editingId ? (
-          <div className="space-y-4">
+  return (
+    <div className={panelCollapsed ? "grid grid-cols-1" : "grid grid-cols-[1fr_300px] gap-0"}>
+      <div className="relative border-r border-neutral-200 bg-neutral-50 p-6">
+        <button
+          type="button"
+          onClick={() => setPanelCollapsed((v) => !v)}
+          title={panelCollapsed ? "Show panel" : "Expand canvas"}
+          className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-md border border-neutral-300 bg-white text-neutral-500 hover:bg-neutral-50"
+        >
+          {panelCollapsed ? "⤡" : "⤢"}
+        </button>
+        <PavilionCanvas cards={cards} onCardClick={toggleCard} onCardChange={handleCardChange} />
+      </div>
+
+      {!panelCollapsed && (
+        <div className="p-4">
+          <div className="mb-3 flex items-baseline justify-between">
+            <input
+              type="text"
+              defaultValue={pageTitle}
+              onBlur={(e) => handleRenamePage(e.target.value)}
+              className="w-1/2 rounded-md border border-transparent px-1 py-0.5 -mx-1 text-lg font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
+            />
             <button
               type="button"
-              onClick={closeForm}
-              className="text-sm text-neutral-500 hover:underline"
+              onClick={openNewCardForm}
+              className="text-xs font-medium uppercase tracking-wide text-neutral-500 hover:text-neutral-900"
             >
-              ← Back
+              Add Pavilion
             </button>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
-              <input
-                type="text"
-                value={draftName}
-                onChange={(e) => setDraftName(e.target.value)}
-                autoFocus
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Description
-              </label>
-              <textarea
-                value={draftDescription}
-                onChange={(e) => setDraftDescription(e.target.value)}
-                rows={4}
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              />
-            </div>
-
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">Image</label>
-              {draftImageUrl && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={draftImageUrl}
-                  alt=""
-                  className="mb-2 max-h-40 w-full rounded-md object-cover"
-                />
-              )}
-              <div className="w-24">
-                <MediaPicker
-                  artistId={artistId}
-                  siteId={siteId}
-                  mode="single"
-                  label={draftImageUrl ? "Change" : "Add"}
-                  onSelect={(imgs) => {
-                    setDraftImageId(imgs[0].id);
-                    setDraftImageUrl(imgs[0].url);
-                  }}
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={handleSaveCard}
-                disabled={isSaving || !draftName.trim()}
-                className="flex-1 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-              >
-                Save
-              </button>
-              <button
-                type="button"
-                onClick={handleDeleteCard}
-                disabled={isSaving}
-                className="rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-              >
-                Delete
-              </button>
-            </div>
           </div>
-        ) : (
-          <button
-            type="button"
-            onClick={openNewCardForm}
-            className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm font-medium hover:bg-neutral-50"
-          >
-            + Add Pavilion
-          </button>
-        )}
+          {titleSaved && <p className="mb-2 text-xs text-green-600">Saved</p>}
 
-        <div className="mt-6">
-          <p className="text-xs text-neutral-400">
+          <div className="space-y-2">
+            {cards.map((card) => (
+              <div key={card.id}>
+                {editingId === card.id ? (
+                  <input
+                    type="text"
+                    value={draftName}
+                    onChange={(e) => setDraftName(e.target.value)}
+                    autoFocus
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => toggleCard(card.id)}
+                    className="w-full truncate rounded-md border border-neutral-300 px-3 py-2 text-left text-sm hover:bg-neutral-50"
+                  >
+                    {card.name || "Untitled"}
+                  </button>
+                )}
+                {editingId === card.id && renderExpandedFields()}
+              </div>
+            ))}
+
+            {editingId === "new" && (
+              <div>
+                <input
+                  type="text"
+                  value={draftName}
+                  onChange={(e) => setDraftName(e.target.value)}
+                  placeholder="Name"
+                  autoFocus
+                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                />
+                {renderExpandedFields()}
+              </div>
+            )}
+          </div>
+
+          <p className="mt-4 text-xs text-neutral-400">
             {saveState === "saving" ? "Saving…" : saveState === "saved" ? "Saved" : ""}
           </p>
-          <Link
-            href={`/sites/${siteId}/pages/${pageId}/preview`}
-            target="_blank"
-            className="mt-2 block rounded-md border border-neutral-300 px-3 py-1.5 text-center text-sm hover:bg-neutral-50"
-          >
-            Open full preview
-          </Link>
 
           <button
             type="button"
@@ -314,7 +336,7 @@ export default function PavilionEditor({
             Delete Page
           </button>
         </div>
-      </div>
+      )}
     </div>
   );
 }
