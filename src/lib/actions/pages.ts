@@ -4,7 +4,10 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-function slugify(title: string) {
+// Exported (2026-08-30) so pavilions.ts can generate a slug for each
+// Pavilion's auto-created child Page the exact same way a normal
+// "+ Add New Page" does — one shared slugging convention, not two.
+export function slugify(title: string) {
   return (
     title
       .toLowerCase()
@@ -14,7 +17,7 @@ function slugify(title: string) {
   );
 }
 
-async function uniqueSlug(siteId: string, base: string) {
+export async function uniqueSlug(siteId: string, base: string) {
   let slug = base;
   let n = 2;
   while (await db.page.findFirst({ where: { siteId, slug } })) {
@@ -27,7 +30,8 @@ async function uniqueSlug(siteId: string, base: string) {
 export async function createPage(siteId: string, formData: FormData) {
   const title = (formData.get("title") as string)?.trim();
   if (!title) return;
-  const type = formData.get("type") === "PRIVATE" ? "PRIVATE" : "SECTION";
+  const typeRaw = formData.get("type");
+  const type = typeRaw === "PRIVATE" ? "PRIVATE" : typeRaw === "PAVILION" ? "PAVILION" : "SECTION";
 
   const baseSlug = slugify(title);
   const slug = await uniqueSlug(siteId, baseSlug);
