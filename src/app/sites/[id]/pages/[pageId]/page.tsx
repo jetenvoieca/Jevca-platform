@@ -2,9 +2,10 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import PageEditor from "./PageEditor";
 import SectionEditor from "@/components/SectionEditor";
+import PavilionEditor from "@/components/PavilionEditor";
 import { getArtworksByIds } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
-import type { ContentBlock, SectionContent } from "@/lib/blocks";
+import type { ContentBlock, SectionContent, PavilionContent } from "@/lib/blocks";
 
 export default async function PageEditorPage({
   params,
@@ -45,6 +46,20 @@ export default async function PageEditorPage({
         initialArtworks={artworks}
         settings={settings}
         siteDefaultCurrency={site.defaultCurrency}
+      />
+    );
+  }
+
+  if (page.type === "PAVILION") {
+    const content = (page.draftBlocks as unknown as PavilionContent) || { cards: [] };
+
+    return (
+      <PavilionEditor
+        siteId={id}
+        artistId={site.artistId}
+        pageId={page.id}
+        pageTitle={page.title}
+        initialCards={content.cards || []}
       />
     );
   }
