@@ -8,7 +8,7 @@ import {
   renamePavilionChildPage,
   deletePavilionChildPage,
 } from "@/lib/actions/pavilions";
-import { nextCardPosition, nextCuratorPosition } from "@/lib/pavilionLayout";
+import { nextCardPosition, nextCuratorPosition, normalizeCards } from "@/lib/pavilionLayout";
 import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
 import ArtistSelectorModal from "@/components/ArtistSelectorModal";
@@ -68,7 +68,12 @@ export default function PavilionEditor({
   pageTitle: string;
   initialCards: PavilionCard[];
 }) {
-  const [cards, setCards] = useState<PavilionCard[]>(initialCards);
+  // Normalized on load (2026-08-30) — backfills any field the shape has
+  // gained since a given card/curator/artist was last saved (e.g. an
+  // early Curator saved before `artists` existed). See normalizeCards
+  // in pavilionLayout.ts: without it, drilling into old data can throw
+  // and crash the whole page.
+  const [cards, setCards] = useState<PavilionCard[]>(() => normalizeCards(initialCards));
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const [isDeleting, setIsDeleting] = useState(false);
   const [titleSaved, setTitleSaved] = useState(false);
@@ -583,7 +588,7 @@ export default function PavilionEditor({
           title={panelCollapsed ? "Show panel" : "Expand canvas"}
           className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-md border border-neutral-300 bg-white text-neutral-500 hover:bg-neutral-50"
         >
-          {panelCollapsed ? "⤡" : "⤢"}
+          {panelCollapsed ? "⤡" : "⤡"}
         </button>
 
         {/* Fixed "you are here" marker for whichever level is drilled
