@@ -13,6 +13,8 @@ import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
 import type { PavilionCard } from "@/lib/blocks";
 
+const MAX_CURATORS = 9;
+
 // Its own two-column layout (2026-08-30), not the generic ThreeColumnShell
 // used by PageEditor/SectionEditor — deliberately tight, since the panel
 // needs to stay compact as more content (Curators, etc.) lands in it, and
@@ -48,6 +50,7 @@ export default function PavilionEditor({
   const [draftDescription, setDraftDescription] = useState("");
   const [draftImageId, setDraftImageId] = useState("");
   const [draftImageUrl, setDraftImageUrl] = useState("");
+  const [draftCurators, setDraftCurators] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   // Collapses the right panel entirely and gives the canvas the full
   // width — toggled from the small corner button on the canvas itself,
@@ -120,6 +123,7 @@ export default function PavilionEditor({
     setDraftDescription("");
     setDraftImageId("");
     setDraftImageUrl("");
+    setDraftCurators([]);
   };
 
   const toggleCard = (id: string) => {
@@ -134,12 +138,14 @@ export default function PavilionEditor({
     setDraftDescription(card.description);
     setDraftImageId(card.imageId);
     setDraftImageUrl(card.imageUrl);
+    setDraftCurators(card.curators ?? []);
   };
 
   const handleSaveCard = async () => {
     const trimmedName = draftName.trim();
     if (!trimmedName) return;
     setIsSaving(true);
+    const curators = draftCurators.map((c) => c.trim()).filter(Boolean);
 
     if (editingId === "new") {
       const childPage = await createPavilionChildPage(siteId, trimmedName);
@@ -155,6 +161,7 @@ export default function PavilionEditor({
         imageId: draftImageId,
         imageUrl: draftImageUrl,
         childPageId: childPage.id,
+        curators,
         ...position,
       };
       setCards((prev) => [...prev, newCard]);
@@ -172,6 +179,7 @@ export default function PavilionEditor({
                 description: draftDescription.trim(),
                 imageId: draftImageId,
                 imageUrl: draftImageUrl,
+                curators,
               }
             : c
         )
@@ -197,14 +205,54 @@ export default function PavilionEditor({
     setEditingId(null);
   };
 
+  const addCurator = () => {
+    if (draftCurators.length >= MAX_CURATORS) return;
+    setDraftCurators((prev) => [...prev, ""]);
+  };
+
+  const updateCurator = (index: number, value: string) => {
+    setDraftCurators((prev) => prev.map((c, i) => (i === index ? value : c)));
+  };
+
+  const removeCurator = (index: number) => {
+    setDraftCurators((prev) => prev.filter((_, i) => i !== index));
+  };
+
   const renderExpandedFields = () => (
     <div className="mt-2 space-y-3 pl-1">
-      {/* Curator functionality itself is a later step — this is a
-          placeholder link only, per that decision, so it doesn't
-          silently disappear from the layout once it's actually built. */}
-      <button type="button" className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-        Add Curator
-      </button>
+      {/* Curators (2026-08-30) — up to 9 plain names per Pavilion. "Add
+          Curator" appends a blank row; each has its own remove control.
+          Nothing here is saved until this card's own Save button is
+          clicked, same as Name/Description/Image. */}
+      <div className="space-y-1.5">
+        {draftCurators.map((name, i) => (
+          <div key={i} className="flex items-center gap-1.5">
+            <input
+              type="text"
+              value={name}
+              onChange={(e) => updateCurator(i, e.target.value)}
+              placeholder={`Curator ${i + 1}`}
+              className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+            />
+            <button
+              type="button"
+              onClick={() => removeCurator(i)}
+              aria-label="Remove curator"
+              className="shrink-0 text-neutral-400 hover:text-red-600"
+            >
+              ×
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          onClick={addCurator}
+          disabled={draftCurators.length >= MAX_CURATORS}
+          className="text-xs font-medium uppercase tracking-wide text-neutral-400 hover:text-neutral-700 disabled:opacity-40"
+        >
+          Add Curator{draftCurators.length > 0 ? ` (${draftCurators.length}/${MAX_CURATORS})` : ""}
+        </button>
+      </div>
 
       {/* Large, uncropped-to-a-tiny-box clickable preview (2026-08-30) —
           the image itself is the trigger to change it now, via
