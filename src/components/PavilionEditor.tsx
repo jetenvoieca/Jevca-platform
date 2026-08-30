@@ -8,8 +8,8 @@ import {
   createPavilionChildPage,
   renamePavilionChildPage,
   deletePavilionChildPage,
-  nextCardPosition,
 } from "@/lib/actions/pavilions";
+import { nextCardPosition } from "@/lib/pavilionLayout";
 import ThreeColumnShell from "@/components/ThreeColumnShell";
 import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
@@ -267,8 +267,8 @@ export default function PavilionEditor({
           </div>
         ) : (
           <p className="text-sm text-neutral-400">
-            Click "+ Add Pavilion" on the right, or click a card on the canvas to edit it. Drag
-            any card to reposition it, or its bottom-right corner to resize it.
+            Click &quot;+ Add Pavilion&quot; on the right, or click a card on the canvas to edit
+            it. Drag any card to reposition it, or its bottom-right corner to resize it.
           </p>
         )
       }
