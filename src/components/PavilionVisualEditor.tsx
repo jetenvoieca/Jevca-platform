@@ -13,6 +13,8 @@ import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
 import type { PavilionCard } from "@/lib/blocks";
 
+const MAX_CURATORS = 9;
+
 // A parallel variant of PavilionEditor.tsx (2026-08-30) — same
 // underlying data, same drag/resize canvas, same child-page actions.
 // What's genuinely different here is the panel: closed by default, and
@@ -20,7 +22,11 @@ import type { PavilionCard } from "@/lib/blocks";
 // canvas itself IS that browsing surface. Two ways in:
 //   - the pencil icon always opens a blank "Add Pavilion" form
 //   - clicking a tile on the canvas opens the panel scoped to editing
-//     just that one tile, nothing else
+//     just that one tile — but ONLY when the panel is already open
+//     (2026-08-30, direct request); clicking a tile while the canvas is
+//     shown full-screen (panel closed) is a deliberate no-op for now —
+//     that's reserved for a future "open this Pavilion's own page"
+//     action, not implemented yet.
 // PavilionEditor's own panel, by contrast, stays open with a full list —
 // this one is deliberately narrower in scope.
 export default function PavilionVisualEditor({
@@ -43,13 +49,13 @@ export default function PavilionVisualEditor({
   const [panelOpen, setPanelOpen] = useState(false);
   // "new" while the blank Add-Pavilion form is open; a card's own id
   // while that one tile's fields are open; null only when the panel
-  // itself is closed (there's never a "panel open, nothing selected"
-  // state in this variant — see openNewCardForm/toggleCard below).
+  // itself is closed.
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftName, setDraftName] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [draftImageId, setDraftImageId] = useState("");
   const [draftImageUrl, setDraftImageUrl] = useState("");
+  const [draftCurators, setDraftCurators] = useState<string[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const isFirstRun = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -119,12 +125,13 @@ export default function PavilionVisualEditor({
     setDraftDescription("");
     setDraftImageId("");
     setDraftImageUrl("");
+    setDraftCurators([]);
   };
 
   // The pencil icon on the canvas — always opens a blank Add Pavilion
   // form. Editing an existing one happens by clicking its tile directly
-  // (toggleCard below), not through this button, so pencil has exactly
-  // one job.
+  // (handleCardClick below), not through this button, so pencil has
+  // exactly one job.
   const handlePencilClick = () => {
     if (panelOpen && editingId === "new") {
       setPanelOpen(false);
@@ -134,29 +141,26 @@ export default function PavilionVisualEditor({
     openNewCardForm();
   };
 
-  // Clicking a tile on the canvas — opens the panel scoped to just this
-  // one card's fields. Clicking the same tile again closes the panel;
-  // clicking a different tile switches straight to it.
-  const toggleCard = (id: string) => {
-    if (panelOpen && editingId === id) {
-      setPanelOpen(false);
-      setEditingId(null);
-      return;
-    }
+  // Clicking a tile on the canvas — only does anything while the panel
+  // is already open (see the component-level note above for why); at
+  // that point it opens the panel scoped to just this one card's fields.
+  const handleCardClick = (id: string) => {
+    if (!panelOpen) return;
     const card = cards.find((c) => c.id === id);
     if (!card) return;
-    setPanelOpen(true);
     setEditingId(id);
     setDraftName(card.name);
     setDraftDescription(card.description);
     setDraftImageId(card.imageId);
     setDraftImageUrl(card.imageUrl);
+    setDraftCurators(card.curators ?? []);
   };
 
   const handleSaveCard = async () => {
     const trimmedName = draftName.trim();
     if (!trimmedName) return;
     setIsSaving(true);
+    const curators = draftCurators.map((c) => c.trim()).filter(Boolean);
 
     if (editingId === "new") {
       const childPage = await createPavilionChildPage(siteId, trimmedName);
@@ -172,6 +176,7 @@ export default function PavilionVisualEditor({
         imageId: draftImageId,
         imageUrl: draftImageUrl,
         childPageId: childPage.id,
+        curators,
         ...position,
       };
       setCards((prev) => [...prev, newCard]);
@@ -189,6 +194,7 @@ export default function PavilionVisualEditor({
                 description: draftDescription.trim(),
                 imageId: draftImageId,
                 imageUrl: draftImageUrl,
+                curators,
               }
             : c
         )
@@ -217,6 +223,19 @@ export default function PavilionVisualEditor({
     setEditingId(null);
   };
 
+  const addCurator = () => {
+    if (draftCurators.length >= MAX_CURATORS) return;
+    setDraftCurators((prev) => [...prev, ""]);
+  };
+
+  const updateCurator = (index: number, value: string) => {
+    setDraftCurators((prev) => prev.map((c, i) => (i === index ? value : c)));
+  };
+
+  const removeCurator = (index: number) => {
+    setDraftCurators((prev) => prev.filter((_, i) => i !== index));
+  };
+
   return (
     <div className={`h-full ${panelOpen ? "grid grid-cols-[1fr_300px] gap-0" : "grid grid-cols-1"}`}>
       <div className="relative h-full overflow-y-auto p-6">
@@ -228,7 +247,7 @@ export default function PavilionVisualEditor({
         >
           ✎
         </button>
-        <PavilionCanvas cards={cards} onCardClick={toggleCard} onCardChange={handleCardChange} />
+        <PavilionCanvas cards={cards} onCardClick={handleCardClick} onCardChange={handleCardChange} />
       </div>
 
       {panelOpen && (
@@ -256,9 +275,8 @@ export default function PavilionVisualEditor({
           </div>
 
           {/* Just this one tile's fields — no list of other Pavilions
-              here (2026-08-30, direct request): the canvas is the
-              browsing surface, this panel is only ever "add one" or
-              "edit the one you just clicked". */}
+              here: the canvas is the browsing surface, this panel is
+              only ever "add one" or "edit the one you just clicked". */}
           <div className="space-y-3">
             <input
               type="text"
@@ -269,15 +287,40 @@ export default function PavilionVisualEditor({
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             />
 
-            {/* Curator functionality itself is a later step — this is a
-                placeholder link only, so it doesn't silently disappear
-                from the layout once it's actually built. */}
-            <button
-              type="button"
-              className="text-xs font-medium uppercase tracking-wide text-neutral-400"
-            >
-              Add Curator
-            </button>
+            {/* Curators (2026-08-30) — up to 9 plain names per Pavilion.
+                "Add Curator" appends a blank row; each has its own
+                remove control. Nothing here is saved until the panel's
+                own Save button is clicked, same as Name/Description/
+                Image. */}
+            <div className="space-y-1.5">
+              {draftCurators.map((name, i) => (
+                <div key={i} className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => updateCurator(i, e.target.value)}
+                    placeholder={`Curator ${i + 1}`}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeCurator(i)}
+                    aria-label="Remove curator"
+                    className="shrink-0 text-neutral-400 hover:text-red-600"
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+              <button
+                type="button"
+                onClick={addCurator}
+                disabled={draftCurators.length >= MAX_CURATORS}
+                className="text-xs font-medium uppercase tracking-wide text-neutral-400 hover:text-neutral-700 disabled:opacity-40"
+              >
+                Add Curator{draftCurators.length > 0 ? ` (${draftCurators.length}/${MAX_CURATORS})` : ""}
+              </button>
+            </div>
 
             {/* Large, uncropped-to-a-tiny-box clickable preview — the
                 image itself is the trigger to change it, via
