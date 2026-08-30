@@ -18,6 +18,10 @@ import type { PavilionCard } from "@/lib/blocks";
 // via the pencil icon on the canvas. Kept as its own component/page type
 // specifically so trying this out can never affect or lose the original
 // PAVILION implementation.
+//
+// Canvas is h-full/overflow-y-auto (2026-08-30, matching PavilionEditor's
+// own canvas) so it fills the available page height and scrolls rather
+// than sitting in a fixed-height box.
 export default function PavilionVisualEditor({
   siteId,
   artistId,
@@ -206,6 +210,22 @@ export default function PavilionVisualEditor({
         Add Curator
       </button>
 
+      {/* Large, uncropped-to-a-tiny-box clickable preview (2026-08-30) —
+          the image itself is the trigger to change it now, via
+          MediaPicker's previewUrl prop, rather than a small thumbnail
+          plus a separate tiny "Change" button. */}
+      <MediaPicker
+        artistId={artistId}
+        siteId={siteId}
+        mode="single"
+        previewUrl={draftImageUrl || undefined}
+        label="Add Image"
+        onSelect={(imgs) => {
+          setDraftImageId(imgs[0].id);
+          setDraftImageUrl(imgs[0].url);
+        }}
+      />
+
       <textarea
         value={draftDescription}
         onChange={(e) => setDraftDescription(e.target.value)}
@@ -213,25 +233,6 @@ export default function PavilionVisualEditor({
         rows={3}
         className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
       />
-
-      <div>
-        {draftImageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={draftImageUrl} alt="" className="mb-2 max-h-32 w-full rounded-md object-cover" />
-        )}
-        <div className="w-20">
-          <MediaPicker
-            artistId={artistId}
-            siteId={siteId}
-            mode="single"
-            label={draftImageUrl ? "Change" : "Add"}
-            onSelect={(imgs) => {
-              setDraftImageId(imgs[0].id);
-              setDraftImageUrl(imgs[0].url);
-            }}
-          />
-        </div>
-      </div>
 
       <div className="flex gap-2">
         <button
@@ -257,7 +258,7 @@ export default function PavilionVisualEditor({
   return (
     <div className={`h-full ${panelOpen ? "grid grid-cols-[1fr_300px] gap-0" : "grid grid-cols-1"}`}>
       <div className="relative h-full overflow-y-auto p-6">
-        <div className="relative min-h-[640px] w-full rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-6">
+        <div className="relative h-full min-h-[640px] w-full rounded-lg border border-dashed border-neutral-300 bg-neutral-50 p-6">
           <button
             type="button"
             onClick={handlePencilClick}
