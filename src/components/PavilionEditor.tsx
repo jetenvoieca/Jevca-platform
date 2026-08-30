@@ -18,9 +18,12 @@ import type { PavilionCard } from "@/lib/blocks";
 // needs to stay compact as more content (Curators, etc.) lands in it, and
 // the canvas needs to be able to go full-width via the expand toggle.
 //
-// Right panel is a single, tight list: each Pavilion is a name row; only
-// the one currently open expands in place to show its editable fields —
-// never a separate full-panel form.
+// Root is h-full so the canvas can genuinely fill the available page
+// height rather than only its own content's height — the site's own
+// layout.tsx already gives this component's slot a bounded, scrollable
+// height (its "independently scrolling columns" convention), this just
+// opts into it. Left (canvas) and right (list) columns each scroll
+// independently within that height.
 export default function PavilionEditor({
   siteId,
   artistId,
@@ -252,8 +255,12 @@ export default function PavilionEditor({
   );
 
   return (
-    <div className={panelCollapsed ? "grid grid-cols-1" : "grid grid-cols-[1fr_300px] gap-0"}>
-      <div className="relative border-r border-neutral-200 bg-neutral-50 p-6">
+    <div
+      className={`h-full ${
+        panelCollapsed ? "grid grid-cols-1" : "grid grid-cols-[1fr_300px] gap-0"
+      }`}
+    >
+      <div className="relative h-full overflow-y-auto border-r border-neutral-200 bg-neutral-50 p-6">
         <button
           type="button"
           onClick={() => setPanelCollapsed((v) => !v)}
@@ -266,7 +273,7 @@ export default function PavilionEditor({
       </div>
 
       {!panelCollapsed && (
-        <div className="p-4">
+        <div className="h-full overflow-y-auto p-4">
           <div className="mb-3 flex items-baseline justify-between">
             <input
               type="text"
