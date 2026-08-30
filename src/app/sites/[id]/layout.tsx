@@ -34,7 +34,14 @@ export default async function SiteLayout({
     openAlerts,
   ] = await Promise.all([
     db.page.findMany({
-      where: { siteId: id },
+      // Excludes auto-created Pavilion child pages (sourceTag: "pavilion",
+      // 2026-08-30) — each one is a real Page (so it can be opened,
+      // filled in, or added to a Menu by hand later), but listing every
+      // one of them here too would mean this sidebar grows by one entry
+      // per Pavilion card. They still appear normally in Menu Builder's
+      // own page picker, and each is one click away from its own card on
+      // the parent Pavilions page's canvas.
+      where: { siteId: id, sourceTag: { not: "pavilion" } },
       orderBy: { position: "asc" },
       select: {
         id: true,
@@ -115,5 +122,3 @@ export default async function SiteLayout({
     </div>
   );
 }
-
-
