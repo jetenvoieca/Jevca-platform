@@ -11,14 +11,14 @@ import {
 import { nextCardPosition } from "@/lib/pavilionLayout";
 import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
-import type { PavilionCard } from "@/lib/blocks";
+import type { PavilionCard, PavilionCurator } from "@/lib/blocks";
 
 const MAX_CURATORS = 9;
 
 // Its own two-column layout (2026-08-30), not the generic ThreeColumnShell
 // used by PageEditor/SectionEditor — deliberately tight, since the panel
-// needs to stay compact as more content (Curators, etc.) lands in it, and
-// the canvas needs to be able to go full-width via the expand toggle.
+// needs to stay compact as more content lands in it, and the canvas needs
+// to be able to go full-width via the expand toggle.
 //
 // Root is h-full so the canvas can genuinely fill the available page
 // height rather than only its own content's height — the site's own
@@ -26,6 +26,12 @@ const MAX_CURATORS = 9;
 // height (its "independently scrolling columns" convention), this just
 // opts into it. Left (canvas) and right (list) columns each scroll
 // independently within that height.
+//
+// Curators drill one level deeper within the same right-hand column: a
+// Pavilion's expanded fields show a compact list of its Curators (name
+// only); clicking one, or "Add Curator", swaps to that Curator's own
+// Name/Image/Description/Save/Delete form — the identical template used
+// for a Pavilion itself — with a "← Back" to return.
 export default function PavilionEditor({
   siteId,
   artistId,
@@ -50,12 +56,22 @@ export default function PavilionEditor({
   const [draftDescription, setDraftDescription] = useState("");
   const [draftImageId, setDraftImageId] = useState("");
   const [draftImageUrl, setDraftImageUrl] = useState("");
-  const [draftCurators, setDraftCurators] = useState<string[]>([]);
+  const [draftCurators, setDraftCurators] = useState<PavilionCurator[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   // Collapses the right panel entirely and gives the canvas the full
   // width — toggled from the small corner button on the canvas itself,
   // not a separate "Open full preview" page/tab.
   const [panelCollapsed, setPanelCollapsed] = useState(false);
+
+  // Curator sub-editor state — "new" or an existing curator's index
+  // while drilled into a Curator's own form; null while showing the
+  // Pavilion-level fields.
+  const [curatorEditingIndex, setCuratorEditingIndex] = useState<number | "new" | null>(null);
+  const [draftCuratorName, setDraftCuratorName] = useState("");
+  const [draftCuratorDescription, setDraftCuratorDescription] = useState("");
+  const [draftCuratorImageId, setDraftCuratorImageId] = useState("");
+  const [draftCuratorImageUrl, setDraftCuratorImageUrl] = useState("");
+
   const isFirstRun = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
@@ -124,6 +140,7 @@ export default function PavilionEditor({
     setDraftImageId("");
     setDraftImageUrl("");
     setDraftCurators([]);
+    setCuratorEditingIndex(null);
   };
 
   const toggleCard = (id: string) => {
@@ -139,13 +156,13 @@ export default function PavilionEditor({
     setDraftImageId(card.imageId);
     setDraftImageUrl(card.imageUrl);
     setDraftCurators(card.curators ?? []);
+    setCuratorEditingIndex(null);
   };
 
   const handleSaveCard = async () => {
     const trimmedName = draftName.trim();
     if (!trimmedName) return;
     setIsSaving(true);
-    const curators = draftCurators.map((c) => c.trim()).filter(Boolean);
 
     if (editingId === "new") {
       const childPage = await createPavilionChildPage(siteId, trimmedName);
@@ -161,7 +178,7 @@ export default function PavilionEditor({
         imageId: draftImageId,
         imageUrl: draftImageUrl,
         childPageId: childPage.id,
-        curators,
+        curators: draftCurators,
         ...position,
       };
       setCards((prev) => [...prev, newCard]);
@@ -179,7 +196,7 @@ export default function PavilionEditor({
                 description: draftDescription.trim(),
                 imageId: draftImageId,
                 imageUrl: draftImageUrl,
-                curators,
+                curators: draftCurators,
               }
             : c
         )
@@ -205,48 +222,148 @@ export default function PavilionEditor({
     setEditingId(null);
   };
 
-  const addCurator = () => {
+  // ---- Curator sub-editor (drills into the same expanded-row space) ----
+
+  const openNewCuratorForm = () => {
     if (draftCurators.length >= MAX_CURATORS) return;
-    setDraftCurators((prev) => [...prev, ""]);
+    setCuratorEditingIndex("new");
+    setDraftCuratorName("");
+    setDraftCuratorDescription("");
+    setDraftCuratorImageId("");
+    setDraftCuratorImageUrl("");
   };
 
-  const updateCurator = (index: number, value: string) => {
-    setDraftCurators((prev) => prev.map((c, i) => (i === index ? value : c)));
+  const openExistingCurator = (index: number) => {
+    const c = draftCurators[index];
+    if (!c) return;
+    setCuratorEditingIndex(index);
+    setDraftCuratorName(c.name);
+    setDraftCuratorDescription(c.description);
+    setDraftCuratorImageId(c.imageId);
+    setDraftCuratorImageUrl(c.imageUrl);
   };
 
-  const removeCurator = (index: number) => {
+  const handleSaveCurator = () => {
+    const trimmedName = draftCuratorName.trim();
+    if (!trimmedName) return;
+    if (curatorEditingIndex === "new") {
+      setDraftCurators((prev) => [
+        ...prev,
+        {
+          id: crypto.randomUUID(),
+          name: trimmedName,
+          description: draftCuratorDescription.trim(),
+          imageId: draftCuratorImageId,
+          imageUrl: draftCuratorImageUrl,
+        },
+      ]);
+    } else if (curatorEditingIndex !== null) {
+      const index = curatorEditingIndex;
+      setDraftCurators((prev) =>
+        prev.map((c, i) =>
+          i === index
+            ? {
+                ...c,
+                name: trimmedName,
+                description: draftCuratorDescription.trim(),
+                imageId: draftCuratorImageId,
+                imageUrl: draftCuratorImageUrl,
+              }
+            : c
+        )
+      );
+    }
+    setCuratorEditingIndex(null);
+  };
+
+  const handleDeleteCurator = () => {
+    if (curatorEditingIndex === "new" || curatorEditingIndex === null) {
+      setCuratorEditingIndex(null);
+      return;
+    }
+    const index = curatorEditingIndex;
     setDraftCurators((prev) => prev.filter((_, i) => i !== index));
+    setCuratorEditingIndex(null);
   };
+
+  const renderCuratorForm = () => (
+    <div className="mt-2 space-y-3 pl-1">
+      <button
+        type="button"
+        onClick={() => setCuratorEditingIndex(null)}
+        className="text-sm text-neutral-500 hover:underline"
+      >
+        ← Back to {draftName || "Pavilion"}
+      </button>
+
+      <input
+        type="text"
+        value={draftCuratorName}
+        onChange={(e) => setDraftCuratorName(e.target.value)}
+        placeholder="Name"
+        autoFocus
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+      />
+
+      <MediaPicker
+        artistId={artistId}
+        siteId={siteId}
+        mode="single"
+        previewUrl={draftCuratorImageUrl || undefined}
+        label="Add Image"
+        onSelect={(imgs) => {
+          setDraftCuratorImageId(imgs[0].id);
+          setDraftCuratorImageUrl(imgs[0].url);
+        }}
+      />
+
+      <textarea
+        value={draftCuratorDescription}
+        onChange={(e) => setDraftCuratorDescription(e.target.value)}
+        placeholder="Description"
+        rows={3}
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+      />
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={handleSaveCurator}
+          disabled={!draftCuratorName.trim()}
+          className="flex-1 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        >
+          Save
+        </button>
+        <button
+          type="button"
+          onClick={handleDeleteCurator}
+          className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
 
   const renderExpandedFields = () => (
     <div className="mt-2 space-y-3 pl-1">
-      {/* Curators (2026-08-30) — up to 9 plain names per Pavilion. "Add
-          Curator" appends a blank row; each has its own remove control.
-          Nothing here is saved until this card's own Save button is
-          clicked, same as Name/Description/Image. */}
+      {/* Curators — a compact list of names, each opening its own full
+          Name/Image/Description form on click, same template as this
+          Pavilion's own fields. */}
       <div className="space-y-1.5">
-        {draftCurators.map((name, i) => (
-          <div key={i} className="flex items-center gap-1.5">
-            <input
-              type="text"
-              value={name}
-              onChange={(e) => updateCurator(i, e.target.value)}
-              placeholder={`Curator ${i + 1}`}
-              className="w-full rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-            />
-            <button
-              type="button"
-              onClick={() => removeCurator(i)}
-              aria-label="Remove curator"
-              className="shrink-0 text-neutral-400 hover:text-red-600"
-            >
-              ×
-            </button>
-          </div>
+        {draftCurators.map((c, i) => (
+          <button
+            key={c.id}
+            type="button"
+            onClick={() => openExistingCurator(i)}
+            className="w-full truncate rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
+          >
+            {c.name || "Untitled Curator"}
+          </button>
         ))}
         <button
           type="button"
-          onClick={addCurator}
+          onClick={openNewCuratorForm}
           disabled={draftCurators.length >= MAX_CURATORS}
           className="text-xs font-medium uppercase tracking-wide text-neutral-400 hover:text-neutral-700 disabled:opacity-40"
         >
@@ -254,10 +371,9 @@ export default function PavilionEditor({
         </button>
       </div>
 
-      {/* Large, uncropped-to-a-tiny-box clickable preview (2026-08-30) —
-          the image itself is the trigger to change it now, via
-          MediaPicker's previewUrl prop, rather than a small thumbnail
-          plus a separate tiny "Change" button. */}
+      {/* Large, uncropped-to-a-tiny-box clickable preview — the image
+          itself is the trigger to change it, via MediaPicker's
+          previewUrl prop. */}
       <MediaPicker
         artistId={artistId}
         siteId={siteId}
@@ -356,7 +472,8 @@ export default function PavilionEditor({
                     {card.name || "Untitled"}
                   </button>
                 )}
-                {editingId === card.id && renderExpandedFields()}
+                {editingId === card.id &&
+                  (curatorEditingIndex !== null ? renderCuratorForm() : renderExpandedFields())}
               </div>
             ))}
 
@@ -370,7 +487,7 @@ export default function PavilionEditor({
                   autoFocus
                   className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                 />
-                {renderExpandedFields()}
+                {curatorEditingIndex !== null ? renderCuratorForm() : renderExpandedFields()}
               </div>
             )}
           </div>
