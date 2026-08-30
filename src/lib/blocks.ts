@@ -63,3 +63,31 @@ export type SectionContent = {
   byline: string;
   artworkIds: string[];
 };
+
+// One card on a Pavilion page's freeform canvas (2026-08-30) — like
+// SectionContent above, a Pavilion page isn't built from Content Blocks
+// either; it's a fixed shape (an array of these cards), stored in the
+// same draftBlocks/liveBlocks columns.
+//
+// `childPageId` points at a real Page (type PRIVATE, tagged
+// sourceTag: "pavilion") created automatically the moment this card is
+// added — so it's a genuine destination that can be linked from a Menu
+// or filled in with its own content later, even though at creation it's
+// blank. x/y/width/height are percentages of the canvas (0–100), not
+// pixels, so the layout holds up across different screen sizes.
+export type PavilionCard = {
+  id: string;
+  name: string;
+  description: string;
+  imageId: string;
+  imageUrl: string;
+  childPageId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+export type PavilionContent = {
+  cards: PavilionCard[];
+};
