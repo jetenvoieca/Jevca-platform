@@ -27,9 +27,15 @@ enum SiteStatus {
   ISYT
 }
 
+// PAVILION added 2026-08-30 — a third page template alongside SECTION
+// (fixed byline + artwork grid) and PRIVATE (generic Content Blocks): a
+// freeform canvas of draggable/resizable cards, each one a real linked
+// child Page. See PavilionEditor.tsx / lib/blocks.ts (PavilionContent)
+// for the shape stored in draftBlocks/liveBlocks.
 enum PageType {
   SECTION
   PRIVATE
+  PAVILION
 }
 
 enum ArtworkAvailability {
@@ -316,6 +322,11 @@ model Page {
   slug      String
   visible   Boolean  @default(true)
   position  Int      @default(0)
+  // Free-text marker for pages auto-created by another feature rather
+  // than the "+ Add New Page" flow (e.g. "pavilion", 2026-08-30) — used
+  // to keep the main site nav sidebar from being cluttered with every
+  // auto-created child page, while such a page still behaves as a normal
+  // Page everywhere else (Menu Builder's page picker, its own editor).
   sourceTag String?
 
   draftBlocks Json  @default("[]")
