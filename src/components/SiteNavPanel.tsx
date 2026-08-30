@@ -139,6 +139,11 @@ export default function SiteNavPanel({
               <option value="SECTION">Section</option>
               <option value="PRIVATE">Private / Custom</option>
               <option value="PAVILION">Pavilion</option>
+              {/* Experimental parallel version (2026-08-30) — same data,
+                  a simpler flow-layout canvas with no drag/resize, panel
+                  closed until you click the pencil. Kept as a separate
+                  type entirely so trying it never risks the original. */}
+              <option value="PAVILION_VISUAL">Pavilion (Visual)</option>
             </select>
             <div className="flex gap-1">
               <button
