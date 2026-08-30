@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import PageEditor from "./PageEditor";
 import SectionEditor from "@/components/SectionEditor";
 import PavilionEditor from "@/components/PavilionEditor";
+import PavilionVisualEditor from "@/components/PavilionVisualEditor";
 import { getArtworksByIds } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import type { ContentBlock, SectionContent, PavilionContent } from "@/lib/blocks";
@@ -55,6 +56,20 @@ export default async function PageEditorPage({
 
     return (
       <PavilionEditor
+        siteId={id}
+        artistId={site.artistId}
+        pageId={page.id}
+        pageTitle={page.title}
+        initialCards={content.cards || []}
+      />
+    );
+  }
+
+  if (page.type === "PAVILION_VISUAL") {
+    const content = (page.draftBlocks as unknown as PavilionContent) || { cards: [] };
+
+    return (
+      <PavilionVisualEditor
         siteId={id}
         artistId={site.artistId}
         pageId={page.id}
