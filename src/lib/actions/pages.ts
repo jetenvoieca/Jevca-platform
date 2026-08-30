@@ -22,7 +22,14 @@ export async function createPage(siteId: string, formData: FormData) {
   const title = (formData.get("title") as string)?.trim();
   if (!title) return;
   const typeRaw = formData.get("type");
-  const type = typeRaw === "PRIVATE" ? "PRIVATE" : typeRaw === "PAVILION" ? "PAVILION" : "SECTION";
+  const type =
+    typeRaw === "PRIVATE"
+      ? "PRIVATE"
+      : typeRaw === "PAVILION"
+        ? "PAVILION"
+        : typeRaw === "PAVILION_VISUAL"
+          ? "PAVILION_VISUAL"
+          : "SECTION";
 
   const baseSlug = slugify(title);
   const slug = await uniqueSlug(siteId, baseSlug);
