@@ -1,55 +1,66 @@
 "use client";
 
 import { useRef, useState } from "react";
-import type { PavilionCard } from "@/lib/blocks";
+import type { PavilionTile } from "@/lib/blocks";
 
-// Freeform drag-to-reposition, drag-to-resize canvas of Pavilion cards
-// (2026-08-30). Manual pointer-event tracking rather than the native
-// HTML5 drag API, for the same reason as ArtworkImageManager's own
-// thumbnail reordering: native drag suppresses the click event once a
-// drag actually starts, with no clean way to have both "click opens this
-// card" and "drag repositions it" on the same element using that API.
-// pointerdown only marks a card as a drag *candidate*; real pointer
-// movement is what promotes it to an actual drag, so a plain click never
-// touches the drag path at all.
+// Freeform drag-to-reposition, drag-to-resize canvas of tiles
+// (2026-08-30). Generic over PavilionTile (id/name/description/imageUrl/
+// x/y/width/height) rather than PavilionCard specifically, since the
+// same canvas now also renders a Pavilion's Curators when "drilled into"
+// — the component itself doesn't need to know which kind of tile it's
+// drawing.
+//
+// Manual pointer-event tracking rather than the native HTML5 drag API,
+// for the same reason as ArtworkImageManager's own thumbnail reordering:
+// native drag suppresses the click event once a drag actually starts,
+// with no clean way to have both "click opens this card" and "drag
+// repositions it" on the same element using that API. pointerdown only
+// marks a card as a drag *candidate*; real pointer movement is what
+// promotes it to an actual drag, so a plain click never touches the drag
+// path at all.
 //
 // Position/size are percentages of the canvas (0–100), not pixels, so
 // the layout holds up across different screen widths — computed from
 // the container's own bounding rect on every move, not a fixed
 // px-to-percent constant.
 //
-// Fills whatever height its parent gives it (2026-08-30 — was previously
-// a fixed 640px box) and scrolls on its own when cards are dragged below
-// the visible area, rather than clipping them — same "independently
-// scrolling column" convention already used for the site's own layout.
+// Fills whatever height its parent gives it and scrolls on its own when
+// tiles are dragged below the visible area, rather than clipping them —
+// same "independently scrolling column" convention already used for the
+// site's own layout.
 export default function PavilionCanvas({
   cards,
   onCardClick,
   onCardChange,
+  highlightId,
+  emptyMessage = "Add your first Pavilion using the panel on the right.",
 }: {
-  cards: PavilionCard[];
+  cards: PavilionTile[];
   onCardClick: (id: string) => void;
   // Called live during drag/resize, on every pointer move — the parent
-  // owns the actual `cards` array and its own debounced autosave, same
-  // as everywhere else in this app; this component only ever reports
-  // the numbers, never persists anything itself.
-  onCardChange: (id: string, patch: Partial<Pick<PavilionCard, "x" | "y" | "width" | "height">>) => void;
+  // owns the actual tiles array and its own debounced autosave, same as
+  // everywhere else in this app; this component only ever reports the
+  // numbers, never persists anything itself.
+  onCardChange: (id: string, patch: Partial<Pick<PavilionTile, "x" | "y" | "width" | "height">>) => void;
+  // Marks one tile with a distinct border (2026-08-30) — used to keep
+  // the "anchor" Pavilion visually identifiable among its own Curators
+  // when drilled into it.
+  highlightId?: string;
+  emptyMessage?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
-  const [mode, setMode] = useState<"move" | "resize" | null>(null);
   const movedRef = useRef(false);
   const startRef = useRef({ pointerX: 0, pointerY: 0, x: 0, y: 0, width: 0, height: 0 });
 
   const clamp = (n: number, min: number, max: number) => Math.min(max, Math.max(min, n));
 
-  const beginDrag = (card: PavilionCard, kind: "move" | "resize") => (e: React.PointerEvent) => {
+  const beginDrag = (card: PavilionTile, kind: "move" | "resize") => (e: React.PointerEvent) => {
     if (e.button !== 0) return;
     e.stopPropagation();
     movedRef.current = false;
     startRef.current = { pointerX: e.clientX, pointerY: e.clientY, x: card.x, y: card.y, width: card.width, height: card.height };
     setActiveId(card.id);
-    setMode(kind);
 
     const container = containerRef.current;
     if (!container) return;
@@ -75,7 +86,6 @@ export default function PavilionCanvas({
       window.removeEventListener("pointermove", handleMove);
       window.removeEventListener("pointerup", handleUp);
       setActiveId(null);
-      setMode(null);
     };
 
     window.addEventListener("pointermove", handleMove);
@@ -99,7 +109,7 @@ export default function PavilionCanvas({
     >
       {cards.length === 0 && (
         <p className="absolute inset-0 flex items-center justify-center text-sm text-neutral-400">
-          Add your first Pavilion using the panel on the right.
+          {emptyMessage}
         </p>
       )}
       {cards.map((card) => (
@@ -115,7 +125,11 @@ export default function PavilionCanvas({
             touchAction: "none",
           }}
           className={`group absolute flex cursor-move flex-col overflow-hidden rounded-lg border bg-white shadow-sm ${
-            activeId === card.id ? "border-neutral-900 shadow-md" : "border-neutral-200"
+            card.id === highlightId
+              ? "border-2 border-neutral-900"
+              : activeId === card.id
+                ? "border-neutral-900 shadow-md"
+                : "border-neutral-200"
           }`}
         >
           <p className="truncate px-3 pt-2 text-center text-sm text-neutral-500">
