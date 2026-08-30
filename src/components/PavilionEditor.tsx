@@ -588,7 +588,7 @@ export default function PavilionEditor({
           title={panelCollapsed ? "Show panel" : "Expand canvas"}
           className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-md border border-neutral-300 bg-white text-neutral-500 hover:bg-neutral-50"
         >
-          {panelCollapsed ? "⤡" : "⤡"}
+          {panelCollapsed ? "⤡" : "⤢"}
         </button>
 
         {/* Fixed "you are here" marker for whichever level is drilled
