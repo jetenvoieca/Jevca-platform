@@ -17,11 +17,15 @@ import type { PavilionCard } from "@/lib/blocks";
 // the layout holds up across different screen widths — computed from
 // the container's own bounding rect on every move, not a fixed
 // px-to-percent constant.
+//
+// Fills whatever height its parent gives it (2026-08-30 — was previously
+// a fixed 640px box) and scrolls on its own when cards are dragged below
+// the visible area, rather than clipping them — same "independently
+// scrolling column" convention already used for the site's own layout.
 export default function PavilionCanvas({
   cards,
   onCardClick,
   onCardChange,
-  height = 640,
 }: {
   cards: PavilionCard[];
   onCardClick: (id: string) => void;
@@ -30,7 +34,6 @@ export default function PavilionCanvas({
   // as everywhere else in this app; this component only ever reports
   // the numbers, never persists anything itself.
   onCardChange: (id: string, patch: Partial<Pick<PavilionCard, "x" | "y" | "width" | "height">>) => void;
-  height?: number;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -92,8 +95,7 @@ export default function PavilionCanvas({
   return (
     <div
       ref={containerRef}
-      className="relative w-full select-none overflow-hidden rounded-lg border border-dashed border-neutral-300 bg-neutral-50"
-      style={{ height }}
+      className="relative h-full min-h-[640px] w-full select-none overflow-auto rounded-lg border border-dashed border-neutral-300 bg-neutral-50"
     >
       {cards.length === 0 && (
         <p className="absolute inset-0 flex items-center justify-center text-sm text-neutral-400">
