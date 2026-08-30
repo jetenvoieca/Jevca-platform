@@ -11,25 +11,25 @@ import {
 import { nextCardPosition, nextCuratorPosition } from "@/lib/pavilionLayout";
 import PavilionCanvas from "@/components/PavilionCanvas";
 import MediaPicker from "@/components/MediaPicker";
-import type { PavilionCard, PavilionCurator, PavilionTile } from "@/lib/blocks";
+import ArtistSelectorModal from "@/components/ArtistSelectorModal";
+import type { PavilionCard, PavilionCurator, PavilionCuratorArtist, PavilionTile } from "@/lib/blocks";
 
 const MAX_CURATORS = 9;
 
-// Fixed "you are here" spot for the drilled-into Pavilion's own marker
-// (2026-08-30) — deliberately NOT the Pavilion's real x/y/width/height
-// (that position is specific to the *main* canvas and could be
-// anywhere; reusing it here was the bug that had the marker turning up
-// wherever it happened to be on the main canvas, and collided in size
-// with Curators using the same default placement sequence). Rendered as
-// a separate, static, non-draggable element outside PavilionCanvas —
-// it's context, not a tile to be rearranged — while Curators are the
-// only thing PavilionCanvas itself renders/drags/resizes in this view.
-const PAVILION_MARKER = { left: "2%", top: "2%", width: "18%", height: "20%" };
+// Fixed "you are here" spot for whichever level is drilled into
+// (2026-08-30) — deliberately NOT that item's real x/y/width/height
+// (that position is specific to the level above, where several
+// siblings sit side by side, and could be anywhere). Rendered as a
+// separate, static, non-draggable element outside PavilionCanvas
+// entirely — it's context, not a tile to be rearranged — while whatever
+// is one level down is the only thing PavilionCanvas itself renders/
+// drags/resizes.
+const DRILL_MARKER = { left: "2%", top: "2%", width: "18%", height: "20%" };
 
-// Its own two-column layout (2026-08-30), not the generic ThreeColumnShell
-// used by PageEditor/SectionEditor — deliberately tight, since the panel
-// needs to stay compact as more content lands in it, and the canvas needs
-// to be able to go full-width via the expand toggle.
+// Its own two-column layout, not the generic ThreeColumnShell used by
+// PageEditor/SectionEditor — deliberately tight, since the panel needs
+// to stay compact as more content lands in it, and the canvas needs to
+// be able to go full-width via the expand toggle.
 //
 // Root is h-full so the canvas can genuinely fill the available page
 // height rather than only its own content's height — the site's own
@@ -41,16 +41,19 @@ const PAVILION_MARKER = { left: "2%", top: "2%", width: "18%", height: "20%" };
 // Curators drill one level deeper within the same right-hand column: a
 // Pavilion's expanded fields show a compact list of its Curators (name
 // only); clicking one, or "Add Curator", swaps to that Curator's own
-// Name/Image/Description/Save/Delete form — the identical template used
-// for a Pavilion itself — with a "← Back" to return.
+// Name/Image/Description/Save/Delete form (plus an Artist selector) —
+// the identical template used for a Pavilion itself — with a "← Back"
+// to return.
 //
 // Drilling on the canvas itself (2026-08-30, matching
 // PavilionVisualEditor) — while the panel is collapsed (full-width
-// canvas), clicking a Pavilion tile hides every other Pavilion and shows
-// just that one (as the fixed marker above) plus its Curators as
-// draggable/resizable cards; clicking the marker exits back to the full
-// set. While the panel is open, clicking a tile still opens/selects it
-// for editing as before — drilling is specifically a full-screen-mode
+// canvas), clicking a tile goes one level deeper each time: all
+// Pavilions → one Pavilion's Curators → one Curator's Artists (real
+// platform Artists ticked via the picker, shown as plain-name
+// placeholder cards for now). Whichever item you drilled into becomes
+// the fixed marker, top-left; clicking it goes back up one level.
+// While the panel is open, clicking a tile still opens/selects it for
+// editing as before — drilling is specifically a full-screen-mode
 // behaviour.
 export default function PavilionEditor({
   siteId,
@@ -91,10 +94,14 @@ export default function PavilionEditor({
   const [draftCuratorDescription, setDraftCuratorDescription] = useState("");
   const [draftCuratorImageId, setDraftCuratorImageId] = useState("");
   const [draftCuratorImageUrl, setDraftCuratorImageUrl] = useState("");
+  const [draftCuratorArtists, setDraftCuratorArtists] = useState<PavilionCuratorArtist[]>([]);
+  const [artistPickerOpen, setArtistPickerOpen] = useState(false);
 
-  // Full-screen (panel-collapsed) drill state — which Pavilion's own
-  // Curators are being shown on the canvas instead of the full set.
+  // Full-screen (panel-collapsed) drill state — which Pavilion, and (one
+  // level further) which of its Curators, are being shown on the canvas
+  // instead of the level above.
   const [drilledPavilionId, setDrilledPavilionId] = useState<string | null>(null);
+  const [drilledCuratorId, setDrilledCuratorId] = useState<string | null>(null);
 
   const isFirstRun = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -148,32 +155,61 @@ export default function PavilionEditor({
     await deletePage(siteId, pageId);
   };
 
-  // The drilled Pavilion (if any, and only meaningful while the panel is
-  // collapsed).
   const drilledCard =
     panelCollapsed && drilledPavilionId ? cards.find((c) => c.id === drilledPavilionId) ?? null : null;
+  const drilledCurator =
+    drilledCard && drilledCuratorId
+      ? drilledCard.curators.find((c) => c.id === drilledCuratorId) ?? null
+      : null;
 
-  // Curators only — the Pavilion itself is rendered separately as a
-  // fixed marker (see PAVILION_MARKER), not as a canvas tile.
-  const curatorTiles: PavilionTile[] =
-    drilledCard?.curators.map((c) => ({
-      id: c.id,
-      name: c.name,
-      description: c.description,
-      imageUrl: c.imageUrl,
-      x: c.x,
-      y: c.y,
-      width: c.width,
-      height: c.height,
-    })) ?? [];
+  const markerItem: PavilionTile | null = drilledCurator ?? drilledCard;
+  const visibleTiles: PavilionTile[] = drilledCurator
+    ? drilledCurator.artists.map((a) => ({
+        id: a.id,
+        name: a.name,
+        description: "",
+        imageUrl: "",
+        x: a.x,
+        y: a.y,
+        width: a.width,
+        height: a.height,
+      }))
+    : drilledCard
+      ? drilledCard.curators.map((c) => ({
+          id: c.id,
+          name: c.name,
+          description: c.description,
+          imageUrl: c.imageUrl,
+          x: c.x,
+          y: c.y,
+          width: c.width,
+          height: c.height,
+        }))
+      : cards;
 
-  const visibleTiles: PavilionTile[] = drilledCard ? curatorTiles : cards;
-
-  // Live position/size updates from the canvas.
+  // Live position/size updates from the canvas — routed to whichever
+  // nesting level is currently drilled into.
   const handleCardChange = (
     id: string,
     patch: Partial<Pick<PavilionTile, "x" | "y" | "width" | "height">>
   ) => {
+    if (drilledCurator && drilledCard) {
+      setCards((prev) =>
+        prev.map((c) =>
+          c.id !== drilledCard.id
+            ? c
+            : {
+                ...c,
+                curators: c.curators.map((cur) =>
+                  cur.id !== drilledCurator.id
+                    ? cur
+                    : { ...cur, artists: cur.artists.map((a) => (a.id === id ? { ...a, ...patch } : a)) }
+                ),
+              }
+        )
+      );
+      return;
+    }
     if (drilledCard) {
       setCards((prev) =>
         prev.map((c) =>
@@ -197,11 +233,18 @@ export default function PavilionEditor({
     setCuratorEditingIndex(null);
   };
 
+  const handleMarkerClick = () => {
+    if (drilledCuratorId) {
+      setDrilledCuratorId(null);
+      return;
+    }
+    setDrilledPavilionId(null);
+  };
+
   // Clicking a tile — while the panel is open, this opens/selects it for
   // editing as before (list-row behaviour). While the panel is
-  // collapsed (full-screen canvas), this drills into that Pavilion's
-  // Curators, or is a no-op if it's a Curator's own card (exiting the
-  // drill happens via the fixed marker's own click, not this handler).
+  // collapsed (full-screen canvas), this drills one level deeper each
+  // time, or is a no-op on an Artist card.
   const toggleCard = (id: string) => {
     if (!panelCollapsed) {
       if (editingId === id) {
@@ -220,7 +263,11 @@ export default function PavilionEditor({
       return;
     }
 
-    if (drilledCard) return; // Curator card clicked — no-op for now.
+    if (drilledCurator) return; // Artist card — no-op for now.
+    if (drilledCard) {
+      setDrilledCuratorId(id);
+      return;
+    }
     setDrilledPavilionId(id);
   };
 
@@ -296,6 +343,7 @@ export default function PavilionEditor({
     setDraftCuratorDescription("");
     setDraftCuratorImageId("");
     setDraftCuratorImageUrl("");
+    setDraftCuratorArtists([]);
   };
 
   const openExistingCurator = (index: number) => {
@@ -306,6 +354,19 @@ export default function PavilionEditor({
     setDraftCuratorDescription(c.description);
     setDraftCuratorImageId(c.imageId);
     setDraftCuratorImageUrl(c.imageUrl);
+    setDraftCuratorArtists(c.artists ?? []);
+  };
+
+  const toggleCuratorArtist = (artist: { id: string; name: string }) => {
+    setDraftCuratorArtists((prev) => {
+      const exists = prev.some((a) => a.artistId === artist.id);
+      if (exists) return prev.filter((a) => a.artistId !== artist.id);
+      const position = nextCuratorPosition(prev.length);
+      return [
+        ...prev,
+        { id: crypto.randomUUID(), artistId: artist.id, name: artist.name, description: "", imageUrl: "", ...position },
+      ];
+    });
   };
 
   const handleSaveCurator = () => {
@@ -321,6 +382,7 @@ export default function PavilionEditor({
           description: draftCuratorDescription.trim(),
           imageId: draftCuratorImageId,
           imageUrl: draftCuratorImageUrl,
+          artists: draftCuratorArtists,
           ...position,
         },
       ]);
@@ -335,6 +397,7 @@ export default function PavilionEditor({
                 description: draftCuratorDescription.trim(),
                 imageId: draftCuratorImageId,
                 imageUrl: draftCuratorImageUrl,
+                artists: draftCuratorArtists,
               }
             : c
         )
@@ -371,6 +434,27 @@ export default function PavilionEditor({
         autoFocus
         className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
       />
+
+      {/* Artists — real platform Artists ticked via the picker;
+          drilling into this Curator on the canvas shows these as
+          placeholder cards. */}
+      <div className="space-y-1.5">
+        {draftCuratorArtists.map((a) => (
+          <p
+            key={a.id}
+            className="truncate rounded-md border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-sm text-neutral-600"
+          >
+            {a.name}
+          </p>
+        ))}
+        <button
+          type="button"
+          onClick={() => setArtistPickerOpen(true)}
+          className="text-xs font-medium uppercase tracking-wide text-neutral-400 hover:text-neutral-700"
+        >
+          Select Artists{draftCuratorArtists.length > 0 ? ` (${draftCuratorArtists.length})` : ""}
+        </button>
+      </div>
 
       <MediaPicker
         artistId={artistId}
@@ -494,6 +578,7 @@ export default function PavilionEditor({
           onClick={() => {
             setPanelCollapsed((v) => !v);
             setDrilledPavilionId(null);
+            setDrilledCuratorId(null);
           }}
           title={panelCollapsed ? "Show panel" : "Expand canvas"}
           className="absolute right-3 top-3 z-10 flex h-8 w-8 items-center justify-center rounded-md border border-neutral-300 bg-white text-neutral-500 hover:bg-neutral-50"
@@ -501,28 +586,23 @@ export default function PavilionEditor({
           {panelCollapsed ? "⤡" : "⤢"}
         </button>
 
-        {/* Fixed "you are here" marker for the drilled-into Pavilion —
-            not a canvas tile, so it never competes for space or drag/
-            resize with the Curator cards. Click to exit the drill. */}
-        {drilledCard && (
+        {/* Fixed "you are here" marker for whichever level is drilled
+            into — not a canvas tile. Click to go back up one level. */}
+        {markerItem && (
           <button
             type="button"
-            onClick={() => setDrilledPavilionId(null)}
-            title="Show all Pavilions"
-            style={PAVILION_MARKER}
+            onClick={handleMarkerClick}
+            title="Go back"
+            style={DRILL_MARKER}
             className="absolute z-10 flex flex-col overflow-hidden rounded-lg border-2 border-neutral-900 bg-white text-left shadow-md"
           >
             <p className="truncate px-2 pt-1.5 text-center text-xs font-medium text-neutral-600">
-              {drilledCard.name || "Untitled"}
+              {markerItem.name || "Untitled"}
             </p>
             <div className="flex-1 overflow-hidden px-2 py-1">
-              {drilledCard.imageUrl ? (
+              {markerItem.imageUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={drilledCard.imageUrl}
-                  alt=""
-                  className="h-full w-full rounded object-cover"
-                />
+                <img src={markerItem.imageUrl} alt="" className="h-full w-full rounded object-cover" />
               ) : (
                 <div className="flex h-full w-full items-center justify-center rounded bg-neutral-100 text-[10px] text-neutral-400">
                   No image
@@ -537,9 +617,11 @@ export default function PavilionEditor({
           onCardClick={toggleCard}
           onCardChange={handleCardChange}
           emptyMessage={
-            drilledCard
-              ? "No Curators yet — open the panel to add one."
-              : "Add your first Pavilion using the panel on the right."
+            drilledCurator
+              ? "No Artists selected yet — tick some in this Curator's edit form."
+              : drilledCard
+                ? "No Curators yet — open the panel to add one."
+                : "Add your first Pavilion using the panel on the right."
           }
         />
       </div>
@@ -616,6 +698,14 @@ export default function PavilionEditor({
             Delete Page
           </button>
         </div>
+      )}
+
+      {artistPickerOpen && (
+        <ArtistSelectorModal
+          selectedIds={draftCuratorArtists.map((a) => a.artistId)}
+          onToggle={toggleCuratorArtist}
+          onClose={() => setArtistPickerOpen(false)}
+        />
       )}
     </div>
   );
