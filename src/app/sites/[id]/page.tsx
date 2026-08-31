@@ -16,7 +16,11 @@ export default async function SiteSettingsPage({
 
   const site = await db.site.findUnique({
     where: { id },
-    include: { artist: true },
+    // profileImage included alongside the plain artist scalars — needed
+    // to resolve profileImageId into an actual URL (2026-08-31, since
+    // the photo is now a relation to an existing Image, picked via
+    // MediaPicker, rather than its own stored URL).
+    include: { artist: { include: { profileImage: true } } },
     relationLoadStrategy: "query",
   });
   if (!site) notFound();
@@ -95,7 +99,7 @@ export default async function SiteSettingsPage({
             stripeMode: site.artist.stripeMode,
             stripeSubscriptionCustomerId: site.artist.stripeSubscriptionCustomerId,
             stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
-            profileImageUrl: site.artist.profileImageUrl,
+            profileImageUrl: site.artist.profileImage?.url ?? null,
             story: site.artist.story,
           }}
           subscriptionPayments={payments.map((p) => ({
