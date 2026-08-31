@@ -12,9 +12,9 @@ export type AppShellNavItem = {
   badge?: number;
   // A further-indented, lighter-weight sub-link — e.g. a "Settings" or
   // "Bucket" page nested beneath its parent catalogue link within the
-  // same section. Rendered smaller, with a soft grey active state
-  // instead of the black used for normal section children, so it reads
-  // as a level below them rather than a peer.
+  // same section. Rendered smaller, with the same light-grey active
+  // state as a normal link, just further indented and lighter-weight,
+  // so it reads as a level below them rather than a peer.
   subtle?: boolean;
 };
 
@@ -79,11 +79,19 @@ function findActiveSectionKey(entries: AppShellNavEntry[]): string | null {
   return null;
 }
 
+// Current-page highlight (2026-08-31 revision) — light grey (#E7E7E7),
+// same height as a section header button (py-1), deliberately much
+// quieter than the section headers themselves so the two don't compete:
+// the section header says "you're in this group", this just says
+// "you're on this particular page" within it. The "subtle" sub-link
+// style below already used almost exactly this shade (neutral-200), so
+// this brings normal links in line with it rather than introducing a
+// third look.
 export function NavLink({ item, indented }: { item: AppShellNavItem; indented: boolean }) {
   if (item.disabled) {
     return (
       <span
-        className={`cursor-not-allowed rounded-md px-3 py-2 text-sm font-medium text-neutral-300 ${
+        className={`cursor-not-allowed rounded-md px-3 py-1 text-sm font-medium text-neutral-300 ${
           indented ? (item.subtle ? "ml-4" : "ml-2") : ""
         }`}
       >
@@ -97,9 +105,9 @@ export function NavLink({ item, indented }: { item: AppShellNavItem; indented: b
       <Link
         href={item.href}
         prefetch={false}
-        className={`ml-4 rounded-md px-3 py-1.5 text-sm ${
+        className={`ml-4 rounded-md px-3 py-1 text-sm ${
           item.active
-            ? "bg-neutral-200 font-medium text-neutral-900"
+            ? "bg-[#E7E7E7] font-medium text-neutral-900"
             : "text-neutral-500 hover:bg-neutral-100"
         }`}
       >
@@ -112,17 +120,13 @@ export function NavLink({ item, indented }: { item: AppShellNavItem; indented: b
     <Link
       href={item.href}
       prefetch={false}
-      className={`flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium ${
+      className={`flex items-center justify-between rounded-md px-3 py-1 text-sm font-medium ${
         indented ? "ml-2" : ""
-      } ${item.active ? "bg-neutral-900 text-white" : "text-neutral-700 hover:bg-neutral-100"}`}
+      } ${item.active ? "bg-[#E7E7E7] text-neutral-900" : "text-neutral-700 hover:bg-neutral-100"}`}
     >
       {item.label}
       {!!item.badge && (
-        <span
-          className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
-            item.active ? "bg-white/20 text-white" : "bg-red-100 text-red-700"
-          }`}
-        >
+        <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
           {item.badge}
         </span>
       )}
