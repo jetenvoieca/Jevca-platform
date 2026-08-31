@@ -94,12 +94,16 @@ model Artist {
   phone     String?
   notes     String?
 
-  // Personal Profile tab (2026-08-31) — a portrait/story photo and
-  // free-text bio shown on the artist's own profile. Deliberately
-  // separate from `logoUrl` below, which is a business asset used on
-  // invoices, not a personal photo.
-  profileImageUrl String?
-  story           String?
+  // Personal Profile tab (2026-08-31) — a portrait photo and free-text
+  // bio shown on the artist's own profile. The photo is picked from the
+  // artist's existing Media Catalogue via MediaPicker (2026-08-31,
+  // direct request — "keep everything in one place" rather than a
+  // separate direct upload), so this is a relation to an existing
+  // Image row, the same pattern as Artwork.mainImageId below, not its
+  // own upload path like `logoUrl` (which deliberately stays outside
+  // the Media Catalogue — see the note there).
+  profileImageId String? @unique
+  story          String?
 
   hopperToken String @unique @default(cuid())
   subscriptionAmount Decimal? @db.Decimal(10, 2)
@@ -162,6 +166,9 @@ model Artist {
   stripeSubscriptionStatus     String?
 
   images Image[]
+  // Picked via MediaPicker from this same artist's Media Catalogue — see
+  // the note by profileImageId above.
+  profileImage Image? @relation("ArtistProfileImage", fields: [profileImageId], references: [id])
   videoRenders VideoRender[]
   subscriptionPayments SubscriptionPayment[]
   alertEvents AlertEvent[]
@@ -641,6 +648,7 @@ model Image {
   artwork   Artwork?    @relation(fields: [artworkId], references: [id])
 
   mainImageOfArtwork Artwork? @relation("ArtworkMainImage")
+  profileImageOfArtist Artist? @relation("ArtistProfileImage")
 
   sourceVideoRender VideoRender?
 
