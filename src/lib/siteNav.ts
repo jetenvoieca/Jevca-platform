@@ -4,10 +4,14 @@ import { buildAccountsSection } from "@/lib/topNav";
 
 // Which page (within a site) is currently active, for highlighting and
 // for deciding which of the four groups the accordion should open on.
-// "menu" covers both the Menu Builder page and, loosely, the Sites
-// section as a whole when nothing more specific matches.
+// "menu" is the Menu Builder page; "pages" is any individual page's own
+// editor (/sites/[id]/pages/[pageId]) — both belong to the Sites
+// section, but only "menu" highlights the Menu link itself (an open
+// page editor highlights that page within the page list instead, which
+// SiteShell already handles locally).
 export type SiteNavKey =
   | "menu"
+  | "pages"
   | "hopper"
   | "artworks"
   | "artworkSettings"
@@ -19,6 +23,8 @@ export type SiteNavKey =
   | "galleries"
   | "purchases"
   | "purchasesSettings";
+
+const SITES_KEYS: SiteNavKey[] = ["menu", "pages"];
 
 const CONTENT_KEYS: SiteNavKey[] = [
   "hopper",
@@ -119,7 +125,7 @@ export function buildSiteNavEntries({
       label: "Sites",
       section: true,
       key: "sites",
-      active: active === "menu",
+      active: active !== null && SITES_KEYS.includes(active),
       customChildren: sitesSectionBody,
     },
     {
