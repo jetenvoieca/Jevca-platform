@@ -2,7 +2,7 @@
 
 import { useState, useTransition, type ReactNode } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { NavLink } from "@/components/SidebarNav";
 import { createPage, publishSite, updatePageVisibility } from "@/lib/actions/pages";
@@ -61,6 +61,7 @@ export default function SiteShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [adding, setAdding] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -99,6 +100,7 @@ export default function SiteShell({
                 onClick={() =>
                   startTransition(async () => {
                     await updatePageVisibility(p.id, siteId, !p.visible);
+                    router.refresh();
                   })
                 }
                 title={
