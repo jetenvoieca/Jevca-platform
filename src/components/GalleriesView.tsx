@@ -13,11 +13,34 @@ import {
 } from "@/lib/actions/customers";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
-type RelationshipStatus = "PROSPECT" | "ACTIVE";
+type DetailTab = "details" | "sales";
 
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
 const labelCls = "mb-1 block text-xs text-neutral-500";
+
+function formatMoney(amount: string, currency: string) {
+  const n = parseFloat(amount);
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
+}
+
+// Same "UNPAID" label/styling as the active-gallery-sale badge in
+// PurchasePanel — kept identical on purpose so the word means the same
+// thing everywhere in the app, rather than introducing a second phrase
+// for the same status (2026-08-31).
+function SaleStatusBadge({ status }: { status: "ACTIVE" | "COMPLETED" | "ABANDONED" }) {
+  if (status === "COMPLETED") {
+    return <span className="text-sm text-green-600">Completed</span>;
+  }
+  if (status === "ABANDONED") {
+    return <span className="text-sm text-neutral-400">Abandoned</span>;
+  }
+  return (
+    <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
+      UNPAID
+    </span>
+  );
+}
 
 export default function GalleriesView({
   siteId,
@@ -39,6 +62,7 @@ export default function GalleriesView({
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [detailTab, setDetailTab] = useState<DetailTab>("details");
   const router = useRouter();
 
   const filtered = galleries.filter((g) => {
@@ -51,6 +75,7 @@ export default function GalleriesView({
     setSelectedId(customerId);
     setSelectedDetail(null);
     setSelectedWorkId(null);
+    setDetailTab("details");
     setLoading(true);
     getGalleryDetail(customerId).then((detail) => {
       setSelectedDetail(detail);
@@ -83,6 +108,11 @@ export default function GalleriesView({
     fd.set("email", field === "email" ? value : selectedDetail.email || "");
     fd.set("phone", field === "phone" ? value : selectedDetail.phone || "");
     fd.set("address", field === "address" ? value : selectedDetail.address || "");
+    // language, notes and relationshipStatus have no fields in this panel
+    // any more (removed 2026-08-31 — not needed for how Galleries are
+    // actually used), but their stored values still need to be resent
+    // here on every save, otherwise they'd be silently wiped to blank
+    // the next time any other field on this form is edited.
     fd.set("language", field === "language" ? value : selectedDetail.language || "");
     fd.set("notes", field === "notes" ? value : selectedDetail.notes || "");
     fd.set("contactName", field === "contactName" ? value : selectedDetail.contactName || "");
@@ -145,6 +175,26 @@ export default function GalleriesView({
 
   const selectedWork: GalleryConsignedWork | null =
     selectedDetail?.consignedWorks.find((w) => w.id === selectedWorkId) || null;
+
+  // Sum of every sale linked to this gallery, regardless of status —
+  // "all invoices", not just completed ones (2026-08-31 decision). Kept
+  // separate per currency rather than added together, same reasoning as
+  // the main Sales page.
+  const salesByCurrency: Record<string, number> = {};
+  if (selectedDetail) {
+    for (const p of selectedDetail.purchases) {
+      salesByCurrency[p.currency] = (salesByCurrency[p.currency] || 0) + parseFloat(p.totalAmount);
+    }
+  }
+  const salesSummary = !selectedDetail
+    ? ""
+    : selectedDetail.purchases.length === 0
+      ? "No sales yet."
+      : `${selectedDetail.purchases.length} sale${selectedDetail.purchases.length === 1 ? "" : "s"} · ${Object.entries(
+          salesByCurrency
+        )
+          .map(([cur, amt]) => formatMoney(amt.toFixed(2), cur))
+          .join(" · ")}`;
 
   return (
     <div className="flex h-full overflow-hidden">
@@ -242,7 +292,7 @@ export default function GalleriesView({
         )}
       </div>
 
-      {/* ---- Gallery details (middle) ---- */}
+      {/* ---- Gallery details / sales (middle) ---- */}
       <div className="w-[480px] shrink-0 overflow-y-auto border-l border-neutral-200 p-6">
         {!selectedId ? (
           <p className="text-sm text-neutral-400">Select a gallery to see its details.</p>
@@ -252,7 +302,31 @@ export default function GalleriesView({
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
-              <div className="flex gap-2">
+              <div className="flex items-center gap-3">
+                <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab("details")}
+                    className={`px-3 py-1 font-medium ${
+                      detailTab === "details"
+                        ? "bg-neutral-900 text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab("sales")}
+                    className={`px-3 py-1 font-medium ${
+                      detailTab === "sales"
+                        ? "bg-neutral-900 text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    Sales
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => setConfirmingDelete(true)}
@@ -273,81 +347,106 @@ export default function GalleriesView({
               </div>
             </div>
 
-            <div className="space-y-3">
+            {detailTab === "sales" ? (
               <div>
-                <label className={labelCls}>Relationship</label>
-                <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                  {(["PROSPECT", "ACTIVE"] as RelationshipStatus[]).map((s) => (
-                    <button
-                      key={s}
-                      type="button"
-                      disabled={isPending}
-                      onClick={() => saveField("relationshipStatus", s)}
-                      className={`flex-1 px-3 py-1.5 disabled:opacity-50 ${
-                        selectedDetail.relationshipStatus === s
-                          ? "bg-neutral-900 text-white"
-                          : "bg-white text-neutral-600 hover:bg-neutral-50"
-                      }`}
-                    >
-                      {s === "ACTIVE" ? "Active" : "Prospect"}
-                    </button>
-                  ))}
+                <p className="mb-4 text-sm text-neutral-500">{salesSummary}</p>
+                <div className="overflow-hidden rounded-lg border border-neutral-200">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
+                        <th className="px-3 py-2 font-normal">Artwork</th>
+                        <th className="px-3 py-2 font-normal">Status</th>
+                        <th className="px-3 py-2 font-normal">Amount</th>
+                        <th className="px-3 py-2 font-normal">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedDetail.purchases.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
+                            Nothing here yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        selectedDetail.purchases.map((p) => (
+                          <tr key={p.id} className="border-b border-neutral-100 last:border-0">
+                            <td className="px-3 py-2">
+                              <div className="flex items-center gap-2">
+                                {p.artworkImageUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={p.artworkImageUrl}
+                                    alt=""
+                                    className="h-8 w-8 shrink-0 rounded object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-8 w-8 shrink-0 rounded bg-neutral-100" />
+                                )}
+                                <span className="truncate">{p.artworkTitle}</span>
+                              </div>
+                            </td>
+                            <td className="px-3 py-2">
+                              <SaleStatusBadge status={p.status} />
+                            </td>
+                            <td className="px-3 py-2 text-neutral-800">
+                              {formatMoney(p.totalAmount, p.currency)}
+                            </td>
+                            <td className="px-3 py-2 text-neutral-400">
+                              {new Date(p.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
                 </div>
               </div>
-
-              <div>
-                <label className={labelCls}>Gallery name</label>
-                <input
-                  key={`name-${selectedDetail.id}`}
-                  type="text"
-                  defaultValue={selectedDetail.name}
-                  onBlur={(e) => saveField("name", e.target.value.trim())}
-                  disabled={isPending}
-                  className={inputCls}
-                />
-                <p className="mt-1 text-xs text-neutral-400">
-                  Renaming updates which works show as consigned here — matched by this exact
-                  name against each artwork&apos;s Location.
-                </p>
-              </div>
-              <div>
-                <label className={labelCls}>General email</label>
-                <input
-                  key={`email-${selectedDetail.id}`}
-                  type="email"
-                  defaultValue={selectedDetail.email || ""}
-                  onBlur={(e) => saveField("email", e.target.value.trim())}
-                  disabled={isPending}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Phone</label>
-                <input
-                  key={`phone-${selectedDetail.id}`}
-                  type="text"
-                  defaultValue={selectedDetail.phone || ""}
-                  onBlur={(e) => saveField("phone", e.target.value.trim())}
-                  disabled={isPending}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Address</label>
-                <textarea
-                  key={`address-${selectedDetail.id}`}
-                  defaultValue={selectedDetail.address || ""}
-                  onBlur={(e) => saveField("address", e.target.value.trim())}
-                  disabled={isPending}
-                  rows={2}
-                  className={inputCls}
-                />
-              </div>
-
-              <div className="space-y-3 rounded-md border border-neutral-200 p-3">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  Gallery details
-                </p>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls}>Gallery name</label>
+                  <input
+                    key={`name-${selectedDetail.id}`}
+                    type="text"
+                    defaultValue={selectedDetail.name}
+                    onBlur={(e) => saveField("name", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>General email</label>
+                  <input
+                    key={`email-${selectedDetail.id}`}
+                    type="email"
+                    defaultValue={selectedDetail.email || ""}
+                    onBlur={(e) => saveField("email", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Phone</label>
+                  <input
+                    key={`phone-${selectedDetail.id}`}
+                    type="text"
+                    defaultValue={selectedDetail.phone || ""}
+                    onBlur={(e) => saveField("phone", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Address</label>
+                  <textarea
+                    key={`address-${selectedDetail.id}`}
+                    defaultValue={selectedDetail.address || ""}
+                    onBlur={(e) => saveField("address", e.target.value.trim())}
+                    disabled={isPending}
+                    rows={2}
+                    className={inputCls}
+                  />
+                </div>
                 <div>
                   <label className={labelCls}>Contact name</label>
                   <input
@@ -434,40 +533,10 @@ export default function GalleriesView({
                     placeholder="e.g. 30"
                     className={inputCls}
                   />
-                  <p className="mt-1 text-xs text-neutral-400">
-                    A starting point when recording a sale through this gallery — each sale can
-                    still have its own commission typed in if it differs.
-                  </p>
                 </div>
+                {savedField && <p className="text-xs text-green-600">Saved</p>}
               </div>
-
-              <div>
-                <label className={labelCls}>Invoice language</label>
-                <select
-                  key={`language-${selectedDetail.id}`}
-                  defaultValue={selectedDetail.language || ""}
-                  onChange={(e) => saveField("language", e.target.value)}
-                  disabled={isPending}
-                  className={inputCls}
-                >
-                  <option value="">Use artist default</option>
-                  <option value="EN">English</option>
-                  <option value="FR">French</option>
-                </select>
-              </div>
-              <div>
-                <label className={labelCls}>Notes</label>
-                <textarea
-                  key={`notes-${selectedDetail.id}`}
-                  defaultValue={selectedDetail.notes || ""}
-                  onBlur={(e) => saveField("notes", e.target.value.trim())}
-                  disabled={isPending}
-                  rows={3}
-                  className={inputCls}
-                />
-              </div>
-              {savedField && <p className="text-xs text-green-600">Saved</p>}
-            </div>
+            )}
           </div>
         )}
       </div>
