@@ -1,12 +1,10 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { publishSite } from "@/lib/actions/pages";
-import { logout } from "@/lib/actions/auth";
 import { countHopper, countBucket } from "@/lib/actions/hopper";
 import { countArtworksNeedingReview } from "@/lib/actions/artworks";
 import { countMediaNeedingReview } from "@/lib/actions/mediaCatalogue";
 import { getOpenAlerts } from "@/lib/alerts";
-import SiteNavPanel from "@/components/SiteNavPanel";
+import SiteShell from "@/components/SiteShell";
 import LastVisitedSiteTracker from "@/components/LastVisitedSiteTracker";
 import SiteNameField from "@/components/SiteNameField";
 
@@ -73,62 +71,35 @@ export default async function SiteLayout({
   );
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden">
+    <>
       <LastVisitedSiteTracker siteId={id} />
-      <div className="flex items-center justify-between border-b border-neutral-200 px-6 py-4">
-        <SiteNameField
-          site={{
-            id: site.id,
-            name: site.name,
-            domain: site.domain,
-            defaultCurrency: site.defaultCurrency,
-            template: site.template,
-            domainStatus: site.domainStatus,
-            domainRenewalDate: site.domainRenewalDate,
-          }}
-          ownerName={site.artist.name}
-        />
-        <div className="flex shrink-0 items-center gap-2">
-          <form action={publishSite.bind(null, id)}>
-            <button
-              type="submit"
-              disabled={!hasUnpublished}
-              className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:hover:bg-neutral-200"
-            >
-              Publish to live site
-            </button>
-          </form>
-          <form action={logout}>
-            <button
-              type="submit"
-              className="rounded-md px-3 py-2 text-sm text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
-            >
-              Log out
-            </button>
-          </form>
-        </div>
-      </div>
-
-      {/* Standing layout rule (2026-08-03): independently-scrolling
-          columns, fixed headers — this per-site shell had never actually
-          been retrofitted to it (only AppShell.tsx and SitesDirectoryView
-          had). Each column below scrolls on its own; the header above
-          stays pinned regardless of how far either column scrolls. */}
-      <div className="grid flex-1 grid-cols-[1fr_220px] overflow-hidden">
-        <div className="h-full overflow-y-auto">{children}</div>
-        <div className="h-full overflow-y-auto border-l border-neutral-200 p-4">
-          <SiteNavPanel
-            siteId={id}
-            pages={pages.map((p) => ({ id: p.id, title: p.title, type: p.type, visible: p.visible }))}
-            salesEnabled={site.salesEnabled}
-            hopperCount={hopperCount}
-            bucketCount={bucketCount}
-            artworkNeedsReviewCount={artworkNeedsReviewCount}
-            mediaNeedsReviewCount={mediaNeedsReviewCount}
-            alertCount={openAlerts.length}
+      <SiteShell
+        siteId={id}
+        pages={pages.map((p) => ({ id: p.id, title: p.title, type: p.type, visible: p.visible }))}
+        salesEnabled={site.salesEnabled}
+        hopperCount={hopperCount}
+        bucketCount={bucketCount}
+        artworkNeedsReviewCount={artworkNeedsReviewCount}
+        mediaNeedsReviewCount={mediaNeedsReviewCount}
+        alertCount={openAlerts.length}
+        hasUnpublished={hasUnpublished}
+        header={
+          <SiteNameField
+            site={{
+              id: site.id,
+              name: site.name,
+              domain: site.domain,
+              defaultCurrency: site.defaultCurrency,
+              template: site.template,
+              domainStatus: site.domainStatus,
+              domainRenewalDate: site.domainRenewalDate,
+            }}
+            ownerName={site.artist.name}
           />
-        </div>
-      </div>
-    </div>
+        }
+      >
+        {children}
+      </SiteShell>
+    </>
   );
 }
