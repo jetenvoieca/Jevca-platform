@@ -18,13 +18,22 @@ export type AppShellNavItem = {
   subtle?: boolean;
 };
 
-// A top-level entry can either be a plain link (existing behaviour) or a
-// section — a black header button (2026-08-28 decision, originally just
-// "Accounts" grouping Alerts/Subscriptions/Expenses/Account/Consolidated
-// Sales) with its own indented children below it. `key` disambiguates
-// sections that might otherwise share a label; it defaults to the label
-// itself, which is fine as long as labels are unique among sections in
-// a given nav.
+// A top-level entry can either be a plain link or a section — a black
+// header button (2026-08-28 decision, originally just "Accounts"
+// grouping Alerts/Subscriptions/Expenses/Account/Consolidated Sales)
+// with its own indented children below it. `key` disambiguates sections
+// that might otherwise share a label; it defaults to the label itself,
+// which is fine as long as labels are unique among sections in a given
+// nav.
+//
+// A plain top-level entry (e.g. "Sites" before a specific site is
+// selected — nothing to expand, it's just a page to go to) renders with
+// the same grey button styling as a section header (2026-08-31 — they
+// looked inconsistent otherwise), it just navigates on click instead of
+// toggling. Only top-level entries get this treatment; the same
+// AppShellNavItem shape used *inside* a section (indented) keeps the
+// plain-link look, since a pill button repeated at every indent level
+// would be far too heavy.
 //
 // A section's body is usually just a flat list of links (`children`),
 // which this component renders and lays out itself. Occasionally a
@@ -134,6 +143,34 @@ export function NavLink({ item, indented }: { item: AppShellNavItem; indented: b
   );
 }
 
+// A top-level plain link, styled identically to a section header button
+// (same grey pill) so all main-menu entries look consistent whether or
+// not they happen to have children to expand. See the AppShellNavEntry
+// comment above for why this is separate from NavLink.
+function TopLevelLink({ item }: { item: AppShellNavItem }) {
+  if (item.disabled) {
+    return (
+      <span className="w-full cursor-not-allowed rounded-md bg-neutral-200 px-3 py-1 text-sm font-medium text-neutral-400">
+        {item.label}
+      </span>
+    );
+  }
+  return (
+    <Link
+      href={item.href}
+      prefetch={false}
+      className="flex w-full items-center justify-between rounded-md bg-[#5E5E5E] px-3 py-1 text-sm font-medium text-white hover:bg-[#525252]"
+    >
+      {item.label}
+      {!!item.badge && (
+        <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
+          {item.badge}
+        </span>
+      )}
+    </Link>
+  );
+}
+
 // Standardised sidebar navigation (2026-08-31). Every top-level "black
 // button" is a section header: clicking it opens its children and closes
 // any other open section, so only one set of sub-items is ever visible
@@ -182,7 +219,11 @@ export default function SidebarNav({ entries }: { entries: AppShellNavEntry[] })
             </div>
           );
         }
-        return <NavLink key={entry.href} item={entry} indented={false} />;
+        return (
+          <div key={entry.href} className="mb-2">
+            <TopLevelLink item={entry} />
+          </div>
+        );
       })}
     </>
   );
