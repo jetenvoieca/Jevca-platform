@@ -9,6 +9,8 @@ import {
   updateArtistStripeMode,
   updateSalesEnabled,
   saveArtistLogo,
+  saveArtistProfileImage,
+  updateArtistStory,
   regenerateHopperToken,
 } from "@/lib/actions";
 import {
@@ -61,6 +63,8 @@ type ArtistData = {
   stripeMode: "TEST" | "LIVE";
   stripeSubscriptionCustomerId: string | null;
   stripeSubscriptionStatus: string | null;
+  profileImageUrl: string | null;
+  story: string | null;
 };
 
 export default function SiteSettingsPanel({
@@ -75,6 +79,7 @@ export default function SiteSettingsPanel({
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [profileImageUploading, setProfileImageUploading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [regeneratingToken, setRegeneratingToken] = useState(false);
   const [resettingSales, setResettingSales] = useState(false);
@@ -255,6 +260,38 @@ export default function SiteSettingsPanel({
     } finally {
       setLogoUploading(false);
     }
+  };
+
+  const handleProfileImageUpload = async (file: File) => {
+    setProfileImageUploading(true);
+    try {
+      const result = await requestUploadUrl(artist.id, file.name, file.type);
+      if ("error" in result) {
+        alert(result.error);
+        return;
+      }
+      const putRes = await fetch(result.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putRes.ok) {
+        alert("Upload failed — please try again.");
+        return;
+      }
+      await saveArtistProfileImage(artist.id, result.key);
+      router.refresh();
+    } finally {
+      setProfileImageUploading(false);
+    }
+  };
+
+  const handleStorySave = (value: string) => {
+    startTransition(async () => {
+      await updateArtistStory(artist.id, value);
+      router.refresh();
+      flash("story");
+    });
   };
 
   const handlePaymentMethodChange = (value: "" | "Stripe" | "PayPal" | "DD") => {
@@ -699,9 +736,40 @@ export default function SiteSettingsPanel({
           {activeTab === "personal" ? (
             <div className={cardCls}>
               <p className={cardTitleCls}>Personal Profile</p>
-              <p className="text-sm text-neutral-400">
-                Nothing here yet — this tab is a placeholder for future personal-profile fields.
-              </p>
+
+              <label className="mb-4 flex h-48 w-48 cursor-pointer flex-col items-center justify-center rounded-2xl border border-neutral-300 text-sm text-neutral-500 hover:bg-neutral-50">
+                {artist.profileImageUrl ? (
+                  <img
+                    src={artist.profileImageUrl}
+                    alt=""
+                    className="h-full w-full rounded-2xl object-cover"
+                  />
+                ) : (
+                  <span>{profileImageUploading ? "Uploading…" : "+ Image"}</span>
+                )}
+                <input
+                  type="file"
+                  accept="image/*"
+                  disabled={profileImageUploading}
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleProfileImageUpload(file);
+                  }}
+                  className="hidden"
+                />
+              </label>
+
+              <label className={labelCls}>Story</label>
+              <textarea
+                key={`story-${artist.id}`}
+                defaultValue={artist.story || ""}
+                onBlur={(e) => handleStorySave(e.target.value.trim())}
+                disabled={isPending}
+                rows={10}
+                placeholder="This artist's story…"
+                className={inputCls}
+              />
+              {savedField === "story" && <p className="mt-1 text-xs text-green-600">Saved</p>}
             </div>
           ) : (
             <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
