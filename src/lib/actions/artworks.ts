@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -256,8 +257,20 @@ const DEFAULT_PAGE_SIZE = 60;
 // Powers the "raw import" count shown next to Artwork Catalogue in the
 // nav (2026-08-17) — see the matching note on Artwork.needsReview in
 // schema.prisma for exactly what sets/clears this.
+//
+// Also part of the shared site layout (src/app/sites/[id]/layout.tsx),
+// which re-runs this on every navigation inside a site. Cached for 60s
+// per artist (2026-08-31) — same reasoning as the hopper/bucket counts
+// and getOpenAlerts: cheap on its own, but adds up when paid on every
+// click, and doesn't need second-level freshness.
+const countArtworksNeedingReviewCached = unstable_cache(
+  async (artistId: string) => db.artwork.count({ where: { artistId, needsReview: true } }),
+  ["count-artworks-needing-review"],
+  { revalidate: 60 }
+);
+
 export async function countArtworksNeedingReview(artistId: string): Promise<number> {
-  return db.artwork.count({ where: { artistId, needsReview: true } });
+  return countArtworksNeedingReviewCached(artistId);
 }
 
 // Lightweight rows for the grid — only what a tile needs to render.
