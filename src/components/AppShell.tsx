@@ -11,6 +11,7 @@ export default function AppShell({
   publishEnabled = false,
   publishAction,
   navItems,
+  nav,
 }: {
   // Omit entirely (leave as null/undefined) when a page has nothing to
   // preview — e.g. a plain list. Reserving a fixed 340px column that just
@@ -34,7 +35,17 @@ export default function AppShell({
   // the button then stays disabled regardless of publishEnabled, same
   // as before this existed.
   publishAction?: (formData: FormData) => void | Promise<void>;
-  navItems: AppShellNavEntry[];
+  // Static nav data — AppShell renders it via SidebarNav itself. Fine
+  // for navs that don't depend on anything besides props already known
+  // server-side (e.g. an explicit "active" key passed in per page).
+  navItems?: AppShellNavEntry[];
+  // Alternative to navItems: a fully-built nav element, for callers whose
+  // nav needs to work out its own active state from the current URL
+  // (e.g. the per-site menu, which covers many routes under /sites/[id]/*
+  // and would otherwise need every single one of those pages to pass its
+  // own explicit "active" key up through this layout). Exactly one of
+  // navItems / nav should be given.
+  nav?: React.ReactNode;
 }) {
   const hasPreview = preview !== undefined && preview !== null;
   const hasRightPanel = rightPanel !== undefined && rightPanel !== null;
@@ -81,7 +92,7 @@ export default function AppShell({
         </div>
 
         <nav className="flex flex-1 flex-col gap-1 overflow-y-auto p-4">
-          <SidebarNav entries={navItems} />
+          {nav ?? <SidebarNav entries={navItems ?? []} />}
         </nav>
 
         {/* Fixed footer, same non-scrolling treatment as the Publish
