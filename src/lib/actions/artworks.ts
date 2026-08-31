@@ -337,10 +337,6 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
 
 // Full record for the slide-in detail panel — both facets, all images.
 export async function getArtworkDetail(id: string) {
-  // TEMPORARY DIAGNOSTIC LOGGING (2026-08-12) — tracking down a reported
-  // 2-3 second delay on artwork selection. Remove once the cause is
-  // confirmed and fixed; not meant to stay long-term.
-  const t0 = Date.now();
   const result = await db.artwork.findUnique({
     where: { id },
     relationLoadStrategy: "join",
@@ -353,7 +349,6 @@ export async function getArtworkDetail(id: string) {
       },
     },
   });
-  console.log(`[TIMING] getArtworkDetail(${id}): ${Date.now() - t0}ms`);
   return result;
 }
 
@@ -365,10 +360,6 @@ export async function getArtworkDetail(id: string) {
 // from a client component (e.g. clicking an artwork tile to edit it
 // in-place, as the Section editor does).
 export async function getArtworkDetailForClient(id: string) {
-  // TEMPORARY DIAGNOSTIC LOGGING (2026-08-12) — see matching note on
-  // getArtworkDetail above. This wraps the whole function so we can see
-  // total server-side time vs. just the database query time.
-  const tStart = Date.now();
   const artwork = await getArtworkDetail(id);
   if (!artwork) return null;
 
@@ -401,8 +392,6 @@ export async function getArtworkDetailForClient(id: string) {
       paidDate: pay.paidDate ? pay.paidDate.toISOString() : null,
     })),
   }));
-
-  console.log(`[TIMING] getArtworkDetailForClient(${id}) total: ${Date.now() - tStart}ms`);
 
   return {
     id: artwork.id,
