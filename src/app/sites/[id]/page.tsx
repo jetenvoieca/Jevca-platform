@@ -130,12 +130,16 @@ export default async function SiteSettingsPage({
           sort="owner"
           status={status}
           selectedId={id}
+          // This panel is a compact "jump to another site" list, not the
+          // full filterable Directory — see the comment on the query
+          // above. Live search would navigate away from the site you're
+          // currently editing on every keystroke, which is exactly the
+          // "everything jumps" problem reported 2026-08-31; explicit
+          // Enter-to-search (SitesListColumn's default when this is
+          // false) avoids that.
+          liveSearch={false}
         />
       </div>
     </div>
   );
 }
-
-
-
-
