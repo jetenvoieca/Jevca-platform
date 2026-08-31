@@ -88,12 +88,26 @@ export default function SitesListColumn({
   sort,
   status,
   selectedId = null,
+  liveSearch = true,
 }: {
   sites: SiteRow[];
   q: string;
   sort: string;
   status: string;
   selectedId?: string | null;
+  // The Sites Directory ("/") wants search-as-you-type — that's this
+  // component's default. The per-site settings page also renders this
+  // same component as a compact "jump to another site" panel
+  // (src/app/sites/[id]/page.tsx), and that usage was deliberately kept
+  // simple with no search filtering of its own — typing there was
+  // always just a way to jump to the full Directory to search properly,
+  // one explicit submit at a time, never anything you'd trigger by
+  // accident mid-keystroke while you're in the middle of editing a
+  // site. Live search would turn every keystroke into an immediate,
+  // unrequested navigation away from whatever site you're on — so that
+  // caller passes liveSearch={false} to keep the old explicit-submit
+  // form instead.
+  liveSearch?: boolean;
 }) {
   const router = useRouter();
 
@@ -228,18 +242,33 @@ export default function SitesListColumn({
         </div>
 
         <div className="flex flex-col gap-1.5">
-          {/* Search now filters as you type (debounced) instead of
-              needing a separate "Search" button click. Still drives the
-              server-side "q" filter via the URL, same as before — see
-              handleSearchChange above. */}
-          <input
-            type="text"
-            name="q"
-            defaultValue={q}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search owner or site"
-            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
-          />
+          {/* On the Sites Directory, this filters as you type (debounced)
+              instead of needing a separate "Search" button click — see
+              handleSearchChange above. On the per-site panel
+              (liveSearch=false), it's a plain form instead: typing alone
+              does nothing, and only pressing Enter navigates to the full
+              Directory to search — so you can't get bumped off the site
+              you're editing by a stray keystroke. */}
+          {liveSearch ? (
+            <input
+              type="text"
+              name="q"
+              defaultValue={q}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Search owner or site"
+              className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+            />
+          ) : (
+            <form method="get" action="/">
+              <input
+                type="text"
+                name="q"
+                defaultValue={q}
+                placeholder="Search all sites (Enter)"
+                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+              />
+            </form>
+          )}
 
           {/* Status and sort filters share one row now — both are
               single-choice dropdowns of similar weight, so there's no
