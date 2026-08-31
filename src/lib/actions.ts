@@ -159,16 +159,15 @@ export async function saveArtistLogo(artistId: string, key: string): Promise<voi
   revalidatePath("/");
 }
 
-// 2026-08-31, direct request — the Personal Profile tab's photo, same
-// direct-to-R2 upload flow and same reasoning as saveArtistLogo just
-// above (a business-identity image, not artwork media, so no Image row).
-// Its own action rather than folded into updateArtist for the same
-// reason the logo is: it arrives as an upload key, not a plain form
-// field.
-export async function saveArtistProfileImage(artistId: string, key: string): Promise<void> {
+// 2026-08-31, direct request — the Personal Profile photo is picked via
+// MediaPicker from the artist's own Media Catalogue, same as
+// Artwork.mainImageId (see setMainImage in actions/artworks.ts) — not a
+// separate upload like the Invoicing logo above. Just sets which
+// existing Image row this artist's profile points at.
+export async function setArtistProfileImage(artistId: string, imageId: string): Promise<void> {
   await db.artist.update({
     where: { id: artistId },
-    data: { profileImageUrl: `/api/media/${key}` },
+    data: { profileImageId: imageId },
   });
   revalidatePath("/");
 }
