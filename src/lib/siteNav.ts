@@ -15,33 +15,32 @@ export type SiteNavKey =
   | "hopper"
   | "artworks"
   | "artworkSettings"
+  | "galleries"
   | "media"
   | "bucket"
   | "mediaSettings"
   | "sales"
   | "customers"
-  | "galleries"
   | "purchases"
   | "purchasesSettings";
 
 const SITES_KEYS: SiteNavKey[] = ["menu", "pages"];
 
+// "galleries" (displayed as "Locations") moved from Financial into
+// Content, 2026-08-31 — it's cataloguing data about where artwork
+// lives, same family as the Artwork/Media catalogues either side of
+// it, not a financial record like Sales or Purchases.
 const CONTENT_KEYS: SiteNavKey[] = [
   "hopper",
   "artworks",
   "artworkSettings",
+  "galleries",
   "media",
   "bucket",
   "mediaSettings",
 ];
 
-const FINANCIAL_KEYS: SiteNavKey[] = [
-  "sales",
-  "customers",
-  "galleries",
-  "purchases",
-  "purchasesSettings",
-];
+const FINANCIAL_KEYS: SiteNavKey[] = ["sales", "customers", "purchases", "purchasesSettings"];
 
 export function buildSiteNavEntries({
   siteId,
@@ -78,6 +77,10 @@ export function buildSiteNavEntries({
       active: active === "artworks",
       badge: artworkNeedsReviewCount,
     },
+    // "Locations" (was "Galleries", same route — only the label has
+    // changed for now) sits here, between Artwork Catalogue and its
+    // Settings, per direct request 2026-08-31.
+    { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },
     {
       label: "Settings",
       href: `${base}/artworks/settings`,
@@ -106,7 +109,6 @@ export function buildSiteNavEntries({
           { label: "Customers", href: `${base}/customers`, active: active === "customers" },
         ]
       : []),
-    { label: "Galleries", href: `${base}/galleries`, active: active === "galleries" },
     { label: "Purchases", href: `${base}/purchases`, active: active === "purchases" },
     {
       label: "Settings",
