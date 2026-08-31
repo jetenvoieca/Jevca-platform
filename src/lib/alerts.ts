@@ -1,3 +1,4 @@
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 
 // 2026-08-13 decision: manual (PayPal/DD) artists are expected roughly
@@ -21,7 +22,20 @@ export type AlertItem = {
   dismissable: boolean;
 };
 
-export async function getOpenAlerts(): Promise<AlertItem[]> {
+// getOpenAlerts scans every artist and every payment across the whole
+// platform (it's not scoped to one site), and it's called on every single
+// navigation inside every site — plus on the sites picker screen. With a
+// handful of sites that's cheap; with 100+ sites it means a full
+// database scan on every click.
+//
+// 2026-08-31: none of these alerts need to be accurate to the second —
+// an overdue payment or a missing payment method being reflected up to a
+// minute late is a non-issue for what is essentially a dashboard badge.
+// So the actual scan is cached for 60 seconds (Next.js data cache) and
+// every navigation within that window reuses the same result instead of
+// re-querying. This is the main fix for the "everything feels sluggish"
+// reports — this scan was being paid for on almost every click.
+const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
   const [stored, manualCandidates, noPaymentMethodArtists, unpaidPayments] = await Promise.all([
     db.alertEvent.findMany({
       where: { resolvedAt: null },
@@ -181,4 +195,13 @@ export async function getOpenAlerts(): Promise<AlertItem[]> {
       return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
     }
   );
+};
+
+const cachedGetOpenAlerts = unstable_cache(getOpenAlertsUncached, ["open-alerts"], {
+  revalidate: 60,
+  tags: ["open-alerts"],
+});
+
+export async function getOpenAlerts(): Promise<AlertItem[]> {
+  return cachedGetOpenAlerts();
 }
