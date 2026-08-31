@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { getArtworksForArtist, quickCreateArtwork } from "@/lib/actions/media";
 
 type PickedArtwork = {
@@ -37,6 +37,7 @@ export default function ArtworkPicker({
   const [newTitle, setNewTitle] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = (q: string) => {
     startTransition(async () => {
@@ -58,6 +59,22 @@ export default function ArtworkPicker({
     setSelected([]);
     load(query);
   };
+
+  // Debounced search-as-you-type (2026-08-31) — previously fired a full
+  // server request on every keystroke, same issue already fixed in
+  // CustomerPicker.tsx (see that file for the original pattern this
+  // copies). Only fires while the picker is open, and only reacts to
+  // `query` changing — handleOpen's own immediate load() above still
+  // runs right away when the picker is first opened.
+  useEffect(() => {
+    if (!open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => load(query), 250);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const handlePick = (a: PickedArtwork) => {
     if (mode === "single") {
@@ -138,10 +155,7 @@ export default function ArtworkPicker({
           <input
             type="text"
             value={query}
-            onChange={(e) => {
-              setQuery(e.target.value);
-              load(e.target.value);
-            }}
+            onChange={(e) => setQuery(e.target.value)}
             placeholder="Search artworks…"
             autoFocus
             className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
@@ -177,6 +191,13 @@ export default function ArtworkPicker({
         )}
 
         <div className="flex-1 overflow-y-auto p-4">
+          {/* Visible loading state (2026-08-31) — previously there was no
+              indication a search was in flight at all, which is exactly
+              what makes a picker feel unresponsive/broken rather than
+              just "a bit slow". */}
+          {isPending && (
+            <p className="pb-3 text-xs text-neutral-400">Searching…</p>
+          )}
           <div className="grid grid-cols-8 gap-3">
             {artworks.map((a) => {
               const isSelected = selected.some((s) => s.id === a.id);
@@ -203,7 +224,7 @@ export default function ArtworkPicker({
               );
             })}
           </div>
-          {artworks.length === 0 && (
+          {artworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
               No artworks yet — type a title above to create one.
             </p>

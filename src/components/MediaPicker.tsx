@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
@@ -101,7 +101,8 @@ export default function MediaPicker({
   const [images, setImages] = useState<PickedImage[]>([]);
   const [relatedCount, setRelatedCount] = useState(0);
   const [selected, setSelected] = useState<PickedImage[]>([]);
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // This picker searches across the whole catalogue rather than paging
   // through it (unlike the Media Catalogue screen itself, which now
@@ -146,6 +147,23 @@ export default function MediaPicker({
       });
     }
   };
+
+  // Debounced search-as-you-type (2026-08-31) — previously fired a full
+  // server request (fetching up to PICKER_FETCH_LIMIT rows) on every
+  // keystroke, with no visible loading state. Same fix as ArtworkPicker.tsx
+  // / CustomerPicker.tsx. Only reacts to `query` changing — handlePurposeChange
+  // below still reloads immediately on an explicit tab click, and
+  // handleOpen's own immediate load() above still runs right away when the
+  // picker is first opened.
+  useEffect(() => {
+    if (!open) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => load(query, purpose), 250);
+    return () => {
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const handlePurposeChange = (p: "marketing" | "related") => {
     setPurpose(p);
@@ -238,6 +256,13 @@ export default function MediaPicker({
             already used for the Artwork editor's grid/detail-panel split. */}
         <div className="flex max-h-[85vh] w-full overflow-hidden rounded-lg bg-white shadow-xl">
           <div className="flex-1 overflow-y-auto p-4 pb-8">
+          {/* Visible loading state (2026-08-31) — previously there was no
+              indication a search was in flight at all, which is exactly
+              what makes a picker feel unresponsive/broken rather than
+              just "a bit slow". */}
+          {isPending && (
+            <p className="pb-3 text-xs text-neutral-400">Searching…</p>
+          )}
           <div className="grid grid-cols-6 gap-3">
             {images.map((img) => {
               const isSelected = selected.some((s) => s.id === img.id);
@@ -305,7 +330,7 @@ export default function MediaPicker({
               );
             })}
           </div>
-          {images.length === 0 && (
+          {images.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
               {linkedArtworkId && purpose === "related"
                 ? "No images related to this artwork yet."
@@ -354,10 +379,7 @@ export default function MediaPicker({
             <input
               type="text"
               value={query}
-              onChange={(e) => {
-                setQuery(e.target.value);
-                load(e.target.value, purpose);
-              }}
+              onChange={(e) => setQuery(e.target.value)}
               placeholder={
                 mediaKinds && mediaKinds.length > 1
                   ? "Search images and videos…"
