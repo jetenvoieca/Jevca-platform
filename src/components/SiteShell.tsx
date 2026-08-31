@@ -29,6 +29,7 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
   if (pathname.startsWith(`${base}/customers`)) return "customers";
   if (pathname.startsWith(`${base}/galleries`)) return "galleries";
   if (pathname.startsWith(`${base}/menus`)) return "menu";
+  if (pathname.startsWith(`${base}/pages/`)) return "pages";
   return null;
 }
 
