@@ -95,18 +95,15 @@ export default function SitesListColumn({
   sort: string;
   status: string;
   selectedId?: string | null;
-  // The Sites Directory ("/") wants search-as-you-type — that's this
-  // component's default. The per-site settings page also renders this
-  // same component as a compact "jump to another site" panel
+  // The Sites Directory ("/") wants search-as-you-type against the full,
+  // server-side catalogue — that's this component's default. The
+  // per-site settings page also renders this same component as a
+  // compact "jump to another site" panel
   // (src/app/sites/[id]/page.tsx), and that usage was deliberately kept
-  // simple with no search filtering of its own — typing there was
-  // always just a way to jump to the full Directory to search properly,
-  // one explicit submit at a time, never anything you'd trigger by
-  // accident mid-keystroke while you're in the middle of editing a
-  // site. Live search would turn every keystroke into an immediate,
-  // unrequested navigation away from whatever site you're on — so that
-  // caller passes liveSearch={false} to keep the old explicit-submit
-  // form instead.
+  // simple — its list is already fully loaded, so that caller passes
+  // liveSearch={false} to filter it locally, in the browser, with no
+  // navigation at all. That's what stops a search there from ever
+  // knocking you off the site you're currently editing.
   liveSearch?: boolean;
 }) {
   const router = useRouter();
@@ -192,9 +189,29 @@ export default function SitesListColumn({
     }
   }, []);
 
+  // Non-live-search mode (the per-site "jump to another site" panel)
+  // filters the already-fetched `sites` prop entirely in the browser —
+  // no navigation at all, so the page you're on, and everything in its
+  // header/nav, never changes. That's deliberately different from the
+  // Directory's server-side search: this panel's list is a bounded,
+  // already-loaded convenience set (whatever the current Status filter
+  // returns), not the full unbounded catalogue, so filtering it in
+  // memory is cheap and never needs a round-trip.
+  const [localFilter, setLocalFilter] = useState(q);
+
+  const visibleSites = useMemo(() => {
+    if (liveSearch) return sites;
+    const term = localFilter.trim().toLowerCase();
+    if (!term) return sites;
+    return sites.filter(
+      (s) =>
+        s.ownerName.toLowerCase().includes(term) || s.name.toLowerCase().includes(term)
+    );
+  }, [sites, liveSearch, localFilter]);
+
   const sortedSites = useMemo(
-    () => [...sites].sort((a, b) => compareSites(a, b, clientSort)),
-    [sites, clientSort]
+    () => [...visibleSites].sort((a, b) => compareSites(a, b, clientSort)),
+    [visibleSites, clientSort]
   );
 
   // Only actually reorders if the pinned site is present in the current
@@ -243,12 +260,12 @@ export default function SitesListColumn({
 
         <div className="flex flex-col gap-1.5">
           {/* On the Sites Directory, this filters as you type (debounced)
-              instead of needing a separate "Search" button click — see
-              handleSearchChange above. On the per-site panel
-              (liveSearch=false), it's a plain form instead: typing alone
-              does nothing, and only pressing Enter navigates to the full
-              Directory to search — so you can't get bumped off the site
-              you're editing by a stray keystroke. */}
+              and drives the server-side search — see handleSearchChange
+              above. On the per-site panel (liveSearch=false), typing
+              filters this already-loaded list entirely in the browser
+              instead — no navigation, so the site you're editing (and
+              its header/nav) never changes; click a row to actually jump
+              to it. */}
           {liveSearch ? (
             <input
               type="text"
@@ -259,15 +276,13 @@ export default function SitesListColumn({
               className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
             />
           ) : (
-            <form method="get" action="/">
-              <input
-                type="text"
-                name="q"
-                defaultValue={q}
-                placeholder="Search all sites (Enter)"
-                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
-              />
-            </form>
+            <input
+              type="text"
+              value={localFilter}
+              onChange={(e) => setLocalFilter(e.target.value)}
+              placeholder="Filter this list"
+              className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+            />
           )}
 
           {/* Status and sort filters share one row now — both are
@@ -321,12 +336,12 @@ export default function SitesListColumn({
         </div>
 
         <p className="mt-2 text-[11px] text-neutral-400">
-          {sites.length} site{sites.length === 1 ? "" : "s"}
+          {visibleSites.length} site{visibleSites.length === 1 ? "" : "s"}
         </p>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        {sites.length === 0 ? (
+        {visibleSites.length === 0 ? (
           <p className="p-4 text-xs text-neutral-500">No sites match.</p>
         ) : (
           <ul className="divide-y divide-neutral-100">
