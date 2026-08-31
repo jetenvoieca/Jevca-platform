@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { LAST_VISITED_SITE_KEY } from "@/components/LastVisitedSiteTracker";
 import { SITES_STATUS_FILTER_COOKIE } from "@/lib/sitesStatusFilter";
@@ -29,6 +29,17 @@ type SortValue = "owner" | "date" | "payment";
 // to forget to pass it through.
 const SORT_STORAGE_KEY = "jevca:sites-sort";
 
+// 2026-08-31, direct request — search used to require a separate
+// "Search" button click and a full form submit. Typing now debounces
+// (300ms) and updates the "q" URL param via router.replace, which is
+// what actually re-runs the server-side, database-level filter in
+// src/app/page.tsx. Deliberately NOT filtering the already-fetched
+// `sites` prop client-side instead — with this list meant to grow past
+// 100 sites, only ever fetching the page that matches the current
+// search (same reasoning as the status-filter cookie below) is what
+// scales, rather than fetching everything up front.
+const SEARCH_DEBOUNCE_MS = 300;
+
 function compareSites(a: SiteRow, b: SiteRow, sort: SortValue): number {
   if (sort === "date") {
     // Newest first — matches the server's original default ordering
@@ -47,6 +58,28 @@ function compareSites(a: SiteRow, b: SiteRow, sort: SortValue): number {
     return cmp !== 0 ? cmp : a.ownerName.localeCompare(b.ownerName);
   }
   return a.ownerName.localeCompare(b.ownerName);
+}
+
+// Small inline sync icon for the Namecheap Sync link — kept as a plain
+// SVG rather than pulling in an icon library for one glyph.
+function SyncIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className="h-3.5 w-3.5"
+      aria-hidden="true"
+    >
+      <path d="M21 12a9 9 0 0 1-15.3 6.4L3 16" />
+      <path d="M3 12a9 9 0 0 1 15.3-6.4L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  );
 }
 
 export default function SitesListColumn({
@@ -93,6 +126,33 @@ export default function SitesListColumn({
     } catch {
       // Non-critical — this session's choice just won't persist.
     }
+  };
+
+  // Debounced search-as-you-type. Uncontrolled input (defaultValue={q})
+  // so the server-rendered value shows immediately with no flicker;
+  // each keystroke resets a timer, and only the last one in a burst
+  // actually triggers a navigation — otherwise every keystroke would
+  // fire its own server round-trip.
+  const searchTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    };
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    if (searchTimeout.current) clearTimeout(searchTimeout.current);
+    searchTimeout.current = setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      if (value.trim()) {
+        params.set("q", value.trim());
+      } else {
+        params.delete("q");
+      }
+      const queryString = params.toString();
+      router.replace(queryString ? `/?${queryString}` : "/");
+    }, SEARCH_DEBOUNCE_MS);
   };
 
   // Pins whichever site was last actually opened to the very top of the
@@ -142,89 +202,98 @@ export default function SitesListColumn({
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-neutral-200 px-4 pb-3 pt-4">
-        <h2 className="mb-2 text-sm font-semibold text-neutral-900">Sites</h2>
-        {/* Sort lives outside this form now (2026-08-19) — it's an
-            instant, local re-order, not something that needs a server
-            round-trip. Search text and the archived filter still do need
-            fresh data from the server, so they're unchanged: always
-            posts to "/" — searching or filtering from within a selected
-            site's settings page takes you to the full list view to see
-            the results, same as clicking a row would. */}
-        <div className="flex flex-col gap-1.5">
-          <form method="get" action="/" className="flex flex-col gap-1.5">
-            <input
-              type="text"
-              name="q"
-              defaultValue={q}
-              placeholder="Search owner or site"
-              className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
-            />
-            <button
-              type="submit"
-              className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+        {/* Header row — title left, "+ Add New" and the Namecheap Sync
+            icon on the right. Namecheap Sync used to be its own full-width
+            button under the filters; it's a low-frequency admin action,
+            so it's now a small icon next to Add New rather than competing
+            for space with the controls people use on every visit. */}
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <h2 className="text-sm font-semibold text-neutral-900">Sites</h2>
+          <div className="flex items-center gap-1.5">
+            <Link
+              href="/namecheap-sync"
+              title="Namecheap Sync"
+              aria-label="Namecheap Sync"
+              className="rounded-md border border-neutral-300 p-1 text-neutral-500 hover:bg-neutral-50"
             >
-              Search
-            </button>
-          </form>
-          {/* 2026-08-19, direct request — replaces a plain "Show
-              archived" checkbox with a real status filter. Empty (the
-              default) means everything except Archived, same as the
-              checkbox's own default did; any specific status can now be
-              picked to see just that one instead of it only ever being
-              all-or-nothing.
-              Sets a cookie rather than submitting a form (2026-08-19,
-              second pass) — a URL param reset to the default every time
-              a specific site was opened, since that page's own copy of
-              this list never carried it through. Deliberately not the
-              same fully-client-side approach used for Sort below,
-              though: this genuinely changes which sites the server
-              fetches, and with this list expected to grow into the
-              hundreds, always fetching everything just to filter it in
-              the browser doesn't scale the way re-sorting an
-              already-fetched page does. The cookie is read server-side
-              (see sitesStatusFilter.ts) by both this page and the
-              site-detail page's own copy, so the database query itself
-              stays properly filtered no matter which one you're on. */}
-          <select
-            defaultValue={status}
-            onChange={(e) => {
-              document.cookie = `${SITES_STATUS_FILTER_COOKIE}=${e.target.value}; path=/; max-age=31536000`;
-              router.refresh();
-            }}
-            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
-          >
-            <option value="">All except Archived</option>
-            <option value="DRAFT">Draft</option>
-            <option value="LIVE">Live</option>
-            <option value="PAUSED">Paused</option>
-            <option value="ISYT">ISYT</option>
-            <option value="ARCHIVED">Archived</option>
-          </select>
-          <select
-            value={clientSort}
-            onChange={(e) => handleSortChange(e.target.value as SortValue)}
-            className="w-full rounded-md border border-neutral-300 px-1.5 py-1 text-xs"
-          >
-            <option value="owner">Sort: Owner</option>
-            <option value="date">Sort: Date</option>
-            <option value="payment">Sort: Payment</option>
-          </select>
+              <SyncIcon />
+            </Link>
+            <Link
+              href="/sites/new"
+              className="text-xs font-medium text-neutral-900 hover:underline"
+            >
+              + Add New
+            </Link>
+          </div>
         </div>
+
+        <div className="flex flex-col gap-1.5">
+          {/* Search now filters as you type (debounced) instead of
+              needing a separate "Search" button click. Still drives the
+              server-side "q" filter via the URL, same as before — see
+              handleSearchChange above. */}
+          <input
+            type="text"
+            name="q"
+            defaultValue={q}
+            onChange={(e) => handleSearchChange(e.target.value)}
+            placeholder="Search owner or site"
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+          />
+
+          {/* Status and sort filters share one row now — both are
+              single-choice dropdowns of similar weight, so there's no
+              reason for one to sit above the other. */}
+          <div className="flex gap-1.5">
+            {/* 2026-08-19, direct request — replaces a plain "Show
+                archived" checkbox with a real status filter. Empty (the
+                default) means everything except Archived, same as the
+                checkbox's own default did; any specific status can now be
+                picked to see just that one instead of it only ever being
+                all-or-nothing.
+                Sets a cookie rather than submitting a form (2026-08-19,
+                second pass) — a URL param reset to the default every time
+                a specific site was opened, since that page's own copy of
+                this list never carried it through. Deliberately not the
+                same fully-client-side approach used for Sort below,
+                though: this genuinely changes which sites the server
+                fetches, and with this list expected to grow into the
+                hundreds, always fetching everything just to filter it in
+                the browser doesn't scale the way re-sorting an
+                already-fetched page does. The cookie is read server-side
+                (see sitesStatusFilter.ts) by both this page and the
+                site-detail page's own copy, so the database query itself
+                stays properly filtered no matter which one you're on. */}
+            <select
+              defaultValue={status}
+              onChange={(e) => {
+                document.cookie = `${SITES_STATUS_FILTER_COOKIE}=${e.target.value}; path=/; max-age=31536000`;
+                router.refresh();
+              }}
+              className="w-1/2 min-w-0 rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
+            >
+              <option value="">All except Archived</option>
+              <option value="DRAFT">Draft</option>
+              <option value="LIVE">Live</option>
+              <option value="PAUSED">Paused</option>
+              <option value="ISYT">ISYT</option>
+              <option value="ARCHIVED">Archived</option>
+            </select>
+            <select
+              value={clientSort}
+              onChange={(e) => handleSortChange(e.target.value as SortValue)}
+              className="w-1/2 min-w-0 rounded-md border border-neutral-300 px-1.5 py-1.5 text-xs"
+            >
+              <option value="owner">Sort: Owner</option>
+              <option value="date">Sort: Date</option>
+              <option value="payment">Sort: Payment</option>
+            </select>
+          </div>
+        </div>
+
         <p className="mt-2 text-[11px] text-neutral-400">
           {sites.length} site{sites.length === 1 ? "" : "s"}
         </p>
-        <Link
-          href="/sites/new"
-          className="mt-2 block rounded-md bg-neutral-900 px-2 py-1.5 text-center text-xs font-medium text-white hover:bg-neutral-700"
-        >
-          + Add New Site
-        </Link>
-        <Link
-          href="/namecheap-sync"
-          className="mt-1.5 block rounded-md border border-neutral-300 px-2 py-1.5 text-center text-xs text-neutral-600 hover:bg-neutral-50"
-        >
-          Namecheap Sync
-        </Link>
       </div>
 
       <div className="flex-1 overflow-y-auto">
@@ -302,5 +371,3 @@ export default function SitesListColumn({
     </div>
   );
 }
-
-
