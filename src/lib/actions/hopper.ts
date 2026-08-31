@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
@@ -34,8 +35,21 @@ type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 // building that route's data is a genuine, different case worth
 // checking if this recurs there too.
 
+// countHopper/countBucket power sidebar badges in the shared site layout
+// (src/app/sites/[id]/layout.tsx), which re-runs on every navigation
+// inside a site. A plain db.image.count() is cheap on its own, but paid
+// on every single click it adds up — and neither number needs to be
+// exact to the second (2026-08-31, same reasoning as getOpenAlerts in
+// lib/alerts.ts). Cached for 60s per artist instead of queried fresh on
+// every navigation.
+const countHopperCached = unstable_cache(
+  async (artistId: string) => db.image.count({ where: { artistId, status: "HOPPER" } }),
+  ["count-hopper"],
+  { revalidate: 60 }
+);
+
 export async function countHopper(artistId: string): Promise<number> {
-  return db.image.count({ where: { artistId, status: "HOPPER" } });
+  return countHopperCached(artistId);
 }
 
 export async function listHopperQueue(artistId: string) {
@@ -89,8 +103,14 @@ export async function addHopperItemToMedia(id: string, siteId: string): Promise<
   await db.image.update({ where: { id }, data: { status: "SORTED", needsReview: true } });
 }
 
+const countBucketCached = unstable_cache(
+  async (artistId: string) => db.image.count({ where: { artistId, status: "BUCKET" } }),
+  ["count-bucket"],
+  { revalidate: 60 }
+);
+
 export async function countBucket(artistId: string): Promise<number> {
-  return db.image.count({ where: { artistId, status: "BUCKET" } });
+  return countBucketCached(artistId);
 }
 
 export async function addHopperItemToBucket(
@@ -186,5 +206,3 @@ export async function createArtworkFromHopperQuick(
 
   return { ok: true, artwork: { id: artwork.id } };
 }
-
-
