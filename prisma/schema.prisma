@@ -94,6 +94,13 @@ model Artist {
   phone     String?
   notes     String?
 
+  // Personal Profile tab (2026-08-31) — a portrait/story photo and
+  // free-text bio shown on the artist's own profile. Deliberately
+  // separate from `logoUrl` below, which is a business asset used on
+  // invoices, not a personal photo.
+  profileImageUrl String?
+  story           String?
+
   hopperToken String @unique @default(cuid())
   subscriptionAmount Decimal? @db.Decimal(10, 2)
   paymentMethod      String?
