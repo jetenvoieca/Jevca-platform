@@ -202,13 +202,26 @@ export async function startPurchase(
 
 // ---------- Gallery sales — no Stripe involved at all ----------
 
-// Sold through a third party rather than paid online — raises an invoice
-// for the net amount owed (sale price less commission), which starts out
-// unpaid. Unlike a Stripe sale, the price isn't locked to Sale Terms —
-// a gallery sale can be negotiated at a different figure, so it's typed
-// in directly here.
+// Reworked 2026-08-31 to be started only from the Gallery's own
+// Consigned Works panel (GalleriesView), never typed from the Artwork
+// Catalogue's Payment tab any more — see the matching removal in
+// PurchasePanel. The buyer is always the gallery being viewed, so there
+// are no separate buyer name/email/address fields here at all: they're
+// snapshotted straight from that gallery's own Customer record. This is
+// deliberate, not just a shortcut — galleries are often reluctant to
+// disclose who the actual end buyer was, and the money is owed by the
+// gallery either way, so the "buyer" for this app's purposes always is
+// the gallery.
+//
+// Raises an unpaid invoice for the net amount owed (sale price less
+// commission) — the sale stays ACTIVE ("UNPAID" in the UI) until
+// markGallerySalePaid is called once the gallery actually pays. `saleDate`
+// is when the gallery says it actually sold (can be backdated — galleries
+// don't always report a sale immediately), not today's date, so it's
+// used as the Purchase's own createdAt rather than defaulting to now.
 export async function startGallerySale(
   artworkId: string,
+  customerId: string,
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
@@ -219,52 +232,37 @@ export async function startGallerySale(
     return { ok: false, error: "There's already an active sale in progress for this artwork." };
   }
 
-  const buyerName = (formData.get("buyerName") as string)?.trim() || null;
-  const buyerEmail = (formData.get("buyerEmail") as string)?.trim() || null;
-  const buyerAddress = (formData.get("buyerAddress") as string)?.trim() || null;
+  const customer = await db.customer.findUnique({ where: { id: customerId } });
+  if (!customer) return { ok: false, error: "Gallery not found." };
+
   const totalAmount = (formData.get("totalAmount") as string)?.trim();
   const currencyRaw = (formData.get("currency") as string)?.trim().toUpperCase();
-  // Bug fixed 2026-08-13: this used to fall straight back to a hard-coded
-  // "GBP" whenever the form didn't submit a currency — which it never
-  // did, since the form had no currency field at all (see PurchasePanel).
-  // A real sale was recorded and invoiced in GBP despite Sale Terms
-  // being set to EUR. The form now always submits an explicit value, so
-  // this fallback is a safety net, not the normal path — but it now
-  // checks Sale Terms first rather than silently assuming GBP again.
-  const currency =
-    currencyRaw || (await db.saleTerms.findUnique({ where: { artworkId } }))?.currency || "GBP";
+  const currency = currencyRaw || "GBP";
   const commissionPercent = (formData.get("commissionPercent") as string)?.trim() || null;
-  const source = (formData.get("source") as string)?.trim() || null;
-  // See the matching note in startPurchase above (2026-08-16).
-  const customerId = (formData.get("customerId") as string)?.trim() || null;
+  const saleDateRaw = (formData.get("saleDate") as string)?.trim();
 
-  if (!buyerName) return { ok: false, error: "The gallery/buyer name is required." };
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
 
-  const artwork = await db.artwork.findUniqueOrThrow({
-    where: { id: artworkId },
-    select: { artistId: true },
-  });
-  const customer = await findOrCreateCustomer(artwork.artistId, {
-    name: buyerName,
-    email: buyerEmail,
-    address: buyerAddress,
-    customerId,
-  });
+  let createdAt: Date | undefined;
+  if (saleDateRaw) {
+    const parsed = new Date(saleDateRaw);
+    if (Number.isNaN(parsed.getTime())) return { ok: false, error: "That date isn't valid." };
+    createdAt = parsed;
+  }
 
   const purchase = await db.purchase.create({
     data: {
       artworkId,
       channel: "GALLERY",
       customerId: customer.id,
-      buyerName,
-      buyerEmail,
-      buyerAddress,
+      buyerName: customer.name,
+      buyerEmail: customer.email,
+      buyerAddress: customer.address,
       type: "FULL",
-      source,
       totalAmount,
       currency,
       commissionPercent,
+      ...(createdAt ? { createdAt } : {}),
     },
   });
 
