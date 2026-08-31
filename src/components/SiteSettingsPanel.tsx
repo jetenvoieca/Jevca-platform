@@ -3,13 +3,14 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import StatusSelect from "@/components/StatusSelect";
+import MediaPicker from "@/components/MediaPicker";
 import {
   updateSite,
   updateArtist,
   updateArtistStripeMode,
   updateSalesEnabled,
   saveArtistLogo,
-  saveArtistProfileImage,
+  setArtistProfileImage,
   updateArtistStory,
   regenerateHopperToken,
 } from "@/lib/actions";
@@ -79,7 +80,6 @@ export default function SiteSettingsPanel({
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
-  const [profileImageUploading, setProfileImageUploading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [regeneratingToken, setRegeneratingToken] = useState(false);
   const [resettingSales, setResettingSales] = useState(false);
@@ -262,28 +262,11 @@ export default function SiteSettingsPanel({
     }
   };
 
-  const handleProfileImageUpload = async (file: File) => {
-    setProfileImageUploading(true);
-    try {
-      const result = await requestUploadUrl(artist.id, file.name, file.type);
-      if ("error" in result) {
-        alert(result.error);
-        return;
-      }
-      const putRes = await fetch(result.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": file.type },
-        body: file,
-      });
-      if (!putRes.ok) {
-        alert("Upload failed — please try again.");
-        return;
-      }
-      await saveArtistProfileImage(artist.id, result.key);
+  const handleProfileImagePick = (imageId: string) => {
+    startTransition(async () => {
+      await setArtistProfileImage(artist.id, imageId);
       router.refresh();
-    } finally {
-      setProfileImageUploading(false);
-    }
+    });
   };
 
   const handleStorySave = (value: string) => {
@@ -737,27 +720,18 @@ export default function SiteSettingsPanel({
             <div className={cardCls}>
               <p className={cardTitleCls}>Personal Profile</p>
 
-              <label className="mb-4 flex h-48 w-48 cursor-pointer flex-col items-center justify-center rounded-2xl border border-neutral-300 text-sm text-neutral-500 hover:bg-neutral-50">
-                {artist.profileImageUrl ? (
-                  <img
-                    src={artist.profileImageUrl}
-                    alt=""
-                    className="h-full w-full rounded-2xl object-cover"
-                  />
-                ) : (
-                  <span>{profileImageUploading ? "Uploading…" : "+ Image"}</span>
-                )}
-                <input
-                  type="file"
-                  accept="image/*"
-                  disabled={profileImageUploading}
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleProfileImageUpload(file);
+              <div className="mb-4 w-48">
+                <MediaPicker
+                  artistId={artist.id}
+                  siteId={site.id}
+                  mode="single"
+                  previewUrl={artist.profileImageUrl || undefined}
+                  label="Image"
+                  onSelect={(imgs) => {
+                    if (imgs[0]) handleProfileImagePick(imgs[0].id);
                   }}
-                  className="hidden"
                 />
-              </label>
+              </div>
 
               <label className={labelCls}>Story</label>
               <textarea
