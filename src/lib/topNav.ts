@@ -16,19 +16,22 @@ export type TopNavKey =
 // that same page; "Account" is the Sales/Expenses/Net summary; "Settings"
 // (added same day) is the expense-category editor, moved out of Expenses
 // into its own page, listed last after Consolidated Sales as requested.
+// Section label itself renamed "Accounts" -> "Administration" 2026-08-31
+// (the `key` stays "accounts" — it's just an internal id for tracking
+// which section is open, nothing reads it as a label).
 //
 // Split out as its own function (2026-08-31) so the per-site menu
-// (siteNav.ts) can render an identical "Accounts" group instead of
-// duplicating this list — the labels, hrefs, and active-state logic
-// stay in exactly one place. Pass `active: null` from a context where
-// none of these pages is the current one (e.g. from inside a site),
-// so nothing here is shown as active/open.
+// (siteNav.ts) can render an identical group instead of duplicating
+// this list — the labels, hrefs, and active-state logic stay in
+// exactly one place. Pass `active: null` from a context where none of
+// these pages is the current one (e.g. from inside a site), so nothing
+// here is shown as active/open.
 export function buildAccountsSection(
   active: TopNavKey | null,
   alertCount: number
 ): AppShellNavEntry {
   return {
-    label: "Accounts",
+    label: "Administration",
     section: true,
     key: "accounts",
     children: [
