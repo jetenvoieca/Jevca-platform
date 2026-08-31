@@ -1,5 +1,6 @@
 "use server";
 
+import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
@@ -23,8 +24,20 @@ type ListFilters = {
 // Powers the "raw import" count shown next to Media Catalogue in the
 // nav (2026-08-17) — see the matching note on Image.needsReview in
 // schema.prisma for exactly what sets/clears this.
+//
+// Also part of the shared site layout (src/app/sites/[id]/layout.tsx),
+// which re-runs this on every navigation inside a site. Cached for 60s
+// per artist (2026-08-31) — same reasoning as the hopper/bucket counts
+// and getOpenAlerts: cheap on its own, but adds up when paid on every
+// click, and doesn't need second-level freshness.
+const countMediaNeedingReviewCached = unstable_cache(
+  async (artistId: string) => db.image.count({ where: { artistId, needsReview: true } }),
+  ["count-media-needing-review"],
+  { revalidate: 60 }
+);
+
 export async function countMediaNeedingReview(artistId: string): Promise<number> {
-  return db.image.count({ where: { artistId, needsReview: true } });
+  return countMediaNeedingReviewCached(artistId);
 }
 
 const DEFAULT_PAGE_SIZE = 60;
@@ -196,5 +209,3 @@ export async function removeMediaTagPreset(artistId: string, siteId: string, val
   await db.artist.update({ where: { id: artistId }, data: { mediaTags: next } });
   revalidatePath(`/sites/${siteId}/media/settings`);
 }
-
-
