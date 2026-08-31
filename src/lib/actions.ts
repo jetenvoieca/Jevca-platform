@@ -159,6 +159,32 @@ export async function saveArtistLogo(artistId: string, key: string): Promise<voi
   revalidatePath("/");
 }
 
+// 2026-08-31, direct request — the Personal Profile tab's photo, same
+// direct-to-R2 upload flow and same reasoning as saveArtistLogo just
+// above (a business-identity image, not artwork media, so no Image row).
+// Its own action rather than folded into updateArtist for the same
+// reason the logo is: it arrives as an upload key, not a plain form
+// field.
+export async function saveArtistProfileImage(artistId: string, key: string): Promise<void> {
+  await db.artist.update({
+    where: { id: artistId },
+    data: { profileImageUrl: `/api/media/${key}` },
+  });
+  revalidatePath("/");
+}
+
+// Personal Profile tab's "Story" text — its own action rather than
+// folded into updateArtist's big multi-field form, so saving it doesn't
+// require passing every other Owner field through unchanged just to
+// change this one.
+export async function updateArtistStory(artistId: string, story: string): Promise<void> {
+  await db.artist.update({
+    where: { id: artistId },
+    data: { story: story || null },
+  });
+  revalidatePath("/");
+}
+
 // Deliberately its own action, not folded into the autosave updateArtist
 // above — regenerating this immediately breaks any copy of the iPhone
 // Shortcut still configured with the old value, so it needs to be a
@@ -246,4 +272,3 @@ export async function seedSampleData() {
 
   revalidatePath("/");
 }
-
