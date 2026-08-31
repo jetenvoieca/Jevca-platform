@@ -314,16 +314,14 @@ export default function SitesListColumn({
                   <Link
                     href={`/sites/${site.id}`}
                     prefetch={false}
-                    className={`flex items-center justify-between gap-2 px-4 py-2 text-xs ${
-                      active
-                        ? "bg-neutral-900 text-white"
-                        : "text-neutral-800 hover:bg-neutral-50"
+                    className={`flex items-center justify-between gap-2 px-4 py-2 text-xs text-neutral-800 ${
+                      active ? "bg-[#E7E7E7]" : "hover:bg-neutral-50"
                     }`}
                   >
                     <span className="min-w-0 truncate">
                       <span className="font-medium">{site.ownerName}</span>
                       {site.name !== site.ownerName && (
-                        <span className={active ? "text-neutral-300" : "text-neutral-400"}>
+                        <span className="text-neutral-400">
                           {" "}
                           — {site.name}
                         </span>
@@ -331,11 +329,7 @@ export default function SitesListColumn({
                     </span>
                     <span className="flex shrink-0 items-center gap-1.5">
                       {isPinned && (
-                        <span
-                          className={`text-[10px] ${active ? "text-neutral-300" : "text-neutral-400"}`}
-                        >
-                          Recent
-                        </span>
+                        <span className="text-[10px] text-neutral-400">Recent</span>
                       )}
                       {/* 2026-08-18, direct request — added alongside the
                           new "Sort: Payment" option, so sorting by it
@@ -343,22 +337,12 @@ export default function SitesListColumn({
                           silent, unlabelled reshuffle. Shown regardless of
                           which sort is active, same as Archived/Recent. */}
                       {site.paymentMethod && (
-                        <span
-                          className={`text-[10px] ${
-                            active ? "text-neutral-300" : "text-neutral-400"
-                          }`}
-                        >
+                        <span className="text-[10px] text-neutral-400">
                           {site.paymentMethod}
                         </span>
                       )}
                       {site.status === "ARCHIVED" && (
-                        <span
-                          className={`text-[10px] ${
-                            active ? "text-neutral-300" : "text-neutral-400"
-                          }`}
-                        >
-                          Archived
-                        </span>
+                        <span className="text-[10px] text-neutral-400">Archived</span>
                       )}
                     </span>
                   </Link>
