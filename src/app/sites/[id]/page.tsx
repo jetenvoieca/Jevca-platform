@@ -95,6 +95,8 @@ export default async function SiteSettingsPage({
             stripeMode: site.artist.stripeMode,
             stripeSubscriptionCustomerId: site.artist.stripeSubscriptionCustomerId,
             stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
+            profileImageUrl: site.artist.profileImageUrl,
+            story: site.artist.story,
           }}
           subscriptionPayments={payments.map((p) => ({
             id: p.id,
