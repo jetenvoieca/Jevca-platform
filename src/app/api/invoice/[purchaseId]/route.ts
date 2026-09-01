@@ -7,6 +7,16 @@ export async function GET(
 ) {
   const { purchaseId } = await params;
 
+  // Defaults to "attachment" (a real download) — every existing caller
+  // (Download invoice buttons in PurchasePanel, SaleDetailCard,
+  // GalleriesView, etc.) keeps behaving exactly as before. The Invoice
+  // tab in InvoiceEmailModal is the one caller that wants the PDF
+  // rendered inline inside its <iframe> instead of triggering a browser
+  // download the moment it opens — that's the only difference: same PDF,
+  // same generateInvoicePdf call, just a different Content-Disposition
+  // (2026-09-01, Part Three preview fix).
+  const disposition = req.nextUrl.searchParams.get("disposition") === "inline" ? "inline" : "attachment";
+
   try {
     const { bytes, filename } = await generateInvoicePdf(purchaseId);
     // pdf-lib's return type is a Uint8Array<ArrayBufferLike>, which newer
@@ -18,7 +28,7 @@ export async function GET(
     return new Response(new Blob([safeBytes]), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="${filename}"`,
+        "Content-Disposition": `${disposition}; filename="${filename}"`,
       },
     });
   } catch (err) {
