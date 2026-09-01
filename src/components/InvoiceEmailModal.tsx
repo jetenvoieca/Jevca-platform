@@ -20,7 +20,11 @@ type Tab = "invoice" | "email";
 // "Download invoice" uses elsewhere) rather than re-rendering an HTML
 // copy of it — what's previewed here is guaranteed to be exactly what
 // gets attached when the email is sent, with nothing that could drift
-// out of sync between two separate renderers.
+// out of sync between two separate renderers. Uses ?disposition=inline
+// (2026-09-01 fix) so the browser renders the PDF inside this iframe
+// instead of trying to download it — the plain "Download invoice"
+// buttons elsewhere in the app hit the same route without that param,
+// so they still get a real download, unchanged.
 export default function InvoiceEmailModal({
   purchaseId,
   siteId,
@@ -113,7 +117,7 @@ export default function InvoiceEmailModal({
         <div className="flex-1 overflow-y-auto">
           {tab === "invoice" ? (
             <iframe
-              src={`/api/invoice/${purchaseId}`}
+              src={`/api/invoice/${purchaseId}?disposition=inline`}
               title="Invoice preview"
               className="h-[65vh] w-full"
             />
