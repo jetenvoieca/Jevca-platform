@@ -16,9 +16,11 @@ import {
   markGallerySalePaid,
   abandonPurchase,
   deleteGallerySale,
+  createGalleryPaymentLink,
 } from "@/lib/actions/payments";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import InvoiceEmailModal from "@/components/InvoiceEmailModal";
 
 type DetailTab = "details" | "sales";
 
@@ -102,6 +104,15 @@ export default function GalleriesView({
     onConfirm: () => void;
   } | null>(null);
 
+  // ---- Invoice email + Stripe payment link (2026-09-01, Part Three) ----
+  // A separate, small piece of state rather than folding into
+  // pendingWorkConfirm above — this isn't a confirm/cancel dialog, it's
+  // its own multi-tab flow (InvoiceEmailModal), and "payment link"
+  // copy-feedback is its own tiny thing that doesn't belong on either.
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [paymentLinkError, setPaymentLinkError] = useState<string | null>(null);
+  const [linkCopied, setLinkCopied] = useState(false);
+
   const filtered = galleries.filter((g) => {
     if (!q.trim()) return true;
     const needle = q.trim().toLowerCase();
@@ -134,6 +145,7 @@ export default function GalleriesView({
     setSelectedWorkDetail(null);
     setWorkLoading(true);
     setSaleError(null);
+    setPaymentLinkError(null);
     setSaleTotalAmount("");
     setSaleCurrency("GBP");
     // Defaults to this gallery's own default commission — still
@@ -339,6 +351,44 @@ export default function GalleriesView({
     });
   };
 
+  // ---- Invoice email + Payment link actions (2026-09-01, Part Three) ----
+
+  // Refetches this work's detail (to pick up invoiceEmailedAt/To once
+  // sent) and the gallery's own detail (its Sales tab reads from the
+  // same Purchase rows) — same refresh pair used by every other sale
+  // action above, so the two panels never fall out of sync with each
+  // other.
+  const refreshAfterInvoiceOrLinkChange = () => {
+    if (!selectedWorkId || !selectedId) return;
+    getArtworkDetailForClient(selectedWorkId).then((detail) => setSelectedWorkDetail(detail));
+    refreshGalleryDetail(selectedId);
+  };
+
+  const handleGetPaymentLink = () => {
+    if (!selectedWorkDetail?.activePurchase || !selectedWorkId) return;
+    const purchaseId = selectedWorkDetail.activePurchase.id;
+    setPaymentLinkError(null);
+    startWorkTransition(async () => {
+      // createGalleryPaymentLink itself is idempotent — if this sale
+      // already has a link, it just returns the existing one rather than
+      // creating a duplicate, so this is safe to call every time the
+      // button is pressed.
+      const res = await createGalleryPaymentLink(purchaseId, siteId);
+      if (!res.ok) {
+        setPaymentLinkError(res.error);
+        return;
+      }
+      refreshAfterInvoiceOrLinkChange();
+    });
+  };
+
+  const handleCopyPaymentLink = (url: string) => {
+    navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
+    });
+  };
+
   const activeWorkPurchase = selectedWorkDetail?.activePurchase ?? null;
   const saleAmountNum = parseFloat(saleTotalAmount) || 0;
   const saleCommissionNum = parseFloat(saleCommission) || 0;
@@ -476,6 +526,21 @@ export default function GalleriesView({
                             <p className="mt-2 text-xs text-neutral-400">
                               Sold {new Date(activeWorkPurchase.createdAt).toLocaleDateString()}
                             </p>
+                            {/* Part Three (2026-09-01) — a simple sent-log,
+                                not a full send history: shows the most
+                                recent send only. Matches Purchase's
+                                invoiceEmailedAt/invoiceEmailedTo columns,
+                                which are overwritten on each send rather
+                                than accumulating a list. */}
+                            {activeWorkPurchase.invoiceEmailedAt && (
+                              <p className="mt-1 text-xs text-green-600">
+                                Invoice sent{" "}
+                                {new Date(activeWorkPurchase.invoiceEmailedAt).toLocaleDateString()}
+                                {activeWorkPurchase.invoiceEmailedTo
+                                  ? ` to ${activeWorkPurchase.invoiceEmailedTo}`
+                                  : ""}
+                              </p>
+                            )}
                             {saleError && <p className="mt-2 text-xs text-red-600">{saleError}</p>}
                             <div className="mt-3 flex flex-wrap gap-2">
                               <button
@@ -488,12 +553,62 @@ export default function GalleriesView({
                               </button>
                               <button
                                 type="button"
+                                onClick={() => setShowInvoiceModal(true)}
+                                disabled={workPending}
+                                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                              >
+                                {activeWorkPurchase.invoiceEmailedAt ? "Send invoice again" : "Send invoice"}
+                              </button>
+                              <button
+                                type="button"
                                 onClick={() => downloadInvoice(activeWorkPurchase.id)}
                                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
                               >
                                 Download invoice
                               </button>
                             </div>
+
+                            {/* Payment link — persistent, net-owed link,
+                                separate from the full-price links used
+                                for direct Stripe sales elsewhere. */}
+                            <div className="mt-3 border-t border-neutral-100 pt-3">
+                              {activeWorkPurchase.stripePaymentLinkUrl ? (
+                                <div>
+                                  <label className={labelCls}>Payment link</label>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      readOnly
+                                      value={activeWorkPurchase.stripePaymentLinkUrl}
+                                      onFocus={(e) => e.currentTarget.select()}
+                                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        handleCopyPaymentLink(activeWorkPurchase.stripePaymentLinkUrl!)
+                                      }
+                                      className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                                    >
+                                      {linkCopied ? "Copied" : "Copy"}
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={handleGetPaymentLink}
+                                  disabled={workPending}
+                                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                                >
+                                  {workPending ? "Generating…" : "Get payment link"}
+                                </button>
+                              )}
+                              {paymentLinkError && (
+                                <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>
+                              )}
+                            </div>
+
                             <div className="mt-3 border-t border-neutral-100 pt-3">
                               <button
                                 type="button"
@@ -980,6 +1095,15 @@ export default function GalleriesView({
         onConfirm={() => pendingWorkConfirm?.onConfirm()}
         onCancel={() => setPendingWorkConfirm(null)}
       />
+
+      {showInvoiceModal && activeWorkPurchase && (
+        <InvoiceEmailModal
+          purchaseId={activeWorkPurchase.id}
+          siteId={siteId}
+          onClose={() => setShowInvoiceModal(false)}
+          onSent={refreshAfterInvoiceOrLinkChange}
+        />
+      )}
     </div>
   );
 }
