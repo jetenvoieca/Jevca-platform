@@ -569,6 +569,20 @@ model Purchase {
 
   invoiceNumber Int?
 
+  // Persistent Payment Link (not a one-off Checkout Session — see the
+  // note on createGalleryPaymentLink in payments.ts) for the net amount
+  // a gallery owes on this sale. Only ever set for GALLERY-channel
+  // sales (2026-09-01, Part Three).
+  stripePaymentLinkId  String?
+  stripePaymentLinkUrl String?
+
+  // When the invoice for this sale was last actually emailed, and to
+  // which address — set only by sendInvoiceEmail
+  // (lib/actions/invoiceEmail.ts, 2026-09-01, Part Three). Purely a log
+  // for display; re-sending overwrites both rather than keeping history.
+  invoiceEmailedAt DateTime?
+  invoiceEmailedTo String?
+
   totalAmount         Decimal @db.Decimal(10, 2)
   currency            String
   instalmentCount     Int?
