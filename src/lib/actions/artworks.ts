@@ -375,6 +375,10 @@ export async function getArtworkDetailForClient(id: string) {
     source: p.source,
     commissionPercent: p.commissionPercent != null ? p.commissionPercent.toString() : null,
     invoiceNumber: p.invoiceNumber,
+    // Part Three (2026-09-01) — see the matching schema.prisma comments.
+    stripePaymentLinkUrl: p.stripePaymentLinkUrl,
+    invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
+    invoiceEmailedTo: p.invoiceEmailedTo,
     totalAmount: p.totalAmount.toString(),
     currency: p.currency,
     instalmentCount: p.instalmentCount,
