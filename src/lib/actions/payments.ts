@@ -55,6 +55,10 @@ export type PurchaseDetail = {
   source: string | null;
   commissionPercent: string | null;
   invoiceNumber: number | null;
+  // Part Three (2026-09-01) — see the matching schema.prisma comments.
+  stripePaymentLinkUrl: string | null;
+  invoiceEmailedAt: string | null;
+  invoiceEmailedTo: string | null;
   totalAmount: string;
   currency: string;
   instalmentCount: number | null;
@@ -267,6 +271,65 @@ export async function startGallerySale(
   });
 
   return { ok: true, purchaseId: purchase.id };
+}
+
+// A persistent, non-expiring Stripe Payment Link (2026-09-01, Part
+// Three) for the NET amount a gallery owes on this sale (sale price
+// less commission) — deliberately the Payment Links API, not Checkout
+// Sessions (used by createPaymentLink below, for a live Stripe-channel
+// sale): a gallery invoice can sit unpaid for weeks, and a Checkout
+// Session's URL expires within a day or so, whereas a Payment Link is
+// meant to be reusable and doesn't expire. Doesn't require the gallery
+// to have an email on file — Stripe collects one at checkout if needed.
+// Re-uses the same link on every later call rather than creating a new
+// one each time "Payment link" is pressed again, so it's stable to
+// paste into an already-sent email or invoice.
+export async function createGalleryPaymentLink(
+  purchaseId: string,
+  siteId: string
+): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
+  try {
+    const purchase = await db.purchase.findUnique({
+      where: { id: purchaseId },
+      include: { artwork: true },
+      relationLoadStrategy: "query",
+    });
+    if (!purchase) return { ok: false, error: "Sale not found." };
+    if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a gallery sale." };
+
+    if (purchase.stripePaymentLinkUrl) {
+      return { ok: true, url: purchase.stripePaymentLinkUrl };
+    }
+
+    const total = parseFloat(purchase.totalAmount.toString());
+    const commissionPercent = purchase.commissionPercent
+      ? parseFloat(purchase.commissionPercent.toString())
+      : 0;
+    const net = total - total * (commissionPercent / 100);
+
+    const mode = await getStripeModeForArtwork(purchase.artworkId);
+    const stripe = getStripeClient(mode);
+
+    const price = await stripe.prices.create({
+      unit_amount: toMinorUnits(net),
+      currency: purchase.currency.toLowerCase(),
+      product_data: { name: `${purchase.artwork.presentationTitle} — commission owed` },
+    });
+
+    const link = await stripe.paymentLinks.create({
+      line_items: [{ price: price.id, quantity: 1 }],
+      metadata: { purchaseId: purchase.id },
+    });
+
+    await db.purchase.update({
+      where: { id: purchase.id },
+      data: { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
+    });
+
+    return { ok: true, url: link.url };
+  } catch (err) {
+    return { ok: false, error: stripeErrorMessage(err) };
+  }
 }
 
 // ---------- Past sales — backfilling history, already paid ----------
