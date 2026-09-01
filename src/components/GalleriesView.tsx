@@ -28,15 +28,17 @@ const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
 const labelCls = "mb-1 block text-xs text-neutral-500";
 
+// Shared style for the 2x2 sale-action grid (Send invoice / Cancel Sale
+// / Mark as paid / Delete Sale) — solid black buttons throughout, no
+// separate red "danger" treatment for Cancel/Delete, since each of
+// those already opens a ConfirmDialog before anything actually happens
+// (2026-09-01 restyle, matches Craig's mockup).
+const actionButtonCls =
+  "rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50";
+
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-}
-
-// Opens the generated PDF in a new tab/download — same pattern used by
-// PurchasePanel/SaleDetailCard elsewhere in the app.
-function downloadInvoice(purchaseId: string) {
-  window.open(`/api/invoice/${purchaseId}`, "_blank");
 }
 
 // Same "UNPAID" label/styling as the active-gallery-sale badge in
@@ -110,6 +112,7 @@ export default function GalleriesView({
   // its own multi-tab flow (InvoiceEmailModal), and "payment link"
   // copy-feedback is its own tiny thing that doesn't belong on either.
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  const [preparingInvoice, setPreparingInvoice] = useState(false);
   const [paymentLinkError, setPaymentLinkError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -354,14 +357,38 @@ export default function GalleriesView({
   // ---- Invoice email + Payment link actions (2026-09-01, Part Three) ----
 
   // Refetches this work's detail (to pick up invoiceEmailedAt/To once
-  // sent) and the gallery's own detail (its Sales tab reads from the
-  // same Purchase rows) — same refresh pair used by every other sale
-  // action above, so the two panels never fall out of sync with each
-  // other.
+  // sent, or a freshly-generated payment link) and the gallery's own
+  // detail (its Sales tab reads from the same Purchase rows) — same
+  // refresh pair used by every other sale action above, so the two
+  // panels never fall out of sync with each other.
   const refreshAfterInvoiceOrLinkChange = () => {
     if (!selectedWorkId || !selectedId) return;
     getArtworkDetailForClient(selectedWorkId).then((detail) => setSelectedWorkDetail(detail));
     refreshGalleryDetail(selectedId);
+  };
+
+  // Send invoice now auto-generates the payment link first if this sale
+  // doesn't already have one, so the emailed invoice always includes a
+  // way to pay without a separate manual step (2026-09-01). If link
+  // generation fails, the modal still opens rather than blocking the
+  // invoice — the email falls back to its non-link wording, and a link
+  // can always be generated afterwards from the Payment link section.
+  const handleOpenInvoiceModal = () => {
+    if (!selectedWorkDetail?.activePurchase) return;
+    const purchase = selectedWorkDetail.activePurchase;
+    if (purchase.stripePaymentLinkUrl) {
+      setShowInvoiceModal(true);
+      return;
+    }
+    setPaymentLinkError(null);
+    setPreparingInvoice(true);
+    startWorkTransition(async () => {
+      const res = await createGalleryPaymentLink(purchase.id, siteId);
+      if (!res.ok) setPaymentLinkError(res.error);
+      refreshAfterInvoiceOrLinkChange();
+      setPreparingInvoice(false);
+      setShowInvoiceModal(true);
+    });
   };
 
   const handleGetPaymentLink = () => {
@@ -542,35 +569,60 @@ export default function GalleriesView({
                               </p>
                             )}
                             {saleError && <p className="mt-2 text-xs text-red-600">{saleError}</p>}
-                            <div className="mt-3 flex flex-wrap gap-2">
+
+                            {/* 2x2 action grid (2026-09-01 restyle) — all
+                                four sale actions as equal-weight solid
+                                buttons, matching Craig's mockup. Cancel
+                                Sale and Delete Sale keep their existing
+                                ConfirmDialog safety step even though the
+                                red "danger" styling that used to flag them
+                                visually is gone. */}
+                            <div className="mt-3 grid grid-cols-2 gap-2">
+                              <button
+                                type="button"
+                                onClick={handleOpenInvoiceModal}
+                                disabled={workPending}
+                                className={actionButtonCls}
+                              >
+                                {preparingInvoice
+                                  ? "Preparing…"
+                                  : activeWorkPurchase.invoiceEmailedAt
+                                    ? "Send invoice again"
+                                    : "Send invoice"}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={handleCancelWorkSale}
+                                disabled={workPending}
+                                className={actionButtonCls}
+                              >
+                                Cancel Sale
+                              </button>
                               <button
                                 type="button"
                                 onClick={handleMarkWorkPaid}
                                 disabled={workPending}
-                                className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                                className={actionButtonCls}
                               >
                                 Mark as paid
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setShowInvoiceModal(true)}
+                                onClick={handleDeleteWorkSale}
                                 disabled={workPending}
-                                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                                className={actionButtonCls}
                               >
-                                {activeWorkPurchase.invoiceEmailedAt ? "Send invoice again" : "Send invoice"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => downloadInvoice(activeWorkPurchase.id)}
-                                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-                              >
-                                Download invoice
+                                Delete Sale
                               </button>
                             </div>
 
                             {/* Payment link — persistent, net-owed link,
                                 separate from the full-price links used
-                                for direct Stripe sales elsewhere. */}
+                                for direct Stripe sales elsewhere. Now
+                                generated automatically the first time
+                                "Send invoice" is used, but still shown
+                                and copyable here, and still generatable
+                                on its own ahead of sending an invoice. */}
                             <div className="mt-3 border-t border-neutral-100 pt-3">
                               {activeWorkPurchase.stripePaymentLinkUrl ? (
                                 <div>
@@ -607,26 +659,6 @@ export default function GalleriesView({
                               {paymentLinkError && (
                                 <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>
                               )}
-                            </div>
-
-                            <div className="mt-3 border-t border-neutral-100 pt-3">
-                              <button
-                                type="button"
-                                onClick={handleCancelWorkSale}
-                                disabled={workPending}
-                                className="text-sm text-red-600 hover:underline disabled:opacity-50"
-                              >
-                                Cancel sale
-                              </button>
-                              <span className="mx-2 text-neutral-300">·</span>
-                              <button
-                                type="button"
-                                onClick={handleDeleteWorkSale}
-                                disabled={workPending}
-                                className="text-sm text-red-600 hover:underline disabled:opacity-50"
-                              >
-                                Delete
-                              </button>
                             </div>
                           </div>
                         ) : (
