@@ -1,1 +1,792 @@
-$(cat /home/claude/repo/schema.prisma)
+generator client {
+  provider        = "prisma-client"
+  output          = "../src/generated/prisma"
+  previewFeatures = ["relationJoins"]
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum ArtistStatus {
+  ACTIVE
+  PROSPECT
+  ARCHIVED
+}
+
+enum StripeMode {
+  TEST
+  LIVE
+}
+
+enum SiteStatus {
+  DRAFT
+  LIVE
+  PAUSED
+  ARCHIVED
+  ISYT
+}
+
+// PAVILION added 2026-08-30 — a third page template alongside SECTION
+// (fixed byline + artwork grid) and PRIVATE (generic Content Blocks): a
+// freeform canvas of draggable/resizable cards, each one a real linked
+// child Page. See PavilionEditor.tsx / lib/blocks.ts (PavilionContent)
+// for the shape stored in draftBlocks/liveBlocks.
+//
+// PAVILION_VISUAL added 2026-08-30 (same day) — a deliberately separate,
+// parallel experiment with a different, simpler visual approach (no
+// drag/resize, panel closed by default), explicitly kept apart from
+// PAVILION so trying this out can't affect or lose the original. Reuses
+// the same PavilionCard/PavilionContent shape and child-page actions;
+// only the editor UI (PavilionVisualEditor.tsx) differs.
+enum PageType {
+  SECTION
+  PRIVATE
+  PAVILION
+  PAVILION_VISUAL
+}
+
+enum ArtworkAvailability {
+  AVAILABLE
+  RESERVED
+  SOLD
+}
+
+enum ImageStatus {
+  HOPPER
+  SORTED
+  ARCHIVED
+  BUCKET
+}
+
+enum ImageKind {
+  PHOTO
+  VIDEO
+}
+
+enum PurchaseType {
+  FULL
+  INSTALMENTS
+}
+
+enum SaleChannel {
+  STRIPE
+  GALLERY
+}
+
+enum PurchaseStatus {
+  ACTIVE
+  COMPLETED
+  ABANDONED
+}
+
+enum PaymentStatus {
+  DUE
+  PAID
+  FAILED
+}
+
+model Artist {
+  id        String       @id @default(cuid())
+  name      String
+  firstName String?
+  email     String?
+  phone     String?
+  notes     String?
+
+  // Personal Profile tab (2026-08-31) — a portrait photo and free-text
+  // bio shown on the artist's own profile. The photo is picked from the
+  // artist's existing Media Catalogue via MediaPicker (2026-08-31,
+  // direct request — "keep everything in one place" rather than a
+  // separate direct upload), so this is a relation to an existing
+  // Image row, the same pattern as Artwork.mainImageId below, not its
+  // own upload path like `logoUrl` (which deliberately stays outside
+  // the Media Catalogue — see the note there).
+  profileImageId String? @unique
+  story          String?
+
+  hopperToken String @unique @default(cuid())
+  subscriptionAmount Decimal? @db.Decimal(10, 2)
+  paymentMethod      String?
+  // Per-artist, not global — added 2026-08-09 so one artist can go live
+  // on real Stripe charges while every other artist stays on Test,
+  // safely isolated from each other on the same shared Stripe account.
+  // Defaults TEST so nothing changes for any existing artist.
+  stripeMode StripeMode @default(TEST)
+  status    ArtistStatus @default(ACTIVE)
+  createdAt DateTime     @default(now())
+  updatedAt DateTime     @updatedAt
+  sites     Site[]
+  artworks  Artwork[]
+  customers Customer[]
+
+  artworkGroups    String[] @default([])
+  // Deprecated (2026-08-28) — superseded by the real ArtworkType table
+  // below, which adds a per-type Ref value (used to compute Reference
+  // price) that a plain string list has nowhere to hold. Column kept,
+  // not dropped, only because a one-off data migration reads it once to
+  // seed ArtworkType; nothing in the app reads or writes it any more.
+  artworkTypes     String[] @default([])
+  artworkLocations String[] @default([])
+  mediumPresets    String[] @default([])
+  sizePresets      String[] @default([])
+
+  mediaTags String[] @default([])
+
+  saleSources String[] @default([])
+
+  // Editable per artist (2026-08-27), same pattern as the preset lists
+  // above — was a fixed database enum at first, changed once it became
+  // clear it needed to be a Settings-editable list like everything else
+  // here, not something requiring a migration to change.
+  expenseCategories String[] @default(["Materials", "Studio", "Framing", "Insurance", "Equipment", "Shipping", "Professional fees", "Travel", "Marketing", "Other"])
+
+  logoUrl           String?
+  invoiceAddress    String?
+  vatNumber         String?
+  vatRate           Decimal? @db.Decimal(5, 2)
+  invoiceFooterText String?
+  // "EN" or "FR" — deliberately independent of the sale's currency
+  // (2026-08-13): a EUR sale isn't necessarily to a French-speaking
+  // buyer, so this is the artist's own explicit choice, not inferred.
+  invoiceLanguage   String   @default("EN")
+  nextInvoiceNumber Int      @default(1)
+
+  defaultInstalmentCount     Int    @default(5)
+  defaultReleaseMessage      String @default("Available for collection/delivery once 2 payments have been made.")
+  defaultReleaseTriggerCount Int    @default(2)
+
+  // Platform subscription (the artist paying US for their site/hosting) —
+  // deliberately separate from `stripeMode`/StripeCustomer used elsewhere,
+  // which is about THIS artist's own buyers paying THEM. This is a
+  // different Stripe account entirely (2026-08-13 decision), so a
+  // different Customer ID lives here. Linked manually (pasted in once),
+  // not auto-matched by email.
+  stripeSubscriptionCustomerId String? @unique
+  stripeSubscriptionStatus     String?
+
+  images Image[]
+  // Picked via MediaPicker from this same artist's Media Catalogue — see
+  // the note by profileImageId above.
+  profileImage Image? @relation("ArtistProfileImage", fields: [profileImageId], references: [id])
+  videoRenders VideoRender[]
+  subscriptionPayments SubscriptionPayment[]
+  alertEvents AlertEvent[]
+  expenses Expense[]
+  artworkTypeRecords ArtworkType[]
+}
+
+// Replaces the plain-string `Artist.artworkTypes` list (2026-08-28) — a
+// real Type now carries a Ref value (0.5–2.0) used to suggest a
+// Reference price on the Catalogue tab: (Size preset's width × height)
+// × this Ref value. `type` stays free text on Artwork itself, matched by
+// name against this list, same convention already used for Group/
+// Location/Medium — not a hard foreign key, so nothing breaks if a Type
+// is later renamed or removed while artworks still reference the old
+// name.
+model ArtworkType {
+  id       String  @id @default(cuid())
+  artistId String
+  artist   Artist  @relation(fields: [artistId], references: [id])
+
+  name     String
+  refValue Decimal @default(1.00) @db.Decimal(3, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([artistId, name])
+  @@index([artistId])
+}
+
+// One unified ledger of "artist paid us for their subscription" rows,
+// regardless of source — a manual PayPal/DD entry and a Stripe-synced
+// invoice look identical once they land here, so the display grid never
+// needs to know which one it's showing (2026-08-13 decision).
+model SubscriptionPayment {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  source   String   // "STRIPE" | "MANUAL"
+  amount   Decimal  @db.Decimal(10, 2)
+  currency String   @default("GBP")
+  paidAt   DateTime
+
+  // Dedupe key for the Stripe webhook (Phase 2) — never set for manual
+  // rows. Ensures a re-delivered webhook event can't double-count.
+  stripeInvoiceId String? @unique
+
+  note String?
+
+  createdAt DateTime @default(now())
+
+  @@index([artistId])
+}
+
+// Generic "something needs your attention" record (2026-08-13) —
+// deliberately not payments-specific in shape, even though the only two
+// types today are subscription-related, since the stated intent is one
+// dashboard that can grow to cover other kinds of alerts later without a
+// schema rework. `resolvedAt` null = still open; auto-resolved by the
+// webhook handler when the underlying issue clears (e.g. a payment
+// succeeds after a prior failure), or dismissible by hand.
+model AlertEvent {
+  id       String @id @default(cuid())
+  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED"
+  severity String @default("WARNING") // "INFO" | "WARNING" | "CRITICAL"
+  message  String
+
+  artistId String?
+  artist   Artist? @relation(fields: [artistId], references: [id])
+
+  resolvedAt DateTime?
+  createdAt  DateTime  @default(now())
+
+  @@index([artistId])
+  @@index([resolvedAt])
+}
+
+// Scoped to one artist, deliberately — even the same real-world gallery
+// buying from two different artists gets a separate Customer record for
+// each (2026-08-13 decision), since terms and contacts can genuinely
+// differ artist to artist. Cross-artist awareness is handled separately,
+// by matching email addresses live at read time rather than sharing or
+// merging records — see getCustomerDetail in actions/customers.ts.
+model Customer {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  // "INDIVIDUAL" | "GALLERY" (2026-08-14) — kept as a free string, same
+  // convention as Artist.paymentMethod elsewhere, rather than an enum:
+  // this is UI-facing categorisation, not a value with referential
+  // integrity concerns.
+  kind String @default("INDIVIDUAL")
+
+  name    String
+  // Split out 2026-08-14, alongside the CSV import — kept in sync with
+  // `name` (still the single source of truth for display everywhere:
+  // sale records, invoices, the customer list) rather than replacing
+  // it, so nothing existing needs to change. Individual-only in
+  // practice; a Gallery's `name` is the gallery's own name and these
+  // stay null for it. The actual point of splitting them is future
+  // mailshots wanting "Hi Sarah," not "Hi Sarah Jenkins,".
+  firstName String?
+  lastName  String?
+  email   String?
+  phone   String?
+  address String?
+
+  // Gallery-only fields (2026-08-14) — a gallery is dealt with as a
+  // business, but sold to and invoiced through a named person there,
+  // hence separate from the business's own name/email above.
+  contactName  String?
+  contactEmail String?
+  websiteName  String?
+  websiteUrl   String?
+  instagramUrl String?
+  facebookUrl  String?
+  // The gallery's usual cut — a starting point to prefill with when
+  // starting a sale, not binding on any individual sale (each Purchase
+  // keeps its own commissionPercent, which can still be typed/changed
+  // per sale).
+  defaultCommissionPercent Decimal? @db.Decimal(5, 2)
+  // "PROSPECT" | "ACTIVE" (2026-08-14) — gallery relationship pipeline,
+  // simple two-stage per explicit decision. Left null for Individuals
+  // (not applicable); set to "PROSPECT" when a new Gallery contact is
+  // created, moved to "ACTIVE" by hand once actually working together.
+  relationshipStatus String?
+  // "EN" or "FR", or null to fall back to the artist's own default
+  // (Settings → Invoice language). An explicit per-customer override,
+  // not a duplicate of the artist-level setting.
+  language String?
+
+  notes String?
+
+  purchases Purchase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
+  @@index([email])
+}
+
+model Site {
+  id                   String     @id @default(cuid())
+  name                 String
+  domain               String?
+  status               SiteStatus @default(DRAFT)
+  multiLanguageEnabled Boolean    @default(false)
+  salesEnabled         Boolean    @default(false)
+  defaultCurrency      String     @default("GBP")
+  template             String     @default("Default")
+  domainStatus         String?
+  domainRenewalDate    DateTime?
+  artistId             String
+  artist               Artist     @relation(fields: [artistId], references: [id])
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  pages Page[]
+  menus Menu[]
+
+  @@index([artistId])
+}
+
+model Page {
+  id        String   @id @default(cuid())
+  siteId    String
+  site      Site     @relation(fields: [siteId], references: [id])
+  type      PageType
+  title     String
+  slug      String
+  visible   Boolean  @default(true)
+  position  Int      @default(0)
+  // Free-text marker for pages auto-created by another feature rather
+  // than the "+ Add New Page" flow (e.g. "pavilion", 2026-08-30) — used
+  // to keep the main site nav sidebar from being cluttered with every
+  // auto-created child page, while such a page still behaves as a normal
+  // Page everywhere else (Menu Builder's page picker, its own editor).
+  sourceTag String?
+
+  draftBlocks Json  @default("[]")
+  liveBlocks  Json?
+
+  menuItems MenuItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([siteId, slug])
+  @@index([siteId])
+}
+
+model Menu {
+  id       String  @id @default(cuid())
+  siteId   String
+  site     Site    @relation(fields: [siteId], references: [id])
+  name     String
+  isActive Boolean @default(false)
+
+  groups MenuGroup[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteId])
+}
+
+model MenuGroup {
+  id       String @id @default(cuid())
+  menuId   String
+  menu     Menu   @relation(fields: [menuId], references: [id], onDelete: Cascade)
+  name     String
+  position Int    @default(0)
+
+  items MenuItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([menuId])
+}
+
+model MenuItem {
+  id       String    @id @default(cuid())
+  groupId  String
+  group    MenuGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  pageId   String
+  page     Page      @relation(fields: [pageId], references: [id])
+  label    String
+  byline   String?
+  position Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([pageId])
+}
+
+model Artwork {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  catalogueNumber String
+
+  presentationTitle String
+  // Mirrors Catalogue's `offeredPrice` (2026-08-28) — Presentation no
+  // longer has its own independently-typed price; "Price" there is a
+  // read-only display of this same figure, kept in sync from
+  // updateCatalogue every time Offered price is saved. Stays a real
+  // column (not computed on read) since Payment/Sale Terms/invoices
+  // already depend on it — re-plumbing every one of those to read a
+  // different field directly was a bigger, riskier change than just
+  // keeping this in sync underneath.
+  presentationPrice Decimal?            @db.Decimal(10, 2)
+  // Deprecated (2026-08-16) — superseded by `size` (Size and Dimensions
+  // turned out to be the same concept; `size` already holds real
+  // dimension-like values via the artist's own preset list). Column
+  // kept, not dropped, only because older CSV-imported rows may still
+  // have data here — nothing in the app reads or writes it any more.
+  dimensions        String?
+  description       String?
+  medium            String?
+  // Presentation's own, independently-editable Medium wording
+  // (2026-08-28) — seeded once from Catalogue's `medium` the first time
+  // Catalogue's Medium is set, then edited separately from here on,
+  // same "seed once, then independent" pattern already used for Title.
+  presentationMedium String?
+  // "Can be viewed at" (2026-08-28) — e.g. a gallery or platform name,
+  // shown on Presentation only.
+  viewingLocation    String?
+  presentationGroup String?
+  // Flagged in the Artwork Catalogue design doc as "seen in the reference
+  // screenshot but not yet built" — added 2026-08-11 once the CSV import
+  // brought in real Tier data (Collectible/Signature/Statement) that
+  // needed somewhere to live. Free text rather than an enum since this
+  // is Louise Dear's own vocabulary, not necessarily universal to every
+  // future artist.
+  tier              String?
+  availability      ArtworkAvailability @default(AVAILABLE)
+  visible           Boolean             @default(true)
+
+  catalogueName  String
+  year           Int?
+  type           String?
+  catalogueGroup String?
+  size           String?
+  location       String?
+  edition        String?
+  availableQty   Int?
+  // Deprecated (2026-08-15) — Catalogue no longer holds price at all
+  // (moved to Presentation's `presentationPrice`, the Unframed price).
+  // Column kept, not dropped, for the same reason as `dimensions` above.
+  priceUnframed  Decimal? @db.Decimal(10, 2)
+  // Deprecated (2026-08-28) — the Framed/Unframed dual-price mechanic is
+  // gone: each Catalogue entry is a single sellable listing with one
+  // price now (`offeredPrice`). If a piece genuinely exists both framed
+  // and unframed, that's two separate Catalogue entries (via "Create
+  // Derivative"), not two prices on one. Column kept, not dropped, for
+  // the same reason as `priceUnframed`/`dimensions` above.
+  priceFramed    Decimal? @db.Decimal(10, 2)
+  // Manually entered on Catalogue (2026-08-28) — the actual asking
+  // price. Mirrored into `presentationPrice` on every save (see the
+  // note there) so the rest of the app (Payment, invoices, Sale Terms)
+  // keeps working unchanged.
+  offeredPrice   Decimal? @db.Decimal(10, 2)
+  studioNotes    String?
+
+  // True only for artworks created via the Hopper's "Add New Artwork"
+  // button (2026-08-17) — never for the ordinary "+ New" in the Artwork
+  // Catalogue itself, and never for quick-creating an artwork from other
+  // pickers elsewhere (e.g. Related Images), even though those also call
+  // the same underlying quickCreateArtwork(). Cleared the first time
+  // either Catalogue or Presentation is actually saved — see
+  // updateCatalogue/updatePresentation. Powers the "raw import, not yet
+  // reviewed" count shown next to Artwork Catalogue in the nav.
+  needsReview Boolean @default(false)
+
+  images Image[]
+
+  mainImageId String? @unique
+  mainImage   Image?  @relation("ArtworkMainImage", fields: [mainImageId], references: [id])
+
+  saleTerms SaleTerms?
+  purchases Purchase[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([artistId, catalogueNumber])
+  @@index([artistId])
+}
+
+model SaleTerms {
+  id        String  @id @default(cuid())
+  artworkId String  @unique
+  artwork   Artwork @relation(fields: [artworkId], references: [id])
+
+  totalAmount Decimal @db.Decimal(10, 2)
+  currency    String  @default("GBP")
+
+  instalmentCount Int @default(5)
+
+  // No longer typed per-artwork on Presentation (2026-08-28) — every
+  // save of this row now takes the artist's current Settings → Payment
+  // Defaults values fresh, rather than an independently-editable
+  // override, so changing the Settings default reaches every artwork
+  // automatically. Columns kept (not dropped) since Purchase still
+  // snapshots them at sale time, and a specific active sale can still
+  // have its own message edited afterwards (PurchasePanel's "Release
+  // message for this sale" — a different, already-started-sale-specific
+  // feature, left as is).
+  releaseMessage      String?
+  releaseTriggerCount Int?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Purchase {
+  id        String  @id @default(cuid())
+  artworkId String
+  artwork   Artwork @relation(fields: [artworkId], references: [id])
+
+  status PurchaseStatus @default(ACTIVE)
+
+  channel SaleChannel @default(STRIPE)
+
+  buyerName    String?
+  buyerEmail   String?
+  buyerAddress String?
+
+  // Added 2026-08-13, alongside the snapshot fields above rather than
+  // replacing them — buyerName/buyerEmail/buyerAddress stay exactly as
+  // they were captured at the time of sale (so past invoices/receipts
+  // never change), while this link enables "list this customer's sales"
+  // and lets a customer's own language preference override the artist's
+  // default. Nullable so every sale made before Customer records existed
+  // needs no backfill or migration.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  type PurchaseType
+
+  // Deprecated (2026-08-28) — the Framed/Unframed choice at point of
+  // sale is gone, alongside Artwork.priceFramed (see the note there).
+  // Column kept, not dropped, since existing sale history still uses it
+  // for its own "(Framed)" label — never set true for a new sale going
+  // forward.
+  framed Boolean @default(false)
+
+  source String?
+
+  commissionPercent Decimal? @db.Decimal(5, 2)
+
+  invoiceNumber Int?
+
+  // Persistent Payment Link (not a one-off Checkout Session — see the
+  // note on createGalleryPaymentLink in payments.ts) for the net amount
+  // a gallery owes on this sale. Only ever set for GALLERY-channel
+  // sales (2026-09-01, Part Three).
+  stripePaymentLinkId  String?
+  stripePaymentLinkUrl String?
+
+  // When the invoice for this sale was last actually emailed, and to
+  // which address — set only by sendInvoiceEmail
+  // (lib/actions/invoiceEmail.ts, 2026-09-01, Part Three). Purely a log
+  // for display; re-sending overwrites both rather than keeping history.
+  invoiceEmailedAt DateTime?
+  invoiceEmailedTo String?
+
+  totalAmount         Decimal @db.Decimal(10, 2)
+  currency            String
+  instalmentCount     Int?
+  releaseMessage      String?
+  releaseTriggerCount Int?
+
+  stripeCustomerId              String?
+  stripeCheckoutSessionId       String?
+  stripeSubscriptionScheduleId  String?
+  stripeSubscriptionId          String?
+
+  payments Payment[]
+
+  createdAt DateTime  @default(now())
+  closedAt DateTime?
+
+  @@index([artworkId])
+  @@index([customerId])
+}
+
+model Payment {
+  id         String   @id @default(cuid())
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+
+  sequence Int
+  amount   Decimal       @db.Decimal(10, 2)
+  currency String
+  status   PaymentStatus @default(DUE)
+
+  dueDate  DateTime?
+  paidDate DateTime?
+
+  stripePaymentIntentId String?
+  stripeInvoiceId       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([purchaseId])
+}
+
+model Image {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+  key       String
+  url       String
+  // Smaller derived versions of the original, generated at upload time
+  // (2026-08-13 — see decisions log). Only ever set for PHOTO images;
+  // videos keep using posterUrl as before. Nullable because existing
+  // images uploaded before this change need a one-off backfill — until
+  // that runs (or for any image where it fails), every place that reads
+  // these falls back to the original `url`, so nothing breaks in the
+  // meantime, it's just not sped up yet.
+  thumbnailKey String?
+  displayKey   String?
+  posterUrl String?
+  kind      ImageKind   @default(PHOTO)
+  mimeType  String
+  caption   String?
+  // Longer free-text note, separate from Caption — added 2026-09-02
+  // alongside the iPhone Shortcut's "Name and Description" fields (see
+  // hopper-shortcut-design notes). Caption already served as the
+  // Hopper's "Name" (and becomes a new artwork's title on "Add
+  // Artwork"); this is its new companion field, editable from the same
+  // Hopper sorting card and carried into a new artwork's own
+  // `description` the same way Caption is carried into its title.
+  description String?
+  altText   String?
+  tags      String[]    @default([])
+  status    ImageStatus @default(SORTED)
+  source    String?
+  // True only when this image was just routed from the Hopper into the
+  // Media Catalogue (addHopperItemToMedia, 2026-08-17) — not for images
+  // uploaded directly to the Media Catalogue by other means. Cleared the
+  // first time it's actually saved from the Media detail panel — see
+  // updateMedia. Powers the "raw import, not yet reviewed" count shown
+  // next to Media Catalogue in the nav. Deliberately not set when a
+  // Hopper item is instead linked to an artwork (addHopperItemToArtwork)
+  // — that's an existing, already-described artwork gaining one more
+  // image, not a new, undescribed catalogue entry needing review.
+  needsReview Boolean @default(false)
+  artworkId String?
+  artwork   Artwork?    @relation(fields: [artworkId], references: [id])
+
+  mainImageOfArtwork Artwork? @relation("ArtworkMainImage")
+  profileImageOfArtist Artist? @relation("ArtistProfileImage")
+
+  sourceVideoRender VideoRender?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
+  @@index([artworkId])
+}
+
+enum VideoRenderStatus {
+  DRAFT
+  PENDING
+  RENDERING
+  DONE
+  FAILED
+}
+
+// Tracks one video, from first being assembled in the Video Editor through
+// to a finished Shotstack render. See bucket-video-editor-design.md.
+model VideoRender {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  name String?
+
+  status           VideoRenderStatus @default(DRAFT)
+  shotstackRenderId String?
+  renderEnv         String?
+  renderError       String?
+  // The exact JSON submitted to Shotstack for this render, saved every
+  // time regardless of success or failure — a self-contained diagnostic
+  // record so the actual request can be inspected directly in the app
+  // (not chased down in Netlify's function logs) if a render looks wrong.
+  // Temporary/debugging-oriented; not part of the core design.
+  debugPayload      Json?
+  // R2 object keys for the temporary re-encoded photo assets uploaded
+  // for this specific render (see prepareImageAsset in render.ts).
+  // Recorded so they can be deleted once Shotstack has actually fetched
+  // them — they're single-use and otherwise leak in storage forever.
+  // Cleaned up by the webhook once the render reaches DONE or FAILED.
+  tempAssetKeys     String[] @default([])
+
+  timeline Json?
+
+  resultImageId String? @unique
+  resultImage   Image?  @relation(fields: [resultImageId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
+}
+
+// Manual record of what the artist spends — an embryonic accounts
+// feature (2026-08-27 decision), deliberately independent of Pennylane:
+// API-based auto-population from Pennylane's supplier invoices was
+// designed (see e-invoicing-design.md) but is blocked behind a paid
+// Pennylane plan, so this exists as simple manual entry instead, and can
+// be extended rather than replaced if that's ever unblocked.
+//
+// Named `Expense`, not `Purchase` — `Purchase` already means an
+// artwork sale to a buyer elsewhere in this schema; reusing the word
+// here for the opposite direction (money going out, not coming in)
+// would be actively confusing.
+model Expense {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  date        DateTime
+  payeeName   String
+  description String?
+  amount      Decimal @db.Decimal(10, 2)
+  currency    String  @default("GBP")
+  category    String  @default("Other")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
+  @@index([date])
+}
+
+// The platform owner's own business expenses (Namecheap, Netlify, etc.)
+// — deliberately separate from Expense above, which is an artist's own
+// spending. This one isn't tied to any Artist at all; it sits against
+// the platform's own subscription revenue on the Accounts page
+// (2026-08-27 decision).
+model PlatformExpense {
+  id String @id @default(cuid())
+
+  date        DateTime
+  payeeName   String
+  description String?
+  amount      Decimal @db.Decimal(10, 2)
+  currency    String  @default("GBP")
+  category    String  @default("Other")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([date])
+}
+
+// Single-row config table for platform-wide settings — there's no
+// existing "Platform" model to hang this off (everything else is
+// Artist- or Site-scoped), so this exists purely to hold the editable
+// category list for PlatformExpense above, the same way Artist holds
+// expenseCategories for its own. Always read/written via the fixed id
+// "singleton" — see src/lib/actions/platformExpenseSettings.ts.
+model PlatformSettings {
+  id String @id @default("singleton")
+
+  expenseCategories String[] @default(["Hosting", "Domains", "Software & APIs", "Legal & Accounting", "Marketing", "Other"])
+
+  updatedAt DateTime @updatedAt
+}
