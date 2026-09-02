@@ -176,8 +176,7 @@ export default function GalleriesView({
       | "websiteUrl"
       | "instagramUrl"
       | "facebookUrl"
-      | "defaultCommissionPercent"
-      | "relationshipStatus",
+      | "defaultCommissionPercent",
     value: string
   ) => {
     if (!selectedDetail) return;
@@ -187,11 +186,13 @@ export default function GalleriesView({
     fd.set("email", field === "email" ? value : selectedDetail.email || "");
     fd.set("phone", field === "phone" ? value : selectedDetail.phone || "");
     fd.set("address", field === "address" ? value : selectedDetail.address || "");
-    // language, notes and relationshipStatus have no fields in this panel
-    // any more (removed 2026-08-31 — not needed for how Galleries are
-    // actually used), but their stored values still need to be resent
-    // here on every save, otherwise they'd be silently wiped to blank
-    // the next time any other field on this form is edited.
+    // language and notes have no fields in this panel any more (removed
+    // 2026-08-31 — not needed for how Galleries are actually used), but
+    // their stored values still need to be resent here on every save,
+    // otherwise they'd be silently wiped to blank the next time any
+    // other field on this form is edited. (relationshipStatus used to
+    // need the same treatment, for the same reason — removed 2026-09-02
+    // along with the list's Active/Prospect badge, its last reader.)
     fd.set("language", field === "language" ? value : selectedDetail.language || "");
     fd.set("notes", field === "notes" ? value : selectedDetail.notes || "");
     fd.set("contactName", field === "contactName" ? value : selectedDetail.contactName || "");
@@ -203,10 +204,6 @@ export default function GalleriesView({
     fd.set(
       "defaultCommissionPercent",
       field === "defaultCommissionPercent" ? value : selectedDetail.defaultCommissionPercent || ""
-    );
-    fd.set(
-      "relationshipStatus",
-      field === "relationshipStatus" ? value : selectedDetail.relationshipStatus || "PROSPECT"
     );
 
     startTransition(async () => {
@@ -1078,24 +1075,11 @@ export default function GalleriesView({
                     onClick={() => openRow(g.id)}
                     className={`flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm ${
                       selectedId === g.id
-                        ? "bg-neutral-900 text-white"
+                        ? "bg-[#E7E7E7] text-neutral-900"
                         : "text-neutral-800 hover:bg-neutral-50"
                     }`}
                   >
                     <span className="truncate">{g.name}</span>
-                    {g.relationshipStatus && (
-                      <span
-                        className={`shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium ${
-                          selectedId === g.id
-                            ? "bg-white/20 text-white"
-                            : g.relationshipStatus === "ACTIVE"
-                              ? "bg-green-100 text-green-700"
-                              : "bg-amber-100 text-amber-700"
-                        }`}
-                      >
-                        {g.relationshipStatus === "ACTIVE" ? "Active" : "Prospect"}
-                      </span>
-                    )}
                   </button>
                 </li>
               ))}
