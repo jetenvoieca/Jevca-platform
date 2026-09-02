@@ -11,8 +11,8 @@ import { finalizeUpload } from "@/lib/actions/media";
 // caption/description (2026-09-02) — both optional. The Shortcut asks
 // once for "Name" and "Description" before sending a batch, then sends
 // the same two values along with every item's finalize call. Left blank
-// (or omitted) by any older/未-updated copy of the Shortcut — that's the
-// same as before this existed, not an error.
+// (or omitted, by an older copy of the Shortcut) is the same as before
+// this existed, not an error.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   if (!body) {
