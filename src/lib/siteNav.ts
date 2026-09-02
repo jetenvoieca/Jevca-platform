@@ -2,14 +2,24 @@ import type { AppShellNavEntry, AppShellNavItem } from "@/components/SidebarNav"
 import type { ReactNode } from "react";
 import { buildAccountsSection } from "@/lib/topNav";
 
+// Colour for every section that's specific to the site you're currently
+// inside (the site's own name/pages section, Content, Financial) —
+// distinct from the default grey used for Administration/Sites, so it's
+// visually obvious which groups are "always there" versus "belong to
+// this particular site" (2026-09-02, direct request).
+const SITE_SECTION_COLOR = "#635572";
+
 // Which page (within a site) is currently active, for highlighting and
 // for deciding which of the four groups the accordion should open on.
-// "menu" is the Menu Builder page; "pages" is any individual page's own
-// editor (/sites/[id]/pages/[pageId]) — both belong to the Sites
-// section, but only "menu" highlights the Menu link itself (an open
-// page editor highlights that page within the page list instead, which
-// SiteShell already handles locally).
+// "overview" is the site's own settings/summary page (/sites/[id] with
+// nothing more specific); "menu" is the Menu Builder page; "pages" is
+// any individual page's own editor (/sites/[id]/pages/[pageId]) — all
+// three belong to the site's own section, but only "menu" highlights
+// the Menu link itself (an open page editor highlights that page
+// within the page list instead, which SiteShell already handles
+// locally).
 export type SiteNavKey =
+  | "overview"
   | "menu"
   | "pages"
   | "hopper"
@@ -24,7 +34,7 @@ export type SiteNavKey =
   | "purchases"
   | "purchasesSettings";
 
-const SITES_KEYS: SiteNavKey[] = ["menu", "pages"];
+const SITE_INFO_KEYS: SiteNavKey[] = ["overview", "menu", "pages"];
 
 // "galleries" (displayed as "Locations") moved from Financial into
 // Content, 2026-08-31 — it's cataloguing data about where artwork
@@ -44,6 +54,7 @@ const FINANCIAL_KEYS: SiteNavKey[] = ["sales", "customers", "purchases", "purcha
 
 export function buildSiteNavEntries({
   siteId,
+  siteLabel,
   active,
   alertCount,
   hopperCount,
@@ -51,9 +62,14 @@ export function buildSiteNavEntries({
   artworkNeedsReviewCount,
   mediaNeedsReviewCount,
   salesEnabled,
-  sitesSectionBody,
+  siteSectionBody,
 }: {
   siteId: string;
+  // What to label the site's own section with — the site's name, or
+  // (2026-09-02) the artist's name as a fallback for the rare site
+  // with no name of its own. Resolved by the caller (the layout has
+  // both site.name and site.artist.name to hand) rather than here.
+  siteLabel: string;
   active: SiteNavKey | null;
   alertCount: number;
   hopperCount: number;
@@ -61,11 +77,11 @@ export function buildSiteNavEntries({
   artworkNeedsReviewCount: number;
   mediaNeedsReviewCount: number;
   salesEnabled: boolean;
-  // The Sites section needs more than plain links (per-page visibility
-  // toggles, an inline add-page form) — that part is built by the
-  // caller (SiteShell, which holds the client-side state for it) and
-  // passed straight through here.
-  sitesSectionBody: ReactNode;
+  // The site's own section needs more than plain links (per-page
+  // visibility toggles, an inline add-page form) — that part is built
+  // by the caller (SiteShell, which holds the client-side state for
+  // it) and passed straight through here.
+  siteSectionBody: ReactNode;
 }): AppShellNavEntry[] {
   const base = `/sites/${siteId}`;
 
@@ -119,21 +135,28 @@ export function buildSiteNavEntries({
   ];
 
   return [
-    // Same "Accounts" group as the top-level Accounts pages — none of
-    // its own keys apply while inside a site, so it's never the one
-    // that auto-opens here.
+    // Same "Administration" group as the top-level Accounts pages —
+    // none of its own keys apply while inside a site, so it's never
+    // the one that auto-opens here.
     buildAccountsSection(null, alertCount),
+    // Plain link back to the full Sites list (2026-09-02 — this used to
+    // be a section containing the current site's own pages; that's now
+    // its own section below, labelled with the site itself, so this one
+    // only ever does the one job its label says).
+    { label: "Sites", href: "/", active: false },
     {
-      label: "Sites",
+      label: siteLabel,
       section: true,
-      key: "sites",
-      active: active !== null && SITES_KEYS.includes(active),
-      customChildren: sitesSectionBody,
+      key: "site",
+      color: SITE_SECTION_COLOR,
+      active: active !== null && SITE_INFO_KEYS.includes(active),
+      customChildren: siteSectionBody,
     },
     {
       label: "Content",
       section: true,
       key: "content",
+      color: SITE_SECTION_COLOR,
       active: active !== null && CONTENT_KEYS.includes(active),
       children: contentChildren,
     },
@@ -141,6 +164,7 @@ export function buildSiteNavEntries({
       label: "Financial",
       section: true,
       key: "financial",
+      color: SITE_SECTION_COLOR,
       active: active !== null && FINANCIAL_KEYS.includes(active),
       children: financialChildren,
     },
