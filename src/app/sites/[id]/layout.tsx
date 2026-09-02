@@ -75,6 +75,10 @@ export default async function SiteLayout({
       <LastVisitedSiteTracker siteId={id} />
       <SiteShell
         siteId={id}
+        // Falls back to the artist's name for the rare site with no
+        // name of its own (2026-09-02, direct request) — the nav
+        // section needs a label either way.
+        siteLabel={site.name.trim() || site.artist.name}
         pages={pages.map((p) => ({ id: p.id, title: p.title, type: p.type, visible: p.visible }))}
         salesEnabled={site.salesEnabled}
         hopperCount={hopperCount}
