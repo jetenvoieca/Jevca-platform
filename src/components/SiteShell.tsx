@@ -15,7 +15,12 @@ type PageRow = { id: string; title: string; type: string; visible: boolean };
 // own key, the way the top-level Accounts pages do) because this shell
 // is rendered once from the shared site layout, wrapping every page
 // under /sites/[id]/*, rather than being built fresh per page.
-function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
+// Falls back to "overview" (2026-09-02) rather than null for anything
+// that isn't one of the other, more specific routes — in practice
+// that's the site's own bare /sites/[id] settings page, and it's what
+// makes the site's own section open by default the moment you land on
+// a site, instead of every section starting closed.
+function resolveActiveKey(pathname: string, siteId: string): SiteNavKey {
   const base = `/sites/${siteId}`;
   if (pathname === `${base}/artworks/settings`) return "artworkSettings";
   if (pathname.startsWith(`${base}/artworks`)) return "artworks";
@@ -30,11 +35,12 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
   if (pathname.startsWith(`${base}/galleries`)) return "galleries";
   if (pathname.startsWith(`${base}/menus`)) return "menu";
   if (pathname.startsWith(`${base}/pages/`)) return "pages";
-  return null;
+  return "overview";
 }
 
 export default function SiteShell({
   siteId,
+  siteLabel,
   pages,
   salesEnabled,
   hopperCount,
@@ -47,6 +53,10 @@ export default function SiteShell({
   children,
 }: {
   siteId: string;
+  // Label for the site's own nav section — the site's name, with an
+  // artist-name fallback resolved by the (server) layout, which has
+  // both to hand.
+  siteLabel: string;
   pages: PageRow[];
   salesEnabled: boolean;
   hopperCount: number;
@@ -69,17 +79,13 @@ export default function SiteShell({
   const activeKey = resolveActiveKey(pathname, siteId);
   const menuActive = activeKey === "menu";
 
-  const sitesSectionBody = (
+  // No "All Sites" link here any more (2026-09-02) — "Sites" itself,
+  // one level up, now does that job directly (see siteNav.ts), so
+  // having a second way to do the same thing from inside this section
+  // was just redundant.
+  const siteSectionBody = (
     <>
-      <Link
-        href="/"
-        prefetch={false}
-        className="ml-2 rounded-md px-3 py-1.5 text-sm text-neutral-500 hover:bg-neutral-100"
-      >
-        All Sites
-      </Link>
-
-      <div className="ml-2 flex flex-col gap-1 border-l border-neutral-200 py-1 pl-2">
+      <div className="flex flex-col gap-1 border-l border-neutral-200 py-1 pl-2">
         {pages.map((p) => {
           const active = pathname === `/sites/${siteId}/pages/${p.id}`;
           return (
@@ -186,6 +192,7 @@ export default function SiteShell({
 
   const navItems = buildSiteNavEntries({
     siteId,
+    siteLabel,
     active: activeKey,
     alertCount,
     hopperCount,
@@ -193,7 +200,7 @@ export default function SiteShell({
     artworkNeedsReviewCount,
     mediaNeedsReviewCount,
     salesEnabled,
-    sitesSectionBody,
+    siteSectionBody,
   });
 
   return (
