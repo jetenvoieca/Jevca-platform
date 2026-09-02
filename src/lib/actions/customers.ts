@@ -13,8 +13,6 @@ export type CustomerSummary = {
   email: string | null;
   phone: string | null;
   address: string | null;
-  // "PROSPECT" | "ACTIVE" | null — gallery-only, null for Individuals.
-  relationshipStatus: string | null;
 };
 
 export type CustomerDetail = {
@@ -36,7 +34,6 @@ export type CustomerDetail = {
   instagramUrl: string | null;
   facebookUrl: string | null;
   defaultCommissionPercent: string | null;
-  relationshipStatus: string | null;
   language: string | null;
   notes: string | null;
   createdAt: string;
@@ -87,7 +84,6 @@ export async function searchCustomers(
       email: true,
       phone: true,
       address: true,
-      relationshipStatus: true,
     },
     orderBy: { name: "asc" },
     take: 10,
@@ -101,8 +97,8 @@ export async function listCustomers(artistId: string): Promise<
   const rows = await db.customer.findMany({
     // Customers page is Individual-only now (2026-08-14) — Galleries
     // moved to their own page/section since the two are diverging in
-    // what they need (galleries: relationship status, consignment,
-    // socials; individuals: none of that).
+    // what they need (galleries: consignment, socials; individuals:
+    // none of that).
     where: { artistId, kind: "INDIVIDUAL" },
     select: {
       id: true,
@@ -111,7 +107,6 @@ export async function listCustomers(artistId: string): Promise<
       email: true,
       phone: true,
       address: true,
-      relationshipStatus: true,
       _count: { select: { purchases: true } },
     },
     orderBy: { name: "asc" },
@@ -123,7 +118,6 @@ export async function listCustomers(artistId: string): Promise<
     email: r.email,
     phone: r.phone,
     address: r.address,
-    relationshipStatus: r.relationshipStatus,
     saleCount: r._count.purchases,
   }));
 }
@@ -138,7 +132,6 @@ export async function listGalleries(artistId: string): Promise<CustomerSummary[]
       email: true,
       phone: true,
       address: true,
-      relationshipStatus: true,
     },
     orderBy: { name: "asc" },
   });
@@ -201,7 +194,6 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
     defaultCommissionPercent: customer.defaultCommissionPercent
       ? customer.defaultCommissionPercent.toString()
       : null,
-    relationshipStatus: customer.relationshipStatus,
     language: customer.language,
     notes: customer.notes,
     createdAt: customer.createdAt.toISOString(),
@@ -374,9 +366,6 @@ export async function createCustomer(
   const facebookUrl = (formData.get("facebookUrl") as string)?.trim() || null;
   const defaultCommissionRaw = (formData.get("defaultCommissionPercent") as string)?.trim();
   const defaultCommissionPercent = defaultCommissionRaw ? parseFloat(defaultCommissionRaw) : null;
-  // New galleries start life as a Prospect — nothing to approach yet for
-  // an Individual, so left null there (2026-08-14).
-  const relationshipStatus = kind === "GALLERY" ? "PROSPECT" : null;
 
   const created = await db.customer.create({
     data: {
@@ -397,7 +386,6 @@ export async function createCustomer(
       instagramUrl,
       facebookUrl,
       defaultCommissionPercent,
-      relationshipStatus,
     },
   });
   revalidatePath(`/sites`);
@@ -429,11 +417,6 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
   const facebookUrl = (formData.get("facebookUrl") as string)?.trim() || null;
   const defaultCommissionRaw = (formData.get("defaultCommissionPercent") as string)?.trim();
   const defaultCommissionPercent = defaultCommissionRaw ? parseFloat(defaultCommissionRaw) : null;
-  const relationshipStatusRaw = (formData.get("relationshipStatus") as string)?.trim();
-  const relationshipStatus =
-    relationshipStatusRaw === "PROSPECT" || relationshipStatusRaw === "ACTIVE"
-      ? relationshipStatusRaw
-      : null;
 
   await db.customer.update({
     where: { id: customerId },
@@ -454,7 +437,6 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
       instagramUrl,
       facebookUrl,
       defaultCommissionPercent,
-      relationshipStatus,
     },
   });
   revalidatePath(`/sites`);
