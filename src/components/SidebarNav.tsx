@@ -4,6 +4,12 @@ import { useEffect, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+// Default section-header colour — grey, used for Administration/Sites
+// and anywhere else a caller doesn't specify one. The per-site menu
+// (siteNav.ts) overrides this to a distinct purple for the sections
+// that belong to the specific site you're inside, 2026-09-02.
+const DEFAULT_SECTION_COLOR = "#5E5E5E";
+
 export type AppShellNavItem = {
   label: string;
   href: string;
@@ -18,29 +24,29 @@ export type AppShellNavItem = {
   subtle?: boolean;
 };
 
-// A top-level entry can either be a plain link or a section — a black
-// header button (2026-08-28 decision, originally just "Accounts"
-// grouping Alerts/Subscriptions/Expenses/Account/Consolidated Sales)
-// with its own indented children below it. `key` disambiguates sections
-// that might otherwise share a label; it defaults to the label itself,
+// A top-level entry can either be a plain link or a section — a header
+// button (2026-08-28 decision, originally just "Accounts" grouping
+// Alerts/Subscriptions/Expenses/Account/Consolidated Sales) with its
+// own indented children below it. `key` disambiguates sections that
+// might otherwise share a label; it defaults to the label itself,
 // which is fine as long as labels are unique among sections in a given
-// nav.
+// nav. `color` (any CSS colour) defaults to grey — see
+// DEFAULT_SECTION_COLOR above.
 //
-// A plain top-level entry (e.g. "Sites" before a specific site is
-// selected — nothing to expand, it's just a page to go to) renders with
-// the same grey button styling as a section header (2026-08-31 — they
-// looked inconsistent otherwise), it just navigates on click instead of
-// toggling. Only top-level entries get this treatment; the same
-// AppShellNavItem shape used *inside* a section (indented) keeps the
-// plain-link look, since a pill button repeated at every indent level
-// would be far too heavy.
+// A plain top-level entry (e.g. "Sites" — nothing to expand, it's just
+// a page to go to) renders with the same button styling as a section
+// header (2026-08-31 — they looked inconsistent otherwise), it just
+// navigates on click instead of toggling. Only top-level entries get
+// this treatment; the same AppShellNavItem shape used *inside* a
+// section (indented) keeps the plain-link look, since a pill button
+// repeated at every indent level would be far too heavy.
 //
 // A section's body is usually just a flat list of links (`children`),
 // which this component renders and lays out itself. Occasionally a
-// section needs something richer than a link list — e.g. the Sites
-// section's page list, with per-page visibility toggles and an inline
-// "add page" form — for that, a caller supplies pre-built `customChildren`
-// instead, and must also say explicitly whether the section `active`
+// section needs something richer than a link list — e.g. the per-site
+// page list, with per-page visibility toggles and an inline "add page"
+// form — for that, a caller supplies pre-built `customChildren`
+// instead, and must also say explicitly whether the section is `active`
 // (since there are no child `.active` flags for this component to
 // infer it from).
 export type AppShellNavEntry =
@@ -50,6 +56,7 @@ export type AppShellNavEntry =
       section: true;
       key?: string;
       active?: boolean;
+      color?: string;
       children: AppShellNavItem[];
     }
   | {
@@ -57,6 +64,7 @@ export type AppShellNavEntry =
       section: true;
       key?: string;
       active: boolean;
+      color?: string;
       customChildren: ReactNode;
     };
 
@@ -144,9 +152,10 @@ export function NavLink({ item, indented }: { item: AppShellNavItem; indented: b
 }
 
 // A top-level plain link, styled identically to a section header button
-// (same grey pill) so all main-menu entries look consistent whether or
-// not they happen to have children to expand. See the AppShellNavEntry
-// comment above for why this is separate from NavLink.
+// (same pill, same default grey) so all main-menu entries look
+// consistent whether or not they happen to have children to expand.
+// See the AppShellNavEntry comment above for why this is separate from
+// NavLink.
 function TopLevelLink({ item }: { item: AppShellNavItem }) {
   if (item.disabled) {
     return (
@@ -159,7 +168,8 @@ function TopLevelLink({ item }: { item: AppShellNavItem }) {
     <Link
       href={item.href}
       prefetch={false}
-      className="flex w-full items-center justify-between rounded-md bg-[#5E5E5E] px-3 py-1 text-sm font-medium text-white hover:bg-[#525252]"
+      style={{ backgroundColor: DEFAULT_SECTION_COLOR }}
+      className="flex w-full items-center justify-between rounded-md px-3 py-1 text-sm font-medium text-white hover:brightness-90"
     >
       {item.label}
       {!!item.badge && (
@@ -203,7 +213,8 @@ export default function SidebarNav({ entries }: { entries: AppShellNavEntry[] })
                 type="button"
                 onClick={() => setOpenKey(isOpen ? null : key)}
                 aria-expanded={isOpen}
-                className="w-full rounded-md bg-[#5E5E5E] px-3 py-1 text-left text-sm font-medium text-white hover:bg-[#525252]"
+                style={{ backgroundColor: entry.color ?? DEFAULT_SECTION_COLOR }}
+                className="w-full rounded-md px-3 py-1 text-left text-sm font-medium text-white hover:brightness-90"
               >
                 {entry.label}
               </button>
