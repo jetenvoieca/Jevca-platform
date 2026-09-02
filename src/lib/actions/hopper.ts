@@ -62,6 +62,7 @@ export async function listHopperQueue(artistId: string) {
       posterUrl: true,
       kind: true,
       caption: true,
+      description: true,
       altText: true,
       tags: true,
       createdAt: true,
@@ -69,20 +70,21 @@ export async function listHopperQueue(artistId: string) {
   });
 }
 
-// Only caption is editable from the Hopper now (2026-08-17) — Tags and
-// Alt text were both removed from this screen (see the matching note on
-// SortingCard in HopperView.tsx for why), so this no longer touches
-// either field. Previously wrote both on every save regardless of
-// whether the client actually sent a new value, which — once the client
-// stopped sending them — would have silently overwritten whatever was
-// there with empty/null on every caption blur.
-export async function updateHopperCaption(
+// Caption ("Name") and Description are both editable from the Hopper
+// (2026-09-02 — Description added alongside the iPhone Shortcut's own
+// Name/Description prompt, replacing the old caption-only
+// updateHopperCaption). Tags and Alt text stay out of this screen (see
+// the matching note on SortingCard in HopperView.tsx for why) — this
+// still only ever touches these two fields, writing null for either one
+// that's blank rather than an empty string.
+export async function updateHopperFields(
   id: string,
   siteId: string,
   formData: FormData
 ): Promise<void> {
   const caption = (formData.get("caption") as string)?.trim() || null;
-  await db.image.update({ where: { id }, data: { caption } });
+  const description = (formData.get("description") as string)?.trim() || null;
+  await db.image.update({ where: { id }, data: { caption, description } });
 }
 
 // 2026-08-19, direct request — was `status: "ARCHIVED"` (the same
@@ -144,14 +146,18 @@ export async function addHopperItemToArtwork(
 // request). Previously: pressing "Add Artwork" created the Artwork
 // immediately via quickCreateArtwork (a real, live catalogue entry from
 // that click alone), then each inline Catalogue field saved itself
-// separately as it was filled in — two distinct rounds of "entry and
-// commit". Now nothing is written to the database until this single
-// action runs, fired once from "Done, next item": the artwork is created
-// with every field the person filled in, and the Hopper image is linked
-// to it (as its main image) as part of the same action. Cancelling before
-// "Done, next item" needs no cleanup at all, since nothing was ever
-// created — that's the main benefit over the old approach, not just fewer
-// clicks.
+// separately as it was filled in. Now nothing is written to the database
+// until this single action runs, fired once from "Done, next item": the
+// artwork is created with every field the person filled in, and the
+// Hopper image is linked to it (as its main image) as part of the same
+// action. Cancelling before "Done, next item" needs no cleanup at all,
+// since nothing was ever created — that's the main benefit over the old
+// approach, not just fewer clicks.
+//
+// description (2026-09-02) — the Hopper item's own Description carries
+// straight across into the new artwork's Description field, the same
+// way its Caption already carries across as the title. Optional, same
+// as every other quick-catalogue field.
 //
 // needsReview stays true here, same as the old quickCreateArtwork(...,
 // true) call did — filling in these fields is still optional, so a
@@ -164,9 +170,11 @@ export async function createArtworkFromHopperQuick(
   siteId: string,
   artistId: string,
   title: string,
+  description: string,
   formData: FormData
 ): Promise<{ ok: true; artwork: { id: string } } | { ok: false; error: string }> {
   const finalTitle = title.trim() || "Untitled";
+  const finalDescription = description.trim() || null;
 
   const yearRaw = (formData.get("year") as string)?.trim();
   const type = (formData.get("type") as string)?.trim() || null;
@@ -182,6 +190,7 @@ export async function createArtworkFromHopperQuick(
     artwork = await createArtworkWithRetry(artistId, {
       presentationTitle: finalTitle,
       catalogueName: finalTitle,
+      description: finalDescription,
       type,
       catalogueGroup,
       size,
