@@ -11,17 +11,10 @@ import {
   type GalleryDetail,
 } from "@/lib/actions/customers";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
-import {
-  startGallerySale,
-  markGallerySalePaid,
-  abandonPurchase,
-  deleteGallerySale,
-  createGalleryPaymentLink,
-  type PurchaseDetail,
-} from "@/lib/actions/payments";
+import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import InvoiceEmailModal from "@/components/InvoiceEmailModal";
+import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
 
 type DetailTab = "details" | "sales";
 
@@ -29,74 +22,9 @@ const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
 const labelCls = "mb-1 block text-xs text-neutral-500";
 
-// Shared style for the 2x2 sale-action grid (Send invoice / Cancel Sale
-// / Mark as paid / Delete Sale) — solid black buttons throughout, no
-// separate red "danger" treatment for Cancel/Delete, since each of
-// those already opens a ConfirmDialog before anything actually happens
-// (2026-09-01 restyle, matches Craig's mockup).
-const actionButtonCls =
-  "rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50";
-
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-}
-
-// Same "UNPAID" label/styling as the active-gallery-sale badge in
-// PurchasePanel — kept identical on purpose so the word means the same
-// thing everywhere in the app, rather than introducing a second phrase
-// for the same status (2026-08-31).
-function SaleStatusBadge({ status }: { status: "ACTIVE" | "COMPLETED" | "ABANDONED" }) {
-  if (status === "COMPLETED") {
-    return <span className="text-sm text-green-600">Completed</span>;
-  }
-  if (status === "ABANDONED") {
-    return <span className="text-sm text-neutral-400">Abandoned</span>;
-  }
-  return (
-    <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-      UNPAID
-    </span>
-  );
-}
-
-// Net owed after commission — shared by the active-sale card and the
-// completed-sale summary (2026-09-03), so the figure is calculated
-// exactly the same way in both places.
-function netOwed(totalAmount: string, commissionPercent: string | null) {
-  const total = parseFloat(totalAmount);
-  const commission = commissionPercent ? parseFloat(commissionPercent) : 0;
-  return total - total * (commission / 100);
-}
-
-// The "Sale Price £X / Net Sale £Y" row shown at the top of both the
-// active and completed sale cards (2026-09-03 restyle) — pulled into
-// one shared component since the two cards need it to look identical,
-// and it replaces what used to be a single amount plus a separate small
-// "Commission X% — net owed Y" sentence underneath. Always shows both
-// columns rather than only when commissionPercent is set (the previous
-// commission-line's condition) — a sale with no commission on file just
-// shows the same figure twice, which is self-explanatory and keeps the
-// two-column layout consistent rather than sometimes collapsing to one.
-function SalePriceRow({
-  totalAmount,
-  currency,
-  commissionPercent,
-}: {
-  totalAmount: string;
-  currency: string;
-  commissionPercent: string | null;
-}) {
-  return (
-    <div className="mb-2 flex items-baseline justify-between">
-      <p className="text-sm font-medium text-neutral-900">
-        Sale Price {formatMoney(totalAmount, currency)}
-      </p>
-      <p className="text-sm font-medium text-neutral-900">
-        Net Sale {formatMoney(netOwed(totalAmount, commissionPercent).toFixed(2), currency)}
-      </p>
-    </div>
-  );
 }
 
 export default function GalleriesView({
@@ -108,9 +36,9 @@ export default function GalleriesView({
   siteId: string;
   artistId: string;
   galleries: CustomerSummary[];
-  // Offered in the "Mark as paid" Method dropdown (2026-09-03) —
-  // Settings-editable, same list the Payment Methods card on the
-  // Artwork Catalogue's Settings screen manages. See artworkSettings.ts.
+  // Offered in GallerySaleCard's "Mark as paid" Method dropdown
+  // (2026-09-03) — Settings-editable, same list the Payment Methods
+  // card on the Artwork Catalogue's Settings screen manages.
   paymentMethods: string[];
 }) {
   const [q, setQ] = useState("");
@@ -131,9 +59,9 @@ export default function GalleriesView({
   // the Artwork Catalogue itself uses) so this panel can tell whether
   // it already has a sale on it — a blank "Start a sale" form only ever
   // shows for an artwork with no active sale; otherwise its live status
-  // shows instead. Kept as a separate fetch/loading pair from the
-  // gallery's own selectedDetail above, since they're genuinely
-  // different records (Customer vs Artwork).
+  // shows instead (via GallerySaleCard, 2026-09-03). Kept as a separate
+  // fetch/loading pair from the gallery's own selectedDetail above,
+  // since they're genuinely different records (Customer vs Artwork).
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [selectedWorkDetail, setSelectedWorkDetail] = useState<ArtworkDetail | null>(null);
   const [workLoading, setWorkLoading] = useState(false);
@@ -143,42 +71,6 @@ export default function GalleriesView({
   const [saleCurrency, setSaleCurrency] = useState("GBP");
   const [saleCommission, setSaleCommission] = useState("");
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [pendingWorkConfirm, setPendingWorkConfirm] = useState<{
-    title: string;
-    message: string;
-    confirmLabel: string;
-    danger?: boolean;
-    onConfirm: () => void;
-  } | null>(null);
-
-  // ---- Invoice email + Stripe payment link (2026-09-01, Part Three) ----
-  // A separate, small piece of state rather than folding into
-  // pendingWorkConfirm above — this isn't a confirm/cancel dialog, it's
-  // its own multi-tab flow (InvoiceEmailModal), and "payment link"
-  // copy-feedback is its own tiny thing that doesn't belong on either.
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
-  // Which purchase the modal is for (2026-09-03) — no longer always
-  // "whichever purchase is active", since Send invoice can now also be
-  // pressed from the completed-sale summary below, where there is no
-  // active purchase at all.
-  const [invoicePurchaseId, setInvoicePurchaseId] = useState<string | null>(null);
-  // Whether that purchase is already paid (2026-09-03) — passed straight
-  // through to InvoiceEmailModal so it can say "Receipt" instead of
-  // "Invoice" when that's what's actually being sent, matching the PDF
-  // itself (generateInvoicePdf already titles the document that way).
-  const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
-  const [preparingInvoice, setPreparingInvoice] = useState(false);
-  const [paymentLinkError, setPaymentLinkError] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
-
-  // ---- Mark as paid — inline Date paid / Method form (2026-09-03) ----
-  // Replaces the old plain ConfirmDialog for this one action — Cancel
-  // Sale and Delete Sale still use pendingWorkConfirm above, since they
-  // genuinely only need a yes/no; this one needs to actually collect two
-  // values first, so it gets its own small inline form instead.
-  const [showMarkPaidForm, setShowMarkPaidForm] = useState(false);
-  const [paidDate, setPaidDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [paidMethod, setPaidMethod] = useState("");
 
   const filtered = galleries.filter((g) => {
     if (!q.trim()) return true;
@@ -212,9 +104,6 @@ export default function GalleriesView({
     setSelectedWorkDetail(null);
     setWorkLoading(true);
     setSaleError(null);
-    setPaymentLinkError(null);
-    setShowMarkPaidForm(false);
-    setShowInvoiceModal(false);
     setSaleTotalAmount("");
     setSaleCurrency("GBP");
     // Defaults to this gallery's own default commission — still
@@ -225,15 +114,25 @@ export default function GalleriesView({
     getArtworkDetailForClient(workId).then((detail) => {
       setSelectedWorkDetail(detail);
       // Sale price defaults to the artwork's own listed price
-      // (2026-09-03) — it's still fully editable before "Start sale" is
+      // (2026-09-03) — still fully editable before "Start sale" is
       // pressed, this just saves retyping a figure that's almost always
       // the same as what's already on the Catalogue. Only meaningful for
       // the blank "Start a sale" form (no active/completed purchase);
       // harmless to set unconditionally since saleTotalAmount is never
-      // read in the other two branches.
+      // read once a sale already exists.
       setSaleTotalAmount(detail?.presentationPrice || "");
       setWorkLoading(false);
     });
+  };
+
+  // Refetches this work's detail (to pick up any change GallerySaleCard
+  // just made — paid, sent, cancelled, deleted, link generated) and the
+  // gallery's own detail (its Sales tab reads from the same Purchase
+  // rows), so the two panels never fall out of sync with each other.
+  const refreshAfterSaleChange = () => {
+    if (!selectedWorkId || !selectedId) return;
+    getArtworkDetailForClient(selectedWorkId).then((detail) => setSelectedWorkDetail(detail));
+    refreshGalleryDetail(selectedId);
   };
 
   const saveField = (
@@ -323,7 +222,10 @@ export default function GalleriesView({
     });
   };
 
-  // ---- Starting/managing a gallery sale for a consigned work ----
+  // ---- Starting a gallery sale for a consigned work ----
+  // Once a sale exists (active or completed), managing it entirely goes
+  // through GallerySaleCard below — this is only ever reached from the
+  // blank "Start a sale" form, before any Purchase exists yet.
 
   const handleStartSale = () => {
     if (!selectedWorkId || !selectedId) return;
@@ -350,170 +252,19 @@ export default function GalleriesView({
     });
   };
 
-  // Opens the inline Date paid / Method form rather than marking paid
-  // immediately (2026-09-03) — see the showMarkPaidForm state above.
-  const handleMarkPaidClick = () => {
-    setSaleError(null);
-    setPaidDate(new Date().toISOString().slice(0, 10));
-    setPaidMethod(paymentMethods[0] || "");
-    setShowMarkPaidForm(true);
-  };
-
-  const handleConfirmMarkPaid = () => {
-    if (!selectedWorkDetail?.activePurchase || !selectedWorkId || !selectedId) return;
-    const purchaseId = selectedWorkDetail.activePurchase.id;
-    setSaleError(null);
-    const fd = new FormData();
-    fd.set("paidDate", paidDate);
-    fd.set("method", paidMethod);
-    startWorkTransition(async () => {
-      const res = await markGallerySalePaid(purchaseId, siteId, fd);
-      if (!res.ok) {
-        setSaleError(res.error);
-        return;
-      }
-      setShowMarkPaidForm(false);
-      const detail = await getArtworkDetailForClient(selectedWorkId);
-      setSelectedWorkDetail(detail);
-      refreshGalleryDetail(selectedId);
-      router.refresh();
-    });
-  };
-
-  const handleCancelWorkSale = () => {
-    if (!selectedWorkDetail?.activePurchase || !selectedWorkId || !selectedId) return;
-    const purchaseId = selectedWorkDetail.activePurchase.id;
-    setPendingWorkConfirm({
-      title: "Cancel this sale?",
-      message: "It'll be kept in the history, marked as abandoned.",
-      confirmLabel: "Cancel sale",
-      danger: true,
-      onConfirm: () => {
-        setPendingWorkConfirm(null);
-        setSaleError(null);
-        startWorkTransition(async () => {
-          const res = await abandonPurchase(purchaseId, siteId);
-          if (!res.ok) setSaleError(res.error);
-          const detail = await getArtworkDetailForClient(selectedWorkId);
-          setSelectedWorkDetail(detail);
-          refreshGalleryDetail(selectedId);
-          router.refresh();
-        });
-      },
-    });
-  };
-
-  const handleDeleteWorkSale = () => {
-    if (!selectedWorkDetail?.activePurchase || !selectedWorkId || !selectedId) return;
-    const purchaseId = selectedWorkDetail.activePurchase.id;
-    const invoiceNumber = selectedWorkDetail.activePurchase.invoiceNumber;
-    const message = invoiceNumber
-      ? `An invoice (#${invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely.`
-      : "This removes the sale entirely — it cannot be undone.";
-    setPendingWorkConfirm({
-      title: "Delete this sale permanently?",
-      message,
-      confirmLabel: "Delete permanently",
-      danger: true,
-      onConfirm: () => {
-        setPendingWorkConfirm(null);
-        setSaleError(null);
-        startWorkTransition(async () => {
-          const res = await deleteGallerySale(purchaseId, siteId);
-          if (!res.ok) {
-            setSaleError(res.error);
-            return;
-          }
-          const detail = await getArtworkDetailForClient(selectedWorkId);
-          setSelectedWorkDetail(detail);
-          refreshGalleryDetail(selectedId);
-          router.refresh();
-        });
-      },
-    });
-  };
-
-  // ---- Invoice email + Payment link actions (2026-09-01, Part Three) ----
-
-  // Refetches this work's detail (to pick up invoiceEmailedAt/To once
-  // sent, or a freshly-generated payment link) and the gallery's own
-  // detail (its Sales tab reads from the same Purchase rows) — same
-  // refresh pair used by every other sale action above, so the two
-  // panels never fall out of sync with each other.
-  const refreshAfterInvoiceOrLinkChange = () => {
-    if (!selectedWorkId || !selectedId) return;
-    getArtworkDetailForClient(selectedWorkId).then((detail) => setSelectedWorkDetail(detail));
-    refreshGalleryDetail(selectedId);
-  };
-
-  // Send invoice now auto-generates the payment link first if this sale
-  // is still ACTIVE and doesn't already have one, so the emailed invoice
-  // always includes a way to pay without a separate manual step
-  // (2026-09-01). Takes the purchase explicitly (2026-09-03) rather than
-  // always reading activePurchase, since this is now also reachable from
-  // the completed-sale summary below, where there is no active purchase
-  // at all — a completed sale is already paid, so it never needs a
-  // payment link generated first. If link generation fails, the modal
-  // still opens rather than blocking the invoice — the email falls back
-  // to its non-link wording, and a link can always be generated
-  // afterwards from the Payment link section.
-  const handleOpenInvoiceModal = (purchase: PurchaseDetail) => {
-    setInvoicePurchaseId(purchase.id);
-    setInvoiceIsPaid(purchase.status === "COMPLETED");
-    if (purchase.status !== "ACTIVE" || purchase.stripePaymentLinkUrl) {
-      setShowInvoiceModal(true);
-      return;
-    }
-    setPaymentLinkError(null);
-    setPreparingInvoice(true);
-    startWorkTransition(async () => {
-      const res = await createGalleryPaymentLink(purchase.id, siteId);
-      if (!res.ok) setPaymentLinkError(res.error);
-      refreshAfterInvoiceOrLinkChange();
-      setPreparingInvoice(false);
-      setShowInvoiceModal(true);
-    });
-  };
-
-  const handleGetPaymentLink = () => {
-    if (!selectedWorkDetail?.activePurchase || !selectedWorkId) return;
-    const purchaseId = selectedWorkDetail.activePurchase.id;
-    setPaymentLinkError(null);
-    startWorkTransition(async () => {
-      // createGalleryPaymentLink itself is idempotent — if this sale
-      // already has a link, it just returns the existing one rather than
-      // creating a duplicate, so this is safe to call every time the
-      // button is pressed.
-      const res = await createGalleryPaymentLink(purchaseId, siteId);
-      if (!res.ok) {
-        setPaymentLinkError(res.error);
-        return;
-      }
-      refreshAfterInvoiceOrLinkChange();
-    });
-  };
-
-  const handleCopyPaymentLink = (url: string) => {
-    navigator.clipboard.writeText(url).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 1500);
-    });
-  };
-
   const activeWorkPurchase = selectedWorkDetail?.activePurchase ?? null;
   // A sale that's already been marked paid, for the artwork currently
   // open — only looked up when there's no active purchase, since active
-  // always takes priority (2026-09-03). purchaseHistory is already
-  // ordered most-recent-first (same query ordering as activePurchase
-  // itself), so this is genuinely the latest completed gallery sale, not
-  // just any past one — relevant for a piece that's been consigned, sold,
+  // always takes priority. purchaseHistory is already ordered
+  // most-recent-first (same query ordering as activePurchase itself), so
+  // this is genuinely the latest completed gallery sale, not just any
+  // past one — relevant for a piece that's been consigned, sold,
   // returned, and consigned again.
   const completedGallerySale: PurchaseDetail | null = !activeWorkPurchase
     ? (selectedWorkDetail?.purchaseHistory.find(
         (p) => p.channel === "GALLERY" && p.status === "COMPLETED"
       ) ?? null)
     : null;
-  const completedPayment = completedGallerySale?.payments[0] ?? null;
 
   const saleAmountNum = parseFloat(saleTotalAmount) || 0;
   const saleCommissionNum = parseFloat(saleCommission) || 0;
@@ -593,9 +344,8 @@ export default function GalleriesView({
                               className="h-full w-full object-cover"
                             />
                           ) : null}
-                          {/* SOLD ribbon (2026-09-03) — only for a
-                              completed gallery sale, not just an active
-                              (UNPAID) one, matching Craig's mockup. */}
+                          {/* SOLD ribbon — only for a completed gallery
+                              sale, not just an active (UNPAID) one. */}
                           {soldWorkIds.has(w.id) && (
                             <span className="absolute right-1 top-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                               Sold
@@ -649,175 +399,12 @@ export default function GalleriesView({
 
                       {activeWorkPurchase ? (
                         activeWorkPurchase.channel === "GALLERY" ? (
-                          <div>
-                            <SalePriceRow
-                              totalAmount={activeWorkPurchase.totalAmount}
-                              currency={activeWorkPurchase.currency}
-                              commissionPercent={activeWorkPurchase.commissionPercent}
-                            />
-                            <SaleStatusBadge status={activeWorkPurchase.status} />
-                            <p className="mt-2 text-xs text-neutral-400">
-                              Sold {new Date(activeWorkPurchase.createdAt).toLocaleDateString()}
-                            </p>
-                            {/* Part Three (2026-09-01) — a simple sent-log,
-                                not a full send history: shows the most
-                                recent send only. Matches Purchase's
-                                invoiceEmailedAt/invoiceEmailedTo columns,
-                                which are overwritten on each send rather
-                                than accumulating a list. */}
-                            {activeWorkPurchase.invoiceEmailedAt && (
-                              <p className="mt-1 text-xs text-green-600">
-                                Invoice sent{" "}
-                                {new Date(activeWorkPurchase.invoiceEmailedAt).toLocaleDateString()}
-                                {activeWorkPurchase.invoiceEmailedTo
-                                  ? ` to ${activeWorkPurchase.invoiceEmailedTo}`
-                                  : ""}
-                              </p>
-                            )}
-                            {saleError && <p className="mt-2 text-xs text-red-600">{saleError}</p>}
-
-                            {/* 2x2 action grid (2026-09-01 restyle) — all
-                                four sale actions as equal-weight solid
-                                buttons, matching Craig's mockup. Cancel
-                                Sale and Delete Sale keep their existing
-                                ConfirmDialog safety step even though the
-                                red "danger" styling that used to flag them
-                                visually is gone. */}
-                            <div className="mt-3 grid grid-cols-2 gap-2">
-                              <button
-                                type="button"
-                                onClick={() => handleOpenInvoiceModal(activeWorkPurchase)}
-                                disabled={workPending}
-                                className={actionButtonCls}
-                              >
-                                {preparingInvoice
-                                  ? "Preparing…"
-                                  : activeWorkPurchase.invoiceEmailedAt
-                                    ? "Send invoice again"
-                                    : "Send invoice"}
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleCancelWorkSale}
-                                disabled={workPending}
-                                className={actionButtonCls}
-                              >
-                                Cancel Sale
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleMarkPaidClick}
-                                disabled={workPending}
-                                className={actionButtonCls}
-                              >
-                                Mark as paid
-                              </button>
-                              <button
-                                type="button"
-                                onClick={handleDeleteWorkSale}
-                                disabled={workPending}
-                                className={actionButtonCls}
-                              >
-                                Delete Sale
-                              </button>
-                            </div>
-
-                            {/* Inline Date paid / Method form (2026-09-03)
-                                — replaces the old plain confirm dialog for
-                                this one action, so the actual payment
-                                details get captured at the same moment. */}
-                            {showMarkPaidForm && (
-                              <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-neutral-50 p-3">
-                                <div>
-                                  <label className={labelCls}>Date paid</label>
-                                  <input
-                                    type="date"
-                                    value={paidDate}
-                                    onChange={(e) => setPaidDate(e.target.value)}
-                                    className={inputCls}
-                                  />
-                                </div>
-                                <div>
-                                  <label className={labelCls}>Method</label>
-                                  <select
-                                    value={paidMethod}
-                                    onChange={(e) => setPaidMethod(e.target.value)}
-                                    className={inputCls}
-                                  >
-                                    <option value="">Choose…</option>
-                                    {paymentMethods.map((m) => (
-                                      <option key={m} value={m}>
-                                        {m}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </div>
-                                <div className="flex gap-2">
-                                  <button
-                                    type="button"
-                                    onClick={handleConfirmMarkPaid}
-                                    disabled={workPending || !paidMethod}
-                                    className="flex-1 rounded-md bg-neutral-900 px-3 py-2 text-sm font-semibold uppercase tracking-wide text-white hover:bg-neutral-700 disabled:opacity-50"
-                                  >
-                                    Paid
-                                  </button>
-                                  <button
-                                    type="button"
-                                    onClick={() => setShowMarkPaidForm(false)}
-                                    disabled={workPending}
-                                    className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-white disabled:opacity-50"
-                                  >
-                                    Cancel
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {/* Payment link — persistent, net-owed link,
-                                separate from the full-price links used
-                                for direct Stripe sales elsewhere. Now
-                                generated automatically the first time
-                                "Send invoice" is used, but still shown
-                                and copyable here, and still generatable
-                                on its own ahead of sending an invoice. */}
-                            <div className="mt-3 border-t border-neutral-100 pt-3">
-                              {activeWorkPurchase.stripePaymentLinkUrl ? (
-                                <div>
-                                  <label className={labelCls}>Payment link</label>
-                                  <div className="flex gap-2">
-                                    <input
-                                      type="text"
-                                      readOnly
-                                      value={activeWorkPurchase.stripePaymentLinkUrl}
-                                      onFocus={(e) => e.currentTarget.select()}
-                                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600"
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        handleCopyPaymentLink(activeWorkPurchase.stripePaymentLinkUrl!)
-                                      }
-                                      className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                                    >
-                                      {linkCopied ? "Copied" : "Copy"}
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={handleGetPaymentLink}
-                                  disabled={workPending}
-                                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-                                >
-                                  {workPending ? "Generating…" : "Get payment link"}
-                                </button>
-                              )}
-                              {paymentLinkError && (
-                                <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>
-                              )}
-                            </div>
-                          </div>
+                          <GallerySaleCard
+                            purchase={activeWorkPurchase}
+                            siteId={siteId}
+                            paymentMethods={paymentMethods}
+                            onChanged={refreshAfterSaleChange}
+                          />
                         ) : (
                           <p className="text-sm text-neutral-500">
                             This artwork already has an active Stripe sale in progress — manage
@@ -825,51 +412,12 @@ export default function GalleriesView({
                           </p>
                         )
                       ) : completedGallerySale ? (
-                        // A gallery sale already marked paid, for a work
-                        // with no active sale on it right now (2026-09-03
-                        // fix) — previously this fell straight through to
-                        // the blank "Start a sale" form below, which was
-                        // wrong: getArtworkDetailForClient's activePurchase
-                        // only ever holds ACTIVE sales, so a just-completed
-                        // one has nowhere else to show once marked paid.
-                        <div>
-                          <SalePriceRow
-                            totalAmount={completedGallerySale.totalAmount}
-                            currency={completedGallerySale.currency}
-                            commissionPercent={completedGallerySale.commissionPercent}
-                          />
-                          <SaleStatusBadge status="COMPLETED" />
-                          <p className="mt-2 text-xs text-neutral-400">
-                            Sold {new Date(completedGallerySale.createdAt).toLocaleDateString()}
-                          </p>
-                          {completedPayment?.paidDate && (
-                            <p className="mt-1 text-xs text-green-600">
-                              Paid {new Date(completedPayment.paidDate).toLocaleDateString()}
-                              {completedPayment.method ? ` — ${completedPayment.method}` : ""}
-                            </p>
-                          )}
-                          {completedGallerySale.invoiceEmailedAt && (
-                            <p className="mt-1 text-xs text-neutral-400">
-                              Receipt sent{" "}
-                              {new Date(completedGallerySale.invoiceEmailedAt).toLocaleDateString()}
-                              {completedGallerySale.invoiceEmailedTo
-                                ? ` to ${completedGallerySale.invoiceEmailedTo}`
-                                : ""}
-                            </p>
-                          )}
-                          <div className="mt-3">
-                            <button
-                              type="button"
-                              onClick={() => handleOpenInvoiceModal(completedGallerySale)}
-                              disabled={workPending}
-                              className={actionButtonCls}
-                            >
-                              {completedGallerySale.invoiceEmailedAt
-                                ? "Send receipt again"
-                                : "Send receipt"}
-                            </button>
-                          </div>
-                        </div>
+                        <GallerySaleCard
+                          purchase={completedGallerySale}
+                          siteId={siteId}
+                          paymentMethods={paymentMethods}
+                          onChanged={refreshAfterSaleChange}
+                        />
                       ) : (
                         <div>
                           <div className="grid grid-cols-2 gap-2">
@@ -1035,9 +583,9 @@ export default function GalleriesView({
                       ) : (
                         selectedDetail.purchases.map((p) => (
                           // Clicking a row opens that artwork in the
-                          // Consigned Works panel on the left (2026-09-03)
-                          // — same as clicking its thumbnail there, just
-                          // reachable from this table too.
+                          // Consigned Works panel on the left — same as
+                          // clicking its thumbnail there, just reachable
+                          // from this table too.
                           <tr
                             key={p.id}
                             onClick={() => openWork(p.artworkId)}
@@ -1315,26 +863,6 @@ export default function GalleriesView({
         onConfirm={handleDeleteGallery}
         onCancel={() => setConfirmingDelete(false)}
       />
-
-      <ConfirmDialog
-        open={pendingWorkConfirm !== null}
-        title={pendingWorkConfirm?.title ?? ""}
-        message={pendingWorkConfirm?.message ?? ""}
-        confirmLabel={pendingWorkConfirm?.confirmLabel ?? ""}
-        danger={pendingWorkConfirm?.danger}
-        onConfirm={() => pendingWorkConfirm?.onConfirm()}
-        onCancel={() => setPendingWorkConfirm(null)}
-      />
-
-      {showInvoiceModal && invoicePurchaseId && (
-        <InvoiceEmailModal
-          purchaseId={invoicePurchaseId}
-          siteId={siteId}
-          isPaid={invoiceIsPaid}
-          onClose={() => setShowInvoiceModal(false)}
-          onSent={refreshAfterInvoiceOrLinkChange}
-        />
-      )}
     </div>
   );
 }
