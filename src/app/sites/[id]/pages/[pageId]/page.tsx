@@ -16,7 +16,13 @@ export default async function PageEditorPage({
   const { id, pageId } = await params;
 
   const [page, site] = await Promise.all([
-    db.page.findUnique({ where: { id: pageId } }),
+    db.page.findUnique({
+      where: { id: pageId },
+      // backgroundImage included so its url is available to prefill the
+      // editor without a second query — see Page.backgroundImageId in
+      // schema.prisma.
+      include: { backgroundImage: true },
+    }),
     db.site.findUnique({ where: { id }, select: { artistId: true, defaultCurrency: true } }),
   ]);
   if (!page || page.siteId !== id || !site) notFound();
@@ -88,6 +94,9 @@ export default async function PageEditorPage({
       pageId={page.id}
       pageTitle={page.title}
       initialBlocks={blocks}
+      initialBackgroundColor={page.backgroundColor}
+      initialBackgroundImageId={page.backgroundImageId}
+      initialBackgroundImageUrl={page.backgroundImage?.url ?? null}
     />
   );
 }
