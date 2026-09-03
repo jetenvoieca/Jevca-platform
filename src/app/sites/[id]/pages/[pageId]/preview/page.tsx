@@ -12,7 +12,10 @@ export default async function PreviewPage({
 }) {
   const { id, pageId } = await params;
 
-  const page = await db.page.findUnique({ where: { id: pageId } });
+  const page = await db.page.findUnique({
+    where: { id: pageId },
+    include: { backgroundImage: true },
+  });
   if (!page || page.siteId !== id) notFound();
 
   const banner = (
@@ -64,7 +67,15 @@ export default async function PreviewPage({
   }));
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-10">
+    <main
+      className="mx-auto max-w-3xl px-6 py-10"
+      style={{
+        backgroundColor: page.backgroundColor || undefined,
+        backgroundImage: page.backgroundImage?.url ? `url(${page.backgroundImage.url})` : undefined,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+      }}
+    >
       {banner}
       {/* No automatic page-title heading (2026-09-03) — a page only
           shows a heading now if a Header block has deliberately been
