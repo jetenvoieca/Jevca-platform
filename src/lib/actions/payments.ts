@@ -41,6 +41,11 @@ export type PaymentDetail = {
   status: "DUE" | "PAID" | "FAILED";
   dueDate: string | null;
   paidDate: string | null;
+  // Only ever set for a GALLERY-channel sale's payment, chosen from
+  // Artist.paymentMethods at the moment it's marked paid (2026-09-03) —
+  // see markGallerySalePaid below. Null for Stripe-channel payments and
+  // for anything paid before this existed.
+  method: string | null;
 };
 
 export type PurchaseDetail = {
@@ -486,14 +491,34 @@ export async function forceDeleteCompletedSale(
 // The manual equivalent of a Stripe webhook confirming payment — you
 // click this once the gallery has actually paid (e.g. by bank transfer),
 // since nothing in this flow can confirm that automatically.
+//
+// Takes a Date paid and a Method (2026-09-03, matching the inline "Mark
+// as paid" form in GalleriesView) rather than always stamping the exact
+// moment the button is pressed — a gallery often reports payment a few
+// days after it actually landed, and knowing how they paid (bank
+// transfer, cash, etc.) is worth keeping alongside the amount. Method is
+// free-form text from the caller's point of view (validated only by
+// GalleriesView's <select>, sourced from Artist.paymentMethods) rather
+// than a hard enum here, same convention as Customer.kind elsewhere.
 export async function markGallerySalePaid(
   purchaseId: string,
-  siteId: string
+  siteId: string,
+  formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Purchase not found." };
   if (purchase.channel !== "GALLERY") {
     return { ok: false, error: "This isn't a gallery sale." };
+  }
+
+  const paidDateRaw = (formData.get("paidDate") as string)?.trim();
+  const method = (formData.get("method") as string)?.trim() || null;
+
+  let paidDate = new Date();
+  if (paidDateRaw) {
+    const parsed = new Date(paidDateRaw);
+    if (Number.isNaN(parsed.getTime())) return { ok: false, error: "That date isn't valid." };
+    paidDate = parsed;
   }
 
   const total = parseFloat(purchase.totalAmount.toString());
@@ -509,13 +534,14 @@ export async function markGallerySalePaid(
       amount: net,
       currency: purchase.currency,
       status: "PAID",
-      paidDate: new Date(),
+      paidDate,
+      method,
     },
   });
 
   await db.purchase.update({
     where: { id: purchaseId },
-    data: { status: "COMPLETED", closedAt: new Date() },
+    data: { status: "COMPLETED", closedAt: paidDate },
   });
 
   return { ok: true };
