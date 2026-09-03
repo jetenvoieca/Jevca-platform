@@ -392,6 +392,17 @@ model Page {
   // Page everywhere else (Menu Builder's page picker, its own editor).
   sourceTag String?
 
+  // Page-level background styling (2026-09-03) — deliberately real
+  // columns, not folded into draftBlocks/liveBlocks: these are page
+  // settings, not repeatable content, and apply to the page itself
+  // regardless of which draft/live content it currently holds.
+  // backgroundImageId is a plain (non-unique) relation, since the same
+  // image can reasonably be reused as the background on more than one
+  // page — unlike Artist.profileImageId above, which is genuinely 1:1.
+  backgroundColor   String?
+  backgroundImageId String?
+  backgroundImage   Image?  @relation("PageBackgroundImage", fields: [backgroundImageId], references: [id])
+
   draftBlocks Json  @default("[]")
   liveBlocks  Json?
 
@@ -402,6 +413,7 @@ model Page {
 
   @@unique([siteId, slug])
   @@index([siteId])
+  @@index([backgroundImageId])
 }
 
 model Menu {
@@ -726,6 +738,10 @@ model Image {
 
   mainImageOfArtwork Artwork? @relation("ArtworkMainImage")
   profileImageOfArtist Artist? @relation("ArtistProfileImage")
+  // Back-relation for Page.backgroundImageId above — plural, since
+  // (unlike the two 1:1 relations just above) the same Image can be the
+  // background of more than one Page.
+  backgroundOfPages Page[] @relation("PageBackgroundImage")
 
   sourceVideoRender VideoRender?
 
