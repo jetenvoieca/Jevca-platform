@@ -4,13 +4,25 @@ import type { ContentBlock } from "@/lib/blocks";
 
 export default function LiveBlockPreview({
   blocks,
+  backgroundColor,
+  backgroundImageUrl,
 }: {
   blocks: ContentBlock[];
+  backgroundColor?: string | null;
+  backgroundImageUrl?: string | null;
 }) {
   return (
     <div>
       <p className="mb-4 text-xs uppercase tracking-wide text-neutral-400">Live preview</p>
-      <div className="space-y-6">
+      <div
+        className="space-y-6 rounded-md p-4 -m-4"
+        style={{
+          backgroundColor: backgroundColor || undefined,
+          backgroundImage: backgroundImageUrl ? `url(${backgroundImageUrl})` : undefined,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
         {blocks.map((block) => {
           if (block.type === "header") {
             return block.text ? (
