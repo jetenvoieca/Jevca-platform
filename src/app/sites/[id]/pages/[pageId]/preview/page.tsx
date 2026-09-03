@@ -66,7 +66,9 @@ export default async function PreviewPage({
   return (
     <main className="mx-auto max-w-3xl px-6 py-10">
       {banner}
-      <h1 className="mb-6 text-3xl font-semibold text-neutral-900">{page.title}</h1>
+      {/* No automatic page-title heading (2026-09-03) — a page only
+          shows a heading now if a Header block has deliberately been
+          added to it; see the Header block note in lib/blocks.ts. */}
       <BlockRenderer blocks={blocks} artworks={artworksWithMainImage} />
     </main>
   );
