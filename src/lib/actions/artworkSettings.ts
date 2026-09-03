@@ -8,7 +8,8 @@ export type SettingsField =
   | "artworkLocations"
   | "mediumPresets"
   | "sizePresets"
-  | "saleSources";
+  | "saleSources"
+  | "paymentMethods";
 
 // These presets belong to the Artist now (same reasoning as Artwork
 // ownership) — shared across all of that artist's sites, not duplicated
@@ -33,6 +34,7 @@ export async function getArtworkSettings(artistId: string) {
         mediumPresets: true,
         sizePresets: true,
         saleSources: true,
+        paymentMethods: true,
         defaultInstalmentCount: true,
         defaultReleaseMessage: true,
         defaultReleaseTriggerCount: true,
@@ -53,6 +55,7 @@ export async function getArtworkSettings(artistId: string) {
     mediumPresets: artist?.mediumPresets ?? [],
     sizePresets: artist?.sizePresets ?? [],
     saleSources: artist?.saleSources ?? [],
+    paymentMethods: artist?.paymentMethods ?? [],
     defaultInstalmentCount: artist?.defaultInstalmentCount ?? 5,
     defaultReleaseMessage:
       artist?.defaultReleaseMessage ??
@@ -156,9 +159,21 @@ async function updateList(
     case "saleSources":
       await db.artist.update({ where: { id: artistId }, data: { saleSources: next } });
       break;
+    case "paymentMethods":
+      await db.artist.update({ where: { id: artistId }, data: { paymentMethods: next } });
+      break;
   }
   revalidatePath(`/sites/${siteId}/artworks/settings`);
   revalidatePath(`/sites/${siteId}/artworks`);
+  // Payment methods are also offered on the Galleries page's "Mark as
+  // paid" form, not just the Artwork Catalogue's Settings screen
+  // (2026-09-03) — that route is already force-dynamic (see the note in
+  // GalleriesView/payments.ts), so nothing further is needed there, but
+  // revalidating it here keeps this consistent with every other
+  // settings-touching action in this file.
+  if (field === "paymentMethods") {
+    revalidatePath(`/sites/${siteId}/galleries`);
+  }
 }
 
 export async function addSettingOption(
