@@ -113,6 +113,27 @@ export async function saveDraftBlocks(pageId: string, blocks: unknown) {
   return { ok: true };
 }
 
+// Page-level background styling (2026-09-03) — deliberately separate
+// from saveDraftBlocks above: backgroundColor/backgroundImageId are
+// real columns on Page, not part of the draftBlocks/liveBlocks content
+// JSON (see the note on those columns in schema.prisma), so this is its
+// own small action rather than being folded into the blocks payload.
+// Either value can be explicitly set to null to clear it (e.g. removing
+// a background image while leaving the colour as is).
+export async function updatePageBackground(
+  pageId: string,
+  data: { backgroundColor?: string | null; backgroundImageId?: string | null }
+) {
+  await db.page.update({
+    where: { id: pageId },
+    data: {
+      ...(data.backgroundColor !== undefined && { backgroundColor: data.backgroundColor }),
+      ...(data.backgroundImageId !== undefined && { backgroundImageId: data.backgroundImageId }),
+    },
+  });
+  return { ok: true };
+}
+
 export async function publishSite(siteId: string): Promise<void> {
   const pages = await db.page.findMany({ where: { siteId } });
 
