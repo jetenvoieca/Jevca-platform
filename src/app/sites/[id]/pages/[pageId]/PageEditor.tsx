@@ -15,6 +15,278 @@ import ArtworkPicker from "@/components/ArtworkPicker";
 import ThreeColumnShell from "@/components/ThreeColumnShell";
 import LiveBlockPreview from "@/components/LiveBlockPreview";
 import type { ContentBlock } from "@/lib/blocks";
+import { groupBlocksByRow } from "@/lib/blocks";
+
+// The field-editing UI for one block, by type — pulled out to its own
+// function so it can be used identically whether the block is rendered
+// full-width or paired side-by-side in a row (2026-09-03), rather than
+// being duplicated between the two rendering paths below.
+function BlockFields({
+  block,
+  artistId,
+  siteId,
+  updateBlock,
+}: {
+  block: ContentBlock;
+  artistId: string;
+  siteId: string;
+  updateBlock: (id: string, patch: Partial<ContentBlock>) => void;
+}) {
+  if (block.type === "header") {
+    return (
+      <input
+        type="text"
+        value={block.text}
+        onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+        placeholder="Page heading…"
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-lg font-semibold"
+      />
+    );
+  }
+
+  if (block.type === "text") {
+    return (
+      <textarea
+        value={block.text}
+        onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+        rows={4}
+        placeholder="Write something…"
+        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+      />
+    );
+  }
+
+  if (block.type === "image") {
+    return (
+      <div>
+        {block.url && (
+          <img src={block.url} alt="" className="mb-2 max-h-48 rounded-md object-cover" />
+        )}
+        <div className="w-32">
+          <MediaPicker
+            artistId={artistId}
+            siteId={siteId}
+            mode="single"
+            label={block.url ? "Change Image" : "Add Image"}
+            onSelect={(imgs) => updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })}
+          />
+        </div>
+        {block.url && (
+          <input
+            type="text"
+            value={block.caption || ""}
+            onChange={(e) => updateBlock(block.id, { caption: e.target.value })}
+            placeholder="Caption (optional)"
+            className="mt-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm"
+          />
+        )}
+      </div>
+    );
+  }
+
+  if (block.type === "gallery") {
+    return (
+      <div className="grid grid-cols-4 gap-2">
+        {block.images.map((img) => (
+          <div key={img.imageId} className="group relative">
+            <img src={img.url} alt="" className="aspect-square w-full rounded object-cover" />
+            <button
+              type="button"
+              onClick={() =>
+                updateBlock(block.id, {
+                  images: block.images.filter((i) => i.imageId !== img.imageId),
+                })
+              }
+              className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <MediaPicker
+          artistId={artistId}
+          siteId={siteId}
+          mode="multi"
+          label="Add Images"
+          onSelect={(imgs) =>
+            updateBlock(block.id, {
+              images: [
+                ...block.images,
+                ...imgs
+                  .filter((img) => !block.images.some((e) => e.imageId === img.id))
+                  .map((img) => ({ imageId: img.id, url: img.url })),
+              ],
+            })
+          }
+        />
+      </div>
+    );
+  }
+
+  if (block.type === "artwork") {
+    return (
+      <div>
+        {block.previewTitle && (
+          <div className="mb-2 flex items-center gap-3">
+            {block.previewImageUrl ? (
+              <img
+                src={block.previewImageUrl}
+                alt=""
+                className="h-12 w-12 rounded object-cover"
+              />
+            ) : (
+              <div className="h-12 w-12 rounded bg-neutral-200" />
+            )}
+            <span className="text-sm text-neutral-700">{block.previewTitle}</span>
+          </div>
+        )}
+        <div className="w-32">
+          <ArtworkPicker
+            artistId={artistId}
+            mode="single"
+            label={block.previewTitle ? "Change Artwork" : "Add Artwork"}
+            onSelect={(arr) => {
+              const a = arr[0];
+              updateBlock(block.id, {
+                artworkId: a.id,
+                previewTitle: a.presentationTitle,
+                previewImageUrl: a.imageUrl || undefined,
+                previewPrice: a.presentationPrice,
+                previewAvailability: a.availability,
+              });
+            }}
+          />
+        </div>
+        <p className="mt-1 text-xs text-neutral-400">
+          Always shows the artwork&apos;s current title, image, price and status — editing the
+          artwork updates every page it appears on.
+        </p>
+      </div>
+    );
+  }
+
+  if (block.type === "video") {
+    return (
+      <div>
+        {block.url && (
+          <video
+            src={block.url}
+            poster={block.posterUrl}
+            controls
+            className="mb-2 max-h-48 w-full rounded-md"
+          />
+        )}
+        <div className="w-32">
+          <MediaPicker
+            artistId={artistId}
+            siteId={siteId}
+            mode="single"
+            videoOnly
+            label={block.url ? "Change Video" : "Add Video"}
+            onSelect={(vids) =>
+              updateBlock(block.id, {
+                imageId: vids[0].id,
+                url: vids[0].url,
+                posterUrl: vids[0].posterUrl || undefined,
+              })
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === "textgrid") {
+    return (
+      <div>
+        <p className="mb-2 text-xs text-neutral-400">
+          Column headers — e.g. Year / Exhibition / Location
+        </p>
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          {block.columns.map((col, ci) => (
+            <input
+              key={ci}
+              type="text"
+              value={col}
+              onChange={(e) => {
+                const next = [...block.columns] as [string, string, string];
+                next[ci] = e.target.value;
+                updateBlock(block.id, { columns: next });
+              }}
+              className="rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium"
+            />
+          ))}
+        </div>
+
+        <div className="space-y-2">
+          {block.rows.map((row) => (
+            <div key={row.id} className="flex items-center gap-2">
+              <input
+                type="text"
+                value={row.cell1}
+                onChange={(e) =>
+                  updateBlock(block.id, {
+                    rows: block.rows.map((r) =>
+                      r.id === row.id ? { ...r, cell1: e.target.value } : r
+                    ),
+                  })
+                }
+                className="w-1/4 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+              />
+              <input
+                type="text"
+                value={row.cell2}
+                onChange={(e) =>
+                  updateBlock(block.id, {
+                    rows: block.rows.map((r) =>
+                      r.id === row.id ? { ...r, cell2: e.target.value } : r
+                    ),
+                  })
+                }
+                className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+              />
+              <input
+                type="text"
+                value={row.cell3}
+                onChange={(e) =>
+                  updateBlock(block.id, {
+                    rows: block.rows.map((r) =>
+                      r.id === row.id ? { ...r, cell3: e.target.value } : r
+                    ),
+                  })
+                }
+                className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+              />
+              <button
+                type="button"
+                onClick={() =>
+                  updateBlock(block.id, { rows: block.rows.filter((r) => r.id !== row.id) })
+                }
+                className="shrink-0 px-1 text-neutral-400 hover:text-red-600"
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <button
+          type="button"
+          onClick={() =>
+            updateBlock(block.id, {
+              rows: [...block.rows, { id: crypto.randomUUID(), cell1: "", cell2: "", cell3: "" }],
+            })
+          }
+          className="mt-2 rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
+        >
+          + Add Row
+        </button>
+      </div>
+    );
+  }
+
+  return null;
+}
 
 export default function PageEditor({
   siteId,
@@ -53,6 +325,12 @@ export default function PageEditor({
   const [bgSaveState, setBgSaveState] = useState<"idle" | "saving" | "saved">("idle");
   const isBgFirstRun = useRef(true);
   const bgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Side-by-side placement (2026-09-03) — a one-shot toggle: pick
+  // "left"/"right", then the next block you add pairs with the last
+  // block on the page instead of stacking below it. Resets to "none"
+  // straight after that one add, same as a keyboard modifier key.
+  const [placementMode, setPlacementMode] = useState<"none" | "left" | "right">("none");
 
   const handleRenamePage = (value: string) => {
     const trimmed = value.trim();
@@ -119,38 +397,66 @@ export default function PageEditor({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [backgroundColor, backgroundImageId]);
 
-  const addBlock = (type: ContentBlock["type"]) => {
+  const buildBlock = (type: ContentBlock["type"]): ContentBlock => {
     const id = crypto.randomUUID();
-    let newBlock: ContentBlock;
     switch (type) {
       case "header":
-        newBlock = { id, type: "header", text: "" };
-        break;
+        return { id, type: "header", text: "" };
       case "text":
-        newBlock = { id, type: "text", text: "" };
-        break;
+        return { id, type: "text", text: "" };
       case "image":
-        newBlock = { id, type: "image", imageId: "", url: "", caption: "" };
-        break;
+        return { id, type: "image", imageId: "", url: "", caption: "" };
       case "gallery":
-        newBlock = { id, type: "gallery", images: [] };
-        break;
+        return { id, type: "gallery", images: [] };
       case "artwork":
-        newBlock = { id, type: "artwork", artworkId: "" };
-        break;
+        return { id, type: "artwork", artworkId: "" };
       case "video":
-        newBlock = { id, type: "video", imageId: "", url: "" };
-        break;
+        return { id, type: "video", imageId: "", url: "" };
       case "textgrid":
-        newBlock = {
+        return {
           id,
           type: "textgrid",
           columns: ["Year", "Exhibition", "Location"],
           rows: [{ id: crypto.randomUUID(), cell1: "", cell2: "", cell3: "" }],
         };
-        break;
     }
-    setBlocks((prev) => [...prev, newBlock]);
+  };
+
+  // `placement` pairs the new block with the last block on the page
+  // (side by side) instead of appending it full-width below — see
+  // placementMode above. Both blocks in the pair are given/kept the
+  // same `row` id; groupBlocksByRow (lib/blocks.ts) is what actually
+  // turns that into a rendered row everywhere the page is shown.
+  const addBlock = (type: ContentBlock["type"], placement: "none" | "left" | "right" = "none") => {
+    const newBlock = buildBlock(type);
+
+    setBlocks((prev) => {
+      if (placement === "none" || prev.length === 0) {
+        return [...prev, newBlock];
+      }
+
+      const groups = groupBlocksByRow(prev);
+      const lastGroup = groups[groups.length - 1];
+      const rowId = lastGroup[0].row || crypto.randomUUID();
+      const lastGroupIds = new Set(lastGroup.map((b) => b.id));
+
+      const withRowId = prev.map((b) =>
+        lastGroupIds.has(b.id) ? ({ ...b, row: rowId } as ContentBlock) : b
+      );
+      const pairedBlock = { ...newBlock, row: rowId } as ContentBlock;
+
+      const insertAt =
+        placement === "right"
+          ? withRowId.findIndex((b) => b.id === lastGroup[lastGroup.length - 1].id) + 1
+          : withRowId.findIndex((b) => b.id === lastGroup[0].id);
+
+      return [...withRowId.slice(0, insertAt), pairedBlock, ...withRowId.slice(insertAt)];
+    });
+  };
+
+  const handleAddBlockClick = (type: ContentBlock["type"]) => {
+    addBlock(type, placementMode);
+    setPlacementMode("none");
   };
 
   const updateBlock = (id: string, patch: Partial<ContentBlock>) => {
@@ -163,16 +469,22 @@ export default function PageEditor({
     setBlocks((prev) => prev.filter((b) => b.id !== id));
   };
 
-  const moveBlock = (id: string, direction: -1 | 1) => {
+  // Moves a whole row (1 or more blocks) up/down past its neighbouring
+  // row, keeping every row's own blocks contiguous and together.
+  const moveGroup = (groupIndex: number, direction: -1 | 1) => {
     setBlocks((prev) => {
-      const index = prev.findIndex((b) => b.id === id);
-      const newIndex = index + direction;
-      if (newIndex < 0 || newIndex >= prev.length) return prev;
-      const copy = [...prev];
-      [copy[index], copy[newIndex]] = [copy[newIndex], copy[index]];
-      return copy;
+      const groups = groupBlocksByRow(prev);
+      const targetIndex = groupIndex + direction;
+      if (targetIndex < 0 || targetIndex >= groups.length) return prev;
+      const a = Math.min(groupIndex, targetIndex);
+      const before = groups.slice(0, a).flat();
+      const after = groups.slice(a + 2).flat();
+      const [first, second] = [groups[a], groups[a + 1]];
+      return [...before, ...second, ...first, ...after];
     });
   };
+
+  const groups = groupBlocksByRow(blocks);
 
   return (
     <ThreeColumnShell
@@ -184,297 +496,102 @@ export default function PageEditor({
         />
       }
       edit={
-        <div>
-          <div className="space-y-4">
-            {blocks.map((block, i) => (
-              <div key={block.id} className="rounded-lg border border-neutral-200 p-4">
-                <div className="mb-2 flex items-center justify-between">
+        <div className="space-y-4">
+          {groups.map((group, groupIndex) =>
+            group.length > 1 ? (
+              <div key={group[0].id} className="rounded-lg border border-neutral-300 bg-neutral-50 p-3">
+                <div className="mb-3 flex items-center justify-between">
                   <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                    {block.type}
+                    Row · {group.length} blocks side by side
                   </span>
                   <div className="flex items-center gap-2 text-xs text-neutral-400">
                     <button
                       type="button"
-                      onClick={() => moveBlock(block.id, -1)}
-                      disabled={i === 0}
+                      onClick={() => moveGroup(groupIndex, -1)}
+                      disabled={groupIndex === 0}
                       className="hover:text-neutral-900 disabled:opacity-30"
                     >
                       ↑
                     </button>
                     <button
                       type="button"
-                      onClick={() => moveBlock(block.id, 1)}
-                      disabled={i === blocks.length - 1}
+                      onClick={() => moveGroup(groupIndex, 1)}
+                      disabled={groupIndex === groups.length - 1}
+                      className="hover:text-neutral-900 disabled:opacity-30"
+                    >
+                      ↓
+                    </button>
+                  </div>
+                </div>
+                <div
+                  className="grid gap-3"
+                  style={{ gridTemplateColumns: `repeat(${group.length}, minmax(0, 1fr))` }}
+                >
+                  {group.map((block) => (
+                    <div key={block.id} className="rounded-lg border border-neutral-200 bg-white p-3">
+                      <div className="mb-2 flex items-center justify-between">
+                        <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                          {block.type}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeBlock(block.id)}
+                          className="text-xs text-red-500 hover:underline"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                      <BlockFields
+                        block={block}
+                        artistId={artistId}
+                        siteId={siteId}
+                        updateBlock={updateBlock}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div key={group[0].id} className="rounded-lg border border-neutral-200 p-4">
+                <div className="mb-2 flex items-center justify-between">
+                  <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                    {group[0].type}
+                  </span>
+                  <div className="flex items-center gap-2 text-xs text-neutral-400">
+                    <button
+                      type="button"
+                      onClick={() => moveGroup(groupIndex, -1)}
+                      disabled={groupIndex === 0}
+                      className="hover:text-neutral-900 disabled:opacity-30"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveGroup(groupIndex, 1)}
+                      disabled={groupIndex === groups.length - 1}
                       className="hover:text-neutral-900 disabled:opacity-30"
                     >
                       ↓
                     </button>
                     <button
                       type="button"
-                      onClick={() => removeBlock(block.id)}
+                      onClick={() => removeBlock(group[0].id)}
                       className="text-red-500 hover:underline"
                     >
                       Remove
                     </button>
                   </div>
                 </div>
-
-                {block.type === "header" && (
-                  <input
-                    type="text"
-                    value={block.text}
-                    onChange={(e) => updateBlock(block.id, { text: e.target.value })}
-                    placeholder="Page heading…"
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-lg font-semibold"
-                  />
-                )}
-
-                {block.type === "text" && (
-                  <textarea
-                    value={block.text}
-                    onChange={(e) => updateBlock(block.id, { text: e.target.value })}
-                    rows={4}
-                    placeholder="Write something…"
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                )}
-
-                {block.type === "image" && (
-                  <div>
-                    {block.url && (
-                      <img
-                        src={block.url}
-                        alt=""
-                        className="mb-2 max-h-48 rounded-md object-cover"
-                      />
-                    )}
-                    <div className="w-32">
-                      <MediaPicker
-                        artistId={artistId}
-                        siteId={siteId}
-                        mode="single"
-                        label={block.url ? "Change Image" : "Add Image"}
-                        onSelect={(imgs) =>
-                          updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })
-                        }
-                      />
-                    </div>
-                    {block.url && (
-                      <input
-                        type="text"
-                        value={block.caption || ""}
-                        onChange={(e) => updateBlock(block.id, { caption: e.target.value })}
-                        placeholder="Caption (optional)"
-                        className="mt-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm"
-                      />
-                    )}
-                  </div>
-                )}
-
-                {block.type === "gallery" && (
-                  <div className="grid grid-cols-4 gap-2">
-                    {block.images.map((img) => (
-                      <div key={img.imageId} className="group relative">
-                        <img
-                          src={img.url}
-                          alt=""
-                          className="aspect-square w-full rounded object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={() =>
-                            updateBlock(block.id, {
-                              images: block.images.filter((i) => i.imageId !== img.imageId),
-                            })
-                          }
-                          className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                    <MediaPicker
-                      artistId={artistId}
-                      siteId={siteId}
-                      mode="multi"
-                      label="Add Images"
-                      onSelect={(imgs) =>
-                        updateBlock(block.id, {
-                          images: [
-                            ...block.images,
-                            ...imgs
-                              .filter((img) => !block.images.some((e) => e.imageId === img.id))
-                              .map((img) => ({ imageId: img.id, url: img.url })),
-                          ],
-                        })
-                      }
-                    />
-                  </div>
-                )}
-
-                {block.type === "artwork" && (
-                  <div>
-                    {block.previewTitle && (
-                      <div className="mb-2 flex items-center gap-3">
-                        {block.previewImageUrl ? (
-                          <img
-                            src={block.previewImageUrl}
-                            alt=""
-                            className="h-12 w-12 rounded object-cover"
-                          />
-                        ) : (
-                          <div className="h-12 w-12 rounded bg-neutral-200" />
-                        )}
-                        <span className="text-sm text-neutral-700">{block.previewTitle}</span>
-                      </div>
-                    )}
-                    <div className="w-32">
-                      <ArtworkPicker
-                        artistId={artistId}
-                        mode="single"
-                        label={block.previewTitle ? "Change Artwork" : "Add Artwork"}
-                        onSelect={(arr) => {
-                          const a = arr[0];
-                          updateBlock(block.id, {
-                            artworkId: a.id,
-                            previewTitle: a.presentationTitle,
-                            previewImageUrl: a.imageUrl || undefined,
-                            previewPrice: a.presentationPrice,
-                            previewAvailability: a.availability,
-                          });
-                        }}
-                      />
-                    </div>
-                    <p className="mt-1 text-xs text-neutral-400">
-                      Always shows the artwork&apos;s current title, image, price and status —
-                      editing the artwork updates every page it appears on.
-                    </p>
-                  </div>
-                )}
-
-                {block.type === "video" && (
-                  <div>
-                    {block.url && (
-                      <video
-                        src={block.url}
-                        poster={block.posterUrl}
-                        controls
-                        className="mb-2 max-h-48 w-full rounded-md"
-                      />
-                    )}
-                    <div className="w-32">
-                      <MediaPicker
-                        artistId={artistId}
-                        siteId={siteId}
-                        mode="single"
-                        videoOnly
-                        label={block.url ? "Change Video" : "Add Video"}
-                        onSelect={(vids) =>
-                          updateBlock(block.id, {
-                            imageId: vids[0].id,
-                            url: vids[0].url,
-                            posterUrl: vids[0].posterUrl || undefined,
-                          })
-                        }
-                      />
-                    </div>
-                  </div>
-                )}
-
-                {block.type === "textgrid" && (
-                  <div>
-                    <p className="mb-2 text-xs text-neutral-400">
-                      Column headers — e.g. Year / Exhibition / Location
-                    </p>
-                    <div className="mb-3 grid grid-cols-3 gap-2">
-                      {block.columns.map((col, ci) => (
-                        <input
-                          key={ci}
-                          type="text"
-                          value={col}
-                          onChange={(e) => {
-                            const next = [...block.columns] as [string, string, string];
-                            next[ci] = e.target.value;
-                            updateBlock(block.id, { columns: next });
-                          }}
-                          className="rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium"
-                        />
-                      ))}
-                    </div>
-
-                    <div className="space-y-2">
-                      {block.rows.map((row) => (
-                        <div key={row.id} className="flex items-center gap-2">
-                          <input
-                            type="text"
-                            value={row.cell1}
-                            onChange={(e) =>
-                              updateBlock(block.id, {
-                                rows: block.rows.map((r) =>
-                                  r.id === row.id ? { ...r, cell1: e.target.value } : r
-                                ),
-                              })
-                            }
-                            className="w-1/4 rounded-md border border-neutral-300 px-2 py-1 text-sm"
-                          />
-                          <input
-                            type="text"
-                            value={row.cell2}
-                            onChange={(e) =>
-                              updateBlock(block.id, {
-                                rows: block.rows.map((r) =>
-                                  r.id === row.id ? { ...r, cell2: e.target.value } : r
-                                ),
-                              })
-                            }
-                            className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm"
-                          />
-                          <input
-                            type="text"
-                            value={row.cell3}
-                            onChange={(e) =>
-                              updateBlock(block.id, {
-                                rows: block.rows.map((r) =>
-                                  r.id === row.id ? { ...r, cell3: e.target.value } : r
-                                ),
-                              })
-                            }
-                            className="flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm"
-                          />
-                          <button
-                            type="button"
-                            onClick={() =>
-                              updateBlock(block.id, {
-                                rows: block.rows.filter((r) => r.id !== row.id),
-                              })
-                            }
-                            className="shrink-0 px-1 text-neutral-400 hover:text-red-600"
-                          >
-                            ✕
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() =>
-                        updateBlock(block.id, {
-                          rows: [
-                            ...block.rows,
-                            { id: crypto.randomUUID(), cell1: "", cell2: "", cell3: "" },
-                          ],
-                        })
-                      }
-                      className="mt-2 rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
-                    >
-                      + Add Row
-                    </button>
-                  </div>
-                )}
+                <BlockFields
+                  block={group[0]}
+                  artistId={artistId}
+                  siteId={siteId}
+                  updateBlock={updateBlock}
+                />
               </div>
-            ))}
-          </div>
+            )
+          )}
         </div>
       }
       menu={
@@ -530,7 +647,11 @@ export default function PageEditor({
 
             {backgroundImageUrl ? (
               <div className="rounded-md border border-neutral-300 p-2">
-                <img src={backgroundImageUrl} alt="" className="mb-2 h-20 w-full rounded object-cover" />
+                <img
+                  src={backgroundImageUrl}
+                  alt=""
+                  className="mb-2 h-20 w-full rounded object-cover"
+                />
                 <div className="flex items-center justify-between">
                   <div className="w-28">
                     <MediaPicker
@@ -574,48 +695,86 @@ export default function PageEditor({
           </div>
 
           <div>
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-              Add block
-            </p>
+            <div className="mb-2 flex items-center justify-between">
+              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                Add block
+              </p>
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  disabled={blocks.length === 0}
+                  onClick={() =>
+                    setPlacementMode((m) => (m === "left" ? "none" : "left"))
+                  }
+                  className={`rounded-md border px-2 py-1 text-xs disabled:opacity-30 ${
+                    placementMode === "left"
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  To left
+                </button>
+                <button
+                  type="button"
+                  disabled={blocks.length === 0}
+                  onClick={() =>
+                    setPlacementMode((m) => (m === "right" ? "none" : "right"))
+                  }
+                  className={`rounded-md border px-2 py-1 text-xs disabled:opacity-30 ${
+                    placementMode === "right"
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  To Right
+                </button>
+              </div>
+            </div>
+            {placementMode !== "none" && (
+              <p className="mb-2 text-xs text-amber-600">
+                The next block you add will sit to the {placementMode} of the last block,
+                side by side.
+              </p>
+            )}
             <div className="flex flex-col gap-2">
               <button
                 type="button"
-                onClick={() => addBlock("text")}
+                onClick={() => handleAddBlockClick("text")}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
               >
                 + Text
               </button>
               <button
                 type="button"
-                onClick={() => addBlock("image")}
+                onClick={() => handleAddBlockClick("image")}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
               >
                 + Single Image
               </button>
               <button
                 type="button"
-                onClick={() => addBlock("gallery")}
+                onClick={() => handleAddBlockClick("gallery")}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
               >
                 + Gallery
               </button>
               <button
                 type="button"
-                onClick={() => addBlock("artwork")}
+                onClick={() => handleAddBlockClick("artwork")}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
               >
                 + Artwork Feature
               </button>
               <button
                 type="button"
-                onClick={() => addBlock("video")}
+                onClick={() => handleAddBlockClick("video")}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
               >
                 + Video
               </button>
               <button
                 type="button"
-                onClick={() => addBlock("textgrid")}
+                onClick={() => handleAddBlockClick("textgrid")}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
               >
                 + Text Grid
