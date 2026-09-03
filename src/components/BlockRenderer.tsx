@@ -18,6 +18,13 @@ export default function BlockRenderer({
   return (
     <div className="space-y-6">
       {blocks.map((block) => {
+        if (block.type === "header") {
+          return block.text ? (
+            <h1 key={block.id} className="text-3xl font-semibold text-neutral-900">
+              {block.text}
+            </h1>
+          ) : null;
+        }
         if (block.type === "text") {
           return (
             <p key={block.id} className="whitespace-pre-wrap text-neutral-800">
