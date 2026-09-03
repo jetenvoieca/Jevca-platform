@@ -159,6 +159,15 @@ model Artist {
   invoiceLanguage   String   @default("EN")
   nextInvoiceNumber Int      @default(1)
 
+  // The artist's signature image for the Certificate of Authenticity
+  // (2026-09-03) — deliberately its own upload, separate from `logoUrl`
+  // above: for some artists (e.g. Louise Dear) the two happen to be the
+  // same image, but that isn't true for every artist, so this isn't
+  // just a second reference to logoUrl. Same "business asset, not
+  // artwork media" reasoning as logoUrl — uploaded directly, not picked
+  // via MediaPicker from the Media Catalogue.
+  signatureUrl String?
+
   defaultInstalmentCount     Int    @default(5)
   defaultReleaseMessage      String @default("Available for collection/delivery once 2 payments have been made.")
   defaultReleaseTriggerCount Int    @default(2)
@@ -181,6 +190,7 @@ model Artist {
   alertEvents AlertEvent[]
   expenses Expense[]
   artworkTypeRecords ArtworkType[]
+  certificateTemplates CertificateTemplate[]
 }
 
 // Replaces the plain-string `Artist.artworkTypes` list (2026-08-28) — a
@@ -203,6 +213,30 @@ model ArtworkType {
   updatedAt DateTime @updatedAt
 
   @@unique([artistId, name])
+  @@index([artistId])
+}
+
+// Editable Certificate of Authenticity wording (2026-09-03) — one entry
+// per artwork Type-ish category (Original / Unique / Edition, etc.),
+// each with a label matched against Artwork.type (same free-text-match
+// convention as ArtworkType above — not a hard foreign key) and its own
+// certifying text, e.g. "I certify that this work is a unique original
+// Artwork created by myself". Own table rather than a plain string list
+// (like Artist.paymentMethods) since each entry needs two fields, not
+// one — same reasoning as ArtworkType existing as its own table instead
+// of a string list once it needed a second value (refValue) alongside
+// the name.
+model CertificateTemplate {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  label String
+  text  String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   @@index([artistId])
 }
 
@@ -589,6 +623,13 @@ model Purchase {
   // for display; re-sending overwrites both rather than keeping history.
   invoiceEmailedAt DateTime?
   invoiceEmailedTo String?
+
+  // Same simple sent-log, for the Certificate of Authenticity
+  // (2026-09-03) — see the matching invoiceEmailedAt/invoiceEmailedTo
+  // above. Independent of those: a sale can have its invoice/receipt
+  // sent without ever having a certificate requested, or vice versa.
+  certificateEmailedAt DateTime?
+  certificateEmailedTo String?
 
   totalAmount         Decimal @db.Decimal(10, 2)
   currency            String
