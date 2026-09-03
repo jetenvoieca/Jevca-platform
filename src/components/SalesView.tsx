@@ -7,6 +7,7 @@ import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payme
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
+import GallerySaleCard from "@/components/GallerySaleCard";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import type { SaleRow } from "@/lib/actions/sales";
 
@@ -22,11 +23,16 @@ export default function SalesView({
   artistId,
   sales,
   saleSources,
+  paymentMethods,
 }: {
   siteId: string;
   artistId: string;
   sales: SaleRow[];
   saleSources: string[];
+  // Offered in GallerySaleCard's "Mark as paid" Method dropdown
+  // (2026-09-03) — same Settings-editable list as everywhere else it's
+  // used (artworkSettings.ts).
+  paymentMethods: string[];
 }) {
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("ALL");
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
@@ -279,9 +285,30 @@ export default function SalesView({
                   </div>
                 </div>
 
-                {selectedPurchase?.status === "ACTIVE" ? (
-                  // Only an in-progress sale gets the interactive panel —
-                  // take payment, cancel, etc. all still make sense here.
+                {!selectedPurchase ? (
+                  <p className="text-sm text-neutral-400">
+                    This sale couldn&apos;t be found — it may have changed since the list loaded.
+                  </p>
+                ) : selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "ABANDONED" ? (
+                  // The same shared card used on the Galleries page and
+                  // the Artwork Catalogue's Payment tab (2026-09-03) —
+                  // this page used to have its own separate, older
+                  // version (PurchasePanel's old gallery block for an
+                  // ACTIVE sale, SaleDetailCard's generic read-only view
+                  // for a COMPLETED one), which is exactly how it fell
+                  // behind. Covers both ACTIVE and COMPLETED here;
+                  // ABANDONED still falls through to SaleDetailCard
+                  // below, same as it always has everywhere else.
+                  <GallerySaleCard
+                    purchase={selectedPurchase}
+                    siteId={siteId}
+                    paymentMethods={paymentMethods}
+                    onChanged={() => openRow(selectedArtworkId!, selectedPurchaseId!)}
+                  />
+                ) : selectedPurchase.status === "ACTIVE" ? (
+                  // Only an in-progress STRIPE sale gets the interactive
+                  // panel — take payment, cancel, etc. all still make
+                  // sense here.
                   <PurchasePanel
                     artworkId={selectedArtworkId!}
                     artistId={artistId}
@@ -290,11 +317,12 @@ export default function SalesView({
                     activePurchase={selectedDetail.activePurchase}
                     history={selectedDetail.purchaseHistory}
                     saleSources={saleSources}
-                    onChanged={() => openRow(selectedArtworkId!, selectedPurchaseId)}
+                    onChanged={() => openRow(selectedArtworkId!, selectedPurchaseId!)}
                   />
-                ) : selectedPurchase ? (
-                  // Completed or Abandoned — a past transaction, shown
-                  // read-only rather than as an editable form.
+                ) : (
+                  // Completed/Abandoned STRIPE sale, or an Abandoned
+                  // gallery one — a past transaction, shown read-only
+                  // rather than as an editable form.
                   <SaleDetailCard
                     purchase={selectedPurchase}
                     artworkType={selectedDetail.type}
@@ -312,10 +340,6 @@ export default function SalesView({
                         : undefined
                     }
                   />
-                ) : (
-                  <p className="text-sm text-neutral-400">
-                    This sale couldn&apos;t be found — it may have changed since the list loaded.
-                  </p>
                 )}
               </>
             )}
