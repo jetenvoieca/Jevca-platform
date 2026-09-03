@@ -73,6 +73,15 @@ export default async function ArtworkSettingsPage({
           options={settings.saleSources}
           placeholder="e.g. Instagram, Studio visit…"
         />
+        <SettingsListCard
+          artistId={artistId}
+          siteId={id}
+          field="paymentMethods"
+          title="Payment Methods"
+          description="Offered in the Method dropdown when marking a gallery sale as paid."
+          options={settings.paymentMethods}
+          placeholder="e.g. Bank transfer, Cash…"
+        />
       </div>
 
       <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
