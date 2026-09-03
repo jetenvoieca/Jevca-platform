@@ -80,6 +80,9 @@ export default function PageEditor({
     const id = crypto.randomUUID();
     let newBlock: ContentBlock;
     switch (type) {
+      case "header":
+        newBlock = { id, type: "header", text: "" };
+        break;
       case "text":
         newBlock = { id, type: "text", text: "" };
         break;
@@ -130,7 +133,7 @@ export default function PageEditor({
 
   return (
     <ThreeColumnShell
-      preview={<LiveBlockPreview blocks={blocks} pageTitle={pageTitle} />}
+      preview={<LiveBlockPreview blocks={blocks} />}
       edit={
         <div>
           <div className="space-y-4">
@@ -166,6 +169,16 @@ export default function PageEditor({
                     </button>
                   </div>
                 </div>
+
+                {block.type === "header" && (
+                  <input
+                    type="text"
+                    value={block.text}
+                    onChange={(e) => updateBlock(block.id, { text: e.target.value })}
+                    placeholder="Page heading…"
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-lg font-semibold"
+                  />
+                )}
 
                 {block.type === "text" && (
                   <textarea
@@ -425,6 +438,22 @@ export default function PageEditor({
               className="w-full rounded-md border border-transparent px-1 py-0.5 -mx-1 text-lg font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
             />
             {titleSaved && <p className="mt-1 text-xs text-green-600">Saved</p>}
+          </div>
+
+          {/* Page-level controls, separate from the repeatable content
+              blocks below — Add Header is still just a block (reuses
+              the same addBlock/updateBlock/moveBlock machinery as every
+              other block type), just surfaced here since it's the
+              thing most pages want first, now that no heading appears
+              automatically. */}
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => addBlock("header")}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
+            >
+              + Add Header
+            </button>
           </div>
 
           <div>
