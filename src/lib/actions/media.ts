@@ -44,6 +44,12 @@ export async function requestUploadUrl(
 // source) so every existing caller — MediaPicker, uploadDirect.ts — is
 // unaffected. The Hopper route is the only caller that passes
 // status: "HOPPER" and source: "iPhone Shortcut".
+//
+// caption/description (2026-09-02) — optional, both start null for every
+// existing caller. The Hopper route is currently the only caller that can
+// pass them, carrying across whatever "Name"/"Description" text the
+// iPhone Shortcut asked for before sending. Both stay freely editable
+// afterwards from the Hopper sorting card either way.
 export async function finalizeUpload(
   artistId: string,
   key: string,
@@ -51,7 +57,9 @@ export async function finalizeUpload(
   kind: "PHOTO" | "VIDEO",
   posterUrl?: string,
   status: "SORTED" | "HOPPER" = "SORTED",
-  source?: string
+  source?: string,
+  caption?: string,
+  description?: string
 ) {
   // Generate the smaller display/thumbnail versions now, once, rather than
   // making every future page view pay the cost of loading the full-size
@@ -97,6 +105,8 @@ export async function finalizeUpload(
       mimeType: contentType,
       status,
       source: source || null,
+      caption: caption || null,
+      description: description || null,
     },
   });
   return {

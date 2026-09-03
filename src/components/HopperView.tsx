@@ -8,7 +8,7 @@ import {
   addHopperItemToMedia,
   addHopperItemToArtwork,
   addHopperItemToBucket,
-  updateHopperCaption,
+  updateHopperFields,
   createArtworkFromHopperQuick,
 } from "@/lib/actions/hopper";
 import { uploadFileDirect } from "@/lib/uploadDirect";
@@ -23,6 +23,7 @@ export type HopperItem = {
   posterUrl: string | null;
   kind: string;
   caption: string | null;
+  description: string | null;
   altText: string | null;
   tags: string[];
   createdAt: string;
@@ -270,16 +271,24 @@ export default function HopperView({
   // was pressed, then saved each Catalogue field separately as it was
   // filled in afterwards). Nothing is written to the database until this
   // runs, fired once from SortingCard's "Done, next item" — the artwork
-  // (with title + whatever Catalogue fields were filled in), the image
-  // link, and setting it as the main image all happen together in
-  // createArtworkFromHopperQuick. Only then does the queue auto-advance,
-  // same rhythm as every other action on this screen.
+  // (with title + description + whatever Catalogue fields were filled
+  // in), the image link, and setting it as the main image all happen
+  // together in createArtworkFromHopperQuick. Only then does the queue
+  // auto-advance, same rhythm as every other action on this screen.
   const handleAddNewArtwork = async (
     item: HopperItem,
     title: string,
+    description: string,
     fields: FormData
   ): Promise<boolean> => {
-    const result = await createArtworkFromHopperQuick(item.id, siteId, artistId, title, fields);
+    const result = await createArtworkFromHopperQuick(
+      item.id,
+      siteId,
+      artistId,
+      title,
+      description,
+      fields
+    );
     if (!result.ok) {
       setAddError(result.error);
       return false;
@@ -654,7 +663,9 @@ export default function HopperView({
                 onAddToExistingArtwork={(artworkId, artworkTitle) =>
                   handleAddToExistingArtwork(current, artworkId, artworkTitle)
                 }
-                onAddNewArtwork={(title, fields) => handleAddNewArtwork(current, title, fields)}
+                onAddNewArtwork={(title, description, fields) =>
+                  handleAddNewArtwork(current, title, description, fields)
+                }
               />
             )}
           </div>
@@ -778,13 +789,15 @@ function SortingCard({
   // from "Add Artwork" any more (2026-08-18). Returns whether it
   // succeeded so this card knows whether to keep the form open (on
   // failure, so nothing typed is lost) or let the parent's advance take
-  // over (on success).
-  onAddNewArtwork: (title: string, fields: FormData) => Promise<boolean>;
+  // over (on success). description (2026-09-02) travels alongside title,
+  // same "carried straight into the new artwork" treatment.
+  onAddNewArtwork: (title: string, description: string, fields: FormData) => Promise<boolean>;
 }) {
   // Local state, reset automatically each time this card remounts (the
-  // parent keys it by item.id) — no stale-caption bug when moving
-  // between queue items.
+  // parent keys it by item.id) — no stale-caption/description bug when
+  // moving between queue items.
   const [caption, setCaption] = useState(item.caption || "");
+  const [description, setDescription] = useState(item.description || "");
   // Whether the inline "quick catalogue" form is open. Nothing is created
   // in the database just by opening it (2026-08-18) — closing it again,
   // whether via Cancel or by picking a different action button entirely,
@@ -797,9 +810,10 @@ function SortingCard({
   const saveFields = () => {
     const fd = new FormData();
     fd.set("caption", caption);
+    fd.set("description", description);
     // Fire-and-forget — this is a background autosave, not the action
     // that advances the queue, so it doesn't need its own pending state.
-    updateHopperCaption(item.id, siteId, fd);
+    updateHopperFields(item.id, siteId, fd);
   };
 
   return (
@@ -825,12 +839,22 @@ function SortingCard({
 
       <div className="mb-4 space-y-3">
         <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
           <input
             type="text"
             value={caption}
             onChange={(e) => setCaption(e.target.value)}
             onBlur={() => saveFields()}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">Description</label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            onBlur={() => saveFields()}
+            rows={3}
             className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
         </div>
@@ -892,8 +916,9 @@ function SortingCard({
       </div>
       {!showQuickForm && (
         <p className="mt-2 text-xs text-neutral-400">
-          &quot;Add Artwork&quot; uses the caption above as its title (or &quot;Untitled&quot;
-          if blank), and this image becomes its main image automatically.
+          &quot;Add Artwork&quot; uses Name above as its title (or &quot;Untitled&quot; if
+          blank) and Description above as its description, and this image becomes its main
+          image automatically.
         </p>
       )}
 
@@ -913,7 +938,7 @@ function SortingCard({
           onCancel={() => setShowQuickForm(false)}
           onDone={async (fields) => {
             setCreatingArtwork(true);
-            const ok = await onAddNewArtwork(caption, fields);
+            const ok = await onAddNewArtwork(caption, description, fields);
             setCreatingArtwork(false);
             // On failure, leave the form open (with whatever was typed
             // still in it, since it's a plain uncontrolled form) so
@@ -932,7 +957,8 @@ function SortingCard({
 // caption above instead) or Edition/Available qty (kept out to match the
 // simpler layout this was asked for; a brand-new artwork has nothing in
 // either field yet regardless, so omitting them from this form doesn't
-// lose anything).
+// lose anything). Description also comes from the caption/description
+// pair above, for the same reason.
 //
 // 2026-08-18: no longer autosaves field-by-field, since there's no
 // artwork to save to until "Done, next item" is pressed — the artwork
@@ -1103,8 +1129,3 @@ function QuickCatalogueFields({
     </div>
   );
 }
-
-
-
-
-

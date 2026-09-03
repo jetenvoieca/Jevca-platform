@@ -26,6 +26,7 @@ export default async function HopperPage({
     posterUrl: i.posterUrl,
     kind: i.kind,
     caption: i.caption,
+    description: i.description,
     altText: i.altText,
     tags: i.tags,
     createdAt: i.createdAt.toISOString(),

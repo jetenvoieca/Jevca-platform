@@ -644,6 +644,14 @@ model Image {
   kind      ImageKind   @default(PHOTO)
   mimeType  String
   caption   String?
+  // Longer free-text note, separate from Caption — added 2026-09-02
+  // alongside the iPhone Shortcut's "Name and Description" fields (see
+  // hopper-shortcut-design notes). Caption already served as the
+  // Hopper's "Name" (and becomes a new artwork's title on "Add
+  // Artwork"); this is its new companion field, editable from the same
+  // Hopper sorting card and carried into a new artwork's own
+  // `description` the same way Caption is carried into its title.
+  description String?
   altText   String?
   tags      String[]    @default([])
   status    ImageStatus @default(SORTED)

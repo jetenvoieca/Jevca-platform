@@ -7,17 +7,25 @@ import { finalizeUpload } from "@/lib/actions/media";
 // the Image row with status HOPPER, so it lands in the sorting queue
 // rather than skipping straight into the catalogue the way a direct
 // in-app upload does.
+//
+// caption/description (2026-09-02) — both optional. The Shortcut asks
+// once for "Name" and "Description" before sending a batch, then sends
+// the same two values along with every item's finalize call. Left blank
+// (or omitted, by an older copy of the Shortcut) is the same as before
+// this existed, not an error.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { token, key, contentType, kind } = body as {
+  const { token, key, contentType, kind, caption, description } = body as {
     token?: string;
     key?: string;
     contentType?: string;
     kind?: "PHOTO" | "VIDEO";
+    caption?: string;
+    description?: string;
   };
 
   if (!token || !key || !contentType || !kind) {
@@ -46,7 +54,9 @@ export async function POST(request: NextRequest) {
     kind,
     undefined,
     "HOPPER",
-    "iPhone Shortcut"
+    "iPhone Shortcut",
+    caption,
+    description
   );
 
   return NextResponse.json(result);
