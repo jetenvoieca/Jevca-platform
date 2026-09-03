@@ -394,6 +394,8 @@ export async function getArtworkDetailForClient(id: string) {
       status: pay.status,
       dueDate: pay.dueDate ? pay.dueDate.toISOString() : null,
       paidDate: pay.paidDate ? pay.paidDate.toISOString() : null,
+      // 2026-09-03 — see the matching schema.prisma/payments.ts comments.
+      method: pay.method,
     })),
   }));
 
