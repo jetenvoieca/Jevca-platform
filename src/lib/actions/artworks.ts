@@ -379,6 +379,10 @@ export async function getArtworkDetailForClient(id: string) {
     stripePaymentLinkUrl: p.stripePaymentLinkUrl,
     invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
     invoiceEmailedTo: p.invoiceEmailedTo,
+    // Certificate of Authenticity sent-log (2026-09-03) — see the
+    // matching schema.prisma/payments.ts comments.
+    certificateEmailedAt: p.certificateEmailedAt ? p.certificateEmailedAt.toISOString() : null,
+    certificateEmailedTo: p.certificateEmailedTo,
     totalAmount: p.totalAmount.toString(),
     currency: p.currency,
     instalmentCount: p.instalmentCount,
