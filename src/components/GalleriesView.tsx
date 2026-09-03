@@ -69,6 +69,36 @@ function netOwed(totalAmount: string, commissionPercent: string | null) {
   return total - total * (commission / 100);
 }
 
+// The "Sale Price £X / Net Sale £Y" row shown at the top of both the
+// active and completed sale cards (2026-09-03 restyle) — pulled into
+// one shared component since the two cards need it to look identical,
+// and it replaces what used to be a single amount plus a separate small
+// "Commission X% — net owed Y" sentence underneath. Always shows both
+// columns rather than only when commissionPercent is set (the previous
+// commission-line's condition) — a sale with no commission on file just
+// shows the same figure twice, which is self-explanatory and keeps the
+// two-column layout consistent rather than sometimes collapsing to one.
+function SalePriceRow({
+  totalAmount,
+  currency,
+  commissionPercent,
+}: {
+  totalAmount: string;
+  currency: string;
+  commissionPercent: string | null;
+}) {
+  return (
+    <div className="mb-2 flex items-baseline justify-between">
+      <p className="text-sm font-medium text-neutral-900">
+        Sale Price {formatMoney(totalAmount, currency)}
+      </p>
+      <p className="text-sm font-medium text-neutral-900">
+        Net Sale {formatMoney(netOwed(totalAmount, commissionPercent).toFixed(2), currency)}
+      </p>
+    </div>
+  );
+}
+
 export default function GalleriesView({
   siteId,
   artistId,
@@ -612,22 +642,12 @@ export default function GalleriesView({
                       {activeWorkPurchase ? (
                         activeWorkPurchase.channel === "GALLERY" ? (
                           <div>
-                            <p className="mb-2 text-sm font-medium text-neutral-900">
-                              {formatMoney(activeWorkPurchase.totalAmount, activeWorkPurchase.currency)}
-                            </p>
+                            <SalePriceRow
+                              totalAmount={activeWorkPurchase.totalAmount}
+                              currency={activeWorkPurchase.currency}
+                              commissionPercent={activeWorkPurchase.commissionPercent}
+                            />
                             <SaleStatusBadge status={activeWorkPurchase.status} />
-                            {activeWorkPurchase.commissionPercent && (
-                              <p className="mt-2 text-xs text-neutral-500">
-                                Commission {activeWorkPurchase.commissionPercent}% — net owed{" "}
-                                {formatMoney(
-                                  netOwed(
-                                    activeWorkPurchase.totalAmount,
-                                    activeWorkPurchase.commissionPercent
-                                  ).toFixed(2),
-                                  activeWorkPurchase.currency
-                                )}
-                              </p>
-                            )}
                             <p className="mt-2 text-xs text-neutral-400">
                               Sold {new Date(activeWorkPurchase.createdAt).toLocaleDateString()}
                             </p>
@@ -805,22 +825,12 @@ export default function GalleriesView({
                         // only ever holds ACTIVE sales, so a just-completed
                         // one has nowhere else to show once marked paid.
                         <div>
-                          <p className="mb-2 text-sm font-medium text-neutral-900">
-                            {formatMoney(completedGallerySale.totalAmount, completedGallerySale.currency)}
-                          </p>
+                          <SalePriceRow
+                            totalAmount={completedGallerySale.totalAmount}
+                            currency={completedGallerySale.currency}
+                            commissionPercent={completedGallerySale.commissionPercent}
+                          />
                           <SaleStatusBadge status="COMPLETED" />
-                          {completedGallerySale.commissionPercent && (
-                            <p className="mt-2 text-xs text-neutral-500">
-                              Commission {completedGallerySale.commissionPercent}% — net owed{" "}
-                              {formatMoney(
-                                netOwed(
-                                  completedGallerySale.totalAmount,
-                                  completedGallerySale.commissionPercent
-                                ).toFixed(2),
-                                completedGallerySale.currency
-                              )}
-                            </p>
-                          )}
                           <p className="mt-2 text-xs text-neutral-400">
                             Sold {new Date(completedGallerySale.createdAt).toLocaleDateString()}
                           </p>
