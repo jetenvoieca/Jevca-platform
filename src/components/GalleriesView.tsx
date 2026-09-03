@@ -826,7 +826,7 @@ export default function GalleriesView({
                           )}
                           {completedGallerySale.invoiceEmailedAt && (
                             <p className="mt-1 text-xs text-neutral-400">
-                              Invoice sent{" "}
+                              Receipt sent{" "}
                               {new Date(completedGallerySale.invoiceEmailedAt).toLocaleDateString()}
                               {completedGallerySale.invoiceEmailedTo
                                 ? ` to ${completedGallerySale.invoiceEmailedTo}`
@@ -841,8 +841,8 @@ export default function GalleriesView({
                               className={actionButtonCls}
                             >
                               {completedGallerySale.invoiceEmailedAt
-                                ? "Send invoice again"
-                                : "Send invoice"}
+                                ? "Send receipt again"
+                                : "Send receipt"}
                             </button>
                           </div>
                         </div>
