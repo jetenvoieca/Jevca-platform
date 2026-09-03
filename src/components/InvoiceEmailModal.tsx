@@ -28,11 +28,22 @@ type Tab = "invoice" | "email";
 export default function InvoiceEmailModal({
   purchaseId,
   siteId,
+  // Whether this sale is already paid (2026-09-03 fix) — passed down by
+  // the caller (it already knows), rather than fetched again here, since
+  // it changes only display wording, not any actual logic: the left tab
+  // reads "Receipt" instead of "Invoice", matching the PDF itself
+  // (generateInvoicePdf already titles the document "Receipt" once
+  // paid — this modal was the one place still calling it "Invoice"
+  // regardless). Defaults to false (the far more common case — most
+  // sends happen before payment) so every existing caller keeps working
+  // unchanged if it doesn't pass this.
+  isPaid = false,
   onClose,
   onSent,
 }: {
   purchaseId: string;
   siteId: string;
+  isPaid?: boolean;
   onClose: () => void;
   onSent?: () => void;
 }) {
@@ -45,6 +56,8 @@ export default function InvoiceEmailModal({
   const [isPending, startTransition] = useTransition();
   const [sendError, setSendError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  const docLabel = isPaid ? "Receipt" : "Invoice";
 
   const openEmailTab = () => {
     setTab("email");
@@ -91,7 +104,7 @@ export default function InvoiceEmailModal({
                   : "bg-white text-neutral-600 hover:bg-neutral-50"
               }`}
             >
-              Invoice
+              {docLabel}
             </button>
             <button
               type="button"
@@ -118,7 +131,7 @@ export default function InvoiceEmailModal({
           {tab === "invoice" ? (
             <iframe
               src={`/api/invoice/${purchaseId}?disposition=inline`}
-              title="Invoice preview"
+              title={`${docLabel} preview`}
               className="h-[65vh] w-full"
             />
           ) : (
@@ -155,7 +168,9 @@ export default function InvoiceEmailModal({
                       className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
                     />
                   </div>
-                  <p className="text-xs text-neutral-400">The invoice PDF is attached automatically.</p>
+                  <p className="text-xs text-neutral-400">
+                    The {docLabel.toLowerCase()} PDF is attached automatically.
+                  </p>
                   {sendError && <p className="text-sm text-red-600">{sendError}</p>}
                   <div className="flex justify-end">
                     <button
