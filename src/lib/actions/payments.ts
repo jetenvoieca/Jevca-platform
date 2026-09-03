@@ -97,7 +97,7 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 // Release message/trigger count are no longer typed per-artwork
 // (2026-08-28 simplification, at the person's request — repeating a
 // value that's already set once in Settings → Payment Defaults was
-// unnecessary duplication). Every save of this row takes the artist's
+// unnecessary duplication). Every save of this row now takes the artist's
 // *current* Settings default fresh, so changing that default later
 // reaches every artwork's Sale Terms automatically rather than each one
 // being frozen at whatever it was when last saved. A specific
@@ -492,18 +492,23 @@ export async function forceDeleteCompletedSale(
 // click this once the gallery has actually paid (e.g. by bank transfer),
 // since nothing in this flow can confirm that automatically.
 //
-// Takes a Date paid and a Method (2026-09-03, matching the inline "Mark
-// as paid" form in GalleriesView) rather than always stamping the exact
-// moment the button is pressed — a gallery often reports payment a few
-// days after it actually landed, and knowing how they paid (bank
-// transfer, cash, etc.) is worth keeping alongside the amount. Method is
-// free-form text from the caller's point of view (validated only by
-// GalleriesView's <select>, sourced from Artist.paymentMethods) rather
-// than a hard enum here, same convention as Customer.kind elsewhere.
+// Takes an optional Date paid and Method (2026-09-03, matching the
+// inline "Mark as paid" form in GalleriesView) rather than always
+// stamping the exact moment the button is pressed — a gallery often
+// reports payment a few days after it actually landed, and knowing how
+// they paid (bank transfer, cash, etc.) is worth keeping alongside the
+// amount. `formData` is optional because PurchasePanel (the Artwork
+// Catalogue's own Payment tab) still has its own simpler one-click "Mark
+// as paid" for a gallery-channel sale, with no date/method form of its
+// own — that caller passes nothing and just gets today's date, no
+// method, exactly as before this existed. Method is free-form text from
+// the caller's point of view (validated only by GalleriesView's
+// <select>, sourced from Artist.paymentMethods) rather than a hard enum
+// here, same convention as Customer.kind elsewhere.
 export async function markGallerySalePaid(
   purchaseId: string,
   siteId: string,
-  formData: FormData
+  formData?: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Purchase not found." };
@@ -511,8 +516,8 @@ export async function markGallerySalePaid(
     return { ok: false, error: "This isn't a gallery sale." };
   }
 
-  const paidDateRaw = (formData.get("paidDate") as string)?.trim();
-  const method = (formData.get("method") as string)?.trim() || null;
+  const paidDateRaw = (formData?.get("paidDate") as string | null)?.trim();
+  const method = (formData?.get("method") as string | null)?.trim() || null;
 
   let paidDate = new Date();
   if (paidDateRaw) {
