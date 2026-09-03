@@ -59,6 +59,10 @@ export type ArtworkSettings = {
   mediumPresets: string[];
   sizePresets: string[];
   saleSources: string[];
+  // Offered in GallerySaleCard's "Mark as paid" Method dropdown, via
+  // PurchasePanel's Payment tab (2026-09-03) — same Settings-editable
+  // list as everywhere else it's used.
+  paymentMethods: string[];
   defaultInstalmentCount: number;
   defaultReleaseMessage: string;
   defaultReleaseTriggerCount: number;
@@ -742,6 +746,7 @@ export default function ArtworkDetailPanel({
               activePurchase={artwork.activePurchase}
               history={artwork.purchaseHistory}
               saleSources={settings.saleSources}
+              paymentMethods={settings.paymentMethods}
               onChanged={onDataChanged}
             />
           ) : (
