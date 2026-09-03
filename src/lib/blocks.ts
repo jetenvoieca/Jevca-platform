@@ -1,3 +1,11 @@
+// Renders as the page's on-page heading (an <h1>). Added 2026-09-03 to
+// replace the editor/preview automatically printing the page's admin
+// title as a heading — that auto-behaviour is gone, so a page now only
+// shows a heading if one of these has deliberately been added, giving
+// full control over whether/where/what it says rather than it always
+// matching the internal page title.
+export type HeaderBlock = { id: string; type: "header"; text: string };
+
 export type TextBlock = { id: string; type: "text"; text: string };
 
 export type ImageBlock = {
@@ -47,6 +55,7 @@ export type TextGridBlock = {
 };
 
 export type ContentBlock =
+  | HeaderBlock
   | TextBlock
   | ImageBlock
   | GalleryBlock
