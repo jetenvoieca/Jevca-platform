@@ -33,13 +33,16 @@ function recipientFor(customer: { contactEmail: string | null; email: string | n
   return customer.contactEmail || customer.email;
 }
 
-// Builds the default subject/body for a gallery-sale invoice email, with
+// Builds the default subject/body for a gallery-sale email, with
 // placeholders already filled from real data — still fully editable
-// before sending (InvoiceEmailModal). Mentions the Stripe payment link
-// only if one has already been generated for this purchase's net-owed
-// amount (createGalleryPaymentLink in payments.ts); a gallery invoice is
-// just as often settled by bank transfer, so it's fine to send one
-// without a link at all.
+// before sending (InvoiceEmailModal). Wording branches on whether the
+// sale is already paid (2026-09-03 fix): an unpaid sale gets asked for
+// payment (mentioning the Stripe link only if one's been generated —
+// createGalleryPaymentLink in payments.ts — since a gallery invoice is
+// just as often settled by bank transfer); a paid sale gets thanked and
+// sent its receipt, with no payment request at all — the earlier wording
+// asked a gallery that had *already paid* to pay again, which read as a
+// genuine mistake, not just a labelling quirk.
 export async function getInvoiceEmailDraft(
   purchaseId: string
 ): Promise<InvoiceEmailDraft | { error: string }> {
@@ -57,19 +60,24 @@ export async function getInvoiceEmailDraft(
   const total = parseFloat(purchase.totalAmount.toString());
   const contactFirstName =
     purchase.customer.contactName?.trim().split(/\s+/)[0] || purchase.customer.name;
+  const isPaid = purchase.status === "COMPLETED";
 
-  const paymentLine = purchase.stripePaymentLinkUrl
-    ? `Payment by transfer to our account on the invoice, or by this secure payment link: ${purchase.stripePaymentLinkUrl}`
-    : "Payment by transfer to our account on the invoice.";
+  const middleParagraphs = isPaid
+    ? ["Thank you for the payment — I enclose our receipt for your records."]
+    : [
+        "I enclose our invoice for your attention.",
+        "",
+        purchase.stripePaymentLinkUrl
+          ? `Payment by transfer to our account on the invoice, or by this secure payment link: ${purchase.stripePaymentLinkUrl}`
+          : "Payment by transfer to our account on the invoice.",
+      ];
 
   const body = [
     `Dear ${contactFirstName},`,
     "",
     `It's great that you have sold ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`,
     "",
-    "I enclose our invoice for your attention.",
-    "",
-    paymentLine,
+    ...middleParagraphs,
     "",
     "Many thanks,",
     purchase.artwork.artist.name,
@@ -82,7 +90,9 @@ export async function getInvoiceEmailDraft(
   };
 }
 
-// Actually sends it, via Resend, with the real invoice PDF attached. The
+// Actually sends it, via Resend, with the real invoice/receipt PDF
+// attached (generateInvoicePdf itself already picks the right document —
+// "Invoice" or "Receipt" — based on the sale's paid status). The
 // recipient is always re-derived from the Customer record here
 // server-side — never taken from the submitted form — so an edited
 // subject/body can never redirect where the email actually goes.
