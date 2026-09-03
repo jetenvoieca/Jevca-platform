@@ -6,7 +6,6 @@ import {
   startPurchase,
   deleteGallerySale,
   forceDeleteCompletedSale,
-  markGallerySalePaid,
   updatePurchaseRelease,
   abandonPurchase,
   createPaymentLink,
@@ -17,6 +16,7 @@ import {
 import StripeCardForm from "@/components/StripeCardForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import CustomerPicker from "@/components/CustomerPicker";
+import GallerySaleCard from "@/components/GallerySaleCard";
 import type { CustomerSummary } from "@/lib/actions/customers";
 
 function formatMoney(amount: string, currency: string) {
@@ -39,6 +39,12 @@ export default function PurchasePanel({
   activePurchase,
   history,
   saleSources = [],
+  // Offered in GallerySaleCard's "Mark as paid" Method dropdown, for a
+  // GALLERY-channel activePurchase below (2026-09-03) — same
+  // Settings-editable list as everywhere else it's used. Defaults to an
+  // empty array so this stays optional for any caller that never shows
+  // a gallery sale here in the first place.
+  paymentMethods = [],
   onChanged,
 }: {
   artworkId: string;
@@ -48,6 +54,7 @@ export default function PurchasePanel({
   activePurchase: PurchaseDetail | null;
   history: PurchaseDetail[];
   saleSources?: string[];
+  paymentMethods?: string[];
   onChanged?: () => void;
 }) {
   const router = useRouter();
@@ -173,25 +180,6 @@ export default function PurchasePanel({
     });
   };
 
-  const handleMarkPaid = () => {
-    if (!activePurchase) return;
-    setPendingConfirm({
-      title: "Mark this sale as paid?",
-      message: "Only do this once the gallery has actually paid.",
-      confirmLabel: "Mark as paid",
-      onConfirm: () => {
-        setPendingConfirm(null);
-        setError(null);
-        startTransition(async () => {
-          const res = await markGallerySalePaid(activePurchase.id, siteId);
-          if (!res.ok) setError(res.error);
-          if (onChanged) onChanged();
-          else router.refresh();
-        });
-      },
-    });
-  };
-
   const handleAbandon = () => {
     if (!activePurchase) return;
     setPendingConfirm({
@@ -264,11 +252,12 @@ export default function PurchasePanel({
     });
   };
 
-  // Direct delete for a currently-active, unpaid gallery sale — added
-  // 2026-08-13 so a genuinely wrong transaction (mistyped commission,
-  // wrong buyer) doesn't need the extra "cancel first, then delete from
-  // history" round trip. Same restriction either way: only unpaid
-  // gallery sales, enforced again server-side regardless.
+  // Direct delete for a currently-active, unpaid sale — added 2026-08-13
+  // so a genuinely wrong transaction (mistyped commission, wrong buyer)
+  // doesn't need the extra "cancel first, then delete from history"
+  // round trip. Only reached from the STRIPE-channel branch below —
+  // GALLERY-channel active sales get the same capability from
+  // GallerySaleCard's own Delete Sale button instead.
   const handleDeleteActiveSale = () => {
     if (!activePurchase) return;
     const message = activePurchase.invoiceNumber
@@ -469,231 +458,217 @@ export default function PurchasePanel({
               </form>
               {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
             </>
+          ) : activePurchase.channel === "GALLERY" ? (
+            // One shared component for the whole GALLERY-channel sale
+            // experience (2026-09-03) — Sale Price/Net Sale row, 2x2
+            // action grid, inline Mark as paid form, invoice/receipt
+            // sending. Previously this tab had its own separate, older
+            // version of this UI (plain "Mark as paid" confirm dialog,
+            // "Download invoice" only) that had drifted behind the
+            // Galleries page's — see GallerySaleCard's own comment.
+            <GallerySaleCard
+              purchase={activePurchase}
+              siteId={siteId}
+              paymentMethods={paymentMethods}
+              onChanged={onChanged ?? (() => router.refresh())}
+            />
           ) : (
             <>
-          <div className="mb-3 flex items-baseline justify-between">
-            <h4 className="text-sm font-medium text-neutral-700">
-              {activePurchase.channel === "GALLERY"
-                ? "Gallery sale"
-                : activePurchase.type === "FULL"
-                  ? "Full payment"
-                  : `${activePurchase.instalmentCount} instalments`}
-              {activePurchase.framed && (
-                <span className="ml-1.5 text-xs font-normal text-neutral-400">(Framed)</span>
-              )}
-            </h4>
-            <span className="text-sm text-neutral-900">
-              {formatMoney(activePurchase.totalAmount, activePurchase.currency)}
-            </span>
-          </div>
-          <p className="mb-3 text-xs text-neutral-500">
-            {activePurchase.buyerName}
-            {activePurchase.buyerName && activePurchase.buyerEmail ? " · " : ""}
-            {activePurchase.buyerEmail}
-            {activePurchase.source ? ` · ${activePurchase.source}` : ""}
-          </p>
-
-          {activePurchase.channel === "GALLERY" ? (
-            <div className="mb-3">
-              <span className="rounded bg-amber-50 px-2 py-1 text-xs font-medium text-amber-700">
-                UNPAID
-              </span>
-              {activePurchase.commissionPercent && (
-                <p className="mt-2 text-xs text-neutral-500">
-                  Commission {activePurchase.commissionPercent}% — net owed{" "}
-                  {formatMoney(
-                    (
-                      parseFloat(activePurchase.totalAmount) *
-                      (1 - parseFloat(activePurchase.commissionPercent) / 100)
-                    ).toFixed(2),
-                    activePurchase.currency
+              <div className="mb-3 flex items-baseline justify-between">
+                <h4 className="text-sm font-medium text-neutral-700">
+                  {activePurchase.type === "FULL"
+                    ? "Full payment"
+                    : `${activePurchase.instalmentCount} instalments`}
+                  {activePurchase.framed && (
+                    <span className="ml-1.5 text-xs font-normal text-neutral-400">(Framed)</span>
                   )}
-                </p>
-              )}
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleMarkPaid}
-                  disabled={isPending}
-                  className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-                >
-                  Mark as paid
-                </button>
-                <button
-                  type="button"
-                  onClick={() => downloadInvoice(activePurchase.id)}
-                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-                >
-                  Download invoice
-                </button>
+                </h4>
+                <span className="text-sm text-neutral-900">
+                  {formatMoney(activePurchase.totalAmount, activePurchase.currency)}
+                </span>
               </div>
-            </div>
-          ) : activePurchase.payments.length === 0 ? (
-            <>
-              <p className="mb-3 text-xs text-neutral-400">
-                Either option saves the buyer&apos;s card on file, so future instalments (if any)
-                can be charged automatically without them needing to be present.
+              <p className="mb-3 text-xs text-neutral-500">
+                {activePurchase.buyerName}
+                {activePurchase.buyerName && activePurchase.buyerEmail ? " · " : ""}
+                {activePurchase.buyerEmail}
+                {activePurchase.source ? ` · ${activePurchase.source}` : ""}
               </p>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={handleGetLink}
-                  disabled={isPending}
-                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-                >
-                  Get payment link
-                </button>
-                <button
-                  type="button"
-                  onClick={handleEnterCard}
-                  disabled={isPending}
-                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-                >
-                  Enter card now
-                </button>
-              </div>
 
-              {linkUrl && (
-                <div className="mt-3 rounded-md bg-neutral-50 p-3">
-                  <p className="mb-1 text-xs text-neutral-500">
-                    Send this link to the buyer (copy and paste — nothing is emailed
-                    automatically):
+              {activePurchase.payments.length === 0 ? (
+                <>
+                  <p className="mb-3 text-xs text-neutral-400">
+                    Either option saves the buyer&apos;s card on file, so future instalments (if
+                    any) can be charged automatically without them needing to be present.
                   </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={handleGetLink}
+                      disabled={isPending}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                    >
+                      Get payment link
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleEnterCard}
+                      disabled={isPending}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                    >
+                      Enter card now
+                    </button>
+                  </div>
+
+                  {linkUrl && (
+                    <div className="mt-3 rounded-md bg-neutral-50 p-3">
+                      <p className="mb-1 text-xs text-neutral-500">
+                        Send this link to the buyer (copy and paste — nothing is emailed
+                        automatically):
+                      </p>
+                      <input
+                        readOnly
+                        value={linkUrl}
+                        onFocus={(e) => e.target.select()}
+                        className="w-full rounded border border-neutral-300 bg-white px-2 py-1 text-xs"
+                      />
+                    </div>
+                  )}
+
+                  {cardSecret && cardPublishableKey && (
+                    <div className="mt-3">
+                      <StripeCardForm
+                        clientSecret={cardSecret}
+                        publishableKey={cardPublishableKey}
+                        onDone={() => {
+                          setCardSecret(null);
+                          setCardPublishableKey(null);
+                          if (onChanged) onChanged();
+                          else router.refresh();
+                        }}
+                      />
+                      <p className="mt-2 text-xs text-neutral-400">
+                        Status below updates within a few seconds of Stripe confirming the charge.
+                      </p>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="text-left text-xs text-neutral-400">
+                        <th className="pb-1 font-normal">#</th>
+                        <th className="pb-1 font-normal">Amount</th>
+                        <th className="pb-1 font-normal">Status</th>
+                        <th className="pb-1 font-normal">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {activePurchase.payments.map((p) => (
+                        <tr key={p.id} className="border-t border-neutral-100">
+                          <td className="py-1.5 text-neutral-500">{p.sequence}</td>
+                          <td className="py-1.5">{formatMoney(p.amount, p.currency)}</td>
+                          <td className="py-1.5">
+                            <span
+                              className={
+                                p.status === "PAID"
+                                  ? "text-green-600"
+                                  : p.status === "FAILED"
+                                    ? "text-red-600"
+                                    : "text-neutral-500"
+                              }
+                            >
+                              {p.status === "PAID" ? "Paid" : p.status === "FAILED" ? "Failed" : "Due"}
+                            </span>
+                          </td>
+                          <td className="py-1.5 text-neutral-500">
+                            {p.paidDate
+                              ? new Date(p.paidDate).toLocaleDateString()
+                              : p.dueDate
+                                ? new Date(p.dueDate).toLocaleDateString()
+                                : "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <button
+                    type="button"
+                    onClick={() => downloadInvoice(activePurchase.id)}
+                    className="mt-3 rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+                  >
+                    Download invoice
+                  </button>
+                </>
+              )}
+
+              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+              {activePurchase.type === "INSTALMENTS" && (
+                <form
+                  action={handleSaveRelease}
+                  className="mt-4 space-y-3 border-t border-neutral-100 pt-4"
+                >
+                  <h5 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                    Release message for this sale
+                  </h5>
+                  {releaseReached && (
+                    <p className="rounded bg-green-50 px-2 py-1 text-xs text-green-700">
+                      Trigger reached — this message now applies.
+                    </p>
+                  )}
+                  <textarea
+                    name="releaseMessage"
+                    defaultValue={activePurchase.releaseMessage ?? ""}
+                    rows={2}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
                   <input
-                    readOnly
-                    value={linkUrl}
-                    onFocus={(e) => e.target.select()}
-                    className="w-full rounded border border-neutral-300 bg-white px-2 py-1 text-xs"
+                    type="number"
+                    name="releaseTriggerCount"
+                    min={1}
+                    defaultValue={activePurchase.releaseTriggerCount ?? ""}
+                    placeholder="Release after this many payments"
+                    className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
                   />
-                </div>
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="submit"
+                      disabled={isPending}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                    >
+                      Save
+                    </button>
+                    {saved && <span className="text-sm text-green-600">Saved</span>}
+                  </div>
+                </form>
               )}
 
-              {cardSecret && cardPublishableKey && (
-                <div className="mt-3">
-                  <StripeCardForm
-                    clientSecret={cardSecret}
-                    publishableKey={cardPublishableKey}
-                    onDone={() => {
-                      setCardSecret(null);
-                      setCardPublishableKey(null);
-                      if (onChanged) onChanged();
-                      else router.refresh();
-                    }}
-                  />
-                  <p className="mt-2 text-xs text-neutral-400">
-                    Status below updates within a few seconds of Stripe confirming the charge.
-                  </p>
-                </div>
-              )}
-            </>
-          ) : (
-            <>
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-neutral-400">
-                    <th className="pb-1 font-normal">#</th>
-                    <th className="pb-1 font-normal">Amount</th>
-                    <th className="pb-1 font-normal">Status</th>
-                    <th className="pb-1 font-normal">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {activePurchase.payments.map((p) => (
-                    <tr key={p.id} className="border-t border-neutral-100">
-                      <td className="py-1.5 text-neutral-500">{p.sequence}</td>
-                      <td className="py-1.5">{formatMoney(p.amount, p.currency)}</td>
-                      <td className="py-1.5">
-                        <span
-                          className={
-                            p.status === "PAID"
-                              ? "text-green-600"
-                              : p.status === "FAILED"
-                                ? "text-red-600"
-                                : "text-neutral-500"
-                          }
-                        >
-                          {p.status === "PAID" ? "Paid" : p.status === "FAILED" ? "Failed" : "Due"}
-                        </span>
-                      </td>
-                      <td className="py-1.5 text-neutral-500">
-                        {p.paidDate
-                          ? new Date(p.paidDate).toLocaleDateString()
-                          : p.dueDate
-                            ? new Date(p.dueDate).toLocaleDateString()
-                            : "—"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button
-                type="button"
-                onClick={() => downloadInvoice(activePurchase.id)}
-                className="mt-3 rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              <div
+                className={
+                  activePurchase.type === "INSTALMENTS"
+                    ? "mt-3"
+                    : "mt-4 border-t border-neutral-100 pt-4"
+                }
               >
-                Download invoice
-              </button>
-            </>
-          )}
-
-          {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-          {activePurchase.type === "INSTALMENTS" && (
-            <form action={handleSaveRelease} className="mt-4 space-y-3 border-t border-neutral-100 pt-4">
-              <h5 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                Release message for this sale
-              </h5>
-              {releaseReached && (
-                <p className="rounded bg-green-50 px-2 py-1 text-xs text-green-700">
-                  Trigger reached — this message now applies.
-                </p>
-              )}
-              <textarea
-                name="releaseMessage"
-                defaultValue={activePurchase.releaseMessage ?? ""}
-                rows={2}
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              />
-              <input
-                type="number"
-                name="releaseTriggerCount"
-                min={1}
-                defaultValue={activePurchase.releaseTriggerCount ?? ""}
-                placeholder="Release after this many payments"
-                className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              />
-              <div className="flex items-center gap-3">
                 <button
-                  type="submit"
+                  type="button"
+                  onClick={handleAbandon}
                   disabled={isPending}
-                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                  className="text-sm text-red-600 hover:underline disabled:opacity-50"
                 >
-                  Save
+                  Cancel sale
                 </button>
-                {saved && <span className="text-sm text-green-600">Saved</span>}
+                <span className="mx-2 text-neutral-300">·</span>
+                <button
+                  type="button"
+                  onClick={handleDeleteActiveSale}
+                  disabled={isPending}
+                  className="text-sm text-red-600 hover:underline disabled:opacity-50"
+                >
+                  Delete
+                </button>
               </div>
-            </form>
-          )}
-
-          <div className={activePurchase.type === "INSTALMENTS" ? "mt-3" : "mt-4 border-t border-neutral-100 pt-4"}>
-            <button
-              type="button"
-              onClick={handleAbandon}
-              disabled={isPending}
-              className="text-sm text-red-600 hover:underline disabled:opacity-50"
-            >
-              Cancel sale
-            </button>
-            <span className="mx-2 text-neutral-300">·</span>
-            <button
-              type="button"
-              onClick={handleDeleteActiveSale}
-              disabled={isPending}
-              className="text-sm text-red-600 hover:underline disabled:opacity-50"
-            >
-              Delete
-            </button>
-          </div>
             </>
           )}
         </div>
