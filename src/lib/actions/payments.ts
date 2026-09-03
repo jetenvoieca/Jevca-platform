@@ -64,6 +64,10 @@ export type PurchaseDetail = {
   stripePaymentLinkUrl: string | null;
   invoiceEmailedAt: string | null;
   invoiceEmailedTo: string | null;
+  // Certificate of Authenticity sent-log (2026-09-03) — same simple
+  // current-status pattern as invoiceEmailedAt/invoiceEmailedTo above.
+  certificateEmailedAt: string | null;
+  certificateEmailedTo: string | null;
   totalAmount: string;
   currency: string;
   instalmentCount: number | null;
