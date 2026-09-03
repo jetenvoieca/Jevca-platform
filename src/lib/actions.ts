@@ -159,6 +159,20 @@ export async function saveArtistLogo(artistId: string, key: string): Promise<voi
   revalidatePath("/");
 }
 
+// The Certificate of Authenticity's signature image (2026-09-03) — same
+// direct-to-R2 upload mechanism as the Logo above, and deliberately its
+// own separate field rather than reusing logoUrl: for some artists
+// they're the same image, but that isn't true for every artist (per
+// direct confirmation), so this can't just be a second reference to the
+// Logo.
+export async function saveArtistSignature(artistId: string, key: string): Promise<void> {
+  await db.artist.update({
+    where: { id: artistId },
+    data: { signatureUrl: `/api/media/${key}` },
+  });
+  revalidatePath("/");
+}
+
 // 2026-08-31, direct request — the Personal Profile photo is picked via
 // MediaPicker from the artist's own Media Catalogue, same as
 // Artwork.mainImageId (see setMainImage in actions/artworks.ts) — not a
