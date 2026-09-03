@@ -224,6 +224,14 @@ export default function GalleriesView({
     setSaleDate(new Date().toISOString().slice(0, 10));
     getArtworkDetailForClient(workId).then((detail) => {
       setSelectedWorkDetail(detail);
+      // Sale price defaults to the artwork's own listed price
+      // (2026-09-03) — it's still fully editable before "Start sale" is
+      // pressed, this just saves retyping a figure that's almost always
+      // the same as what's already on the Catalogue. Only meaningful for
+      // the blank "Start a sale" form (no active/completed purchase);
+      // harmless to set unconditionally since saleTotalAmount is never
+      // read in the other two branches.
+      setSaleTotalAmount(detail?.presentationPrice || "");
       setWorkLoading(false);
     });
   };
@@ -934,9 +942,9 @@ export default function GalleriesView({
                               setSelectedWorkId(null);
                               setSelectedWorkDetail(null);
                             }}
-                            className="mt-3 text-sm text-red-600 hover:underline"
+                            className="mt-3 text-sm text-neutral-500 hover:underline"
                           >
-                            Cancel sale
+                            Close
                           </button>
                         </div>
                       )}
