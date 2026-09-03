@@ -3,7 +3,13 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { saveDraftBlocks, deletePage, menuItemCountForPage, updatePageTitle } from "@/lib/actions/pages";
+import {
+  saveDraftBlocks,
+  deletePage,
+  menuItemCountForPage,
+  updatePageTitle,
+  updatePageBackground,
+} from "@/lib/actions/pages";
 import MediaPicker from "@/components/MediaPicker";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import ThreeColumnShell from "@/components/ThreeColumnShell";
@@ -16,12 +22,18 @@ export default function PageEditor({
   pageId,
   pageTitle,
   initialBlocks,
+  initialBackgroundColor,
+  initialBackgroundImageId,
+  initialBackgroundImageUrl,
 }: {
   siteId: string;
   artistId: string;
   pageId: string;
   pageTitle: string;
   initialBlocks: ContentBlock[];
+  initialBackgroundColor?: string | null;
+  initialBackgroundImageId?: string | null;
+  initialBackgroundImageUrl?: string | null;
 }) {
   const [blocks, setBlocks] = useState<ContentBlock[]>(initialBlocks);
   const [saveState, setSaveState] = useState<"idle" | "saving" | "saved">("idle");
@@ -30,6 +42,17 @@ export default function PageEditor({
   const isFirstRun = useRef(true);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
+
+  // Page-level background — separate state and its own debounced save
+  // effect below, since these persist to real Page columns
+  // (backgroundColor/backgroundImageId) via updatePageBackground, not
+  // to draftBlocks like `blocks` above.
+  const [backgroundColor, setBackgroundColor] = useState(initialBackgroundColor || "");
+  const [backgroundImageId, setBackgroundImageId] = useState(initialBackgroundImageId || "");
+  const [backgroundImageUrl, setBackgroundImageUrl] = useState(initialBackgroundImageUrl || "");
+  const [bgSaveState, setBgSaveState] = useState<"idle" | "saving" | "saved">("idle");
+  const isBgFirstRun = useRef(true);
+  const bgDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const handleRenamePage = (value: string) => {
     const trimmed = value.trim();
@@ -75,6 +98,26 @@ export default function PageEditor({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks]);
+
+  useEffect(() => {
+    if (isBgFirstRun.current) {
+      isBgFirstRun.current = false;
+      return;
+    }
+    setBgSaveState("saving");
+    if (bgDebounceRef.current) clearTimeout(bgDebounceRef.current);
+    bgDebounceRef.current = setTimeout(async () => {
+      await updatePageBackground(pageId, {
+        backgroundColor: backgroundColor || null,
+        backgroundImageId: backgroundImageId || null,
+      });
+      setBgSaveState("saved");
+    }, 700);
+    return () => {
+      if (bgDebounceRef.current) clearTimeout(bgDebounceRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [backgroundColor, backgroundImageId]);
 
   const addBlock = (type: ContentBlock["type"]) => {
     const id = crypto.randomUUID();
@@ -133,7 +176,13 @@ export default function PageEditor({
 
   return (
     <ThreeColumnShell
-      preview={<LiveBlockPreview blocks={blocks} />}
+      preview={
+        <LiveBlockPreview
+          blocks={blocks}
+          backgroundColor={backgroundColor}
+          backgroundImageUrl={backgroundImageUrl}
+        />
+      }
       edit={
         <div>
           <div className="space-y-4">
@@ -440,12 +489,9 @@ export default function PageEditor({
             {titleSaved && <p className="mt-1 text-xs text-green-600">Saved</p>}
           </div>
 
-          {/* Page-level controls, separate from the repeatable content
-              blocks below — Add Header is still just a block (reuses
-              the same addBlock/updateBlock/moveBlock machinery as every
-              other block type), just surfaced here since it's the
-              thing most pages want first, now that no heading appears
-              automatically. */}
+          {/* Page-level controls — Add Header is a content block (see
+              below), while background colour/image are real Page
+              columns with their own debounced save effect above. */}
           <div className="flex flex-col gap-2">
             <button
               type="button"
@@ -454,6 +500,77 @@ export default function PageEditor({
             >
               + Add Header
             </button>
+
+            {backgroundColor ? (
+              <div className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-1.5">
+                <input
+                  type="color"
+                  value={backgroundColor}
+                  onChange={(e) => setBackgroundColor(e.target.value)}
+                  className="h-6 w-6 shrink-0 cursor-pointer rounded border border-neutral-300 p-0"
+                />
+                <span className="flex-1 text-sm text-neutral-700">{backgroundColor}</span>
+                <button
+                  type="button"
+                  onClick={() => setBackgroundColor("")}
+                  className="text-xs text-red-500 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setBackgroundColor("#ffffff")}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
+              >
+                + Add background colour
+              </button>
+            )}
+
+            {backgroundImageUrl ? (
+              <div className="rounded-md border border-neutral-300 p-2">
+                <img src={backgroundImageUrl} alt="" className="mb-2 h-20 w-full rounded object-cover" />
+                <div className="flex items-center justify-between">
+                  <div className="w-28">
+                    <MediaPicker
+                      artistId={artistId}
+                      siteId={siteId}
+                      mode="single"
+                      label="Change"
+                      onSelect={(imgs) => {
+                        setBackgroundImageId(imgs[0].id);
+                        setBackgroundImageUrl(imgs[0].url);
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBackgroundImageId("");
+                      setBackgroundImageUrl("");
+                    }}
+                    className="text-xs text-red-500 hover:underline"
+                  >
+                    Remove
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <MediaPicker
+                artistId={artistId}
+                siteId={siteId}
+                mode="single"
+                label="+ Add background Image"
+                onSelect={(imgs) => {
+                  setBackgroundImageId(imgs[0].id);
+                  setBackgroundImageUrl(imgs[0].url);
+                }}
+              />
+            )}
+            <p className="text-xs text-neutral-400">
+              {bgSaveState === "saving" ? "Saving…" : bgSaveState === "saved" ? "Saved" : ""}
+            </p>
           </div>
 
           <div>
