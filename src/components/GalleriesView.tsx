@@ -132,6 +132,11 @@ export default function GalleriesView({
   // pressed from the completed-sale summary below, where there is no
   // active purchase at all.
   const [invoicePurchaseId, setInvoicePurchaseId] = useState<string | null>(null);
+  // Whether that purchase is already paid (2026-09-03) — passed straight
+  // through to InvoiceEmailModal so it can say "Receipt" instead of
+  // "Invoice" when that's what's actually being sent, matching the PDF
+  // itself (generateInvoicePdf already titles the document that way).
+  const [invoiceIsPaid, setInvoiceIsPaid] = useState(false);
   const [preparingInvoice, setPreparingInvoice] = useState(false);
   const [paymentLinkError, setPaymentLinkError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
@@ -416,6 +421,7 @@ export default function GalleriesView({
   // afterwards from the Payment link section.
   const handleOpenInvoiceModal = (purchase: PurchaseDetail) => {
     setInvoicePurchaseId(purchase.id);
+    setInvoiceIsPaid(purchase.status === "COMPLETED");
     if (purchase.status !== "ACTIVE" || purchase.stripePaymentLinkUrl) {
       setShowInvoiceModal(true);
       return;
@@ -1306,6 +1312,7 @@ export default function GalleriesView({
         <InvoiceEmailModal
           purchaseId={invoicePurchaseId}
           siteId={siteId}
+          isPaid={invoiceIsPaid}
           onClose={() => setShowInvoiceModal(false)}
           onSent={refreshAfterInvoiceOrLinkChange}
         />
