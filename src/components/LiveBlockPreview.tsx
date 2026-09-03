@@ -4,17 +4,21 @@ import type { ContentBlock } from "@/lib/blocks";
 
 export default function LiveBlockPreview({
   blocks,
-  pageTitle,
 }: {
   blocks: ContentBlock[];
-  pageTitle: string;
 }) {
   return (
     <div>
       <p className="mb-4 text-xs uppercase tracking-wide text-neutral-400">Live preview</p>
-      <h1 className="mb-4 text-2xl font-semibold text-neutral-900">{pageTitle}</h1>
       <div className="space-y-6">
         {blocks.map((block) => {
+          if (block.type === "header") {
+            return block.text ? (
+              <h1 key={block.id} className="text-2xl font-semibold text-neutral-900">
+                {block.text}
+              </h1>
+            ) : null;
+          }
           if (block.type === "text") {
             return block.text ? (
               <p key={block.id} className="whitespace-pre-wrap text-sm text-neutral-800">
