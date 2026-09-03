@@ -46,6 +46,7 @@ export default async function SalesPage({ params }: { params: Promise<{ id: stri
       artistId={site.artistId}
       sales={sales}
       saleSources={settings.saleSources}
+      paymentMethods={settings.paymentMethods}
     />
   );
 }
