@@ -141,6 +141,13 @@ model Artist {
   // here, not something requiring a migration to change.
   expenseCategories String[] @default(["Materials", "Studio", "Framing", "Insurance", "Equipment", "Shipping", "Professional fees", "Travel", "Marketing", "Other"])
 
+  // Offered as the "Method" dropdown when marking a gallery sale paid
+  // (2026-09-03) — same Settings-editable-list pattern as
+  // expenseCategories/saleSources above, edited via the same
+  // SettingsListCard. See markGallerySalePaid in lib/actions/payments.ts
+  // and Payment.method below.
+  paymentMethods String[] @default(["Bank transfer", "Cash", "Cheque", "Card", "PayPal"])
+
   logoUrl           String?
   invoiceAddress    String?
   vatNumber         String?
@@ -615,6 +622,13 @@ model Payment {
 
   dueDate  DateTime?
   paidDate DateTime?
+
+  // Only ever set on a GALLERY-channel sale's payment, by
+  // markGallerySalePaid (2026-09-03) — chosen from Artist.paymentMethods
+  // at the moment it's marked paid. Left null for Stripe-channel
+  // payments (always card, not worth recording) and for every row
+  // created before this existed.
+  method String?
 
   stripePaymentIntentId String?
   stripeInvoiceId       String?
