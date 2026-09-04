@@ -13,7 +13,11 @@ import { groupBlocksByRow } from "@/lib/blocks";
 // it up. Anchored top-left (object-left-top) rather than centred, so
 // the image doesn't visually drift as you drag a resize handle — the
 // top-left corner stays put and only the bottom/right edge moves.
-// Full-width, no-row blocks are unaffected either way.
+//
+// A full-width block with no row (`fill` false) gets its own cap —
+// max-h-[520px] with object-cover — so a portrait-oriented image
+// doesn't render at its full, potentially very tall, natural height
+// and end up looking oddly slim/elongated at typical preview widths.
 function renderBlock(block: ContentBlock, fill: boolean) {
   if (block.type === "header") {
     return block.text ? (
@@ -38,7 +42,7 @@ function renderBlock(block: ContentBlock, fill: boolean) {
           className={
             fill
               ? "h-full w-full rounded-md object-contain object-left-top"
-              : "w-full rounded-md"
+              : "max-h-[520px] w-full rounded-md object-cover"
           }
         />
         {block.caption && (
@@ -72,7 +76,7 @@ function renderBlock(block: ContentBlock, fill: boolean) {
         className={
           fill
             ? "h-full w-full rounded-md object-contain object-left-top"
-            : "w-full rounded-md"
+            : "max-h-[520px] w-full rounded-md"
         }
       />
     ) : null;
