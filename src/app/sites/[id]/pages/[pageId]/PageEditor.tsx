@@ -21,16 +21,26 @@ import { groupBlocksByRow } from "@/lib/blocks";
 // function so it can be used identically whether the block is rendered
 // full-width or paired side-by-side in a row (2026-09-03), rather than
 // being duplicated between the two rendering paths below.
+//
+// `fill` (2026-09-04 bug fix) — true when this block sits in a row that
+// has an explicit rowHeight. Image/video previews then stretch to fill
+// the available height (object-cover, matching the real page) instead
+// of a fixed small thumbnail — without this, dragging the width handle
+// visually looked like the image was being "cropped narrower" rather
+// than actually resized, because the preview never reflected the row's
+// real proportions while editing.
 function BlockFields({
   block,
   artistId,
   siteId,
   updateBlock,
+  fill = false,
 }: {
   block: ContentBlock;
   artistId: string;
   siteId: string;
   updateBlock: (id: string, patch: Partial<ContentBlock>) => void;
+  fill?: boolean;
 }) {
   if (block.type === "header") {
     return (
@@ -58,9 +68,19 @@ function BlockFields({
 
   if (block.type === "image") {
     return (
-      <div>
+      <div className={fill ? "flex h-full flex-col" : undefined}>
         {block.url && (
-          <img src={block.url} alt="" className="mb-2 max-h-48 rounded-md object-cover" />
+          <div className={fill ? "mb-2 min-h-0 flex-1" : "mb-2"}>
+            <img
+              src={block.url}
+              alt=""
+              className={
+                fill
+                  ? "h-full w-full rounded-md object-cover"
+                  : "max-h-48 w-full rounded-md object-cover"
+              }
+            />
+          </div>
         )}
         <div className="w-32">
           <MediaPicker
@@ -167,14 +187,18 @@ function BlockFields({
 
   if (block.type === "video") {
     return (
-      <div>
+      <div className={fill ? "flex h-full flex-col" : undefined}>
         {block.url && (
-          <video
-            src={block.url}
-            poster={block.posterUrl}
-            controls
-            className="mb-2 max-h-48 w-full rounded-md"
-          />
+          <div className={fill ? "mb-2 min-h-0 flex-1" : "mb-2"}>
+            <video
+              src={block.url}
+              poster={block.posterUrl}
+              controls
+              className={
+                fill ? "h-full w-full rounded-md object-cover" : "max-h-48 w-full rounded-md"
+              }
+            />
+          </div>
         )}
         <div className="w-32">
           <MediaPicker
@@ -395,9 +419,14 @@ function RowGroup({
         </div>
       </div>
 
+      {/* overflow-hidden when a height is set (2026-09-04 bug fix) —
+          keeps this box's visual size matching its layout size, same
+          reasoning as the matching fix in LiveBlockPreview/
+          BlockRenderer, so the editor's own box doesn't silently grow
+          past what you actually set. */}
       <div
         ref={containerRef}
-        className="grid items-stretch"
+        className={`grid items-stretch ${rowHeight ? "overflow-hidden" : ""}`}
         style={{
           gridTemplateColumns: group.map((b) => `${b.width ?? 1}fr`).join(" "),
           height: rowHeight ? `${rowHeight}px` : undefined,
@@ -423,6 +452,7 @@ function RowGroup({
                 artistId={artistId}
                 siteId={siteId}
                 updateBlock={updateBlock}
+                fill={Boolean(rowHeight)}
               />
             </div>
             {i < group.length - 1 && (
