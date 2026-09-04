@@ -86,6 +86,15 @@ enum PaymentStatus {
   FAILED
 }
 
+// The two fixed guide categories shown as pill tabs on the Guides page
+// (2026-09-04) — deliberately a real enum, not a Settings-editable list
+// like Artist.paymentMethods: confirmed as always exactly these two,
+// never a third.
+enum GuideCategory {
+  USER
+  TECHNICAL
+}
+
 model Artist {
   id        String       @id @default(cuid())
   name      String
@@ -860,4 +869,32 @@ model PlatformSettings {
   expenseCategories String[] @default(["Hosting", "Domains", "Software & APIs", "Legal & Accounting", "Marketing", "Other"])
 
   updatedAt DateTime @updatedAt
+}
+
+// Step-by-step user guides, shown in the Administration menu (2026-09-04,
+// direct request) — platform-wide like PlatformExpense above, not tied
+// to any Artist or Site: this is the platform owner's own internal
+// documentation, managed centrally in one place rather than per site.
+//
+// `steps` is an ordered JSON array (`{ id, text, imageUrl }[]`) rather
+// than a child table — same convention already used for Page's
+// draftBlocks/liveBlocks — since steps are only ever read/written as one
+// whole unit from the guide's own edit panel, never queried on their
+// own.
+model Guide {
+  id       String        @id @default(cuid())
+  category GuideCategory
+  title    String
+
+  steps Json @default("[]")
+
+  // Sets display order within its category — a new guide is appended
+  // after the current highest position in that category. No drag-and-
+  // drop between categories; a guide's category is fixed once created.
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([category])
 }
