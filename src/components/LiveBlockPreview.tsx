@@ -3,7 +3,11 @@
 import type { ContentBlock } from "@/lib/blocks";
 import { groupBlocksByRow } from "@/lib/blocks";
 
-function renderBlock(block: ContentBlock) {
+// `fill` — true when this block is rendered inside a row that has an
+// explicit rowHeight (2026-09-04), so media should stretch to fill that
+// height (object-cover) instead of using its own natural aspect ratio.
+// Full-width, no-row blocks are unaffected either way.
+function renderBlock(block: ContentBlock, fill: boolean) {
   if (block.type === "header") {
     return block.text ? (
       <h1 key={block.id} className="text-2xl font-semibold text-neutral-900">
@@ -20,8 +24,12 @@ function renderBlock(block: ContentBlock) {
   }
   if (block.type === "image") {
     return block.url ? (
-      <figure key={block.id}>
-        <img src={block.url} alt={block.caption || ""} className="w-full rounded-md" />
+      <figure key={block.id} className={fill ? "h-full" : undefined}>
+        <img
+          src={block.url}
+          alt={block.caption || ""}
+          className={fill ? "h-full w-full rounded-md object-cover" : "w-full rounded-md"}
+        />
         {block.caption && (
           <figcaption className="mt-1 text-xs text-neutral-500">{block.caption}</figcaption>
         )}
@@ -30,16 +38,26 @@ function renderBlock(block: ContentBlock) {
   }
   if (block.type === "gallery") {
     return block.images.length > 0 ? (
-      <div key={block.id} className="grid grid-cols-2 gap-2">
+      <div key={block.id} className={`grid grid-cols-2 gap-2 ${fill ? "h-full" : ""}`}>
         {block.images.map((img) => (
-          <img key={img.imageId} src={img.url} alt="" className="rounded-md" />
+          <img
+            key={img.imageId}
+            src={img.url}
+            alt=""
+            className={fill ? "h-full w-full rounded-md object-cover" : "rounded-md"}
+          />
         ))}
       </div>
     ) : null;
   }
   if (block.type === "video") {
     return block.url ? (
-      <video key={block.id} src={block.url} controls className="w-full rounded-md" />
+      <video
+        key={block.id}
+        src={block.url}
+        controls
+        className={fill ? "h-full w-full rounded-md object-cover" : "w-full rounded-md"}
+      />
     ) : null;
   }
   if (block.type === "artwork") {
@@ -47,7 +65,11 @@ function renderBlock(block: ContentBlock) {
     return (
       <div key={block.id} className="flex gap-3 rounded-md border border-neutral-200 p-3">
         {block.previewImageUrl ? (
-          <img src={block.previewImageUrl} alt="" className="h-20 w-20 rounded object-cover" />
+          <img
+            src={block.previewImageUrl}
+            alt=""
+            className="h-20 w-20 rounded object-cover"
+          />
         ) : (
           <div className="h-20 w-20 rounded bg-neutral-100" />
         )}
@@ -115,19 +137,22 @@ export default function LiveBlockPreview({
           backgroundPosition: "center",
         }}
       >
-        {groups.map((group) =>
-          group.length > 1 ? (
+        {groups.map((group) => {
+          if (group.length === 1) return renderBlock(group[0], false);
+          const rowHeight = group[0].rowHeight;
+          return (
             <div
               key={group[0].id}
-              className="grid gap-4"
-              style={{ gridTemplateColumns: `repeat(${group.length}, minmax(0, 1fr))` }}
+              className="grid items-stretch gap-4"
+              style={{
+                gridTemplateColumns: group.map((b) => `${b.width ?? 1}fr`).join(" "),
+                height: rowHeight ? `${rowHeight}px` : undefined,
+              }}
             >
-              {group.map((block) => renderBlock(block))}
+              {group.map((block) => renderBlock(block, Boolean(rowHeight)))}
             </div>
-          ) : (
-            renderBlock(group[0])
-          )
-        )}
+          );
+        })}
         {blocks.length === 0 && (
           <p className="text-sm text-neutral-400">Add a block to see it appear here.</p>
         )}
