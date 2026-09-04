@@ -23,12 +23,14 @@ import { groupBlocksByRow } from "@/lib/blocks";
 // being duplicated between the two rendering paths below.
 //
 // `fill` (2026-09-04) — true when this block sits in a row that has an
-// explicit rowHeight. Image/video previews then scale to fit that
-// height (object-contain, whole image visible, anchored top-left)
-// instead of a fixed small thumbnail, so what you see while dragging
-// the resize handles matches the real page: shrinking a row shrinks
-// the picture without cropping it, and the image doesn't drift as you
-// drag since it's anchored rather than centred.
+// explicit rowHeight. Image/Video below both use ONE MediaPicker call
+// each, in every case (row or not) — only the size/crop props change
+// (previewClassName/previewObjectFit) — rather than two different
+// implementations for the two cases. That divergence (a manual <img>
+// for rows vs. MediaPicker's own preview box for standalone) is what
+// caused the resize-slider regression on 2026-09-04: the two paths
+// drifted out of sync with each other. One call, parameterized, can't
+// drift.
 function BlockFields({
   block,
   artistId,
@@ -67,61 +69,20 @@ function BlockFields({
   }
 
   if (block.type === "image") {
-    // In a sized row, keep the manual preview: it needs to match the
-    // row's exact height (object-contain, anchored top-left, per the
-    // note above) — MediaPicker's previewUrl mode below uses a fixed
-    // 4:3 box that isn't meant to track an arbitrary drag-resized
-    // height.
-    if (fill) {
-      return (
-        <div className="flex h-full flex-col">
-          {block.url && (
-            <div className="mb-2 min-h-0 flex-1">
-              <img
-                src={block.url}
-                alt=""
-                className="h-full w-full rounded-md object-contain object-left-top"
-              />
-            </div>
-          )}
-          <div className="w-32">
-            <MediaPicker
-              artistId={artistId}
-              siteId={siteId}
-              mode="single"
-              label={block.url ? "Change Image" : "Add Image"}
-              onSelect={(imgs) =>
-                updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })
-              }
-            />
-          </div>
-          {block.url && (
-            <input
-              type="text"
-              value={block.caption || ""}
-              onChange={(e) => updateBlock(block.id, { caption: e.target.value })}
-              placeholder="Caption (optional)"
-              className="mt-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm"
-            />
-          )}
-        </div>
-      );
-    }
-
-    // Click the image itself to change it (2026-09-04, direct request)
-    // — MediaPicker's previewUrl mode makes the picked image the click
-    // target (with a hover "+" overlay) instead of a separate small
-    // "Change Image" button below a static thumbnail.
     return (
-      <div>
-        <MediaPicker
-          artistId={artistId}
-          siteId={siteId}
-          mode="single"
-          label="Add Image"
-          previewUrl={block.url || undefined}
-          onSelect={(imgs) => updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })}
-        />
+      <div className={fill ? "flex h-full flex-col" : undefined}>
+        <div className={fill ? "min-h-0 flex-1" : undefined}>
+          <MediaPicker
+            artistId={artistId}
+            siteId={siteId}
+            mode="single"
+            label="Add Image"
+            previewUrl={block.url || undefined}
+            previewClassName={fill ? "h-full w-full" : "max-h-[520px] w-full"}
+            previewObjectFit={fill ? "contain" : "cover"}
+            onSelect={(imgs) => updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })}
+          />
+        </div>
         {block.url && (
           <input
             type="text"
@@ -219,27 +180,17 @@ function BlockFields({
   if (block.type === "video") {
     return (
       <div className={fill ? "flex h-full flex-col" : undefined}>
-        {block.url && (
-          <div className={fill ? "mb-2 min-h-0 flex-1" : "mb-2"}>
-            <video
-              src={block.url}
-              poster={block.posterUrl}
-              controls
-              className={
-                fill
-                  ? "h-full w-full rounded-md object-contain object-left-top"
-                  : "max-h-48 w-full rounded-md"
-              }
-            />
-          </div>
-        )}
-        <div className="w-32">
+        <div className={fill ? "min-h-0 flex-1" : undefined}>
           <MediaPicker
             artistId={artistId}
             siteId={siteId}
             mode="single"
             videoOnly
-            label={block.url ? "Change Video" : "Add Video"}
+            label="Add Video"
+            previewUrl={block.posterUrl || block.url || undefined}
+            previewKind={block.posterUrl ? "image" : "video"}
+            previewClassName={fill ? "h-full w-full" : "max-h-[520px] w-full"}
+            previewObjectFit={fill ? "contain" : "cover"}
             onSelect={(vids) =>
               updateBlock(block.id, {
                 imageId: vids[0].id,
@@ -399,6 +350,10 @@ function ResizeHandle({
 // row's bottom edge (drags the row's own `rowHeight`, in px). Pulled
 // out from the main map() below since it needs its own ref (to measure
 // the row's rendered size for the drag math) and drag-start baseline.
+// This handle is structurally independent of what's inside each
+// block — it doesn't read or depend on any block's own content or
+// rendering, only on `containerRef`'s measured size — so it can't be
+// broken by a block-content change the way the resize regression was.
 function RowGroup({
   group,
   groupIndex,
@@ -692,8 +647,24 @@ export default function PageEditor({
     );
   };
 
+  // Removing a block from a row that leaves exactly one block behind
+  // (2026-09-04, direct request) resets that leftover block back to
+  // natural full-width — clearing `row`/`width`/`rowHeight` rather than
+  // leaving it sized as if it still had a partner, or a row wrapper
+  // with nothing to divide space with.
   const removeBlock = (id: string) => {
-    setBlocks((prev) => prev.filter((b) => b.id !== id));
+    setBlocks((prev) => {
+      const next = prev.filter((b) => b.id !== id);
+      const groups = groupBlocksByRow(next);
+      return next.map((b) => {
+        const stillGrouped = groups.some((g) => g.length > 1 && g.some((gb) => gb.id === b.id));
+        if (!stillGrouped && b.row) {
+          const { row, width, rowHeight, ...rest } = b;
+          return rest as ContentBlock;
+        }
+        return b;
+      });
+    });
   };
 
   // Moves a whole row (1 or more blocks) up/down past its neighbouring
