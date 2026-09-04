@@ -9,7 +9,10 @@ type ArtworkData = {
   images: { url: string }[];
 };
 
-// `fill` — see the matching note in LiveBlockPreview.tsx.
+// `fill` — see the matching note in LiveBlockPreview.tsx. Full-width
+// (non-row) images/video are capped at max-h-[520px] + object-cover
+// for the same reason noted there — a portrait-oriented image
+// shouldn't render at its uncapped natural height.
 function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean) {
   if (block.type === "header") {
     return block.text ? (
@@ -34,7 +37,7 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
           className={
             fill
               ? "h-full w-full rounded-md object-contain object-left-top"
-              : "w-full rounded-md"
+              : "max-h-[520px] w-full rounded-md object-cover"
           }
         />
         {block.caption && (
@@ -68,7 +71,7 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
         className={
           fill
             ? "h-full w-full rounded-md object-contain object-left-top"
-            : "w-full rounded-md"
+            : "max-h-[520px] w-full rounded-md"
         }
       />
     ) : null;
