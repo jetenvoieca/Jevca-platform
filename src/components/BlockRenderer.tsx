@@ -125,9 +125,11 @@ export default function BlockRenderer({
         if (group.length === 1) return renderBlock(group[0], artworks, false);
         const rowHeight = group[0].rowHeight;
         return (
+          // See the matching note in LiveBlockPreview.tsx — clipping
+          // only when a height is actually set.
           <div
             key={group[0].id}
-            className="grid items-stretch gap-6"
+            className={`grid items-stretch gap-6 ${rowHeight ? "overflow-hidden" : ""}`}
             style={{
               gridTemplateColumns: group.map((b) => `${b.width ?? 1}fr`).join(" "),
               height: rowHeight ? `${rowHeight}px` : undefined,
