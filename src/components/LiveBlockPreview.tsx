@@ -5,10 +5,15 @@ import { groupBlocksByRow } from "@/lib/blocks";
 
 // `fill` — true when this block is rendered inside a row that has an
 // explicit rowHeight (2026-09-04). Media then scales to fit within
-// that height (object-contain, whole image visible, letterboxed on a
-// neutral backdrop) rather than being cropped to fill it — resizing a
-// row shrinks the picture, it doesn't cut pieces off it. Full-width,
-// no-row blocks are unaffected either way.
+// that height (object-contain, whole image visible) rather than being
+// cropped — resizing a row shrinks the picture, it doesn't cut pieces
+// off it. No backdrop colour behind the letterboxing (2026-09-04 fix):
+// the box is transparent, so the page's own background colour/image
+// shows through continuously instead of a fixed grey patch breaking
+// it up. Anchored top-left (object-left-top) rather than centred, so
+// the image doesn't visually drift as you drag a resize handle — the
+// top-left corner stays put and only the bottom/right edge moves.
+// Full-width, no-row blocks are unaffected either way.
 function renderBlock(block: ContentBlock, fill: boolean) {
   if (block.type === "header") {
     return block.text ? (
@@ -32,7 +37,7 @@ function renderBlock(block: ContentBlock, fill: boolean) {
           alt={block.caption || ""}
           className={
             fill
-              ? "h-full w-full rounded-md bg-neutral-100 object-contain"
+              ? "h-full w-full rounded-md object-contain object-left-top"
               : "w-full rounded-md"
           }
         />
@@ -51,9 +56,7 @@ function renderBlock(block: ContentBlock, fill: boolean) {
             src={img.url}
             alt=""
             className={
-              fill
-                ? "h-full w-full rounded-md bg-neutral-100 object-contain"
-                : "rounded-md"
+              fill ? "h-full w-full rounded-md object-contain object-left-top" : "rounded-md"
             }
           />
         ))}
@@ -68,7 +71,7 @@ function renderBlock(block: ContentBlock, fill: boolean) {
         controls
         className={
           fill
-            ? "h-full w-full rounded-md bg-neutral-900 object-contain"
+            ? "h-full w-full rounded-md object-contain object-left-top"
             : "w-full rounded-md"
         }
       />
