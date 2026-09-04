@@ -301,6 +301,15 @@ function BlockFields({
 // cursor leaves it mid-drag, so no document-level listener wiring is
 // needed. Reports each incremental pixel delta via onDrag — the caller
 // decides what that delta means (a width weight, a height in px).
+//
+// Hit-target is deliberately wider than the thin visible bar (w-6/h-6,
+// 24px, vs the 4px bar drawn inside it) — 2026-09-04, direct report
+// that the handle felt like it "jumped away" as the cursor approached.
+// A thin target sitting right at a CSS Grid fr-based column boundary
+// is exactly the kind of thing sub-pixel rounding + a large adjacent
+// hover-reactive element (the image/MediaPicker button) can make feel
+// elusive; giving it real width is the standard, robust fix rather
+// than fighting pixel-level positioning.
 function ResizeHandle({
   direction,
   onDrag,
@@ -329,8 +338,8 @@ function ResizeHandle({
       }}
       className={
         direction === "horizontal"
-          ? "group flex w-4 shrink-0 touch-none items-center justify-center cursor-col-resize"
-          : "group mt-2 flex h-4 w-full touch-none items-center justify-center cursor-row-resize"
+          ? "group flex w-6 shrink-0 touch-none select-none items-center justify-center cursor-col-resize"
+          : "group mt-2 flex h-6 w-full touch-none select-none items-center justify-center cursor-row-resize"
       }
     >
       <div
