@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/payments";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import InvoiceEmailModal from "@/components/InvoiceEmailModal";
+import CertificateEmailModal from "@/components/CertificateEmailModal";
 
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
@@ -96,6 +97,9 @@ export default function GallerySaleCard({
   const [preparingInvoice, setPreparingInvoice] = useState(false);
   const [paymentLinkError, setPaymentLinkError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+
+  // ---- Certificate of Authenticity — only ever offered once paid ----
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
 
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
@@ -260,10 +264,20 @@ export default function GallerySaleCard({
         </p>
       )}
 
+      {/* Same simple sent-log pattern as invoiceEmailedAt above — only
+          ever shown once paid, since a certificate can't be requested
+          before that. */}
+      {purchase.certificateEmailedAt && (
+        <p className="mt-1 text-xs text-neutral-400">
+          Certificate sent {new Date(purchase.certificateEmailedAt).toLocaleDateString()}
+          {purchase.certificateEmailedTo ? ` to ${purchase.certificateEmailedTo}` : ""}
+        </p>
+      )}
+
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
       {isPaid ? (
-        <div className="mt-3">
+        <div className="mt-3 flex gap-2">
           <button
             type="button"
             onClick={handleOpenInvoiceModal}
@@ -271,6 +285,16 @@ export default function GallerySaleCard({
             className={actionButtonCls}
           >
             {purchase.invoiceEmailedAt ? "Send receipt again" : "Send receipt"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowCertificateModal(true)}
+            disabled={isPending}
+            className={actionButtonCls}
+          >
+            {purchase.certificateEmailedAt
+              ? "Send certificate again"
+              : "Certificate of Authenticity"}
           </button>
         </div>
       ) : (
@@ -421,6 +445,15 @@ export default function GallerySaleCard({
           siteId={siteId}
           isPaid={isPaid}
           onClose={() => setShowInvoiceModal(false)}
+          onSent={onChanged}
+        />
+      )}
+
+      {showCertificateModal && (
+        <CertificateEmailModal
+          purchaseId={purchase.id}
+          siteId={siteId}
+          onClose={() => setShowCertificateModal(false)}
           onSent={onChanged}
         />
       )}
