@@ -22,13 +22,12 @@ import { groupBlocksByRow } from "@/lib/blocks";
 // full-width or paired side-by-side in a row (2026-09-03), rather than
 // being duplicated between the two rendering paths below.
 //
-// `fill` (2026-09-04 bug fix) — true when this block sits in a row that
-// has an explicit rowHeight. Image/video previews then stretch to fill
-// the available height (object-cover, matching the real page) instead
-// of a fixed small thumbnail — without this, dragging the width handle
-// visually looked like the image was being "cropped narrower" rather
-// than actually resized, because the preview never reflected the row's
-// real proportions while editing.
+// `fill` (2026-09-04) — true when this block sits in a row that has an
+// explicit rowHeight. Image/video previews then scale to fit that
+// height (object-contain, whole image visible, letterboxed) instead of
+// a fixed small thumbnail, so what you see while dragging the resize
+// handles matches the real page — shrinking a row shrinks the picture,
+// it doesn't crop pieces off it.
 function BlockFields({
   block,
   artistId,
@@ -76,7 +75,7 @@ function BlockFields({
               alt=""
               className={
                 fill
-                  ? "h-full w-full rounded-md object-cover"
+                  ? "h-full w-full rounded-md bg-neutral-100 object-contain"
                   : "max-h-48 w-full rounded-md object-cover"
               }
             />
@@ -195,7 +194,9 @@ function BlockFields({
               poster={block.posterUrl}
               controls
               className={
-                fill ? "h-full w-full rounded-md object-cover" : "max-h-48 w-full rounded-md"
+                fill
+                  ? "h-full w-full rounded-md bg-neutral-900 object-contain"
+                  : "max-h-48 w-full rounded-md"
               }
             />
           </div>
