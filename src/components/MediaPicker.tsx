@@ -61,6 +61,9 @@ export default function MediaPicker({
   label = "Add Image",
   linkedArtworkId,
   previewUrl,
+  previewKind = "image",
+  previewClassName,
+  previewObjectFit = "cover",
   onSelect,
 }: {
   artistId: string;
@@ -93,6 +96,27 @@ export default function MediaPicker({
   // longer need their own separate <img> + small MediaPicker pairing —
   // this one picker is now both the preview and the trigger.
   previewUrl?: string;
+  // "video" renders previewUrl in a muted <video> instead of an <img>
+  // (2026-09-04, Content Blocks' Video block) — e.g. pass a poster
+  // frame's URL with previewKind="image" if one exists, or the video
+  // file itself with previewKind="video" as a fallback when it doesn't.
+  previewKind?: "image" | "video";
+  // Overrides the default `aspect-[4/3] w-full` box the preview/trigger
+  // renders at (2026-09-04) — e.g. `h-full w-full` to fill an
+  // arbitrary drag-resized row, or `max-h-[520px] w-full` for a capped
+  // full-width block. Also applied to the empty (no previewUrl yet)
+  // dashed placeholder, so a not-yet-picked slot sizes the same way an
+  // already-picked one would — the two states shouldn't visually
+  // disagree about how much space this picker occupies. Every other
+  // existing caller (Artist profile photo, Artwork main image, etc.)
+  // is unaffected — they don't pass this, so they keep the original
+  // aspect-[4/3]/aspect-square boxes exactly as before.
+  previewClassName?: string;
+  // "contain" (2026-09-04) — whole image visible, scaled to fit rather
+  // than cropped, anchored top-left so it doesn't drift as the box is
+  // resized. Used for the Content Blocks row-resize feature; every
+  // other caller keeps the default "cover".
+  previewObjectFit?: "cover" | "contain";
   onSelect: (images: PickedImage[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -199,15 +223,24 @@ export default function MediaPicker({
   // size instead of a small placeholder, with the same dashed-border
   // language shown as a hover overlay rather than the whole tile.
   if (!open) {
+    const fitClass =
+      previewObjectFit === "contain" ? "object-contain object-left-top" : "object-cover";
+
     if (previewUrl) {
       return (
         <button
           type="button"
           onClick={handleOpen}
-          className="group relative block aspect-[4/3] w-full overflow-hidden rounded-md"
+          className={`group relative block w-full overflow-hidden rounded-md ${
+            previewClassName ?? "aspect-[4/3]"
+          }`}
         >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+          {previewKind === "video" ? (
+            <video src={previewUrl} muted playsInline className={`h-full w-full ${fitClass}`} />
+          ) : (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={previewUrl} alt="" className={`h-full w-full ${fitClass}`} />
+          )}
           <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
             <div className="hidden h-2/3 w-2/3 items-center justify-center border-2 border-dashed border-white group-hover:flex">
               <span className="text-2xl leading-none text-white">+</span>
@@ -220,7 +253,9 @@ export default function MediaPicker({
       <button
         type="button"
         onClick={handleOpen}
-        className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
+        className={`flex w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600 ${
+          previewClassName ?? "aspect-square"
+        }`}
       >
         + {label}
       </button>
