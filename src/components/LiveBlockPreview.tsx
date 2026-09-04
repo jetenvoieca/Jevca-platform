@@ -141,9 +141,18 @@ export default function LiveBlockPreview({
           if (group.length === 1) return renderBlock(group[0], false);
           const rowHeight = group[0].rowHeight;
           return (
+            // overflow-hidden when a height has been set (2026-09-04
+            // bug fix) — without it, content taller than the chosen
+            // height painted past the row's laid-out box: the box
+            // itself (and the page background behind it) stayed at the
+            // set height while the image visually spilled below it,
+            // and the next row then started flowing right after that
+            // too-short box, overlapping the spill. Clipping keeps the
+            // row's visual size and its layout size the same, matching
+            // how the width handle already crops rather than overflows.
             <div
               key={group[0].id}
-              className="grid items-stretch gap-4"
+              className={`grid items-stretch gap-4 ${rowHeight ? "overflow-hidden" : ""}`}
               style={{
                 gridTemplateColumns: group.map((b) => `${b.width ?? 1}fr`).join(" "),
                 height: rowHeight ? `${rowHeight}px` : undefined,
