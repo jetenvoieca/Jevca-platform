@@ -171,11 +171,20 @@ export default function LiveBlockPreview({
             // too-short box, overlapping the spill. Clipping keeps the
             // row's visual size and its layout size the same, matching
             // how the width handle already crops rather than overflows.
+            //
+            // gridTemplateColumns uses minmax(0, Xfr), not bare `Xfr`
+            // (2026-09-04 bug fix, matching PageEditor's RowGroup) — a
+            // bare `fr` track still respects its content's min-content
+            // width by default, which could keep a column from truly
+            // reaching a small share even though the ratio was
+            // correct. Applied here too so this renderer can't drift
+            // out of sync with the editor or BlockRenderer the way the
+            // editor's own copy briefly did.
             <div
               key={group[0].id}
               className={`grid items-stretch gap-4 ${rowHeight ? "overflow-hidden" : ""}`}
               style={{
-                gridTemplateColumns: group.map((b) => `${b.width ?? 1}fr`).join(" "),
+                gridTemplateColumns: group.map((b) => `minmax(0, ${b.width ?? 1}fr)`).join(" "),
                 height: rowHeight ? `${rowHeight}px` : undefined,
               }}
             >
