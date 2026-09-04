@@ -139,12 +139,15 @@ export default function BlockRenderer({
         const rowHeight = group[0].rowHeight;
         return (
           // See the matching note in LiveBlockPreview.tsx — clipping
-          // only when a height is actually set.
+          // only when a height is actually set, and minmax(0, Xfr) so
+          // this renderer can't drift out of sync with the editor or
+          // LiveBlockPreview the way the editor's own copy briefly did
+          // (2026-09-04 bug fix).
           <div
             key={group[0].id}
             className={`grid items-stretch gap-6 ${rowHeight ? "overflow-hidden" : ""}`}
             style={{
-              gridTemplateColumns: group.map((b) => `${b.width ?? 1}fr`).join(" "),
+              gridTemplateColumns: group.map((b) => `minmax(0, ${b.width ?? 1}fr)`).join(" "),
               height: rowHeight ? `${rowHeight}px` : undefined,
             }}
           >
