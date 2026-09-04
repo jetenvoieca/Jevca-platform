@@ -288,6 +288,170 @@ function BlockFields({
   return null;
 }
 
+// A draggable divider (2026-09-04, resize sliders). Pointer capture
+// means move/up events keep firing on this element even once the
+// cursor leaves it mid-drag, so no document-level listener wiring is
+// needed. Reports each incremental pixel delta via onDrag — the caller
+// decides what that delta means (a width weight, a height in px).
+function ResizeHandle({
+  direction,
+  onDrag,
+}: {
+  direction: "horizontal" | "vertical";
+  onDrag: (deltaPx: number) => void;
+}) {
+  const dragging = useRef(false);
+  const lastPos = useRef(0);
+
+  return (
+    <div
+      onPointerDown={(e) => {
+        dragging.current = true;
+        lastPos.current = direction === "horizontal" ? e.clientX : e.clientY;
+        (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      }}
+      onPointerMove={(e) => {
+        if (!dragging.current) return;
+        const pos = direction === "horizontal" ? e.clientX : e.clientY;
+        onDrag(pos - lastPos.current);
+        lastPos.current = pos;
+      }}
+      onPointerUp={() => {
+        dragging.current = false;
+      }}
+      className={
+        direction === "horizontal"
+          ? "group flex w-4 shrink-0 touch-none items-center justify-center cursor-col-resize"
+          : "group mt-2 flex h-4 w-full touch-none items-center justify-center cursor-row-resize"
+      }
+    >
+      <div
+        className={
+          direction === "horizontal"
+            ? "h-8 w-1 rounded-full bg-neutral-300 group-hover:bg-neutral-500"
+            : "h-1 w-8 rounded-full bg-neutral-300 group-hover:bg-neutral-500"
+        }
+      />
+    </div>
+  );
+}
+
+// One row of 2+ side-by-side blocks, with its own resize handles — a
+// vertical handle between each pair of blocks (drags their `width`
+// weights relative to each other) and a horizontal handle along the
+// row's bottom edge (drags the row's own `rowHeight`, in px). Pulled
+// out from the main map() below since it needs its own ref (to measure
+// the row's rendered size for the drag math) and drag-start baseline.
+function RowGroup({
+  group,
+  groupIndex,
+  groupsLength,
+  artistId,
+  siteId,
+  updateBlock,
+  removeBlock,
+  moveGroup,
+  adjustRowWidths,
+  adjustRowHeight,
+}: {
+  group: ContentBlock[];
+  groupIndex: number;
+  groupsLength: number;
+  artistId: string;
+  siteId: string;
+  updateBlock: (id: string, patch: Partial<ContentBlock>) => void;
+  removeBlock: (id: string) => void;
+  moveGroup: (groupIndex: number, direction: -1 | 1) => void;
+  adjustRowWidths: (leftId: string, rightId: string, deltaPx: number, containerWidth: number) => void;
+  adjustRowHeight: (blockIds: string[], deltaPx: number, naturalHeightFallback: number) => void;
+}) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rowHeight = group[0].rowHeight;
+  const blockIds = group.map((b) => b.id);
+
+  return (
+    <div className="rounded-lg border border-neutral-300 bg-neutral-50 p-3">
+      <div className="mb-3 flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+          Row · {group.length} blocks side by side
+        </span>
+        <div className="flex items-center gap-2 text-xs text-neutral-400">
+          <button
+            type="button"
+            onClick={() => moveGroup(groupIndex, -1)}
+            disabled={groupIndex === 0}
+            className="hover:text-neutral-900 disabled:opacity-30"
+          >
+            ↑
+          </button>
+          <button
+            type="button"
+            onClick={() => moveGroup(groupIndex, 1)}
+            disabled={groupIndex === groupsLength - 1}
+            className="hover:text-neutral-900 disabled:opacity-30"
+          >
+            ↓
+          </button>
+        </div>
+      </div>
+
+      <div
+        ref={containerRef}
+        className="grid items-stretch"
+        style={{
+          gridTemplateColumns: group.map((b) => `${b.width ?? 1}fr`).join(" "),
+          height: rowHeight ? `${rowHeight}px` : undefined,
+        }}
+      >
+        {group.map((block, i) => (
+          <div key={block.id} className="flex min-w-0 items-stretch">
+            <div className="flex min-w-0 flex-1 flex-col overflow-auto rounded-lg border border-neutral-200 bg-white p-3">
+              <div className="mb-2 flex items-center justify-between">
+                <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  {block.type}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => removeBlock(block.id)}
+                  className="text-xs text-red-500 hover:underline"
+                >
+                  Remove
+                </button>
+              </div>
+              <BlockFields
+                block={block}
+                artistId={artistId}
+                siteId={siteId}
+                updateBlock={updateBlock}
+              />
+            </div>
+            {i < group.length - 1 && (
+              <ResizeHandle
+                direction="horizontal"
+                onDrag={(deltaPx) =>
+                  adjustRowWidths(
+                    block.id,
+                    group[i + 1].id,
+                    deltaPx,
+                    containerRef.current?.getBoundingClientRect().width || 400
+                  )
+                }
+              />
+            )}
+          </div>
+        ))}
+      </div>
+
+      <ResizeHandle
+        direction="vertical"
+        onDrag={(deltaPx) =>
+          adjustRowHeight(blockIds, deltaPx, containerRef.current?.getBoundingClientRect().height || 300)
+        }
+      />
+    </div>
+  );
+}
+
 export default function PageEditor({
   siteId,
   artistId,
@@ -484,6 +648,52 @@ export default function PageEditor({
     });
   };
 
+  // Resize sliders (2026-09-04). Both read the *current* state on every
+  // call rather than a captured drag-start snapshot — pointer events
+  // fire once per pixel of movement, so each call just needs to nudge
+  // the previous value by that pixel's delta; over a whole drag this
+  // converges to the same result as computing from a fixed start point,
+  // without RowGroup needing to track its own running total.
+
+  // Converts the dragged pixel distance into a change in the two
+  // blocks' relative width *weights* (not px directly), so the ratio
+  // keeps making sense at any container width.
+  const adjustRowWidths = (
+    leftId: string,
+    rightId: string,
+    deltaPx: number,
+    containerWidth: number
+  ) => {
+    setBlocks((prev) => {
+      const left = prev.find((b) => b.id === leftId);
+      const right = prev.find((b) => b.id === rightId);
+      if (!left || !right) return prev;
+      const leftWidth = left.width ?? 1;
+      const rightWidth = right.width ?? 1;
+      const deltaWeight = (deltaPx / containerWidth) * (leftWidth + rightWidth);
+      const newLeft = Math.max(0.2, leftWidth + deltaWeight);
+      const newRight = Math.max(0.2, rightWidth - deltaWeight);
+      return prev.map((b) => {
+        if (b.id === leftId) return { ...b, width: newLeft } as ContentBlock;
+        if (b.id === rightId) return { ...b, width: newRight } as ContentBlock;
+        return b;
+      });
+    });
+  };
+
+  // `naturalHeightFallback` (the row's currently-rendered height) only
+  // matters the very first time this row is resized, before any block
+  // in it has a `rowHeight` yet — after that, the stored value is used.
+  const adjustRowHeight = (blockIds: string[], deltaPx: number, naturalHeightFallback: number) => {
+    setBlocks((prev) => {
+      const current = prev.find((b) => blockIds.includes(b.id))?.rowHeight ?? naturalHeightFallback;
+      const next = Math.min(900, Math.max(60, current + deltaPx));
+      return prev.map((b) =>
+        blockIds.includes(b.id) ? ({ ...b, rowHeight: next } as ContentBlock) : b
+      );
+    });
+  };
+
   const groups = groupBlocksByRow(blocks);
 
   return (
@@ -499,58 +709,19 @@ export default function PageEditor({
         <div className="space-y-4">
           {groups.map((group, groupIndex) =>
             group.length > 1 ? (
-              <div key={group[0].id} className="rounded-lg border border-neutral-300 bg-neutral-50 p-3">
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                    Row · {group.length} blocks side by side
-                  </span>
-                  <div className="flex items-center gap-2 text-xs text-neutral-400">
-                    <button
-                      type="button"
-                      onClick={() => moveGroup(groupIndex, -1)}
-                      disabled={groupIndex === 0}
-                      className="hover:text-neutral-900 disabled:opacity-30"
-                    >
-                      ↑
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveGroup(groupIndex, 1)}
-                      disabled={groupIndex === groups.length - 1}
-                      className="hover:text-neutral-900 disabled:opacity-30"
-                    >
-                      ↓
-                    </button>
-                  </div>
-                </div>
-                <div
-                  className="grid gap-3"
-                  style={{ gridTemplateColumns: `repeat(${group.length}, minmax(0, 1fr))` }}
-                >
-                  {group.map((block) => (
-                    <div key={block.id} className="rounded-lg border border-neutral-200 bg-white p-3">
-                      <div className="mb-2 flex items-center justify-between">
-                        <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                          {block.type}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => removeBlock(block.id)}
-                          className="text-xs text-red-500 hover:underline"
-                        >
-                          Remove
-                        </button>
-                      </div>
-                      <BlockFields
-                        block={block}
-                        artistId={artistId}
-                        siteId={siteId}
-                        updateBlock={updateBlock}
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
+              <RowGroup
+                key={group[0].id}
+                group={group}
+                groupIndex={groupIndex}
+                groupsLength={groups.length}
+                artistId={artistId}
+                siteId={siteId}
+                updateBlock={updateBlock}
+                removeBlock={removeBlock}
+                moveGroup={moveGroup}
+                adjustRowWidths={adjustRowWidths}
+                adjustRowHeight={adjustRowHeight}
+              />
             ) : (
               <div key={group[0].id} className="rounded-lg border border-neutral-200 p-4">
                 <div className="mb-2 flex items-center justify-between">
