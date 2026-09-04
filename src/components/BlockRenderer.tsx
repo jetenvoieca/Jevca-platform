@@ -31,7 +31,11 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
         <img
           src={block.url}
           alt={block.caption || ""}
-          className={fill ? "h-full w-full rounded-md object-cover" : "w-full rounded-md"}
+          className={
+            fill
+              ? "h-full w-full rounded-md bg-neutral-100 object-contain"
+              : "w-full rounded-md"
+          }
         />
         {block.caption && (
           <figcaption className="mt-1 text-sm text-neutral-500">{block.caption}</figcaption>
@@ -47,7 +51,11 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
             key={img.imageId}
             src={img.url}
             alt=""
-            className={fill ? "h-full w-full rounded-md object-cover" : "rounded-md"}
+            className={
+              fill
+                ? "h-full w-full rounded-md bg-neutral-100 object-contain"
+                : "rounded-md"
+            }
           />
         ))}
       </div>
@@ -59,7 +67,11 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
         key={block.id}
         src={block.url}
         controls
-        className={fill ? "h-full w-full rounded-md object-cover" : "w-full rounded-md"}
+        className={
+          fill
+            ? "h-full w-full rounded-md bg-neutral-900 object-contain"
+            : "w-full rounded-md"
+        }
       />
     ) : null;
   }
