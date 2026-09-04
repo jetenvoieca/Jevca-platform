@@ -33,7 +33,7 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
           alt={block.caption || ""}
           className={
             fill
-              ? "h-full w-full rounded-md bg-neutral-100 object-contain"
+              ? "h-full w-full rounded-md object-contain object-left-top"
               : "w-full rounded-md"
           }
         />
@@ -52,9 +52,7 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
             src={img.url}
             alt=""
             className={
-              fill
-                ? "h-full w-full rounded-md bg-neutral-100 object-contain"
-                : "rounded-md"
+              fill ? "h-full w-full rounded-md object-contain object-left-top" : "rounded-md"
             }
           />
         ))}
@@ -69,7 +67,7 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
         controls
         className={
           fill
-            ? "h-full w-full rounded-md bg-neutral-900 object-contain"
+            ? "h-full w-full rounded-md object-contain object-left-top"
             : "w-full rounded-md"
         }
       />
