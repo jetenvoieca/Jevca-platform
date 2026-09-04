@@ -7,7 +7,19 @@
 // two blocks sharing a row — even though the editor UI (PageEditor's
 // "To left"/"To right") only ever builds rows of 2 for now, so a wider
 // layout doesn't require touching this type again later.
-type BlockLayout = { row?: string };
+//
+// `width` (2026-09-04, resize sliders) — this block's relative share of
+// its row's horizontal space, as a weight (default 1 when unset, i.e.
+// equal split), set by dragging the vertical handle between two blocks
+// in the same row. Meaningless on a block with no `row`.
+//
+// `rowHeight` (2026-09-04, same feature) — the row's own height in
+// pixels, set by dragging the horizontal handle at the bottom of a row.
+// A property of the row as a whole, not of any one block in it, so it's
+// kept identical across every block sharing that `row` id — the same
+// convention already used for `row` itself. Unset = natural content
+// height, same as every row before this feature existed.
+type BlockLayout = { row?: string; width?: number; rowHeight?: number };
 
 // Renders as the page's on-page heading (an <h1>). Added 2026-09-03 to
 // replace the editor/preview automatically printing the page's admin
