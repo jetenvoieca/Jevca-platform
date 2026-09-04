@@ -10,6 +10,7 @@ import {
   updateArtistStripeMode,
   updateSalesEnabled,
   saveArtistLogo,
+  saveArtistSignature,
   setArtistProfileImage,
   updateArtistStory,
   regenerateHopperToken,
@@ -22,6 +23,8 @@ import {
 } from "@/lib/actions/subscriptions";
 import { requestUploadUrl } from "@/lib/actions/media";
 import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales";
+import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
+import type { CertificateTemplateRow } from "@/lib/actions/certificateSettings";
 
 type SubscriptionPaymentRow = {
   id: string;
@@ -66,20 +69,29 @@ type ArtistData = {
   stripeSubscriptionStatus: string | null;
   profileImageUrl: string | null;
   story: string | null;
+  // The Certificate of Authenticity's signature image (2026-09-03) —
+  // see the matching note by saveArtistSignature in lib/actions.ts.
+  signatureUrl: string | null;
 };
 
 export default function SiteSettingsPanel({
   site,
   artist,
   subscriptionPayments,
+  certificateTemplates,
 }: {
   site: SiteData;
   artist: ArtistData;
   subscriptionPayments: SubscriptionPaymentRow[];
+  // Certificate of Authenticity templates (2026-09-04) — see
+  // CertificateTemplatesCard, rendered full-width below the
+  // Financial/Invoicing row.
+  certificateTemplates: CertificateTemplateRow[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
+  const [signatureUploading, setSignatureUploading] = useState(false);
   const [tokenCopied, setTokenCopied] = useState(false);
   const [regeneratingToken, setRegeneratingToken] = useState(false);
   const [resettingSales, setResettingSales] = useState(false);
@@ -259,6 +271,33 @@ export default function SiteSettingsPanel({
       router.refresh();
     } finally {
       setLogoUploading(false);
+    }
+  };
+
+  // Same direct-to-R2 upload flow as the Logo above, saved to its own
+  // signatureUrl field — see the note on saveArtistSignature in
+  // lib/actions.ts for why this is deliberately separate from the Logo.
+  const handleSignatureUpload = async (file: File) => {
+    setSignatureUploading(true);
+    try {
+      const result = await requestUploadUrl(artist.id, file.name, file.type);
+      if ("error" in result) {
+        alert(result.error);
+        return;
+      }
+      const putRes = await fetch(result.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!putRes.ok) {
+        alert("Upload failed — please try again.");
+        return;
+      }
+      await saveArtistSignature(artist.id, result.key);
+      router.refresh();
+    } finally {
+      setSignatureUploading(false);
     }
   };
 
@@ -746,9 +785,10 @@ export default function SiteSettingsPanel({
               {savedField === "story" && <p className="mt-1 text-xs text-green-600">Saved</p>}
             </div>
           ) : (
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-              {/* ---- Financial: currency / take payments / Stripe mode / reset ---- */}
-              <div className={`${cardCls} lg:w-72 lg:shrink-0`}>
+            <div className="flex flex-col gap-4">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+                {/* ---- Financial: currency / take payments / Stripe mode / reset ---- */}
+                <div className={`${cardCls} lg:w-72 lg:shrink-0`}>
                 <p className={cardTitleCls}>Financial</p>
 
                 <label className={labelCls}>Default currency</label>
@@ -848,6 +888,36 @@ export default function SiteSettingsPanel({
                     </label>
                   </div>
 
+                  {/* Certificate of Authenticity signature (2026-09-03)
+                      — its own upload, separate from Logo above, since
+                      the two aren't always the same image for every
+                      artist. */}
+                  <label className={labelCls}>Signature</label>
+                  <div className="mb-3 flex items-center gap-2">
+                    {artist.signatureUrl ? (
+                      <img
+                        src={artist.signatureUrl}
+                        alt=""
+                        className="h-10 w-10 rounded border border-neutral-200 object-contain"
+                      />
+                    ) : (
+                      <div className="h-10 w-10 rounded border border-dashed border-neutral-300" />
+                    )}
+                    <label className="cursor-pointer rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">
+                      {signatureUploading ? "Uploading…" : "Upload…"}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        disabled={signatureUploading}
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) handleSignatureUpload(file);
+                        }}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+
                   <label className={labelCls}>Artist address (for invoices)</label>
                   <textarea
                     key={`owner-invoice-address-${artist.id}`}
@@ -934,6 +1004,19 @@ export default function SiteSettingsPanel({
                     <p className="mt-2 text-xs text-green-600">Saved</p>
                   )}
                 </div>
+              )}
+              </div>
+
+              {/* Certificate of Authenticity templates (2026-09-04) —
+                  full width, below the Financial/Invoicing row, same
+                  "only relevant once this site takes payments" gating
+                  as Invoicing above. */}
+              {site.salesEnabled && (
+                <CertificateTemplatesCard
+                  artistId={artist.id}
+                  siteId={site.id}
+                  templates={certificateTemplates}
+                />
               )}
             </div>
           )}
