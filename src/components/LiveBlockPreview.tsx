@@ -4,9 +4,11 @@ import type { ContentBlock } from "@/lib/blocks";
 import { groupBlocksByRow } from "@/lib/blocks";
 
 // `fill` — true when this block is rendered inside a row that has an
-// explicit rowHeight (2026-09-04), so media should stretch to fill that
-// height (object-cover) instead of using its own natural aspect ratio.
-// Full-width, no-row blocks are unaffected either way.
+// explicit rowHeight (2026-09-04). Media then scales to fit within
+// that height (object-contain, whole image visible, letterboxed on a
+// neutral backdrop) rather than being cropped to fill it — resizing a
+// row shrinks the picture, it doesn't cut pieces off it. Full-width,
+// no-row blocks are unaffected either way.
 function renderBlock(block: ContentBlock, fill: boolean) {
   if (block.type === "header") {
     return block.text ? (
@@ -28,7 +30,11 @@ function renderBlock(block: ContentBlock, fill: boolean) {
         <img
           src={block.url}
           alt={block.caption || ""}
-          className={fill ? "h-full w-full rounded-md object-cover" : "w-full rounded-md"}
+          className={
+            fill
+              ? "h-full w-full rounded-md bg-neutral-100 object-contain"
+              : "w-full rounded-md"
+          }
         />
         {block.caption && (
           <figcaption className="mt-1 text-xs text-neutral-500">{block.caption}</figcaption>
@@ -44,7 +50,11 @@ function renderBlock(block: ContentBlock, fill: boolean) {
             key={img.imageId}
             src={img.url}
             alt=""
-            className={fill ? "h-full w-full rounded-md object-cover" : "rounded-md"}
+            className={
+              fill
+                ? "h-full w-full rounded-md bg-neutral-100 object-contain"
+                : "rounded-md"
+            }
           />
         ))}
       </div>
@@ -56,7 +66,11 @@ function renderBlock(block: ContentBlock, fill: boolean) {
         key={block.id}
         src={block.url}
         controls
-        className={fill ? "h-full w-full rounded-md object-cover" : "w-full rounded-md"}
+        className={
+          fill
+            ? "h-full w-full rounded-md bg-neutral-900 object-contain"
+            : "w-full rounded-md"
+        }
       />
     ) : null;
   }
