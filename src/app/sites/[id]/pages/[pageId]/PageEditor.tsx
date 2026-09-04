@@ -24,10 +24,11 @@ import { groupBlocksByRow } from "@/lib/blocks";
 //
 // `fill` (2026-09-04) — true when this block sits in a row that has an
 // explicit rowHeight. Image/video previews then scale to fit that
-// height (object-contain, whole image visible, letterboxed) instead of
-// a fixed small thumbnail, so what you see while dragging the resize
-// handles matches the real page — shrinking a row shrinks the picture,
-// it doesn't crop pieces off it.
+// height (object-contain, whole image visible, anchored top-left)
+// instead of a fixed small thumbnail, so what you see while dragging
+// the resize handles matches the real page: shrinking a row shrinks
+// the picture without cropping it, and the image doesn't drift as you
+// drag since it's anchored rather than centred.
 function BlockFields({
   block,
   artistId,
@@ -75,7 +76,7 @@ function BlockFields({
               alt=""
               className={
                 fill
-                  ? "h-full w-full rounded-md bg-neutral-100 object-contain"
+                  ? "h-full w-full rounded-md object-contain object-left-top"
                   : "max-h-48 w-full rounded-md object-cover"
               }
             />
@@ -195,7 +196,7 @@ function BlockFields({
               controls
               className={
                 fill
-                  ? "h-full w-full rounded-md bg-neutral-900 object-contain"
+                  ? "h-full w-full rounded-md object-contain object-left-top"
                   : "max-h-48 w-full rounded-md"
               }
             />
