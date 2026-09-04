@@ -67,30 +67,61 @@ function BlockFields({
   }
 
   if (block.type === "image") {
-    return (
-      <div className={fill ? "flex h-full flex-col" : undefined}>
-        {block.url && (
-          <div className={fill ? "mb-2 min-h-0 flex-1" : "mb-2"}>
-            <img
-              src={block.url}
-              alt=""
-              className={
-                fill
-                  ? "h-full w-full rounded-md object-contain object-left-top"
-                  : "max-h-48 w-full rounded-md object-cover"
+    // In a sized row, keep the manual preview: it needs to match the
+    // row's exact height (object-contain, anchored top-left, per the
+    // note above) — MediaPicker's previewUrl mode below uses a fixed
+    // 4:3 box that isn't meant to track an arbitrary drag-resized
+    // height.
+    if (fill) {
+      return (
+        <div className="flex h-full flex-col">
+          {block.url && (
+            <div className="mb-2 min-h-0 flex-1">
+              <img
+                src={block.url}
+                alt=""
+                className="h-full w-full rounded-md object-contain object-left-top"
+              />
+            </div>
+          )}
+          <div className="w-32">
+            <MediaPicker
+              artistId={artistId}
+              siteId={siteId}
+              mode="single"
+              label={block.url ? "Change Image" : "Add Image"}
+              onSelect={(imgs) =>
+                updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })
               }
             />
           </div>
-        )}
-        <div className="w-32">
-          <MediaPicker
-            artistId={artistId}
-            siteId={siteId}
-            mode="single"
-            label={block.url ? "Change Image" : "Add Image"}
-            onSelect={(imgs) => updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })}
-          />
+          {block.url && (
+            <input
+              type="text"
+              value={block.caption || ""}
+              onChange={(e) => updateBlock(block.id, { caption: e.target.value })}
+              placeholder="Caption (optional)"
+              className="mt-2 w-full rounded-md border border-neutral-300 px-2 py-1 text-sm"
+            />
+          )}
         </div>
+      );
+    }
+
+    // Click the image itself to change it (2026-09-04, direct request)
+    // — MediaPicker's previewUrl mode makes the picked image the click
+    // target (with a hover "+" overlay) instead of a separate small
+    // "Change Image" button below a static thumbnail.
+    return (
+      <div>
+        <MediaPicker
+          artistId={artistId}
+          siteId={siteId}
+          mode="single"
+          label="Add Image"
+          previewUrl={block.url || undefined}
+          onSelect={(imgs) => updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })}
+        />
         {block.url && (
           <input
             type="text"
