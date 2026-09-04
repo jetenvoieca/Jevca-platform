@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import SiteSettingsPanel from "@/components/SiteSettingsPanel";
 import SitesListColumn from "@/components/SitesListColumn";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
+import { getCertificateTemplates } from "@/lib/actions/certificateSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function SiteSettingsPage({
   const cookieStore = await cookies();
   const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
 
-  const [payments, allSites] = await Promise.all([
+  const [payments, allSites, certificateTemplates] = await Promise.all([
     db.subscriptionPayment.findMany({
       where: { artistId: site.artistId },
       orderBy: { paidAt: "desc" },
@@ -57,6 +58,9 @@ export default async function SiteSettingsPage({
       relationLoadStrategy: "query",
       orderBy: { artist: { name: "asc" } },
     }),
+    // Certificate of Authenticity templates (2026-09-04) — see
+    // CertificateTemplatesCard on the Financial tab below.
+    getCertificateTemplates(site.artistId),
   ]);
 
   return (
@@ -101,7 +105,9 @@ export default async function SiteSettingsPage({
             stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
             profileImageUrl: site.artist.profileImage?.url ?? null,
             story: site.artist.story,
+            signatureUrl: site.artist.signatureUrl,
           }}
+          certificateTemplates={certificateTemplates}
           subscriptionPayments={payments.map((p) => ({
             id: p.id,
             source: p.source as "STRIPE" | "MANUAL",
