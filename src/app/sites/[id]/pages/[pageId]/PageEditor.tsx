@@ -420,12 +420,23 @@ function RowGroup({
           keeps this box's visual size matching its layout size, same
           reasoning as the matching fix in LiveBlockPreview/
           BlockRenderer, so the editor's own box doesn't silently grow
-          past what you actually set. */}
+          past what you actually set.
+
+          gridTemplateColumns uses minmax(0, Xfr) rather than plain
+          `Xfr` (2026-09-04 bug fix) — a bare `fr` track still respects
+          each item's own min-content width by default in CSS Grid, so
+          a column holding richer editor UI (the MediaPicker button,
+          caption field) could refuse to shrink to its actual share
+          even though the *ratio* was being computed correctly — the
+          live preview's plainer markup didn't hit this, which is why
+          the two could visibly disagree. minmax(0, …) removes that
+          floor everywhere, so the editor and the real page can no
+          longer drift apart on this. */}
       <div
         ref={containerRef}
         className={`grid items-stretch ${rowHeight ? "overflow-hidden" : ""}`}
         style={{
-          gridTemplateColumns: group.map((b) => `${b.width ?? 1}fr`).join(" "),
+          gridTemplateColumns: group.map((b) => `minmax(0, ${b.width ?? 1}fr)`).join(" "),
           height: rowHeight ? `${rowHeight}px` : undefined,
         }}
       >
