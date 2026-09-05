@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { randomUUID } from "crypto";
+import { generateUniqueEmailSlug } from "@/lib/emailSlug";
 
 // ---- Reading data for the "Add New Site" picker ----
 
@@ -40,8 +41,12 @@ export async function createSite(
   let artistId = existingArtistId;
 
   if (!artistId) {
+    // Auto-suggests this new artist's @jevca.art local part from their
+    // name (2026-09-05, Email Integration) — editable afterwards in
+    // Settings. See lib/emailSlug.ts for the sanitise/dedupe rules.
+    const emailSlug = await generateUniqueEmailSlug(newArtistName);
     const newArtist = await db.artist.create({
-      data: { name: newArtistName },
+      data: { name: newArtistName, emailSlug },
     });
     artistId = newArtist.id;
   }
@@ -109,6 +114,12 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
   const invoiceLanguageRaw = (formData.get("invoiceLanguage") as string)?.trim().toUpperCase();
   const invoiceLanguage = invoiceLanguageRaw === "FR" ? "FR" : "EN";
   const nextInvoiceNumberRaw = (formData.get("nextInvoiceNumber") as string)?.trim();
+  // The @jevca.art local part (2026-09-05, Email Integration) — left
+  // untouched if the field wasn't submitted with a value at all, but if
+  // it was, always re-run through the same sanitiser/dedupe used at
+  // creation (excluding this same artist, so re-saving an unchanged
+  // value never bumps itself to a "2").
+  const emailSlugRaw = (formData.get("emailSlug") as string)?.trim();
   if (!name) return;
 
   await db.artist.update({
@@ -131,6 +142,7 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
       // getOrAssignInvoiceNumber, not here, so leave it alone unless the
       // field was actually submitted with a value.
       ...(nextInvoiceNumberRaw ? { nextInvoiceNumber: parseInt(nextInvoiceNumberRaw, 10) } : {}),
+      ...(emailSlugRaw ? { emailSlug: await generateUniqueEmailSlug(emailSlugRaw, id) } : {}),
     },
   });
   revalidatePath("/");

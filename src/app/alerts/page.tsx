@@ -12,6 +12,9 @@ const TYPE_LABELS: Record<string, string> = {
   SUBSCRIPTION_PAYMENT_OVERDUE: "Payment overdue",
   SUBSCRIPTION_METHOD_MISSING: "No payment method",
   SALE_INVOICE_UNPAID: "Invoice unpaid",
+  // 2026-09-05, Email Integration — see raiseAlertIfNotAlreadyOpen in
+  // lib/actions/inboundEmail.ts.
+  EMAIL_REPLY_RECEIVED: "New email reply",
 };
 
 export default async function AlertsPage() {

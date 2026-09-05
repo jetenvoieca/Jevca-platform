@@ -3,6 +3,7 @@ import type { AppShellNavEntry } from "@/components/SidebarNav";
 export type TopNavKey =
   | "sites"
   | "alerts"
+  | "inbox"
   | "subscriptions"
   | "expenses"
   | "accountSummary"
@@ -25,6 +26,12 @@ export type TopNavKey =
 // documentation the platform owner writes for themselves, placed just
 // above Settings as asked.
 //
+// "Inbox" added 2026-09-05, Email Integration — the unified admin inbox
+// for every reply to an artist's own @jevca.art address plus ad hoc
+// admin emails (see AdminInboxPanel.tsx). Placed right after Alerts:
+// a new-reply alert links straight into here (see lib/alerts.ts), so
+// the two sit next to each other.
+//
 // Split out as its own function (2026-08-31) so the per-site menu
 // (siteNav.ts) can render an identical group instead of duplicating
 // this list — the labels, hrefs, and active-state logic stay in
@@ -41,6 +48,7 @@ export function buildAccountsSection(
     key: "accounts",
     children: [
       { label: "Alerts", href: "/alerts", active: active === "alerts", badge: alertCount },
+      { label: "Inbox", href: "/accounts/inbox", active: active === "inbox" },
       { label: "Subscriptions", href: "/accounts", active: active === "subscriptions" },
       { label: "Expenses", href: "/accounts/expenses", active: active === "expenses" },
       { label: "Account", href: "/accounts/summary", active: active === "accountSummary" },
