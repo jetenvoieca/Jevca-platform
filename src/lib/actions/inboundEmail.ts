@@ -193,7 +193,12 @@ export type SentSummaryItem = {
   fromAddress: string;
   toAddress: string;
   subject: string | null;
-  preview: string;
+  // Full sent content — not truncated. This list is loaded on demand
+  // (only once the Sent tab is opened, see AdminInboxPanel) rather than
+  // up front, so shipping the full body here rather than a preview is
+  // fine, and it means clicking an item to see it in the centre panel
+  // (2026-09-05, third same-day request) needs no second round trip.
+  body: string | null;
   artistId: string | null;
   artistName: string | null;
   customerId: string | null;
@@ -224,7 +229,7 @@ export async function getSentList(artistId?: string): Promise<SentSummaryItem[]>
     fromAddress: r.fromAddress,
     toAddress: r.toAddress,
     subject: r.subject,
-    preview: (r.body || "").slice(0, 140),
+    body: r.body,
     artistId: r.artistId,
     artistName: r.artist?.name || null,
     customerId: r.customerId,

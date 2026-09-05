@@ -20,11 +20,15 @@ import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail"
 // emails — kept inline here rather than a separate modal component,
 // since this is the only place either flow is used.
 //
-// "Sent" tab added same day, second request — a flat, read-only list of
-// every OutboundEmail (admin sends, replies, and now invoice/receipt/
+// "Sent" tab added same day, second request — a flat list of every
+// OutboundEmail (admin sends, replies, and now invoice/receipt/
 // certificate sends too — see getSentList), fetched on demand only when
 // this tab is actually opened rather than always loaded up front, since
 // this is meant to scale to 100+ artists' worth of sends over time.
+// Clicking a sent item shows its full content in the centre panel, same
+// idea as opening an inbox thread — third request, same day — except
+// there's no server round-trip needed: the full body is already in the
+// list we fetched, so this just reads from local state.
 //
 // Plain, minimalist styling, consistent with InvoiceEmailModal/
 // SiteSettingsPanel elsewhere in the app — no separate visual language
@@ -57,6 +61,7 @@ export default function AdminInboxPanel({
   const [mainTab, setMainTab] = useState<"inbox" | "sent">("inbox");
   const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
   const [sentLoading, setSentLoading] = useState(false);
+  const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [thread, setThread] = useState<InboxThreadItem[] | null>(null);
@@ -78,6 +83,8 @@ export default function AdminInboxPanel({
   const cardCls = "rounded-lg border border-neutral-200 bg-white";
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
+
+  const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
 
   // Fetches (or re-fetches, e.g. after the artist filter changes) the
   // Sent list whenever the Sent tab is the active one.
@@ -161,6 +168,7 @@ export default function AdminInboxPanel({
     setMainTab("inbox");
     setOpenId(null);
     setThread(null);
+    setSelectedSentId(null);
     setComposing(true);
     setComposeTo("");
     setComposeArtistId(null);
@@ -176,6 +184,7 @@ export default function AdminInboxPanel({
     setComposing(false);
     setOpenId(null);
     setThread(null);
+    setSelectedSentId(null);
   };
 
   return (
@@ -268,22 +277,30 @@ export default function AdminInboxPanel({
           ) : (
             <ul className="divide-y divide-neutral-100">
               {sentList.map((m) => (
-                <li key={m.id} className="px-3 py-2.5">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
-                    <span className="shrink-0 text-[10px] text-neutral-400">
-                      {new Date(m.sentAt).toLocaleDateString()}
-                    </span>
-                  </div>
-                  <p className="truncate text-xs text-neutral-500">
-                    <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                      {KIND_LABELS[m.kind] || m.kind}
-                    </span>
-                    {m.subject || "(no subject)"}
-                  </p>
-                  <p className="mt-0.5 truncate text-xs text-neutral-400">
-                    {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
-                  </p>
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSentId(m.id)}
+                    className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                      selectedSentId === m.id ? "bg-neutral-100" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
+                      <span className="shrink-0 text-[10px] text-neutral-400">
+                        {new Date(m.sentAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="truncate text-xs text-neutral-500">
+                      <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                        {KIND_LABELS[m.kind] || m.kind}
+                      </span>
+                      {m.subject || "(no subject)"}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-neutral-400">
+                      {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
+                    </p>
+                  </button>
                 </li>
               ))}
             </ul>
@@ -291,7 +308,7 @@ export default function AdminInboxPanel({
         </div>
       </div>
 
-      {/* ---- RIGHT: thread or compose ---- */}
+      {/* ---- RIGHT: thread, sent detail, or compose ---- */}
       <div className={`${cardCls} min-w-0 flex-1 overflow-y-auto p-5`}>
         {composing ? (
           <div className="mx-auto max-w-xl space-y-3">
@@ -352,10 +369,33 @@ export default function AdminInboxPanel({
               </>
             )}
           </div>
+        ) : mainTab === "sent" ? (
+          !selectedSent ? (
+            <p className="text-center text-sm text-neutral-400">Select a message on the left, or start a new one.</p>
+          ) : (
+            <div className="mx-auto max-w-xl space-y-2">
+              <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
+              </span>
+              <p className="text-sm font-medium text-neutral-800">{selectedSent.subject || "(no subject)"}</p>
+              <p className="text-xs text-neutral-400">
+                {selectedSent.fromAddress} → {selectedSent.toAddress}
+              </p>
+              <p className="text-xs text-neutral-400">{new Date(selectedSent.sentAt).toLocaleString()}</p>
+              {(selectedSent.artistName || selectedSent.customerName || selectedSent.artworkTitle) && (
+                <p className="text-xs text-neutral-400">
+                  {[selectedSent.artistName, selectedSent.customerName, selectedSent.artworkTitle]
+                    .filter(Boolean)
+                    .join(" — ")}
+                </p>
+              )}
+              <div className="mt-3 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+                {selectedSent.body || "(empty)"}
+              </div>
+            </div>
+          )
         ) : !openId ? (
-          <p className="text-center text-sm text-neutral-400">
-            {mainTab === "inbox" ? "Select a message, or start a new one." : "Select a message on the left, or start a new one."}
-          </p>
+          <p className="text-center text-sm text-neutral-400">Select a message, or start a new one.</p>
         ) : threadLoading || !thread ? (
           <p className="text-sm text-neutral-400">Loading…</p>
         ) : (
