@@ -48,6 +48,12 @@ export default function GuidesPanel({ guides }: { guides: GuideWithSteps[] }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [uploadingStepId, setUploadingStepId] = useState<string | null>(null);
 
+  // Display Mode (2026-09-05, direct request) — a read-only expanded
+  // view, separate from the edit form: clicking a topic's title opens
+  // this instead of jumping straight to editing, and the row's own
+  // Edit button is what actually switches to the edit form below.
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+
   const [newTopicOpen, setNewTopicOpen] = useState(false);
   const [newTopicTitle, setNewTopicTitle] = useState("");
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
@@ -59,9 +65,18 @@ export default function GuidesPanel({ guides }: { guides: GuideWithSteps[] }) {
     setEditTitle(guide.title);
     setEditSteps(guide.steps.map((s) => ({ ...s })));
     setSaveError(null);
+    setExpandedId(null);
+  };
+
+  const toggleExpanded = (id: string) => {
+    setExpandedId((prev) => (prev === id ? null : id));
   };
 
   const closeEdit = () => {
+    // Returns to Display Mode for the guide just edited, rather than
+    // fully collapsing — a natural "here's what you just saved" view
+    // after closing the edit form.
+    setExpandedId(editingId);
     setEditingId(null);
     setSaveError(null);
   };
@@ -91,6 +106,7 @@ export default function GuidesPanel({ guides }: { guides: GuideWithSteps[] }) {
     startTransition(async () => {
       await deleteGuide(id);
       if (editingId === id) closeEdit();
+      if (expandedId === id) setExpandedId(null);
       router.refresh();
     });
   };
@@ -174,6 +190,7 @@ export default function GuidesPanel({ guides }: { guides: GuideWithSteps[] }) {
             onClick={() => {
               setTab(cat);
               closeEdit();
+              setExpandedId(null);
             }}
             className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${
               tab === cat ? "bg-neutral-900 text-white" : "text-neutral-500 hover:text-neutral-700"
@@ -311,26 +328,65 @@ export default function GuidesPanel({ guides }: { guides: GuideWithSteps[] }) {
               </button>
             </div>
           ) : (
-            <div
-              key={guide.id}
-              className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50/50 px-4 py-3"
-            >
-              <span className="text-sm text-neutral-900">{guide.title}</span>
-              <div className="flex shrink-0 gap-2">
-                <a href={`/api/guide/${guide.id}`} className={buttonCls}>
-                  PDF
-                </a>
-                <button type="button" onClick={() => startEdit(guide)} className={buttonCls}>
-                  Edit
-                </button>
+            <div key={guide.id}>
+              <div className="flex items-center justify-between rounded-lg border border-amber-100 bg-amber-50/50 px-4 py-3">
                 <button
                   type="button"
-                  onClick={() => handleDeleteClick(guide.id)}
-                  className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                  onClick={() => toggleExpanded(guide.id)}
+                  className="text-left text-sm text-neutral-900 hover:underline"
                 >
-                  Delete
+                  {guide.title}
                 </button>
+                <div className="flex shrink-0 gap-2">
+                  <a href={`/api/guide/${guide.id}`} className={buttonCls}>
+                    PDF
+                  </a>
+                  <button type="button" onClick={() => startEdit(guide)} className={buttonCls}>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteClick(guide.id)}
+                    className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
+
+              {/* Display Mode (2026-09-05) — a read-only expanded view
+                  of the guide's current steps, opened by clicking the
+                  title above. Separate from the edit form: this never
+                  writes anything, it's just for reading a guide back.
+                  The row's own Edit button is the only way into the
+                  actual edit form. */}
+              {expandedId === guide.id && (
+                <div className="mt-2 rounded-lg border border-neutral-200 bg-white p-4">
+                  {guide.steps.length === 0 ? (
+                    <p className="text-sm text-neutral-400">
+                      No steps have been added to this guide yet.
+                    </p>
+                  ) : (
+                    <ol className="flex flex-col gap-4">
+                      {guide.steps.map((step, idx) => (
+                        <li key={step.id} className="flex gap-3">
+                          <span className="shrink-0 font-semibold text-amber-700">{idx + 1}</span>
+                          <div>
+                            <p className="text-sm text-neutral-900">{step.text}</p>
+                            {step.imageUrl && (
+                              <img
+                                src={step.imageUrl}
+                                alt=""
+                                className="mt-2 max-h-48 rounded border border-neutral-200 object-contain"
+                              />
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ol>
+                  )}
+                </div>
+              )}
             </div>
           )
         )}
