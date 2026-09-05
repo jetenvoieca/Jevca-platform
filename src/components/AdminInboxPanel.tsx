@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   getThread,
   sendInboxReply,
+  getSentList,
   type InboxSummaryItem,
   type InboxThreadItem,
+  type SentSummaryItem,
 } from "@/lib/actions/inboundEmail";
 import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail";
 
@@ -18,9 +20,24 @@ import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail"
 // emails — kept inline here rather than a separate modal component,
 // since this is the only place either flow is used.
 //
+// "Sent" tab added same day, second request — a flat, read-only list of
+// every OutboundEmail (admin sends, replies, and now invoice/receipt/
+// certificate sends too — see getSentList), fetched on demand only when
+// this tab is actually opened rather than always loaded up front, since
+// this is meant to scale to 100+ artists' worth of sends over time.
+//
 // Plain, minimalist styling, consistent with InvoiceEmailModal/
 // SiteSettingsPanel elsewhere in the app — no separate visual language
 // for this screen.
+
+const KIND_LABELS: Record<string, string> = {
+  ADMIN: "Message",
+  REPLY: "Reply",
+  INVOICE: "Invoice",
+  RECEIPT: "Receipt",
+  CERTIFICATE: "Certificate",
+};
+
 export default function AdminInboxPanel({
   initialList,
   artistOptions,
@@ -36,6 +53,10 @@ export default function AdminInboxPanel({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
+
+  const [mainTab, setMainTab] = useState<"inbox" | "sent">("inbox");
+  const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
+  const [sentLoading, setSentLoading] = useState(false);
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [thread, setThread] = useState<InboxThreadItem[] | null>(null);
@@ -57,6 +78,17 @@ export default function AdminInboxPanel({
   const cardCls = "rounded-lg border border-neutral-200 bg-white";
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
+
+  // Fetches (or re-fetches, e.g. after the artist filter changes) the
+  // Sent list whenever the Sent tab is the active one.
+  useEffect(() => {
+    if (mainTab !== "sent") return;
+    setSentLoading(true);
+    getSentList(selectedArtistId || undefined).then((rows) => {
+      setSentList(rows);
+      setSentLoading(false);
+    });
+  }, [mainTab, selectedArtistId]);
 
   const openThread = (id: string) => {
     setOpenId(id);
@@ -126,6 +158,7 @@ export default function AdminInboxPanel({
   };
 
   const startCompose = () => {
+    setMainTab("inbox");
     setOpenId(null);
     setThread(null);
     setComposing(true);
@@ -136,6 +169,13 @@ export default function AdminInboxPanel({
     setComposeBody("");
     setComposeError(null);
     setComposeSent(false);
+  };
+
+  const switchTab = (tab: "inbox" | "sent") => {
+    setMainTab(tab);
+    setComposing(false);
+    setOpenId(null);
+    setThread(null);
   };
 
   return (
@@ -153,6 +193,27 @@ export default function AdminInboxPanel({
           </button>
         </div>
 
+        <div className="mb-3 inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1">
+          <button
+            type="button"
+            onClick={() => switchTab("inbox")}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              mainTab === "inbox" ? "bg-neutral-200 text-neutral-900" : "text-neutral-500 hover:text-neutral-700"
+            }`}
+          >
+            Inbox
+          </button>
+          <button
+            type="button"
+            onClick={() => switchTab("sent")}
+            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
+              mainTab === "sent" ? "bg-neutral-200 text-neutral-900" : "text-neutral-500 hover:text-neutral-700"
+            }`}
+          >
+            Sent
+          </button>
+        </div>
+
         <select
           value={selectedArtistId || ""}
           onChange={(e) => handleFilterChange(e.target.value)}
@@ -167,34 +228,62 @@ export default function AdminInboxPanel({
         </select>
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
-          {initialList.length === 0 ? (
-            <p className="p-4 text-center text-sm text-neutral-400">Nothing here yet.</p>
+          {mainTab === "inbox" ? (
+            initialList.length === 0 ? (
+              <p className="p-4 text-center text-sm text-neutral-400">Nothing here yet.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">
+                {initialList.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => openThread(m.id)}
+                      className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                        openId === m.id ? "bg-neutral-100" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
+                        >
+                          {m.fromName || m.fromAddress}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-neutral-400">
+                          {new Date(m.receivedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-neutral-500">{m.subject || "(no subject)"}</p>
+                      <p className="mt-0.5 truncate text-xs text-neutral-400">
+                        {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : sentLoading || !sentList ? (
+            <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
+          ) : sentList.length === 0 ? (
+            <p className="p-4 text-center text-sm text-neutral-400">Nothing sent yet.</p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {initialList.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => openThread(m.id)}
-                    className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                      openId === m.id ? "bg-neutral-100" : ""
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
-                      >
-                        {m.fromName || m.fromAddress}
-                      </span>
-                      <span className="shrink-0 text-[10px] text-neutral-400">
-                        {new Date(m.receivedAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <p className="truncate text-xs text-neutral-500">{m.subject || "(no subject)"}</p>
-                    <p className="mt-0.5 truncate text-xs text-neutral-400">
-                      {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
-                    </p>
-                  </button>
+              {sentList.map((m) => (
+                <li key={m.id} className="px-3 py-2.5">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
+                    <span className="shrink-0 text-[10px] text-neutral-400">
+                      {new Date(m.sentAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                  <p className="truncate text-xs text-neutral-500">
+                    <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                      {KIND_LABELS[m.kind] || m.kind}
+                    </span>
+                    {m.subject || "(no subject)"}
+                  </p>
+                  <p className="mt-0.5 truncate text-xs text-neutral-400">
+                    {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
+                  </p>
                 </li>
               ))}
             </ul>
@@ -264,7 +353,9 @@ export default function AdminInboxPanel({
             )}
           </div>
         ) : !openId ? (
-          <p className="text-center text-sm text-neutral-400">Select a message, or start a new one.</p>
+          <p className="text-center text-sm text-neutral-400">
+            {mainTab === "inbox" ? "Select a message, or start a new one." : "Select a message on the left, or start a new one."}
+          </p>
         ) : threadLoading || !thread ? (
           <p className="text-sm text-neutral-400">Loading…</p>
         ) : (
