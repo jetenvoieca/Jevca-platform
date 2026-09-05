@@ -454,12 +454,15 @@ model InboundEmail {
 }
 
 // The other half of the same inbox (see InboundEmail above) — every ad
-// hoc email Craig sends from the Inbox's Compose screen, and every reply
-// sent from within an open thread, so a thread shows both sides in one
-// place. Deliberately separate from the existing
-// invoiceEmailedAt/certificateEmailedAt log fields on Purchase, which
-// stay exactly as they are — those are a single "last sent" stamp for a
-// specific sale, not a general message log.
+// hoc email Craig sends from the Inbox's Compose screen, every reply
+// sent from within an open thread, AND (2026-09-05, second Email
+// Integration request — "add a Sent view showing everything") every
+// invoice/receipt/certificate send too, purely so the Sent list has one
+// place to read from. Purchase's own invoiceEmailedAt/invoiceEmailedTo/
+// certificateEmailedAt/certificateEmailedTo fields are unchanged and
+// still what the per-sale card reads for its own "Invoice sent [date]"
+// line — this table doesn't replace them, it's an additional record
+// written alongside them purely for this unified view.
 model OutboundEmail {
   id String @id @default(cuid())
 
@@ -469,6 +472,19 @@ model OutboundEmail {
   toAddress   String
   subject     String?
   body        String?
+
+  // What this send actually was, for the Sent list: "ADMIN" (ad hoc
+  // Compose), "REPLY" (from an open thread), "INVOICE", "RECEIPT", or
+  // "CERTIFICATE". INVOICE vs RECEIPT is decided by invoiceEmail.ts from
+  // the sale's paid status at the moment it's sent — same distinction
+  // already used for the email wording itself. Free string, not an
+  // enum, same convention as Customer.kind above — purely UI-facing.
+  kind String @default("ADMIN")
+
+  // Set only for INVOICE/RECEIPT/CERTIFICATE sends, so the Sent list can
+  // show which sale a send belongs to — never set for ADMIN/REPLY.
+  purchaseId String?
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id])
 
   // Same "which artist/gallery does this belong to, for the filter"
   // purpose as InboundEmail.artistId/customerId above. For a reply, both
@@ -492,6 +508,7 @@ model OutboundEmail {
   @@index([artistId])
   @@index([customerId])
   @@index([inReplyToId])
+  @@index([purchaseId])
 }
 
 model Site {
@@ -795,6 +812,11 @@ model Purchase {
   stripeSubscriptionId          String?
 
   payments Payment[]
+  // Every invoice/receipt/certificate email ever sent for this sale
+  // (2026-09-05, Email Integration — unified Sent list). Purely additive
+  // alongside invoiceEmailedAt/certificateEmailedAt above, which remain
+  // the source for the per-sale "Invoice sent [date]" line.
+  outboundEmails OutboundEmail[]
 
   createdAt DateTime  @default(now())
   closedAt DateTime?
