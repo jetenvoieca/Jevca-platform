@@ -31,6 +31,17 @@ import { groupBlocksByRow } from "@/lib/blocks";
 // caused the resize-slider regression on 2026-09-04: the two paths
 // drifted out of sync with each other. One call, parameterized, can't
 // drift.
+//
+// `min-h-0` on the fill-mode wrapper (2026-09-05 bug fix) — a flex
+// item's automatic minimum height defaults to its CONTENT's size, not
+// zero, unless overflow is hidden or min-h-0 is set. Without it here,
+// this wrapper refused to shrink below the image's natural height no
+// matter what rowHeight said, so the image rendered oversized in the
+// editor (looking "cropped" inside its scrolling box) and appeared not
+// to respond to the height-resize handle at all. Same category of bug
+// as the grid minmax(0, Xfr) fix below, just the flex/height
+// equivalent — any future `h-full` flex-col wrapper needs `min-h-0`
+// alongside it for the same reason.
 function BlockFields({
   block,
   artistId,
@@ -70,7 +81,7 @@ function BlockFields({
 
   if (block.type === "image") {
     return (
-      <div className={fill ? "flex h-full flex-col" : undefined}>
+      <div className={fill ? "flex h-full min-h-0 flex-col" : undefined}>
         <div className={fill ? "min-h-0 flex-1" : undefined}>
           <MediaPicker
             artistId={artistId}
@@ -179,7 +190,7 @@ function BlockFields({
 
   if (block.type === "video") {
     return (
-      <div className={fill ? "flex h-full flex-col" : undefined}>
+      <div className={fill ? "flex h-full min-h-0 flex-col" : undefined}>
         <div className={fill ? "min-h-0 flex-1" : undefined}>
           <MediaPicker
             artistId={artistId}
