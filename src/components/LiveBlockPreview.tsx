@@ -2,23 +2,16 @@
 
 import type { ContentBlock } from "@/lib/blocks";
 import { groupBlocksByRow } from "@/lib/blocks";
+import { getPlainMediaSizing, type MediaSizeMode } from "@/lib/blockMedia";
 
-// `fill` — true when this block is rendered inside a row that has an
-// explicit rowHeight (2026-09-04). Media then scales to fit within
-// that height (object-contain, whole image visible) rather than being
-// cropped — resizing a row shrinks the picture, it doesn't cut pieces
-// off it. No backdrop colour behind the letterboxing (2026-09-04 fix):
-// the box is transparent, so the page's own background colour/image
-// shows through continuously instead of a fixed grey patch breaking
-// it up. Anchored top-left (object-left-top) rather than centred, so
-// the image doesn't visually drift as you drag a resize handle — the
-// top-left corner stays put and only the bottom/right edge moves.
-//
-// A full-width block with no row (`fill` false) gets its own cap —
-// max-h-[520px] with object-cover — so a portrait-oriented image
-// doesn't render at its full, potentially very tall, natural height
-// and end up looking oddly slim/elongated at typical preview widths.
-function renderBlock(block: ContentBlock, fill: boolean) {
+// Image/Video/Gallery sizing comes from getPlainMediaSizing in
+// @/lib/blockMedia (2026-09-05 redesign) — the same function
+// BlockRenderer.tsx and PageEditor.tsx's MediaPicker calls use, so this
+// mini preview, the full /preview page, and the editor itself can never
+// visually disagree about how big a media box is. See blockMedia.ts for
+// the full rationale (this replaces an earlier `fill` boolean + inline
+// className ternary that were hand-copied across all three files).
+function renderBlock(block: ContentBlock, mode: MediaSizeMode) {
   if (block.type === "header") {
     return block.text ? (
       <h1 key={block.id} className="text-2xl font-semibold text-neutral-900">
@@ -34,58 +27,43 @@ function renderBlock(block: ContentBlock, fill: boolean) {
     ) : null;
   }
   if (block.type === "image") {
-    return block.url ? (
-      <figure key={block.id} className={fill ? "h-full" : undefined}>
-        <img
-          src={block.url}
-          alt={block.caption || ""}
-          className={
-            fill
-              ? "h-full w-full rounded-md object-contain object-left-top"
-              : "max-h-[520px] w-full rounded-md object-cover"
-          }
-        />
+    if (!block.url) return null;
+    const media = getPlainMediaSizing(mode);
+    return (
+      <figure key={block.id} className={mode.kind === "row" ? "h-full" : undefined}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={block.url} alt={block.caption || ""} className={media.className} style={media.style} />
         {block.caption && (
           <figcaption className="mt-1 text-xs text-neutral-500">{block.caption}</figcaption>
         )}
       </figure>
-    ) : null;
+    );
   }
   if (block.type === "gallery") {
-    return block.images.length > 0 ? (
-      <div key={block.id} className={`grid grid-cols-2 gap-2 ${fill ? "h-full" : ""}`}>
+    if (block.images.length === 0) return null;
+    const media = getPlainMediaSizing(mode);
+    return (
+      <div key={block.id} className={`grid grid-cols-2 gap-2 ${mode.kind === "row" ? "h-full" : ""}`}>
         {block.images.map((img) => (
-          <img
-            key={img.imageId}
-            src={img.url}
-            alt=""
-            className={
-              fill ? "h-full w-full rounded-md object-contain object-left-top" : "rounded-md"
-            }
-          />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={img.imageId} src={img.url} alt="" className={media.className} style={media.style} />
         ))}
       </div>
-    ) : null;
+    );
   }
   if (block.type === "video") {
-    return block.url ? (
-      <video
-        key={block.id}
-        src={block.url}
-        controls
-        className={
-          fill
-            ? "h-full w-full rounded-md object-contain object-left-top"
-            : "max-h-[520px] w-full rounded-md"
-        }
-      />
-    ) : null;
+    if (!block.url) return null;
+    const media = getPlainMediaSizing(mode);
+    return (
+      <video key={block.id} src={block.url} controls className={media.className} style={media.style} />
+    );
   }
   if (block.type === "artwork") {
     if (!block.previewTitle) return null;
     return (
       <div key={block.id} className="flex gap-3 rounded-md border border-neutral-200 p-3">
         {block.previewImageUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img
             src={block.previewImageUrl}
             alt=""
@@ -159,27 +137,26 @@ export default function LiveBlockPreview({
         }}
       >
         {groups.map((group) => {
-          if (group.length === 1) return renderBlock(group[0], false);
+          if (group.length === 1) return renderBlock(group[0], { kind: "natural" });
           const rowHeight = group[0].rowHeight;
+          const mode: MediaSizeMode = rowHeight ? { kind: "row", rowHeightPx: rowHeight } : { kind: "natural" };
           return (
             // overflow-hidden when a height has been set (2026-09-04
             // bug fix) — without it, content taller than the chosen
-            // height painted past the row's laid-out box: the box
-            // itself (and the page background behind it) stayed at the
-            // set height while the image visually spilled below it,
-            // and the next row then started flowing right after that
-            // too-short box, overlapping the spill. Clipping keeps the
-            // row's visual size and its layout size the same, matching
-            // how the width handle already crops rather than overflows.
+            // height painted past the row's laid-out box. Clipping
+            // keeps the row's visual size and its layout size the
+            // same, matching how the width handle already crops rather
+            // than overflows. This row has no header chrome (unlike
+            // the editor's own card), so forcing its total height to
+            // exactly rowHeight is correct here — see PageEditor.tsx's
+            // RowGroup for why the editor itself no longer does this.
             //
             // gridTemplateColumns uses minmax(0, Xfr), not bare `Xfr`
             // (2026-09-04 bug fix, matching PageEditor's RowGroup) — a
             // bare `fr` track still respects its content's min-content
             // width by default, which could keep a column from truly
             // reaching a small share even though the ratio was
-            // correct. Applied here too so this renderer can't drift
-            // out of sync with the editor or BlockRenderer the way the
-            // editor's own copy briefly did.
+            // correct.
             <div
               key={group[0].id}
               className={`grid items-stretch gap-4 ${rowHeight ? "overflow-hidden" : ""}`}
@@ -188,7 +165,7 @@ export default function LiveBlockPreview({
                 height: rowHeight ? `${rowHeight}px` : undefined,
               }}
             >
-              {group.map((block) => renderBlock(block, Boolean(rowHeight)))}
+              {group.map((block) => renderBlock(block, mode))}
             </div>
           );
         })}
