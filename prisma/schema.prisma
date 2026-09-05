@@ -115,6 +115,20 @@ model Artist {
   story          String?
 
   hopperToken String @unique @default(cuid())
+
+  // Local part of this artist's own address on the platform's shared
+  // domain (2026-09-05, Email Integration) — combined with the fixed
+  // "@jevca.art" suffix (see lib/email.ts) to build both the "from"
+  // address used when sending invoices/receipts/certificates, and the
+  // address inbound replies are matched against (see
+  // processInboundEmail in lib/actions/inboundEmail.ts). Auto-suggested
+  // from the artist's name when the artist is created
+  // (generateUniqueEmailSlug in lib/emailSlug.ts), editable afterwards
+  // in Settings, and always sanitised/deduped through that same
+  // function so it can never collide with another artist's slug or a
+  // reserved address (craig@, admin@, etc — see RESERVED_SLUGS there).
+  emailSlug String? @unique
+
   subscriptionAmount Decimal? @db.Decimal(10, 2)
   paymentMethod      String?
   // Per-artist, not global — added 2026-08-09 so one artist can go live
@@ -200,6 +214,11 @@ model Artist {
   expenses Expense[]
   artworkTypeRecords ArtworkType[]
   certificateTemplates CertificateTemplate[]
+  // Every reply received at this artist's own address, and every ad hoc
+  // email or reply sent as/to them — see InboundEmail/OutboundEmail
+  // below (2026-09-05, Email Integration).
+  inboundEmails  InboundEmail[]
+  outboundEmails OutboundEmail[]
 }
 
 // Replaces the plain-string `Artist.artworkTypes` list (2026-08-28) — a
@@ -281,9 +300,15 @@ model SubscriptionPayment {
 // schema rework. `resolvedAt` null = still open; auto-resolved by the
 // webhook handler when the underlying issue clears (e.g. a payment
 // succeeds after a prior failure), or dismissible by hand.
+//
+// Also used for EMAIL_REPLY_RECEIVED (2026-09-05, Email Integration) —
+// raised when a reply lands for a given artist, auto-resolved the first
+// time that reply is actually opened in the inbox (getThread in
+// lib/actions/inboundEmail.ts), same self-clearing pattern as the
+// subscription alerts.
 model AlertEvent {
   id       String @id @default(cuid())
-  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED"
+  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED" | "EMAIL_REPLY_RECEIVED"
   severity String @default("WARNING") // "INFO" | "WARNING" | "CRITICAL"
   message  String
 
@@ -356,11 +381,117 @@ model Customer {
 
   purchases Purchase[]
 
+  // Best-effort tags on inbound/outbound email (2026-09-05, Email
+  // Integration) — matched by comparing the sender's/recipient's address
+  // against this customer's own email/contactEmail at the time a message
+  // is sent or received. See InboundEmail/OutboundEmail below.
+  inboundEmails  InboundEmail[]
+  outboundEmails OutboundEmail[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([artistId])
   @@index([email])
+}
+
+// One unified messaging inbox for every address on the platform's
+// shared domain (2026-09-05, Email Integration) — every artist's own
+// address (louise.dear@jevca.art, via Artist.emailSlug) and the general
+// admin address (craig@jevca.art, PlatformSettings.adminEmailAddress)
+// all land here, in one box that's then filtered by artist/gallery in
+// the UI, rather than as separate per-artist inboxes — this was a
+// direct decision (2026-09-05): easier to scan across 100+ artists from
+// one screen than to maintain a mailbox per artist.
+//
+// Deliberately not scoped to a Purchase/sale — an inbound reply is
+// matched to an Artist (by which address it was sent to) and,
+// best-effort, to a Customer (by matching the sender's address against
+// that artist's own Customer records) purely so the inbox can be
+// filtered, not because every email is about one specific sale.
+model InboundEmail {
+  id String @id @default(cuid())
+
+  // Resend's own id for this message — the dedupe key if a webhook is
+  // ever redelivered (Resend's own retry behaviour), and needed to fetch
+  // the full HTML/Plain Text body from the Receiving API (webhooks only
+  // carry metadata — see processInboundEmail in
+  // lib/actions/inboundEmail.ts).
+  resendEmailId String  @unique
+  messageId     String? // RFC Message-Id header, for reply threading.
+
+  fromAddress String
+  fromName    String?
+  toAddress   String // whichever @jevca.art address it was actually sent to.
+
+  // Resolved from toAddress's local part against Artist.emailSlug — null
+  // for anything sent to the general admin address, or to an address
+  // that doesn't match any artist (shown unfiltered in the inbox either
+  // way, never dropped).
+  artistId String?
+  artist   Artist? @relation(fields: [artistId], references: [id])
+
+  // Best-effort tag for the inbox filter (see the model-level note
+  // above) — matched by fromAddress against this same artist's own
+  // Customer.email/contactEmail at receive time. Never re-matched after
+  // the fact if a Customer record changes later.
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  subject  String?
+  textBody String?
+  htmlBody String?
+
+  isRead Boolean @default(false)
+
+  receivedAt DateTime @default(now())
+
+  replies OutboundEmail[]
+
+  @@index([artistId])
+  @@index([customerId])
+  @@index([toAddress])
+}
+
+// The other half of the same inbox (see InboundEmail above) — every ad
+// hoc email Craig sends from the Inbox's Compose screen, and every reply
+// sent from within an open thread, so a thread shows both sides in one
+// place. Deliberately separate from the existing
+// invoiceEmailedAt/certificateEmailedAt log fields on Purchase, which
+// stay exactly as they are — those are a single "last sent" stamp for a
+// specific sale, not a general message log.
+model OutboundEmail {
+  id String @id @default(cuid())
+
+  resendEmailId String? @unique
+
+  fromAddress String
+  toAddress   String
+  subject     String?
+  body        String?
+
+  // Same "which artist/gallery does this belong to, for the filter"
+  // purpose as InboundEmail.artistId/customerId above. For a reply, both
+  // are copied straight from the message being replied to rather than
+  // re-resolved.
+  artistId String?
+  artist   Artist? @relation(fields: [artistId], references: [id])
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  // Set only when this is a reply to a specific inbound message — how
+  // the thread view knows what it's a reply to, and what to put in the
+  // outgoing In-Reply-To header so it threads correctly in the
+  // recipient's own mail client.
+  inReplyToId String?
+  inReplyTo   InboundEmail? @relation(fields: [inReplyToId], references: [id])
+
+  sentAt DateTime @default(now())
+
+  @@index([artistId])
+  @@index([customerId])
+  @@index([inReplyToId])
 }
 
 model Site {
@@ -867,6 +998,14 @@ model PlatformSettings {
   id String @id @default("singleton")
 
   expenseCategories String[] @default(["Hosting", "Domains", "Software & APIs", "Legal & Accounting", "Marketing", "Other"])
+
+  // The address ad hoc admin emails are sent from (2026-09-05, Email
+  // Integration) — one shared address, not per-artist: these are
+  // Craig's own emails to artists/contacts, not sent on any artist's
+  // behalf (direct decision — "craig@jevca.art is more friendly").
+  // Editable here rather than an env var, so it doesn't need a redeploy
+  // to change, consistent with everything else on this singleton row.
+  adminEmailAddress String @default("craig@jevca.art")
 
   updatedAt DateTime @updatedAt
 }
