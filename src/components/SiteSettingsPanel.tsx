@@ -25,6 +25,7 @@ import { requestUploadUrl } from "@/lib/actions/media";
 import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales";
 import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
 import type { CertificateTemplateRow } from "@/lib/actions/certificateSettings";
+import { EMAIL_DOMAIN } from "@/lib/email";
 
 type SubscriptionPaymentRow = {
   id: string;
@@ -72,6 +73,10 @@ type ArtistData = {
   // The Certificate of Authenticity's signature image (2026-09-03) —
   // see the matching note by saveArtistSignature in lib/actions.ts.
   signatureUrl: string | null;
+  // This artist's own @jevca.art local part (2026-09-05, Email
+  // Integration) — see the matching note on Artist.emailSlug in
+  // schema.prisma. Null until one's been generated/assigned.
+  emailSlug: string | null;
 };
 
 export default function SiteSettingsPanel({
@@ -147,7 +152,8 @@ export default function SiteSettingsPanel({
       | "vatRate"
       | "invoiceFooterText"
       | "invoiceLanguage"
-      | "nextInvoiceNumber",
+      | "nextInvoiceNumber"
+      | "emailSlug",
     value: string
   ) => {
     const fd = new FormData();
@@ -173,6 +179,11 @@ export default function SiteSettingsPanel({
     fd.set("invoiceFooterText", field === "invoiceFooterText" ? value : artist.invoiceFooterText || "");
     fd.set("invoiceLanguage", field === "invoiceLanguage" ? value : artist.invoiceLanguage || "EN");
     if (field === "nextInvoiceNumber") fd.set("nextInvoiceNumber", value);
+    // emailSlug is left off the FormData entirely unless it's the field
+    // actually being saved (2026-09-05) — updateArtist only re-runs the
+    // sanitise/dedupe check when the key is present at all, so every
+    // other autosave on this panel can't accidentally re-trigger it.
+    if (field === "emailSlug") fd.set("emailSlug", value);
     startTransition(async () => {
       await updateArtist(artist.id, fd);
       router.refresh();
@@ -427,10 +438,38 @@ export default function SiteSettingsPanel({
                 className={inputCls}
               />
             </div>
+            {/* This artist's own sending/receiving address (2026-09-05,
+                Email Integration) — auto-suggested from their name when
+                created, editable here. The @jevca.art suffix is fixed and
+                shown alongside rather than typed, so it can never be
+                mistyped into something that isn't actually this
+                platform's domain. */}
+            <div>
+              <label className={labelCls}>Email address (for sending/receiving)</label>
+              <div className="flex items-center gap-1">
+                <input
+                  key={`owner-email-slug-${artist.id}`}
+                  type="text"
+                  defaultValue={artist.emailSlug || ""}
+                  placeholder="e.g. louise.dear"
+                  onBlur={(e) => e.target.value.trim() && saveOwner("emailSlug", e.target.value.trim())}
+                  disabled={isPending}
+                  className={inputCls}
+                />
+                <span className="shrink-0 text-sm text-neutral-400">@{EMAIL_DOMAIN}</span>
+              </div>
+              {!artist.emailSlug && (
+                <p className="mt-1 text-xs text-amber-700">
+                  Not set yet — invoices/receipts/certificates can't be emailed until this has a
+                  value.
+                </p>
+              )}
+            </div>
             {(savedField === "name" ||
               savedField === "firstName" ||
               savedField === "email" ||
-              savedField === "phone") && <p className="text-xs text-green-600">Saved</p>}
+              savedField === "phone" ||
+              savedField === "emailSlug") && <p className="text-xs text-green-600">Saved</p>}
           </div>
 
           <div className="mt-4 flex items-end gap-3 border-t border-neutral-200 pt-4">

@@ -106,6 +106,9 @@ export default async function SiteSettingsPage({
             profileImageUrl: site.artist.profileImage?.url ?? null,
             story: site.artist.story,
             signatureUrl: site.artist.signatureUrl,
+            // This artist's own @jevca.art local part (2026-09-05, Email
+            // Integration) — see the Owner card in SiteSettingsPanel.
+            emailSlug: site.artist.emailSlug,
           }}
           certificateTemplates={certificateTemplates}
           subscriptionPayments={payments.map((p) => ({
