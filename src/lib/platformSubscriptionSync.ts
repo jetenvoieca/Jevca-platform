@@ -1,36 +1,10 @@
 import { db } from "@/lib/db";
 import { fromMinorUnits } from "@/lib/stripe";
 import { getPlatformStripeClient } from "@/lib/platformStripe";
+import { raiseAlertIfNotAlreadyOpen, resolveAlertsOfType } from "@/lib/alerts";
 
 const PAYMENT_FAILED = "SUBSCRIPTION_PAYMENT_FAILED";
 const SUBSCRIPTION_CANCELLED = "SUBSCRIPTION_CANCELLED";
-
-async function resolveOpenAlerts(artistId: string, type: string) {
-  await db.alertEvent.updateMany({
-    where: { artistId, type, resolvedAt: null },
-    data: { resolvedAt: new Date() },
-  });
-}
-
-async function raiseAlertIfNotAlreadyOpen(params: {
-  artistId: string;
-  type: string;
-  severity: "WARNING" | "CRITICAL";
-  message: string;
-}) {
-  const existing = await db.alertEvent.findFirst({
-    where: { artistId: params.artistId, type: params.type, resolvedAt: null },
-  });
-  if (existing) return; // Already flagged — don't spam a fresh row per retry/webhook redelivery.
-  await db.alertEvent.create({
-    data: {
-      artistId: params.artistId,
-      type: params.type,
-      severity: params.severity,
-      message: params.message,
-    },
-  });
-}
 
 // A Stripe invoice being paid, for a subscription customer we recognise
 // (i.e. one already manually linked via Artist.stripeSubscriptionCustomerId
@@ -74,7 +48,7 @@ export async function recordPlatformInvoicePaid(params: {
 
   // A successful payment clears any open "payment failed" alert for this
   // artist — that's exactly the signal the issue resolved itself.
-  await resolveOpenAlerts(artist.id, PAYMENT_FAILED);
+  await resolveAlertsOfType(artist.id, PAYMENT_FAILED);
 }
 
 export async function recordPlatformInvoiceFailed(params: {
@@ -130,7 +104,7 @@ export async function updatePlatformSubscriptionStatus(params: {
     });
   } else if (params.status === "active" || params.status === "trialing") {
     // Reactivated — clear any open cancellation alert.
-    await resolveOpenAlerts(artist.id, SUBSCRIPTION_CANCELLED);
+    await resolveAlertsOfType(artist.id, SUBSCRIPTION_CANCELLED);
   }
 }
 
@@ -211,4 +185,3 @@ export async function backfillMissingSubscriptionPayments(): Promise<{
 
   return { checked, created };
 }
-

@@ -8,6 +8,10 @@ import { db } from "@/lib/db";
 // onboarding).
 const MANUAL_OVERDUE_DAYS = 30 + 14;
 
+// Alert types that link to the Inbox rather than a site's Settings page
+// (2026-09-05, Email Integration) — see the storedItems mapping below.
+const EMAIL_ALERT_TYPE = "EMAIL_REPLY_RECEIVED";
+
 export type AlertItem = {
   id: string;
   type: string;
@@ -21,6 +25,42 @@ export type AlertItem = {
   createdAt: string;
   dismissable: boolean;
 };
+
+// Generic "raise this alert if one isn't already open for this artist +
+// type" helper, shared by anything that raises a stored AlertEvent —
+// originally lived only in platformSubscriptionSync.ts (subscription
+// payment failures/cancellations), pulled out here (2026-09-05) so
+// inboundEmail.ts's EMAIL_REPLY_RECEIVED alert can use the exact same
+// dedupe logic instead of a second copy of it.
+export async function raiseAlertIfNotAlreadyOpen(params: {
+  artistId: string;
+  type: string;
+  severity: "WARNING" | "CRITICAL";
+  message: string;
+}): Promise<void> {
+  const existing = await db.alertEvent.findFirst({
+    where: { artistId: params.artistId, type: params.type, resolvedAt: null },
+  });
+  if (existing) return; // Already flagged — don't spam a fresh row per retry/redelivery.
+  await db.alertEvent.create({
+    data: {
+      artistId: params.artistId,
+      type: params.type,
+      severity: params.severity,
+      message: params.message,
+    },
+  });
+}
+
+// Resolves every currently-open alert of a given type for an artist —
+// the other half of raiseAlertIfNotAlreadyOpen above, same shared-helper
+// reasoning.
+export async function resolveAlertsOfType(artistId: string, type: string): Promise<void> {
+  await db.alertEvent.updateMany({
+    where: { artistId, type, resolvedAt: null },
+    data: { resolvedAt: new Date() },
+  });
+}
 
 // getOpenAlerts scans every artist and every payment across the whole
 // platform (it's not scoped to one site), and it's called on every single
@@ -110,6 +150,10 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
 
   const storedItems: AlertItem[] = stored.map((a) => {
     const siteId = a.artist?.sites[0]?.id || null;
+    // Email alerts link straight to the Inbox (filtered to the artist
+    // where possible), not to a site's Settings page like every other
+    // stored alert type (2026-09-05, Email Integration).
+    const isEmailAlert = a.type === EMAIL_ALERT_TYPE;
     return {
       id: a.id,
       type: a.type,
@@ -118,8 +162,12 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       artistId: a.artistId,
       artistName: a.artist?.name || null,
       siteId,
-      linkHref: siteId ? `/sites/${siteId}` : null,
-      linkLabel: "View settings",
+      linkHref: isEmailAlert
+        ? `/accounts/inbox${a.artistId ? `?artistId=${a.artistId}` : ""}`
+        : siteId
+        ? `/sites/${siteId}`
+        : null,
+      linkLabel: isEmailAlert ? "View inbox" : "View settings",
       createdAt: a.createdAt.toISOString(),
       dismissable: true,
     };
