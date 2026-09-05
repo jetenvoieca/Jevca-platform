@@ -148,7 +148,7 @@ export type InboxSummaryItem = {
 // 2026-09-05 decision). OutboundEmail rows only ever show up inside an
 // opened thread (getThread below), not in this list — keeps the main
 // list to "things you might need to act on", not a mix of
-// sent-and-received.
+// sent-and-received. See getSentList below for the separate Sent view.
 export async function getInboxList(artistId?: string): Promise<InboxSummaryItem[]> {
   const rows = await db.inboundEmail.findMany({
     where: artistId ? { artistId } : undefined,
@@ -176,14 +176,62 @@ export async function getInboxList(artistId?: string): Promise<InboxSummaryItem[
 }
 
 // Every artist with a sending address set — the filter dropdown's
-// options. An artist with no emailSlug yet can't have received anything
-// (nothing could have been sent to them), so it's correctly left out.
+// options, shared by both the Inbox and Sent views. An artist with no
+// emailSlug yet can't have received or sent anything, so it's correctly
+// left out.
 export async function getArtistFilterOptions(): Promise<{ id: string; name: string }[]> {
   return db.artist.findMany({
     where: { emailSlug: { not: null }, status: { not: "ARCHIVED" } },
     orderBy: { name: "asc" },
     select: { id: true, name: true },
   });
+}
+
+export type SentSummaryItem = {
+  id: string;
+  kind: string; // "ADMIN" | "REPLY" | "INVOICE" | "RECEIPT" | "CERTIFICATE"
+  fromAddress: string;
+  toAddress: string;
+  subject: string | null;
+  preview: string;
+  artistId: string | null;
+  artistName: string | null;
+  customerId: string | null;
+  customerName: string | null;
+  artworkTitle: string | null;
+  sentAt: string;
+};
+
+// The unified Sent view (2026-09-05, second Email Integration request) —
+// every OutboundEmail regardless of kind: ad hoc Compose sends, inbox
+// replies, and now invoice/receipt/certificate sends too (see the note
+// on OutboundEmail in schema.prisma). Optionally filtered to one artist,
+// same as getInboxList above.
+export async function getSentList(artistId?: string): Promise<SentSummaryItem[]> {
+  const rows = await db.outboundEmail.findMany({
+    where: artistId ? { artistId } : undefined,
+    orderBy: { sentAt: "desc" },
+    take: 200,
+    include: {
+      artist: { select: { name: true } },
+      customer: { select: { name: true } },
+      purchase: { select: { artwork: { select: { presentationTitle: true } } } },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    kind: r.kind,
+    fromAddress: r.fromAddress,
+    toAddress: r.toAddress,
+    subject: r.subject,
+    preview: (r.body || "").slice(0, 140),
+    artistId: r.artistId,
+    artistName: r.artist?.name || null,
+    customerId: r.customerId,
+    customerName: r.customer?.name || null,
+    artworkTitle: r.purchase?.artwork.presentationTitle || null,
+    sentAt: r.sentAt.toISOString(),
+  }));
 }
 
 // A thread = the opened inbound email, plus every OutboundEmail sent as
@@ -285,6 +333,7 @@ export async function sendInboxReply(
       toAddress: inbound.fromAddress,
       subject,
       body,
+      kind: "REPLY",
       artistId: inbound.artistId,
       customerId: inbound.customerId,
       inReplyToId: inbound.id,

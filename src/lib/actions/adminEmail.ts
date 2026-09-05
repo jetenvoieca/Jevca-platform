@@ -125,6 +125,7 @@ export async function sendAdminEmail(
       toAddress: to,
       subject,
       body,
+      kind: "ADMIN",
       artistId: artistId || null,
       customerId: customerId || null,
     },

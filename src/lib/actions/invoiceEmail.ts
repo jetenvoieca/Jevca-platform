@@ -12,13 +12,19 @@ import { artistFromAddress } from "@/lib/email";
 // sale-lifecycle code (payments.ts) don't need to know anything about
 // email at all.
 //
-// 2026-09-05, Email Integration: now sends from the artist's own
+// 2026-09-05, Email Integration: sends from the artist's own
 // louise.dear@jevca.art address (artistFromAddress in lib/email.ts)
 // instead of one shared RESEND_FROM_EMAIL address. `replyTo` pointing at
 // the artist's personal email has been removed — a gallery's reply now
 // arrives at that same @jevca.art address and is picked up by the
 // Resend inbound webhook into the shared admin inbox
-// (/accounts/inbox), not the artist's own personal inbox.
+// (/accounts/inbox).
+//
+// 2026-09-05, same day, second request — also logs an OutboundEmail row
+// (kind INVOICE/RECEIPT, linked to this purchase) purely so the send
+// shows up in the Inbox's unified Sent list. Purchase's own
+// invoiceEmailedAt/invoiceEmailedTo fields are untouched and still what
+// the sale card itself reads.
 
 export type InvoiceEmailDraft = { to: string; subject: string; body: string };
 
@@ -144,7 +150,7 @@ export async function sendInvoiceEmail(
 
   const resend = new Resend(apiKey);
 
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: fromResult.from,
     to: recipient,
     subject,
@@ -156,9 +162,28 @@ export async function sendInvoiceEmail(
     return { ok: false, error: error.message || "Resend could not send the email." };
   }
 
+  const isPaid = purchase.status === "COMPLETED";
+
   await db.purchase.update({
     where: { id: purchaseId },
     data: { invoiceEmailedAt: new Date(), invoiceEmailedTo: recipient },
+  });
+
+  // Logged purely for the Inbox's unified Sent list (2026-09-05) —
+  // doesn't replace the invoiceEmailedAt/invoiceEmailedTo update above,
+  // which is still what the sale card itself displays.
+  await db.outboundEmail.create({
+    data: {
+      resendEmailId: data?.id || null,
+      fromAddress: fromResult.address,
+      toAddress: recipient,
+      subject,
+      body,
+      kind: isPaid ? "RECEIPT" : "INVOICE",
+      purchaseId,
+      artistId: purchase.artwork.artistId,
+      customerId: purchase.customerId,
+    },
   });
 
   return { ok: true };

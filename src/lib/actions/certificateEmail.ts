@@ -9,7 +9,9 @@ import { artistFromAddress } from "@/lib/email";
 // from the artist's own @jevca.art address instead of one shared
 // RESEND_FROM_EMAIL, and no longer sets `replyTo` to the artist's
 // personal email (replies now arrive at the @jevca.art address itself,
-// via the Resend inbound webhook into /accounts/inbox).
+// via the Resend inbound webhook into /accounts/inbox). Also logs an
+// OutboundEmail row (kind CERTIFICATE) for the Inbox's unified Sent
+// list — see the matching note in invoiceEmail.ts.
 
 export type CertificateEmailDraft = { to: string; subject: string; body: string };
 
@@ -100,7 +102,7 @@ export async function sendCertificateEmail(
 
   const resend = new Resend(apiKey);
 
-  const { error } = await resend.emails.send({
+  const { data, error } = await resend.emails.send({
     from: fromResult.from,
     to: recipient,
     subject,
@@ -115,6 +117,22 @@ export async function sendCertificateEmail(
   await db.purchase.update({
     where: { id: purchaseId },
     data: { certificateEmailedAt: new Date(), certificateEmailedTo: recipient },
+  });
+
+  // Logged purely for the Inbox's unified Sent list (2026-09-05) — see
+  // the matching note in invoiceEmail.ts.
+  await db.outboundEmail.create({
+    data: {
+      resendEmailId: data?.id || null,
+      fromAddress: fromResult.address,
+      toAddress: recipient,
+      subject,
+      body,
+      kind: "CERTIFICATE",
+      purchaseId,
+      artistId: purchase.artwork.artistId,
+      customerId: purchase.customerId,
+    },
   });
 
   return { ok: true };
