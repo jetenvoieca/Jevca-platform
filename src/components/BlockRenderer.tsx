@@ -1,5 +1,6 @@
 import type { ContentBlock } from "@/lib/blocks";
 import { groupBlocksByRow } from "@/lib/blocks";
+import { getPlainMediaSizing, type MediaSizeMode } from "@/lib/blockMedia";
 
 type ArtworkData = {
   id: string;
@@ -9,11 +10,15 @@ type ArtworkData = {
   images: { url: string }[];
 };
 
-// `fill` — see the matching note in LiveBlockPreview.tsx. Full-width
-// (non-row) images/video are capped at max-h-[520px] + object-cover
-// for the same reason noted there — a portrait-oriented image
-// shouldn't render at its uncapped natural height.
-function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean) {
+// Image/Video/Gallery sizing comes from getPlainMediaSizing in
+// @/lib/blockMedia (2026-09-05 redesign) — the same function
+// LiveBlockPreview.tsx and PageEditor.tsx's MediaPicker calls use, so
+// this full-size preview, the editor's mini preview, and the editor
+// itself can never visually disagree about how big a media box is. See
+// blockMedia.ts for the full rationale (this replaces an earlier `fill`
+// boolean + inline className ternary that were hand-copied across all
+// three files, and had drifted out of sync twice).
+function renderBlock(block: ContentBlock, artworks: ArtworkData[], mode: MediaSizeMode) {
   if (block.type === "header") {
     return block.text ? (
       <h1 key={block.id} className="text-3xl font-semibold text-neutral-900">
@@ -29,52 +34,35 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
     );
   }
   if (block.type === "image") {
-    return block.url ? (
-      <figure key={block.id} className={fill ? "h-full" : undefined}>
-        <img
-          src={block.url}
-          alt={block.caption || ""}
-          className={
-            fill
-              ? "h-full w-full rounded-md object-contain object-left-top"
-              : "max-h-[520px] w-full rounded-md object-cover"
-          }
-        />
+    if (!block.url) return null;
+    const media = getPlainMediaSizing(mode);
+    return (
+      <figure key={block.id} className={mode.kind === "row" ? "h-full" : undefined}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={block.url} alt={block.caption || ""} className={media.className} style={media.style} />
         {block.caption && (
           <figcaption className="mt-1 text-sm text-neutral-500">{block.caption}</figcaption>
         )}
       </figure>
-    ) : null;
+    );
   }
   if (block.type === "gallery") {
+    const media = getPlainMediaSizing(mode);
     return (
-      <div key={block.id} className={`grid grid-cols-2 gap-2 ${fill ? "h-full" : ""}`}>
+      <div key={block.id} className={`grid grid-cols-2 gap-2 ${mode.kind === "row" ? "h-full" : ""}`}>
         {block.images.map((img) => (
-          <img
-            key={img.imageId}
-            src={img.url}
-            alt=""
-            className={
-              fill ? "h-full w-full rounded-md object-contain object-left-top" : "rounded-md"
-            }
-          />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={img.imageId} src={img.url} alt="" className={media.className} style={media.style} />
         ))}
       </div>
     );
   }
   if (block.type === "video") {
-    return block.url ? (
-      <video
-        key={block.id}
-        src={block.url}
-        controls
-        className={
-          fill
-            ? "h-full w-full rounded-md object-contain object-left-top"
-            : "max-h-[520px] w-full rounded-md"
-        }
-      />
-    ) : null;
+    if (!block.url) return null;
+    const media = getPlainMediaSizing(mode);
+    return (
+      <video key={block.id} src={block.url} controls className={media.className} style={media.style} />
+    );
   }
   if (block.type === "artwork") {
     const artwork = artworks.find((a) => a.id === block.artworkId);
@@ -82,6 +70,7 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], fill: boolean
     return (
       <div key={block.id} className="flex gap-4 rounded-md border border-neutral-200 p-4">
         {artwork.images[0] && (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={artwork.images[0].url} alt="" className="h-32 w-32 rounded object-cover" />
         )}
         <div>
@@ -135,14 +124,14 @@ export default function BlockRenderer({
   return (
     <div className="space-y-6">
       {groups.map((group) => {
-        if (group.length === 1) return renderBlock(group[0], artworks, false);
+        if (group.length === 1) return renderBlock(group[0], artworks, { kind: "natural" });
         const rowHeight = group[0].rowHeight;
+        const mode: MediaSizeMode = rowHeight ? { kind: "row", rowHeightPx: rowHeight } : { kind: "natural" };
         return (
           // See the matching note in LiveBlockPreview.tsx — clipping
           // only when a height is actually set, and minmax(0, Xfr) so
           // this renderer can't drift out of sync with the editor or
-          // LiveBlockPreview the way the editor's own copy briefly did
-          // (2026-09-04 bug fix).
+          // LiveBlockPreview.
           <div
             key={group[0].id}
             className={`grid items-stretch gap-6 ${rowHeight ? "overflow-hidden" : ""}`}
@@ -151,7 +140,7 @@ export default function BlockRenderer({
               height: rowHeight ? `${rowHeight}px` : undefined,
             }}
           >
-            {group.map((block) => renderBlock(block, artworks, Boolean(rowHeight)))}
+            {group.map((block) => renderBlock(block, artworks, mode))}
           </div>
         );
       })}
