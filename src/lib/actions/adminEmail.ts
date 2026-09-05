@@ -49,14 +49,17 @@ export async function getComposeRecipients(): Promise<ComposeRecipient[]> {
     .filter((a): a is typeof a & { email: string } => !!a.email)
     .map((a) => ({ label: `${a.name} (artist)`, email: a.email, artistId: a.id, customerId: null }));
 
-  const customerRecipients: ComposeRecipient[] = customers
-    .map((c) => {
-      const email = c.contactEmail || c.email;
-      if (!email) return null;
-      const who = c.contactName ? `${c.contactName}, ${c.name}` : c.name;
-      return { label: `${who} — ${c.artist.name}`, email, artistId: c.artistId, customerId: c.id };
-    })
-    .filter((r): r is ComposeRecipient => r !== null);
+  // flatMap rather than map+filter(Boolean) (2026-09-05 build fix) —
+  // returning [] to skip a customer with no email keeps every element
+  // of the resulting array a real ComposeRecipient object directly, so
+  // there's no intermediate `| null` union for TypeScript to narrow
+  // away, which is what broke the production build here.
+  const customerRecipients: ComposeRecipient[] = customers.flatMap((c) => {
+    const email = c.contactEmail || c.email;
+    if (!email) return [];
+    const who = c.contactName ? `${c.contactName}, ${c.name}` : c.name;
+    return [{ label: `${who} — ${c.artist.name}`, email, artistId: c.artistId, customerId: c.id }];
+  });
 
   return [...artistRecipients, ...customerRecipients];
 }
