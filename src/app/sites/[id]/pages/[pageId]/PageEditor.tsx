@@ -16,45 +16,47 @@ import ThreeColumnShell from "@/components/ThreeColumnShell";
 import LiveBlockPreview from "@/components/LiveBlockPreview";
 import type { ContentBlock } from "@/lib/blocks";
 import { groupBlocksByRow } from "@/lib/blocks";
+import { getMediaBoxProps, type MediaSizeMode } from "@/lib/blockMedia";
 
 // The field-editing UI for one block, by type — pulled out to its own
 // function so it can be used identically whether the block is rendered
 // full-width or paired side-by-side in a row (2026-09-03), rather than
 // being duplicated between the two rendering paths below.
 //
-// `fill` (2026-09-04) — true when this block sits in a row that has an
-// explicit rowHeight. Image/Video below both use ONE MediaPicker call
-// each, in every case (row or not) — only the size/crop props change
-// (previewClassName/previewObjectFit) — rather than two different
-// implementations for the two cases. That divergence (a manual <img>
-// for rows vs. MediaPicker's own preview box for standalone) is what
-// caused the resize-slider regression on 2026-09-04: the two paths
-// drifted out of sync with each other. One call, parameterized, can't
-// drift.
+// `rowHeightPx` (2026-09-05 redesign) — set when this block sits in a
+// row whose height has been dragged; undefined for a standalone block
+// or a row that hasn't been resized yet. Image/Video below get their
+// actual sizing (className + inline style) from getMediaBoxProps in
+// @/lib/blockMedia, the single function shared with LiveBlockPreview
+// and BlockRenderer — so the editor, the editor's own preview, and the
+// real page can never disagree about how big a media box is.
 //
-// `min-h-0` on the fill-mode wrapper (2026-09-05 bug fix) — a flex
-// item's automatic minimum height defaults to its CONTENT's size, not
-// zero, unless overflow is hidden or min-h-0 is set. Without it here,
-// this wrapper refused to shrink below the image's natural height no
-// matter what rowHeight said, so the image rendered oversized in the
-// editor (looking "cropped" inside its scrolling box) and appeared not
-// to respond to the height-resize handle at all. Same category of bug
-// as the grid minmax(0, Xfr) fix below, just the flex/height
-// equivalent — any future `h-full` flex-col wrapper needs `min-h-0`
-// alongside it for the same reason.
+// This replaces an earlier design (2026-09-03 to 2026-09-05) that
+// delivered a resized row's height as a CSS percentage (`h-full`)
+// inherited through several nested flex/grid wrapper layers. That
+// broke twice in a row: a percentage can be silently overridden by any
+// ancestor's own content-based sizing (the min-height:auto default),
+// and each of the three renderers had grown its own slightly-different
+// copy of the wrapper chain. getMediaBoxProps instead resolves a set
+// pixel height once and hands it to MediaPicker as an explicit inline
+// style, applied directly to the element that needs it — no percentage
+// chain for an ancestor to interfere with, and one function instead of
+// three hand-copied ones. See blockMedia.ts for the full rationale.
 function BlockFields({
   block,
   artistId,
   siteId,
   updateBlock,
-  fill = false,
+  rowHeightPx,
 }: {
   block: ContentBlock;
   artistId: string;
   siteId: string;
   updateBlock: (id: string, patch: Partial<ContentBlock>) => void;
-  fill?: boolean;
+  rowHeightPx?: number;
 }) {
+  const mediaMode: MediaSizeMode = rowHeightPx ? { kind: "row", rowHeightPx } : { kind: "natural" };
+
   if (block.type === "header") {
     return (
       <input
@@ -80,20 +82,21 @@ function BlockFields({
   }
 
   if (block.type === "image") {
+    const media = getMediaBoxProps(mediaMode, Boolean(block.url));
     return (
-      <div className={fill ? "flex h-full min-h-0 flex-col" : undefined}>
-        <div className={fill ? "min-h-0 flex-1" : undefined}>
-          <MediaPicker
-            artistId={artistId}
-            siteId={siteId}
-            mode="single"
-            label="Add Image"
-            previewUrl={block.url || undefined}
-            previewClassName={fill ? "h-full w-full" : "max-h-[520px] w-full"}
-            previewObjectFit={fill ? "contain" : "cover"}
-            onSelect={(imgs) => updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })}
-          />
-        </div>
+      <div>
+        <MediaPicker
+          artistId={artistId}
+          siteId={siteId}
+          mode="single"
+          label="Add Image"
+          previewUrl={block.url || undefined}
+          previewFit={media.previewFit}
+          previewClassName={media.previewClassName}
+          previewStyle={media.previewStyle}
+          previewObjectFit={media.previewObjectFit}
+          onSelect={(imgs) => updateBlock(block.id, { imageId: imgs[0].id, url: imgs[0].url })}
+        />
         {block.url && (
           <input
             type="text"
@@ -189,28 +192,29 @@ function BlockFields({
   }
 
   if (block.type === "video") {
+    const media = getMediaBoxProps(mediaMode, Boolean(block.posterUrl || block.url));
     return (
-      <div className={fill ? "flex h-full min-h-0 flex-col" : undefined}>
-        <div className={fill ? "min-h-0 flex-1" : undefined}>
-          <MediaPicker
-            artistId={artistId}
-            siteId={siteId}
-            mode="single"
-            videoOnly
-            label="Add Video"
-            previewUrl={block.posterUrl || block.url || undefined}
-            previewKind={block.posterUrl ? "image" : "video"}
-            previewClassName={fill ? "h-full w-full" : "max-h-[520px] w-full"}
-            previewObjectFit={fill ? "contain" : "cover"}
-            onSelect={(vids) =>
-              updateBlock(block.id, {
-                imageId: vids[0].id,
-                url: vids[0].url,
-                posterUrl: vids[0].posterUrl || undefined,
-              })
-            }
-          />
-        </div>
+      <div>
+        <MediaPicker
+          artistId={artistId}
+          siteId={siteId}
+          mode="single"
+          videoOnly
+          label="Add Video"
+          previewUrl={block.posterUrl || block.url || undefined}
+          previewKind={block.posterUrl ? "image" : "video"}
+          previewFit={media.previewFit}
+          previewClassName={media.previewClassName}
+          previewStyle={media.previewStyle}
+          previewObjectFit={media.previewObjectFit}
+          onSelect={(vids) =>
+            updateBlock(block.id, {
+              imageId: vids[0].id,
+              url: vids[0].url,
+              posterUrl: vids[0].posterUrl || undefined,
+            })
+          }
+        />
       </div>
     );
   }
@@ -427,33 +431,30 @@ function RowGroup({
         </div>
       </div>
 
-      {/* overflow-hidden when a height is set (2026-09-04 bug fix) —
-          keeps this box's visual size matching its layout size, same
-          reasoning as the matching fix in LiveBlockPreview/
-          BlockRenderer, so the editor's own box doesn't silently grow
-          past what you actually set.
+      {/* gridTemplateColumns uses minmax(0, Xfr) rather than plain `Xfr`
+          (2026-09-04 bug fix) — a bare `fr` track still respects each
+          item's own min-content width by default in CSS Grid, so a
+          column holding richer editor UI (the MediaPicker button,
+          caption field) could refuse to shrink to its actual share even
+          though the *ratio* was being computed correctly. minmax(0, …)
+          removes that floor, so width-sharing here can't drift from
+          LiveBlockPreview/BlockRenderer.
 
-          gridTemplateColumns uses minmax(0, Xfr) rather than plain
-          `Xfr` (2026-09-04 bug fix) — a bare `fr` track still respects
-          each item's own min-content width by default in CSS Grid, so
-          a column holding richer editor UI (the MediaPicker button,
-          caption field) could refuse to shrink to its actual share
-          even though the *ratio* was being computed correctly — the
-          live preview's plainer markup didn't hit this, which is why
-          the two could visibly disagree. minmax(0, …) removes that
-          floor everywhere, so the editor and the real page can no
-          longer drift apart on this. */}
+          No forced row height or overflow-hidden here (2026-09-05
+          redesign) — a resized row's height is now delivered directly
+          to each block's media element (see BlockFields/blockMedia.ts),
+          not to this wrapper via a percentage chain, so nothing here
+          needs to clip an oversized child; the row's own height is
+          simply whatever its content (header + sized media + caption)
+          naturally adds up to. */}
       <div
         ref={containerRef}
-        className={`grid items-stretch ${rowHeight ? "overflow-hidden" : ""}`}
-        style={{
-          gridTemplateColumns: group.map((b) => `minmax(0, ${b.width ?? 1}fr)`).join(" "),
-          height: rowHeight ? `${rowHeight}px` : undefined,
-        }}
+        className="grid items-stretch"
+        style={{ gridTemplateColumns: group.map((b) => `minmax(0, ${b.width ?? 1}fr)`).join(" ") }}
       >
         {group.map((block, i) => (
           <div key={block.id} className="flex min-w-0 items-stretch">
-            <div className="flex min-w-0 flex-1 flex-col overflow-auto rounded-lg border border-neutral-200 bg-white p-3">
+            <div className="flex min-w-0 flex-1 flex-col rounded-lg border border-neutral-200 bg-white p-3">
               <div className="mb-2 flex items-center justify-between">
                 <span className="text-xs font-medium uppercase tracking-wide text-neutral-400">
                   {block.type}
@@ -471,7 +472,7 @@ function RowGroup({
                 artistId={artistId}
                 siteId={siteId}
                 updateBlock={updateBlock}
-                fill={Boolean(rowHeight)}
+                rowHeightPx={rowHeight}
               />
             </div>
             {i < group.length - 1 && (
