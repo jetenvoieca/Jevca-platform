@@ -24,6 +24,14 @@ import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 //   and eventually the public-facing site itself once that's built. The
 //   files behind it aren't sensitive; the login wall exists to protect
 //   the admin tool, not the media library.
+// - /api/webhooks/resend-inbound — authenticated by Resend's own webhook
+//   signature check (resend.webhooks.verify in the route itself), same
+//   pattern as the two Stripe webhooks above — and the exact same bug as
+//   those originally had (2026-09-05): every delivery was being silently
+//   redirected to /login (a 307, which Resend correctly treats as a
+//   failed delivery and keeps retrying) instead of ever reaching the
+//   route, so no reply was ever actually processed despite Resend
+//   showing "email.received" firing correctly on its side.
 // - /login                — has to be reachable before you're logged in
 const PUBLIC_PATH_PREFIXES = [
   "/api/hopper",
@@ -31,6 +39,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/platform-subscriptions/webhook",
   "/api/shotstack/render-webhook",
   "/api/media",
+  "/api/webhooks/resend-inbound",
   "/login",
 ];
 
@@ -58,4 +67,3 @@ export const config = {
   // nothing sensitive and gating them just adds needless redirects.
   matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
-
