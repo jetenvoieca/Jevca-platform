@@ -104,14 +104,12 @@ export default function MediaPicker({
   // file itself with previewKind="video" as a fallback when it doesn't.
   previewKind?: "image" | "video";
   // Overrides the default `aspect-[4/3] w-full` box the preview/trigger
-  // renders at (2026-09-04) — e.g. `h-full w-full` to fill an
-  // arbitrary drag-resized row, or `max-h-[520px] w-full` for a capped
-  // full-width block. Also applied to the empty (no previewUrl yet)
-  // dashed placeholder, so a not-yet-picked slot sizes the same way an
-  // already-picked one would — the two states shouldn't visually
-  // disagree about how much space this picker occupies. Every other
-  // existing caller (Artist profile photo, Artwork main image, etc.)
-  // is unaffected — they don't pass this, so they keep the original
+  // renders at (2026-09-04) — e.g. `h-full w-full` for a drag-resized
+  // row (see previewFit="box" below). Also applied to the empty (no
+  // previewUrl yet) dashed placeholder, so a not-yet-picked slot sizes
+  // the same way an already-picked one would. Every other existing
+  // caller (Artist profile photo, Artwork main image, etc.) is
+  // unaffected — they don't pass this, so they keep the original
   // aspect-[4/3]/aspect-square boxes exactly as before.
   previewClassName?: string;
   // "contain" (2026-09-04) — whole image visible, scaled to fit rather
