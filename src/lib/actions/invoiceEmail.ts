@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { generateInvoicePdf } from "./invoice";
+import { artistFromAddress } from "@/lib/email";
 
 // Part Three (2026-09-01) — sending an invoice email for a gallery sale.
 // Deliberately its own file, not folded into payments.ts or invoice.ts:
@@ -10,6 +11,14 @@ import { generateInvoicePdf } from "./invoice";
 // separate means the PDF-generation code (invoice.ts) and the
 // sale-lifecycle code (payments.ts) don't need to know anything about
 // email at all.
+//
+// 2026-09-05, Email Integration: now sends from the artist's own
+// louise.dear@jevca.art address (artistFromAddress in lib/email.ts)
+// instead of one shared RESEND_FROM_EMAIL address. `replyTo` pointing at
+// the artist's personal email has been removed — a gallery's reply now
+// arrives at that same @jevca.art address and is picked up by the
+// Resend inbound webhook into the shared admin inbox
+// (/accounts/inbox), not the artist's own personal inbox.
 
 export type InvoiceEmailDraft = { to: string; subject: string; body: string };
 
@@ -111,13 +120,15 @@ export async function sendInvoiceEmail(
   }
 
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !fromEmail) {
+  if (!apiKey) {
     return {
       ok: false,
-      error: "Email sending isn't configured yet — RESEND_API_KEY / RESEND_FROM_EMAIL are missing in Netlify.",
+      error: "Email sending isn't configured yet — RESEND_API_KEY is missing in Netlify.",
     };
   }
+
+  const fromResult = artistFromAddress(purchase.artwork.artist);
+  if (!fromResult.ok) return { ok: false, error: fromResult.error };
 
   const subject = ((formData.get("subject") as string) || "").trim();
   const body = ((formData.get("body") as string) || "").trim();
@@ -132,13 +143,10 @@ export async function sendInvoiceEmail(
   }
 
   const resend = new Resend(apiKey);
-  const artistName = purchase.artwork.artist.name;
-  const artistEmail = purchase.artwork.artist.email;
 
   const { error } = await resend.emails.send({
-    from: `${artistName} <${fromEmail}>`,
+    from: fromResult.from,
     to: recipient,
-    replyTo: artistEmail || undefined,
     subject,
     text: body,
     attachments: [{ filename: attachment.filename, content: Buffer.from(attachment.bytes) }],

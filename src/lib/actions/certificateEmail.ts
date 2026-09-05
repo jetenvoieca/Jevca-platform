@@ -3,6 +3,13 @@
 import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { generateCertificatePdf } from "./certificate";
+import { artistFromAddress } from "@/lib/email";
+
+// 2026-09-05, Email Integration: same change as invoiceEmail.ts — sends
+// from the artist's own @jevca.art address instead of one shared
+// RESEND_FROM_EMAIL, and no longer sets `replyTo` to the artist's
+// personal email (replies now arrive at the @jevca.art address itself,
+// via the Resend inbound webhook into /accounts/inbox).
 
 export type CertificateEmailDraft = { to: string; subject: string; body: string };
 
@@ -69,13 +76,15 @@ export async function sendCertificateEmail(
   }
 
   const apiKey = process.env.RESEND_API_KEY;
-  const fromEmail = process.env.RESEND_FROM_EMAIL;
-  if (!apiKey || !fromEmail) {
+  if (!apiKey) {
     return {
       ok: false,
-      error: "Email sending isn't configured yet — RESEND_API_KEY / RESEND_FROM_EMAIL are missing in Netlify.",
+      error: "Email sending isn't configured yet — RESEND_API_KEY is missing in Netlify.",
     };
   }
+
+  const fromResult = artistFromAddress(purchase.artwork.artist);
+  if (!fromResult.ok) return { ok: false, error: fromResult.error };
 
   const subject = ((formData.get("subject") as string) || "").trim();
   const body = ((formData.get("body") as string) || "").trim();
@@ -90,13 +99,10 @@ export async function sendCertificateEmail(
   }
 
   const resend = new Resend(apiKey);
-  const artistName = purchase.artwork.artist.name;
-  const artistEmail = purchase.artwork.artist.email;
 
   const { error } = await resend.emails.send({
-    from: `${artistName} <${fromEmail}>`,
+    from: fromResult.from,
     to: recipient,
-    replyTo: artistEmail || undefined,
     subject,
     text: body,
     attachments: [{ filename: attachment.filename, content: Buffer.from(attachment.bytes) }],
