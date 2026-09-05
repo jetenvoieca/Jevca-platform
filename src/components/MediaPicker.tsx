@@ -64,6 +64,8 @@ export default function MediaPicker({
   previewKind = "image",
   previewClassName,
   previewObjectFit = "cover",
+  previewFit = "box",
+  previewStyle,
   onSelect,
 }: {
   artistId: string;
@@ -117,6 +119,25 @@ export default function MediaPicker({
   // resized. Used for the Content Blocks row-resize feature; every
   // other caller keeps the default "cover".
   previewObjectFit?: "cover" | "contain";
+  // "box" (default, every existing caller keeps this unchanged) — the
+  // preview is a fixed-size box (sized by previewClassName/previewStyle)
+  // that the image/video fills via object-fit, exactly as before.
+  //
+  // "natural" (2026-09-05, Content Blocks standalone images) — the
+  // image/video sizes itself from its own aspect ratio (never cropped),
+  // scaled down to fit previewStyle.maxHeight if given. Used for
+  // standalone (non-row) Content Block images, per direct request that
+  // an artist's images should never be auto-cropped. previewObjectFit
+  // is ignored in this mode since there's no box to fit into.
+  previewFit?: "box" | "natural";
+  // Explicit inline style, layered on top of previewClassName — e.g. an
+  // exact pixel `height` for a drag-resized row (2026-09-05: delivered
+  // as a real number here rather than a CSS percentage inherited through
+  // parent wrappers, so it can't be silently overridden by an ancestor's
+  // own content-based sizing the way `h-full` was). Applied identically
+  // whether or not previewUrl is set yet, so an empty slot can carry a
+  // `minHeight` floor and never collapse to a sliver.
+  previewStyle?: React.CSSProperties;
   onSelect: (images: PickedImage[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -223,6 +244,58 @@ export default function MediaPicker({
   // size instead of a small placeholder, with the same dashed-border
   // language shown as a hover overlay rather than the whole tile.
   if (!open) {
+    // "natural" fit (2026-09-05) — the image/video sizes itself from its
+    // own aspect ratio and is never cropped, per direct request for
+    // standalone Content Block images. No fixed box, no object-fit: the
+    // element just renders at its own proportions, capped by
+    // previewStyle.maxHeight if the caller gave one. The click-to-change
+    // hover affordance becomes a border rather than an overlay, since
+    // there's no fixed-size box for an inset-0 overlay to match.
+    if (previewFit === "natural") {
+      if (previewUrl) {
+        return (
+          <button
+            type="button"
+            onClick={handleOpen}
+            className="group block w-full rounded-md ring-1 ring-transparent transition hover:ring-2 hover:ring-neutral-400"
+          >
+            {previewKind === "video" ? (
+              <video
+                src={previewUrl}
+                muted
+                playsInline
+                style={previewStyle}
+                className={previewClassName ?? "max-w-full h-auto rounded-md"}
+              />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={previewUrl}
+                alt=""
+                style={previewStyle}
+                className={previewClassName ?? "max-w-full h-auto rounded-md"}
+              />
+            )}
+          </button>
+        );
+      }
+      return (
+        <button
+          type="button"
+          onClick={handleOpen}
+          style={previewStyle}
+          className={`flex w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600 ${
+            previewClassName ?? ""
+          }`}
+        >
+          + {label}
+        </button>
+      );
+    }
+
+    // "box" fit (default) — unchanged behaviour for every existing
+    // caller: a fixed-size box (previewClassName/previewStyle) that the
+    // image/video fills via object-fit.
     const fitClass =
       previewObjectFit === "contain" ? "object-contain object-left-top" : "object-cover";
 
@@ -231,6 +304,7 @@ export default function MediaPicker({
         <button
           type="button"
           onClick={handleOpen}
+          style={previewStyle}
           className={`group relative block w-full overflow-hidden rounded-md ${
             previewClassName ?? "aspect-[4/3]"
           }`}
@@ -253,6 +327,7 @@ export default function MediaPicker({
       <button
         type="button"
         onClick={handleOpen}
+        style={previewStyle}
         className={`flex w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600 ${
           previewClassName ?? "aspect-square"
         }`}
