@@ -44,6 +44,18 @@ enum PageType {
   PRIVATE
   PAVILION
   PAVILION_VISUAL
+  // Added 2026-09-06 — a page created by picking one of a Site's own
+  // Template's page styles (portfolio, showcase, profile, exhibitions,
+  // home) from the same "+ Add New Page" list as Section/Private/
+  // Pavilion, rather than one of those fixed system types. Which style
+  // it actually is lives in Page.templateStyle, since the style is a
+  // PageStyle value, not a PageType — this is deliberately a single
+  // extra PageType, not one enum value per style, so adding a new style
+  // later never means another migration here. Picking "freeform" from
+  // that same list creates a PRIVATE page instead (see
+  // src/lib/actions/pages.ts) — it's exactly the existing block editor,
+  // so it needs no distinct type of its own.
+  TEMPLATE_STYLE
 }
 
 // Fixed layout styles offered by the Templates library (2026-09-06) —
@@ -57,12 +69,18 @@ enum PageType {
 // FREEFORM is the escape hatch: a TemplatePage of this style means "use
 // the existing block/row editor" — so the one existing free-form system
 // has a place in this same list rather than being a special case
-// scattered through the Templates UI.
+// scattered through the Templates UI. A real Page never actually stores
+// FREEFORM as its own templateStyle (see Page.templateStyle below) —
+// picking it from the "+ Add New Page" list just creates an ordinary
+// PRIVATE page instead.
 //
-// Shell only for now (2026-09-06) — the enum and the Template/
-// TemplatePage models below exist so a Template's pages can be named and
-// typed, but no PageStyle has a real layout renderer yet. That's later,
-// one style at a time.
+// Also referenced directly by Page.templateStyle (2026-09-06) — not just
+// TemplatePage — once a Site is linked to a Template (Site.templateId),
+// so a Page created from one of that Template's styles remembers which
+// style it is.
+//
+// No PageStyle has a real layout renderer yet beyond that plumbing —
+// that's later, one style at a time.
 enum PageStyle {
   PORTFOLIO
   SHOWCASE
@@ -560,7 +578,15 @@ model Site {
   multiLanguageEnabled Boolean    @default(false)
   salesEnabled         Boolean    @default(false)
   defaultCurrency      String     @default("GBP")
-  template             String     @default("Default")
+  // Replaces the old free-text `template` field (2026-09-06) — a real
+  // link to a Template record now that Templates are an actual library
+  // (see the Template model below), rather than a string that only
+  // ever held "Default". Nullable: a site doesn't need a Template
+  // assigned to keep working the ordinary way (Section/Private/
+  // Pavilion pages) — it's only needed to also offer that Template's
+  // own page styles when adding a new page (see Page.templateStyle).
+  templateId           String?
+  template             Template?  @relation(fields: [templateId], references: [id])
   domainStatus         String?
   domainRenewalDate    DateTime?
   artistId             String
@@ -572,6 +598,7 @@ model Site {
   menus Menu[]
 
   @@index([artistId])
+  @@index([templateId])
 }
 
 model Page {
@@ -600,6 +627,14 @@ model Page {
   backgroundColor   String?
   backgroundImageId String?
   backgroundImage   Image?  @relation("PageBackgroundImage", fields: [backgroundImageId], references: [id])
+
+  // Which of the Site's Template's page styles this page is (2026-09-06)
+  // — set only when type is TEMPLATE_STYLE, null otherwise. Kept as its
+  // own nullable field rather than repurposing `type` for this, since
+  // `type` is a small fixed set of system behaviours (Section/Private/
+  // Pavilion/Pavilion Visual/Template Style) while this is "which
+  // style", a separate question that only applies to one of them.
+  templateStyle PageStyle?
 
   draftBlocks Json  @default("[]")
   liveBlocks  Json?
@@ -664,15 +699,14 @@ model MenuItem {
 // A reusable design library (2026-09-06) — e.g. "ISYT", replicating the
 // isendyouthis.com template set shown in the design mockups. Deliberately
 // its own top-level model, separate from Site/Page: a Template is
-// authored once here and then intended to be referenced by many Sites
-// (100+, eventually) rather than belonging to one. Wiring an actual Site
-// to a Template is a later step — Site.template is still a plain free-
-// text field for now, untouched by this addition.
+// authored once here and referenced by many Sites (100+, eventually)
+// rather than belonging to one — see Site.templateId.
 model Template {
   id   String @id @default(cuid())
   name String
 
   pages TemplatePage[]
+  sites Site[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
