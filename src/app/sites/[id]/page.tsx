@@ -5,6 +5,7 @@ import SiteSettingsPanel from "@/components/SiteSettingsPanel";
 import SitesListColumn from "@/components/SitesListColumn";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 import { getCertificateTemplates } from "@/lib/actions/certificateSettings";
+import { getTemplatesForDirectory } from "@/lib/actions/templates";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +35,7 @@ export default async function SiteSettingsPage({
   const cookieStore = await cookies();
   const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
 
-  const [payments, allSites, certificateTemplates] = await Promise.all([
+  const [payments, allSites, certificateTemplates, templates] = await Promise.all([
     db.subscriptionPayment.findMany({
       where: { artistId: site.artistId },
       orderBy: { paidAt: "desc" },
@@ -61,6 +62,10 @@ export default async function SiteSettingsPage({
     // Certificate of Authenticity templates (2026-09-04) — see
     // CertificateTemplatesCard on the Financial tab below.
     getCertificateTemplates(site.artistId),
+    // The Templates library (2026-09-06) — populates the "Template"
+    // dropdown in SiteSettingsPanel, replacing the old hardcoded
+    // "Default" option. See src/lib/actions/templates.ts.
+    getTemplatesForDirectory(""),
   ]);
 
   return (
@@ -74,7 +79,7 @@ export default async function SiteSettingsPage({
             status: site.status,
             createdAt: site.createdAt.toISOString(),
             defaultCurrency: site.defaultCurrency,
-            template: site.template,
+            templateId: site.templateId,
             salesEnabled: site.salesEnabled,
             domainStatus: site.domainStatus,
             domainRenewalDate: site.domainRenewalDate
@@ -117,6 +122,7 @@ export default async function SiteSettingsPage({
             emailSlug: site.artist.emailSlug,
           }}
           certificateTemplates={certificateTemplates}
+          templates={templates.map((t) => ({ id: t.id, name: t.name }))}
           subscriptionPayments={payments.map((p) => ({
             id: p.id,
             source: p.source as "STRIPE" | "MANUAL",
