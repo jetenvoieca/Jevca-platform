@@ -46,6 +46,32 @@ enum PageType {
   PAVILION_VISUAL
 }
 
+// Fixed layout styles offered by the Templates library (2026-09-06) —
+// each one its own purpose-built renderer (thumbnail grid + detail
+// panel, hero shot + text, sliding showcase, etc.), replicating the
+// isendyouthis.com template set shown in the design mockups. Deliberately
+// NOT built from the free-form block/row system used by PageType.PRIVATE
+// (see blocks.ts) — these are a different kind of page altogether, per
+// direct decision (2026-09-06).
+//
+// FREEFORM is the escape hatch: a TemplatePage of this style means "use
+// the existing block/row editor" — so the one existing free-form system
+// has a place in this same list rather than being a special case
+// scattered through the Templates UI.
+//
+// Shell only for now (2026-09-06) — the enum and the Template/
+// TemplatePage models below exist so a Template's pages can be named and
+// typed, but no PageStyle has a real layout renderer yet. That's later,
+// one style at a time.
+enum PageStyle {
+  PORTFOLIO
+  SHOWCASE
+  PROFILE
+  EXHIBITIONS
+  HOME
+  FREEFORM
+}
+
 enum ArtworkAvailability {
   AVAILABLE
   RESERVED
@@ -633,6 +659,43 @@ model MenuItem {
 
   @@index([groupId])
   @@index([pageId])
+}
+
+// A reusable design library (2026-09-06) — e.g. "ISYT", replicating the
+// isendyouthis.com template set shown in the design mockups. Deliberately
+// its own top-level model, separate from Site/Page: a Template is
+// authored once here and then intended to be referenced by many Sites
+// (100+, eventually) rather than belonging to one. Wiring an actual Site
+// to a Template is a later step — Site.template is still a plain free-
+// text field for now, untouched by this addition.
+model Template {
+  id   String @id @default(cuid())
+  name String
+
+  pages TemplatePage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// One named page slot within a Template (2026-09-06) — "+ Add new menu
+// item" in the mockups: a Page Name plus a fixed PageStyle. Shell only —
+// see the note on the PageStyle enum above. `position` orders pages
+// within the Template the same way MenuItem/MenuGroup already order
+// themselves elsewhere.
+model TemplatePage {
+  id         String   @id @default(cuid())
+  templateId String
+  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  name     String
+  style    PageStyle
+  position Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([templateId])
 }
 
 model Artwork {
