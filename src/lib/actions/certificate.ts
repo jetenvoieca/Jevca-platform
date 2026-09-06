@@ -166,14 +166,32 @@ export async function generateCertificatePdf(
   y = drawWrappedCentered(page, template.text, font, 12, centerX, y, width - left * 2, 18);
   y -= 50;
 
-  // ---- Signed, with the artist's signature image beneath ----
+  // ---- Signed, with the artist's signature image beneath, then the
+  // artist's name and postcode/country underneath that (2026-09-06,
+  // direct request — "under the signature put artist's name, postcode
+  // and country", e.g. "Louise Dear / 11440, France") ----
   page.drawText("Signed …", { x: left, y, size: 11, font });
   y -= 10;
   const signature = await embedImageFromUrl(doc, artist.signatureUrl);
+  let afterSignatureY: number;
   if (signature) {
     const sigHeight = 50;
     const scale = sigHeight / signature.height;
     page.drawImage(signature, { x: left, y: y - sigHeight, width: signature.width * scale, height: sigHeight });
+    afterSignatureY = y - sigHeight;
+  } else {
+    // No signature image on file — leave the same blank space a real
+    // signature image would have taken, so the name/location line below
+    // still lands in a sensible spot rather than crowding "Signed …".
+    afterSignatureY = y - 50;
+  }
+
+  afterSignatureY -= 16;
+  page.drawText(artist.name, { x: left, y: afterSignatureY, size: 10, font: bold });
+  const location = [artist.postcode, artist.country].filter(Boolean).join(", ");
+  if (location) {
+    afterSignatureY -= 13;
+    page.drawText(location, { x: left, y: afterSignatureY, size: 10, font, color: grey });
   }
 
   // ---- Footer ----

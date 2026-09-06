@@ -33,6 +33,26 @@ function currencySymbol(currency: string) {
   return currency === "EUR" ? "€" : currency === "USD" ? "$" : "£";
 }
 
+// Builds the printed address block from the artist's structured fields
+// (2026-09-06, reformed from a single freeform `invoiceAddress` field) —
+// addressLine1 can itself be more than one line (a street address
+// genuinely can be), followed by city, then postcode + country on one
+// line. Blank fields are simply skipped rather than leaving an empty
+// line.
+function addressLines(artist: {
+  addressLine1: string | null;
+  city: string | null;
+  postcode: string | null;
+  country: string | null;
+}): string[] {
+  const lines = [
+    ...(artist.addressLine1 || "").split("\n").map((l) => l.trim()).filter(Boolean),
+    artist.city?.trim() || null,
+    [artist.postcode?.trim(), artist.country?.trim()].filter(Boolean).join(", ") || null,
+  ];
+  return lines.filter((l): l is string => !!l);
+}
+
 // Document wording (2026-08-13). Language is the artist's own explicit
 // choice (Settings → Invoice language) — deliberately not inferred from
 // the sale's currency, since currency and the buyer's language aren't
@@ -155,7 +175,7 @@ export async function generateInvoicePdf(
   // ---- From (the artist) ----
   page.drawText(artist.name, { x: left, y, size: 11, font: bold });
   y -= 14;
-  for (const line of (artist.invoiceAddress || "").split("\n").filter(Boolean)) {
+  for (const line of addressLines(artist)) {
     page.drawText(line, { x: left, y, size: 10, font });
     y -= 13;
   }
