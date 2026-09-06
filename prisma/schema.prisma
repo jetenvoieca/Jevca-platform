@@ -172,7 +172,22 @@ model Artist {
   paymentMethods String[] @default(["Bank transfer", "Cash", "Cheque", "Card", "PayPal"])
 
   logoUrl           String?
-  invoiceAddress    String?
+
+  // Structured postal address (2026-09-06, reformed from a single
+  // freeform `invoiceAddress` field, direct request — "reform the
+  // Artist address field so it can be used wherever needed") — split
+  // out so any document needing just one piece can pull exactly that,
+  // rather than parsing a blob of free text. The Certificate of
+  // Authenticity's signature block, for instance, needs only postcode +
+  // country (e.g. "11440, France") — see certificate.ts.
+  // addressLine1 stays free text (a street address can genuinely span
+  // more than one line); city/postcode/country are split out because
+  // they're the pieces reused individually elsewhere.
+  addressLine1 String?
+  city         String?
+  postcode     String?
+  country      String?
+
   vatNumber         String?
   vatRate           Decimal? @db.Decimal(5, 2)
   invoiceFooterText String?
