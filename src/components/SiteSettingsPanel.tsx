@@ -58,7 +58,14 @@ type ArtistData = {
   subscriptionAmount: string;
   paymentMethod: string | null;
   logoUrl: string | null;
-  invoiceAddress: string | null;
+  // Structured postal address (2026-09-06, reformed from a single
+  // freeform `invoiceAddress` field, direct request — "reform the
+  // Artist address field so it can be used wherever needed") — see the
+  // matching note on Artist.addressLine1 in schema.prisma.
+  addressLine1: string | null;
+  city: string | null;
+  postcode: string | null;
+  country: string | null;
   vatNumber: string | null;
   vatRate: string;
   invoiceFooterText: string | null;
@@ -147,7 +154,10 @@ export default function SiteSettingsPanel({
       | "email"
       | "phone"
       | "subscriptionAmount"
-      | "invoiceAddress"
+      | "addressLine1"
+      | "city"
+      | "postcode"
+      | "country"
       | "vatNumber"
       | "vatRate"
       | "invoiceFooterText"
@@ -173,7 +183,10 @@ export default function SiteSettingsPanel({
     // but updateArtist still expects the field present so it doesn't get
     // accidentally cleared.
     fd.set("paymentMethod", artist.paymentMethod || "");
-    fd.set("invoiceAddress", field === "invoiceAddress" ? value : artist.invoiceAddress || "");
+    fd.set("addressLine1", field === "addressLine1" ? value : artist.addressLine1 || "");
+    fd.set("city", field === "city" ? value : artist.city || "");
+    fd.set("postcode", field === "postcode" ? value : artist.postcode || "");
+    fd.set("country", field === "country" ? value : artist.country || "");
     fd.set("vatNumber", field === "vatNumber" ? value : artist.vatNumber || "");
     fd.set("vatRate", field === "vatRate" ? value : artist.vatRate);
     fd.set("invoiceFooterText", field === "invoiceFooterText" ? value : artist.invoiceFooterText || "");
@@ -957,15 +970,58 @@ export default function SiteSettingsPanel({
                     </label>
                   </div>
 
+                  {/* Structured address (2026-09-06, reformed from a single
+                      freeform field, direct request) — addressLine1 stays
+                      a textarea (a street address can be more than one
+                      line); City/Postcode/Country are their own fields so
+                      other documents can pull just the piece they need
+                      (e.g. the Certificate of Authenticity's signature
+                      block needs only Postcode + Country). */}
                   <label className={labelCls}>Artist address (for invoices)</label>
                   <textarea
-                    key={`owner-invoice-address-${artist.id}`}
-                    defaultValue={artist.invoiceAddress || ""}
-                    onBlur={(e) => saveOwner("invoiceAddress", e.target.value.trim())}
+                    key={`owner-address-line1-${artist.id}`}
+                    defaultValue={artist.addressLine1 || ""}
+                    onBlur={(e) => saveOwner("addressLine1", e.target.value.trim())}
                     disabled={isPending}
                     rows={2}
-                    className={`${inputCls} mb-3`}
+                    placeholder="Street address"
+                    className={`${inputCls} mb-2`}
                   />
+                  <div className="mb-3 grid grid-cols-3 gap-2">
+                    <div>
+                      <label className={labelCls}>City</label>
+                      <input
+                        key={`owner-city-${artist.id}`}
+                        type="text"
+                        defaultValue={artist.city || ""}
+                        onBlur={(e) => saveOwner("city", e.target.value.trim())}
+                        disabled={isPending}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Postcode</label>
+                      <input
+                        key={`owner-postcode-${artist.id}`}
+                        type="text"
+                        defaultValue={artist.postcode || ""}
+                        onBlur={(e) => saveOwner("postcode", e.target.value.trim())}
+                        disabled={isPending}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Country</label>
+                      <input
+                        key={`owner-country-${artist.id}`}
+                        type="text"
+                        defaultValue={artist.country || ""}
+                        onBlur={(e) => saveOwner("country", e.target.value.trim())}
+                        disabled={isPending}
+                        className={inputCls}
+                      />
+                    </div>
+                  </div>
 
                   <div className="mb-3 grid grid-cols-2 gap-2">
                     <div>
@@ -1034,7 +1090,10 @@ export default function SiteSettingsPanel({
                     invoice is actually generated.
                   </p>
 
-                  {(savedField === "invoiceAddress" ||
+                  {(savedField === "addressLine1" ||
+                    savedField === "city" ||
+                    savedField === "postcode" ||
+                    savedField === "country" ||
                     savedField === "vatNumber" ||
                     savedField === "vatRate" ||
                     savedField === "invoiceFooterText" ||
