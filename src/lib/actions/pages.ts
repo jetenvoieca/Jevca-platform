@@ -36,15 +36,35 @@ export async function uniqueSlug(siteId: string, base: string) {
 export async function createPage(siteId: string, formData: FormData) {
   const title = (formData.get("title") as string)?.trim();
   if (!title) return;
-  const typeRaw = formData.get("type");
-  const type =
-    typeRaw === "PRIVATE"
-      ? "PRIVATE"
-      : typeRaw === "PAVILION"
-        ? "PAVILION"
-        : typeRaw === "PAVILION_VISUAL"
-          ? "PAVILION_VISUAL"
-          : "SECTION";
+  const typeRaw = (formData.get("type") as string) || "";
+
+  // A Template's own page style is encoded as "STYLE:<value>" (2026-09-06
+  // — see the matching option list in SiteShell.tsx), so this one form
+  // field still covers both the four system types and any of the site's
+  // Template's styles, rather than needing a second control. "FREEFORM"
+  // is the one style that isn't a distinct PageType at all — picking it
+  // creates an ordinary PRIVATE page (the ordinary block editor); see
+  // the note on PageStyle.FREEFORM in schema.prisma.
+  let type: "SECTION" | "PRIVATE" | "PAVILION" | "PAVILION_VISUAL" | "TEMPLATE_STYLE" = "SECTION";
+  let templateStyle: "PORTFOLIO" | "SHOWCASE" | "PROFILE" | "EXHIBITIONS" | "HOME" | null = null;
+
+  if (typeRaw.startsWith("STYLE:")) {
+    const style = typeRaw.slice("STYLE:".length);
+    if (style === "FREEFORM") {
+      type = "PRIVATE";
+    } else if (
+      style === "PORTFOLIO" ||
+      style === "SHOWCASE" ||
+      style === "PROFILE" ||
+      style === "EXHIBITIONS" ||
+      style === "HOME"
+    ) {
+      type = "TEMPLATE_STYLE";
+      templateStyle = style;
+    }
+  } else if (typeRaw === "PRIVATE" || typeRaw === "PAVILION" || typeRaw === "PAVILION_VISUAL") {
+    type = typeRaw;
+  }
 
   const baseSlug = slugify(title);
   const slug = await uniqueSlug(siteId, baseSlug);
@@ -58,6 +78,7 @@ export async function createPage(siteId: string, formData: FormData) {
     data: {
       siteId,
       type,
+      templateStyle,
       title,
       slug,
       position: (maxPosition._max.position ?? -1) + 1,
