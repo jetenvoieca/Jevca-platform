@@ -181,3 +181,19 @@ export type PavilionCard = PavilionTile & {
 export type PavilionContent = {
   cards: PavilionCard[];
 };
+
+// The Portfolio page style's own fixed shape (2026-09-06, first real
+// PageStyle renderer) — like SectionContent/PavilionContent above, not
+// built from Content Blocks. A Portfolio is a set of named categories
+// (e.g. "Head Sculptures", "Wall Mounted" — matching the isendyouthis.com
+// reference), each holding an ordered list of artworks. Stored in the
+// same draftBlocks/liveBlocks columns as every other page type.
+export type PortfolioGroup = {
+  id: string;
+  name: string;
+  artworkIds: string[];
+};
+
+export type PortfolioContent = {
+  groups: PortfolioGroup[];
+};
