@@ -13,7 +13,7 @@ import { updateSite } from "@/lib/actions";
 //
 // updateSite (the underlying Server Action) saves the site's editable
 // fields together as one form, not name in isolation — so this still
-// sends the site's current domain/currency/template/etc. unchanged
+// sends the site's current domain/currency/templateId/etc. unchanged
 // alongside the new name, same as Settings' own save always did.
 export default function SiteNameField({
   site,
@@ -24,7 +24,9 @@ export default function SiteNameField({
     name: string;
     domain: string | null;
     defaultCurrency: string;
-    template: string;
+    // Replaces the old free-text `template` (2026-09-06) — see
+    // Site.templateId in schema.prisma. Null = no Template assigned.
+    templateId: string | null;
     domainStatus: string | null;
     domainRenewalDate: Date | null;
   };
@@ -41,7 +43,7 @@ export default function SiteNameField({
     fd.set("name", trimmed);
     fd.set("domain", site.domain || "");
     fd.set("defaultCurrency", site.defaultCurrency);
-    fd.set("template", site.template);
+    fd.set("templateId", site.templateId || "");
     fd.set("domainStatus", site.domainStatus || "");
     fd.set(
       "domainRenewalDate",
