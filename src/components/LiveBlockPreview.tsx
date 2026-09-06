@@ -30,9 +30,14 @@ function renderBlock(block: ContentBlock, mode: MediaSizeMode) {
     if (!block.url) return null;
     const media = getPlainMediaSizing(mode);
     return (
-      <figure key={block.id} className={mode.kind === "row" ? "h-full" : undefined}>
+      <figure key={block.id} className={media.figureClassName}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img src={block.url} alt={block.caption || ""} className={media.className} style={media.style} />
+        <img
+          src={block.url}
+          alt={block.caption || ""}
+          className={media.mediaClassName}
+          style={media.mediaStyle}
+        />
         {block.caption && (
           <figcaption className="mt-1 text-xs text-neutral-500">{block.caption}</figcaption>
         )}
@@ -45,8 +50,10 @@ function renderBlock(block: ContentBlock, mode: MediaSizeMode) {
     return (
       <div key={block.id} className={`grid grid-cols-2 gap-2 ${mode.kind === "row" ? "h-full" : ""}`}>
         {block.images.map((img) => (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img key={img.imageId} src={img.url} alt="" className={media.className} style={media.style} />
+          <div key={img.imageId} className={mode.kind === "row" ? "h-full" : media.figureClassName}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={img.url} alt="" className={media.mediaClassName} style={media.mediaStyle} />
+          </div>
         ))}
       </div>
     );
@@ -55,7 +62,9 @@ function renderBlock(block: ContentBlock, mode: MediaSizeMode) {
     if (!block.url) return null;
     const media = getPlainMediaSizing(mode);
     return (
-      <video key={block.id} src={block.url} controls className={media.className} style={media.style} />
+      <div key={block.id} className={media.figureClassName}>
+        <video src={block.url} controls className={media.mediaClassName} style={media.mediaStyle} />
+      </div>
     );
   }
   if (block.type === "artwork") {
