@@ -2,6 +2,7 @@ import type { AppShellNavEntry } from "@/components/SidebarNav";
 
 export type TopNavKey =
   | "sites"
+  | "templates"
   | "alerts"
   | "inbox"
   | "subscriptions"
@@ -62,6 +63,11 @@ export function buildAccountsSection(
 export function buildTopNavItems(active: TopNavKey, alertCount: number): AppShellNavEntry[] {
   return [
     buildAccountsSection(active, alertCount),
+    // "Templates" (2026-09-06) — a reusable, cross-site design library
+    // (Template + TemplatePage), separate from any one Site. Sits above
+    // Sites as its own peer item, matching the ISYT design mockups,
+    // rather than folded into the Administration group above.
+    { label: "Templates", href: "/templates", active: active === "templates" },
     { label: "Sites", href: "/", active: active === "sites" },
   ];
 }
