@@ -82,7 +82,7 @@ function BlockFields({
   }
 
   if (block.type === "image") {
-    const media = getMediaBoxProps(mediaMode, Boolean(block.url));
+    const media = getMediaBoxProps(mediaMode);
     return (
       <div>
         <MediaPicker
@@ -91,7 +91,6 @@ function BlockFields({
           mode="single"
           label="Add Image"
           previewUrl={block.url || undefined}
-          previewFit={media.previewFit}
           previewClassName={media.previewClassName}
           previewStyle={media.previewStyle}
           previewObjectFit={media.previewObjectFit}
@@ -192,7 +191,7 @@ function BlockFields({
   }
 
   if (block.type === "video") {
-    const media = getMediaBoxProps(mediaMode, Boolean(block.posterUrl || block.url));
+    const media = getMediaBoxProps(mediaMode);
     return (
       <div>
         <MediaPicker
@@ -203,7 +202,6 @@ function BlockFields({
           label="Add Video"
           previewUrl={block.posterUrl || block.url || undefined}
           previewKind={block.posterUrl ? "image" : "video"}
-          previewFit={media.previewFit}
           previewClassName={media.previewClassName}
           previewStyle={media.previewStyle}
           previewObjectFit={media.previewObjectFit}
