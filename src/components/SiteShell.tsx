@@ -49,6 +49,7 @@ export default function SiteShell({
   mediaNeedsReviewCount,
   alertCount,
   hasUnpublished,
+  hasTemplate,
   header,
   children,
 }: {
@@ -65,6 +66,14 @@ export default function SiteShell({
   mediaNeedsReviewCount: number;
   alertCount: number;
   hasUnpublished: boolean;
+  // Whether this site has a Template assigned (2026-09-06, Site.templateId)
+  // — when true, the "+ Add New Page" dropdown below also offers that
+  // Template's page styles (portfolio/showcase/profile/exhibitions/home),
+  // alongside the four system types. Just a boolean, not the Template's
+  // own list of named pages — a style is available regardless of whether
+  // a TemplatePage of that style happens to exist in the Template's own
+  // authoring list (see TemplatePage in schema.prisma).
+  hasTemplate: boolean;
   // The site name / domain header, pinned above the scrolling page
   // content — built by the (server) layout since it needs the site
   // record, passed in ready-made.
@@ -155,6 +164,26 @@ export default function SiteShell({
                   closed until you click the pencil. Kept as a separate
                   type entirely so trying it never risks the original. */}
               <option value="PAVILION_VISUAL">Pavilion (Visual)</option>
+              {/* Added 2026-09-06 — this site's own Template's page
+                  styles, offered alongside the four system types above,
+                  once a Template is assigned (Site.templateId). Encoded
+                  as "STYLE:<value>" so this stays one flat dropdown/one
+                  form field rather than a second control — createPage
+                  (lib/actions/pages.ts) decodes it back into
+                  type/templateStyle. "freeform" is the one exception: it
+                  decodes to an ordinary PRIVATE page (the existing block
+                  editor), not a distinct templateStyle — see the note
+                  there and on PageStyle.FREEFORM in schema.prisma. */}
+              {hasTemplate && (
+                <>
+                  <option value="STYLE:PORTFOLIO">portfolio</option>
+                  <option value="STYLE:SHOWCASE">showcase</option>
+                  <option value="STYLE:PROFILE">profile</option>
+                  <option value="STYLE:EXHIBITIONS">exhibitions</option>
+                  <option value="STYLE:HOME">home</option>
+                  <option value="STYLE:FREEFORM">freeform (existing block editor)</option>
+                </>
+              )}
             </select>
             <div className="flex gap-1">
               <button
