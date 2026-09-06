@@ -2,8 +2,9 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import BlockRenderer from "@/components/BlockRenderer";
 import SectionGrid from "@/components/SectionGrid";
+import PortfolioGrid from "@/components/PortfolioGrid";
 import { getArtworksByIds } from "@/lib/actions/artworks";
-import type { ContentBlock, SectionContent } from "@/lib/blocks";
+import type { ContentBlock, SectionContent, PortfolioContent } from "@/lib/blocks";
 
 export default async function PreviewPage({
   params,
@@ -41,6 +42,57 @@ export default async function PreviewPage({
       <main className="mx-auto max-w-3xl px-6 py-10">
         {banner}
         <SectionGrid title={page.title} byline={content.byline || ""} artworks={artworks} />
+      </main>
+    );
+  }
+
+  // Portfolio is the first PageStyle with a real renderer (2026-09-06) —
+  // uses the exact same PortfolioGrid component as the editor's own live
+  // preview column, so there's one render path for what a Portfolio page
+  // looks like, not two that can drift apart. Every other, not-yet-built
+  // style falls through to a plain placeholder rather than the generic
+  // block renderer below, which expects a ContentBlock[] shape this page
+  // type never has.
+  if (page.type === "TEMPLATE_STYLE" && page.templateStyle === "PORTFOLIO") {
+    const content = (page.draftBlocks as unknown as PortfolioContent) || { groups: [] };
+    const groupArtworkRows = await Promise.all(
+      content.groups.map((g) => getArtworksByIds(g.artworkIds || []))
+    );
+    const groups = content.groups.map((g, i) => ({
+      id: g.id,
+      name: g.name,
+      artworks: groupArtworkRows[i].map((a) => ({
+        id: a.id,
+        presentationTitle: a.presentationTitle,
+        imageUrl: a.images[0]?.url ?? null,
+        presentationPrice: a.presentationPrice,
+        description: a.description,
+        presentationMedium: a.presentationMedium,
+        viewingLocation: a.viewingLocation,
+        size: a.size,
+        edition: a.edition,
+      })),
+    }));
+
+    return (
+      <main className="mx-auto max-w-3xl px-6 py-10">
+        {banner}
+        <PortfolioGrid title={page.title} groups={groups} />
+      </main>
+    );
+  }
+
+  if (page.type === "TEMPLATE_STYLE") {
+    return (
+      <main className="mx-auto max-w-2xl px-6 py-10 text-center">
+        {banner}
+        <p className="text-sm font-medium uppercase tracking-wide text-neutral-400">
+          {page.templateStyle?.toLowerCase()} layout
+        </p>
+        <h1 className="mt-2 text-xl font-semibold text-neutral-900">{page.title}</h1>
+        <p className="mt-4 text-sm text-neutral-500">
+          This page style hasn&apos;t been built yet.
+        </p>
       </main>
     );
   }
