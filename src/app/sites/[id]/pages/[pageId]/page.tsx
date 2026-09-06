@@ -4,9 +4,10 @@ import PageEditor from "./PageEditor";
 import SectionEditor from "@/components/SectionEditor";
 import PavilionEditor from "@/components/PavilionEditor";
 import PavilionVisualEditor from "@/components/PavilionVisualEditor";
+import PortfolioEditor from "@/components/PortfolioEditor";
 import { getArtworksByIds } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
-import type { ContentBlock, SectionContent, PavilionContent } from "@/lib/blocks";
+import type { ContentBlock, SectionContent, PavilionContent, PortfolioContent } from "@/lib/blocks";
 
 export default async function PageEditorPage({
   params,
@@ -86,11 +87,47 @@ export default async function PageEditorPage({
   }
 
   // A page created from one of the site's Template's page styles
-  // (2026-09-06 — see Page.templateStyle in schema.prisma). No style has
-  // a real layout renderer yet (that's the next piece of work, one style
-  // at a time), so this is a plain placeholder rather than silently
-  // falling through to the generic block editor below, which would be
-  // the wrong editor entirely for a page meant to use a fixed layout.
+  // (2026-09-06 — see Page.templateStyle in schema.prisma). Portfolio is
+  // the first style with a real renderer; every other style still shows
+  // the plain placeholder below until it's built, one at a time, rather
+  // than silently falling through to the generic block editor, which
+  // would be the wrong editor entirely for a page meant to use a fixed
+  // layout.
+  if (page.type === "TEMPLATE_STYLE" && page.templateStyle === "PORTFOLIO") {
+    const content = (page.draftBlocks as unknown as PortfolioContent) || { groups: [] };
+    const [settings, ...groupArtworkRows] = await Promise.all([
+      getArtworkSettings(site.artistId),
+      ...content.groups.map((g) => getArtworksByIds(g.artworkIds || [])),
+    ]);
+    const initialGroups = content.groups.map((g, i) => ({
+      id: g.id,
+      name: g.name,
+      artworks: groupArtworkRows[i].map((a) => ({
+        id: a.id,
+        presentationTitle: a.presentationTitle,
+        imageUrl: a.images[0]?.url ?? null,
+        presentationPrice: a.presentationPrice,
+        description: a.description,
+        presentationMedium: a.presentationMedium,
+        viewingLocation: a.viewingLocation,
+        size: a.size,
+        edition: a.edition,
+      })),
+    }));
+
+    return (
+      <PortfolioEditor
+        siteId={id}
+        artistId={site.artistId}
+        pageId={page.id}
+        pageTitle={page.title}
+        initialGroups={initialGroups}
+        settings={settings}
+        siteDefaultCurrency={site.defaultCurrency}
+      />
+    );
+  }
+
   if (page.type === "TEMPLATE_STYLE") {
     return (
       <div className="mx-auto max-w-2xl px-6 py-12 text-center">
