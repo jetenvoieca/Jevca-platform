@@ -106,7 +106,15 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
   const subscriptionAmountRaw = (formData.get("subscriptionAmount") as string)?.trim();
   const subscriptionAmount = subscriptionAmountRaw ? subscriptionAmountRaw : null;
   const paymentMethod = (formData.get("paymentMethod") as string)?.trim() || null;
-  const invoiceAddress = (formData.get("invoiceAddress") as string)?.trim() || null;
+  // Structured address (2026-09-06, reformed from a single freeform
+  // `invoiceAddress` field) — addressLine1 stays free text (can be more
+  // than one line); city/postcode/country are their own fields so other
+  // documents (the Certificate of Authenticity's signature block) can
+  // pull just the piece they need — see lib/actions/certificate.ts.
+  const addressLine1 = (formData.get("addressLine1") as string)?.trim() || null;
+  const city = (formData.get("city") as string)?.trim() || null;
+  const postcode = (formData.get("postcode") as string)?.trim() || null;
+  const country = (formData.get("country") as string)?.trim() || null;
   const vatNumber = (formData.get("vatNumber") as string)?.trim() || null;
   const vatRateRaw = (formData.get("vatRate") as string)?.trim();
   const vatRate = vatRateRaw ? vatRateRaw : null;
@@ -132,7 +140,10 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
       notes,
       subscriptionAmount,
       paymentMethod,
-      invoiceAddress,
+      addressLine1,
+      city,
+      postcode,
+      country,
       vatNumber,
       vatRate,
       invoiceFooterText,
