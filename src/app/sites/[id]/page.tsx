@@ -93,7 +93,13 @@ export default async function SiteSettingsPage({
               : "",
             paymentMethod: site.artist.paymentMethod,
             logoUrl: site.artist.logoUrl,
-            invoiceAddress: site.artist.invoiceAddress,
+            // Structured postal address (2026-09-06, reformed from a
+            // single freeform `invoiceAddress` field) — see the matching
+            // note on Artist.addressLine1 in schema.prisma.
+            addressLine1: site.artist.addressLine1,
+            city: site.artist.city,
+            postcode: site.artist.postcode,
+            country: site.artist.country,
             vatNumber: site.artist.vatNumber,
             vatRate: site.artist.vatRate ? site.artist.vatRate.toString() : "",
             invoiceFooterText: site.artist.invoiceFooterText,
