@@ -87,6 +87,10 @@ export default async function SiteLayout({
         mediaNeedsReviewCount={mediaNeedsReviewCount}
         alertCount={openAlerts.length}
         hasUnpublished={hasUnpublished}
+        // Gates the extra Template-style options in the "+ Add New Page"
+        // dropdown (2026-09-06) — see the note on SiteShell's own
+        // hasTemplate prop.
+        hasTemplate={!!site.templateId}
         header={
           <SiteNameField
             site={{
