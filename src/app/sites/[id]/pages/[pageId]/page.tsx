@@ -85,6 +85,26 @@ export default async function PageEditorPage({
     );
   }
 
+  // A page created from one of the site's Template's page styles
+  // (2026-09-06 — see Page.templateStyle in schema.prisma). No style has
+  // a real layout renderer yet (that's the next piece of work, one style
+  // at a time), so this is a plain placeholder rather than silently
+  // falling through to the generic block editor below, which would be
+  // the wrong editor entirely for a page meant to use a fixed layout.
+  if (page.type === "TEMPLATE_STYLE") {
+    return (
+      <div className="mx-auto max-w-2xl px-6 py-12 text-center">
+        <p className="text-sm font-medium uppercase tracking-wide text-neutral-400">
+          {page.templateStyle?.toLowerCase()} layout
+        </p>
+        <h1 className="mt-2 text-xl font-semibold text-neutral-900">{page.title}</h1>
+        <p className="mt-4 text-sm text-neutral-500">
+          This page style hasn&apos;t been built yet — it&apos;s coming next, one style at a time.
+        </p>
+      </div>
+    );
+  }
+
   const blocks = (page.draftBlocks as unknown as ContentBlock[]) || [];
 
   return (
