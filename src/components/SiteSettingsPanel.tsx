@@ -42,7 +42,10 @@ type SiteData = {
   status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
   createdAt: string;
   defaultCurrency: string;
-  template: string;
+  // Replaces the old free-text `template` (2026-09-06) — a real link to
+  // a Template record now (see Site.templateId in schema.prisma). Null
+  // = no Template assigned.
+  templateId: string | null;
   salesEnabled: boolean;
   domainStatus: string | null;
   domainRenewalDate: string;
@@ -91,6 +94,7 @@ export default function SiteSettingsPanel({
   artist,
   subscriptionPayments,
   certificateTemplates,
+  templates,
 }: {
   site: SiteData;
   artist: ArtistData;
@@ -99,6 +103,10 @@ export default function SiteSettingsPanel({
   // CertificateTemplatesCard, rendered full-width below the
   // Financial/Invoicing row.
   certificateTemplates: CertificateTemplateRow[];
+  // The Templates library (2026-09-06) — real records now, populating
+  // the "Template" dropdown below instead of a hardcoded "Default"
+  // option. See src/lib/actions/templates.ts.
+  templates: { id: string; name: string }[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
@@ -127,7 +135,7 @@ export default function SiteSettingsPanel({
   };
 
   const saveSite = (
-    field: "domain" | "defaultCurrency" | "template" | "domainStatus" | "domainRenewalDate",
+    field: "domain" | "defaultCurrency" | "templateId" | "domainStatus" | "domainRenewalDate",
     value: string
   ) => {
     const fd = new FormData();
@@ -137,7 +145,7 @@ export default function SiteSettingsPanel({
     fd.set("name", site.name);
     fd.set("domain", field === "domain" ? value : site.domain || "");
     fd.set("defaultCurrency", field === "defaultCurrency" ? value : site.defaultCurrency);
-    fd.set("template", field === "template" ? value : site.template);
+    fd.set("templateId", field === "templateId" ? value : site.templateId || "");
     fd.set("domainStatus", field === "domainStatus" ? value : site.domainStatus || "");
     fd.set("domainRenewalDate", field === "domainRenewalDate" ? value : site.domainRenewalDate);
     startTransition(async () => {
@@ -551,17 +559,33 @@ export default function SiteSettingsPanel({
               </p>
             </div>
 
+            {/* Real Templates now (2026-09-06) — was a hardcoded select
+                with only "Default" as an option. "— None —" (empty
+                value) means this site has no Template assigned, which
+                is a perfectly normal state (ordinary Section/Private/
+                Pavilion pages don't need one) — see Site.templateId in
+                schema.prisma. */}
             <label className={`${labelCls} mt-3`}>Template</label>
             <select
               key={`template-${site.id}`}
-              defaultValue={site.template}
-              onChange={(e) => saveSite("template", e.target.value)}
+              defaultValue={site.templateId || ""}
+              onChange={(e) => saveSite("templateId", e.target.value)}
               disabled={isPending}
               className={inputCls}
             >
-              <option value="Default">Default</option>
+              <option value="">— None —</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
             </select>
-            {savedField === "template" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+            {templates.length === 0 && (
+              <p className="mt-1 text-xs text-neutral-400">
+                No templates yet — create one under Templates in the nav.
+              </p>
+            )}
+            {savedField === "templateId" && <p className="mt-1 text-xs text-green-600">Saved</p>}
           </div>
 
           <div className="mt-4 border-t border-neutral-200 pt-4">
