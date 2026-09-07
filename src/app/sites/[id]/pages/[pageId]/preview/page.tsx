@@ -67,9 +67,21 @@ export default async function PreviewPage({
     // fallback (bug fixed 2026-09-07 — same crash as the editor route).
     const rawContent = page.draftBlocks as unknown as PortfolioContent;
     const contentGroups = Array.isArray(rawContent?.groups) ? rawContent.groups : [];
-    const groupArtworkRows = await Promise.all(
-      contentGroups.map((g) => getArtworksByIds(g.artworkIds || []))
-    );
+    const [groupArtworkRows, activeMenu] = await Promise.all([
+      Promise.all(contentGroups.map((g) => getArtworksByIds(g.artworkIds || []))),
+      // The site's real navigation (2026-09-07, feedback round 4) —
+      // shown as a sidebar matching the reference sites' own right-hand
+      // menu. See PortfolioSiteMenu in PortfolioGrid.tsx.
+      db.menu.findFirst({
+        where: { siteId: id, isActive: true },
+        include: {
+          groups: {
+            orderBy: { position: "asc" },
+            include: { items: { orderBy: { position: "asc" } } },
+          },
+        },
+      }),
+    ]);
     const groups = contentGroups.map((g, i) => ({
       id: g.id,
       name: g.name,
@@ -85,11 +97,29 @@ export default async function PreviewPage({
         edition: a.edition,
       })),
     }));
+    const siteMenu = activeMenu
+      ? {
+          groups: activeMenu.groups.map((g) => ({
+            id: g.id,
+            name: g.name,
+            items: g.items.map((item) => ({ id: item.id, label: item.label })),
+          })),
+        }
+      : null;
 
     return (
       <main className="mx-auto max-w-4xl px-6 py-10">
-        {banner}
-        <PortfolioGrid artistName={site?.artist.name ?? ""} title={page.title} groups={groups} />
+        {/* No draft banner here (2026-09-07, feedback round 4) — this
+            page style is judged against a real reference site's visual
+            fidelity, and the banner broke that comparison. Still shown
+            for the generic block-based pages further below, where it
+            still serves a real purpose. */}
+        <PortfolioGrid
+          artistName={site?.artist.name ?? ""}
+          title={page.title}
+          groups={groups}
+          siteMenu={siteMenu}
+        />
       </main>
     );
   }
