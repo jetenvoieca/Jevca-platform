@@ -274,9 +274,14 @@ export default function PortfolioEditor({
     <div>
       {/* Header — artist name + editable page title, matching the
           mockup's "Artist name / Page name" and the reference sites'
-          own serif heading (2026-09-07, feedback round 4). */}
+          own serif heading. Artist-name size/weight/colour now matches
+          PortfolioGrid's public-facing header exactly (text-lg
+          font-bold text-neutral-800) — previously this editor had its
+          own smaller, lighter styling (text-sm text-neutral-500) that
+          didn't match what visitors actually see (issue 1, 2026-09-07,
+          feedback round 5). */}
       <div className="border-b border-neutral-200 bg-neutral-50 px-6 py-4">
-        <p className="font-serif text-sm font-bold text-neutral-500">{artistName}</p>
+        <p className="font-serif text-lg font-bold text-neutral-800">{artistName}</p>
         <input
           type="text"
           defaultValue={pageTitle}
