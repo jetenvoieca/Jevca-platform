@@ -274,12 +274,11 @@ export default function PortfolioEditor({
     <div>
       {/* Header — artist name + editable page title, matching the
           mockup's "Artist name / Page name" and the reference sites'
-          own serif heading. Sizes now match jillysuttonsculpture.com's
-          own heading proportions (2026-09-07, feedback round 6) —
-          artist name bumped to text-xl, page title input to text-2xl,
-          same values as the public PortfolioGrid header. */}
+          own serif heading. Artist-name colour is an exact hex
+          (#808080) confirmed by Craig via colour picker, not a
+          Tailwind neutral shade (2026-09-07, feedback round 6). */}
       <div className="border-b border-neutral-200 bg-neutral-50 px-6 py-4">
-        <p className="font-serif text-xl font-bold text-neutral-800">{artistName}</p>
+        <p className="font-serif text-xl font-bold text-[#808080]">{artistName}</p>
         <input
           type="text"
           defaultValue={pageTitle}
