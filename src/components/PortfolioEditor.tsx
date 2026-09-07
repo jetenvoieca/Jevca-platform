@@ -321,7 +321,17 @@ export default function PortfolioEditor({
                 </p>
               )}
 
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,110px))] gap-2">
+              {/* `items-start` (2026-09-07, feedback round 6) — same
+                  fix as PortfolioGrid.tsx's public thumbnail grid:
+                  without it, the grid's default item-stretch behaviour
+                  can inflate an aspect-square tile's computed row
+                  height, making the gap between wrapped rows look much
+                  bigger than the column gap even though both use the
+                  same gap-2 value. This is a separate grid from
+                  PortfolioGrid's (this one drives the editor's own
+                  drag-to-reorder tiles), so it needed the same fix
+                  applied here too. */}
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,110px))] items-start gap-2">
                 {activeGroup.artworks.map((a, i) => (
                   <div
                     key={a.id}
