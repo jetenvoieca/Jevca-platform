@@ -87,22 +87,28 @@ export default function PortfolioGrid({
           <p className="text-sm text-neutral-400">No categories added yet.</p>
         ) : (
           <>
-            <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 border-b border-neutral-200 pb-3 text-sm">
-              {groups.map((g) => (
-                <button
-                  key={g.id}
-                  type="button"
-                  onClick={() => selectGroup(g.id)}
-                  className={
-                    activeGroup?.id === g.id
-                      ? "font-semibold text-neutral-900 underline"
-                      : "text-neutral-500 hover:text-neutral-800"
-                  }
-                >
-                  {g.name}
-                </button>
-              ))}
-            </div>
+            {/* Only shown once there's actually something to switch
+                between — a single category has nothing to pick from,
+                so the underlined button just duplicated the heading
+                above (issue 2, 2026-09-07). */}
+            {groups.length > 1 && (
+              <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 border-b border-neutral-200 pb-3 text-sm">
+                {groups.map((g) => (
+                  <button
+                    key={g.id}
+                    type="button"
+                    onClick={() => selectGroup(g.id)}
+                    className={
+                      activeGroup?.id === g.id
+                        ? "font-semibold text-neutral-900 underline"
+                        : "text-neutral-500 hover:text-neutral-800"
+                    }
+                  >
+                    {g.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {activeGroup && activeGroup.artworks.length === 0 ? (
               <p className="text-sm text-neutral-400">No artworks in this category yet.</p>
