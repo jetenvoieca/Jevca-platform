@@ -94,12 +94,19 @@ export default async function PageEditorPage({
   // would be the wrong editor entirely for a page meant to use a fixed
   // layout.
   if (page.type === "TEMPLATE_STYLE" && page.templateStyle === "PORTFOLIO") {
-    const content = (page.draftBlocks as unknown as PortfolioContent) || { groups: [] };
+    // Page.draftBlocks defaults to "[]" (an empty JSON array) at the
+    // database level, not "{ groups: [] }" — and [] is truthy in JS, so
+    // "page.draftBlocks || { groups: [] }" never actually falls back to
+    // the default here. Guarded explicitly instead of relying on that
+    // fallback (bug fixed 2026-09-07 — this crashed the whole page with
+    // a server error the moment a brand-new Portfolio page was opened).
+    const rawContent = page.draftBlocks as unknown as PortfolioContent;
+    const contentGroups = Array.isArray(rawContent?.groups) ? rawContent.groups : [];
     const [settings, ...groupArtworkRows] = await Promise.all([
       getArtworkSettings(site.artistId),
-      ...content.groups.map((g) => getArtworksByIds(g.artworkIds || [])),
+      ...contentGroups.map((g) => getArtworksByIds(g.artworkIds || [])),
     ]);
-    const initialGroups = content.groups.map((g, i) => ({
+    const initialGroups = contentGroups.map((g, i) => ({
       id: g.id,
       name: g.name,
       artworks: groupArtworkRows[i].map((a) => ({
