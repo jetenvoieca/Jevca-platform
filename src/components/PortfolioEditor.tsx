@@ -274,19 +274,17 @@ export default function PortfolioEditor({
     <div>
       {/* Header — artist name + editable page title, matching the
           mockup's "Artist name / Page name" and the reference sites'
-          own serif heading. Artist-name size/weight/colour now matches
-          PortfolioGrid's public-facing header exactly (text-lg
-          font-bold text-neutral-800) — previously this editor had its
-          own smaller, lighter styling (text-sm text-neutral-500) that
-          didn't match what visitors actually see (issue 1, 2026-09-07,
-          feedback round 5). */}
+          own serif heading. Sizes now match jillysuttonsculpture.com's
+          own heading proportions (2026-09-07, feedback round 6) —
+          artist name bumped to text-xl, page title input to text-2xl,
+          same values as the public PortfolioGrid header. */}
       <div className="border-b border-neutral-200 bg-neutral-50 px-6 py-4">
-        <p className="font-serif text-lg font-bold text-neutral-800">{artistName}</p>
+        <p className="font-serif text-xl font-bold text-neutral-800">{artistName}</p>
         <input
           type="text"
           defaultValue={pageTitle}
           onBlur={(e) => handleRenamePage(e.target.value)}
-          className="w-full max-w-md rounded-md border border-transparent px-1 py-0.5 -mx-1 font-serif text-xl font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
+          className="w-full max-w-md rounded-md border border-transparent px-1 py-0.5 -mx-1 font-serif text-2xl font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
         />
         {titleSaved && <p className="mt-1 text-xs text-green-600">Saved</p>}
       </div>
