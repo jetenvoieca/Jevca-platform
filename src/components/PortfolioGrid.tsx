@@ -25,15 +25,15 @@ export type PortfolioGridGroup = {
   artworks: PortfolioGridArtwork[];
 };
 
-// The site's real navigation (2026-09-07) — read from its active Menu
-// (Menu/MenuGroup/MenuItem in schema.prisma), rendered as a sidebar to
-// match the reference sites' own right-hand nav (portfolio/showcase/
-// profile/etc.). Just labels — MenuItems aren't linked anywhere yet
-// since there's no real public-facing site renderer to link to (see the
-// note in the handover doc), but the visual structure matches.
-export type PortfolioSiteMenu = {
-  groups: { id: string; name: string; items: { id: string; label: string }[] }[];
-};
+// The site's own pages, one per nav entry (2026-09-07) — fixed-format
+// templates like this one build their nav straight from whichever real
+// pages exist on the site (matching jillysuttonsculpture.com: each of
+// "portfolio", "showcase", "profile", etc. is literally a distinct
+// page), not from the general Menu Builder — Menu Builder is for
+// freeform templates, which don't have a fixed page structure to draw
+// on. Just labels for now — not linked anywhere yet since there's no
+// real public-facing site renderer (see the note in the handover doc).
+export type PortfolioSitePage = { id: string; title: string };
 
 // Matches the isendyouthis.com reference sites (e.g.
 // jillysuttonsculpture.com): a category switcher, a compact thumbnail
@@ -46,15 +46,16 @@ export default function PortfolioGrid({
   artistName,
   title,
   groups,
-  siteMenu,
+  sitePages,
 }: {
   artistName?: string;
   title: string;
   groups: PortfolioGridGroup[];
-  // Optional — the editor's own live preview column doesn't have a
-  // real Menu to show yet (nothing's been through Publish), so this is
-  // only passed from the standalone /preview route.
-  siteMenu?: PortfolioSiteMenu | null;
+  // Optional — the editor's own live preview column doesn't show this
+  // (nothing's been through Publish, and the editor is about this one
+  // page, not the whole site) — only passed from the standalone
+  // /preview route.
+  sitePages?: PortfolioSitePage[] | null;
 }) {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(groups[0]?.id ?? null);
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? groups[0] ?? null;
@@ -180,23 +181,17 @@ export default function PortfolioGrid({
         )}
       </div>
 
-      {/* The site's real navigation (2026-09-07) — matches the
-          reference sites' own right-hand menu position/style. Only
-          rendered when a Menu is actually passed in (the /preview
-          route's own concern — see the note on the siteMenu prop). */}
-      {siteMenu && siteMenu.groups.length > 0 && (
+      {/* The site's own pages, one per nav entry (2026-09-07) — matches
+          jillysuttonsculpture.com's own right-hand nav, built from real
+          pages rather than the general Menu Builder (see the note on
+          the sitePages prop — fixed-format templates don't use Menu
+          Builder). */}
+      {sitePages && sitePages.length > 0 && (
         <div className="hidden w-40 shrink-0 border-l border-neutral-200 pl-6 font-serif text-sm sm:block">
-          {siteMenu.groups.map((g) => (
-            <div key={g.id} className="mb-4">
-              <p className="font-semibold text-neutral-900">{g.name}</p>
-              {g.items.length > 0 && (
-                <div className="mt-1 space-y-0.5 text-neutral-600">
-                  {g.items.map((item) => (
-                    <p key={item.id}>{item.label}</p>
-                  ))}
-                </div>
-              )}
-            </div>
+          {sitePages.map((p) => (
+            <p key={p.id} className="mb-2 font-semibold text-neutral-900">
+              {p.title}
+            </p>
           ))}
         </div>
       )}
