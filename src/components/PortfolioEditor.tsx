@@ -285,7 +285,7 @@ export default function PortfolioEditor({
               </p>
             )}
 
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(110px,140px))] gap-3">
               {activeGroup.artworks.map((a, i) => (
                 <div
                   key={a.id}
