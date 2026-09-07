@@ -25,6 +25,16 @@ export type PortfolioGridGroup = {
   artworks: PortfolioGridArtwork[];
 };
 
+// The site's real navigation (2026-09-07) — read from its active Menu
+// (Menu/MenuGroup/MenuItem in schema.prisma), rendered as a sidebar to
+// match the reference sites' own right-hand nav (portfolio/showcase/
+// profile/etc.). Just labels — MenuItems aren't linked anywhere yet
+// since there's no real public-facing site renderer to link to (see the
+// note in the handover doc), but the visual structure matches.
+export type PortfolioSiteMenu = {
+  groups: { id: string; name: string; items: { id: string; label: string }[] }[];
+};
+
 // Matches the isendyouthis.com reference sites (e.g.
 // jillysuttonsculpture.com): a category switcher, a compact thumbnail
 // grid, and the selected artwork's image/details shown alongside it in
@@ -36,10 +46,15 @@ export default function PortfolioGrid({
   artistName,
   title,
   groups,
+  siteMenu,
 }: {
   artistName?: string;
   title: string;
   groups: PortfolioGridGroup[];
+  // Optional — the editor's own live preview column doesn't have a
+  // real Menu to show yet (nothing's been through Publish), so this is
+  // only passed from the standalone /preview route.
+  siteMenu?: PortfolioSiteMenu | null;
 }) {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(groups[0]?.id ?? null);
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? groups[0] ?? null;
@@ -57,105 +72,133 @@ export default function PortfolioGrid({
   };
 
   return (
-    <div>
-      {artistName && (
-        <p className="text-sm font-semibold text-neutral-500">{artistName}</p>
-      )}
-      <h1 className="mb-4 text-2xl font-semibold text-neutral-900">
-        {title}
-        {activeGroup ? `: ${activeGroup.name}` : ""}
-      </h1>
+    <div className="flex gap-10">
+      <div className="min-w-0 flex-1">
+        {artistName && (
+          <p className="font-serif text-lg font-bold text-neutral-800">{artistName}</p>
+        )}
+        <h1 className="mb-4 font-serif text-2xl text-neutral-400">
+          {title}
+          {activeGroup ? `: ${activeGroup.name}` : ""}
+        </h1>
 
-      {groups.length === 0 ? (
-        <p className="text-sm text-neutral-400">No categories added yet.</p>
-      ) : (
-        <>
-          <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 border-b border-neutral-200 pb-3 text-sm">
-            {groups.map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                onClick={() => selectGroup(g.id)}
-                className={
-                  activeGroup?.id === g.id
-                    ? "font-semibold text-neutral-900 underline"
-                    : "text-neutral-500 hover:text-neutral-800"
-                }
-              >
-                {g.name}
-              </button>
-            ))}
-          </div>
+        {groups.length === 0 ? (
+          <p className="text-sm text-neutral-400">No categories added yet.</p>
+        ) : (
+          <>
+            <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 border-b border-neutral-200 pb-3 text-sm">
+              {groups.map((g) => (
+                <button
+                  key={g.id}
+                  type="button"
+                  onClick={() => selectGroup(g.id)}
+                  className={
+                    activeGroup?.id === g.id
+                      ? "font-semibold text-neutral-900 underline"
+                      : "text-neutral-500 hover:text-neutral-800"
+                  }
+                >
+                  {g.name}
+                </button>
+              ))}
+            </div>
 
-          {activeGroup && activeGroup.artworks.length === 0 ? (
-            <p className="text-sm text-neutral-400">No artworks in this category yet.</p>
-          ) : (
-            <div className="flex flex-col gap-6 sm:flex-row">
-              {/* Thumbnail grid — a fixed, modest width (matches the
-                  mockup's smaller left-hand box), not stretched to fill
-                  whatever space is available. */}
-              <div className="grid w-full shrink-0 grid-cols-3 gap-2 sm:w-[260px]">
-                {activeGroup?.artworks.map((a) => (
-                  <button
-                    key={a.id}
-                    type="button"
-                    onClick={() => setSelectedArtworkId(a.id)}
-                    className={`overflow-hidden rounded-md border-2 ${
-                      selectedArtworkId === a.id ? "border-neutral-900" : "border-transparent"
-                    }`}
-                  >
-                    {a.imageUrl ? (
-                      <img src={a.imageUrl} alt="" className="aspect-square w-full object-cover" />
-                    ) : (
-                      <div className="flex aspect-square w-full items-center justify-center bg-neutral-100 text-[10px] text-neutral-400">
-                        No image
+            {activeGroup && activeGroup.artworks.length === 0 ? (
+              <p className="text-sm text-neutral-400">No artworks in this category yet.</p>
+            ) : (
+              <div className="flex flex-col gap-6 sm:flex-row">
+                {/* Thumbnail grid — a fixed, modest width (matches the
+                    mockup's smaller left-hand box), not stretched to
+                    fill whatever space is available. Each tile is a
+                    fixed-height square wrapper around the image, rather
+                    than an `aspect-square` on the <img> itself — Safari
+                    can size an aspect-ratio'd <img> inconsistently
+                    before/if it fails to load, which showed up as an
+                    empty tall box (bug fixed 2026-09-07). */}
+                <div className="grid w-full shrink-0 grid-cols-3 gap-2 sm:w-[260px]">
+                  {activeGroup?.artworks.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => setSelectedArtworkId(a.id)}
+                      className={`aspect-square overflow-hidden rounded-md border-2 ${
+                        selectedArtworkId === a.id ? "border-neutral-900" : "border-transparent"
+                      }`}
+                    >
+                      {a.imageUrl ? (
+                        <img src={a.imageUrl} alt="" className="h-full w-full object-cover" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center bg-neutral-100 text-[10px] text-neutral-400">
+                          No image
+                        </div>
+                      )}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Details — always visible alongside the grid, not
+                    revealed only after a click. */}
+                <div className="min-w-0 flex-1">
+                  {selectedArtwork ? (
+                    <div>
+                      {selectedArtwork.imageUrl && (
+                        <img
+                          src={selectedArtwork.imageUrl}
+                          alt=""
+                          className="mb-3 max-h-96 w-full rounded-md bg-neutral-50 object-contain"
+                        />
+                      )}
+                      <h2 className="font-serif text-lg font-semibold text-neutral-900">
+                        {selectedArtwork.presentationTitle}
+                      </h2>
+                      {selectedArtwork.description && (
+                        <p className="mt-2 whitespace-pre-line text-sm text-neutral-600">
+                          {selectedArtwork.description}
+                        </p>
+                      )}
+                      <div className="mt-3 space-y-0.5 text-xs text-neutral-500">
+                        {selectedArtwork.presentationMedium && <p>{selectedArtwork.presentationMedium}</p>}
+                        {selectedArtwork.size && <p>{selectedArtwork.size}</p>}
+                        {selectedArtwork.edition && <p>Edition of {selectedArtwork.edition}</p>}
+                        {selectedArtwork.viewingLocation && (
+                          <p>Can be seen at {selectedArtwork.viewingLocation}</p>
+                        )}
                       </div>
-                    )}
-                  </button>
-                ))}
-              </div>
-
-              {/* Details — always visible alongside the grid, not
-                  revealed only after a click. */}
-              <div className="min-w-0 flex-1">
-                {selectedArtwork ? (
-                  <div>
-                    {selectedArtwork.imageUrl && (
-                      <img
-                        src={selectedArtwork.imageUrl}
-                        alt=""
-                        className="mb-3 max-h-96 w-full rounded-md bg-neutral-50 object-contain"
-                      />
-                    )}
-                    <h2 className="text-lg font-semibold text-neutral-900">
-                      {selectedArtwork.presentationTitle}
-                    </h2>
-                    {selectedArtwork.description && (
-                      <p className="mt-2 whitespace-pre-line text-sm text-neutral-600">
-                        {selectedArtwork.description}
-                      </p>
-                    )}
-                    <div className="mt-3 space-y-0.5 text-xs text-neutral-500">
-                      {selectedArtwork.presentationMedium && <p>{selectedArtwork.presentationMedium}</p>}
-                      {selectedArtwork.size && <p>{selectedArtwork.size}</p>}
-                      {selectedArtwork.edition && <p>Edition of {selectedArtwork.edition}</p>}
-                      {selectedArtwork.viewingLocation && (
-                        <p>Can be seen at {selectedArtwork.viewingLocation}</p>
+                      {selectedArtwork.presentationPrice && (
+                        <p className="mt-2 text-sm font-medium text-neutral-900">
+                          £{selectedArtwork.presentationPrice}
+                        </p>
                       )}
                     </div>
-                    {selectedArtwork.presentationPrice && (
-                      <p className="mt-2 text-sm font-medium text-neutral-900">
-                        £{selectedArtwork.presentationPrice}
-                      </p>
-                    )}
-                  </div>
-                ) : (
-                  <p className="text-sm text-neutral-400">Select an artwork to see its details.</p>
-                )}
+                  ) : (
+                    <p className="text-sm text-neutral-400">Select an artwork to see its details.</p>
+                  )}
+                </div>
               </div>
+            )}
+          </>
+        )}
+      </div>
+
+      {/* The site's real navigation (2026-09-07) — matches the
+          reference sites' own right-hand menu position/style. Only
+          rendered when a Menu is actually passed in (the /preview
+          route's own concern — see the note on the siteMenu prop). */}
+      {siteMenu && siteMenu.groups.length > 0 && (
+        <div className="hidden w-40 shrink-0 border-l border-neutral-200 pl-6 font-serif text-sm sm:block">
+          {siteMenu.groups.map((g) => (
+            <div key={g.id} className="mb-4">
+              <p className="font-semibold text-neutral-900">{g.name}</p>
+              {g.items.length > 0 && (
+                <div className="mt-1 space-y-0.5 text-neutral-600">
+                  {g.items.map((item) => (
+                    <p key={item.id}>{item.label}</p>
+                  ))}
+                </div>
+              )}
             </div>
-          )}
-        </>
+          ))}
+        </div>
       )}
     </div>
   );
