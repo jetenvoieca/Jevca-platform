@@ -115,6 +115,7 @@ export default async function PreviewPage({
           title={page.title}
           groups={groups}
           sitePages={siteOwnPages}
+          currentPageId={page.id}
         />
       </main>
     );
