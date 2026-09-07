@@ -82,10 +82,15 @@ export default function PortfolioGrid({
   return (
     <div className="flex gap-10">
       <div className="min-w-0 flex-1">
+        {/* Sizes matched against jillysuttonsculpture.com's own heading
+            proportions (2026-09-07, feedback round 6) — the artist name
+            reads noticeably larger/bolder there than our previous
+            text-lg, and the category subtitle larger than our previous
+            text-2xl. */}
         {artistName && (
-          <p className="font-serif text-lg font-bold text-neutral-800">{artistName}</p>
+          <p className="font-serif text-xl font-bold text-neutral-800">{artistName}</p>
         )}
-        <h1 className="mb-4 font-serif text-2xl text-neutral-400">
+        <h1 className="mb-4 font-serif text-3xl text-neutral-400">
           {title}
           {activeGroup ? `: ${activeGroup.name}` : ""}
         </h1>
