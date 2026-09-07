@@ -125,7 +125,19 @@ export default function PortfolioGrid({
             {activeGroup && activeGroup.artworks.length === 0 ? (
               <p className="text-sm text-neutral-400">No artworks in this category yet.</p>
             ) : (
-              <div className="flex flex-col gap-6 sm:flex-row">
+              // `items-start` here (2026-09-07, feedback round 7) is the
+              // real fix, confirmed by the gap changing size on window
+              // resize: this flex row's default align-items is
+              // "stretch", so it was stretching the grid box to match
+              // the taller details panel next to it. CSS Grid's default
+              // align-content then distributes that extra height into
+              // the grid's own row gaps — which is exactly why the gap
+              // tracked the details panel's (variable) height instead
+              // of staying a fixed 8px. The `items-start` added to the
+              // grid itself in the last two rounds was fixing a
+              // different, real but much smaller issue and was never
+              // going to touch this one.
+              <div className="flex flex-col items-start gap-6 sm:flex-row">
                 {/* Thumbnail grid — a fixed, modest width (matches the
                     mockup's smaller left-hand box), not stretched to
                     fill whatever space is available. Each tile is a
@@ -133,14 +145,7 @@ export default function PortfolioGrid({
                     than an `aspect-square` on the <img> itself — Safari
                     can size an aspect-ratio'd <img> inconsistently
                     before/if it fails to load, which showed up as an
-                    empty tall box (bug fixed 2026-09-07).
-                    `items-start` (2026-09-07, feedback round 5) stops
-                    the grid's default item-stretch behaviour, which is
-                    what was producing a large phantom gap before a
-                    wrapped row: without it, browsers can compute an
-                    aspect-ratio tile's height off a stretched (rather
-                    than natural) box, inflating that row's track
-                    height. */}
+                    empty tall box (bug fixed 2026-09-07). */}
                 <div className="grid w-full shrink-0 grid-cols-3 items-start gap-2 sm:w-[260px]">
                   {activeGroup?.artworks.map((a) => (
                     <button
