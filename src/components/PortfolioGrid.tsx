@@ -83,12 +83,12 @@ export default function PortfolioGrid({
     <div className="flex gap-10">
       <div className="min-w-0 flex-1">
         {/* Sizes matched against jillysuttonsculpture.com's own heading
-            proportions (2026-09-07, feedback round 6) — the artist name
-            reads noticeably larger/bolder there than our previous
-            text-lg, and the category subtitle larger than our previous
-            text-2xl. */}
+            proportions (2026-09-07, feedback round 6). Artist-name
+            colour is an exact hex (#808080) confirmed by Craig via
+            colour picker, not a Tailwind neutral shade — none of the
+            palette's steps land on it exactly. */}
         {artistName && (
-          <p className="font-serif text-xl font-bold text-neutral-800">{artistName}</p>
+          <p className="font-serif text-xl font-bold text-[#808080]">{artistName}</p>
         )}
         <h1 className="mb-4 font-serif text-3xl text-neutral-400">
           {title}
