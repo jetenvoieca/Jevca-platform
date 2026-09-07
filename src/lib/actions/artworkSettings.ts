@@ -8,6 +8,7 @@ export type SettingsField =
   | "artworkLocations"
   | "mediumPresets"
   | "sizePresets"
+  | "artworkTiers"
   | "saleSources"
   | "paymentMethods";
 
@@ -33,6 +34,7 @@ export async function getArtworkSettings(artistId: string) {
         artworkLocations: true,
         mediumPresets: true,
         sizePresets: true,
+        artworkTiers: true,
         saleSources: true,
         paymentMethods: true,
         defaultInstalmentCount: true,
@@ -54,6 +56,7 @@ export async function getArtworkSettings(artistId: string) {
     artworkLocations: artist?.artworkLocations ?? [],
     mediumPresets: artist?.mediumPresets ?? [],
     sizePresets: artist?.sizePresets ?? [],
+    artworkTiers: artist?.artworkTiers ?? [],
     saleSources: artist?.saleSources ?? [],
     paymentMethods: artist?.paymentMethods ?? [],
     defaultInstalmentCount: artist?.defaultInstalmentCount ?? 5,
@@ -155,6 +158,9 @@ async function updateList(
       break;
     case "sizePresets":
       await db.artist.update({ where: { id: artistId }, data: { sizePresets: next } });
+      break;
+    case "artworkTiers":
+      await db.artist.update({ where: { id: artistId }, data: { artworkTiers: next } });
       break;
     case "saleSources":
       await db.artist.update({ where: { id: artistId }, data: { saleSources: next } });

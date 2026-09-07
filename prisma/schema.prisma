@@ -198,6 +198,13 @@ model Artist {
   mediumPresets    String[] @default([])
   sizePresets      String[] @default([])
 
+  // Settings-editable list offered in the new Tier dropdown on the
+  // Catalogue tab (2026-09-07) — same free-text-preset pattern as
+  // Group/Location/Medium above. Prefilled with the three values seen
+  // in the original CSV import (see Artwork.tier) so every artist
+  // starts with sensible defaults rather than an empty list.
+  artworkTiers String[] @default(["Statement", "Signature", "Collectible"])
+
   mediaTags String[] @default([])
 
   saleSources String[] @default([])

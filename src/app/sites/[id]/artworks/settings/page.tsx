@@ -18,8 +18,8 @@ export default async function ArtworkSettingsPage({
     <div className="p-6">
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Settings</h1>
       <p className="mb-6 text-sm text-neutral-500">
-        Manage the Group, Type, Location, Medium and Size options offered across the Artwork
-        Catalogue. Shared across all of this artist&apos;s sites.
+        Manage the Group, Type, Location, Medium, Size and Tier options offered across the
+        Artwork Catalogue. Shared across all of this artist&apos;s sites.
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -33,6 +33,15 @@ export default async function ArtworkSettingsPage({
           placeholder="New group…"
         />
         <ArtworkTypesCard artistId={artistId} siteId={id} types={settings.artworkTypeRecords} />
+        <SettingsListCard
+          artistId={artistId}
+          siteId={id}
+          field="artworkTiers"
+          title="Tiers"
+          description="Offered in the Tier dropdown, on the Catalogue tab."
+          options={settings.artworkTiers}
+          placeholder="New tier…"
+        />
         <SettingsListCard
           artistId={artistId}
           siteId={id}
@@ -81,16 +90,6 @@ export default async function ArtworkSettingsPage({
           description="Offered in the Method dropdown when marking a gallery sale as paid."
           options={settings.paymentMethods}
           placeholder="e.g. Bank transfer, Cash…"
-        />
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <PaymentDefaultsCard
-          artistId={artistId}
-          siteId={id}
-          defaultInstalmentCount={settings.defaultInstalmentCount}
-          defaultReleaseMessage={settings.defaultReleaseMessage}
-          defaultReleaseTriggerCount={settings.defaultReleaseTriggerCount}
         />
       </div>
     </div>
