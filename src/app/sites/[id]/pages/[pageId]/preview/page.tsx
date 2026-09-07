@@ -67,19 +67,24 @@ export default async function PreviewPage({
     // fallback (bug fixed 2026-09-07 — same crash as the editor route).
     const rawContent = page.draftBlocks as unknown as PortfolioContent;
     const contentGroups = Array.isArray(rawContent?.groups) ? rawContent.groups : [];
-    const [groupArtworkRows, activeMenu] = await Promise.all([
+    const [groupArtworkRows, siteOwnPages] = await Promise.all([
       Promise.all(contentGroups.map((g) => getArtworksByIds(g.artworkIds || []))),
-      // The site's real navigation (2026-09-07, feedback round 4) —
-      // shown as a sidebar matching the reference sites' own right-hand
-      // menu. See PortfolioSiteMenu in PortfolioGrid.tsx.
-      db.menu.findFirst({
-        where: { siteId: id, isActive: true },
-        include: {
-          groups: {
-            orderBy: { position: "asc" },
-            include: { items: { orderBy: { position: "asc" } } },
-          },
+      // The site's real navigation (2026-09-07, feedback round 5) — a
+      // fixed-format template like this one builds its nav straight
+      // from the site's own real pages, matching
+      // jillysuttonsculpture.com (each of "portfolio", "showcase",
+      // "profile" etc. is literally a distinct page there) — Menu
+      // Builder is for freeform templates instead, which don't have a
+      // fixed page structure to draw the nav from. See PortfolioSitePage
+      // in PortfolioGrid.tsx.
+      db.page.findMany({
+        where: {
+          siteId: id,
+          visible: true,
+          OR: [{ sourceTag: null }, { sourceTag: { not: "pavilion" } }],
         },
+        orderBy: { position: "asc" },
+        select: { id: true, title: true },
       }),
     ]);
     const groups = contentGroups.map((g, i) => ({
@@ -97,15 +102,6 @@ export default async function PreviewPage({
         edition: a.edition,
       })),
     }));
-    const siteMenu = activeMenu
-      ? {
-          groups: activeMenu.groups.map((g) => ({
-            id: g.id,
-            name: g.name,
-            items: g.items.map((item) => ({ id: item.id, label: item.label })),
-          })),
-        }
-      : null;
 
     return (
       <main className="mx-auto max-w-4xl px-6 py-10">
@@ -118,7 +114,7 @@ export default async function PreviewPage({
           artistName={site?.artist.name ?? ""}
           title={page.title}
           groups={groups}
-          siteMenu={siteMenu}
+          sitePages={siteOwnPages}
         />
       </main>
     );
