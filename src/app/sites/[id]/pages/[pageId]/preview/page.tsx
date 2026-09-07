@@ -54,11 +54,17 @@ export default async function PreviewPage({
   // block renderer below, which expects a ContentBlock[] shape this page
   // type never has.
   if (page.type === "TEMPLATE_STYLE" && page.templateStyle === "PORTFOLIO") {
-    const content = (page.draftBlocks as unknown as PortfolioContent) || { groups: [] };
+    // Page.draftBlocks defaults to "[]" (an empty JSON array) at the
+    // database level, not "{ groups: [] }" — and [] is truthy in JS, so
+    // "page.draftBlocks || { groups: [] }" never actually falls back to
+    // the default here. Guarded explicitly instead of relying on that
+    // fallback (bug fixed 2026-09-07 — same crash as the editor route).
+    const rawContent = page.draftBlocks as unknown as PortfolioContent;
+    const contentGroups = Array.isArray(rawContent?.groups) ? rawContent.groups : [];
     const groupArtworkRows = await Promise.all(
-      content.groups.map((g) => getArtworksByIds(g.artworkIds || []))
+      contentGroups.map((g) => getArtworksByIds(g.artworkIds || []))
     );
-    const groups = content.groups.map((g, i) => ({
+    const groups = contentGroups.map((g, i) => ({
       id: g.id,
       name: g.name,
       artworks: groupArtworkRows[i].map((a) => ({
