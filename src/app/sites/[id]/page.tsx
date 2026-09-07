@@ -120,6 +120,13 @@ export default async function SiteSettingsPage({
             // This artist's own @jevca.art local part (2026-09-05, Email
             // Integration) — see the Owner card in SiteSettingsPanel.
             emailSlug: site.artist.emailSlug,
+            // Payment plan defaults (2026-09-07) — moved here from the
+            // Artwork Catalogue's own Settings page: these are financial
+            // terms, not catalogue data, so they belong on the Financial
+            // tab alongside Invoicing. See PaymentDefaultsCard.
+            defaultInstalmentCount: site.artist.defaultInstalmentCount,
+            defaultReleaseMessage: site.artist.defaultReleaseMessage,
+            defaultReleaseTriggerCount: site.artist.defaultReleaseTriggerCount,
           }}
           certificateTemplates={certificateTemplates}
           templates={templates.map((t) => ({ id: t.id, name: t.name }))}

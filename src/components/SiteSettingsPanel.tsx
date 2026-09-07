@@ -24,6 +24,7 @@ import {
 import { requestUploadUrl } from "@/lib/actions/media";
 import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales";
 import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
+import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
 import type { CertificateTemplateRow } from "@/lib/actions/certificateSettings";
 import { EMAIL_DOMAIN } from "@/lib/email";
 
@@ -87,6 +88,11 @@ type ArtistData = {
   // Integration) — see the matching note on Artist.emailSlug in
   // schema.prisma. Null until one's been generated/assigned.
   emailSlug: string | null;
+  // Payment plan defaults (2026-09-07, moved here from Artwork
+  // Catalogue Settings — see PaymentDefaultsCard below).
+  defaultInstalmentCount: number;
+  defaultReleaseMessage: string;
+  defaultReleaseTriggerCount: number;
 };
 
 export default function SiteSettingsPanel({
@@ -1139,6 +1145,24 @@ export default function SiteSettingsPanel({
                   siteId={site.id}
                   templates={certificateTemplates}
                 />
+              )}
+
+              {/* Payment plan defaults (2026-09-07) — moved here from
+                  the Artwork Catalogue's own Settings page: these are
+                  financial terms, so they belong on the Financial tab,
+                  not Catalogue/Type/Group settings. Same "only relevant
+                  once this site takes payments" gating as Invoicing/
+                  Certificate above. */}
+              {site.salesEnabled && (
+                <div className="lg:w-72">
+                  <PaymentDefaultsCard
+                    artistId={artist.id}
+                    siteId={site.id}
+                    defaultInstalmentCount={artist.defaultInstalmentCount}
+                    defaultReleaseMessage={artist.defaultReleaseMessage}
+                    defaultReleaseTriggerCount={artist.defaultReleaseTriggerCount}
+                  />
+                </div>
               )}
             </div>
           )}

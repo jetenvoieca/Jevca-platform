@@ -2,7 +2,6 @@ import { db } from "@/lib/db";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SettingsListCard from "@/components/SettingsListCard";
 import ArtworkTypesCard from "@/components/ArtworkTypesCard";
-import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
 
 export default async function ArtworkSettingsPage({
   params,

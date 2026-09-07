@@ -114,7 +114,11 @@ export async function removeArtworkType(artistId: string, siteId: string, typeId
 
 // The three Payments defaults are single values, not preset lists, so they
 // don't fit updateList/addSettingOption/removeSettingOption above — a
-// small dedicated action instead.
+// small dedicated action instead. Card itself lives on the site's own
+// Financial settings tab (SiteSettingsPanel), not here — moved 2026-09-07,
+// these are financial terms rather than Catalogue/Type/Group data — but
+// stays in this file since it's still the same Artist-level settings
+// concept as everything else here.
 export async function updatePaymentDefaults(artistId: string, siteId: string, formData: FormData) {
   const defaultInstalmentCount = parseInt((formData.get("defaultInstalmentCount") as string) || "5", 10);
   const defaultReleaseMessage = (formData.get("defaultReleaseMessage") as string)?.trim() || "";
@@ -128,7 +132,7 @@ export async function updatePaymentDefaults(artistId: string, siteId: string, fo
     data: { defaultInstalmentCount, defaultReleaseMessage, defaultReleaseTriggerCount },
   });
 
-  revalidatePath(`/sites/${siteId}/artworks/settings`);
+  revalidatePath(`/sites/${siteId}`);
   revalidatePath(`/sites/${siteId}/artworks`);
 }
 
