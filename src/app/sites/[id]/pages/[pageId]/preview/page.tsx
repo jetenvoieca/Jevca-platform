@@ -13,10 +13,16 @@ export default async function PreviewPage({
 }) {
   const { id, pageId } = await params;
 
-  const page = await db.page.findUnique({
-    where: { id: pageId },
-    include: { backgroundImage: true },
-  });
+  const [page, site] = await Promise.all([
+    db.page.findUnique({
+      where: { id: pageId },
+      include: { backgroundImage: true },
+    }),
+    // Only needed for the Portfolio branch below (artist name heading,
+    // matching the isendyouthis.com reference sites) but cheap enough to
+    // fetch alongside every page type rather than branching the query.
+    db.site.findUnique({ where: { id }, select: { artist: { select: { name: true } } } }),
+  ]);
   if (!page || page.siteId !== id) notFound();
 
   const banner = (
@@ -81,9 +87,9 @@ export default async function PreviewPage({
     }));
 
     return (
-      <main className="mx-auto max-w-3xl px-6 py-10">
+      <main className="mx-auto max-w-4xl px-6 py-10">
         {banner}
-        <PortfolioGrid title={page.title} groups={groups} />
+        <PortfolioGrid artistName={site?.artist.name ?? ""} title={page.title} groups={groups} />
       </main>
     );
   }
