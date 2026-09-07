@@ -31,8 +31,7 @@ export type PortfolioGridGroup = {
 // "portfolio", "showcase", "profile", etc. is literally a distinct
 // page), not from the general Menu Builder — Menu Builder is for
 // freeform templates, which don't have a fixed page structure to draw
-// on. Just labels for now — not linked anywhere yet since there's no
-// real public-facing site renderer (see the note in the handover doc).
+// on.
 export type PortfolioSitePage = { id: string; title: string };
 
 // Matches the isendyouthis.com reference sites (e.g.
@@ -47,6 +46,7 @@ export default function PortfolioGrid({
   title,
   groups,
   sitePages,
+  currentPageId,
 }: {
   artistName?: string;
   title: string;
@@ -56,6 +56,13 @@ export default function PortfolioGrid({
   // page, not the whole site) — only passed from the standalone
   // /preview route.
   sitePages?: PortfolioSitePage[] | null;
+  // Which of sitePages is this page — lets the nav nest this page's own
+  // categories underneath its own entry (issue 4, 2026-09-07, feedback
+  // round 5), matching jillysuttonsculpture.com's accordion ("the menu
+  // is of pages which have accordion drop downs of the categories").
+  // Only meaningful alongside sitePages, so also only passed from
+  // /preview.
+  currentPageId?: string;
 }) {
   const [activeGroupId, setActiveGroupId] = useState<string | null>(groups[0]?.id ?? null);
   const activeGroup = groups.find((g) => g.id === activeGroupId) ?? groups[0] ?? null;
@@ -90,7 +97,7 @@ export default function PortfolioGrid({
             {/* Only shown once there's actually something to switch
                 between — a single category has nothing to pick from,
                 so the underlined button just duplicated the heading
-                above (issue 2, 2026-09-07). */}
+                above (issue 2, 2026-09-07, feedback round 5). */}
             {groups.length > 1 && (
               <div className="mb-4 flex flex-wrap gap-x-4 gap-y-1 border-b border-neutral-200 pb-3 text-sm">
                 {groups.map((g) => (
@@ -121,8 +128,15 @@ export default function PortfolioGrid({
                     than an `aspect-square` on the <img> itself — Safari
                     can size an aspect-ratio'd <img> inconsistently
                     before/if it fails to load, which showed up as an
-                    empty tall box (bug fixed 2026-09-07). */}
-                <div className="grid w-full shrink-0 grid-cols-3 gap-2 sm:w-[260px]">
+                    empty tall box (bug fixed 2026-09-07).
+                    `items-start` (2026-09-07, feedback round 5) stops
+                    the grid's default item-stretch behaviour, which is
+                    what was producing a large phantom gap before a
+                    wrapped row: without it, browsers can compute an
+                    aspect-ratio tile's height off a stretched (rather
+                    than natural) box, inflating that row's track
+                    height. */}
+                <div className="grid w-full shrink-0 grid-cols-3 items-start gap-2 sm:w-[260px]">
                   {activeGroup?.artworks.map((a) => (
                     <button
                       key={a.id}
@@ -187,17 +201,39 @@ export default function PortfolioGrid({
         )}
       </div>
 
-      {/* The site's own pages, one per nav entry (2026-09-07) — matches
+      {/* The site's own pages, one per nav entry — matches
           jillysuttonsculpture.com's own right-hand nav, built from real
-          pages rather than the general Menu Builder (see the note on
-          the sitePages prop — fixed-format templates don't use Menu
-          Builder). */}
+          pages rather than the general Menu Builder. This page's own
+          categories now nest underneath its own entry (issue 4,
+          2026-09-07, feedback round 5) — Craig: "the category is a
+          menu item, it should sit beneath [the page]" — clicking one
+          switches category the same way the inline switcher above
+          does. Other pages' entries are plain labels for now (no real
+          public-facing site renderer exists yet to link them to). */}
       {sitePages && sitePages.length > 0 && (
         <div className="hidden w-40 shrink-0 border-l border-neutral-200 pl-6 font-serif text-sm sm:block">
           {sitePages.map((p) => (
-            <p key={p.id} className="mb-2 font-semibold text-neutral-900">
-              {p.title}
-            </p>
+            <div key={p.id} className="mb-2">
+              <p className="font-semibold text-neutral-900">{p.title}</p>
+              {p.id === currentPageId && groups.length > 0 && (
+                <div className="mt-1 space-y-1 pl-3">
+                  {groups.map((g) => (
+                    <button
+                      key={g.id}
+                      type="button"
+                      onClick={() => selectGroup(g.id)}
+                      className={`block text-left text-xs ${
+                        activeGroup?.id === g.id
+                          ? "font-semibold text-neutral-900 underline"
+                          : "text-neutral-500 hover:text-neutral-800"
+                      }`}
+                    >
+                      {g.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
       )}
