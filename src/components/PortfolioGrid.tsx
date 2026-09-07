@@ -78,7 +78,7 @@ export default function PortfolioGrid({
           {activeGroup && activeGroup.artworks.length === 0 ? (
             <p className="text-sm text-neutral-400">No artworks in this category yet.</p>
           ) : (
-            <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(90px,120px))] gap-3">
               {activeGroup?.artworks.map((a) => (
                 <button
                   key={a.id}
