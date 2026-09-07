@@ -24,7 +24,10 @@ export default async function PageEditorPage({
       // schema.prisma.
       include: { backgroundImage: true },
     }),
-    db.site.findUnique({ where: { id }, select: { artistId: true, defaultCurrency: true } }),
+    db.site.findUnique({
+      where: { id },
+      select: { artistId: true, defaultCurrency: true, artist: { select: { name: true } } },
+    }),
   ]);
   if (!page || page.siteId !== id || !site) notFound();
 
@@ -126,6 +129,7 @@ export default async function PageEditorPage({
       <PortfolioEditor
         siteId={id}
         artistId={site.artistId}
+        artistName={site.artist.name}
         pageId={page.id}
         pageTitle={page.title}
         initialGroups={initialGroups}
