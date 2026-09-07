@@ -8,6 +8,16 @@ import SiteShell from "@/components/SiteShell";
 import LastVisitedSiteTracker from "@/components/LastVisitedSiteTracker";
 import SiteNameField from "@/components/SiteNameField";
 
+// Without this, Next can treat this layout as static-cacheable (it uses
+// no dynamic APIs like cookies()/headers(), just plain db reads) and
+// serve a stale copy of the page list from the Full Route Cache after a
+// page is created/deleted/renamed elsewhere — the site's own Settings
+// page (src/app/sites/[id]/page.tsx) already sets this for the same
+// reason. Bug fixed 2026-09-07: a deleted page kept showing (and
+// 404'ing) in this sidebar until the next deploy, because this layout
+// specifically — not the page under it — was the stale piece.
+export const dynamic = "force-dynamic";
+
 export default async function SiteLayout({
   children,
   params,
