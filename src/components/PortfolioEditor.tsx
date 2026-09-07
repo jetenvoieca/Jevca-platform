@@ -274,14 +274,14 @@ export default function PortfolioEditor({
     <div>
       {/* Header — artist name + editable page title, matching the
           mockup's "Artist name / Page name" and the reference sites'
-          own heading. */}
+          own serif heading (2026-09-07, feedback round 4). */}
       <div className="border-b border-neutral-200 bg-neutral-50 px-6 py-4">
-        <p className="text-sm font-medium text-neutral-500">{artistName}</p>
+        <p className="font-serif text-sm font-bold text-neutral-500">{artistName}</p>
         <input
           type="text"
           defaultValue={pageTitle}
           onBlur={(e) => handleRenamePage(e.target.value)}
-          className="w-full max-w-md rounded-md border border-transparent px-1 py-0.5 -mx-1 text-xl font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
+          className="w-full max-w-md rounded-md border border-transparent px-1 py-0.5 -mx-1 font-serif text-xl font-semibold text-neutral-900 hover:border-neutral-300 focus:border-neutral-300"
         />
         {titleSaved && <p className="mt-1 text-xs text-green-600">Saved</p>}
       </div>
@@ -332,7 +332,7 @@ export default function PortfolioEditor({
                       setSelectedArtworkId(a.id);
                       setIsEditingArtwork(false);
                     }}
-                    className={`group relative cursor-pointer overflow-hidden rounded-md border-2 ${
+                    className={`group relative aspect-square cursor-pointer overflow-hidden rounded-md border-2 ${
                       dragIndex === i
                         ? "border-neutral-900 opacity-50"
                         : selectedArtworkId === a.id
@@ -340,10 +340,15 @@ export default function PortfolioEditor({
                           : "border-transparent"
                     }`}
                   >
+                    {/* aspect-square lives on this wrapper div, not the
+                        <img> itself — Safari can size an aspect-ratio'd
+                        <img> inconsistently before/if it fails to load,
+                        which showed up as an empty tall box (bug fixed
+                        2026-09-07, feedback round 4). */}
                     {a.imageUrl ? (
-                      <img src={a.imageUrl} alt="" className="aspect-square w-full object-cover" />
+                      <img src={a.imageUrl} alt="" className="h-full w-full object-cover" />
                     ) : (
-                      <div className="flex aspect-square w-full items-center justify-center bg-neutral-100 text-[10px] text-neutral-400">
+                      <div className="flex h-full w-full items-center justify-center bg-neutral-100 text-[10px] text-neutral-400">
                         No image
                       </div>
                     )}
@@ -404,7 +409,7 @@ export default function PortfolioEditor({
                   className="mb-3 max-h-96 w-full rounded-md bg-neutral-50 object-contain"
                 />
               )}
-              <h2 className="text-lg font-semibold text-neutral-900">
+              <h2 className="font-serif text-lg font-semibold text-neutral-900">
                 {selectedArtwork.presentationTitle}
               </h2>
               {selectedArtwork.description && (
