@@ -8,6 +8,7 @@ import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
 import PurchasePanel from "@/components/PurchasePanel";
 import RecordPastSaleForm from "@/components/RecordPastSaleForm";
+import ArtworkCatalogueFields, { withCurrent } from "@/components/ArtworkCatalogueFields";
 import type { SaleTermsDetail, PurchaseDetail } from "@/lib/actions/payments";
 
 export type ArtworkDetail = {
@@ -24,13 +25,19 @@ export type ArtworkDetail = {
   availability: string;
   visible: boolean;
   catalogueName: string;
-  year: number | null;
+  // Free text (e.g. "June 2025"), not a number — see the matching note
+  // on Artwork.date in schema.prisma (renamed + retyped from the old
+  // numeric `year`, 2026-09-07).
+  date: string | null;
   type: string | null;
   catalogueGroup: string | null;
   size: string | null;
   location: string | null;
   edition: string | null;
   availableQty: number | null;
+  // Settings-editable list, offered as a dropdown (2026-09-07) — see
+  // Artist.artworkTiers in schema.prisma.
+  tier: string | null;
   offeredPrice: string | null;
   studioNotes: string | null;
   images: {
@@ -58,6 +65,9 @@ export type ArtworkSettings = {
   artworkLocations: string[];
   mediumPresets: string[];
   sizePresets: string[];
+  // Offered in the Catalogue tab's Tier dropdown (2026-09-07) — see
+  // Artist.artworkTiers in schema.prisma.
+  artworkTiers: string[];
   saleSources: string[];
   // Offered in GallerySaleCard's "Mark as paid" Method dropdown, via
   // PurchasePanel's Payment tab (2026-09-03) — same Settings-editable
@@ -67,13 +77,6 @@ export type ArtworkSettings = {
   defaultReleaseMessage: string;
   defaultReleaseTriggerCount: number;
 };
-
-// Keeps a select from silently dropping an existing value that isn't (yet)
-// in the preset list — e.g. legacy data typed in before Settings existed.
-function withCurrent(presets: string[], current: string | null) {
-  if (!current || presets.includes(current)) return presets;
-  return [current, ...presets];
-}
 
 export default function ArtworkDetailPanel({
   siteId,
@@ -130,15 +133,11 @@ export default function ArtworkDetailPanel({
   const [tab, setTab] = useState<"presentation" | "catalogue" | "payment" | "past">("catalogue");
   const [isPending, startTransition] = useTransition();
   const [savedTab, setSavedTab] = useState<null | "presentation" | "catalogue">(null);
-  // Original/Unique pieces don't have editions the way prints do —
-  // Catalogue shows a simpler set of fields for them. Tracked live (not
-  // just at load) so switching Type updates the form immediately,
-  // without needing to save and reopen.
+  // Live state for Type/Size (2026-08-28) — needed for the Reference
+  // price preview below. Owned here (rather than inside
+  // ArtworkCatalogueFields) since Reference price is Catalogue-tab-only;
+  // kept in sync via that component's onTypeOrSizeChange.
   const [typeValue, setTypeValue] = useState(artwork.type || "");
-  // Substring rather than exact match (2026-08-15) — Type is free text
-  // from the artist's own preset list and can be phrased several ways
-  // ("Edition", "Giclée Edition", "Limited Edition").
-  const isEditionType = typeValue.trim().toLowerCase().includes("edition");
   const router = useRouter();
 
   // Live state for Size (2026-08-28) — needed alongside typeValue to
@@ -517,218 +516,77 @@ export default function ArtworkDetailPanel({
                   </div>
                   <div>
                     <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Year
-                    </label>
-                    <input
-                      type="number"
-                      name="year"
-                      defaultValue={artwork.year ?? ""}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Type
+                      Tier
                     </label>
                     <select
-                      name="type"
-                      value={typeValue}
-                      onChange={(e) => {
-                        setTypeValue(e.target.value);
-                        autosaveCatalogue(e.currentTarget.form!);
-                      }}
+                      name="tier"
+                      defaultValue={artwork.tier || ""}
+                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
                       className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                     >
                       <option value="">Choose from list…</option>
-                      {withCurrent(settings.artworkTypes, artwork.type).map((t) => (
+                      {withCurrent(settings.artworkTiers, artwork.tier).map((t) => (
                         <option key={t} value={t}>
                           {t}
                         </option>
                       ))}
                     </select>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Group
-                    </label>
-                    <select
-                      name="catalogueGroup"
-                      defaultValue={artwork.catalogueGroup || ""}
-                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">Choose from list…</option>
-                      {withCurrent(settings.artworkGroups, artwork.catalogueGroup).map((g) => (
-                        <option key={g} value={g}>
-                          {g}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Medium
-                    </label>
-                    <select
-                      name="medium"
-                      defaultValue={artwork.medium || ""}
-                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">Choose from list…</option>
-                      {withCurrent(settings.mediumPresets, artwork.medium).map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Size
-                    </label>
-                    <select
-                      name="size"
-                      value={sizeValue}
-                      onChange={(e) => {
-                        setSizeValue(e.target.value);
-                        autosaveCatalogue(e.currentTarget.form!);
-                      }}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">Choose from list…</option>
-                      {withCurrent(settings.sizePresets, artwork.size).map((s) => (
-                        <option key={s} value={s}>
-                          {s}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {/* Edition only applies to editioned work — Originals
-                      and Uniques (and materials like Aluminium that
-                      aren't editioned) are one-offs (2026-08-15
-                      decision). Positive match on "is this an edition"
-                      rather than the old "isn't unique", since a type
-                      like Aluminium is neither. */}
-                  {isEditionType && (
+                  {/* The Type/Group/Medium/Size/Edition/Available/
+                      Location/Date/Availability/Studio notes block below
+                      is the exact same shared component the Hopper's
+                      quick-add form uses (ArtworkCatalogueFields,
+                      2026-09-07) — Name and Tier above, and Reference/
+                      Offered price (passed as children, rendered between
+                      Date and Availability) stay Catalogue-tab-only. */}
+                  <ArtworkCatalogueFields
+                    settings={settings}
+                    values={{
+                      type: artwork.type || "",
+                      catalogueGroup: artwork.catalogueGroup || "",
+                      medium: artwork.medium || "",
+                      size: artwork.size || "",
+                      edition: artwork.edition || "",
+                      location: artwork.location || "",
+                      availableQty: artwork.availableQty?.toString() ?? "",
+                      date: artwork.date || "",
+                      studioNotes: artwork.studioNotes || "",
+                      availability: artwork.availability,
+                    }}
+                    onAutosave={autosaveCatalogue}
+                    onTypeOrSizeChange={(type, size) => {
+                      setTypeValue(type);
+                      setSizeValue(size);
+                    }}
+                  >
+                    {/* Reference price is a suggestion, not typed —
+                        (Size preset's width × height) × the selected
+                        Type's Ref value, recalculated live as either
+                        changes (2026-08-28). See src/lib/pricing.ts. */}
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Edition
+                        Reference price
                       </label>
                       <input
                         type="text"
-                        name="edition"
-                        defaultValue={artwork.edition || ""}
-                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                        readOnly
+                        value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
+                        className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
                       />
                     </div>
-                  )}
-                  {!isEditionType && (
-                    // Preserve any Edition value already on record rather
-                    // than wiping it out just because Type changed — it'll
-                    // reappear if switched back.
-                    <input type="hidden" name="edition" value={artwork.edition || ""} />
-                  )}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Location
-                    </label>
-                    <select
-                      name="location"
-                      defaultValue={artwork.location || ""}
-                      onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    >
-                      <option value="">Choose from list…</option>
-                      {withCurrent(settings.artworkLocations, artwork.location).map((l) => (
-                        <option key={l} value={l}>
-                          {l}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  {isEditionType && (
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Available (qty)
+                        Offered price
                       </label>
                       <input
-                        type="number"
-                        name="availableQty"
-                        defaultValue={artwork.availableQty ?? ""}
+                        type="text"
+                        name="offeredPrice"
+                        defaultValue={artwork.offeredPrice || ""}
+                        placeholder="e.g. 450.00"
                         className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
                       />
                     </div>
-                  )}
-                  {!isEditionType && (
-                    <input
-                      type="hidden"
-                      name="availableQty"
-                      value={artwork.availableQty ?? ""}
-                    />
-                  )}
-                  {/* Reference price is a suggestion, not typed —
-                      (Size preset's width × height) × the selected
-                      Type's Ref value, recalculated live as either
-                      changes (2026-08-28). See src/lib/pricing.ts. */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Reference price
-                    </label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
-                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Offered price
-                    </label>
-                    <input
-                      type="text"
-                      name="offeredPrice"
-                      defaultValue={artwork.offeredPrice || ""}
-                      placeholder="e.g. 450.00"
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  {!isEditionType ? (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Availability
-                      </label>
-                      <select
-                        name="availability"
-                        defaultValue={artwork.availability}
-                        onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
-                        className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                      >
-                        <option value="AVAILABLE">Available</option>
-                        <option value="RESERVED">Reserved</option>
-                        <option value="SOLD">Sold</option>
-                      </select>
-                    </div>
-                  ) : (
-                    // Editions track availability via the numeric Available
-                    // (qty) field instead — this status only makes sense
-                    // for a one-of-a-kind piece. Required/non-nullable in
-                    // the database, so preserved via hidden input rather
-                    // than left out of the submitted form.
-                    <input type="hidden" name="availability" value={artwork.availability} />
-                  )}
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Studio notes <span className="font-normal text-neutral-400">(private)</span>
-                  </label>
-                  <textarea
-                    name="studioNotes"
-                    defaultValue={artwork.studioNotes || ""}
-                    rows={3}
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
+                  </ArtworkCatalogueFields>
                 </div>
                 <div className="flex items-center gap-3">
                   {savedTab === "catalogue" && (
