@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import {
   binHopperItem,
+  binHopperItems,
   addHopperItemToMedia,
   addHopperItemToArtwork,
   addHopperItemToBucket,
@@ -105,6 +106,13 @@ export default function HopperView({
   // it, alongside the two file pickers, drag-and-drop, and the iPhone
   // Shortcut. See HopperImportPanel.tsx.
   const [showCsvImport, setShowCsvImport] = useState(false);
+
+  // Bulk select-and-delete for "Up next" (2026-09-07, direct request) —
+  // a separate mode rather than always-on checkboxes, so the ordinary
+  // one-click-to-sort flow on each thumbnail isn't disturbed day to day.
+  const [bulkSelectMode, setBulkSelectMode] = useState(false);
+  const [selectedForDelete, setSelectedForDelete] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
 
   // webkitdirectory/directory aren't part of React's typed HTML
   // attributes, so they're set imperatively here rather than as JSX
@@ -232,6 +240,46 @@ export default function HopperView({
       setAddError(null);
       logProcessed(item, "Binned", null);
       advanceAfterAction();
+    });
+  };
+
+  // Bulk delete for "Up next" (2026-09-07). Deliberately not routed
+  // through the Processed log — that trail is for the one-by-one sorting
+  // flow, and a bulk cleanup of a pile of duplicates/rejects doesn't fit
+  // its "here's what happened to this specific item" shape.
+  const handleBulkDelete = () => {
+    if (selectedForDelete.size === 0) return;
+    const count = selectedForDelete.size;
+    if (
+      !confirm(
+        `Permanently delete ${count} image${count === 1 ? "" : "s"}? This can't be undone.`
+      )
+    ) {
+      return;
+    }
+    setBulkDeleting(true);
+    startTransition(async () => {
+      const { failed } = await binHopperItems(Array.from(selectedForDelete), siteId);
+      setBulkDeleting(false);
+      setSelectedForDelete(new Set());
+      setBulkSelectMode(false);
+      if (failed.length > 0) {
+        setAddError(
+          `${failed.length} image${failed.length === 1 ? "" : "s"} couldn't be deleted — still linked elsewhere.`
+        );
+      } else {
+        setAddError(null);
+      }
+      router.refresh();
+    });
+  };
+
+  const toggleSelectedForDelete = (id: string) => {
+    setSelectedForDelete((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
     });
   };
 
@@ -685,40 +733,96 @@ export default function HopperView({
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
               Up next ({remaining.length})
             </p>
-            {/* Sort order (2026-08-18) — small ^/v arrows, replacing an
-                earlier pill-button toggle per direct request ("neat
-                little arrows instead [of] ugly buttons"). Up = newest
-                first, down = oldest first; the active direction is
-                solid black, the inactive one pale grey. Genuinely
-                changes which item you're asked to sort next, not just
-                how this list looks — see sortedQueue above. */}
-            <div className="flex items-center gap-0.5">
-              <button
-                type="button"
-                onClick={() => setSortOrder("newest")}
-                aria-label="Newest first"
-                title="Newest first"
-                className={`px-1 text-xs leading-none ${
-                  sortOrder === "newest"
-                    ? "text-neutral-900"
-                    : "text-neutral-300 hover:text-neutral-500"
-                }`}
-              >
-                ▲
-              </button>
-              <button
-                type="button"
-                onClick={() => setSortOrder("oldest")}
-                aria-label="Oldest first"
-                title="Oldest first"
-                className={`px-1 text-xs leading-none ${
-                  sortOrder === "oldest"
-                    ? "text-neutral-900"
-                    : "text-neutral-300 hover:text-neutral-500"
-                }`}
-              >
-                ▼
-              </button>
+            {/* Bulk select-and-delete (2026-09-07, direct request) —
+                toggled separately from the sort arrows so the ordinary
+                one-click-to-sort flow on each thumbnail stays untouched
+                until this is deliberately switched on. While active, a
+                thumbnail click toggles its checkbox instead of opening
+                it for sorting — see the grid below. */}
+            <div className="flex items-center gap-3">
+              {bulkSelectMode ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setSelectedForDelete(
+                        selectedForDelete.size === remaining.length
+                          ? new Set()
+                          : new Set(remaining.map((i) => i.id))
+                      )
+                    }
+                    className="text-xs text-neutral-500 hover:text-neutral-900 hover:underline"
+                  >
+                    {selectedForDelete.size === remaining.length ? "Select none" : "Select all"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleBulkDelete}
+                    disabled={selectedForDelete.size === 0 || bulkDeleting}
+                    className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {bulkDeleting ? "Deleting…" : `Delete (${selectedForDelete.size})`}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBulkSelectMode(false);
+                      setSelectedForDelete(new Set());
+                    }}
+                    disabled={bulkDeleting}
+                    className="text-xs text-neutral-400 hover:text-neutral-700"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setBulkSelectMode(true)}
+                  className="text-xs text-neutral-500 hover:text-neutral-900 hover:underline"
+                >
+                  Select
+                </button>
+              )}
+              {/* Sort order (2026-08-18) — small ^/v arrows, replacing an
+                  earlier pill-button toggle per direct request ("neat
+                  little arrows instead [of] ugly buttons"). Up = newest
+                  first, down = oldest first; the active direction is
+                  solid black, the inactive one pale grey. Genuinely
+                  changes which item you're asked to sort next, not just
+                  how this list looks — see sortedQueue above. Hidden
+                  while bulk-selecting, since re-sorting mid-selection
+                  would just reshuffle the grid under someone's cursor. */}
+              {!bulkSelectMode && (
+                <div className="flex items-center gap-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder("newest")}
+                    aria-label="Newest first"
+                    title="Newest first"
+                    className={`px-1 text-xs leading-none ${
+                      sortOrder === "newest"
+                        ? "text-neutral-900"
+                        : "text-neutral-300 hover:text-neutral-500"
+                    }`}
+                  >
+                    ▲
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSortOrder("oldest")}
+                    aria-label="Oldest first"
+                    title="Oldest first"
+                    className={`px-1 text-xs leading-none ${
+                      sortOrder === "oldest"
+                        ? "text-neutral-900"
+                        : "text-neutral-300 hover:text-neutral-500"
+                    }`}
+                  >
+                    ▼
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
@@ -726,28 +830,48 @@ export default function HopperView({
               <p className="text-xs text-neutral-400">This is the last one.</p>
             ) : (
               <div className="grid grid-cols-6 gap-2 lg:grid-cols-7">
-                {remaining.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setSelectedId(item.id)}
-                    className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300"
-                  >
-                    {item.kind === "VIDEO" ? (
-                      item.posterUrl ? (
-                        <img
-                          src={item.posterUrl}
-                          alt=""
-                          className="aspect-square w-full object-cover"
-                        />
+                {remaining.map((item) => {
+                  const isSelected = selectedForDelete.has(item.id);
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() =>
+                        bulkSelectMode ? toggleSelectedForDelete(item.id) : setSelectedId(item.id)
+                      }
+                      className={`relative overflow-hidden rounded-md border-2 ${
+                        bulkSelectMode && isSelected
+                          ? "border-neutral-900"
+                          : "border-transparent hover:border-neutral-300"
+                      }`}
+                    >
+                      {item.kind === "VIDEO" ? (
+                        item.posterUrl ? (
+                          <img
+                            src={item.posterUrl}
+                            alt=""
+                            className="aspect-square w-full object-cover"
+                          />
+                        ) : (
+                          <VideoThumb src={item.url} className="aspect-square w-full object-cover" />
+                        )
                       ) : (
-                        <VideoThumb src={item.url} className="aspect-square w-full object-cover" />
-                      )
-                    ) : (
-                      <img src={item.url} alt="" className="aspect-square w-full object-cover" />
-                    )}
-                  </button>
-                ))}
+                        <img src={item.url} alt="" className="aspect-square w-full object-cover" />
+                      )}
+                      {bulkSelectMode && (
+                        <span
+                          className={`absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border text-xs ${
+                            isSelected
+                              ? "border-neutral-900 bg-neutral-900 text-white"
+                              : "border-neutral-300 bg-white/80 text-transparent"
+                          }`}
+                        >
+                          ✓
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>

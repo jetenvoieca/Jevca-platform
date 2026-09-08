@@ -101,6 +101,29 @@ export async function binHopperItem(
   return deleteImagePermanently(id);
 }
 
+// Bulk version of binHopperItem (2026-09-07, direct request — "add
+// ability to bulk select images to delete") for the Up next grid's
+// select mode. Reuses the exact same per-item delete (and its same
+// "still linked elsewhere" failure case) rather than a separate bulk
+// implementation, so the two can never behave differently. Runs the
+// batch concurrently — Hopper selections are a handful to a few dozen
+// images at once, not thousands, so no chunking/queueing is needed here.
+// Partial failure is reported back (which ids failed and why) rather
+// than all-or-nothing, so one linked-elsewhere image doesn't block
+// deleting the rest of a selection.
+export async function binHopperItems(
+  ids: string[],
+  siteId: string
+): Promise<{ deletedCount: number; failed: { id: string; error: string }[] }> {
+  const results = await Promise.all(
+    ids.map(async (id) => ({ id, result: await deleteImagePermanently(id) }))
+  );
+  const failed = results
+    .filter((r) => !r.result.ok)
+    .map((r) => ({ id: r.id, error: (r.result as { ok: false; error: string }).error }));
+  return { deletedCount: results.length - failed.length, failed };
+}
+
 export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {
   await db.image.update({ where: { id }, data: { status: "SORTED", needsReview: true } });
 }
