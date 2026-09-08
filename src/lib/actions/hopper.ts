@@ -176,10 +176,12 @@ export async function createArtworkFromHopperQuick(
   const finalTitle = title.trim() || "Untitled";
   const finalDescription = description.trim() || null;
 
-  const yearRaw = (formData.get("year") as string)?.trim();
+  const dateRaw = (formData.get("date") as string)?.trim();
   const type = (formData.get("type") as string)?.trim() || null;
   const catalogueGroup = (formData.get("catalogueGroup") as string)?.trim() || null;
   const size = (formData.get("size") as string)?.trim() || null;
+  const edition = (formData.get("edition") as string)?.trim() || null;
+  const availableQtyRaw = (formData.get("availableQty") as string)?.trim();
   const location = (formData.get("location") as string)?.trim() || null;
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
   const medium = (formData.get("medium") as string)?.trim() || null;
@@ -194,11 +196,13 @@ export async function createArtworkFromHopperQuick(
       type,
       catalogueGroup,
       size,
+      edition,
+      availableQty: availableQtyRaw ? parseInt(availableQtyRaw, 10) : null,
       location,
       studioNotes,
       medium,
       availability,
-      year: yearRaw ? parseInt(yearRaw, 10) : null,
+      date: dateRaw || null,
       needsReview: true,
     });
   } catch {

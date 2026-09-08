@@ -586,12 +586,8 @@ model Site {
   salesEnabled         Boolean    @default(false)
   defaultCurrency      String     @default("GBP")
   // Replaces the old free-text `template` field (2026-09-06) — a real
-  // link to a Template record now that Templates are an actual library
-  // (see the Template model below), rather than a string that only
-  // ever held "Default". Nullable: a site doesn't need a Template
-  // assigned to keep working the ordinary way (Section/Private/
-  // Pavilion pages) — it's only needed to also offer that Template's
-  // own page styles when adding a new page (see Page.templateStyle).
+  // link to a Template record now (see Site.templateId in schema.prisma). Null
+  // = no Template assigned.
   templateId           String?
   template             Template?  @relation(fields: [templateId], references: [id])
   domainStatus         String?
@@ -784,7 +780,11 @@ model Artwork {
   visible           Boolean             @default(true)
 
   catalogueName  String
-  year           Int?
+  // Free text (e.g. "June 2025"), not a real calendar date or a bare
+  // year — renamed + retyped from the old numeric `year` (2026-09-07,
+  // direct request, alongside unifying the Catalogue/Hopper forms) since
+  // artists write this loosely and a plain Int couldn't hold that.
+  date           String?
   type           String?
   catalogueGroup String?
   size           String?
