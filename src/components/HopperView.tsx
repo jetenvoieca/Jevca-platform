@@ -16,6 +16,7 @@ import ArtworkPicker from "@/components/ArtworkPicker";
 import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 
 export type HopperItem = {
   id: string;
@@ -952,19 +953,20 @@ function SortingCard({
   );
 }
 
-// Same field set as the full Artwork editor's Catalogue tab (see
-// ArtworkDetailPanel.tsx) — deliberately not Name (comes from the
-// caption above instead) or Edition/Available qty (kept out to match the
-// simpler layout this was asked for; a brand-new artwork has nothing in
-// either field yet regardless, so omitting them from this form doesn't
-// lose anything). Description also comes from the caption/description
-// pair above, for the same reason.
+// Same field set as the full Artwork editor's Catalogue tab — literally
+// the same shared component, ArtworkCatalogueFields (2026-09-07; see
+// that file for why). Deliberately not Name (comes from the caption
+// above instead) or Tier/Reference/Offered price (Catalogue-tab-only —
+// a brand-new Hopper-created artwork isn't priced or tiered yet).
+// Description also comes from the caption/description pair above, for
+// the same reason Name does.
 //
 // 2026-08-18: no longer autosaves field-by-field, since there's no
 // artwork to save to until "Done, next item" is pressed — the artwork
 // doesn't exist until then. This is now a plain uncontrolled form; every
 // field's current value is only read once, from a single FormData
-// snapshot taken at that moment.
+// snapshot taken at that moment — so ArtworkCatalogueFields is used here
+// with no onAutosave.
 function QuickCatalogueFields({
   settings,
   creating,
@@ -982,121 +984,20 @@ function QuickCatalogueFields({
     <div className="mt-4 rounded-md border border-neutral-300 p-4">
       <form ref={formRef} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Type</label>
-            <select
-              name="type"
-              defaultValue=""
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="">Choose from list…</option>
-              {settings.artworkTypes.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Group</label>
-            <select
-              name="catalogueGroup"
-              defaultValue=""
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="">Choose from list…</option>
-              {settings.artworkGroups.map((g) => (
-                <option key={g} value={g}>
-                  {g}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Medium</label>
-          <select
-            name="medium"
-            defaultValue=""
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          >
-            <option value="">Choose from list…</option>
-            {settings.mediumPresets.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Size</label>
-            <select
-              name="size"
-              defaultValue=""
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="">Choose from list…</option>
-              {settings.sizePresets.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Location</label>
-            <select
-              name="location"
-              defaultValue=""
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="">Choose from list…</option>
-              {settings.artworkLocations.map((l) => (
-                <option key={l} value={l}>
-                  {l}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-        {/* Year moved to sit alongside Availability rather than Name
-            (2026-08-17, direct request — "moved year for better fit"),
-            unlike the full editor's own layout where it's next to Name. */}
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">
-              Availability
-            </label>
-            <select
-              name="availability"
-              defaultValue="AVAILABLE"
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            >
-              <option value="AVAILABLE">Available</option>
-              <option value="RESERVED">Reserved</option>
-              <option value="SOLD">Sold</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Year</label>
-            <input
-              type="text"
-              name="year"
-              defaultValue=""
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-          </div>
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">
-            Studio notes <span className="font-normal text-neutral-400">(private)</span>
-          </label>
-          <textarea
-            name="studioNotes"
-            defaultValue=""
-            rows={3}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          <ArtworkCatalogueFields
+            settings={settings}
+            values={{
+              type: "",
+              catalogueGroup: "",
+              medium: "",
+              size: "",
+              edition: "",
+              availableQty: "",
+              location: "",
+              date: "",
+              studioNotes: "",
+              availability: "AVAILABLE",
+            }}
           />
         </div>
       </form>
