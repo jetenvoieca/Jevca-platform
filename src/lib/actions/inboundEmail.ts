@@ -348,3 +348,33 @@ export async function sendInboxReply(
   revalidatePath("/accounts/inbox");
   return { ok: true };
 }
+
+// Deletes a received message (2026-09-06, direct request — "enable
+// deleting of messages in inbox both received and sent"). Any replies
+// sent to it aren't deleted along with it — the foreign key is ON
+// DELETE SET NULL (see the OutboundEmail migration), so a reply just
+// becomes un-linked from a thread rather than disappearing too; it
+// still shows up in the Sent list on its own. Also clears any open
+// EMAIL_REPLY_RECEIVED alert this message might still have raised, so
+// deleting it can't leave a dangling alert with nothing to open.
+export async function deleteInboundEmail(id: string): Promise<void> {
+  const existing = await db.inboundEmail.findUnique({ where: { id }, select: { artistId: true } });
+  if (!existing) return;
+  await db.inboundEmail.delete({ where: { id } });
+  if (existing.artistId) {
+    await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);
+  }
+  revalidatePath("/accounts/inbox");
+  revalidatePath("/alerts");
+}
+
+// Deletes a sent message — an ad hoc admin send, a reply, or a logged
+// invoice/receipt/certificate send (2026-09-06, same request as above).
+// Only removes it from this Sent record; doesn't touch
+// Purchase.invoiceEmailedAt/certificateEmailedAt or anything already
+// delivered to the recipient — this is a record of what was sent, not
+// the send itself, so deleting it just tidies the list.
+export async function deleteOutboundEmail(id: string): Promise<void> {
+  await db.outboundEmail.delete({ where: { id } });
+  revalidatePath("/accounts/inbox");
+}
