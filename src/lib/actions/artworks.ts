@@ -249,6 +249,9 @@ type ListFilters = {
   location?: string;
   type?: string;
   group?: string;
+  // Settings-editable Tier dropdown (2026-09-07) — see Artist.artworkTiers
+  // in schema.prisma and the matching field on ArtworkFilterInput.
+  tier?: string;
   sort?: string;
   // Pagination — added 2026-08-11 once the catalogue reached real size
   // (~150 artworks after the CSV import). Previously fetched every
