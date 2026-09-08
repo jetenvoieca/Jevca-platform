@@ -43,6 +43,7 @@ export default function ArtworksCatalogueView({
   location: initialLocation,
   type: initialType,
   group: initialGroup,
+  tier: initialTier,
   sort: initialSort,
   initialSelected,
   settings,
@@ -60,6 +61,7 @@ export default function ArtworksCatalogueView({
   location: string;
   type: string;
   group: string;
+  tier: string;
   sort: string;
   initialSelected: ArtworkDetail | null;
   settings: ArtworkSettings;
@@ -89,6 +91,7 @@ export default function ArtworksCatalogueView({
   const [location, setLocation] = useState(initialLocation);
   const [type, setType] = useState(initialType);
   const [group, setGroup] = useState(initialGroup);
+  const [tier, setTier] = useState(initialTier);
   const [sort, setSort] = useState(initialSort);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -110,6 +113,7 @@ export default function ArtworksCatalogueView({
     location: string;
     type: string;
     group: string;
+    tier: string;
     sort: string;
   }) => {
     const params = new URLSearchParams(window.location.search);
@@ -122,6 +126,7 @@ export default function ArtworksCatalogueView({
     setOrDelete("location", next.location);
     setOrDelete("type", next.type);
     setOrDelete("group", next.group);
+    setOrDelete("tier", next.tier);
     setOrDelete("sort", next.sort);
     const qs = params.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
@@ -134,15 +139,17 @@ export default function ArtworksCatalogueView({
       location: string;
       type: string;
       group: string;
+      tier: string;
       sort: string;
     }>) => {
-      const next = { q, availability, location, type, group, sort, ...overrides };
+      const next = { q, availability, location, type, group, tier, sort, ...overrides };
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
         q: next.q || undefined,
         availability: next.availability || undefined,
         location: next.location || undefined,
         type: next.type || undefined,
         group: next.group || undefined,
+        tier: next.tier || undefined,
         sort: next.sort || undefined,
         limit: pageSize,
       });
@@ -178,7 +185,7 @@ export default function ArtworksCatalogueView({
         updateUrlSelected(null);
       }
     },
-    [artistId, q, availability, location, type, group, sort, pageSize, selected]
+    [artistId, q, availability, location, type, group, tier, sort, pageSize, selected]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -190,6 +197,7 @@ export default function ArtworksCatalogueView({
         location: location || undefined,
         type: type || undefined,
         group: group || undefined,
+        tier: tier || undefined,
         sort: sort || undefined,
         offset: artworks.length,
         limit: pageSize,
@@ -211,7 +219,7 @@ export default function ArtworksCatalogueView({
     } finally {
       setLoadingMore(false);
     }
-  }, [artistId, artworks.length, q, availability, location, type, group, sort, pageSize]);
+  }, [artistId, artworks.length, q, availability, location, type, group, tier, sort, pageSize]);
 
   // Infinite scroll: an invisible sentinel sits just past the last row.
   // When it enters the viewport we auto-fetch the next page — no "Load
@@ -322,6 +330,7 @@ export default function ArtworksCatalogueView({
         location: location || undefined,
         type: type || undefined,
         group: group || undefined,
+        tier: tier || undefined,
         sort: sort || undefined,
         limit: pageSize,
       });
@@ -379,6 +388,7 @@ export default function ArtworksCatalogueView({
           location,
           type,
           group,
+          tier,
         });
 
         if (stillMatches) {
@@ -412,6 +422,7 @@ export default function ArtworksCatalogueView({
           location: location || undefined,
           type: type || undefined,
           group: group || undefined,
+          tier: tier || undefined,
           limit: 0,
         });
         setTotal(freshTotal);
@@ -459,7 +470,10 @@ export default function ArtworksCatalogueView({
     <div className="flex h-full flex-col">
       <div className="shrink-0 px-6 pt-4">
         {/* Row 1: title + view controls, together since they both govern
-            how the whole catalogue displays. */}
+            how the whole catalogue displays. All/Available/Sold moved
+            here (2026-09-07, direct request) — in line with the
+            "Artwork Catalogue" title, rather than sitting in the
+            filter row below. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
@@ -519,56 +533,75 @@ export default function ArtworksCatalogueView({
                   ))}
                 </div>
               )}
+
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvailability("");
+                    applyFilters({ availability: "" });
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-sm ${
+                    !availability
+                      ? "bg-neutral-900 text-white"
+                      : "border border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvailability("AVAILABLE");
+                    applyFilters({ availability: "AVAILABLE" });
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-sm ${
+                    availability === "AVAILABLE"
+                      ? "bg-neutral-900 text-white"
+                      : "border border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  Available
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvailability("SOLD");
+                    applyFilters({ availability: "SOLD" });
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-sm ${
+                    availability === "SOLD"
+                      ? "bg-neutral-900 text-white"
+                      : "border border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  Sold
+                </button>
+              </div>
             </div>
           </div>
 
           {/* Row 2: filtering/search — a separate functional group from
-              the view controls above. */}
+              the view controls above. Tier (2026-09-07) sits leftmost,
+              ahead of Search, matching the design mockup. */}
           <div className="mb-3 flex flex-wrap items-center gap-3">
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setAvailability("");
-                  applyFilters({ availability: "" });
-                }}
-                className={`rounded-full px-3 py-1.5 text-sm ${
-                  !availability
-                    ? "bg-neutral-900 text-white"
-                    : "border border-neutral-300 hover:bg-neutral-50"
-                }`}
-              >
-                All
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAvailability("AVAILABLE");
-                  applyFilters({ availability: "AVAILABLE" });
-                }}
-                className={`rounded-full px-3 py-1.5 text-sm ${
-                  availability === "AVAILABLE"
-                    ? "bg-neutral-900 text-white"
-                    : "border border-neutral-300 hover:bg-neutral-50"
-                }`}
-              >
-                Available
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setAvailability("SOLD");
-                  applyFilters({ availability: "SOLD" });
-                }}
-                className={`rounded-full px-3 py-1.5 text-sm ${
-                  availability === "SOLD"
-                    ? "bg-neutral-900 text-white"
-                    : "border border-neutral-300 hover:bg-neutral-50"
-                }`}
-              >
-                Sold
-              </button>
-            </div>
+            <select
+              name="tier"
+              value={tier}
+              onChange={(e) => {
+                const v = e.target.value;
+                setTier(v);
+                applyFilters({ tier: v });
+              }}
+              className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            >
+              <option value="">All tiers</option>
+              {settings.artworkTiers.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
 
             <form
               onSubmit={(e) => {
@@ -816,6 +849,7 @@ export default function ArtworksCatalogueView({
             ...(location ? { location } : {}),
             ...(type ? { type } : {}),
             ...(group ? { group } : {}),
+            ...(tier ? { tier } : {}),
             ...(sort ? { sort } : {}),
           }).toString()}`;
           // Same as the plain link this replaces — a real navigation to
@@ -828,4 +862,3 @@ export default function ArtworksCatalogueView({
     </div>
   );
 }
-
