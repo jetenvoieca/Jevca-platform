@@ -6,6 +6,8 @@ import {
   getThread,
   sendInboxReply,
   getSentList,
+  deleteInboundEmail,
+  deleteOutboundEmail,
   type InboxSummaryItem,
   type InboxThreadItem,
   type SentSummaryItem,
@@ -29,6 +31,13 @@ import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail"
 // idea as opening an inbox thread — third request, same day — except
 // there's no server round-trip needed: the full body is already in the
 // list we fetched, so this just reads from local state.
+//
+// Delete added 2026-09-06, direct request ("enable deleting of messages
+// in inbox both received and sent") — every item in a thread (both the
+// original received message and any replies) and every Sent item gets
+// its own delete control, each with a confirm() first since this is
+// permanent, same pattern as every other destructive action in the app
+// (handleResetSalesData, handleDeletePayment, etc. elsewhere).
 //
 // Plain, minimalist styling, consistent with InvoiceEmailModal/
 // SiteSettingsPanel elsewhere in the app — no separate visual language
@@ -62,6 +71,7 @@ export default function AdminInboxPanel({
   const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
   const [sentLoading, setSentLoading] = useState(false);
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [thread, setThread] = useState<InboxThreadItem[] | null>(null);
@@ -83,6 +93,7 @@ export default function AdminInboxPanel({
   const cardCls = "rounded-lg border border-neutral-200 bg-white";
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
+  const deleteBtnCls = "text-xs text-neutral-400 hover:text-red-600 disabled:opacity-50";
 
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
 
@@ -133,6 +144,43 @@ export default function AdminInboxPanel({
       }
       setReplyBody("");
       openThread(openId); // Reload the thread so the new reply shows up.
+    });
+  };
+
+  // Deletes one item from an open thread. Deleting the original received
+  // message (direction IN) deletes the whole thread, so the panel closes
+  // and the Inbox list refreshes; deleting a reply (direction OUT) just
+  // removes that reply and the thread reloads underneath it.
+  const handleDeleteThreadItem = (item: InboxThreadItem) => {
+    const confirmMsg =
+      item.direction === "IN"
+        ? "Delete this message? Any replies to it will stay in the Sent list, just no longer linked to it. This can't be undone."
+        : "Delete this reply? This can't be undone.";
+    if (!confirm(confirmMsg)) return;
+    setDeletingId(item.id);
+    startTransition(async () => {
+      if (item.direction === "IN") {
+        await deleteInboundEmail(item.id);
+        setDeletingId(null);
+        setOpenId(null);
+        setThread(null);
+        router.refresh();
+      } else {
+        await deleteOutboundEmail(item.id);
+        setDeletingId(null);
+        if (openId) openThread(openId);
+      }
+    });
+  };
+
+  const handleDeleteSentItem = (id: string) => {
+    if (!confirm("Delete this message? This can't be undone.")) return;
+    setDeletingId(id);
+    startTransition(async () => {
+      await deleteOutboundEmail(id);
+      setDeletingId(null);
+      setSentList((prev) => (prev ? prev.filter((s) => s.id !== id) : prev));
+      if (selectedSentId === id) setSelectedSentId(null);
     });
   };
 
@@ -374,9 +422,19 @@ export default function AdminInboxPanel({
             <p className="text-center text-sm text-neutral-400">Select a message on the left, or start a new one.</p>
           ) : (
             <div className="mx-auto max-w-xl space-y-2">
-              <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
-              </span>
+              <div className="flex items-start justify-between gap-2">
+                <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                  {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleDeleteSentItem(selectedSent.id)}
+                  disabled={deletingId === selectedSent.id || isPending}
+                  className={deleteBtnCls}
+                >
+                  {deletingId === selectedSent.id ? "Deleting…" : "Delete"}
+                </button>
+              </div>
               <p className="text-sm font-medium text-neutral-800">{selectedSent.subject || "(no subject)"}</p>
               <p className="text-xs text-neutral-400">
                 {selectedSent.fromAddress} → {selectedSent.toAddress}
@@ -411,7 +469,17 @@ export default function AdminInboxPanel({
                   <span className="font-medium text-neutral-700">
                     {item.direction === "OUT" ? "You" : item.fromName || item.fromAddress}
                   </span>
-                  <span>{new Date(item.at).toLocaleString()}</span>
+                  <div className="flex items-center gap-2">
+                    <span>{new Date(item.at).toLocaleString()}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteThreadItem(item)}
+                      disabled={deletingId === item.id || isPending}
+                      className={deleteBtnCls}
+                    >
+                      {deletingId === item.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
                 </div>
                 {item.direction === "IN" && (
                   <p className="mb-1 text-xs text-neutral-400">
