@@ -39,6 +39,14 @@ import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail"
 // permanent, same pattern as every other destructive action in the app
 // (handleResetSalesData, handleDeletePayment, etc. elsewhere).
 //
+// Auto-select-next added same day, second delete-related request —
+// deleting the message currently open (an inbox thread's original
+// message, or a selected Sent item) moves straight to whichever item
+// was next in that same list, rather than leaving the centre panel
+// blank. "Next" is worked out from the list as it stood immediately
+// before the delete, falling back to the previous item if the deleted
+// one was last, and to nothing only once the list is genuinely empty.
+//
 // Plain, minimalist styling, consistent with InvoiceEmailModal/
 // SiteSettingsPanel elsewhere in the app — no separate visual language
 // for this screen.
@@ -148,39 +156,64 @@ export default function AdminInboxPanel({
   };
 
   // Deletes one item from an open thread. Deleting the original received
-  // message (direction IN) deletes the whole thread, so the panel closes
-  // and the Inbox list refreshes; deleting a reply (direction OUT) just
-  // removes that reply and the thread reloads underneath it.
+  // message (direction IN) deletes the whole thread, so this moves
+  // straight on to whichever message was next in the Inbox list (or the
+  // previous one if this was the last, or closes the panel only once the
+  // list is genuinely empty). Deleting a reply (direction OUT) just
+  // removes that reply and reloads the same thread underneath it.
   const handleDeleteThreadItem = (item: InboxThreadItem) => {
     const confirmMsg =
       item.direction === "IN"
         ? "Delete this message? Any replies to it will stay in the Sent list, just no longer linked to it. This can't be undone."
         : "Delete this reply? This can't be undone.";
     if (!confirm(confirmMsg)) return;
-    setDeletingId(item.id);
-    startTransition(async () => {
-      if (item.direction === "IN") {
+
+    if (item.direction === "IN") {
+      // Worked out from the list as it stands right now, before the
+      // delete actually happens — the list itself only updates once
+      // router.refresh() below completes.
+      const idx = initialList.findIndex((m) => m.id === item.id);
+      const remaining = initialList.filter((m) => m.id !== item.id);
+      const nextId = remaining[idx]?.id ?? remaining[idx - 1]?.id ?? null;
+
+      setDeletingId(item.id);
+      startTransition(async () => {
         await deleteInboundEmail(item.id);
         setDeletingId(null);
-        setOpenId(null);
-        setThread(null);
-        router.refresh();
-      } else {
+        if (nextId) {
+          openThread(nextId); // Also refreshes the list underneath.
+        } else {
+          setOpenId(null);
+          setThread(null);
+          router.refresh();
+        }
+      });
+    } else {
+      setDeletingId(item.id);
+      startTransition(async () => {
         await deleteOutboundEmail(item.id);
         setDeletingId(null);
         if (openId) openThread(openId);
-      }
-    });
+      });
+    }
   };
 
   const handleDeleteSentItem = (id: string) => {
     if (!confirm("Delete this message? This can't be undone.")) return;
+    const currentList = sentList || [];
+    const idx = currentList.findIndex((s) => s.id === id);
+    const remaining = currentList.filter((s) => s.id !== id);
+    // Moves on to whichever item was next, or the previous one if this
+    // was the last, rather than leaving the centre panel blank.
+    const nextSelectedId =
+      selectedSentId === id ? remaining[idx]?.id ?? remaining[idx - 1]?.id ?? null : selectedSentId;
+
     setDeletingId(id);
     startTransition(async () => {
       await deleteOutboundEmail(id);
       setDeletingId(null);
-      setSentList((prev) => (prev ? prev.filter((s) => s.id !== id) : prev));
-      if (selectedSentId === id) setSelectedSentId(null);
+      setSentList(remaining);
+      setSelectedSentId(nextSelectedId);
     });
   };
 
