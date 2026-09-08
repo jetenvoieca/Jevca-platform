@@ -66,12 +66,18 @@ export async function createArtworkWithRetry(
     type: string | null;
     catalogueGroup: string | null;
     size: string | null;
+    // Added (2026-09-07) so the Hopper's one-shot "Add Artwork" flow can
+    // set these too, now that its quick-add form shares the exact same
+    // field set as the Catalogue tab (see ArtworkCatalogueFields.tsx).
+    edition: string | null;
+    availableQty: number | null;
     location: string | null;
     studioNotes: string | null;
-    // Added (2026-08-18) for the Hopper's one-shot "Add Artwork" flow —
-    // no prior caller needed Year at creation time, only updateCatalogue
-    // (an in-place edit) did.
-    year: number | null;
+    // Free text (e.g. "June 2025"), not a number — renamed + retyped
+    // from the old numeric `year` (2026-09-07). Added (2026-08-18) for
+    // the Hopper's one-shot "Add Artwork" flow — no prior caller needed
+    // this at creation time, only updateCatalogue (an in-place edit) did.
+    date: string | null;
     // Optional (2026-08-17) — only the CSV import passes this true.
     // Regular "+ New" and duplicateArtwork both omit it, defaulting to
     // Prisma's own schema default (false) — see the matching note on
@@ -171,7 +177,7 @@ export async function duplicateArtwork(artworkId: string, siteId: string) {
   await db.artwork.update({
     where: { id: created.id },
     data: {
-      year: original.year,
+      date: original.date,
       edition: original.edition,
       availableQty: original.availableQty,
       offeredPrice: original.offeredPrice,
@@ -417,13 +423,17 @@ export async function getArtworkDetailForClient(id: string) {
     availability: artwork.availability,
     visible: artwork.visible,
     catalogueName: artwork.catalogueName,
-    year: artwork.year,
+    date: artwork.date,
     type: artwork.type,
     catalogueGroup: artwork.catalogueGroup,
     size: artwork.size,
     location: artwork.location,
     edition: artwork.edition,
     availableQty: artwork.availableQty,
+    // Settings-editable Tier dropdown (2026-09-07) — see
+    // Artist.artworkTiers in schema.prisma. Was already writable via
+    // CSV import but never surfaced in the Catalogue tab UI until now.
+    tier: artwork.tier,
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     studioNotes: artwork.studioNotes,
     images: artwork.images
@@ -506,7 +516,8 @@ export async function updateCatalogue(
   formData: FormData
 ): Promise<void> {
   const catalogueName = (formData.get("catalogueName") as string)?.trim();
-  const yearRaw = (formData.get("year") as string)?.trim();
+  const dateRaw = (formData.get("date") as string)?.trim();
+  const tier = (formData.get("tier") as string)?.trim() || null;
   const type = (formData.get("type") as string)?.trim() || null;
   const catalogueGroup = (formData.get("catalogueGroup") as string)?.trim() || null;
   const size = (formData.get("size") as string)?.trim() || null;
@@ -554,7 +565,8 @@ export async function updateCatalogue(
     where: { id },
     data: {
       catalogueName,
-      year: yearRaw ? parseInt(yearRaw, 10) : null,
+      date: dateRaw || null,
+      tier,
       type,
       catalogueGroup,
       size,
@@ -608,7 +620,8 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
     !artwork.presentationMedium &&
     !artwork.viewingLocation &&
     !artwork.presentationGroup &&
-    !artwork.year &&
+    !artwork.date &&
+    !artwork.tier &&
     !artwork.type &&
     !artwork.catalogueGroup &&
     !artwork.size &&
