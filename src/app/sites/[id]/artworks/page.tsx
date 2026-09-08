@@ -11,6 +11,9 @@ type SearchParams = {
   location?: string;
   type?: string;
   group?: string;
+  // Settings-editable Tier dropdown filter (2026-09-07) — see
+  // Artist.artworkTiers in schema.prisma.
+  tier?: string;
   sort?: string;
   // Deep-link to a specific artwork's detail panel (e.g. right after
   // creating one, or a link from elsewhere) — read once on first load.
@@ -72,6 +75,7 @@ export default async function ArtworksCataloguePage({
       location={sp.location || ""}
       type={sp.type || ""}
       group={sp.group || ""}
+      tier={sp.tier || ""}
       sort={sp.sort || ""}
       initialSelected={selected}
       settings={settings}

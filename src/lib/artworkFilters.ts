@@ -14,10 +14,14 @@ export type ArtworkFilterInput = {
   location?: string;
   type?: string;
   group?: string;
+  // Tier filter (2026-09-07) — matches Artwork.tier exactly, same
+  // convention as location/type below (Tier is now a Settings-editable
+  // list, same pattern — see Artist.artworkTiers in schema.prisma).
+  tier?: string;
 };
 
 export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput) {
-  const { q, availability, location, type, group } = filters;
+  const { q, availability, location, type, group, tier } = filters;
   return {
     artistId,
     ...(q
@@ -33,6 +37,7 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
     ...(availability ? { availability: availability as Availability } : {}),
     ...(location ? { location } : {}),
     ...(type ? { type } : {}),
+    ...(tier ? { tier } : {}),
     // A Group filter matches either facet's Group, since the same preset
     // list feeds both and it's not obvious to the user which one a given
     // artwork was tagged under.
@@ -63,10 +68,11 @@ export function artworkMatchesFilters(
     type: string | null;
     catalogueGroup: string | null;
     presentationGroup: string | null;
+    tier: string | null;
   },
   filters: ArtworkFilterInput
 ): boolean {
-  const { q, availability, location, type, group } = filters;
+  const { q, availability, location, type, group, tier } = filters;
   if (q) {
     const needle = q.toLowerCase();
     const haystacks = [
@@ -80,6 +86,7 @@ export function artworkMatchesFilters(
   if (availability && artwork.availability !== availability) return false;
   if (location && artwork.location !== location) return false;
   if (type && artwork.type !== type) return false;
+  if (tier && artwork.tier !== tier) return false;
   if (group && artwork.catalogueGroup !== group && artwork.presentationGroup !== group) return false;
   return true;
 }

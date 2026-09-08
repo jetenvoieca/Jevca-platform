@@ -11,6 +11,9 @@ export type CatalogueExportFilters = {
   location?: string;
   type?: string;
   group?: string;
+  // Settings-editable Tier dropdown filter (2026-09-07) — see
+  // Artist.artworkTiers in schema.prisma.
+  tier?: string;
   sort?: string;
   // Editable per-export, via ExportPdfDialog.tsx (2026-08-17) — default
   // to the artist's real name / "Artwork Catalogue" when absent, so one
@@ -321,6 +324,7 @@ function describeFilters(filters: CatalogueExportFilters): string {
   if (filters.q) parts.push(`Search: "${filters.q}"`);
   if (filters.availability) parts.push(filters.availability === "SOLD" ? "Sold" : "Available");
   if (filters.type) parts.push(`Type: ${filters.type}`);
+  if (filters.tier) parts.push(`Tier: ${filters.tier}`);
   if (filters.group) parts.push(`Group: ${filters.group}`);
   if (filters.location) parts.push(`Location: ${filters.location}`);
   return parts.join(" · ");
