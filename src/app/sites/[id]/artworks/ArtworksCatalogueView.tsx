@@ -479,11 +479,59 @@ export default function ArtworksCatalogueView({
             how the whole catalogue displays. All/Available/Sold moved
             here (2026-09-07, direct request) — in line with the
             "Artwork Catalogue" title, rather than sitting in the
-            filter row below. */}
+            filter row below. Order within this cluster (2026-09-09
+            correction) — All/Available/Sold, then Export PDF/Import
+            from CSV/Tile-List/Per row, matching the design mockup;
+            this had been reversed. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
             <div className="flex items-center gap-3">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvailability("");
+                    applyFilters({ availability: "" });
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-sm ${
+                    !availability
+                      ? "bg-neutral-900 text-white"
+                      : "border border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  All
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvailability("AVAILABLE");
+                    applyFilters({ availability: "AVAILABLE" });
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-sm ${
+                    availability === "AVAILABLE"
+                      ? "bg-neutral-900 text-white"
+                      : "border border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  Available
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAvailability("SOLD");
+                    applyFilters({ availability: "SOLD" });
+                  }}
+                  className={`rounded-full px-3 py-1.5 text-sm ${
+                    availability === "SOLD"
+                      ? "bg-neutral-900 text-white"
+                      : "border border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  Sold
+                </button>
+              </div>
+
               <button
                 type="button"
                 onClick={() => setShowExportDialog(true)}
@@ -539,51 +587,6 @@ export default function ArtworksCatalogueView({
                   ))}
                 </div>
               )}
-
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAvailability("");
-                    applyFilters({ availability: "" });
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-sm ${
-                    !availability
-                      ? "bg-neutral-900 text-white"
-                      : "border border-neutral-300 hover:bg-neutral-50"
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAvailability("AVAILABLE");
-                    applyFilters({ availability: "AVAILABLE" });
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-sm ${
-                    availability === "AVAILABLE"
-                      ? "bg-neutral-900 text-white"
-                      : "border border-neutral-300 hover:bg-neutral-50"
-                  }`}
-                >
-                  Available
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAvailability("SOLD");
-                    applyFilters({ availability: "SOLD" });
-                  }}
-                  className={`rounded-full px-3 py-1.5 text-sm ${
-                    availability === "SOLD"
-                      ? "bg-neutral-900 text-white"
-                      : "border border-neutral-300 hover:bg-neutral-50"
-                  }`}
-                >
-                  Sold
-                </button>
-              </div>
             </div>
           </div>
 
