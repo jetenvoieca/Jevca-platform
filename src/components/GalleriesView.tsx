@@ -53,7 +53,10 @@ export default function GalleriesView({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Defaults to "sales" (2026-09-09, direct request) — the sales history
   // is what's checked on opening a gallery day to day; Details (contact
-  // info, address) is looked up far less often.
+  // info, address) is looked up far less often. openRow below (fired
+  // every time a gallery is clicked) resets to this same value too —
+  // this initial useState only covers the very first render, before any
+  // gallery has been selected at all.
   const [detailTab, setDetailTab] = useState<DetailTab>("sales");
   const router = useRouter();
 
@@ -86,7 +89,10 @@ export default function GalleriesView({
     setSelectedDetail(null);
     setSelectedWorkId(null);
     setSelectedWorkDetail(null);
-    setDetailTab("details");
+    // Was resetting to "details" here (2026-09-09 fix) — this ran on
+    // every gallery click and was silently overriding the "sales"
+    // default above, so the panel always opened on Details regardless.
+    setDetailTab("sales");
     setLoading(true);
     getGalleryDetail(customerId).then((detail) => {
       setSelectedDetail(detail);
@@ -476,7 +482,7 @@ export default function GalleriesView({
                               type="button"
                               onClick={handleStartSale}
                               disabled={workPending || !saleTotalAmount.trim()}
-                              className="rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                              className="rounded-md bg-neutral-900 px-3 py-[4px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                             >
                               Start sale
                             </button>
@@ -521,7 +527,7 @@ export default function GalleriesView({
                   <button
                     type="button"
                     onClick={() => setDetailTab("details")}
-                    className={`px-3 py-[3px] font-medium ${
+                    className={`px-3 py-[2px] font-medium ${
                       detailTab === "details"
                         ? "bg-neutral-900 text-white"
                         : "bg-white text-neutral-600 hover:bg-neutral-50"
@@ -532,7 +538,7 @@ export default function GalleriesView({
                   <button
                     type="button"
                     onClick={() => setDetailTab("sales")}
-                    className={`px-3 py-[3px] font-medium ${
+                    className={`px-3 py-[2px] font-medium ${
                       detailTab === "sales"
                         ? "bg-neutral-900 text-white"
                         : "bg-white text-neutral-600 hover:bg-neutral-50"
@@ -544,7 +550,7 @@ export default function GalleriesView({
                 <button
                   type="button"
                   onClick={() => setConfirmingDelete(true)}
-                  className="rounded-md border border-red-200 px-2 py-[3px] text-xs text-red-600 hover:bg-red-50"
+                  className="rounded-md border border-red-200 px-2 py-[2px] text-xs text-red-600 hover:bg-red-50"
                 >
                   Delete
                 </button>
@@ -554,7 +560,7 @@ export default function GalleriesView({
                     setSelectedId(null);
                     setSelectedDetail(null);
                   }}
-                  className="rounded-md border border-neutral-300 px-2 py-[3px] text-xs hover:bg-neutral-50"
+                  className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
                 >
                   Close
                 </button>
@@ -775,7 +781,7 @@ export default function GalleriesView({
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="mb-3 w-full rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-medium text-white hover:bg-neutral-700"
+            className="mb-3 w-full rounded-md bg-neutral-900 px-3 py-[4px] text-sm font-medium text-white hover:bg-neutral-700"
           >
             + Add Gallery
           </button>
@@ -814,7 +820,7 @@ export default function GalleriesView({
             <div className="flex gap-2">
               <button
                 type="submit"
-                className="flex-1 rounded-md bg-neutral-900 px-2 py-[3px] text-xs font-medium text-white hover:bg-neutral-700"
+                className="flex-1 rounded-md bg-neutral-900 px-2 py-[2px] text-xs font-medium text-white hover:bg-neutral-700"
               >
                 Add
               </button>
@@ -824,7 +830,7 @@ export default function GalleriesView({
                   setAdding(false);
                   setAddError(null);
                 }}
-                className="rounded-md border border-neutral-300 px-2 py-[3px] text-xs hover:bg-white"
+                className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-white"
               >
                 Cancel
               </button>
@@ -842,7 +848,7 @@ export default function GalleriesView({
                   <button
                     type="button"
                     onClick={() => openRow(g.id)}
-                    className={`flex w-full items-center justify-between gap-2 px-4 py-[9px] text-left text-sm ${
+                    className={`flex w-full items-center justify-between gap-2 px-4 py-[7px] text-left text-sm ${
                       selectedId === g.id
                         ? "bg-[#E7E7E7] text-neutral-900"
                         : "text-neutral-800 hover:bg-neutral-50"
