@@ -3,34 +3,11 @@ import AppShell from "@/components/AppShell";
 import { db } from "@/lib/db";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import ConsolidatedSalesView, {
+  type ConsolidatedMonthGroup,
+} from "@/components/ConsolidatedSalesView";
 
 export const dynamic = "force-dynamic";
-
-type SaleRow = {
-  siteId: string | null;
-  artistName: string;
-  artworkTitle: string;
-  buyerName: string | null;
-  grossAmount: number;
-  netAmount: number;
-  commissionPercent: number | null;
-  currency: string;
-  status: "ACTIVE" | "COMPLETED" | "ABANDONED";
-  createdAt: Date;
-};
-
-type MonthGroup = {
-  key: string;
-  label: string;
-  totalsByCurrency: Record<string, number>;
-  rows: SaleRow[];
-};
-
-const STATUS_STYLE: Record<SaleRow["status"], string> = {
-  COMPLETED: "text-green-600",
-  ABANDONED: "text-neutral-400",
-  ACTIVE: "text-amber-600",
-};
 
 export default async function ConsolidatedSalesPage() {
   const [purchases, openAlerts] = await Promise.all([
@@ -41,6 +18,7 @@ export default async function ConsolidatedSalesPage() {
     db.purchase.findMany({
       where: { status: { not: "ABANDONED" } },
       select: {
+        id: true,
         totalAmount: true,
         commissionPercent: true,
         currency: true,
@@ -49,9 +27,11 @@ export default async function ConsolidatedSalesPage() {
         createdAt: true,
         artwork: {
           select: {
+            id: true,
             presentationTitle: true,
             artist: {
               select: {
+                id: true,
                 name: true,
                 sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
               },
@@ -65,7 +45,7 @@ export default async function ConsolidatedSalesPage() {
     getOpenAlerts(),
   ]);
 
-  const months = new Map<string, MonthGroup>();
+  const months = new Map<string, ConsolidatedMonthGroup>();
   for (const p of purchases) {
     const key = `${p.createdAt.getFullYear()}-${String(p.createdAt.getMonth() + 1).padStart(2, "0")}`;
     if (!months.has(key)) {
@@ -87,6 +67,9 @@ export default async function ConsolidatedSalesPage() {
     const netAmount = commissionPercent ? grossAmount * (1 - commissionPercent / 100) : grossAmount;
     group.totalsByCurrency[p.currency] = (group.totalsByCurrency[p.currency] || 0) + netAmount;
     group.rows.push({
+      purchaseId: p.id,
+      artworkId: p.artwork.id,
+      artistId: p.artwork.artist.id,
       siteId: p.artwork.artist.sites[0]?.id || null,
       artistName: p.artwork.artist.name,
       artworkTitle: p.artwork.presentationTitle,
@@ -96,7 +79,7 @@ export default async function ConsolidatedSalesPage() {
       commissionPercent,
       currency: p.currency,
       status: p.status,
-      createdAt: p.createdAt,
+      createdAt: p.createdAt.toISOString(),
     });
   }
   const sortedMonths = Array.from(months.values()).sort((a, b) => (a.key < b.key ? 1 : -1));
@@ -147,74 +130,7 @@ export default async function ConsolidatedSalesPage() {
                 </p>
               </div>
 
-              <div className="space-y-3">
-                {sortedMonths.map((g) => (
-                  <details
-                    key={g.key}
-                    className="group rounded-lg border border-neutral-200 bg-white"
-                  >
-                    <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3">
-                      <span className="text-sm font-medium text-neutral-900">{g.label}</span>
-                      <span className="flex items-center gap-3">
-                        <span className="text-sm text-neutral-600">
-                          {Object.entries(g.totalsByCurrency)
-                            .map(([currency, total]) => `${currency} ${total.toFixed(2)}`)
-                            .join("  ·  ")}
-                        </span>
-                        <span className="text-xs text-neutral-400">
-                          {g.rows.length} sale{g.rows.length === 1 ? "" : "s"}
-                        </span>
-                      </span>
-                    </summary>
-                    <table className="w-full table-fixed border-t border-neutral-100 text-xs">
-                      <thead className="bg-neutral-50 text-left text-neutral-400">
-                        <tr>
-                          <th className="w-[18%] px-4 py-1.5 font-medium">Artist</th>
-                          <th className="w-[24%] px-4 py-1.5 font-medium">Artwork</th>
-                          <th className="w-[18%] px-4 py-1.5 font-medium">Buyer</th>
-                          <th className="w-[14%] px-4 py-1.5 font-medium">Date</th>
-                          <th className="w-[16%] px-4 py-1.5 font-medium">Amount</th>
-                          <th className="w-[10%] px-4 py-1.5 font-medium">Status</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {g.rows.map((r, i) => (
-                          <tr key={i} className="border-t border-neutral-100">
-                            <td className="truncate px-4 py-1.5">
-                              {r.siteId ? (
-                                <Link href={`/sites/${r.siteId}/sales`} className="hover:underline">
-                                  {r.artistName}
-                                </Link>
-                              ) : (
-                                r.artistName
-                              )}
-                            </td>
-                            <td className="truncate px-4 py-1.5">{r.artworkTitle}</td>
-                            <td className="truncate px-4 py-1.5 text-neutral-500">
-                              {r.buyerName || "—"}
-                            </td>
-                            <td className="px-4 py-1.5">
-                              {r.createdAt.toLocaleDateString("en-GB")}
-                            </td>
-                            <td className="px-4 py-1.5">
-                              {r.currency} {r.netAmount.toFixed(2)}
-                              {r.commissionPercent != null && (
-                                <span className="ml-1 text-neutral-400">
-                                  (net of {r.commissionPercent}%, gross {r.currency}{" "}
-                                  {r.grossAmount.toFixed(2)})
-                                </span>
-                              )}
-                            </td>
-                            <td className={`px-4 py-1.5 ${STATUS_STYLE[r.status]}`}>
-                              {r.status.charAt(0) + r.status.slice(1).toLowerCase()}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </details>
-                ))}
-              </div>
+              <ConsolidatedSalesView months={sortedMonths} />
             </>
           )}
         </div>
