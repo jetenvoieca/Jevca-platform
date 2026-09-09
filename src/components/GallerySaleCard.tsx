@@ -17,7 +17,7 @@ const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
 const labelCls = "mb-1 block text-xs text-neutral-500";
 const actionButtonCls =
-  "rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50";
+  "rounded-md bg-neutral-900 px-3 py-[7px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50";
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
@@ -372,7 +372,7 @@ export default function GallerySaleCard({
                   type="button"
                   onClick={handleConfirmMarkPaid}
                   disabled={isPending || !paidMethod}
-                  className="flex-1 rounded-md bg-neutral-900 px-3 py-2 text-sm font-semibold uppercase tracking-wide text-white hover:bg-neutral-700 disabled:opacity-50"
+                  className="flex-1 rounded-md bg-neutral-900 px-3 py-[7px] text-sm font-semibold uppercase tracking-wide text-white hover:bg-neutral-700 disabled:opacity-50"
                 >
                   Paid
                 </button>
@@ -380,7 +380,7 @@ export default function GallerySaleCard({
                   type="button"
                   onClick={() => setShowMarkPaidForm(false)}
                   disabled={isPending}
-                  className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-white disabled:opacity-50"
+                  className="rounded-md border border-neutral-300 px-3 py-[7px] text-sm hover:bg-white disabled:opacity-50"
                 >
                   Cancel
                 </button>
@@ -408,7 +408,7 @@ export default function GallerySaleCard({
                   <button
                     type="button"
                     onClick={() => handleCopyPaymentLink(purchase.stripePaymentLinkUrl!)}
-                    className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                    className="shrink-0 rounded-md border border-neutral-300 px-2 py-[3px] text-xs hover:bg-neutral-50"
                   >
                     {linkCopied ? "Copied" : "Copy"}
                   </button>
@@ -419,7 +419,7 @@ export default function GallerySaleCard({
                 type="button"
                 onClick={handleGetPaymentLink}
                 disabled={isPending}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                className="rounded-md border border-neutral-300 px-3 py-[5px] text-sm hover:bg-neutral-50 disabled:opacity-50"
               >
                 {isPending ? "Generating…" : "Get payment link"}
               </button>

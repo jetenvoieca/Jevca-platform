@@ -51,7 +51,10 @@ export default function GalleriesView({
   const [addError, setAddError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
-  const [detailTab, setDetailTab] = useState<DetailTab>("details");
+  // Defaults to "sales" (2026-09-09, direct request) — the sales history
+  // is what's checked on opening a gallery day to day; Details (contact
+  // info, address) is looked up far less often.
+  const [detailTab, setDetailTab] = useState<DetailTab>("sales");
   const router = useRouter();
 
   // ---- Consigned Works control panel (2026-08-31, Part Two) ----
@@ -303,101 +306,95 @@ export default function GalleriesView({
   return (
     <div className="flex h-full overflow-hidden">
       {/* ---- Consigned Works (left) ---- */}
-      <div className="flex-1 overflow-y-auto p-6">
-        <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Consigned Works</h1>
+      <div className="flex flex-1 flex-col overflow-hidden p-6">
+        <h1 className="mb-4 text-2xl font-semibold text-neutral-900">Consigned Works</h1>
         {!selectedDetail ? (
           <p className="text-sm text-neutral-400">
             Select a gallery to see the works currently consigned there.
           </p>
         ) : (
-          <>
-            <p className="mb-4 text-sm text-neutral-500">
-              At {selectedDetail.name} — matched from each artwork&apos;s Location field in the
-              Artwork Catalogue, so an artwork shows up here the moment its Location is set to
-              this gallery&apos;s name.
-            </p>
-            <div className="flex gap-6">
-              <div className="flex-1">
-                {selectedDetail.consignedWorks.length === 0 ? (
-                  <p className="text-sm text-neutral-400">
-                    Nothing currently has its Location set to this gallery.
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-3">
-                    {selectedDetail.consignedWorks.map((w) => (
-                      <button
-                        key={w.id}
-                        type="button"
-                        onClick={() => openWork(w.id)}
-                        className={`w-28 shrink-0 rounded-lg border-2 p-1 text-left ${
-                          selectedWorkId === w.id
-                            ? "border-neutral-900"
-                            : "border-transparent hover:border-neutral-200"
-                        }`}
-                      >
-                        <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
-                          {w.imageUrl ? (
-                            // eslint-disable-next-line @next/next/no-img-element
-                            <img
-                              src={w.imageUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                            />
-                          ) : null}
-                          {/* SOLD ribbon — only for a completed gallery
-                              sale, not just an active (UNPAID) one. */}
-                          {soldWorkIds.has(w.id) && (
-                            <span className="absolute right-1 top-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                              Sold
-                            </span>
-                          )}
-                        </div>
-                        <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
-                          {w.presentationTitle}
-                        </p>
-                        <p className="text-xs text-neutral-400">
-                          {w.presentationPrice ? `£${w.presentationPrice}` : "—"}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-
-              {selectedWorkId && (
-                <div className="w-80 shrink-0 rounded-lg border border-neutral-200 p-4">
-                  {workLoading || !selectedWorkDetail ? (
-                    <p className="text-sm text-neutral-400">Loading…</p>
-                  ) : (
-                    <>
-                      <div className="mb-1 flex items-start justify-between gap-2">
-                        <p className="text-sm font-semibold text-neutral-900">
-                          {selectedWorkDetail.presentationTitle}
-                        </p>
-                        {(selectedWorkDetail.type || selectedWorkDetail.edition) && (
-                          <p className="shrink-0 text-xs text-neutral-400">
-                            {selectedWorkDetail.type}
-                            {selectedWorkDetail.type && selectedWorkDetail.edition ? " - " : ""}
-                            {selectedWorkDetail.edition}
-                          </p>
+          <div className="flex flex-1 gap-6 overflow-hidden">
+            <div className="flex-1 overflow-y-auto">
+              {selectedDetail.consignedWorks.length === 0 ? (
+                <p className="text-sm text-neutral-400">
+                  Nothing currently has its Location set to this gallery.
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-3">
+                  {selectedDetail.consignedWorks.map((w) => (
+                    <button
+                      key={w.id}
+                      type="button"
+                      onClick={() => openWork(w.id)}
+                      className={`w-28 shrink-0 rounded-lg border-2 p-1 text-left ${
+                        selectedWorkId === w.id
+                          ? "border-neutral-900"
+                          : "border-transparent hover:border-neutral-200"
+                      }`}
+                    >
+                      <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
+                        {w.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img
+                            src={w.imageUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                          />
+                        ) : null}
+                        {/* SOLD ribbon — only for a completed gallery
+                            sale, not just an active (UNPAID) one. */}
+                        {soldWorkIds.has(w.id) && (
+                          <span className="absolute right-1 top-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                            Sold
+                          </span>
                         )}
                       </div>
-                      <dl className="mb-4 space-y-1 text-xs text-neutral-500">
-                        {selectedWorkDetail.size && (
-                          <div>
-                            <dt className="inline text-neutral-400">Size: </dt>
-                            <dd className="inline">{selectedWorkDetail.size}</dd>
-                          </div>
-                        )}
-                        {selectedWorkDetail.presentationPrice && (
-                          <div>
-                            <dt className="inline text-neutral-400">Price: </dt>
-                            <dd className="inline">£{selectedWorkDetail.presentationPrice}</dd>
-                          </div>
-                        )}
-                      </dl>
+                      <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
+                        {w.presentationTitle}
+                      </p>
+                      <p className="text-xs text-neutral-400">
+                        {w.presentationPrice ? `£${w.presentationPrice}` : "—"}
+                      </p>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
 
-                      {activeWorkPurchase ? (
+            {selectedWorkId && (
+              <div className="w-80 shrink-0 overflow-y-auto rounded-lg border border-neutral-200 p-4">
+                {workLoading || !selectedWorkDetail ? (
+                  <p className="text-sm text-neutral-400">Loading…</p>
+                ) : (
+                  <>
+                    <div className="mb-1 flex items-start justify-between gap-2">
+                      <p className="text-sm font-semibold text-neutral-900">
+                        {selectedWorkDetail.presentationTitle}
+                      </p>
+                      {(selectedWorkDetail.type || selectedWorkDetail.edition) && (
+                        <p className="shrink-0 text-xs text-neutral-400">
+                          {selectedWorkDetail.type}
+                          {selectedWorkDetail.type && selectedWorkDetail.edition ? " - " : ""}
+                          {selectedWorkDetail.edition}
+                        </p>
+                      )}
+                    </div>
+                    <dl className="mb-4 space-y-1 text-xs text-neutral-500">
+                      {selectedWorkDetail.size && (
+                        <div>
+                          <dt className="inline text-neutral-400">Size: </dt>
+                          <dd className="inline">{selectedWorkDetail.size}</dd>
+                        </div>
+                      )}
+                      {selectedWorkDetail.presentationPrice && (
+                        <div>
+                          <dt className="inline text-neutral-400">Price: </dt>
+                          <dd className="inline">£{selectedWorkDetail.presentationPrice}</dd>
+                        </div>
+                      )}
+                    </dl>
+
+                    {activeWorkPurchase ? (
                         activeWorkPurchase.channel === "GALLERY" ? (
                           <GallerySaleCard
                             purchase={activeWorkPurchase}
@@ -479,7 +476,7 @@ export default function GalleriesView({
                               type="button"
                               onClick={handleStartSale}
                               disabled={workPending || !saleTotalAmount.trim()}
-                              className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                              className="rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                             >
                               Start sale
                             </button>
@@ -500,27 +497,31 @@ export default function GalleriesView({
                   )}
                 </div>
               )}
-            </div>
-          </>
+          </div>
         )}
       </div>
 
       {/* ---- Gallery details / sales (middle) ---- */}
-      <div className="w-[480px] shrink-0 overflow-y-auto border-l border-neutral-200 p-6">
+      {/* Headers never scroll (2026-09-09, general design instruction) —
+          this panel used to be one big overflow-y-auto block, so the
+          name/tabs/Delete/Close row scrolled away with the content
+          beneath it. Now that row is fixed (shrink-0) and only the tab
+          content underneath scrolls. */}
+      <div className="flex w-[480px] shrink-0 flex-col overflow-hidden border-l border-neutral-200 p-6">
         {!selectedId ? (
           <p className="text-sm text-neutral-400">Select a gallery to see its details.</p>
         ) : loading || !selectedDetail ? (
           <p className="text-sm text-neutral-400">Loading…</p>
         ) : (
-          <div>
-            <div className="mb-4 flex items-center justify-between">
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="mb-4 flex shrink-0 items-center justify-between">
               <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
               <div className="flex items-center gap-3">
                 <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
                   <button
                     type="button"
                     onClick={() => setDetailTab("details")}
-                    className={`px-3 py-1 font-medium ${
+                    className={`px-3 py-[3px] font-medium ${
                       detailTab === "details"
                         ? "bg-neutral-900 text-white"
                         : "bg-white text-neutral-600 hover:bg-neutral-50"
@@ -531,7 +532,7 @@ export default function GalleriesView({
                   <button
                     type="button"
                     onClick={() => setDetailTab("sales")}
-                    className={`px-3 py-1 font-medium ${
+                    className={`px-3 py-[3px] font-medium ${
                       detailTab === "sales"
                         ? "bg-neutral-900 text-white"
                         : "bg-white text-neutral-600 hover:bg-neutral-50"
@@ -543,7 +544,7 @@ export default function GalleriesView({
                 <button
                   type="button"
                   onClick={() => setConfirmingDelete(true)}
-                  className="rounded-md border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50"
+                  className="rounded-md border border-red-200 px-2 py-[3px] text-xs text-red-600 hover:bg-red-50"
                 >
                   Delete
                 </button>
@@ -553,13 +554,14 @@ export default function GalleriesView({
                     setSelectedId(null);
                     setSelectedDetail(null);
                   }}
-                  className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                  className="rounded-md border border-neutral-300 px-2 py-[3px] text-xs hover:bg-neutral-50"
                 >
                   Close
                 </button>
               </div>
             </div>
 
+            <div className="flex-1 overflow-y-auto">
             {detailTab === "sales" ? (
               <div>
                 <p className="mb-4 text-sm text-neutral-500">{salesSummary}</p>
@@ -758,17 +760,22 @@ export default function GalleriesView({
                 {savedField && <p className="text-xs text-green-600">Saved</p>}
               </div>
             )}
+            </div>
           </div>
         )}
       </div>
 
       {/* ---- Gallery list (right) ---- */}
-      <div className="flex h-full w-[300px] shrink-0 flex-col overflow-y-auto border-l border-neutral-200">
+      {/* overflow-hidden, not overflow-y-auto — headers never scroll
+          (2026-09-09). The "+ Add Gallery"/search block below is fixed;
+          only the list itself (its own flex-1 overflow-y-auto further
+          down) scrolls. */}
+      <div className="flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-l border-neutral-200">
         <div className="border-b border-neutral-200 p-4">
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="mb-3 w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+            className="mb-3 w-full rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-medium text-white hover:bg-neutral-700"
           >
             + Add Gallery
           </button>
@@ -807,7 +814,7 @@ export default function GalleriesView({
             <div className="flex gap-2">
               <button
                 type="submit"
-                className="flex-1 rounded-md bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700"
+                className="flex-1 rounded-md bg-neutral-900 px-2 py-[3px] text-xs font-medium text-white hover:bg-neutral-700"
               >
                 Add
               </button>
@@ -817,7 +824,7 @@ export default function GalleriesView({
                   setAdding(false);
                   setAddError(null);
                 }}
-                className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-white"
+                className="rounded-md border border-neutral-300 px-2 py-[3px] text-xs hover:bg-white"
               >
                 Cancel
               </button>
@@ -835,7 +842,7 @@ export default function GalleriesView({
                   <button
                     type="button"
                     onClick={() => openRow(g.id)}
-                    className={`flex w-full items-center justify-between gap-2 px-4 py-2.5 text-left text-sm ${
+                    className={`flex w-full items-center justify-between gap-2 px-4 py-[9px] text-left text-sm ${
                       selectedId === g.id
                         ? "bg-[#E7E7E7] text-neutral-900"
                         : "text-neutral-800 hover:bg-neutral-50"
