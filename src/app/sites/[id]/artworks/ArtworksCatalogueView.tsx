@@ -468,7 +468,13 @@ export default function ArtworksCatalogueView({
 
   return (
     <div className="flex h-full flex-col">
-      <div className="shrink-0 px-6 pt-4">
+      {/* pr-[504px] (not px-6 on the right) — reserves exactly the same
+          width as the detail panel + gap below (480px + gap-6's 24px),
+          so this header's content lines up with the grid column's own
+          right edge rather than the full page width. Without this the
+          button row ran past where the grid actually ends, out over
+          the detail panel's space (2026-09-09, direct request). */}
+      <div className="shrink-0 pl-6 pr-[504px] pt-4">
         {/* Row 1: title + view controls, together since they both govern
             how the whole catalogue displays. All/Available/Sold moved
             here (2026-09-07, direct request) — in line with the
