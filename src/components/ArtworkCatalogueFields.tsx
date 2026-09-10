@@ -84,11 +84,13 @@ export default function ArtworkCatalogueFields({
   // (availabilityOverride, below) actually sits further down the form.
   // Omitted entirely by any caller that doesn't pass it (Hopper).
   afterLocation?: React.ReactNode;
-  // Replaces the default Availability <select> for non-edition types
-  // only (2026-09-10) — the Catalogue tab uses this to swap in its own
-  // Available/SOLD toggle; Hopper leaves it unset and keeps the plain
-  // select. Edition types are unaffected either way — they always keep
-  // tracking availability via Available (qty) instead, same as before.
+  // Replaces the default Availability <select> (2026-09-10) — the
+  // Catalogue tab uses this to swap in its own Available/SOLD toggle.
+  // Now shown for every Type, editions included (2026-09-10 correction
+  // — editions previously never got any Availability control at all,
+  // relying on Available (qty) alone; direct request to show the
+  // toggle everywhere instead). Hopper leaves this unset and keeps the
+  // old per-Type default behaviour, below.
   availabilityOverride?: React.ReactNode;
 }) {
   const [typeValue, setTypeValue] = useState(values.type);
@@ -239,8 +241,15 @@ export default function ArtworkCatalogueFields({
         />
       </div>
       {children}
-      {!isEditionType ? (
-        (availabilityOverride ?? (
+      {/* availabilityOverride now shows for every Type, editions
+          included (2026-09-10, direct request) — previously editions
+          never got an Availability control at all here. Falls back to
+          the old per-Type behaviour (plain select for non-editions,
+          hidden input for editions) only when no override is passed at
+          all — i.e. only for Hopper's quick-add, which hasn't opted
+          into the new toggle. */}
+      {availabilityOverride ??
+        (!isEditionType ? (
           <div>
             <label className={labelCls}>Availability</label>
             <select
@@ -254,15 +263,11 @@ export default function ArtworkCatalogueFields({
               <option value="SOLD">Sold</option>
             </select>
           </div>
-        ))
-      ) : (
-        // Editions track availability via the numeric Available (qty)
-        // field instead — this status only makes sense for a
-        // one-of-a-kind piece. Required/non-nullable in the database,
-        // so preserved via hidden input rather than left out of the
-        // submitted form.
-        <input type="hidden" name="availability" value={values.availability} />
-      )}
+        ) : (
+          // Required/non-nullable in the database, so still preserved
+          // via hidden input when no override is in play (Hopper).
+          <input type="hidden" name="availability" value={values.availability} />
+        ))}
       <div className="col-span-2">
         <label className={labelCls}>
           Studio notes <span className="font-normal text-neutral-400">(private)</span>
