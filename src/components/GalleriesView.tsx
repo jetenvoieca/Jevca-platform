@@ -68,6 +68,12 @@ export default function GalleriesView({
   // shows instead (via GallerySaleCard, 2026-09-03). Kept as a separate
   // fetch/loading pair from the gallery's own selectedDetail above,
   // since they're genuinely different records (Customer vs Artwork).
+  //
+  // Shown in its own modal (2026-09-10) — was an inline w-80 panel next
+  // to the grid, but that meant the grid itself had to shrink to make
+  // room for it every time a work was open. As a modal it can be as
+  // roomy as it needs without stealing grid width, and the grid stays
+  // full-width whether or not a work is currently selected.
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [selectedWorkDetail, setSelectedWorkDetail] = useState<ArtworkDetail | null>(null);
   const [workLoading, setWorkLoading] = useState(false);
@@ -312,10 +318,10 @@ export default function GalleriesView({
   return (
     <div className="flex h-full overflow-hidden">
       {/* ---- Consigned Works (left) ---- */}
-      {/* Now the only column besides the gallery list (2026-09-10) —
-          Gallery details/Sales moved out into its own modal below, so
-          this panel simply gets whatever width is left rather than
-          splitting a fixed 480px column with it. */}
+      {/* Grid only now (2026-09-10) — the per-work detail/action panel
+          moved into its own modal below, so the grid no longer has to
+          give up a w-80 slice of its own width whenever a work is
+          selected; it's always full width. */}
       <div className="flex flex-1 flex-col overflow-hidden p-6">
         <h1 className="mb-4 text-2xl font-semibold text-neutral-900">Consigned Works</h1>
         {!selectedDetail ? (
@@ -323,199 +329,324 @@ export default function GalleriesView({
             Select a gallery to see the works currently consigned there.
           </p>
         ) : (
-          <div className="flex flex-1 gap-6 overflow-hidden">
-            <div className="flex-1 overflow-y-auto">
-              {selectedDetail.consignedWorks.length === 0 ? (
-                <p className="text-sm text-neutral-400">
-                  Nothing currently has its Location set to this gallery.
-                </p>
-              ) : (
-                <div className="flex flex-wrap gap-3">
-                  {selectedDetail.consignedWorks.map((w) => (
-                    <button
-                      key={w.id}
-                      type="button"
-                      onClick={() => openWork(w.id)}
-                      className={`w-28 shrink-0 rounded-lg border-2 p-1 text-left ${
-                        selectedWorkId === w.id
-                          ? "border-neutral-900"
-                          : "border-transparent hover:border-neutral-200"
-                      }`}
-                    >
-                      <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
-                        {w.imageUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={w.imageUrl}
-                            alt=""
-                            className="h-full w-full object-cover"
-                          />
-                        ) : null}
-                        {/* SOLD ribbon — only for a completed gallery
-                            sale, not just an active (UNPAID) one. */}
-                        {soldWorkIds.has(w.id) && (
-                          <span className="absolute right-1 top-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                            Sold
-                          </span>
-                        )}
-                      </div>
-                      <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
-                        {w.presentationTitle}
-                      </p>
-                      <p className="text-xs text-neutral-400">
-                        {w.presentationPrice ? `£${w.presentationPrice}` : "—"}
-                      </p>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {selectedWorkId && (
-              <div className="w-80 shrink-0 overflow-y-auto rounded-lg border border-neutral-200 p-4">
-                {workLoading || !selectedWorkDetail ? (
-                  <p className="text-sm text-neutral-400">Loading…</p>
-                ) : (
-                  <>
-                    <div className="mb-1 flex items-start justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-neutral-900">
-                          {selectedWorkDetail.presentationTitle}
-                        </p>
-                        {/* Catalogue number (2026-09-10, direct request)
-                            — same "Catalogue #…" wording ArtworkDetailPanel
-                            already uses, so it reads as the same field
-                            wherever it shows up. */}
-                        <p className="text-xs text-neutral-400">
-                          Catalogue #{selectedWorkDetail.catalogueNumber}
-                        </p>
-                      </div>
-                      {(selectedWorkDetail.type || selectedWorkDetail.edition) && (
-                        <p className="shrink-0 text-xs text-neutral-400">
-                          {selectedWorkDetail.type}
-                          {selectedWorkDetail.type && selectedWorkDetail.edition ? " - " : ""}
-                          {selectedWorkDetail.edition}
-                        </p>
+          <div className="flex-1 overflow-y-auto">
+            {selectedDetail.consignedWorks.length === 0 ? (
+              <p className="text-sm text-neutral-400">
+                Nothing currently has its Location set to this gallery.
+              </p>
+            ) : (
+              <div className="flex flex-wrap gap-3">
+                {selectedDetail.consignedWorks.map((w) => (
+                  <button
+                    key={w.id}
+                    type="button"
+                    onClick={() => openWork(w.id)}
+                    className={`w-28 shrink-0 rounded-lg border-2 p-1 text-left ${
+                      selectedWorkId === w.id
+                        ? "border-neutral-900"
+                        : "border-transparent hover:border-neutral-200"
+                    }`}
+                  >
+                    <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
+                      {w.imageUrl ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={w.imageUrl} alt="" className="h-full w-full object-cover" />
+                      ) : null}
+                      {/* SOLD ribbon — only for a completed gallery
+                          sale, not just an active (UNPAID) one. */}
+                      {soldWorkIds.has(w.id) && (
+                        <span className="absolute right-1 top-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
+                          Sold
+                        </span>
                       )}
                     </div>
-                    <dl className="mb-4 space-y-1 text-xs text-neutral-500">
-                      {selectedWorkDetail.size && (
-                        <div>
-                          <dt className="inline text-neutral-400">Size: </dt>
-                          <dd className="inline">{selectedWorkDetail.size}</dd>
-                        </div>
-                      )}
-                      {selectedWorkDetail.presentationPrice && (
-                        <div>
-                          <dt className="inline text-neutral-400">Price: </dt>
-                          <dd className="inline">£{selectedWorkDetail.presentationPrice}</dd>
-                        </div>
-                      )}
-                    </dl>
+                    <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
+                      {w.presentationTitle}
+                    </p>
+                    <p className="text-xs text-neutral-400">
+                      {w.presentationPrice ? `£${w.presentationPrice}` : "—"}
+                    </p>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
-                    {activeWorkPurchase ? (
-                        activeWorkPurchase.channel === "GALLERY" ? (
-                          <GallerySaleCard
-                            purchase={activeWorkPurchase}
-                            siteId={siteId}
-                            paymentMethods={paymentMethods}
-                            onChanged={refreshAfterSaleChange}
-                          />
-                        ) : (
-                          <p className="text-sm text-neutral-500">
-                            This artwork already has an active Stripe sale in progress — manage
-                            it from the Artwork Catalogue&apos;s Payment tab.
-                          </p>
-                        )
-                      ) : completedGallerySale ? (
-                        <GallerySaleCard
-                          purchase={completedGallerySale}
-                          siteId={siteId}
-                          paymentMethods={paymentMethods}
-                          onChanged={refreshAfterSaleChange}
-                        />
-                      ) : (
-                        <div>
-                          <div className="grid grid-cols-2 gap-2">
-                            <div>
-                              <label className={labelCls}>Sale price</label>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={saleTotalAmount}
-                                onChange={(e) => setSaleTotalAmount(e.target.value)}
-                                placeholder="e.g. 250.00"
-                                className={inputCls}
-                              />
-                            </div>
-                            <div>
-                              <label className={labelCls}>Currency</label>
-                              <select
-                                value={saleCurrency}
-                                onChange={(e) => setSaleCurrency(e.target.value)}
-                                className={inputCls}
-                              >
-                                <option value="GBP">GBP</option>
-                                <option value="EUR">EUR</option>
-                              </select>
-                            </div>
-                            <div>
-                              <label className={labelCls}>Commission %</label>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={saleCommission}
-                                onChange={(e) => setSaleCommission(e.target.value)}
-                                placeholder="e.g. 45"
-                                className={inputCls}
-                              />
-                            </div>
-                            <div>
-                              <label className={labelCls}>Net owed</label>
-                              <input
-                                type="text"
-                                readOnly
-                                value={saleAmountNum ? formatMoney(saleNetOwed.toFixed(2), saleCurrency) : "—"}
-                                className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
-                              />
-                            </div>
-                          </div>
-                          <div className="mt-2">
-                            <label className={labelCls}>Date</label>
-                            <input
-                              type="date"
-                              value={saleDate}
-                              onChange={(e) => setSaleDate(e.target.value)}
-                              className={inputCls}
-                            />
-                          </div>
-                          {saleError && <p className="mt-2 text-xs text-red-600">{saleError}</p>}
-                          <div className="mt-3">
-                            <button
-                              type="button"
-                              onClick={handleStartSale}
-                              disabled={workPending || !saleTotalAmount.trim()}
-                              className="rounded-md bg-neutral-900 px-3 py-[4px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-                            >
-                              Start sale
-                            </button>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedWorkId(null);
-                              setSelectedWorkDetail(null);
-                            }}
-                            className="mt-3 text-sm text-neutral-500 hover:underline"
-                          >
-                            Close
-                          </button>
-                        </div>
-                      )}
-                    </>
-                  )}
+      {/* ---- Gallery details / sales (middle) ---- */}
+      {/* Back to a permanent column (2026-09-10) — stays put here, just
+          widened 25% (600px, up from 480px) to leave room for whatever
+          gets added next. Headers never scroll (2026-09-09) — the
+          name/tabs/Delete/Close row is fixed (shrink-0) and only the
+          tab content underneath scrolls. */}
+      <div className="flex w-[600px] shrink-0 flex-col overflow-hidden border-l border-neutral-200 p-6">
+        {!selectedId ? (
+          <p className="text-sm text-neutral-400">Select a gallery to see its details.</p>
+        ) : loading || !selectedDetail ? (
+          <p className="text-sm text-neutral-400">Loading…</p>
+        ) : (
+          <div className="flex flex-1 flex-col overflow-hidden">
+            <div className="mb-4 flex shrink-0 items-center justify-between">
+              <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
+              <div className="flex items-center gap-3">
+                <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab("details")}
+                    className={`px-3 py-[2px] font-medium ${
+                      detailTab === "details"
+                        ? "bg-neutral-900 text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    Details
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDetailTab("sales")}
+                    className={`px-3 py-[2px] font-medium ${
+                      detailTab === "sales"
+                        ? "bg-neutral-900 text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    Sales
+                  </button>
                 </div>
-              )}
+                <button
+                  type="button"
+                  onClick={() => setConfirmingDelete(true)}
+                  className="rounded-md border border-red-200 px-2 py-[2px] text-xs text-red-600 hover:bg-red-50"
+                >
+                  Delete
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedId(null);
+                    setSelectedDetail(null);
+                  }}
+                  className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+            {detailTab === "sales" ? (
+              <div>
+                <p className="mb-4 text-sm text-neutral-500">{salesSummary}</p>
+                <div className="overflow-hidden rounded-lg border border-neutral-200">
+                  {/* table-fixed + explicit column widths (2026-09-10) —
+                      table-auto let a long artwork title grow the
+                      Artwork column and push Date off the visible edge
+                      of this panel. Artwork now truncates within its own
+                      reserved width instead, so Status/Amount/Date
+                      always stay on screen regardless of title length
+                      or window size. */}
+                  <table className="w-full table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-[42%]" />
+                      <col className="w-[20%]" />
+                      <col className="w-[19%]" />
+                      <col className="w-[19%]" />
+                    </colgroup>
+                    <thead>
+                      <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
+                        <th className="px-3 py-2 font-normal">Artwork</th>
+                        <th className="px-3 py-2 font-normal">Status</th>
+                        <th className="px-3 py-2 font-normal">Amount</th>
+                        <th className="px-3 py-2 font-normal">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedDetail.purchases.length === 0 ? (
+                        <tr>
+                          <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
+                            Nothing here yet.
+                          </td>
+                        </tr>
+                      ) : (
+                        selectedDetail.purchases.map((p) => (
+                          // Clicking a row opens that artwork's detail
+                          // modal — same as clicking its thumbnail in
+                          // the Consigned Works grid, just reachable
+                          // from this table too.
+                          <tr
+                            key={p.id}
+                            onClick={() => openWork(p.artworkId)}
+                            className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50"
+                          >
+                            <td className="px-3 py-2">
+                              <div className="flex min-w-0 items-center gap-2">
+                                {p.artworkImageUrl ? (
+                                  // eslint-disable-next-line @next/next/no-img-element
+                                  <img
+                                    src={p.artworkImageUrl}
+                                    alt=""
+                                    className="h-8 w-8 shrink-0 rounded object-cover"
+                                  />
+                                ) : (
+                                  <div className="h-8 w-8 shrink-0 rounded bg-neutral-100" />
+                                )}
+                                <span className="min-w-0 truncate">{p.artworkTitle}</span>
+                              </div>
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2">
+                              <SaleStatusBadge status={p.status} />
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
+                              {formatMoney(p.totalAmount, p.currency)}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
+                              {new Date(p.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <div>
+                  <label className={labelCls}>Gallery name</label>
+                  <input
+                    key={`name-${selectedDetail.id}`}
+                    type="text"
+                    defaultValue={selectedDetail.name}
+                    onBlur={(e) => saveField("name", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>General email</label>
+                  <input
+                    key={`email-${selectedDetail.id}`}
+                    type="email"
+                    defaultValue={selectedDetail.email || ""}
+                    onBlur={(e) => saveField("email", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Phone</label>
+                  <input
+                    key={`phone-${selectedDetail.id}`}
+                    type="text"
+                    defaultValue={selectedDetail.phone || ""}
+                    onBlur={(e) => saveField("phone", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Address</label>
+                  <textarea
+                    key={`address-${selectedDetail.id}`}
+                    defaultValue={selectedDetail.address || ""}
+                    onBlur={(e) => saveField("address", e.target.value.trim())}
+                    disabled={isPending}
+                    rows={2}
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Contact name</label>
+                  <input
+                    key={`contactName-${selectedDetail.id}`}
+                    type="text"
+                    defaultValue={selectedDetail.contactName || ""}
+                    onBlur={(e) => saveField("contactName", e.target.value.trim())}
+                    disabled={isPending}
+                    placeholder="The person you deal with there"
+                    className={inputCls}
+                  />
+                </div>
+                <div>
+                  <label className={labelCls}>Contact email</label>
+                  <input
+                    key={`contactEmail-${selectedDetail.id}`}
+                    type="email"
+                    defaultValue={selectedDetail.contactEmail || ""}
+                    onBlur={(e) => saveField("contactEmail", e.target.value.trim())}
+                    disabled={isPending}
+                    className={inputCls}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={labelCls}>Website name</label>
+                    <input
+                      key={`websiteName-${selectedDetail.id}`}
+                      type="text"
+                      defaultValue={selectedDetail.websiteName || ""}
+                      onBlur={(e) => saveField("websiteName", e.target.value.trim())}
+                      disabled={isPending}
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Website URL</label>
+                    <input
+                      key={`websiteUrl-${selectedDetail.id}`}
+                      type="text"
+                      defaultValue={selectedDetail.websiteUrl || ""}
+                      onBlur={(e) => saveField("websiteUrl", e.target.value.trim())}
+                      disabled={isPending}
+                      placeholder="https://…"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={labelCls}>Instagram</label>
+                    <input
+                      key={`instagramUrl-${selectedDetail.id}`}
+                      type="text"
+                      defaultValue={selectedDetail.instagramUrl || ""}
+                      onBlur={(e) => saveField("instagramUrl", e.target.value.trim())}
+                      disabled={isPending}
+                      placeholder="https://instagram.com/…"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Facebook</label>
+                    <input
+                      key={`facebookUrl-${selectedDetail.id}`}
+                      type="text"
+                      defaultValue={selectedDetail.facebookUrl || ""}
+                      onBlur={(e) => saveField("facebookUrl", e.target.value.trim())}
+                      disabled={isPending}
+                      placeholder="https://facebook.com/…"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <label className={labelCls}>Default commission %</label>
+                  <input
+                    key={`defaultCommissionPercent-${selectedDetail.id}`}
+                    type="text"
+                    inputMode="decimal"
+                    defaultValue={selectedDetail.defaultCommissionPercent || ""}
+                    onBlur={(e) => saveField("defaultCommissionPercent", e.target.value.trim())}
+                    disabled={isPending}
+                    placeholder="e.g. 30"
+                    className={inputCls}
+                  />
+                </div>
+                {savedField && <p className="text-xs text-green-600">Saved</p>}
+              </div>
+            )}
+            </div>
           </div>
         )}
       </div>
@@ -612,284 +743,154 @@ export default function GalleriesView({
         </div>
       </div>
 
-      {/* ---- Gallery details / sales modal (2026-09-10) ---- */}
-      {/* Was a permanent 480px column between Consigned Works and the
-          gallery list; moved to a modal (25% wider — 600px, up from
-          480px) so Consigned Works gets that width back once no gallery
-          is open. Still opens automatically on the same click that used
-          to just populate the column (openRow), and Close still just
-          clears selectedId/selectedDetail — same state, new
-          presentation. */}
-      {selectedId && (
+      {/* ---- Artwork detail / sale actions modal (2026-09-10) ---- */}
+      {/* Was the inline w-80 panel next to the grid; moved here so the
+          grid can stay full width regardless of whether a work is
+          selected. Opens on the same openWork() call as before (grid
+          thumbnail or a Sales table row), and closes the same way
+          (clearing selectedWorkId/selectedWorkDetail). */}
+      {selectedWorkId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="flex max-h-[85vh] w-full max-w-[600px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
-            {loading || !selectedDetail ? (
+          <div className="flex max-h-[85vh] w-full max-w-[420px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+            {workLoading || !selectedWorkDetail ? (
               <p className="p-6 text-sm text-neutral-400">Loading…</p>
             ) : (
               <>
-                <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 px-6 py-4">
-                  <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
-                  <div className="flex items-center gap-3">
-                    <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
-                      <button
-                        type="button"
-                        onClick={() => setDetailTab("details")}
-                        className={`px-3 py-[2px] font-medium ${
-                          detailTab === "details"
-                            ? "bg-neutral-900 text-white"
-                            : "bg-white text-neutral-600 hover:bg-neutral-50"
-                        }`}
-                      >
-                        Details
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setDetailTab("sales")}
-                        className={`px-3 py-[2px] font-medium ${
-                          detailTab === "sales"
-                            ? "bg-neutral-900 text-white"
-                            : "bg-white text-neutral-600 hover:bg-neutral-50"
-                        }`}
-                      >
-                        Sales
-                      </button>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setConfirmingDelete(true)}
-                      className="rounded-md border border-red-200 px-2 py-[2px] text-xs text-red-600 hover:bg-red-50"
-                    >
-                      Delete
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedId(null);
-                        setSelectedDetail(null);
-                      }}
-                      className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
-                    >
-                      Close
-                    </button>
+                <div className="flex shrink-0 items-start justify-between gap-2 border-b border-neutral-200 px-5 py-4">
+                  <div>
+                    <p className="text-sm font-semibold text-neutral-900">
+                      {selectedWorkDetail.presentationTitle}
+                    </p>
+                    {/* Catalogue number (2026-09-10, direct request) —
+                        same "Catalogue #…" wording ArtworkDetailPanel
+                        already uses, so it reads as the same field
+                        wherever it shows up. */}
+                    <p className="text-xs text-neutral-400">
+                      Catalogue #{selectedWorkDetail.catalogueNumber}
+                    </p>
+                    {(selectedWorkDetail.type || selectedWorkDetail.edition) && (
+                      <p className="mt-1 text-xs text-neutral-400">
+                        {selectedWorkDetail.type}
+                        {selectedWorkDetail.type && selectedWorkDetail.edition ? " - " : ""}
+                        {selectedWorkDetail.edition}
+                      </p>
+                    )}
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedWorkId(null);
+                      setSelectedWorkDetail(null);
+                    }}
+                    className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                  >
+                    Close
+                  </button>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-6">
-                  {detailTab === "sales" ? (
-                    <div>
-                      <p className="mb-4 text-sm text-neutral-500">{salesSummary}</p>
-                      <div className="overflow-hidden rounded-lg border border-neutral-200">
-                        {/* table-fixed + explicit column widths
-                            (2026-09-10) — table-auto let a long artwork
-                            title grow the Artwork column and push Date
-                            off the visible edge. Artwork now truncates
-                            within its own reserved width instead, so
-                            Status/Amount/Date always stay on screen
-                            regardless of title length or window size. */}
-                        <table className="w-full table-fixed text-sm">
-                          <colgroup>
-                            <col className="w-[42%]" />
-                            <col className="w-[20%]" />
-                            <col className="w-[19%]" />
-                            <col className="w-[19%]" />
-                          </colgroup>
-                          <thead>
-                            <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
-                              <th className="px-3 py-2 font-normal">Artwork</th>
-                              <th className="px-3 py-2 font-normal">Status</th>
-                              <th className="px-3 py-2 font-normal">Amount</th>
-                              <th className="px-3 py-2 font-normal">Date</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {selectedDetail.purchases.length === 0 ? (
-                              <tr>
-                                <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
-                                  Nothing here yet.
-                                </td>
-                              </tr>
-                            ) : (
-                              selectedDetail.purchases.map((p) => (
-                                // Clicking a row opens that artwork in
-                                // the Consigned Works panel on the left
-                                // — same as clicking its thumbnail
-                                // there, just reachable from this table
-                                // too. Also closes this modal, since the
-                                // point is to bring the left panel back
-                                // into view.
-                                <tr
-                                  key={p.id}
-                                  onClick={() => {
-                                    openWork(p.artworkId);
-                                    setSelectedId(null);
-                                  }}
-                                  className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50"
-                                >
-                                  <td className="px-3 py-2">
-                                    <div className="flex min-w-0 items-center gap-2">
-                                      {p.artworkImageUrl ? (
-                                        // eslint-disable-next-line @next/next/no-img-element
-                                        <img
-                                          src={p.artworkImageUrl}
-                                          alt=""
-                                          className="h-8 w-8 shrink-0 rounded object-cover"
-                                        />
-                                      ) : (
-                                        <div className="h-8 w-8 shrink-0 rounded bg-neutral-100" />
-                                      )}
-                                      <span className="min-w-0 truncate">{p.artworkTitle}</span>
-                                    </div>
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-2">
-                                    <SaleStatusBadge status={p.status} />
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
-                                    {formatMoney(p.totalAmount, p.currency)}
-                                  </td>
-                                  <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
-                                    {new Date(p.createdAt).toLocaleDateString()}
-                                  </td>
-                                </tr>
-                              ))
-                            )}
-                          </tbody>
-                        </table>
+                <div className="flex-1 overflow-y-auto p-5">
+                  <dl className="mb-4 space-y-1 text-xs text-neutral-500">
+                    {selectedWorkDetail.size && (
+                      <div>
+                        <dt className="inline text-neutral-400">Size: </dt>
+                        <dd className="inline">{selectedWorkDetail.size}</dd>
                       </div>
-                    </div>
+                    )}
+                    {selectedWorkDetail.presentationPrice && (
+                      <div>
+                        <dt className="inline text-neutral-400">Price: </dt>
+                        <dd className="inline">£{selectedWorkDetail.presentationPrice}</dd>
+                      </div>
+                    )}
+                  </dl>
+
+                  {activeWorkPurchase ? (
+                    activeWorkPurchase.channel === "GALLERY" ? (
+                      <GallerySaleCard
+                        purchase={activeWorkPurchase}
+                        siteId={siteId}
+                        paymentMethods={paymentMethods}
+                        onChanged={refreshAfterSaleChange}
+                      />
+                    ) : (
+                      <p className="text-sm text-neutral-500">
+                        This artwork already has an active Stripe sale in progress — manage
+                        it from the Artwork Catalogue&apos;s Payment tab.
+                      </p>
+                    )
+                  ) : completedGallerySale ? (
+                    <GallerySaleCard
+                      purchase={completedGallerySale}
+                      siteId={siteId}
+                      paymentMethods={paymentMethods}
+                      onChanged={refreshAfterSaleChange}
+                    />
                   ) : (
-                    <div className="space-y-3">
-                      <div>
-                        <label className={labelCls}>Gallery name</label>
-                        <input
-                          key={`name-${selectedDetail.id}`}
-                          type="text"
-                          defaultValue={selectedDetail.name}
-                          onBlur={(e) => saveField("name", e.target.value.trim())}
-                          disabled={isPending}
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>General email</label>
-                        <input
-                          key={`email-${selectedDetail.id}`}
-                          type="email"
-                          defaultValue={selectedDetail.email || ""}
-                          onBlur={(e) => saveField("email", e.target.value.trim())}
-                          disabled={isPending}
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Phone</label>
-                        <input
-                          key={`phone-${selectedDetail.id}`}
-                          type="text"
-                          defaultValue={selectedDetail.phone || ""}
-                          onBlur={(e) => saveField("phone", e.target.value.trim())}
-                          disabled={isPending}
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Address</label>
-                        <textarea
-                          key={`address-${selectedDetail.id}`}
-                          defaultValue={selectedDetail.address || ""}
-                          onBlur={(e) => saveField("address", e.target.value.trim())}
-                          disabled={isPending}
-                          rows={2}
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Contact name</label>
-                        <input
-                          key={`contactName-${selectedDetail.id}`}
-                          type="text"
-                          defaultValue={selectedDetail.contactName || ""}
-                          onBlur={(e) => saveField("contactName", e.target.value.trim())}
-                          disabled={isPending}
-                          placeholder="The person you deal with there"
-                          className={inputCls}
-                        />
-                      </div>
-                      <div>
-                        <label className={labelCls}>Contact email</label>
-                        <input
-                          key={`contactEmail-${selectedDetail.id}`}
-                          type="email"
-                          defaultValue={selectedDetail.contactEmail || ""}
-                          onBlur={(e) => saveField("contactEmail", e.target.value.trim())}
-                          disabled={isPending}
-                          className={inputCls}
-                        />
-                      </div>
+                    <div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className={labelCls}>Website name</label>
+                          <label className={labelCls}>Sale price</label>
                           <input
-                            key={`websiteName-${selectedDetail.id}`}
                             type="text"
-                            defaultValue={selectedDetail.websiteName || ""}
-                            onBlur={(e) => saveField("websiteName", e.target.value.trim())}
-                            disabled={isPending}
+                            inputMode="decimal"
+                            value={saleTotalAmount}
+                            onChange={(e) => setSaleTotalAmount(e.target.value)}
+                            placeholder="e.g. 250.00"
                             className={inputCls}
                           />
                         </div>
                         <div>
-                          <label className={labelCls}>Website URL</label>
-                          <input
-                            key={`websiteUrl-${selectedDetail.id}`}
-                            type="text"
-                            defaultValue={selectedDetail.websiteUrl || ""}
-                            onBlur={(e) => saveField("websiteUrl", e.target.value.trim())}
-                            disabled={isPending}
-                            placeholder="https://…"
+                          <label className={labelCls}>Currency</label>
+                          <select
+                            value={saleCurrency}
+                            onChange={(e) => setSaleCurrency(e.target.value)}
                             className={inputCls}
+                          >
+                            <option value="GBP">GBP</option>
+                            <option value="EUR">EUR</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className={labelCls}>Commission %</label>
+                          <input
+                            type="text"
+                            inputMode="decimal"
+                            value={saleCommission}
+                            onChange={(e) => setSaleCommission(e.target.value)}
+                            placeholder="e.g. 45"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Net owed</label>
+                          <input
+                            type="text"
+                            readOnly
+                            value={saleAmountNum ? formatMoney(saleNetOwed.toFixed(2), saleCurrency) : "—"}
+                            className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
                           />
                         </div>
                       </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className={labelCls}>Instagram</label>
-                          <input
-                            key={`instagramUrl-${selectedDetail.id}`}
-                            type="text"
-                            defaultValue={selectedDetail.instagramUrl || ""}
-                            onBlur={(e) => saveField("instagramUrl", e.target.value.trim())}
-                            disabled={isPending}
-                            placeholder="https://instagram.com/…"
-                            className={inputCls}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Facebook</label>
-                          <input
-                            key={`facebookUrl-${selectedDetail.id}`}
-                            type="text"
-                            defaultValue={selectedDetail.facebookUrl || ""}
-                            onBlur={(e) => saveField("facebookUrl", e.target.value.trim())}
-                            disabled={isPending}
-                            placeholder="https://facebook.com/…"
-                            className={inputCls}
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className={labelCls}>Default commission %</label>
+                      <div className="mt-2">
+                        <label className={labelCls}>Date</label>
                         <input
-                          key={`defaultCommissionPercent-${selectedDetail.id}`}
-                          type="text"
-                          inputMode="decimal"
-                          defaultValue={selectedDetail.defaultCommissionPercent || ""}
-                          onBlur={(e) => saveField("defaultCommissionPercent", e.target.value.trim())}
-                          disabled={isPending}
-                          placeholder="e.g. 30"
+                          type="date"
+                          value={saleDate}
+                          onChange={(e) => setSaleDate(e.target.value)}
                           className={inputCls}
                         />
                       </div>
-                      {savedField && <p className="text-xs text-green-600">Saved</p>}
+                      {saleError && <p className="mt-2 text-xs text-red-600">{saleError}</p>}
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={handleStartSale}
+                          disabled={workPending || !saleTotalAmount.trim()}
+                          className="w-full rounded-md bg-neutral-900 px-3 py-[6px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                        >
+                          Start sale
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
