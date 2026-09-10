@@ -1,4 +1,8 @@
+"use client";
+
+import { useState } from "react";
 import type { PurchaseDetail } from "@/lib/actions/payments";
+import CertificateEmailModal from "@/components/CertificateEmailModal";
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
@@ -21,6 +25,7 @@ function downloadInvoice(purchaseId: string) {
 
 export default function SaleDetailCard({
   purchase,
+  siteId,
   artworkType,
   artworkSize,
   artworkGroup,
@@ -29,6 +34,11 @@ export default function SaleDetailCard({
   onForceDelete,
 }: {
   purchase: PurchaseDetail;
+  // Needed for CertificateEmailModal below (2026-09-10) — this card is
+  // read-only otherwise, but issuing a certificate is a real action
+  // (sends an email, logs a sent record) that needs to revalidate the
+  // right site's own pages.
+  siteId: string;
   artworkType: string | null;
   artworkSize: string | null;
   artworkGroup: string | null;
@@ -42,6 +52,12 @@ export default function SaleDetailCard({
   // (2026-08-13, added for cleaning up test/erroneous completed sales).
   onForceDelete?: () => void;
 }) {
+  // Certificate of Authenticity (2026-09-10, direct request — "add to
+  // all sales, completed or not") — available here for any non-
+  // abandoned purchase this card shows (completed Stripe, or an
+  // abandoned/completed gallery sale reached via this generic card
+  // rather than GallerySaleCard's own interactive one).
+  const [showCertificateModal, setShowCertificateModal] = useState(false);
   // The next instalment still owed, if this sale was abandoned partway
   // through an instalment plan — irrelevant (and absent) for a fully
   // Completed sale, since nothing's left due.
@@ -63,6 +79,15 @@ export default function SaleDetailCard({
           >
             {purchase.status === "COMPLETED" ? "Download receipt" : "Download invoice"}
           </button>
+          {purchase.status === "COMPLETED" && (
+            <button
+              type="button"
+              onClick={() => setShowCertificateModal(true)}
+              className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+            >
+              {purchase.certificateEmailedAt ? "Send certificate again" : "Certificate of Authenticity"}
+            </button>
+          )}
           {onDelete && (
             <button
               type="button"
@@ -183,6 +208,14 @@ export default function SaleDetailCard({
             </tbody>
           </table>
         </div>
+      )}
+
+      {showCertificateModal && (
+        <CertificateEmailModal
+          purchaseId={purchase.id}
+          siteId={siteId}
+          onClose={() => setShowCertificateModal(false)}
+        />
       )}
     </div>
   );

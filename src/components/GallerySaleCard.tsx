@@ -98,7 +98,8 @@ export default function GallerySaleCard({
   const [paymentLinkError, setPaymentLinkError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
-  // ---- Certificate of Authenticity — only ever offered once paid ----
+  // ---- Certificate of Authenticity — offered regardless of payment
+  // status (2026-09-10) ----
   const [showCertificateModal, setShowCertificateModal] = useState(false);
 
   const [pendingConfirm, setPendingConfirm] = useState<{
@@ -264,9 +265,9 @@ export default function GallerySaleCard({
         </p>
       )}
 
-      {/* Same simple sent-log pattern as invoiceEmailedAt above — only
-          ever shown once paid, since a certificate can't be requested
-          before that. */}
+      {/* Same simple sent-log pattern as invoiceEmailedAt above — shown
+          whenever a certificate has been sent, regardless of the sale's
+          current payment status (2026-09-10). */}
       {purchase.certificateEmailedAt && (
         <p className="mt-1 text-xs text-neutral-400">
           Certificate sent {new Date(purchase.certificateEmailedAt).toLocaleDateString()}
@@ -340,6 +341,22 @@ export default function GallerySaleCard({
               Delete Sale
             </button>
           </div>
+
+          {/* Certificate of Authenticity — available regardless of
+              payment status (2026-09-10, direct request — "add to all
+              sales, completed or not"). Full width, below the 2x2 grid:
+              this isn't a payment action, so it doesn't belong crammed
+              into that grid alongside them. */}
+          <button
+            type="button"
+            onClick={() => setShowCertificateModal(true)}
+            disabled={isPending}
+            className={`${actionButtonCls} mt-2 w-full`}
+          >
+            {purchase.certificateEmailedAt
+              ? "Send certificate again"
+              : "Certificate of Authenticity"}
+          </button>
 
           {showMarkPaidForm && (
             <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-neutral-50 p-3">
