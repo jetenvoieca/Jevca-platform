@@ -374,9 +374,18 @@ export default function GalleriesView({
                 ) : (
                   <>
                     <div className="mb-1 flex items-start justify-between gap-2">
-                      <p className="text-sm font-semibold text-neutral-900">
-                        {selectedWorkDetail.presentationTitle}
-                      </p>
+                      <div>
+                        <p className="text-sm font-semibold text-neutral-900">
+                          {selectedWorkDetail.presentationTitle}
+                        </p>
+                        {/* Catalogue number (2026-09-10, direct request)
+                            — same "Catalogue #…" wording ArtworkDetailPanel
+                            already uses, so it reads as the same field
+                            wherever it shows up. */}
+                        <p className="text-xs text-neutral-400">
+                          Catalogue #{selectedWorkDetail.catalogueNumber}
+                        </p>
+                      </div>
                       {(selectedWorkDetail.type || selectedWorkDetail.edition) && (
                         <p className="shrink-0 text-xs text-neutral-400">
                           {selectedWorkDetail.type}
