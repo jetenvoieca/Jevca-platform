@@ -158,6 +158,14 @@ export default function ArtworkDetailPanel({
   // mirrors artwork.availability as before) — it only opens/closes the
   // panel for now, until Record sale (and what the other two buttons do)
   // is worked out.
+  //
+  // While the panel is open, everything below it (Date, Reference/
+  // Offered price, the Available/SOLD toggle itself, Studio notes) is
+  // hidden entirely too (2026-09-10 follow-up, matching the mockup
+  // exactly — "sales panel ends with payment link row") via
+  // ArtworkCatalogueFields' hideTail. Offered price's current value is
+  // still preserved via its own hidden input below, alongside the
+  // panel, so it survives an unrelated field autosaving while hidden.
   const [saleOpen, setSaleOpen] = useState(artwork.availability === "SOLD");
 
   // ---- Autosave (2026-08-15) — reads straight from the DOM via
@@ -210,38 +218,6 @@ export default function ArtworkDetailPanel({
       }
     });
   };
-
-  // Available/SOLD toggle (2026-09-10, direct request) — replaces the
-  // plain Availability <select> for a non-edition artwork, positioned
-  // exactly where that select used to sit. The real `availability` form
-  // field still travels with the form exactly as before (hidden input
-  // below); this toggle only opens/closes the sale panel above for now.
-  const availabilityControl = (
-    <div>
-      <label className="mb-1 block text-sm font-medium text-neutral-700">Availability</label>
-      <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-        <button
-          type="button"
-          onClick={() => setSaleOpen(false)}
-          className={`flex-1 px-3 py-2 font-medium ${
-            !saleOpen ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
-          }`}
-        >
-          Available
-        </button>
-        <button
-          type="button"
-          onClick={() => setSaleOpen(true)}
-          className={`flex-1 px-3 py-2 font-medium ${
-            saleOpen ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
-          }`}
-        >
-          SOLD
-        </button>
-      </div>
-      <input type="hidden" name="availability" value={artwork.availability} />
-    </div>
-  );
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
@@ -338,8 +314,9 @@ export default function ArtworkDetailPanel({
               (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
               and Reference/Offered price (passed as children, rendered
               between Date and Availability) stay Catalogue-tab-only.
-              afterLocation/availabilityOverride (2026-09-10) slot in the
-              sale panel and the new Available/SOLD toggle. */}
+              afterLocation/availabilityOverride/hideTail (2026-09-10)
+              slot in the sale panel, the Available/SOLD toggle, and hide
+              everything below the panel while it's open. */}
           <ArtworkCatalogueFields
             settings={settings}
             values={{
@@ -359,44 +336,96 @@ export default function ArtworkDetailPanel({
               setTypeValue(type);
               setSizeValue(size);
             }}
+            hideTail={saleOpen}
             afterLocation={
               saleOpen ? (
-                <ArtworkSalePanel
-                  offeredPrice={artwork.offeredPrice}
-                  currency={artwork.saleTerms?.currency ?? siteDefaultCurrency}
-                  defaultInstalmentCount={settings.defaultInstalmentCount}
-                />
+                <>
+                  <ArtworkSalePanel
+                    offeredPrice={artwork.offeredPrice}
+                    currency={artwork.saleTerms?.currency ?? siteDefaultCurrency}
+                    defaultInstalmentCount={settings.defaultInstalmentCount}
+                    onBackToAvailable={() => setSaleOpen(false)}
+                  />
+                  {/* Offered price's own input is hidden while the panel
+                      is open (hideTail hides the Reference/Offered price
+                      pair passed as children below) — this preserves its
+                      current value so it isn't lost on the next
+                      autosave. */}
+                  <input type="hidden" name="offeredPrice" value={artwork.offeredPrice || ""} />
+                </>
               ) : null
             }
-            availabilityOverride={availabilityControl}
+            availabilityOverride={
+              // Available/SOLD toggle (2026-09-10, direct request) —
+              // replaces the plain Availability <select>, in the same
+              // spot it used to sit. hideTail (above) takes over
+              // entirely while saleOpen, so this only actually renders
+              // when the panel is closed — reopening it is what SOLD
+              // does; closing it is the sale panel's own "Back to
+              // Available" link, not this toggle, once open.
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Availability
+                </label>
+                <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+                  <button
+                    type="button"
+                    onClick={() => setSaleOpen(false)}
+                    className={`flex-1 px-3 py-2 font-medium ${
+                      !saleOpen
+                        ? "bg-neutral-900 text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    Available
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSaleOpen(true)}
+                    className={`flex-1 px-3 py-2 font-medium ${
+                      saleOpen
+                        ? "bg-neutral-900 text-white"
+                        : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    SOLD
+                  </button>
+                </div>
+                <input type="hidden" name="availability" value={artwork.availability} />
+              </div>
+            }
           >
-            {/* Reference price is a suggestion, not typed —
-                (Size preset's width × height) × the selected
-                Type's Ref value, recalculated live as either
-                changes (2026-08-28). See src/lib/pricing.ts. */}
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Reference price
-              </label>
-              <input
-                type="text"
-                readOnly
-                value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
-                className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
-              />
-            </div>
-            <div>
-              <label className="mb-1 block text-sm font-medium text-neutral-700">
-                Offered price
-              </label>
-              <input
-                type="text"
-                name="offeredPrice"
-                defaultValue={artwork.offeredPrice || ""}
-                placeholder="e.g. 450.00"
-                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-              />
-            </div>
+            {!saleOpen && (
+              <>
+                {/* Reference price is a suggestion, not typed —
+                    (Size preset's width × height) × the selected
+                    Type's Ref value, recalculated live as either
+                    changes (2026-08-28). See src/lib/pricing.ts. */}
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Reference price
+                  </label>
+                  <input
+                    type="text"
+                    readOnly
+                    value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
+                    className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                  />
+                </div>
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Offered price
+                  </label>
+                  <input
+                    type="text"
+                    name="offeredPrice"
+                    defaultValue={artwork.offeredPrice || ""}
+                    placeholder="e.g. 450.00"
+                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                </div>
+              </>
+            )}
           </ArtworkCatalogueFields>
         </div>
         <div className="flex items-center gap-3">
