@@ -151,22 +151,24 @@ export default function ArtworkDetailPanel({
 
   // ---- The Sold sale panel (2026-09-10, direct request) ----
   // Toggling SOLD (in the Availability control below) opens
-  // ArtworkSalePanel, but positioned right after Size/Location via
-  // ArtworkCatalogueFields' afterLocation slot — not next to the toggle
-  // itself, which stays down by Offered price. This toggle doesn't yet
-  // write the real availability value (that hidden input still just
-  // mirrors artwork.availability as before) — it only opens/closes the
-  // panel for now, until Record sale (and what the other two buttons do)
-  // is worked out.
-  //
-  // While the panel is open, everything below it (Date, Reference/
-  // Offered price, the Available/SOLD toggle itself, Studio notes) is
-  // hidden entirely too (2026-09-10 follow-up, matching the mockup
-  // exactly — "sales panel ends with payment link row") via
-  // ArtworkCatalogueFields' hideTail. Offered price's current value is
-  // still preserved via its own hidden input below, alongside the
+  // ArtworkSalePanel, positioned right after Size/Location via
+  // ArtworkCatalogueFields' afterLocation slot. Everything below it
+  // (Date, Reference/Offered price, the Available/SOLD toggle itself,
+  // Studio notes) is hidden entirely while open (hideTail), matching
+  // the mockup — "sales panel ends with payment link row". Offered
+  // price's value is preserved via its own hidden input alongside the
   // panel, so it survives an unrelated field autosaving while hidden.
   const [saleOpen, setSaleOpen] = useState(artwork.availability === "SOLD");
+
+  // Enter card now (2026-09-10 follow-up) — moves the sale panel up
+  // further still, to sit right under Name/Tier, matching the mockup's
+  // "slides up further to just under the name/tier row". That means
+  // Type/Group/Medium/Size/Location/Edition/Available(qty) disappear
+  // too, not just the tail fields hideTail already covers — so when
+  // cardMode is on, ArtworkCatalogueFields doesn't render at all, and
+  // every field it would have submitted is preserved via the hidden
+  // inputs just below it instead.
+  const [cardMode, setCardMode] = useState(false);
 
   // ---- Autosave (2026-08-15) — reads straight from the DOM via
   // FormData rather than controlling every field in React state - much
@@ -308,125 +310,165 @@ export default function ArtworkDetailPanel({
               ))}
             </select>
           </div>
-          {/* The Type/Group/Medium/Size/Edition/Available/Location/Date/
-              Availability/Studio notes block below is the exact same
-              shared component the Hopper's quick-add form uses
-              (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
-              and Reference/Offered price (passed as children, rendered
-              between Date and Availability) stay Catalogue-tab-only.
-              afterLocation/availabilityOverride/hideTail (2026-09-10)
-              slot in the sale panel, the Available/SOLD toggle, and hide
-              everything below the panel while it's open. */}
-          <ArtworkCatalogueFields
-            settings={settings}
-            values={{
-              type: artwork.type || "",
-              catalogueGroup: artwork.catalogueGroup || "",
-              medium: artwork.medium || "",
-              size: artwork.size || "",
-              edition: artwork.edition || "",
-              location: artwork.location || "",
-              availableQty: artwork.availableQty?.toString() ?? "",
-              date: artwork.date || "",
-              studioNotes: artwork.studioNotes || "",
-              availability: artwork.availability,
-            }}
-            onAutosave={autosaveCatalogue}
-            onTypeOrSizeChange={(type, size) => {
-              setTypeValue(type);
-              setSizeValue(size);
-            }}
-            hideTail={saleOpen}
-            afterLocation={
-              saleOpen ? (
-                <>
-                  <ArtworkSalePanel
-                    offeredPrice={artwork.offeredPrice}
-                    currency={artwork.saleTerms?.currency ?? siteDefaultCurrency}
-                    defaultInstalmentCount={settings.defaultInstalmentCount}
-                    onBackToAvailable={() => setSaleOpen(false)}
-                  />
-                  {/* Offered price's own input is hidden while the panel
-                      is open (hideTail hides the Reference/Offered price
-                      pair passed as children below) — this preserves its
-                      current value so it isn't lost on the next
-                      autosave. */}
-                  <input type="hidden" name="offeredPrice" value={artwork.offeredPrice || ""} />
-                </>
-              ) : null
-            }
-            availabilityOverride={
-              // Available/SOLD toggle (2026-09-10, direct request) —
-              // replaces the plain Availability <select>, in the same
-              // spot it used to sit. hideTail (above) takes over
-              // entirely while saleOpen, so this only actually renders
-              // when the panel is closed — reopening it is what SOLD
-              // does; closing it is the sale panel's own "Back to
-              // Available" link, not this toggle, once open.
-              <div>
-                <label className="mb-1 block text-sm font-medium text-neutral-700">
-                  Availability
-                </label>
-                <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                  <button
-                    type="button"
-                    onClick={() => setSaleOpen(false)}
-                    className={`flex-1 px-3 py-2 font-medium ${
-                      !saleOpen
-                        ? "bg-neutral-900 text-white"
-                        : "bg-white text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    Available
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSaleOpen(true)}
-                    className={`flex-1 px-3 py-2 font-medium ${
-                      saleOpen
-                        ? "bg-neutral-900 text-white"
-                        : "bg-white text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    SOLD
-                  </button>
-                </div>
-                <input type="hidden" name="availability" value={artwork.availability} />
+
+          {cardMode ? (
+            // Card entry mode (2026-09-10) — Type through Studio notes
+            // don't render at all here; every field ArtworkCatalogueFields
+            // would otherwise submit is preserved via hidden inputs below
+            // so nothing is lost when Name/Tier next autosaves.
+            <>
+              <div className="col-span-2">
+                <ArtworkSalePanel
+                  offeredPrice={artwork.offeredPrice}
+                  currency={artwork.saleTerms?.currency ?? siteDefaultCurrency}
+                  defaultInstalmentCount={settings.defaultInstalmentCount}
+                  mode="card"
+                  onBackToAvailable={() => {
+                    setCardMode(false);
+                    setSaleOpen(false);
+                  }}
+                  onEnterCard={() => {}}
+                />
               </div>
-            }
-          >
-            {!saleOpen && (
-              <>
-                {/* Reference price is a suggestion, not typed —
-                    (Size preset's width × height) × the selected
-                    Type's Ref value, recalculated live as either
-                    changes (2026-08-28). See src/lib/pricing.ts. */}
+              <input type="hidden" name="type" value={artwork.type || ""} />
+              <input type="hidden" name="catalogueGroup" value={artwork.catalogueGroup || ""} />
+              <input type="hidden" name="medium" value={artwork.medium || ""} />
+              <input type="hidden" name="size" value={artwork.size || ""} />
+              <input type="hidden" name="edition" value={artwork.edition || ""} />
+              <input
+                type="hidden"
+                name="availableQty"
+                value={artwork.availableQty?.toString() ?? ""}
+              />
+              <input type="hidden" name="location" value={artwork.location || ""} />
+              <input type="hidden" name="date" value={artwork.date || ""} />
+              <input type="hidden" name="studioNotes" value={artwork.studioNotes || ""} />
+              <input type="hidden" name="availability" value={artwork.availability} />
+              <input type="hidden" name="offeredPrice" value={artwork.offeredPrice || ""} />
+            </>
+          ) : (
+            /* The Type/Group/Medium/Size/Edition/Available/Location/Date/
+               Availability/Studio notes block below is the exact same
+               shared component the Hopper's quick-add form uses
+               (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
+               and Reference/Offered price (passed as children, rendered
+               between Date and Availability) stay Catalogue-tab-only.
+               afterLocation/availabilityOverride/hideTail (2026-09-10)
+               slot in the sale panel, the Available/SOLD toggle, and hide
+               everything below the panel while it's open. */
+            <ArtworkCatalogueFields
+              settings={settings}
+              values={{
+                type: artwork.type || "",
+                catalogueGroup: artwork.catalogueGroup || "",
+                medium: artwork.medium || "",
+                size: artwork.size || "",
+                edition: artwork.edition || "",
+                location: artwork.location || "",
+                availableQty: artwork.availableQty?.toString() ?? "",
+                date: artwork.date || "",
+                studioNotes: artwork.studioNotes || "",
+                availability: artwork.availability,
+              }}
+              onAutosave={autosaveCatalogue}
+              onTypeOrSizeChange={(type, size) => {
+                setTypeValue(type);
+                setSizeValue(size);
+              }}
+              hideTail={saleOpen}
+              afterLocation={
+                saleOpen ? (
+                  <>
+                    <ArtworkSalePanel
+                      offeredPrice={artwork.offeredPrice}
+                      currency={artwork.saleTerms?.currency ?? siteDefaultCurrency}
+                      defaultInstalmentCount={settings.defaultInstalmentCount}
+                      mode="sale"
+                      onBackToAvailable={() => setSaleOpen(false)}
+                      onEnterCard={() => setCardMode(true)}
+                    />
+                    {/* Offered price's own input is hidden while the panel
+                        is open (hideTail hides the Reference/Offered price
+                        pair passed as children below) — this preserves its
+                        current value so it isn't lost on the next
+                        autosave. */}
+                    <input type="hidden" name="offeredPrice" value={artwork.offeredPrice || ""} />
+                  </>
+                ) : null
+              }
+              availabilityOverride={
+                // Available/SOLD toggle (2026-09-10, direct request) —
+                // replaces the plain Availability <select>, in the same
+                // spot it used to sit. hideTail (above) takes over
+                // entirely while saleOpen, so this only actually renders
+                // when the panel is closed — reopening it is what SOLD
+                // does; closing it is the sale panel's own "Back to
+                // Available" link, not this toggle, once open.
                 <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Reference price
+                    Availability
                   </label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
-                    className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
-                  />
+                  <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+                    <button
+                      type="button"
+                      onClick={() => setSaleOpen(false)}
+                      className={`flex-1 px-3 py-2 font-medium ${
+                        !saleOpen
+                          ? "bg-neutral-900 text-white"
+                          : "bg-white text-neutral-600 hover:bg-neutral-50"
+                      }`}
+                    >
+                      Available
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSaleOpen(true)}
+                      className={`flex-1 px-3 py-2 font-medium ${
+                        saleOpen
+                          ? "bg-neutral-900 text-white"
+                          : "bg-white text-neutral-600 hover:bg-neutral-50"
+                      }`}
+                    >
+                      SOLD
+                    </button>
+                  </div>
+                  <input type="hidden" name="availability" value={artwork.availability} />
                 </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Offered price
-                  </label>
-                  <input
-                    type="text"
-                    name="offeredPrice"
-                    defaultValue={artwork.offeredPrice || ""}
-                    placeholder="e.g. 450.00"
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                </div>
-              </>
-            )}
-          </ArtworkCatalogueFields>
+              }
+            >
+              {!saleOpen && (
+                <>
+                  {/* Reference price is a suggestion, not typed —
+                      (Size preset's width × height) × the selected
+                      Type's Ref value, recalculated live as either
+                      changes (2026-08-28). See src/lib/pricing.ts. */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Reference price
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
+                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Offered price
+                    </label>
+                    <input
+                      type="text"
+                      name="offeredPrice"
+                      defaultValue={artwork.offeredPrice || ""}
+                      placeholder="e.g. 450.00"
+                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    />
+                  </div>
+                </>
+              )}
+            </ArtworkCatalogueFields>
+          )}
         </div>
         <div className="flex items-center gap-3">
           {saved && <span className="text-sm text-green-600">Saved</span>}
