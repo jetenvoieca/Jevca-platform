@@ -9,8 +9,9 @@ type Tab = "certificate" | "email";
 // InvoiceEmailModal closely (same "preview tab embeds the real PDF via
 // ?disposition=inline, Email tab loads a draft on first open, recipient
 // is always re-derived server-side" structure), but simpler: no
-// isPaid branching, since this is only ever opened for an already-paid
-// sale. Kept as its own component rather than adding a third mode to
+// isPaid branching. Available for any non-abandoned sale (2026-09-10 —
+// see the matching note in certificate.ts), not just an already-paid
+// one. Kept as its own component rather than adding a third mode to
 // InvoiceEmailModal, since the two documents (and their send actions)
 // are genuinely different things, not variations of the same one.
 export default function CertificateEmailModal({

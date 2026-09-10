@@ -12,6 +12,9 @@ import { artistFromAddress } from "@/lib/email";
 // via the Resend inbound webhook into /accounts/inbox). Also logs an
 // OutboundEmail row (kind CERTIFICATE) for the Inbox's unified Sent
 // list — see the matching note in invoiceEmail.ts.
+//
+// Available regardless of payment status (2026-09-10) — see the matching
+// note in certificate.ts for why. Still refused for ABANDONED.
 
 export type CertificateEmailDraft = { to: string; subject: string; body: string };
 
@@ -22,8 +25,22 @@ async function loadPurchaseForEmail(purchaseId: string) {
   });
 }
 
-function recipientFor(customer: { contactEmail: string | null; email: string | null }) {
-  return customer.contactEmail || customer.email;
+function recipientFor(purchase: {
+  customer: { contactEmail: string | null; email: string | null } | null;
+  buyerEmail: string | null;
+}) {
+  if (purchase.customer) return purchase.customer.contactEmail || purchase.customer.email;
+  return purchase.buyerEmail;
+}
+
+function firstNameFor(purchase: {
+  customer: { contactName: string | null; name: string } | null;
+  buyerName: string | null;
+}) {
+  if (purchase.customer) {
+    return purchase.customer.contactName?.trim().split(/\s+/)[0] || purchase.customer.name;
+  }
+  return purchase.buyerName?.trim().split(/\s+/)[0] || "there";
 }
 
 export async function getCertificateEmailDraft(
@@ -31,18 +48,16 @@ export async function getCertificateEmailDraft(
 ): Promise<CertificateEmailDraft | { error: string }> {
   const purchase = await loadPurchaseForEmail(purchaseId);
   if (!purchase) return { error: "Sale not found." };
-  if (purchase.status !== "COMPLETED") {
-    return { error: "This sale hasn't been marked as paid yet." };
+  if (purchase.status === "ABANDONED") {
+    return { error: "This sale was abandoned — a certificate can't be issued for a sale that didn't go ahead." };
   }
-  if (!purchase.customer) return { error: "No gallery is linked to this sale." };
 
-  const recipient = recipientFor(purchase.customer);
+  const recipient = recipientFor(purchase);
   if (!recipient) {
-    return { error: "This gallery has no email address on file — add one on the Details tab first." };
+    return { error: "No email address is on file for this sale — add one first." };
   }
 
-  const contactFirstName =
-    purchase.customer.contactName?.trim().split(/\s+/)[0] || purchase.customer.name;
+  const contactFirstName = firstNameFor(purchase);
 
   const body = [
     `Dear ${contactFirstName},`,
@@ -67,14 +82,13 @@ export async function sendCertificateEmail(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await loadPurchaseForEmail(purchaseId);
   if (!purchase) return { ok: false, error: "Sale not found." };
-  if (purchase.status !== "COMPLETED") {
-    return { ok: false, error: "This sale hasn't been marked as paid yet." };
+  if (purchase.status === "ABANDONED") {
+    return { ok: false, error: "This sale was abandoned — a certificate can't be issued for a sale that didn't go ahead." };
   }
-  if (!purchase.customer) return { ok: false, error: "No gallery is linked to this sale." };
 
-  const recipient = recipientFor(purchase.customer);
+  const recipient = recipientFor(purchase);
   if (!recipient) {
-    return { ok: false, error: "This gallery has no email address on file." };
+    return { ok: false, error: "No email address is on file for this sale — add one first." };
   }
 
   const apiKey = process.env.RESEND_API_KEY;

@@ -7,12 +7,19 @@ import { APP_URL } from "@/lib/stripe";
 // Certificate of Authenticity PDF (2026-09-03) — its own generator file,
 // deliberately separate from invoice.ts: this is a different document
 // with a different purpose (proving authenticity, not requesting/
-// recording payment), only ever offered once a sale is COMPLETED, and
-// with its own set of fields (Artist/Title/Details/Image Size, a
-// certifying paragraph, a signature) that have nothing in common with
-// an invoice's line items and totals. Reuses the same pdf-lib approach
-// and the artist's existing Logo for the letterhead, since visually it
-// should still look like it came from the same studio.
+// recording payment), and has its own set of fields (Artist/Title/
+// Details/Image Size, a certifying paragraph, a signature) that have
+// nothing in common with an invoice's line items and totals. Reuses the
+// same pdf-lib approach and the artist's existing Logo for the
+// letterhead, since visually it should still look like it came from the
+// same studio.
+//
+// Available regardless of payment status (2026-09-10, direct request —
+// "add to all sales, completed or not") — was ACTIVE/COMPLETED-only at
+// first ("only generates for a COMPLETED sale"), but a gallery/buyer can
+// reasonably want proof of authenticity ahead of payment clearing, not
+// just after. Still refused for an ABANDONED sale — there's no longer a
+// real buyer on the other end of a sale that didn't go ahead.
 
 // Finds the certifying text for this artwork's Type — matched the same
 // free-text way ArtworkType/isEditionType elsewhere in the app match
@@ -99,8 +106,8 @@ export async function generateCertificatePdf(
     include: { artwork: { include: { artist: { include: { certificateTemplates: true } } } } },
   });
   if (!purchase) throw new Error("Sale not found.");
-  if (purchase.status !== "COMPLETED") {
-    throw new Error("This sale hasn't been marked as paid yet — a certificate can't be issued until it has.");
+  if (purchase.status === "ABANDONED") {
+    throw new Error("This sale was abandoned — a certificate can't be issued for a sale that didn't go ahead.");
   }
 
   const artwork = purchase.artwork;
