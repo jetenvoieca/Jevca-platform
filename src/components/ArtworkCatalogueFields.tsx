@@ -62,6 +62,7 @@ export default function ArtworkCatalogueFields({
   children,
   afterLocation,
   availabilityOverride,
+  hideTail,
 }: {
   settings: Pick<
     ArtworkSettings,
@@ -86,12 +87,18 @@ export default function ArtworkCatalogueFields({
   afterLocation?: React.ReactNode;
   // Replaces the default Availability <select> (2026-09-10) — the
   // Catalogue tab uses this to swap in its own Available/SOLD toggle.
-  // Now shown for every Type, editions included (2026-09-10 correction
-  // — editions previously never got any Availability control at all,
-  // relying on Available (qty) alone; direct request to show the
-  // toggle everywhere instead). Hopper leaves this unset and keeps the
-  // old per-Type default behaviour, below.
+  // Shown for every Type, editions included. Hopper leaves this unset
+  // and keeps the old per-Type default behaviour, below.
   availabilityOverride?: React.ReactNode;
+  // When true (2026-09-10, direct request — match the sale-panel
+  // mockup, which shows nothing below its Get payment link/Enter card
+  // now/Record sale row), Date/children (Reference+Offered price)/
+  // Availability/Studio notes stop rendering visibly at all — their
+  // current values are preserved via hidden inputs instead, so nothing
+  // is silently lost the next time any other field on the form
+  // autosaves. Only ever passed true by the Catalogue tab while its
+  // sale panel is open; Hopper never sets this.
+  hideTail?: boolean;
 }) {
   const [typeValue, setTypeValue] = useState(values.type);
   const [sizeValue, setSizeValue] = useState(values.size);
@@ -229,57 +236,60 @@ export default function ArtworkCatalogueFields({
         </select>
       </div>
       {afterLocation && <div className="col-span-2">{afterLocation}</div>}
-      <div>
-        <label className={labelCls}>Date</label>
-        <input
-          type="text"
-          name="date"
-          defaultValue={values.date}
-          placeholder="e.g. June 2025"
-          onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-          className={inputCls}
-        />
-      </div>
-      {children}
-      {/* availabilityOverride now shows for every Type, editions
-          included (2026-09-10, direct request) — previously editions
-          never got an Availability control at all here. Falls back to
-          the old per-Type behaviour (plain select for non-editions,
-          hidden input for editions) only when no override is passed at
-          all — i.e. only for Hopper's quick-add, which hasn't opted
-          into the new toggle. */}
-      {availabilityOverride ??
-        (!isEditionType ? (
-          <div>
-            <label className={labelCls}>Availability</label>
-            <select
-              name="availability"
-              defaultValue={values.availability}
-              onChange={(e) => onAutosave?.(e.currentTarget.form!)}
-              className={inputCls}
-            >
-              <option value="AVAILABLE">Available</option>
-              <option value="RESERVED">Reserved</option>
-              <option value="SOLD">Sold</option>
-            </select>
-          </div>
-        ) : (
-          // Required/non-nullable in the database, so still preserved
-          // via hidden input when no override is in play (Hopper).
-          <input type="hidden" name="availability" value={values.availability} />
-        ))}
-      <div className="col-span-2">
-        <label className={labelCls}>
-          Studio notes <span className="font-normal text-neutral-400">(private)</span>
-        </label>
-        <textarea
-          name="studioNotes"
-          defaultValue={values.studioNotes}
-          onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-          rows={3}
-          className={inputCls}
-        />
-      </div>
+      {hideTail ? (
+        <input type="hidden" name="date" value={values.date} />
+      ) : (
+        <div>
+          <label className={labelCls}>Date</label>
+          <input
+            type="text"
+            name="date"
+            defaultValue={values.date}
+            placeholder="e.g. June 2025"
+            onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
+            className={inputCls}
+          />
+        </div>
+      )}
+      {!hideTail && children}
+      {hideTail ? (
+        <input type="hidden" name="availability" value={values.availability} />
+      ) : (
+        (availabilityOverride ??
+          (!isEditionType ? (
+            <div>
+              <label className={labelCls}>Availability</label>
+              <select
+                name="availability"
+                defaultValue={values.availability}
+                onChange={(e) => onAutosave?.(e.currentTarget.form!)}
+                className={inputCls}
+              >
+                <option value="AVAILABLE">Available</option>
+                <option value="RESERVED">Reserved</option>
+                <option value="SOLD">Sold</option>
+              </select>
+            </div>
+          ) : (
+            <input type="hidden" name="availability" value={values.availability} />
+          )))
+      )}
+      {hideTail ? (
+        <input type="hidden" name="studioNotes" value={values.studioNotes} />
+      ) : (
+        <div className="col-span-2">
+          <label className={labelCls}>
+            Studio notes <span className="font-normal text-neutral-400">(private)</span>
+          </label>
+          <textarea
+            name="studioNotes"
+            defaultValue={values.studioNotes}
+            onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
+            rows={3}
+            className={inputCls}
+          />
+        </div>
+      )}
     </>
   );
 }
