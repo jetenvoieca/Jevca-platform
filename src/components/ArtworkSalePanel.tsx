@@ -17,8 +17,7 @@ function formatMoney(amount: number, currency: string) {
 // SOLD. Layout/calculations only for now: Get payment link/Record sale/
 // Take payment don't do anything yet — deliberately left unwired until
 // the surrounding flow (what each one should actually do) is confirmed,
-// per direct instruction. Deposit paid/Date paid/Purchase option/Name/
-// Email/card fields are all local state only, not yet autosaved.
+// per direct instruction.
 //
 // Enter card now (2026-09-10 follow-up) switches this panel into
 // "card" mode — telephone-sale card entry, no customer personalisation
@@ -30,11 +29,33 @@ function formatMoney(amount: number, currency: string) {
 // right under Name/Tier while in card mode is handled one level up, in
 // ArtworkDetailPanel (this component doesn't know about Type/Group/
 // Medium/Size/Location at all).
+//
+// Deposit paid/Date paid/Purchase option/Name/Email are now controlled
+// from the parent (2026-09-10 fix) rather than this component's own
+// useState — switching mode renders a structurally different branch of
+// the parent's JSX (ArtworkCatalogueFields' afterLocation slot vs. the
+// card-mode branch that skips it entirely), which mounts a genuinely
+// new instance of this component each time. Local state was silently
+// reset by that remount the moment Enter card now was pressed; lifting
+// it to ArtworkDetailPanel means the same values just carry over,
+// regardless of which branch is currently rendering this panel. Card
+// number/Expiry/Security code/Country stay local, uncontrolled — they
+// only ever exist in card mode, which never remounts mid-entry.
 export default function ArtworkSalePanel({
   offeredPrice,
   currency,
   defaultInstalmentCount,
   mode,
+  depositPaid,
+  onDepositPaidChange,
+  datePaid,
+  onDatePaidChange,
+  option,
+  onOptionChange,
+  buyerName,
+  onBuyerNameChange,
+  buyerEmail,
+  onBuyerEmailChange,
   onBackToAvailable,
   onEnterCard,
 }: {
@@ -45,6 +66,16 @@ export default function ArtworkSalePanel({
   // view. "card" — the telephone-sale card entry view, entered via
   // Enter card now.
   mode: "sale" | "card";
+  depositPaid: string;
+  onDepositPaidChange: (value: string) => void;
+  datePaid: string;
+  onDatePaidChange: (value: string) => void;
+  option: "full" | "instalments";
+  onOptionChange: (value: "full" | "instalments") => void;
+  buyerName: string;
+  onBuyerNameChange: (value: string) => void;
+  buyerEmail: string;
+  onBuyerEmailChange: (value: string) => void;
   // 2026-09-10 — everything below this panel (Date, Reference/Offered
   // price, the Available/SOLD toggle itself, Studio notes) is hidden
   // while the panel is open, so this link (sale mode only) takes the
@@ -54,12 +85,6 @@ export default function ArtworkSalePanel({
   // button).
   onEnterCard: () => void;
 }) {
-  const [depositPaid, setDepositPaid] = useState("");
-  const [datePaid, setDatePaid] = useState("");
-  const [option, setOption] = useState<"full" | "instalments">("full");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-
   // Slide-up entrance (2026-09-10, direct request — "sale panel slides
   // up into view") — starts a touch below/faded and animates to its
   // resting position right after mount, rather than just popping in.
@@ -109,14 +134,14 @@ export default function ArtworkSalePanel({
               type="text"
               inputMode="decimal"
               value={depositPaid}
-              onChange={(e) => setDepositPaid(e.target.value)}
+              onChange={(e) => onDepositPaidChange(e.target.value)}
               placeholder="Deposit paid"
               className={boxCls}
             />
             <input
               type="date"
               value={datePaid}
-              onChange={(e) => setDatePaid(e.target.value)}
+              onChange={(e) => onDatePaidChange(e.target.value)}
               placeholder="Date paid"
               className={boxCls}
             />
@@ -127,13 +152,17 @@ export default function ArtworkSalePanel({
       <div>
         <p className="mb-1 text-sm font-medium text-neutral-700">Purchase option</p>
         <div className="grid grid-cols-2 gap-3">
-          <button type="button" onClick={() => setOption("full")} className={cardCls(option === "full")}>
+          <button
+            type="button"
+            onClick={() => onOptionChange("full")}
+            className={cardCls(option === "full")}
+          >
             <p className="font-medium text-neutral-900">Full payment</p>
             <p className="text-neutral-600">{formatMoney(remaining, currency)}</p>
           </button>
           <button
             type="button"
-            onClick={() => setOption("instalments")}
+            onClick={() => onOptionChange("instalments")}
             className={cardCls(option === "instalments")}
           >
             <p className="font-medium text-neutral-900">{instalmentCount} instalments</p>
@@ -146,15 +175,15 @@ export default function ArtworkSalePanel({
 
       <input
         type="text"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
+        value={buyerName}
+        onChange={(e) => onBuyerNameChange(e.target.value)}
         placeholder="Name"
         className={boxCls}
       />
       <input
         type="email"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
+        value={buyerEmail}
+        onChange={(e) => onBuyerEmailChange(e.target.value)}
         placeholder="Email"
         className={boxCls}
       />
