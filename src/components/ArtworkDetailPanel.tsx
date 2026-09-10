@@ -302,10 +302,18 @@ export default function ArtworkDetailPanel({
   // which mode/branch is rendering it — keeps the two call sites below
   // from drifting out of sync with each other.
   const salePanelSharedProps = {
+    artworkId: artwork.id,
+    siteId,
     offeredPrice: artwork.offeredPrice,
     currency: artwork.saleTerms?.currency ?? siteDefaultCurrency,
     defaultInstalmentCount: settings.defaultInstalmentCount,
     saleSources: settings.saleSources,
+    // Reuses an already-active STRIPE-channel purchase if one exists
+    // (2026-09-10) — Get payment link/Enter card now talk to that one
+    // directly instead of trying to start a second, which the backend
+    // would refuse anyway. A GALLERY-channel active purchase (shouldn't
+    // normally coexist with this flow, but just in case) is left alone.
+    activePurchaseId: artwork.activePurchase?.channel === "STRIPE" ? artwork.activePurchase.id : null,
     depositPaid,
     onDepositPaidChange: setDepositPaid,
     datePaid,
@@ -318,6 +326,17 @@ export default function ArtworkDetailPanel({
     onBuyerEmailChange: setBuyerEmail,
     onRecordSale: () => setRecordMode(true),
     onBackFromRecord: () => setRecordMode(false),
+    // A sale actually finished — a card payment confirmed, or Record
+    // sale submitted (2026-09-10). Closes the whole Sold flow back down
+    // (the artwork is now SOLD, so there's nothing left to do here) and
+    // refreshes so the rest of the panel picks up the new state.
+    onSaleCompleted: () => {
+      setSaleOpen(false);
+      setCardMode(false);
+      setRecordMode(false);
+      if (onDataChanged) onDataChanged();
+      else router.refresh();
+    },
   };
 
   return (
