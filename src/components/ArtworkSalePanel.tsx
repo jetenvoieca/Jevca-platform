@@ -14,7 +14,6 @@ import StripeCardForm from "@/components/StripeCardForm";
 
 const boxCls =
   "w-full rounded-md border border-neutral-300 px-3 py-2 text-center text-sm placeholder:text-neutral-400";
-const labelCls = "mb-1 block text-sm font-medium text-neutral-700";
 
 function formatMoney(amount: number, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
