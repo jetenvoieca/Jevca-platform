@@ -21,10 +21,19 @@ export default function ArtworkSalePanel({
   offeredPrice,
   currency,
   defaultInstalmentCount,
+  onBackToAvailable,
 }: {
   offeredPrice: string | null;
   currency: string;
   defaultInstalmentCount: number;
+  // 2026-09-10 — everything below this panel (Date, Reference/Offered
+  // price, the Available/SOLD toggle itself, Studio notes) is now
+  // hidden while the panel is open (see ArtworkCatalogueFields'
+  // hideTail), matching the mockup exactly. That removed the only way
+  // back to Available, so this small link takes its place — living
+  // inside the panel rather than below it, so the "nothing shows below
+  // Record sale" rule still holds.
+  onBackToAvailable: () => void;
 }) {
   const [depositPaid, setDepositPaid] = useState("");
   const [datePaid, setDatePaid] = useState("");
@@ -62,6 +71,14 @@ export default function ArtworkSalePanel({
         shown ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
       }`}
     >
+      <button
+        type="button"
+        onClick={onBackToAvailable}
+        className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
+      >
+        ← Back to Available
+      </button>
+
       <div className="grid grid-cols-2 gap-3">
         <input
           type="text"
