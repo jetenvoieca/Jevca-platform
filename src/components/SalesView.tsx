@@ -325,6 +325,7 @@ export default function SalesView({
                   // rather than as an editable form.
                   <SaleDetailCard
                     purchase={selectedPurchase}
+                    siteId={siteId}
                     artworkType={selectedDetail.type}
                     artworkSize={selectedDetail.size}
                     artworkGroup={selectedDetail.catalogueGroup}

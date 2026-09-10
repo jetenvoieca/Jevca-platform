@@ -286,6 +286,7 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
                 ) : (
                   <SaleDetailCard
                     purchase={selectedPurchase}
+                    siteId={selectedRow.siteId!}
                     artworkType={selectedDetail.type}
                     artworkSize={selectedDetail.size}
                     artworkGroup={selectedDetail.catalogueGroup}
