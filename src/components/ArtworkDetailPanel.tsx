@@ -160,26 +160,33 @@ export default function ArtworkDetailPanel({
   // panel, so it survives an unrelated field autosaving while hidden.
   const [saleOpen, setSaleOpen] = useState(artwork.availability === "SOLD");
 
-  // Enter card now (2026-09-10 follow-up) — moves the sale panel up
-  // further still, to sit right under Name/Tier, matching the mockup's
-  // "slides up further to just under the name/tier row". That means
-  // Type/Group/Medium/Size/Location/Edition/Available(qty) disappear
-  // too, not just the tail fields hideTail already covers — so when
-  // cardMode is on, ArtworkCatalogueFields doesn't render at all, and
-  // every field it would have submitted is preserved via the hidden
-  // inputs just below it instead.
+  // Enter card now — moves the sale panel up further still, to sit
+  // right under Name/Tier, matching the mockup's "slides up further to
+  // just under the name/tier row". That means Type/Group/Medium/Size/
+  // Location/Edition/Available(qty) disappear too, not just the tail
+  // fields hideTail already covers — so when cardMode is on,
+  // ArtworkCatalogueFields doesn't render at all, and every field it
+  // would have submitted is preserved via the hidden inputs just below
+  // it instead.
   const [cardMode, setCardMode] = useState(false);
+
+  // Record sale (2026-09-10 follow-up) — unlike card mode, this stays
+  // in the panel's normal position (afterLocation, same as plain sale
+  // mode); only the panel's own content swaps for a simple record-a-sale
+  // form. See panelMode below for how sale/card/record combine.
+  const [recordMode, setRecordMode] = useState(false);
+  const panelMode: "sale" | "card" | "record" = cardMode ? "card" : recordMode ? "record" : "sale";
 
   // ---- Sale panel field state, owned here (2026-09-10 fix) ----
   // ArtworkSalePanel renders from two structurally different places
   // depending on mode (ArtworkCatalogueFields' afterLocation slot in
-  // "sale" mode vs. the cardMode branch that skips ArtworkCatalogueFields
-  // entirely in "card" mode) — switching between them mounts a genuinely
-  // new component instance, which was silently wiping Deposit paid/
-  // Purchase option/Name/Email the moment Enter card now was pressed.
-  // Owning the values here and passing them down as controlled props
-  // means the same state simply carries over regardless of which branch
-  // is currently rendering the panel.
+  // "sale"/"record" mode vs. the cardMode branch that skips
+  // ArtworkCatalogueFields entirely in "card" mode) — switching between
+  // them mounts a genuinely new component instance, which was silently
+  // wiping Deposit paid/Purchase option/Name/Email the moment Enter
+  // card now was pressed. Owning the values here and passing them down
+  // as controlled props means the same state simply carries over
+  // regardless of which branch is currently rendering the panel.
   const [depositPaid, setDepositPaid] = useState("");
   const [datePaid, setDatePaid] = useState("");
   const [purchaseOption, setPurchaseOption] = useState<"full" | "instalments">("full");
@@ -244,6 +251,7 @@ export default function ArtworkDetailPanel({
     offeredPrice: artwork.offeredPrice,
     currency: artwork.saleTerms?.currency ?? siteDefaultCurrency,
     defaultInstalmentCount: settings.defaultInstalmentCount,
+    saleSources: settings.saleSources,
     depositPaid,
     onDepositPaidChange: setDepositPaid,
     datePaid,
@@ -254,11 +262,20 @@ export default function ArtworkDetailPanel({
     onBuyerNameChange: setBuyerName,
     buyerEmail,
     onBuyerEmailChange: setBuyerEmail,
+    onRecordSale: () => setRecordMode(true),
+    onBackFromRecord: () => setRecordMode(false),
   };
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      <div className="mb-4 flex items-start justify-between">
+      {/* Sticky header (2026-09-10, direct request) — was scrolling away
+          with the rest of the panel's content inside the modal's own
+          overflow-y-auto. The negative margins cancel this wrapper's own
+          p-6 so the sticky bar can run edge-to-edge against the modal
+          while stuck, then its own px-6/py-* reinstates the same
+          padding the content below still has, so nothing visually
+          shifts. */}
+      <div className="sticky top-0 z-10 -mx-6 -mt-6 mb-4 flex items-start justify-between border-b border-neutral-200 bg-white px-6 pb-4 pt-6">
         <div>
           <h2 className="text-xl font-semibold text-neutral-900">{artwork.catalogueName}</h2>
           <p className="text-sm text-neutral-500">
@@ -414,7 +431,7 @@ export default function ArtworkDetailPanel({
                   <>
                     <ArtworkSalePanel
                       {...salePanelSharedProps}
-                      mode="sale"
+                      mode={panelMode === "record" ? "record" : "sale"}
                       onBackToAvailable={() => setSaleOpen(false)}
                       onEnterCard={() => setCardMode(true)}
                     />
