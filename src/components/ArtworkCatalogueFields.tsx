@@ -60,6 +60,8 @@ export default function ArtworkCatalogueFields({
   onAutosave,
   onTypeOrSizeChange,
   children,
+  afterLocation,
+  availabilityOverride,
 }: {
   settings: Pick<
     ArtworkSettings,
@@ -76,6 +78,18 @@ export default function ArtworkCatalogueFields({
   // live Reference price preview (Catalogue tab only) can recompute it.
   onTypeOrSizeChange?: (type: string, size: string) => void;
   children?: React.ReactNode;
+  // Full-width (col-span-2) slot rendered right after Location, before
+  // Date (2026-09-10, direct request) — the Catalogue tab's own sale
+  // panel opens exactly here, regardless of where its trigger
+  // (availabilityOverride, below) actually sits further down the form.
+  // Omitted entirely by any caller that doesn't pass it (Hopper).
+  afterLocation?: React.ReactNode;
+  // Replaces the default Availability <select> for non-edition types
+  // only (2026-09-10) — the Catalogue tab uses this to swap in its own
+  // Available/SOLD toggle; Hopper leaves it unset and keeps the plain
+  // select. Edition types are unaffected either way — they always keep
+  // tracking availability via Available (qty) instead, same as before.
+  availabilityOverride?: React.ReactNode;
 }) {
   const [typeValue, setTypeValue] = useState(values.type);
   const [sizeValue, setSizeValue] = useState(values.size);
@@ -212,6 +226,7 @@ export default function ArtworkCatalogueFields({
           ))}
         </select>
       </div>
+      {afterLocation && <div className="col-span-2">{afterLocation}</div>}
       <div>
         <label className={labelCls}>Date</label>
         <input
@@ -225,19 +240,21 @@ export default function ArtworkCatalogueFields({
       </div>
       {children}
       {!isEditionType ? (
-        <div>
-          <label className={labelCls}>Availability</label>
-          <select
-            name="availability"
-            defaultValue={values.availability}
-            onChange={(e) => onAutosave?.(e.currentTarget.form!)}
-            className={inputCls}
-          >
-            <option value="AVAILABLE">Available</option>
-            <option value="RESERVED">Reserved</option>
-            <option value="SOLD">Sold</option>
-          </select>
-        </div>
+        (availabilityOverride ?? (
+          <div>
+            <label className={labelCls}>Availability</label>
+            <select
+              name="availability"
+              defaultValue={values.availability}
+              onChange={(e) => onAutosave?.(e.currentTarget.form!)}
+              className={inputCls}
+            >
+              <option value="AVAILABLE">Available</option>
+              <option value="RESERVED">Reserved</option>
+              <option value="SOLD">Sold</option>
+            </select>
+          </div>
+        ))
       ) : (
         // Editions track availability via the numeric Available (qty)
         // field instead — this status only makes sense for a
