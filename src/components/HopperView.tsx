@@ -585,141 +585,14 @@ export default function HopperView({
           question to get wrong). Below lg: unchanged — a single stacked
           column with natural page scroll, sorting card first via the
           order-* classes (what matters when you've just dragged
-          something in), Up next second, Processed last. */}
+          something in), Up next second, Processed last.
+          Desktop left-to-right order (2026-09-10, direct request): Up
+          next, Hopper, Processed — set by DOM order below (lg:order-none
+          on every pane means desktop position simply follows source
+          order); the order-1/2/3 classes below are mobile-only and
+          unchanged, so the stacked-on-mobile order (sorting card, Up
+          next, Processed) stays exactly as it was. */}
       <div className="flex flex-col gap-6 lg:h-[calc(100vh-7rem)] lg:flex-row lg:items-stretch">
-        {/* Processed — a visual confirmation trail, not part of the
-            sorting flow itself, so it stays put once the queue on the
-            right runs out. */}
-        <div className="order-3 flex flex-col lg:order-none lg:w-[300px] lg:flex-shrink-0 lg:overflow-hidden">
-          {processedLog.length > 0 && (
-            <>
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  Processed
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setProcessedLog([])}
-                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
-                >
-                  Clear list
-                </button>
-              </div>
-              <div className="space-y-2 lg:flex-1 lg:overflow-y-auto lg:pr-1">
-                {processedLog.map((entry) => {
-                  const thumb =
-                    entry.kind === "VIDEO" ? (
-                      entry.posterUrl ? (
-                        <img
-                          src={entry.posterUrl}
-                          alt=""
-                          className="h-10 w-10 shrink-0 rounded object-cover"
-                        />
-                      ) : (
-                        <VideoThumb
-                          src={entry.url}
-                          className="h-10 w-10 shrink-0 rounded object-cover"
-                        />
-                      )
-                    ) : (
-                      <img
-                        src={entry.url}
-                        alt=""
-                        className="h-10 w-10 shrink-0 rounded object-cover"
-                      />
-                    );
-                  const text = (
-                    <div className="min-w-0">
-                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
-                      <p className="text-xs text-neutral-400">
-                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
-                      </p>
-                    </div>
-                  );
-                  const removeButton = (
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        // Stops the surrounding Link (when this row has
-                        // one) from navigating — this button removing the
-                        // row is the only thing a click on it should do.
-                        e.preventDefault();
-                        e.stopPropagation();
-                        setProcessedLog((prev) => prev.filter((p) => p.key !== entry.key));
-                      }}
-                      aria-label={`Remove ${entry.label} from the processed list`}
-                      // Absolutely positioned in the top-right corner
-                      // (2026-08-19, direct request) — was inline after
-                      // the text, which put it hard against a short
-                      // label ("New pump") but far to the right of a
-                      // long, truncated one ("Hats off to A…"), jumping
-                      // around from row to row instead of sitting
-                      // somewhere predictable. Matches the same
-                      // top-right-corner badge pattern already used for
-                      // the selected-thumbnail badges in the media
-                      // picker.
-                      className="absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-base leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
-                    >
-                      ×
-                    </button>
-                  );
-                  return entry.href ? (
-                    <Link
-                      key={entry.key}
-                      href={entry.href}
-                      className="relative flex items-center gap-2 rounded-md border border-neutral-200 p-2 pr-8 hover:border-neutral-300 hover:bg-neutral-50"
-                    >
-                      {thumb}
-                      {text}
-                      {removeButton}
-                    </Link>
-                  ) : (
-                    <div
-                      key={entry.key}
-                      className="relative flex items-center gap-2 rounded-md border border-neutral-200 p-2 pr-8"
-                    >
-                      {thumb}
-                      {text}
-                      {removeButton}
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          )}
-        </div>
-
-        <div className="order-1 flex flex-col lg:order-none lg:min-w-0 lg:flex-1 lg:overflow-hidden">
-          <div className="mb-3">{importButtons}</div>
-          <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
-            {!current ? (
-              <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-                {queue.length === 0
-                  ? "Hopper is empty — drag and drop files here, or use the buttons above."
-                  : "Drag and drop a new file in, or pick one from Up next to start sorting."}
-              </div>
-            ) : (
-              <SortingCard
-                key={current.id}
-                siteId={siteId}
-                artistId={artistId}
-                item={current}
-                isPending={isPending}
-                settings={artworkSettings}
-                onBin={() => handleBin(current)}
-                onAddToMedia={() => handleAddToMedia(current)}
-                onAddToBucket={() => handleAddToBucket(current)}
-                onAddToExistingArtwork={(artworkId, artworkTitle) =>
-                  handleAddToExistingArtwork(current, artworkId, artworkTitle)
-                }
-                onAddNewArtwork={(title, description, fields) =>
-                  handleAddNewArtwork(current, title, description, fields)
-                }
-              />
-            )}
-          </div>
-        </div>
-
         {/* Up next — always rendered (not just while there's a current
             item), so "Up next (0)" and this column's place in the layout
             stay visible and stable even once the queue empties out.
@@ -875,6 +748,139 @@ export default function HopperView({
               </div>
             )}
           </div>
+        </div>
+
+        <div className="order-1 flex flex-col lg:order-none lg:min-w-0 lg:flex-1 lg:overflow-hidden">
+          <div className="mb-3">{importButtons}</div>
+          <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
+            {!current ? (
+              <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
+                {queue.length === 0
+                  ? "Hopper is empty — drag and drop files here, or use the buttons above."
+                  : "Drag and drop a new file in, or pick one from Up next to start sorting."}
+              </div>
+            ) : (
+              <SortingCard
+                key={current.id}
+                siteId={siteId}
+                artistId={artistId}
+                item={current}
+                isPending={isPending}
+                settings={artworkSettings}
+                onBin={() => handleBin(current)}
+                onAddToMedia={() => handleAddToMedia(current)}
+                onAddToBucket={() => handleAddToBucket(current)}
+                onAddToExistingArtwork={(artworkId, artworkTitle) =>
+                  handleAddToExistingArtwork(current, artworkId, artworkTitle)
+                }
+                onAddNewArtwork={(title, description, fields) =>
+                  handleAddNewArtwork(current, title, description, fields)
+                }
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Processed — a visual confirmation trail, not part of the
+            sorting flow itself, so it stays put once the queue on the
+            right runs out. */}
+        <div className="order-3 flex flex-col lg:order-none lg:w-[300px] lg:flex-shrink-0 lg:overflow-hidden">
+          {processedLog.length > 0 && (
+            <>
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  Processed
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setProcessedLog([])}
+                  className="text-xs text-neutral-400 hover:text-neutral-700 hover:underline"
+                >
+                  Clear list
+                </button>
+              </div>
+              <div className="space-y-2 lg:flex-1 lg:overflow-y-auto lg:pr-1">
+                {processedLog.map((entry) => {
+                  const thumb =
+                    entry.kind === "VIDEO" ? (
+                      entry.posterUrl ? (
+                        <img
+                          src={entry.posterUrl}
+                          alt=""
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                      ) : (
+                        <VideoThumb
+                          src={entry.url}
+                          className="h-10 w-10 shrink-0 rounded object-cover"
+                        />
+                      )
+                    ) : (
+                      <img
+                        src={entry.url}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded object-cover"
+                      />
+                    );
+                  const text = (
+                    <div className="min-w-0">
+                      <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
+                      <p className="text-xs text-neutral-400">
+                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
+                      </p>
+                    </div>
+                  );
+                  const removeButton = (
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        // Stops the surrounding Link (when this row has
+                        // one) from navigating — this button removing the
+                        // row is the only thing a click on it should do.
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setProcessedLog((prev) => prev.filter((p) => p.key !== entry.key));
+                      }}
+                      aria-label={`Remove ${entry.label} from the processed list`}
+                      // Absolutely positioned in the top-right corner
+                      // (2026-08-19, direct request) — was inline after
+                      // the text, which put it hard against a short
+                      // label ("New pump") but far to the right of a
+                      // long, truncated one ("Hats off to A…"), jumping
+                      // around from row to row instead of sitting
+                      // somewhere predictable. Matches the same
+                      // top-right-corner badge pattern already used for
+                      // the selected-thumbnail badges in the media
+                      // picker.
+                      className="absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-base leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+                    >
+                      ×
+                    </button>
+                  );
+                  return entry.href ? (
+                    <Link
+                      key={entry.key}
+                      href={entry.href}
+                      className="relative flex items-center gap-2 rounded-md border border-neutral-200 p-2 pr-8 hover:border-neutral-300 hover:bg-neutral-50"
+                    >
+                      {thumb}
+                      {text}
+                      {removeButton}
+                    </Link>
+                  ) : (
+                    <div
+                      key={entry.key}
+                      className="relative flex items-center gap-2 rounded-md border border-neutral-200 p-2 pr-8"
+                    >
+                      {thumb}
+                      {text}
+                      {removeButton}
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
