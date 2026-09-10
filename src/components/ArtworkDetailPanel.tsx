@@ -170,6 +170,22 @@ export default function ArtworkDetailPanel({
   // inputs just below it instead.
   const [cardMode, setCardMode] = useState(false);
 
+  // ---- Sale panel field state, owned here (2026-09-10 fix) ----
+  // ArtworkSalePanel renders from two structurally different places
+  // depending on mode (ArtworkCatalogueFields' afterLocation slot in
+  // "sale" mode vs. the cardMode branch that skips ArtworkCatalogueFields
+  // entirely in "card" mode) — switching between them mounts a genuinely
+  // new component instance, which was silently wiping Deposit paid/
+  // Purchase option/Name/Email the moment Enter card now was pressed.
+  // Owning the values here and passing them down as controlled props
+  // means the same state simply carries over regardless of which branch
+  // is currently rendering the panel.
+  const [depositPaid, setDepositPaid] = useState("");
+  const [datePaid, setDatePaid] = useState("");
+  const [purchaseOption, setPurchaseOption] = useState<"full" | "instalments">("full");
+  const [buyerName, setBuyerName] = useState("");
+  const [buyerEmail, setBuyerEmail] = useState("");
+
   // ---- Autosave (2026-08-15) — reads straight from the DOM via
   // FormData rather than controlling every field in React state - much
   // less code, and safe here because nothing in this form needs to
@@ -219,6 +235,25 @@ export default function ArtworkDetailPanel({
         router.push(`/sites/${siteId}/artworks`);
       }
     });
+  };
+
+  // Shared props every ArtworkSalePanel instance needs, regardless of
+  // which mode/branch is rendering it — keeps the two call sites below
+  // from drifting out of sync with each other.
+  const salePanelSharedProps = {
+    offeredPrice: artwork.offeredPrice,
+    currency: artwork.saleTerms?.currency ?? siteDefaultCurrency,
+    defaultInstalmentCount: settings.defaultInstalmentCount,
+    depositPaid,
+    onDepositPaidChange: setDepositPaid,
+    datePaid,
+    onDatePaidChange: setDatePaid,
+    option: purchaseOption,
+    onOptionChange: setPurchaseOption,
+    buyerName,
+    onBuyerNameChange: setBuyerName,
+    buyerEmail,
+    onBuyerEmailChange: setBuyerEmail,
   };
 
   return (
@@ -319,9 +354,7 @@ export default function ArtworkDetailPanel({
             <>
               <div className="col-span-2">
                 <ArtworkSalePanel
-                  offeredPrice={artwork.offeredPrice}
-                  currency={artwork.saleTerms?.currency ?? siteDefaultCurrency}
-                  defaultInstalmentCount={settings.defaultInstalmentCount}
+                  {...salePanelSharedProps}
                   mode="card"
                   onBackToAvailable={() => {
                     setCardMode(false);
@@ -380,9 +413,7 @@ export default function ArtworkDetailPanel({
                 saleOpen ? (
                   <>
                     <ArtworkSalePanel
-                      offeredPrice={artwork.offeredPrice}
-                      currency={artwork.saleTerms?.currency ?? siteDefaultCurrency}
-                      defaultInstalmentCount={settings.defaultInstalmentCount}
+                      {...salePanelSharedProps}
                       mode="sale"
                       onBackToAvailable={() => setSaleOpen(false)}
                       onEnterCard={() => setCardMode(true)}
