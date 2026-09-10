@@ -468,13 +468,11 @@ export default function ArtworksCatalogueView({
 
   return (
     <div className="flex h-full flex-col">
-      {/* pr-[504px] (not px-6 on the right) — reserves exactly the same
-          width as the detail panel + gap below (480px + gap-6's 24px),
-          so this header's content lines up with the grid column's own
-          right edge rather than the full page width. Without this the
-          button row ran past where the grid actually ends, out over
-          the detail panel's space (2026-09-09, direct request). */}
-      <div className="shrink-0 pl-6 pr-[504px] pt-4">
+      {/* pl-6 pr-6 (2026-09-10) — used to reserve pr-[504px] to line up
+          with the detail panel's inline column + gap. That panel is now
+          a modal (see below), so the grid runs the full width and the
+          header no longer needs to leave space for it. */}
+      <div className="shrink-0 px-6 pt-4">
         {/* Row 1: title + view controls, together since they both govern
             how the whole catalogue displays. All/Available/Sold moved
             here (2026-09-07, direct request) — in line with the
@@ -708,9 +706,10 @@ export default function ArtworksCatalogueView({
           </p>
       </div>
 
-      <div className="flex flex-1 gap-6 overflow-hidden px-6 pb-4">
-        <div className="flex-1 overflow-y-auto overscroll-contain">
-
+      {/* Grid now runs the full width (2026-09-10) — the detail panel
+          used to sit alongside it in a fixed 480px column; it's a modal
+          now (below), so there's nothing left to share this row with. */}
+      <div className="flex-1 overflow-y-auto overscroll-contain px-6 pb-4">
           {view === "tile" ? (
             <div
               className="grid gap-3"
@@ -809,10 +808,19 @@ export default function ArtworksCatalogueView({
           )}
 
           {loadMoreRow}
-        </div>
+      </div>
 
-        <div className="w-[480px] shrink-0 overflow-y-auto overscroll-contain">
-          {selected ? (
+      {/* ---- Artwork detail modal (2026-09-10) ---- */}
+      {/* Was a permanent 480px column next to the grid; the grid now
+          runs full width regardless of whether anything is selected,
+          and this opens as a modal on the same click (handleSelect)
+          that used to just populate the column. ArtworkDetailPanel is
+          unchanged — its own Duplicate/Delete/Close row still works
+          exactly as before, just showCloseButton is now on (true)
+          since Close is this modal's only way to dismiss it. */}
+      {selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
             <ArtworkDetailPanel
               key={selected.id}
               siteId={siteId}
@@ -824,15 +832,11 @@ export default function ArtworksCatalogueView({
               onDeleted={handleDeletedPanel}
               onDuplicated={handleDuplicated}
               onDataChanged={refreshSelected}
-              showCloseButton={false}
+              showCloseButton={true}
             />
-          ) : (
-            <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
-              Select an artwork to see its details.
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
 
       {showImport && (
         <ArtworkImportPanel
