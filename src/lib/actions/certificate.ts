@@ -154,13 +154,24 @@ export async function generateCertificatePdf(
   });
   y -= 60;
 
-  // ---- Artist / Title / Details / Image Size ----
+  // ---- Artist / Title / Edition / Details / Image Size ----
+  // Edition (2026-09-10, direct request) — the Catalogue tab's own
+  // `edition` free-text field (e.g. "Paper - 5/25"), shown as its own
+  // row only when the artwork actually has one set, right after Title —
+  // same position it reads in everywhere else (e.g. the Consigned Works
+  // tile's "Type - Edition" line). No "—" placeholder for this one when
+  // blank, since not every artwork is an edition at all.
   const fields: [string, string][] = [
     ["Artist :", artist.name],
     ["Title:", artwork.presentationTitle],
-    ["Details:", artwork.presentationMedium || artwork.medium || "—"],
-    ["Image Size:", artwork.size || "—"],
   ];
+  if (artwork.edition) {
+    fields.push(["Edition:", artwork.edition]);
+  }
+  fields.push(
+    ["Details:", artwork.presentationMedium || artwork.medium || "—"],
+    ["Image Size:", artwork.size || "—"]
+  );
   const valueX = left + 110;
   for (const [label, value] of fields) {
     page.drawText(label, { x: left, y, size: 11, font: bold });
