@@ -17,6 +17,7 @@ import StripeCardForm from "@/components/StripeCardForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import CustomerPicker from "@/components/CustomerPicker";
 import GallerySaleCard from "@/components/GallerySaleCard";
+import CertificateEmailModal from "@/components/CertificateEmailModal";
 import type { CustomerSummary } from "@/lib/actions/customers";
 
 function formatMoney(amount: string, currency: string) {
@@ -62,6 +63,11 @@ export default function PurchasePanel({
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  // Certificate of Authenticity (2026-09-10, direct request — "add to
+  // all sales, completed or not") — a single modal shared between the
+  // active purchase's own button and any completed history row's,
+  // holding whichever purchase id it's currently open for (or null).
+  const [certificateModalId, setCertificateModalId] = useState<string | null>(null);
   const [cardSecret, setCardSecret] = useState<string | null>(null);
   const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<"full" | "instalments">("full");
@@ -592,13 +598,24 @@ export default function PurchasePanel({
                       ))}
                     </tbody>
                   </table>
-                  <button
-                    type="button"
-                    onClick={() => downloadInvoice(activePurchase.id)}
-                    className="mt-3 rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-                  >
-                    Download invoice
-                  </button>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => downloadInvoice(activePurchase.id)}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+                    >
+                      Download invoice
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCertificateModalId(activePurchase.id)}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+                    >
+                      {activePurchase.certificateEmailedAt
+                        ? "Send certificate again"
+                        : "Certificate of Authenticity"}
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -708,6 +725,15 @@ export default function PurchasePanel({
                   >
                     {p.status === "COMPLETED" ? "Receipt" : "Invoice"}
                   </button>
+                  {p.status === "COMPLETED" && (
+                    <button
+                      type="button"
+                      onClick={() => setCertificateModalId(p.id)}
+                      className="text-neutral-500 hover:underline"
+                    >
+                      Certificate
+                    </button>
+                  )}
                   {p.status !== "COMPLETED" && (
                     <button
                       type="button"
@@ -742,6 +768,15 @@ export default function PurchasePanel({
         onConfirm={() => pendingConfirm?.onConfirm()}
         onCancel={() => setPendingConfirm(null)}
       />
+
+      {certificateModalId && (
+        <CertificateEmailModal
+          purchaseId={certificateModalId}
+          siteId={siteId}
+          onClose={() => setCertificateModalId(null)}
+          onSent={onChanged ?? (() => router.refresh())}
+        />
+      )}
     </div>
   );
 }
