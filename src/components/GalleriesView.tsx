@@ -312,6 +312,10 @@ export default function GalleriesView({
   return (
     <div className="flex h-full overflow-hidden">
       {/* ---- Consigned Works (left) ---- */}
+      {/* Now the only column besides the gallery list (2026-09-10) —
+          Gallery details/Sales moved out into its own modal below, so
+          this panel simply gets whatever width is left rather than
+          splitting a fixed 480px column with it. */}
       <div className="flex flex-1 flex-col overflow-hidden p-6">
         <h1 className="mb-4 text-2xl font-semibold text-neutral-900">Consigned Works</h1>
         {!selectedDetail ? (
@@ -516,283 +520,6 @@ export default function GalleriesView({
         )}
       </div>
 
-      {/* ---- Gallery details / sales (middle) ---- */}
-      {/* Headers never scroll (2026-09-09, general design instruction) —
-          this panel used to be one big overflow-y-auto block, so the
-          name/tabs/Delete/Close row scrolled away with the content
-          beneath it. Now that row is fixed (shrink-0) and only the tab
-          content underneath scrolls. */}
-      <div className="flex w-[480px] shrink-0 flex-col overflow-hidden border-l border-neutral-200 p-6">
-        {!selectedId ? (
-          <p className="text-sm text-neutral-400">Select a gallery to see its details.</p>
-        ) : loading || !selectedDetail ? (
-          <p className="text-sm text-neutral-400">Loading…</p>
-        ) : (
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <div className="mb-4 flex shrink-0 items-center justify-between">
-              <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
-              <div className="flex items-center gap-3">
-                <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setDetailTab("details")}
-                    className={`px-3 py-[2px] font-medium ${
-                      detailTab === "details"
-                        ? "bg-neutral-900 text-white"
-                        : "bg-white text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    Details
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setDetailTab("sales")}
-                    className={`px-3 py-[2px] font-medium ${
-                      detailTab === "sales"
-                        ? "bg-neutral-900 text-white"
-                        : "bg-white text-neutral-600 hover:bg-neutral-50"
-                    }`}
-                  >
-                    Sales
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setConfirmingDelete(true)}
-                  className="rounded-md border border-red-200 px-2 py-[2px] text-xs text-red-600 hover:bg-red-50"
-                >
-                  Delete
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(null);
-                    setSelectedDetail(null);
-                  }}
-                  className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
-                >
-                  Close
-                </button>
-              </div>
-            </div>
-
-            <div className="flex-1 overflow-y-auto">
-            {detailTab === "sales" ? (
-              <div>
-                <p className="mb-4 text-sm text-neutral-500">{salesSummary}</p>
-                <div className="overflow-hidden rounded-lg border border-neutral-200">
-                  {/* table-fixed + explicit column widths (2026-09-10) —
-                      previously table-auto let a long artwork title grow
-                      the Artwork column and push Date off the visible
-                      edge of this fixed-width panel. Artwork now
-                      truncates within its own reserved width instead, so
-                      Status/Amount/Date always stay on screen regardless
-                      of title length or window size. */}
-                  <table className="w-full table-fixed text-sm">
-                    <colgroup>
-                      <col className="w-[42%]" />
-                      <col className="w-[20%]" />
-                      <col className="w-[19%]" />
-                      <col className="w-[19%]" />
-                    </colgroup>
-                    <thead>
-                      <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
-                        <th className="px-3 py-2 font-normal">Artwork</th>
-                        <th className="px-3 py-2 font-normal">Status</th>
-                        <th className="px-3 py-2 font-normal">Amount</th>
-                        <th className="px-3 py-2 font-normal">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {selectedDetail.purchases.length === 0 ? (
-                        <tr>
-                          <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
-                            Nothing here yet.
-                          </td>
-                        </tr>
-                      ) : (
-                        selectedDetail.purchases.map((p) => (
-                          // Clicking a row opens that artwork in the
-                          // Consigned Works panel on the left — same as
-                          // clicking its thumbnail there, just reachable
-                          // from this table too.
-                          <tr
-                            key={p.id}
-                            onClick={() => openWork(p.artworkId)}
-                            className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50"
-                          >
-                            <td className="px-3 py-2">
-                              <div className="flex min-w-0 items-center gap-2">
-                                {p.artworkImageUrl ? (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={p.artworkImageUrl}
-                                    alt=""
-                                    className="h-8 w-8 shrink-0 rounded object-cover"
-                                  />
-                                ) : (
-                                  <div className="h-8 w-8 shrink-0 rounded bg-neutral-100" />
-                                )}
-                                <span className="min-w-0 truncate">{p.artworkTitle}</span>
-                              </div>
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-2">
-                              <SaleStatusBadge status={p.status} />
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
-                              {formatMoney(p.totalAmount, p.currency)}
-                            </td>
-                            <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
-                              {new Date(p.createdAt).toLocaleDateString()}
-                            </td>
-                          </tr>
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div>
-                  <label className={labelCls}>Gallery name</label>
-                  <input
-                    key={`name-${selectedDetail.id}`}
-                    type="text"
-                    defaultValue={selectedDetail.name}
-                    onBlur={(e) => saveField("name", e.target.value.trim())}
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>General email</label>
-                  <input
-                    key={`email-${selectedDetail.id}`}
-                    type="email"
-                    defaultValue={selectedDetail.email || ""}
-                    onBlur={(e) => saveField("email", e.target.value.trim())}
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Phone</label>
-                  <input
-                    key={`phone-${selectedDetail.id}`}
-                    type="text"
-                    defaultValue={selectedDetail.phone || ""}
-                    onBlur={(e) => saveField("phone", e.target.value.trim())}
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Address</label>
-                  <textarea
-                    key={`address-${selectedDetail.id}`}
-                    defaultValue={selectedDetail.address || ""}
-                    onBlur={(e) => saveField("address", e.target.value.trim())}
-                    disabled={isPending}
-                    rows={2}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Contact name</label>
-                  <input
-                    key={`contactName-${selectedDetail.id}`}
-                    type="text"
-                    defaultValue={selectedDetail.contactName || ""}
-                    onBlur={(e) => saveField("contactName", e.target.value.trim())}
-                    disabled={isPending}
-                    placeholder="The person you deal with there"
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Contact email</label>
-                  <input
-                    key={`contactEmail-${selectedDetail.id}`}
-                    type="email"
-                    defaultValue={selectedDetail.contactEmail || ""}
-                    onBlur={(e) => saveField("contactEmail", e.target.value.trim())}
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className={labelCls}>Website name</label>
-                    <input
-                      key={`websiteName-${selectedDetail.id}`}
-                      type="text"
-                      defaultValue={selectedDetail.websiteName || ""}
-                      onBlur={(e) => saveField("websiteName", e.target.value.trim())}
-                      disabled={isPending}
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Website URL</label>
-                    <input
-                      key={`websiteUrl-${selectedDetail.id}`}
-                      type="text"
-                      defaultValue={selectedDetail.websiteUrl || ""}
-                      onBlur={(e) => saveField("websiteUrl", e.target.value.trim())}
-                      disabled={isPending}
-                      placeholder="https://…"
-                      className={inputCls}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className={labelCls}>Instagram</label>
-                    <input
-                      key={`instagramUrl-${selectedDetail.id}`}
-                      type="text"
-                      defaultValue={selectedDetail.instagramUrl || ""}
-                      onBlur={(e) => saveField("instagramUrl", e.target.value.trim())}
-                      disabled={isPending}
-                      placeholder="https://instagram.com/…"
-                      className={inputCls}
-                    />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Facebook</label>
-                    <input
-                      key={`facebookUrl-${selectedDetail.id}`}
-                      type="text"
-                      defaultValue={selectedDetail.facebookUrl || ""}
-                      onBlur={(e) => saveField("facebookUrl", e.target.value.trim())}
-                      disabled={isPending}
-                      placeholder="https://facebook.com/…"
-                      className={inputCls}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className={labelCls}>Default commission %</label>
-                  <input
-                    key={`defaultCommissionPercent-${selectedDetail.id}`}
-                    type="text"
-                    inputMode="decimal"
-                    defaultValue={selectedDetail.defaultCommissionPercent || ""}
-                    onBlur={(e) => saveField("defaultCommissionPercent", e.target.value.trim())}
-                    disabled={isPending}
-                    placeholder="e.g. 30"
-                    className={inputCls}
-                  />
-                </div>
-                {savedField && <p className="text-xs text-green-600">Saved</p>}
-              </div>
-            )}
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* ---- Gallery list (right) ---- */}
       {/* overflow-hidden, not overflow-y-auto — headers never scroll
           (2026-09-09). The "+ Add Gallery"/search block below is fixed;
@@ -884,6 +611,293 @@ export default function GalleriesView({
           )}
         </div>
       </div>
+
+      {/* ---- Gallery details / sales modal (2026-09-10) ---- */}
+      {/* Was a permanent 480px column between Consigned Works and the
+          gallery list; moved to a modal (25% wider — 600px, up from
+          480px) so Consigned Works gets that width back once no gallery
+          is open. Still opens automatically on the same click that used
+          to just populate the column (openRow), and Close still just
+          clears selectedId/selectedDetail — same state, new
+          presentation. */}
+      {selectedId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+          <div className="flex max-h-[85vh] w-full max-w-[600px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+            {loading || !selectedDetail ? (
+              <p className="p-6 text-sm text-neutral-400">Loading…</p>
+            ) : (
+              <>
+                <div className="flex shrink-0 items-center justify-between border-b border-neutral-200 px-6 py-4">
+                  <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
+                  <div className="flex items-center gap-3">
+                    <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
+                      <button
+                        type="button"
+                        onClick={() => setDetailTab("details")}
+                        className={`px-3 py-[2px] font-medium ${
+                          detailTab === "details"
+                            ? "bg-neutral-900 text-white"
+                            : "bg-white text-neutral-600 hover:bg-neutral-50"
+                        }`}
+                      >
+                        Details
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDetailTab("sales")}
+                        className={`px-3 py-[2px] font-medium ${
+                          detailTab === "sales"
+                            ? "bg-neutral-900 text-white"
+                            : "bg-white text-neutral-600 hover:bg-neutral-50"
+                        }`}
+                      >
+                        Sales
+                      </button>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setConfirmingDelete(true)}
+                      className="rounded-md border border-red-200 px-2 py-[2px] text-xs text-red-600 hover:bg-red-50"
+                    >
+                      Delete
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedId(null);
+                        setSelectedDetail(null);
+                      }}
+                      className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
+                    >
+                      Close
+                    </button>
+                  </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-6">
+                  {detailTab === "sales" ? (
+                    <div>
+                      <p className="mb-4 text-sm text-neutral-500">{salesSummary}</p>
+                      <div className="overflow-hidden rounded-lg border border-neutral-200">
+                        {/* table-fixed + explicit column widths
+                            (2026-09-10) — table-auto let a long artwork
+                            title grow the Artwork column and push Date
+                            off the visible edge. Artwork now truncates
+                            within its own reserved width instead, so
+                            Status/Amount/Date always stay on screen
+                            regardless of title length or window size. */}
+                        <table className="w-full table-fixed text-sm">
+                          <colgroup>
+                            <col className="w-[42%]" />
+                            <col className="w-[20%]" />
+                            <col className="w-[19%]" />
+                            <col className="w-[19%]" />
+                          </colgroup>
+                          <thead>
+                            <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
+                              <th className="px-3 py-2 font-normal">Artwork</th>
+                              <th className="px-3 py-2 font-normal">Status</th>
+                              <th className="px-3 py-2 font-normal">Amount</th>
+                              <th className="px-3 py-2 font-normal">Date</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {selectedDetail.purchases.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
+                                  Nothing here yet.
+                                </td>
+                              </tr>
+                            ) : (
+                              selectedDetail.purchases.map((p) => (
+                                // Clicking a row opens that artwork in
+                                // the Consigned Works panel on the left
+                                // — same as clicking its thumbnail
+                                // there, just reachable from this table
+                                // too. Also closes this modal, since the
+                                // point is to bring the left panel back
+                                // into view.
+                                <tr
+                                  key={p.id}
+                                  onClick={() => {
+                                    openWork(p.artworkId);
+                                    setSelectedId(null);
+                                  }}
+                                  className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50"
+                                >
+                                  <td className="px-3 py-2">
+                                    <div className="flex min-w-0 items-center gap-2">
+                                      {p.artworkImageUrl ? (
+                                        // eslint-disable-next-line @next/next/no-img-element
+                                        <img
+                                          src={p.artworkImageUrl}
+                                          alt=""
+                                          className="h-8 w-8 shrink-0 rounded object-cover"
+                                        />
+                                      ) : (
+                                        <div className="h-8 w-8 shrink-0 rounded bg-neutral-100" />
+                                      )}
+                                      <span className="min-w-0 truncate">{p.artworkTitle}</span>
+                                    </div>
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-2">
+                                    <SaleStatusBadge status={p.status} />
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
+                                    {formatMoney(p.totalAmount, p.currency)}
+                                  </td>
+                                  <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
+                                    {new Date(p.createdAt).toLocaleDateString()}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div>
+                        <label className={labelCls}>Gallery name</label>
+                        <input
+                          key={`name-${selectedDetail.id}`}
+                          type="text"
+                          defaultValue={selectedDetail.name}
+                          onBlur={(e) => saveField("name", e.target.value.trim())}
+                          disabled={isPending}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>General email</label>
+                        <input
+                          key={`email-${selectedDetail.id}`}
+                          type="email"
+                          defaultValue={selectedDetail.email || ""}
+                          onBlur={(e) => saveField("email", e.target.value.trim())}
+                          disabled={isPending}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Phone</label>
+                        <input
+                          key={`phone-${selectedDetail.id}`}
+                          type="text"
+                          defaultValue={selectedDetail.phone || ""}
+                          onBlur={(e) => saveField("phone", e.target.value.trim())}
+                          disabled={isPending}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Address</label>
+                        <textarea
+                          key={`address-${selectedDetail.id}`}
+                          defaultValue={selectedDetail.address || ""}
+                          onBlur={(e) => saveField("address", e.target.value.trim())}
+                          disabled={isPending}
+                          rows={2}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Contact name</label>
+                        <input
+                          key={`contactName-${selectedDetail.id}`}
+                          type="text"
+                          defaultValue={selectedDetail.contactName || ""}
+                          onBlur={(e) => saveField("contactName", e.target.value.trim())}
+                          disabled={isPending}
+                          placeholder="The person you deal with there"
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Contact email</label>
+                        <input
+                          key={`contactEmail-${selectedDetail.id}`}
+                          type="email"
+                          defaultValue={selectedDetail.contactEmail || ""}
+                          onBlur={(e) => saveField("contactEmail", e.target.value.trim())}
+                          disabled={isPending}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className={labelCls}>Website name</label>
+                          <input
+                            key={`websiteName-${selectedDetail.id}`}
+                            type="text"
+                            defaultValue={selectedDetail.websiteName || ""}
+                            onBlur={(e) => saveField("websiteName", e.target.value.trim())}
+                            disabled={isPending}
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Website URL</label>
+                          <input
+                            key={`websiteUrl-${selectedDetail.id}`}
+                            type="text"
+                            defaultValue={selectedDetail.websiteUrl || ""}
+                            onBlur={(e) => saveField("websiteUrl", e.target.value.trim())}
+                            disabled={isPending}
+                            placeholder="https://…"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className={labelCls}>Instagram</label>
+                          <input
+                            key={`instagramUrl-${selectedDetail.id}`}
+                            type="text"
+                            defaultValue={selectedDetail.instagramUrl || ""}
+                            onBlur={(e) => saveField("instagramUrl", e.target.value.trim())}
+                            disabled={isPending}
+                            placeholder="https://instagram.com/…"
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Facebook</label>
+                          <input
+                            key={`facebookUrl-${selectedDetail.id}`}
+                            type="text"
+                            defaultValue={selectedDetail.facebookUrl || ""}
+                            onBlur={(e) => saveField("facebookUrl", e.target.value.trim())}
+                            disabled={isPending}
+                            placeholder="https://facebook.com/…"
+                            className={inputCls}
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Default commission %</label>
+                        <input
+                          key={`defaultCommissionPercent-${selectedDetail.id}`}
+                          type="text"
+                          inputMode="decimal"
+                          defaultValue={selectedDetail.defaultCommissionPercent || ""}
+                          onBlur={(e) => saveField("defaultCommissionPercent", e.target.value.trim())}
+                          disabled={isPending}
+                          placeholder="e.g. 30"
+                          className={inputCls}
+                        />
+                      </div>
+                      {savedField && <p className="text-xs text-green-600">Saved</p>}
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmingDelete}
