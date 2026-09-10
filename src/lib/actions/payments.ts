@@ -143,6 +143,78 @@ export async function saveSaleTerms(artworkId: string, siteId: string, formData:
 
 }
 
+// Seeds/refreshes SaleTerms straight from the Catalogue tab's own
+// Offered price (2026-09-10) — the new Sold panel's "Full payment"/
+// instalment figures are computed live from Offered price minus any
+// Deposit paid noted in the panel, not from a separately-saved SaleTerms
+// row the way the old Presentation tab's price used to work. Rather than
+// inventing a second, parallel start-a-sale pathway, this upserts
+// SaleTerms to match exactly what the panel is showing right before
+// handing off to the existing startPurchase — so instalment splitting,
+// webhooks, invoices and everything else downstream keep working
+// completely unchanged, on a totalAmount that's actually correct for
+// what was agreed in the panel.
+//
+// Deposit paid isn't recorded as its own Payment row (direct instruction,
+// 2026-09-10 — "no deposit handling needed yet, just wire the remaining
+// flow") — it only reduces the amount Stripe is asked to collect here.
+async function seedSaleTermsFromOfferedPrice(
+  artworkId: string,
+  formData: FormData
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const artwork = await db.artwork.findUnique({
+    where: { id: artworkId },
+    select: { offeredPrice: true, artistId: true },
+  });
+  if (!artwork) return { ok: false, error: "Artwork not found." };
+  if (!artwork.offeredPrice) {
+    return { ok: false, error: "Set an Offered price on the Catalogue tab first." };
+  }
+
+  const depositRaw = (formData.get("depositPaid") as string)?.trim();
+  const deposit = depositRaw ? parseFloat(depositRaw) : 0;
+  const offered = parseFloat(artwork.offeredPrice.toString());
+  const remaining = Math.max(offered - (Number.isFinite(deposit) ? deposit : 0), 0);
+  if (remaining <= 0) {
+    return { ok: false, error: "Nothing left to charge after the deposit already noted." };
+  }
+
+  const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
+
+  const artist = await db.artist.findUnique({
+    where: { id: artwork.artistId },
+    select: {
+      defaultInstalmentCount: true,
+      defaultReleaseMessage: true,
+      defaultReleaseTriggerCount: true,
+    },
+  });
+  const instalmentCount = artist?.defaultInstalmentCount || 1;
+  const releaseMessage = artist?.defaultReleaseMessage ?? null;
+  const releaseTriggerCount = artist?.defaultReleaseTriggerCount ?? null;
+
+  await db.saleTerms.upsert({
+    where: { artworkId },
+    create: {
+      artworkId,
+      totalAmount: remaining.toFixed(2),
+      currency,
+      instalmentCount,
+      releaseMessage,
+      releaseTriggerCount,
+    },
+    update: {
+      totalAmount: remaining.toFixed(2),
+      currency,
+      instalmentCount,
+      releaseMessage,
+      releaseTriggerCount,
+    },
+  });
+
+  return { ok: true };
+}
+
 // ---------- Starting a sale — explicit action, not autosaved ----------
 
 // Creates the actual Purchase, snapshotting SaleTerms at this moment.
@@ -211,6 +283,56 @@ export async function startPurchase(
   });
 
   return { ok: true, purchaseId: purchase.id };
+}
+
+// ---------- Starting a sale from the Catalogue tab's Sold panel ----------
+
+// The Sold panel's own "Get payment link"/"Enter card now" (2026-09-10)
+// — seeds SaleTerms from Offered price (less any deposit noted) and
+// then reuses startPurchase/createPaymentLink/createCardEntryIntent
+// completely unchanged. Kept as two thin wrappers rather than one
+// combined function so each still returns exactly the same shape its
+// underlying create* call already does, alongside the new purchaseId.
+export async function startArtworkSaleAndGetLink(
+  artworkId: string,
+  siteId: string,
+  formData: FormData
+): Promise<{ ok: true; purchaseId: string; url: string } | { ok: false; error: string }> {
+  const seeded = await seedSaleTermsFromOfferedPrice(artworkId, formData);
+  if (!seeded.ok) return seeded;
+
+  const started = await startPurchase(artworkId, siteId, formData);
+  if (!started.ok) return started;
+
+  const link = await createPaymentLink(started.purchaseId, siteId, artworkId);
+  if (!link.ok) return { ok: false, error: link.error };
+
+  return { ok: true, purchaseId: started.purchaseId, url: link.url };
+}
+
+export async function startArtworkSaleAndEnterCard(
+  artworkId: string,
+  siteId: string,
+  formData: FormData
+): Promise<
+  | { ok: true; purchaseId: string; clientSecret: string; publishableKey: string }
+  | { ok: false; error: string }
+> {
+  const seeded = await seedSaleTermsFromOfferedPrice(artworkId, formData);
+  if (!seeded.ok) return seeded;
+
+  const started = await startPurchase(artworkId, siteId, formData);
+  if (!started.ok) return started;
+
+  const card = await createCardEntryIntent(started.purchaseId, siteId);
+  if (!card.ok) return { ok: false, error: card.error };
+
+  return {
+    ok: true,
+    purchaseId: started.purchaseId,
+    clientSecret: card.clientSecret,
+    publishableKey: card.publishableKey,
+  };
 }
 
 // ---------- Gallery sales — no Stripe involved at all ----------
@@ -351,6 +473,15 @@ export async function createGalleryPaymentLink(
 // the actual sale date rather than today, so it lands in the right
 // month on the Accounts/Consolidated Sales pages and never shows up as
 // overdue on the Alerts dashboard.
+//
+// Also reused as-is (2026-09-10) by the Catalogue tab's Sold panel's own
+// "Record sale" form — a direct/studio sale recorded after the fact,
+// same shape as a historical gallery backfill (Purchase.channel only
+// distinguishes STRIPE from "not taken through Stripe", not literally
+// "gallery"). commissionPercent is simply left out of that form's
+// FormData (direct instruction — a direct sale is always 0% commission
+// here), so it falls through to null/0 exactly like any other caller
+// that doesn't set it.
 export async function recordPastSale(
   artworkId: string,
   siteId: string,
@@ -552,6 +683,12 @@ export async function markGallerySalePaid(
     where: { id: purchaseId },
     data: { status: "COMPLETED", closedAt: paidDate },
   });
+
+  // Matches recordPastSale's own behaviour (2026-09-10) — completing a
+  // gallery sale by marking it paid is just as real a sale as any other
+  // path, so it flips Availability to SOLD too, rather than only the
+  // Stripe/record-sale paths doing so.
+  await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
 
   return { ok: true };
 }
@@ -762,15 +899,24 @@ function stripeErrorMessage(err: unknown): string {
 
 // Marks a Purchase COMPLETED once every one of its Payments is Paid — a
 // Full sale completes immediately (one payment); an Instalment sale
-// completes once the last one clears.
+// completes once the last one clears. Also flips the artwork's own
+// Availability to SOLD at that same moment (2026-09-10, direct request)
+// — the one shared point every completion path (a Full Stripe sale, the
+// last instalment of a Stripe plan) actually finishes through, so this
+// is the single place that needs to know about it rather than
+// duplicating the same update at every call site.
 async function completeIfAllPaid(purchaseId: string) {
   const remaining = await db.payment.count({
     where: { purchaseId, status: { not: "PAID" } },
   });
   if (remaining === 0) {
-    await db.purchase.update({
+    const purchase = await db.purchase.update({
       where: { id: purchaseId },
       data: { status: "COMPLETED", closedAt: new Date() },
+    });
+    await db.artwork.update({
+      where: { id: purchase.artworkId },
+      data: { availability: "SOLD" },
     });
   }
 }
