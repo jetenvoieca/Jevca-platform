@@ -581,7 +581,20 @@ export default function GalleriesView({
               <div>
                 <p className="mb-4 text-sm text-neutral-500">{salesSummary}</p>
                 <div className="overflow-hidden rounded-lg border border-neutral-200">
-                  <table className="w-full text-sm">
+                  {/* table-fixed + explicit column widths (2026-09-10) —
+                      previously table-auto let a long artwork title grow
+                      the Artwork column and push Date off the visible
+                      edge of this fixed-width panel. Artwork now
+                      truncates within its own reserved width instead, so
+                      Status/Amount/Date always stay on screen regardless
+                      of title length or window size. */}
+                  <table className="w-full table-fixed text-sm">
+                    <colgroup>
+                      <col className="w-[42%]" />
+                      <col className="w-[20%]" />
+                      <col className="w-[19%]" />
+                      <col className="w-[19%]" />
+                    </colgroup>
                     <thead>
                       <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
                         <th className="px-3 py-2 font-normal">Artwork</th>
@@ -609,7 +622,7 @@ export default function GalleriesView({
                             className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50"
                           >
                             <td className="px-3 py-2">
-                              <div className="flex items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 {p.artworkImageUrl ? (
                                   // eslint-disable-next-line @next/next/no-img-element
                                   <img
@@ -620,16 +633,16 @@ export default function GalleriesView({
                                 ) : (
                                   <div className="h-8 w-8 shrink-0 rounded bg-neutral-100" />
                                 )}
-                                <span className="truncate">{p.artworkTitle}</span>
+                                <span className="min-w-0 truncate">{p.artworkTitle}</span>
                               </div>
                             </td>
-                            <td className="px-3 py-2">
+                            <td className="whitespace-nowrap px-3 py-2">
                               <SaleStatusBadge status={p.status} />
                             </td>
-                            <td className="px-3 py-2 text-neutral-800">
+                            <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
                               {formatMoney(p.totalAmount, p.currency)}
                             </td>
-                            <td className="px-3 py-2 text-neutral-400">
+                            <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
                               {new Date(p.createdAt).toLocaleDateString()}
                             </td>
                           </tr>
