@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import MediaPicker from "@/components/MediaPicker";
+import VideoThumb from "@/components/VideoThumb";
 import { linkImagesToArtwork, unlinkImageFromArtwork, setMainImage } from "@/lib/actions/artworks";
 
 export type ArtworkImage = {
@@ -31,6 +32,15 @@ export type ArtworkImage = {
 // listeners handle move/up regardless of which element is under the
 // pointer, which is simpler and more robust than trying to coordinate
 // capture across many sibling thumbnails).
+//
+// Simplified (2026-09-10, direct request) — dropped the separate large
+// "active image" preview above the thumbnails; the tiles themselves are
+// now the whole picture, sized two-per-row so each one is big enough to
+// actually judge, and the grid simply grows a new row once there's a
+// third/fifth/etc image or the Add tile no longer fits — no more fixed
+// single row of small squares to scroll or squeeze into. Click-to-select
+// no longer has a preview to update, so it's gone; drag-to-reorder
+// (unrelated to that) is untouched.
 export default function ArtworkImageManager({
   artworkId,
   siteId,
@@ -45,7 +55,6 @@ export default function ArtworkImageManager({
   onDataChanged?: () => void;
 }) {
   const [images, setImages] = useState(initialImages);
-  const [selectedIndex, setSelectedIndex] = useState(0);
   const [dragId, setDragId] = useState<string | null>(null);
   const [overId, setOverId] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,7 +72,6 @@ export default function ArtworkImageManager({
   // silently out of sync with what was actually saved.
   useEffect(() => {
     setImages(initialImages);
-    setSelectedIndex(0);
   }, [initialImages]);
 
   // Only position 0 ("main") is ever persisted - the rest of the drag
@@ -130,23 +138,11 @@ export default function ArtworkImageManager({
     setDragId(id);
   };
 
-  const handleThumbnailClick = (index: number) => {
-    // A real drag just happened - don't also treat its release as a
-    // click. Belt-and-braces alongside the fact that a plain click
-    // never sets movedRef true in the first place.
-    if (movedRef.current) {
-      movedRef.current = false;
-      return;
-    }
-    setSelectedIndex(index);
-  };
-
   const handleRemove = (id: string) => {
     setBusy(true);
     unlinkImageFromArtwork(artworkId, id, siteId)
       .then(() => {
         setImages((prev) => prev.filter((i) => i.id !== id));
-        setSelectedIndex(0);
         onDataChanged?.();
       })
       .finally(() => setBusy(false));
@@ -176,47 +172,27 @@ export default function ArtworkImageManager({
       .finally(() => setBusy(false));
   };
 
-  const active = images[Math.min(selectedIndex, images.length - 1)] ?? null;
-
   return (
     <div className="mb-6">
       <h3 className="mb-2 text-sm font-medium text-neutral-700">Images &amp; Videos</h3>
-
-      {active && (
-        <div className="mb-3 flex h-96 items-center justify-center rounded-lg bg-neutral-50">
-          {active.kind === "VIDEO" ? (
-            <video
-              key={active.id}
-              src={active.displayUrl}
-              controls
-              className="max-h-96 max-w-full rounded-lg"
-            />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              key={active.id}
-              src={active.displayUrl}
-              alt=""
-              className="max-h-96 max-w-full rounded-lg object-contain"
-            />
-          )}
-        </div>
-      )}
-
       <p className="mb-2 text-xs text-neutral-400">
         The first one is the main image shown in the catalogue - drag any thumbnail to the front
-        to make it the main one instead. Click a thumbnail to preview it above.
+        to make it the main one instead.
       </p>
 
-      <div className="flex flex-wrap gap-2">
-        {images.map((img, index) => (
+      {/* Two per row (2026-09-10, direct request) — a fixed 2-column
+          grid rather than flex-wrap's small fixed-size tiles, so each
+          image is large enough to actually judge. Rows aren't capped:
+          a 5th, 7th, 9th… image (or the Add tile once nothing else
+          fits) simply starts a new row on its own. */}
+      <div className="grid grid-cols-2 gap-3">
+        {images.map((img) => (
           <div
             key={img.id}
             data-thumb-id={img.id}
             onPointerDown={handlePointerDown(img.id)}
-            onClick={() => handleThumbnailClick(index)}
             style={{ touchAction: "none" }}
-            className={`group relative h-20 w-20 cursor-pointer select-none rounded ${
+            className={`group relative aspect-square cursor-grab select-none overflow-hidden rounded-md ${
               dragId === img.id ? "opacity-40" : ""
             } ${
               overId === img.id && dragId && dragId !== img.id
@@ -231,32 +207,17 @@ export default function ArtworkImageManager({
                   src={img.posterUrl}
                   alt=""
                   draggable={false}
-                  className={`h-20 w-20 rounded object-cover ${
-                    index === selectedIndex ? "ring-2 ring-neutral-900" : ""
-                  }`}
+                  className="h-full w-full object-cover"
                 />
               ) : (
-                <div
-                  className={`flex h-20 w-20 items-center justify-center rounded bg-neutral-200 text-[10px] text-neutral-500 ${
-                    index === selectedIndex ? "ring-2 ring-neutral-900" : ""
-                  }`}
-                >
-                  Video
-                </div>
+                <VideoThumb src={img.url} className="h-full w-full object-cover" />
               )
             ) : (
               // eslint-disable-next-line @next/next/no-img-element
-              <img
-                src={img.url}
-                alt=""
-                draggable={false}
-                className={`h-20 w-20 rounded object-cover ${
-                  index === selectedIndex ? "ring-2 ring-neutral-900" : ""
-                }`}
-              />
+              <img src={img.url} alt="" draggable={false} className="h-full w-full object-cover" />
             )}
-            {index === 0 && (
-              <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1 text-[9px] text-white">
+            {images[0]?.id === img.id && (
+              <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1.5 py-0.5 text-[10px] text-white">
                 Main
               </span>
             )}
@@ -266,13 +227,13 @@ export default function ArtworkImageManager({
                 e.stopPropagation();
                 handleRemove(img.id);
               }}
-              className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 text-xs text-white group-hover:block"
+              className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
             >
               ✕
             </button>
           </div>
         ))}
-        <div className="h-20 w-20">
+        <div className="aspect-square">
           <MediaPicker
             artistId={artistId}
             siteId={siteId}
@@ -280,6 +241,7 @@ export default function ArtworkImageManager({
             label="Add"
             linkedArtworkId={artworkId}
             mediaKinds={["PHOTO", "VIDEO"]}
+            previewClassName="aspect-square h-full w-full"
             onSelect={handleAdd}
           />
         </div>
