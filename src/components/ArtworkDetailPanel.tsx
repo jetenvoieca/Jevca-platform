@@ -517,9 +517,10 @@ export default function ArtworkDetailPanel({
               PurchasePanel/RecordPastSaleForm are still used exactly as
               before from the Galleries and Sales pages — just not from
               here any more, pending whatever replaces them next. */}
-          <p className="mb-3 text-xs text-neutral-400">
-            Your private working record — never shown on the public site.
-          </p>
+          {/* "Your private working record…" caption removed (2026-09-11,
+              direct request) — same commentary-removal instruction as
+              the image grid's caption; the form is self-explanatory
+              without it. */}
 
           <form key="catalogue-form" onBlur={(e) => autosaveCatalogue(e.currentTarget)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
