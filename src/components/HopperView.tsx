@@ -591,17 +591,23 @@ export default function HopperView({
           on every pane means desktop position simply follows source
           order); the order-1/2/3 classes below are mobile-only and
           unchanged, so the stacked-on-mobile order (sorting card, Up
-          next, Processed) stays exactly as it was. */}
+          next, Processed) stays exactly as it was.
+          Side columns now flex/shrink instead of being fixed-pixel
+          (2026-09-11, direct request — iPad landscape, roughly
+          1024-1366px wide, couldn't fit all three fixed-width columns
+          at once). Up next and Processed each get a proportional
+          flex-basis with a floor (min-w) and ceiling (max-w) instead of
+          a single fixed width, so all three panes keep shrinking
+          together down to tablet-landscape widths rather than one
+          column overflowing while the others stay locked at their
+          desktop size. The centre Hopper column keeps flex-1 (already
+          the flexible one) with its own floor added so its buttons
+          don't get squashed below a usable width either. */}
       <div className="flex flex-col gap-6 lg:h-[calc(100vh-7rem)] lg:flex-row lg:items-stretch">
         {/* Up next — always rendered (not just while there's a current
             item), so "Up next (0)" and this column's place in the layout
-            stay visible and stable even once the queue empties out.
-            Widened 300px → 700px and 6 → 7 columns (2026-08-18, direct
-            request) — the previous fixed 380px left a large stretch of
-            genuinely unused space on any wide screen (this page's own
-            max-width was raised to match, see the outer container
-            below), and gave meaningfully bigger thumbnails to sort by. */}
-        <div className="order-2 flex flex-col lg:order-none lg:w-[700px] lg:flex-shrink-0 lg:overflow-hidden">
+            stay visible and stable even once the queue empties out. */}
+        <div className="order-2 flex flex-col lg:order-none lg:min-w-[260px] lg:max-w-[700px] lg:flex-1 lg:basis-[38%] lg:overflow-hidden">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
               Up next ({remaining.length})
@@ -702,7 +708,14 @@ export default function HopperView({
             {sortedQueue.length === 0 ? null : remaining.length === 0 ? (
               <p className="text-xs text-neutral-400">This is the last one.</p>
             ) : (
-              <div className="grid grid-cols-6 gap-2 lg:grid-cols-7">
+              // auto-fill/minmax (2026-09-11) instead of a fixed
+              // grid-cols-7 — with this column now itself flexible in
+              // width (see the wrapping div above), a hardcoded column
+              // count either wasted space or overflowed depending on
+              // how much room the flex layout actually gave it. This
+              // way the thumbnail grid always fits whatever width it's
+              // handed, at a consistent thumbnail size, on any screen.
+              <div className="grid grid-cols-6 gap-2 lg:grid-cols-[repeat(auto-fill,minmax(80px,1fr))]">
                 {remaining.map((item) => {
                   const isSelected = selectedForDelete.has(item.id);
                   return (
@@ -750,7 +763,7 @@ export default function HopperView({
           </div>
         </div>
 
-        <div className="order-1 flex flex-col lg:order-none lg:min-w-0 lg:flex-1 lg:overflow-hidden">
+        <div className="order-1 flex flex-col lg:order-none lg:min-w-[320px] lg:flex-1 lg:basis-[42%] lg:overflow-hidden">
           <div className="mb-3">{importButtons}</div>
           <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
             {!current ? (
@@ -784,7 +797,7 @@ export default function HopperView({
         {/* Processed — a visual confirmation trail, not part of the
             sorting flow itself, so it stays put once the queue on the
             right runs out. */}
-        <div className="order-3 flex flex-col lg:order-none lg:w-[300px] lg:flex-shrink-0 lg:overflow-hidden">
+        <div className="order-3 flex flex-col lg:order-none lg:min-w-[220px] lg:max-w-[320px] lg:flex-1 lg:basis-[20%] lg:overflow-hidden">
           {processedLog.length > 0 && (
             <>
               <div className="mb-2 flex items-center justify-between">
