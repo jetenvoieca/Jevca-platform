@@ -12,8 +12,11 @@ import {
 } from "@/lib/actions/payments";
 import StripeCardForm from "@/components/StripeCardForm";
 
+// Vertical padding cut ~20% (2026-09-11, direct request — "catalogue
+// will be a high usage area"), same treatment as ArtworkCatalogueFields'
+// shared inputCls and ArtworkDetailPanel's fields/buttons.
 const boxCls =
-  "w-full rounded-md border border-neutral-300 px-3 py-2 text-center text-sm placeholder:text-neutral-400";
+  "w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-center text-sm placeholder:text-neutral-400";
 
 function formatMoney(amount: number, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
@@ -170,7 +173,7 @@ export default function ArtworkSalePanel({
   const perInstalment = instalmentCount ? remaining / instalmentCount : remaining;
 
   const cardCls = (active: boolean) =>
-    `rounded-md border px-4 py-3 text-left text-sm ${
+    `rounded-md border px-4 py-[9.6px] text-left text-sm ${
       active ? "border-2 border-neutral-900" : "border-neutral-300 hover:border-neutral-400"
     }`;
 
@@ -412,7 +415,7 @@ export default function ArtworkSalePanel({
             type="button"
             onClick={handleRecordSale}
             disabled={isPending}
-            className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+            className="w-full rounded-md bg-neutral-900 px-4 py-[6.4px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
           >
             {isPending ? "Recording…" : "Record sale"}
           </button>
@@ -497,7 +500,7 @@ export default function ArtworkSalePanel({
                   type="button"
                   onClick={handleGetPaymentLink}
                   disabled={isPending}
-                  className="flex-1 rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                  className="flex-1 rounded-md bg-neutral-900 px-4 py-[6.4px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                 >
                   {isPending ? "Working…" : "Get payment link"}
                 </button>
@@ -505,14 +508,14 @@ export default function ArtworkSalePanel({
                   type="button"
                   onClick={handleEnterCardClick}
                   disabled={isPending}
-                  className="flex-1 rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+                  className="flex-1 rounded-md border border-neutral-300 px-4 py-[6.4px] text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
                 >
                   Enter card now
                 </button>
                 <button
                   type="button"
                   onClick={onRecordSale}
-                  className="flex-1 rounded-md bg-neutral-800 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+                  className="flex-1 rounded-md bg-neutral-800 px-4 py-[6.4px] text-sm font-medium text-white hover:bg-neutral-700"
                 >
                   Record sale
                 </button>
@@ -528,7 +531,7 @@ export default function ArtworkSalePanel({
                     readOnly
                     value={linkUrl}
                     onFocus={(e) => e.target.select()}
-                    className="w-full rounded border border-neutral-300 bg-white px-2 py-1 text-xs"
+                    className="w-full rounded border border-neutral-300 bg-white px-2 py-[3.2px] text-xs"
                   />
                 </div>
               )}
