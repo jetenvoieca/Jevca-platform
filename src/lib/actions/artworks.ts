@@ -83,6 +83,10 @@ export async function createArtworkWithRetry(
     // Prisma's own schema default (false) — see the matching note on
     // Artwork.needsReview in schema.prisma.
     needsReview: boolean;
+    // Which artwork (if any) this one is a "Create Derivative" copy of
+    // (2026-09-11) — see the matching note on Artwork.derivedFromId in
+    // schema.prisma. Only ever set by duplicateArtwork below.
+    derivedFromId: string | null;
   }> & { presentationTitle: string; catalogueName: string }
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -132,14 +136,30 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
 // stored file (same `key`/`url`/thumbnailKey/displayKey), not re-uploaded
 // — `Image.artworkId` is a single foreign key (one image belongs to
 // exactly one artwork), so two artworks can never literally share one
-// row, but they can cheaply share the same underlying file. This is
-// exactly what avoids the "upload the same photo again" confusion this
-// feature exists to prevent — and, since 2026-08-28, is also the
-// intended way to represent the same piece offered both framed and
-// unframed: two separate Catalogue entries, each with its own single
-// price, rather than one entry with two prices.
+// row, but they can cheaply share the same underlying file.
 //
-// Deliberately reset rather than copied:
+// Title/Name (2026-09-11, direct request — "don't add 'derivative' to
+// title") — copied across exactly as-is, no " Derivative" suffix. The
+// new artwork's link back to the one it was copied from is instead shown
+// explicitly in the Catalogue tab's header ("Derived from #...") via
+// derivedFromId, set below.
+//
+// What else gets copied now depends on the original's Type (2026-09-11,
+// direct request):
+// - "Original"/"Unique" (isOriginalOrUnique below) — every field except
+//   the title is left blank on the new derivative. The whole point of
+//   deriving from a one-off piece is a genuinely fresh sellable listing
+//   (e.g. a print edition made from an original painting), not a copy of
+//   details that don't apply to it.
+// - Anything else (typically an edition) — every field is carried over
+//   unchanged, same as before this change, EXCEPT Location (always
+//   blank — a new edition print isn't automatically sitting wherever the
+//   original is) and Edition (set to `newEdition`, collected by the
+//   caller — see ArtworkDetailPanel's handleDuplicate — before this runs,
+//   since a new edition copy needs its own edition number, not the
+//   original's).
+//
+// Deliberately reset rather than copied, in both cases:
 // - Availability always starts AVAILABLE, regardless of the original's
 //   current status — a derivative is a distinct, not-yet-sold listing,
 //   even if the original it was copied from has since sold.
@@ -147,27 +167,39 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
 //   sold itself.
 // - A fresh catalogueNumber is generated the normal way (nextCatalogueNumber,
 //   via createArtworkWithRetry) — never reuses the original's number.
-export async function duplicateArtwork(artworkId: string, siteId: string) {
+export async function duplicateArtwork(
+  artworkId: string,
+  siteId: string,
+  newEdition?: string | null
+) {
   const original = await db.artwork.findUniqueOrThrow({
     where: { id: artworkId },
     include: { images: true, saleTerms: true },
   });
 
+  const typeLower = (original.type || "").trim().toLowerCase();
+  const isOriginalOrUnique = typeLower.includes("original") || typeLower.includes("unique");
+
   const created = await createArtworkWithRetry(original.artistId, {
-    presentationTitle: `${original.presentationTitle} Derivative`,
-    catalogueName: `${original.catalogueName} Derivative`,
-    presentationPrice:
-      original.presentationPrice != null ? Number(original.presentationPrice) : null,
-    description: original.description,
-    medium: original.medium,
-    presentationGroup: original.presentationGroup,
-    tier: original.tier,
+    presentationTitle: original.presentationTitle,
+    catalogueName: original.catalogueName,
+    presentationPrice: isOriginalOrUnique
+      ? null
+      : original.presentationPrice != null
+        ? Number(original.presentationPrice)
+        : null,
+    description: isOriginalOrUnique ? null : original.description,
+    medium: isOriginalOrUnique ? null : original.medium,
+    presentationGroup: isOriginalOrUnique ? null : original.presentationGroup,
+    tier: isOriginalOrUnique ? null : original.tier,
     availability: "AVAILABLE",
-    type: original.type,
-    catalogueGroup: original.catalogueGroup,
-    size: original.size,
-    location: original.location,
-    studioNotes: original.studioNotes,
+    type: isOriginalOrUnique ? null : original.type,
+    catalogueGroup: isOriginalOrUnique ? null : original.catalogueGroup,
+    size: isOriginalOrUnique ? null : original.size,
+    // Always blank, in both branches — see the note above.
+    location: null,
+    studioNotes: isOriginalOrUnique ? null : original.studioNotes,
+    derivedFromId: original.id,
   });
 
   // Fields createArtworkWithRetry's signature doesn't cover (added to the
@@ -177,12 +209,12 @@ export async function duplicateArtwork(artworkId: string, siteId: string) {
   await db.artwork.update({
     where: { id: created.id },
     data: {
-      date: original.date,
-      edition: original.edition,
-      availableQty: original.availableQty,
-      offeredPrice: original.offeredPrice,
-      presentationMedium: original.presentationMedium,
-      viewingLocation: original.viewingLocation,
+      date: isOriginalOrUnique ? null : original.date,
+      edition: isOriginalOrUnique ? null : newEdition?.trim() || original.edition,
+      availableQty: isOriginalOrUnique ? null : original.availableQty,
+      offeredPrice: isOriginalOrUnique ? null : original.offeredPrice,
+      presentationMedium: isOriginalOrUnique ? null : original.presentationMedium,
+      viewingLocation: isOriginalOrUnique ? null : original.viewingLocation,
     },
   });
 
@@ -190,7 +222,9 @@ export async function duplicateArtwork(artworkId: string, siteId: string) {
   // is immediately ready to sell (Payment tab checks for a SaleTerms row
   // existing before it will start a Stripe/Gallery sale) rather than
   // silently needing an extra visit-and-resave of Presentation first.
-  if (original.saleTerms) {
+  // Skipped for Original/Unique (2026-09-11) — offeredPrice is blank
+  // there, so a copied Sale Terms row would be inconsistent with it.
+  if (original.saleTerms && !isOriginalOrUnique) {
     await db.saleTerms.create({
       data: {
         artworkId: created.id,
@@ -356,6 +390,10 @@ export async function getArtworkDetail(id: string) {
         include: { payments: { orderBy: { sequence: "asc" } } },
         orderBy: { createdAt: "desc" },
       },
+      // Only the catalogue number is actually shown ("Derived from
+      // #AW-0021") — 2026-09-11, see the matching note on
+      // Artwork.derivedFromId in schema.prisma.
+      derivedFrom: { select: { catalogueNumber: true } },
     },
   });
   return result;
@@ -439,6 +477,10 @@ export async function getArtworkDetailForClient(id: string) {
     tier: artwork.tier,
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     studioNotes: artwork.studioNotes,
+    // "Derived from #..." (2026-09-11) — null for any artwork that
+    // isn't itself a derivative. See the matching note on
+    // Artwork.derivedFromId in schema.prisma.
+    derivedFromCatalogueNumber: artwork.derivedFrom?.catalogueNumber ?? null,
     images: artwork.images
       .slice()
       .sort((a, b) => {
