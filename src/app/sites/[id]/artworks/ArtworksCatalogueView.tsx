@@ -817,10 +817,19 @@ export default function ArtworksCatalogueView({
           that used to just populate the column. ArtworkDetailPanel is
           unchanged — its own Duplicate/Delete/Close row still works
           exactly as before, just showCloseButton is now on (true)
-          since Close is this modal's only way to dismiss it. */}
+          since Close is this modal's only way to dismiss it.
+          Clicking the backdrop closes it too (2026-09-11, direct
+          request) — the inner content stops that click from bubbling
+          up, so clicking inside the modal itself never closes it. */}
       {selected && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
+          onClick={handleClosePanel}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl"
+            onClick={(e) => e.stopPropagation()}
+          >
             <ArtworkDetailPanel
               key={selected.id}
               siteId={siteId}
