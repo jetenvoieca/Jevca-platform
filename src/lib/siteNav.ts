@@ -139,6 +139,14 @@ export function buildSiteNavEntries({
     // none of its own keys apply while inside a site, so it's never
     // the one that auto-opens here.
     buildAccountsSection(null, alertCount),
+    // "Templates" (2026-09-11) — was missing entirely from inside a
+    // site, the one gap in an otherwise-shared nav structure (see
+    // topNav.ts's buildTopNavItems, which places it in this same
+    // Administration → Templates → Sites order). None of this site's
+    // own keys ever match "templates", so it's never shown active here
+    // — reaching Templates from inside a site always means leaving to
+    // the cross-site library, same as clicking it from anywhere else.
+    { label: "Templates", href: "/templates", active: false },
     // Plain link back to the full Sites list (2026-09-02 — this used to
     // be a section containing the current site's own pages; that's now
     // its own section below, labelled with the site itself, so this one
