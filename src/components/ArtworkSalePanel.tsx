@@ -12,11 +12,31 @@ import {
 } from "@/lib/actions/payments";
 import StripeCardForm from "@/components/StripeCardForm";
 
+// Panel tint colours (2026-09-11, direct request — "payment panels need
+// to be subtly different from the details part") — this whole component
+// is the one thing that gets this treatment; the surrounding Catalogue
+// tab stays its ordinary white/neutral palette, so the sale flow reads
+// as visually distinct the moment it opens. Kept as literal Tailwind
+// arbitrary-value classes throughout (not built from these via template
+// strings) — Tailwind's compiler only picks up class names that appear
+// as literal text in the source, so an interpolated `bg-[${x}]` would
+// silently produce no CSS at all.
+const PANEL_BG = "#F9F6EE";
+const PANEL_TEXT = "#5E5E5E";
+
 // Vertical padding cut ~20% (2026-09-11, direct request — "catalogue
 // will be a high usage area"), same treatment as ArtworkCatalogueFields'
-// shared inputCls and ArtworkDetailPanel's fields/buttons.
+// shared inputCls and ArtworkDetailPanel's fields/buttons. Text colour
+// matches the rest of this panel (PANEL_TEXT above).
 const boxCls =
-  "w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-center text-sm placeholder:text-neutral-400";
+  "w-full rounded-md border border-neutral-300 bg-white px-3 py-[6.4px] text-center text-sm text-[#5E5E5E] placeholder:text-[#5E5E5E]/60";
+
+// Filled button style used for every actual action button in this panel
+// (Get payment link, Enter card now, Record sale) — deliberately
+// identical for all three, replacing the previous mixed filled/outlined
+// look, per direct request.
+const buttonCls =
+  "rounded-md bg-[#5E5E5E] px-4 py-[6.4px] text-sm font-medium text-[#F9F6EE] hover:opacity-90 disabled:opacity-50";
 
 function formatMoney(amount: number, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
@@ -58,6 +78,14 @@ function formatMoney(amount: number, currency: string) {
 // new instance of this component; local state was silently reset by
 // that remount. Record mode doesn't have this problem (same afterLocation
 // slot, same instance), so its own fields stay simple local state.
+//
+// Tinted "payment panel" styling (2026-09-11, direct request) — the
+// whole panel background is #F9F6EE, all its own text is #5E5E5E, and
+// every actual action button (Get payment link, Enter card now, Record
+// sale) is filled #5E5E5E with #F9F6EE text, replacing the previous
+// ordinary white/neutral-900/outlined look. Cancel sale/Delete stay red
+// — those are destructive actions and deliberately keep their own
+// distinct colour regardless of this panel's tint.
 export default function ArtworkSalePanel({
   artworkId,
   siteId,
@@ -174,7 +202,7 @@ export default function ArtworkSalePanel({
 
   const cardCls = (active: boolean) =>
     `rounded-md border px-4 py-[9.6px] text-left text-sm ${
-      active ? "border-2 border-neutral-900" : "border-neutral-300 hover:border-neutral-400"
+      active ? "border-2 border-[#5E5E5E]" : "border-neutral-300 hover:border-neutral-400"
     }`;
 
   const buildStartFormData = () => {
@@ -329,7 +357,8 @@ export default function ArtworkSalePanel({
 
   return (
     <div
-      className={`space-y-4 rounded-lg border border-neutral-200 p-4 transition-all duration-300 ease-out ${
+      style={{ backgroundColor: PANEL_BG, color: PANEL_TEXT }}
+      className={`space-y-4 rounded-lg p-4 transition-all duration-300 ease-out ${
         shown ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
       }`}
     >
@@ -340,11 +369,7 @@ export default function ArtworkSalePanel({
         // uses, with commissionPercent left unset (always 0% for a
         // direct sale here, per direct instruction).
         <>
-          <button
-            type="button"
-            onClick={onBackFromRecord}
-            className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
-          >
+          <button type="button" onClick={onBackFromRecord} className="text-sm hover:underline">
             ← Back
           </button>
 
@@ -411,12 +436,7 @@ export default function ArtworkSalePanel({
 
           {recordError && <p className="text-sm text-red-600">{recordError}</p>}
 
-          <button
-            type="button"
-            onClick={handleRecordSale}
-            disabled={isPending}
-            className="w-full rounded-md bg-neutral-900 px-4 py-[6.4px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-          >
+          <button type="button" onClick={handleRecordSale} disabled={isPending} className={`w-full ${buttonCls}`}>
             {isPending ? "Recording…" : "Record sale"}
           </button>
         </>
@@ -427,7 +447,7 @@ export default function ArtworkSalePanel({
               <button
                 type="button"
                 onClick={handleBackToAvailable}
-                className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
+                className="text-sm hover:underline"
               >
                 ← Back to Available
               </button>
@@ -453,23 +473,23 @@ export default function ArtworkSalePanel({
           )}
 
           <div>
-            <p className="mb-1 text-sm font-medium text-neutral-700">Purchase option</p>
+            <p className="mb-1 text-sm font-medium">Purchase option</p>
             <div className="grid grid-cols-2 gap-3">
               <button
                 type="button"
                 onClick={() => onOptionChange("full")}
                 className={cardCls(option === "full")}
               >
-                <p className="font-medium text-neutral-900">Full payment</p>
-                <p className="text-neutral-600">{formatMoney(remaining, currency)}</p>
+                <p className="font-medium">Full payment</p>
+                <p>{formatMoney(remaining, currency)}</p>
               </button>
               <button
                 type="button"
                 onClick={() => onOptionChange("instalments")}
                 className={cardCls(option === "instalments")}
               >
-                <p className="font-medium text-neutral-900">{instalmentCount} instalments</p>
-                <p className="text-neutral-600">
+                <p className="font-medium">{instalmentCount} instalments</p>
+                <p>
                   {formatMoney(remaining, currency)} ({formatMoney(perInstalment, currency)} each)
                 </p>
               </button>
@@ -500,7 +520,7 @@ export default function ArtworkSalePanel({
                   type="button"
                   onClick={handleGetPaymentLink}
                   disabled={isPending}
-                  className="flex-1 rounded-md bg-neutral-900 px-4 py-[6.4px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                  className={`flex-1 ${buttonCls}`}
                 >
                   {isPending ? "Working…" : "Get payment link"}
                 </button>
@@ -508,22 +528,18 @@ export default function ArtworkSalePanel({
                   type="button"
                   onClick={handleEnterCardClick}
                   disabled={isPending}
-                  className="flex-1 rounded-md border border-neutral-300 px-4 py-[6.4px] text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+                  className={`flex-1 ${buttonCls}`}
                 >
                   Enter card now
                 </button>
-                <button
-                  type="button"
-                  onClick={onRecordSale}
-                  className="flex-1 rounded-md bg-neutral-800 px-4 py-[6.4px] text-sm font-medium text-white hover:bg-neutral-700"
-                >
+                <button type="button" onClick={onRecordSale} className={`flex-1 ${buttonCls}`}>
                   Record sale
                 </button>
               </div>
 
               {linkUrl && (
-                <div className="rounded-md bg-neutral-50 p-3">
-                  <p className="mb-1 text-xs text-neutral-500">
+                <div className="rounded-md bg-white/60 p-3">
+                  <p className="mb-1 text-xs">
                     Send this link to the buyer (copy and paste — nothing is emailed
                     automatically):
                   </p>
@@ -540,10 +556,14 @@ export default function ArtworkSalePanel({
             // Card entry — telephone sale, no customer personalisation
             // (direct instruction). Renders the real Stripe Elements
             // form once a client secret comes back from
-            // startArtworkSaleAndEnterCard/createCardEntryIntent.
-            <div className="space-y-4 rounded-lg border border-neutral-200 p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-neutral-900">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" className="text-neutral-700">
+            // startArtworkSaleAndEnterCard/createCardEntryIntent. No
+            // longer its own separately-bordered box (2026-09-11) — it
+            // already sits inside the tinted outer panel, so a second,
+            // differently-coloured box around it just doubled up the
+            // framing for no reason.
+            <div className="space-y-4">
+              <div className="flex items-center gap-2 text-sm font-medium">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
                   <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.6" />
                   <rect x="2" y="9" width="20" height="3" fill="currentColor" />
                 </svg>
@@ -557,14 +577,12 @@ export default function ArtworkSalePanel({
                     publishableKey={cardPublishableKey}
                     onDone={onSaleCompleted}
                   />
-                  <p className="text-xs text-neutral-400">
+                  <p className="text-xs">
                     Status below updates within a few seconds of Stripe confirming the charge.
                   </p>
                 </>
               ) : (
-                <p className="text-sm text-neutral-400">
-                  {isPending ? "Preparing card entry…" : "—"}
-                </p>
+                <p className="text-sm">{isPending ? "Preparing card entry…" : "—"}</p>
               )}
 
               <div className="flex items-center gap-2 text-sm">
@@ -576,7 +594,7 @@ export default function ArtworkSalePanel({
                 >
                   Cancel sale
                 </button>
-                <span className="text-neutral-300">·</span>
+                <span>·</span>
                 <button
                   type="button"
                   onClick={handleDeleteCardSale}
