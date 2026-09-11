@@ -46,6 +46,10 @@ export type ArtworkDetail = {
   tier: string | null;
   offeredPrice: string | null;
   studioNotes: string | null;
+  // "Derived from #..." (2026-09-11) — null for any artwork that isn't
+  // itself a "Create Derivative" copy. See the matching note on
+  // Artwork.derivedFromId in schema.prisma.
+  derivedFromCatalogueNumber: string | null;
   images: {
     id: string;
     url: string;
@@ -276,9 +280,28 @@ export default function ArtworkDetailPanel({
     });
   };
 
+  // Same Type checks duplicateArtwork itself uses server-side (2026-09-11)
+  // — computed here too so this can decide, before calling the action at
+  // all, whether a new edition number needs asking for. Original/Unique
+  // never asks (everything's blank on the new derivative anyway); an
+  // edition-type source does, since a new print copy needs its own
+  // edition number, not the original's.
   const handleDuplicate = () => {
+    const typeLower = (artwork.type || "").trim().toLowerCase();
+    const isOriginalOrUnique = typeLower.includes("original") || typeLower.includes("unique");
+    const isEditionType = typeLower.includes("edition");
+
+    let newEdition: string | null = null;
+    if (!isOriginalOrUnique && isEditionType) {
+      // Cancelling this prompt doesn't cancel the derivative itself —
+      // it just falls back to copying the original's own edition number
+      // (duplicateArtwork's default when newEdition is empty), same as
+      // every other field on an edition-type derivative.
+      newEdition = window.prompt("Edition number for this derivative (e.g. 6/25):");
+    }
+
     startTransition(async () => {
-      const { id: newId } = await duplicateArtwork(artwork.id, siteId);
+      const { id: newId } = await duplicateArtwork(artwork.id, siteId, newEdition);
       if (onDuplicated) onDuplicated(newId);
       else router.push(`/sites/${siteId}/artworks?selected=${newId}`);
     });
@@ -390,6 +413,17 @@ export default function ArtworkDetailPanel({
               title is a raw, not-yet-cleaned-up value like a Hopper
               caption) rather than adding real information. */}
           <p className="text-sm text-neutral-500">Catalogue #{artwork.catalogueNumber}</p>
+          {/* "Derived from #..." (2026-09-11, direct request — "show
+              which artwork the current work is derived from") — replaces
+              the word "Derivative" ever appearing in the title/name
+              (see the Name field and duplicateArtwork) with an explicit,
+              clickable-in-future reference to the actual source
+              artwork's catalogue number instead. */}
+          {artwork.derivedFromCatalogueNumber && (
+            <p className="text-sm text-neutral-500">
+              Derived from #{artwork.derivedFromCatalogueNumber}
+            </p>
+          )}
         </div>
         <div className="flex items-center gap-2">
           {/* Catalogue/Presentation toggle (2026-09-10, direct request)
