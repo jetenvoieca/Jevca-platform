@@ -74,6 +74,11 @@ export default function ArtworksCatalogueView({
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
   const [showImport, setShowImport] = useState(false);
+  // CSV now covers two directions — Import (existing ArtworkImportPanel)
+  // and Export (new, direct download of the current filtered view) —
+  // so the single "CSV" button opens a small choice popover instead of
+  // going straight into the importer (2026-09-11, direct request).
+  const [showCsvChoice, setShowCsvChoice] = useState(false);
   const [artworks, setArtworks] = useState<ArtworkRow[]>(initialArtworks);
   const [total, setTotal] = useState(initialTotal);
   const [soldCount, setSoldCount] = useState(initialSoldCount);
@@ -444,6 +449,24 @@ export default function ArtworksCatalogueView({
     window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
   };
 
+  // Builds the CSV export URL from whatever filters are currently active
+  // — same query-param shape as the PDF export below, minus the
+  // header-title fields that dialog adds (a CSV has no printed header to
+  // customise).
+  const buildCsvExportUrl = () => {
+    const params = new URLSearchParams({
+      artistId,
+      ...(q ? { q } : {}),
+      ...(availability ? { availability } : {}),
+      ...(location ? { location } : {}),
+      ...(type ? { type } : {}),
+      ...(group ? { group } : {}),
+      ...(tier ? { tier } : {}),
+      ...(sort ? { sort } : {}),
+    });
+    return `/api/artwork-catalogue-csv?${params.toString()}`;
+  };
+
   // Goes straight to the Hopper now (2026-08-19, direct request) — the
   // Hopper is the primary way media gets into the Artwork Catalogue (see
   // hopper-design.md), so "add a new artwork" from here means starting
@@ -478,9 +501,12 @@ export default function ArtworksCatalogueView({
             here (2026-09-07, direct request) — in line with the
             "Artwork Catalogue" title, rather than sitting in the
             filter row below. Order within this cluster (2026-09-09
-            correction) — All/Available/Sold, then Export PDF/Import
-            from CSV/Tile-List/Per row, matching the design mockup;
-            this had been reversed. */}
+            correction) — All/Available/Sold, then PDF/CSV/Tile-List/
+            density, matching the design mockup; this had been reversed.
+            "Export PDF"/"Import from CSV" shortened to "PDF"/"CSV"
+            (2026-09-11, direct request) — CSV now opens a small
+            Import/Export choice rather than going straight into the
+            importer, since it covers both directions. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
@@ -535,15 +561,55 @@ export default function ArtworksCatalogueView({
                 onClick={() => setShowExportDialog(true)}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
               >
-                Export PDF
+                PDF
               </button>
-              <button
-                type="button"
-                onClick={() => setShowImport(true)}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-              >
-                Import from CSV
-              </button>
+
+              {/* CSV — Import/Export choice popover (2026-09-11). A
+                  plain relative wrapper + absolutely-positioned panel,
+                  not a full modal (this is a two-option pick, not a
+                  form) — closed by a transparent, unstyled click-catcher
+                  behind it at the same fixed layer, same pattern as the
+                  detail modal's backdrop-click-to-close elsewhere in
+                  this file. */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setShowCsvChoice((v) => !v)}
+                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+                >
+                  CSV
+                </button>
+                {showCsvChoice && (
+                  <>
+                    <div
+                      className="fixed inset-0 z-40"
+                      onClick={() => setShowCsvChoice(false)}
+                    />
+                    <div className="absolute right-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-md border border-neutral-200 bg-white shadow-lg">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCsvChoice(false);
+                          setShowImport(true);
+                        }}
+                        className="block w-full px-3 py-2 text-left text-sm hover:bg-neutral-50"
+                      >
+                        Import
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowCsvChoice(false);
+                          window.open(buildCsvExportUrl(), "_blank");
+                        }}
+                        className="block w-full border-t border-neutral-100 px-3 py-2 text-left text-sm hover:bg-neutral-50"
+                      >
+                        Export
+                      </button>
+                    </div>
+                  </>
+                )}
+              </div>
 
               <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
                 <button
@@ -568,7 +634,6 @@ export default function ArtworksCatalogueView({
 
               {view === "tile" && (
                 <div className="flex items-center gap-1 text-sm text-neutral-500">
-                  <span>Per row</span>
                   {DENSITY_OPTIONS.map((n) => (
                     <button
                       key={n}
