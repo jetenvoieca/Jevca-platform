@@ -506,7 +506,10 @@ export default function ArtworksCatalogueView({
             "Export PDF"/"Import from CSV" shortened to "PDF"/"CSV"
             (2026-09-11, direct request) — CSV now opens a small
             Import/Export choice rather than going straight into the
-            importer, since it covers both directions. */}
+            importer, since it covers both directions. Button/field
+            heights cut ~20% throughout this row and the filter row
+            below (2026-09-11, direct request — "catalogue will be a
+            high usage area"), same treatment as the detail panel. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
@@ -518,7 +521,7 @@ export default function ArtworksCatalogueView({
                     setAvailability("");
                     applyFilters({ availability: "" });
                   }}
-                  className={`rounded-full px-3 py-1.5 text-sm ${
+                  className={`rounded-full px-3 py-[4.8px] text-sm ${
                     !availability
                       ? "bg-neutral-900 text-white"
                       : "border border-neutral-300 hover:bg-neutral-50"
@@ -532,7 +535,7 @@ export default function ArtworksCatalogueView({
                     setAvailability("AVAILABLE");
                     applyFilters({ availability: "AVAILABLE" });
                   }}
-                  className={`rounded-full px-3 py-1.5 text-sm ${
+                  className={`rounded-full px-3 py-[4.8px] text-sm ${
                     availability === "AVAILABLE"
                       ? "bg-neutral-900 text-white"
                       : "border border-neutral-300 hover:bg-neutral-50"
@@ -546,7 +549,7 @@ export default function ArtworksCatalogueView({
                     setAvailability("SOLD");
                     applyFilters({ availability: "SOLD" });
                   }}
-                  className={`rounded-full px-3 py-1.5 text-sm ${
+                  className={`rounded-full px-3 py-[4.8px] text-sm ${
                     availability === "SOLD"
                       ? "bg-neutral-900 text-white"
                       : "border border-neutral-300 hover:bg-neutral-50"
@@ -559,7 +562,7 @@ export default function ArtworksCatalogueView({
               <button
                 type="button"
                 onClick={() => setShowExportDialog(true)}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+                className="rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm hover:bg-neutral-50"
               >
                 PDF
               </button>
@@ -575,7 +578,7 @@ export default function ArtworksCatalogueView({
                 <button
                   type="button"
                   onClick={() => setShowCsvChoice((v) => !v)}
-                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+                  className="rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm hover:bg-neutral-50"
                 >
                   CSV
                 </button>
@@ -592,7 +595,7 @@ export default function ArtworksCatalogueView({
                           setShowCsvChoice(false);
                           setShowImport(true);
                         }}
-                        className="block w-full px-3 py-2 text-left text-sm hover:bg-neutral-50"
+                        className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
                       >
                         Import
                       </button>
@@ -602,7 +605,7 @@ export default function ArtworksCatalogueView({
                           setShowCsvChoice(false);
                           window.open(buildCsvExportUrl(), "_blank");
                         }}
-                        className="block w-full border-t border-neutral-100 px-3 py-2 text-left text-sm hover:bg-neutral-50"
+                        className="block w-full border-t border-neutral-100 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
                       >
                         Export
                       </button>
@@ -615,7 +618,7 @@ export default function ArtworksCatalogueView({
                 <button
                   type="button"
                   onClick={() => setView("tile")}
-                  className={`px-3 py-1.5 ${
+                  className={`px-3 py-[4.8px] ${
                     view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
                   }`}
                 >
@@ -624,7 +627,7 @@ export default function ArtworksCatalogueView({
                 <button
                   type="button"
                   onClick={() => setView("list")}
-                  className={`px-3 py-1.5 ${
+                  className={`px-3 py-[4.8px] ${
                     view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
                   }`}
                 >
@@ -665,7 +668,7 @@ export default function ArtworksCatalogueView({
                 setTier(v);
                 applyFilters({ tier: v });
               }}
-              className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
             >
               <option value="">All tiers</option>
               {settings.artworkTiers.map((t) => (
@@ -696,7 +699,7 @@ export default function ArtworksCatalogueView({
                   searchDebounceRef.current = setTimeout(() => applyFilters({ q: v }), 350);
                 }}
                 placeholder="Search title, catalogue #, medium"
-                className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+                className="w-44 rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm"
               />
               <select
                 name="location"
@@ -706,7 +709,7 @@ export default function ArtworksCatalogueView({
                   setLocation(v);
                   applyFilters({ location: v });
                 }}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
               >
                 <option value="">All locations</option>
                 {settings.artworkLocations.map((l) => (
@@ -723,7 +726,7 @@ export default function ArtworksCatalogueView({
                   setType(v);
                   applyFilters({ type: v });
                 }}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
               >
                 <option value="">All types</option>
                 {settings.artworkTypes.map((t) => (
@@ -740,7 +743,7 @@ export default function ArtworksCatalogueView({
                   setGroup(v);
                   applyFilters({ group: v });
                 }}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
               >
                 <option value="">All groups</option>
                 {settings.artworkGroups.map((g) => (
@@ -757,7 +760,7 @@ export default function ArtworksCatalogueView({
                   setSort(v);
                   applyFilters({ sort: v });
                 }}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
               >
                 <option value="">Sort: Date added</option>
                 <option value="title">Sort: Title</option>
