@@ -824,6 +824,18 @@ model Artwork {
   mainImageId String? @unique
   mainImage   Image?  @relation("ArtworkMainImage", fields: [mainImageId], references: [id])
 
+  // Which artwork (if any) this one was created as a "Create Derivative"
+  // copy of (2026-09-11) — shown in the Catalogue tab's header as
+  // "Derived from #...". Nullable: most artworks aren't derivatives.
+  // onDelete: SetNull so deleting the original artwork a derivative was
+  // copied from never cascades into deleting the derivative itself — it
+  // just loses this back-reference. `derivatives` (the reverse list) is
+  // unused for now but kept for completeness/future use (e.g. showing
+  // every derivative of a given artwork).
+  derivedFromId String?
+  derivedFrom   Artwork?  @relation("ArtworkDerivative", fields: [derivedFromId], references: [id], onDelete: SetNull)
+  derivatives   Artwork[] @relation("ArtworkDerivative")
+
   saleTerms SaleTerms?
   purchases Purchase[]
 
@@ -832,6 +844,7 @@ model Artwork {
 
   @@unique([artistId, catalogueNumber])
   @@index([artistId])
+  @@index([derivedFromId])
 }
 
 model SaleTerms {
