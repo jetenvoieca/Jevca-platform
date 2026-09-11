@@ -758,7 +758,17 @@ export default function ArtworkDetailPanel({
                   }
                 >
                   {!saleOpen && (
-                    <>
+                    // Wrapped together as one compact pair (2026-09-11,
+                    // direct request — "put reference price and offered
+                    // price in same column for direct comparison") —
+                    // previously each was its own full grid cell (same
+                    // width as Type/Group etc.), which put visual
+                    // distance between two numbers meant to be compared
+                    // side by side. This wraps both as a single child of
+                    // ArtworkCatalogueFields (so together they occupy
+                    // just one outer grid cell, not two) with its own
+                    // tight 2-column sub-grid inside.
+                    <div className="grid grid-cols-2 gap-2">
                       {/* Reference price is a suggestion, not typed —
                           (Size preset's width × height) × the selected
                           Type's Ref value, recalculated live as either
@@ -786,7 +796,7 @@ export default function ArtworkDetailPanel({
                           className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
                         />
                       </div>
-                    </>
+                    </div>
                   )}
                 </ArtworkCatalogueFields>
               )}
