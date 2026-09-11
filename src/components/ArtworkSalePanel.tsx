@@ -184,6 +184,15 @@ export default function ArtworkSalePanel({
     return fd;
   };
 
+  // Split into two explicit branches (2026-09-10 build fix) rather than
+  // a single ternary feeding one `result` variable — createPaymentLink
+  // and startArtworkSaleAndGetLink return differently-shaped success
+  // objects (the latter also carries a fresh purchaseId), and merging
+  // them into one union made a plain `"purchaseId" in result` check
+  // fail to narrow cleanly under this project's TS settings (it was
+  // typing result.purchaseId as unknown). Each branch below now talks
+  // to exactly one action with its own precisely-typed result, which
+  // needs no runtime property check at all.
   const handleGetPaymentLink = () => {
     if (!buyerEmail.trim()) {
       setError("Buyer email is required to get a payment link.");
@@ -192,11 +201,19 @@ export default function ArtworkSalePanel({
     setError(null);
     setLinkUrl(null);
     startTransition(async () => {
-      const result = startedPurchaseId
-        ? await createPaymentLink(startedPurchaseId, siteId, artworkId)
-        : await startArtworkSaleAndGetLink(artworkId, siteId, buildStartFormData());
+      if (startedPurchaseId) {
+        const result = await createPaymentLink(startedPurchaseId, siteId, artworkId);
+        if (result.ok) {
+          setLinkUrl(result.url);
+        } else {
+          setError(result.error);
+        }
+        return;
+      }
+
+      const result = await startArtworkSaleAndGetLink(artworkId, siteId, buildStartFormData());
       if (result.ok) {
-        if (!startedPurchaseId && "purchaseId" in result) setStartedPurchaseId(result.purchaseId);
+        setStartedPurchaseId(result.purchaseId);
         setLinkUrl(result.url);
       } else {
         setError(result.error);
@@ -214,11 +231,20 @@ export default function ArtworkSalePanel({
     setCardPublishableKey(null);
     onEnterCard();
     startTransition(async () => {
-      const result = startedPurchaseId
-        ? await createCardEntryIntent(startedPurchaseId, siteId)
-        : await startArtworkSaleAndEnterCard(artworkId, siteId, buildStartFormData());
+      if (startedPurchaseId) {
+        const result = await createCardEntryIntent(startedPurchaseId, siteId);
+        if (result.ok) {
+          setCardSecret(result.clientSecret);
+          setCardPublishableKey(result.publishableKey);
+        } else {
+          setError(result.error);
+        }
+        return;
+      }
+
+      const result = await startArtworkSaleAndEnterCard(artworkId, siteId, buildStartFormData());
       if (result.ok) {
-        if (!startedPurchaseId && "purchaseId" in result) setStartedPurchaseId(result.purchaseId);
+        setStartedPurchaseId(result.purchaseId);
         setCardSecret(result.clientSecret);
         setCardPublishableKey(result.publishableKey);
       } else {
