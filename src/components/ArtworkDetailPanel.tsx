@@ -366,12 +366,15 @@ export default function ArtworkDetailPanel({
         <div className="flex items-center gap-2">
           {/* Catalogue/Presentation toggle (2026-09-10, direct request)
               — replaces the old tab bar; same two views, switched from
-              the header now instead. */}
+              the header now instead. Button heights cut ~20% throughout
+              this header/form (2026-09-11, direct request — "catalogue
+              will be a high usage area") via arbitrary py values, same
+              reasoning as ArtworkCatalogueFields' shared inputCls. */}
           <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
             <button
               type="button"
               onClick={() => setView("catalogue")}
-              className={`px-3 py-1.5 font-medium ${
+              className={`px-3 py-[4.8px] font-medium ${
                 view === "catalogue"
                   ? "bg-neutral-900 text-white"
                   : "bg-white text-neutral-600 hover:bg-neutral-50"
@@ -382,7 +385,7 @@ export default function ArtworkDetailPanel({
             <button
               type="button"
               onClick={() => setView("presentation")}
-              className={`px-3 py-1.5 font-medium ${
+              className={`px-3 py-[4.8px] font-medium ${
                 view === "presentation"
                   ? "bg-neutral-900 text-white"
                   : "bg-white text-neutral-600 hover:bg-neutral-50"
@@ -395,7 +398,7 @@ export default function ArtworkDetailPanel({
             type="button"
             onClick={handleDuplicate}
             disabled={isPending}
-            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+            className="rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm hover:bg-neutral-50 disabled:opacity-50"
           >
             {/* Shortened from "Create Derivative" (2026-09-10, direct
                 request) — same action, just less space taken up now
@@ -406,7 +409,7 @@ export default function ArtworkDetailPanel({
             type="button"
             onClick={handleDelete}
             disabled={isPending}
-            className="rounded-md border border-red-200 px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+            className="rounded-md border border-red-200 px-3 py-[4.8px] text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
           >
             Delete
           </button>
@@ -419,7 +422,7 @@ export default function ArtworkDetailPanel({
               onClick={handleClose}
               disabled={isPending}
               aria-label="Close"
-              className="rounded-md border border-neutral-300 p-1.5 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
+              className="rounded-md border border-neutral-300 p-[4.8px] text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
@@ -456,7 +459,7 @@ export default function ArtworkDetailPanel({
               defaultValue={artwork.presentationTitle}
               placeholder="Title"
               required
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-center text-sm"
+              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-center text-sm"
             />
           </div>
 
@@ -492,7 +495,7 @@ export default function ArtworkDetailPanel({
               onChange={(e) => setDescriptionValue(e.target.value)}
               placeholder="Description"
               rows={6}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
             />
           </div>
 
@@ -505,7 +508,7 @@ export default function ArtworkDetailPanel({
           <button
             type="button"
             onClick={() => setView("catalogue")}
-            className="w-full rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50"
+            className="w-full rounded-md border border-neutral-300 px-4 py-[6.4px] text-sm font-medium hover:bg-neutral-50"
           >
             See Purchase options
           </button>
@@ -535,7 +538,7 @@ export default function ArtworkDetailPanel({
                   name="catalogueName"
                   defaultValue={artwork.catalogueName}
                   required
-                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
                 />
               </div>
               <div>
@@ -544,7 +547,7 @@ export default function ArtworkDetailPanel({
                   name="tier"
                   defaultValue={artwork.tier || ""}
                   onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
-                  className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
                 >
                   <option value="">Choose from list…</option>
                   {withCurrent(settings.artworkTiers, artwork.tier).map((t) => (
@@ -652,7 +655,7 @@ export default function ArtworkDetailPanel({
                         <button
                           type="button"
                           onClick={() => setSaleOpen(false)}
-                          className={`flex-1 px-3 py-2 font-medium ${
+                          className={`flex-1 px-3 py-[6.4px] font-medium ${
                             !saleOpen
                               ? "bg-neutral-900 text-white"
                               : "bg-white text-neutral-600 hover:bg-neutral-50"
@@ -671,7 +674,7 @@ export default function ArtworkDetailPanel({
                           onClick={() => setSaleOpen(true)}
                           disabled={!artwork.offeredPrice}
                           title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
-                          className={`flex-1 px-3 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
+                          className={`flex-1 px-3 py-[6.4px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
                             saleOpen
                               ? "bg-neutral-900 text-white"
                               : "bg-white text-neutral-600 hover:bg-neutral-50"
@@ -698,7 +701,7 @@ export default function ArtworkDetailPanel({
                           type="text"
                           readOnly
                           value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
-                          className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-500"
+                          className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
                         />
                       </div>
                       <div>
@@ -710,7 +713,7 @@ export default function ArtworkDetailPanel({
                           name="offeredPrice"
                           defaultValue={artwork.offeredPrice || ""}
                           placeholder="e.g. 450.00"
-                          className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                          className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
                         />
                       </div>
                     </>
