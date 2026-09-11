@@ -28,7 +28,11 @@ export type ArtworkFacetValues = {
   availability: string;
 };
 
-const inputCls = "w-full rounded-md border border-neutral-300 px-3 py-2 text-sm";
+// Vertical padding cut ~20% (2026-09-11, direct request — "catalogue
+// will be a high usage area") — py-2 (8px) down to 6.4px via an
+// arbitrary value, since no standard Tailwind step lands on exactly
+// 20% less. Horizontal padding untouched; only height was asked for.
+const inputCls = "w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm";
 const labelCls = "mb-1 block text-sm font-medium text-neutral-700";
 
 // The Type / Group / Medium / Size / Edition / Available (qty) /
