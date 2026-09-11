@@ -349,15 +349,16 @@ export default function ArtworkDetailPanel({
           padding the content below still has, so nothing visually
           shifts. */}
       <div className="sticky top-0 z-10 -mx-6 -mt-6 mb-4 flex items-start justify-between border-b border-neutral-200 bg-white px-6 pb-4 pt-6">
-        <div>
-          <h2 className="text-xl font-semibold text-neutral-900">{artwork.catalogueName}</h2>
-          <p className="text-sm text-neutral-500">
-            Catalogue #{artwork.catalogueNumber}
-            {artwork.presentationTitle !== artwork.catalogueName && (
-              <> · Public title: {artwork.presentationTitle}</>
-            )}
-          </p>
-        </div>
+        {/* Heading removed (2026-09-11, direct request) — the Name
+            field just below already shows/edits the same text; the
+            duplicate bold title added nothing. Catalogue #/public title
+            stays as the one identifying line up here. */}
+        <p className="text-sm text-neutral-500">
+          Catalogue #{artwork.catalogueNumber}
+          {artwork.presentationTitle !== artwork.catalogueName && (
+            <> · Public title: {artwork.presentationTitle}</>
+          )}
+        </p>
         <div className="flex items-center gap-2">
           {/* Catalogue/Presentation toggle (2026-09-10, direct request)
               — replaces the old tab bar; same two views, switched from
@@ -406,13 +407,19 @@ export default function ArtworkDetailPanel({
             Delete
           </button>
           {showCloseButton && (
+            // X icon instead of the word "Close" (2026-09-11, direct
+            // request) — same handleClose behaviour, just an icon
+            // button now.
             <button
               type="button"
               onClick={handleClose}
               disabled={isPending}
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              aria-label="Close"
+              className="rounded-md border border-neutral-300 p-1.5 text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
             >
-              Close
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
+              </svg>
             </button>
           )}
         </div>
@@ -648,10 +655,18 @@ export default function ArtworkDetailPanel({
                         >
                           Available
                         </button>
+                        {/* Disabled without an Offered price (2026-09-11,
+                            direct request) — there's nothing for the sale
+                            panel's Purchase option to be based on otherwise.
+                            Checks artwork.offeredPrice (the saved value) since
+                            the field below autosaves on blur — type a price,
+                            click elsewhere, then SOLD becomes available. */}
                         <button
                           type="button"
                           onClick={() => setSaleOpen(true)}
-                          className={`flex-1 px-3 py-2 font-medium ${
+                          disabled={!artwork.offeredPrice}
+                          title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
+                          className={`flex-1 px-3 py-2 font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
                             saleOpen
                               ? "bg-neutral-900 text-white"
                               : "bg-white text-neutral-600 hover:bg-neutral-50"
