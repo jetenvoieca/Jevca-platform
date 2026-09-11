@@ -4,7 +4,9 @@ import { useState } from "react";
 import type { ArtworkSettings } from "@/components/ArtworkDetailPanel";
 
 // Keeps a select from silently dropping an existing value that isn't (yet)
-// in the preset list — e.g. legacy data typed in before Settings existed.
+// in the preset list — e.g. legacy data typed in before Settings existed,
+// or a value just added inline via the "+ Add new…" option below, before
+// a fresh settings list has come back from the server.
 export function withCurrent(presets: string[], current: string | null) {
   if (!current || presets.includes(current)) return presets;
   return [current, ...presets];
@@ -18,7 +20,9 @@ export type ArtworkFacetValues = {
   edition: string;
   // Kept as a string here (not number | null) since this is always read
   // straight off a form field — callers convert to/from a number at
-  // their own DB boundary.
+  // their own DB boundary. No longer editable from this form (2026-09-11,
+  // direct request — see the note by the hidden input further down) but
+  // still threaded through so an existing value is never silently wiped.
   availableQty: string;
   location: string;
   // Free text (e.g. "June 2025") — see the matching note on
@@ -35,16 +39,27 @@ export type ArtworkFacetValues = {
 const inputCls = "w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm";
 const labelCls = "mb-1 block text-sm font-medium text-neutral-700";
 
-// The Type / Group / Medium / Size / Edition / Available (qty) /
-// Location / Date / Availability / Studio notes block — one shared
-// component (2026-09-07, direct request) used by both the full Artwork
-// editor's Catalogue tab (ArtworkDetailPanel) and the Hopper's quick-add
-// form (HopperView/QuickCatalogueFields). These two had drifted into
+// Sentinel option value for "+ Add new…" (2026-09-11) — never a real
+// preset name, so it can never collide with one. Selecting it never
+// actually gets submitted: the onChange handlers below intercept it,
+// prompt for a name, and swap the select's value over to the real new
+// entry before anything autosaves.
+const ADD_NEW = "__add_new__";
+
+// The Type / Group / Medium / Size / Edition / Location / Date /
+// Availability / Studio notes block — one shared component (2026-09-07,
+// direct request) used by both the full Artwork editor's Catalogue tab
+// (ArtworkDetailPanel) and the Hopper's quick-add form
+// (HopperView/QuickCatalogueFields). These two had drifted into
 // separately-maintained copies — the Hopper version was missing Edition
-// and Available (qty) entirely, and showed Availability unconditionally
-// — which is exactly the kind of drift that causes costly mistakes.
-// Unifying them here means a future field change only has to happen
-// once.
+// entirely, and showed Availability unconditionally — which is exactly
+// the kind of drift that causes costly mistakes. Unifying them here means
+// a future field change only has to happen once.
+//
+// Available (qty) removed from the visible form entirely (2026-09-11,
+// direct request) — any existing value is preserved via a hidden input
+// (see below) rather than deleted, so nothing already on record is lost;
+// it's just no longer something this form edits.
 //
 // Name and Tier (Catalogue-tab-only — Tier is a curatorial/pricing
 // category set once cataloguing is done, not at Hopper quick-add time)
@@ -67,6 +82,10 @@ export default function ArtworkCatalogueFields({
   afterLocation,
   availabilityOverride,
   hideTail,
+  onAddType,
+  onAddGroup,
+  onAddMedium,
+  onAddLocation,
 }: {
   settings: Pick<
     ArtworkSettings,
@@ -103,17 +122,64 @@ export default function ArtworkCatalogueFields({
   // autosaves. Only ever passed true by the Catalogue tab while its
   // sale panel is open; Hopper never sets this.
   hideTail?: boolean;
+  // Inline "add new preset" support (2026-09-11, direct request — "all
+  // drop-downs add ability to add to lists"). Each is a small async
+  // action that actually persists the new value to the artist's own
+  // Settings list (Type has its own table with a Ref value, so it's a
+  // distinct action from the plain string-list fields — see
+  // artworkSettings.ts). Omit any of these to leave that particular
+  // select as a plain, fixed-list picker — Hopper's quick-add form
+  // doesn't pass any of them, so its selects are unaffected.
+  onAddType?: (name: string) => Promise<void>;
+  onAddGroup?: (name: string) => Promise<void>;
+  onAddMedium?: (name: string) => Promise<void>;
+  onAddLocation?: (name: string) => Promise<void>;
 }) {
   const [typeValue, setTypeValue] = useState(values.type);
   const [sizeValue, setSizeValue] = useState(values.size);
+  // Group/Medium/Location become controlled state too (2026-09-11) —
+  // needed so a value just added inline (not yet in `settings`, since
+  // that only refreshes from the server afterwards) can still be shown
+  // as selected via withCurrent below, the same way Type/Size already
+  // handle a value outside the preset list.
+  const [groupValue, setGroupValue] = useState(values.catalogueGroup);
+  const [mediumValue, setMediumValue] = useState(values.medium);
+  const [locationValue, setLocationValue] = useState(values.location);
   // Original/Unique pieces don't have editions the way prints do — both
   // forms show a simpler set of fields for them. Tracked live (not just
-  // at load) so switching Type immediately shows/hides Edition/
-  // Available (qty)/Availability. Substring rather than exact match,
-  // since Type is free text from the artist's own preset list and can
-  // be phrased several ways ("Edition", "Giclée Edition", "Limited
-  // Edition").
+  // at load) so switching Type immediately shows/hides Edition.
+  // Substring rather than exact match, since Type is free text from the
+  // artist's own preset list and can be phrased several ways ("Edition",
+  // "Giclée Edition", "Limited Edition").
   const isEditionType = typeValue.trim().toLowerCase().includes("edition");
+
+  // Shared "+ Add new…" flow for a select (2026-09-11). Deliberately a
+  // plain window.prompt() rather than a custom inline input/popover —
+  // this is a quick, occasional escape hatch for a missing preset, not
+  // a primary interaction, and a prompt needs no extra layout space in
+  // an already-dense form. Persists the new value via `persist` (the
+  // matching onAdd* callback), then updates local state so it's
+  // selected immediately (via withCurrent, since `settings` itself
+  // won't include it until a fresh load) and autosaves it onto the
+  // artwork. The autosave is deferred a tick — `persist` and the state
+  // update both need to actually land (state update flushed into the
+  // DOM's controlled select value) before FormData(form) inside
+  // onAutosave would see the right value; calling it synchronously in
+  // the same tick as setState risks reading the select's old value.
+  const addNew = (
+    label: string,
+    persist: ((name: string) => Promise<void>) | undefined,
+    setValue: (v: string) => void,
+    form: HTMLFormElement,
+    andAlsoSetType?: (type: string) => void
+  ) => {
+    const entered = window.prompt(`Add a new ${label}:`)?.trim();
+    if (!entered) return;
+    persist?.(entered);
+    setValue(entered);
+    andAlsoSetType?.(entered);
+    setTimeout(() => onAutosave?.(form), 0);
+  };
 
   return (
     <>
@@ -123,50 +189,79 @@ export default function ArtworkCatalogueFields({
           name="type"
           value={typeValue}
           onChange={(e) => {
-            setTypeValue(e.target.value);
-            onTypeOrSizeChange?.(e.target.value, sizeValue);
-            onAutosave?.(e.currentTarget.form!);
+            const v = e.target.value;
+            const form = e.currentTarget.form!;
+            if (v === ADD_NEW) {
+              addNew("Type", onAddType, setTypeValue, form, (newType) =>
+                onTypeOrSizeChange?.(newType, sizeValue)
+              );
+              return;
+            }
+            setTypeValue(v);
+            onTypeOrSizeChange?.(v, sizeValue);
+            onAutosave?.(form);
           }}
           className={inputCls}
         >
           <option value="">Choose from list…</option>
-          {withCurrent(settings.artworkTypes, values.type).map((t) => (
+          {withCurrent(settings.artworkTypes, typeValue).map((t) => (
             <option key={t} value={t}>
               {t}
             </option>
           ))}
+          {onAddType && <option value={ADD_NEW}>+ Add new…</option>}
         </select>
       </div>
       <div>
         <label className={labelCls}>Group</label>
         <select
           name="catalogueGroup"
-          defaultValue={values.catalogueGroup}
-          onChange={(e) => onAutosave?.(e.currentTarget.form!)}
+          value={groupValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            const form = e.currentTarget.form!;
+            if (v === ADD_NEW) {
+              addNew("Group", onAddGroup, setGroupValue, form);
+              return;
+            }
+            setGroupValue(v);
+            onAutosave?.(form);
+          }}
           className={inputCls}
         >
           <option value="">Choose from list…</option>
-          {withCurrent(settings.artworkGroups, values.catalogueGroup).map((g) => (
+          {withCurrent(settings.artworkGroups, groupValue).map((g) => (
             <option key={g} value={g}>
               {g}
             </option>
           ))}
+          {onAddGroup && <option value={ADD_NEW}>+ Add new…</option>}
         </select>
       </div>
       <div className="col-span-2">
         <label className={labelCls}>Medium</label>
         <select
           name="medium"
-          defaultValue={values.medium}
-          onChange={(e) => onAutosave?.(e.currentTarget.form!)}
+          value={mediumValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            const form = e.currentTarget.form!;
+            if (v === ADD_NEW) {
+              addNew("Medium", onAddMedium, setMediumValue, form);
+              return;
+            }
+            setMediumValue(v);
+            onAutosave?.(form);
+          }}
           className={inputCls}
         >
           <option value="">Choose from list…</option>
-          {withCurrent(settings.mediumPresets, values.medium).map((m) => (
+          {withCurrent(settings.mediumPresets, mediumValue).map((m) => (
             <option key={m} value={m}>
               {m}
             </option>
           ))}
+          {onAddMedium && <option value={ADD_NEW}>+ Add new…</option>}
         </select>
       </div>
       <div>
@@ -209,34 +304,35 @@ export default function ArtworkCatalogueFields({
         // switched back.
         <input type="hidden" name="edition" value={values.edition} />
       )}
-      {isEditionType ? (
-        <div>
-          <label className={labelCls}>Available (qty)</label>
-          <input
-            type="number"
-            name="availableQty"
-            defaultValue={values.availableQty}
-            onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-            className={inputCls}
-          />
-        </div>
-      ) : (
-        <input type="hidden" name="availableQty" value={values.availableQty} />
-      )}
+      {/* Available (qty) removed from the visible form (2026-09-11,
+          direct request) — always a hidden input now, regardless of
+          Type, so any existing value on record is preserved rather than
+          silently cleared the next time this form autosaves. */}
+      <input type="hidden" name="availableQty" value={values.availableQty} />
       <div>
         <label className={labelCls}>Location</label>
         <select
           name="location"
-          defaultValue={values.location}
-          onChange={(e) => onAutosave?.(e.currentTarget.form!)}
+          value={locationValue}
+          onChange={(e) => {
+            const v = e.target.value;
+            const form = e.currentTarget.form!;
+            if (v === ADD_NEW) {
+              addNew("Location", onAddLocation, setLocationValue, form);
+              return;
+            }
+            setLocationValue(v);
+            onAutosave?.(form);
+          }}
           className={inputCls}
         >
           <option value="">Choose from list…</option>
-          {withCurrent(settings.artworkLocations, values.location).map((l) => (
+          {withCurrent(settings.artworkLocations, locationValue).map((l) => (
             <option key={l} value={l}>
               {l}
             </option>
           ))}
+          {onAddLocation && <option value={ADD_NEW}>+ Add new…</option>}
         </select>
       </div>
       {afterLocation && <div className="col-span-2">{afterLocation}</div>}
