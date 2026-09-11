@@ -349,16 +349,20 @@ export default function ArtworkDetailPanel({
           padding the content below still has, so nothing visually
           shifts. */}
       <div className="sticky top-0 z-10 -mx-6 -mt-6 mb-4 flex items-start justify-between border-b border-neutral-200 bg-white px-6 pb-4 pt-6">
-        {/* Heading removed (2026-09-11, direct request) — the Name
-            field just below already shows/edits the same text; the
-            duplicate bold title added nothing. Catalogue #/public title
-            stays as the one identifying line up here. */}
-        <p className="text-sm text-neutral-500">
-          Catalogue #{artwork.catalogueNumber}
-          {artwork.presentationTitle !== artwork.catalogueName && (
-            <> · Public title: {artwork.presentationTitle}</>
-          )}
-        </p>
+        {/* Title reinstated (2026-09-11) — mistakenly removed along with
+            the "Images & Videos" section heading in an earlier pass;
+            those were two different headings and only the latter was
+            meant to go. This one and the Catalogue #/public title line
+            both stay. */}
+        <div>
+          <h2 className="text-xl font-semibold text-neutral-900">{artwork.catalogueName}</h2>
+          <p className="text-sm text-neutral-500">
+            Catalogue #{artwork.catalogueNumber}
+            {artwork.presentationTitle !== artwork.catalogueName && (
+              <> · Public title: {artwork.presentationTitle}</>
+            )}
+          </p>
+        </div>
         <div className="flex items-center gap-2">
           {/* Catalogue/Presentation toggle (2026-09-10, direct request)
               — replaces the old tab bar; same two views, switched from
