@@ -41,6 +41,10 @@ export type ArtworkImage = {
 // single row of small squares to scroll or squeeze into. Click-to-select
 // no longer has a preview to update, so it's gone; drag-to-reorder
 // (unrelated to that) is untouched.
+//
+// Explanatory caption removed (2026-09-11, direct request) — the drag-
+// to-reorder/Main behaviour is unchanged, just no longer described in a
+// line of text above the grid.
 export default function ArtworkImageManager({
   artworkId,
   siteId,
@@ -175,10 +179,6 @@ export default function ArtworkImageManager({
   return (
     <div className="mb-6">
       <h3 className="mb-2 text-sm font-medium text-neutral-700">Images &amp; Videos</h3>
-      <p className="mb-2 text-xs text-neutral-400">
-        The first one is the main image shown in the catalogue - drag any thumbnail to the front
-        to make it the main one instead.
-      </p>
 
       {/* Two per row (2026-09-10, direct request) — a fixed 2-column
           grid rather than flex-wrap's small fixed-size tiles, so each
