@@ -9,6 +9,7 @@ import {
   deleteArtworkIfBlank,
   duplicateArtwork,
 } from "@/lib/actions/artworks";
+import { addArtworkType, addSettingOption } from "@/lib/actions/artworkSettings";
 import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
 import ArtworkSalePanel from "@/components/ArtworkSalePanel";
@@ -177,11 +178,10 @@ export default function ArtworkDetailPanel({
   // Enter card now — moves the sale panel up further still, to sit
   // right under Name/Tier, matching the mockup's "slides up further to
   // just under the name/tier row". That means Type/Group/Medium/Size/
-  // Location/Edition/Available(qty) disappear too, not just the tail
-  // fields hideTail already covers — so when cardMode is on,
-  // ArtworkCatalogueFields doesn't render at all, and every field it
-  // would have submitted is preserved via the hidden inputs just below
-  // it instead.
+  // Location/Edition disappear too, not just the tail fields hideTail
+  // already covers — so when cardMode is on, ArtworkCatalogueFields
+  // doesn't render at all, and every field it would have submitted is
+  // preserved via the hidden inputs just below it instead.
   const [cardMode, setCardMode] = useState(false);
 
   // Record sale (2026-09-10 follow-up) — unlike card mode, this stays
@@ -298,6 +298,37 @@ export default function ArtworkDetailPanel({
     });
   };
 
+  // ---- Inline "add new preset" (2026-09-11, direct request — "all
+  // drop-downs add ability to add to lists") — each just persists the
+  // new value to the artist's own Settings list (Type has its own table
+  // with a Ref value, hence its own action; Group/Medium/Location are
+  // plain string lists via addSettingOption) and fires-and-forgets;
+  // ArtworkCatalogueFields already updates its own local state so the
+  // new value shows as selected immediately, and autosaves it onto this
+  // artwork right after. No router.refresh() needed here specifically
+  // for that to work — the next full load of Settings/this page simply
+  // picks up the new preset from then on.
+  const handleAddType = async (name: string) => {
+    const fd = new FormData();
+    fd.set("name", name);
+    await addArtworkType(artistId, siteId, fd);
+  };
+  const handleAddGroup = async (name: string) => {
+    const fd = new FormData();
+    fd.set("value", name);
+    await addSettingOption(artistId, siteId, "artworkGroups", fd);
+  };
+  const handleAddMedium = async (name: string) => {
+    const fd = new FormData();
+    fd.set("value", name);
+    await addSettingOption(artistId, siteId, "mediumPresets", fd);
+  };
+  const handleAddLocation = async (name: string) => {
+    const fd = new FormData();
+    fd.set("value", name);
+    await addSettingOption(artistId, siteId, "artworkLocations", fd);
+  };
+
   // Shared props every ArtworkSalePanel instance needs, regardless of
   // which mode/branch is rendering it — keeps the two call sites below
   // from drifting out of sync with each other.
@@ -349,19 +380,16 @@ export default function ArtworkDetailPanel({
           padding the content below still has, so nothing visually
           shifts. */}
       <div className="sticky top-0 z-10 -mx-6 -mt-6 mb-4 flex items-start justify-between border-b border-neutral-200 bg-white px-6 pb-4 pt-6">
-        {/* Title reinstated (2026-09-11) — mistakenly removed along with
-            the "Images & Videos" section heading in an earlier pass;
-            those were two different headings and only the latter was
-            meant to go. This one and the Catalogue #/public title line
-            both stay. */}
         <div>
           <h2 className="text-xl font-semibold text-neutral-900">{artwork.catalogueName}</h2>
-          <p className="text-sm text-neutral-500">
-            Catalogue #{artwork.catalogueNumber}
-            {artwork.presentationTitle !== artwork.catalogueName && (
-              <> · Public title: {artwork.presentationTitle}</>
-            )}
-          </p>
+          {/* "· Public title: …" removed (2026-09-11, direct request —
+              "remove erroneous duplicate title"): with the Catalogue
+              name already shown as the heading above, echoing the
+              Presentation title here as well just duplicated it in
+              practice (they're very often the same, or the Presentation
+              title is a raw, not-yet-cleaned-up value like a Hopper
+              caption) rather than adding real information. */}
+          <p className="text-sm text-neutral-500">Catalogue #{artwork.catalogueNumber}</p>
         </div>
         <div className="flex items-center gap-2">
           {/* Catalogue/Presentation toggle (2026-09-10, direct request)
@@ -592,7 +620,7 @@ export default function ArtworkDetailPanel({
                   <input type="hidden" name="offeredPrice" value={artwork.offeredPrice || ""} />
                 </>
               ) : (
-                /* The Type/Group/Medium/Size/Edition/Available/Location/Date/
+                /* The Type/Group/Medium/Size/Edition/Location/Date/
                    Availability/Studio notes block below is the exact same
                    shared component the Hopper's quick-add form uses
                    (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
@@ -600,7 +628,11 @@ export default function ArtworkDetailPanel({
                    between Date and Availability) stay Catalogue-tab-only.
                    afterLocation/availabilityOverride/hideTail (2026-09-10)
                    slot in the sale panel, the Available/SOLD toggle, and hide
-                   everything below the panel while it's open. */
+                   everything below the panel while it's open. onAddType/
+                   onAddGroup/onAddMedium/onAddLocation (2026-09-11) give
+                   Type/Group/Medium/Location their own inline "+ Add new…"
+                   option — Hopper's own use of this component doesn't pass
+                   these, so its selects are unaffected. */
                 <ArtworkCatalogueFields
                   settings={settings}
                   values={{
@@ -620,6 +652,10 @@ export default function ArtworkDetailPanel({
                     setTypeValue(type);
                     setSizeValue(size);
                   }}
+                  onAddType={handleAddType}
+                  onAddGroup={handleAddGroup}
+                  onAddMedium={handleAddMedium}
+                  onAddLocation={handleAddLocation}
                   hideTail={saleOpen}
                   afterLocation={
                     saleOpen ? (
