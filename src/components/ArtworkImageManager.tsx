@@ -29,6 +29,10 @@ export type ArtworkImage = {
 // gone — promoting a different image to Main is now an explicit "Set as
 // Main" action shown on the big preview whenever it isn't already
 // showing the Main image, rather than a drag gesture.
+//
+// "Images & Videos" heading removed (2026-09-11, direct request) — the
+// section is visually obvious from the image grid itself; no label
+// needed above it.
 export default function ArtworkImageManager({
   artworkId,
   siteId,
@@ -118,8 +122,6 @@ export default function ArtworkImageManager({
 
   return (
     <div className="mb-6">
-      <h3 className="mb-2 text-sm font-medium text-neutral-700">Images &amp; Videos</h3>
-
       <div className="grid grid-cols-2 gap-3">
         {/* Big preview — left, same size as a single tile was in the
             old two-per-row grid. Defaults to Main; clicking a mini-grid
