@@ -2,8 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateArtist, buildArtistFormData, type ArtistFormFields } from "@/lib/actions";
-import { toArtistFormFields, type ArtistRecord } from "@/lib/clientPanelTypes";
+import { updateArtist } from "@/lib/actions";
+import {
+  toArtistFormFields,
+  buildArtistFormData,
+  type ArtistFormFields,
+  type ArtistRecord,
+} from "@/lib/clientPanelTypes";
 import { EMAIL_DOMAIN } from "@/lib/email";
 
 const labelCls = "mb-1 block text-xs text-neutral-500";
