@@ -56,6 +56,24 @@ export default function MediaDetailPanel({
   const [tags, setTags] = useState<string[]>(media.tags);
   const router = useRouter();
 
+  // Autosave (2026-09-12, direct request — "remove the save button, this
+  // should auto save like everywhere else") — same pattern as
+  // ArtworkDetailPanel's autosaveCatalogue: reads straight off the DOM
+  // via FormData rather than controlling every field in React state.
+  // Wired to the form's onBlur below (fires for Caption), and called
+  // directly after Tags changes, since adding/removing a tag isn't a
+  // blur event.
+  const autosave = (form: HTMLFormElement) => {
+    const formData = new FormData(form);
+    startTransition(async () => {
+      await updateMedia(media.id, siteId, formData);
+      setSaved(true);
+      if (onDataChanged) onDataChanged();
+      else router.refresh();
+      setTimeout(() => setSaved(false), 1500);
+    });
+  };
+
   const handleClose = () => {
     if (onClose) onClose();
     else router.push(`/sites/${siteId}/media`);
@@ -212,16 +230,11 @@ export default function MediaDetailPanel({
         </div>
       )}
 
-      <form
-        action={async (formData) => {
-          await updateMedia(media.id, siteId, formData);
-          setSaved(true);
-          if (onDataChanged) onDataChanged();
-          else router.refresh();
-          setTimeout(() => setSaved(false), 2000);
-        }}
-        className="space-y-4"
-      >
+      {/* Autosave on blur (2026-09-12) — replaces the old submit-based
+          form action + Save button. Fires for Caption, the only plain
+          text field. Tags don't blur when clicked, so their own
+          add/remove handlers below call autosave directly instead. */}
+      <form onBlur={(e) => autosave(e.currentTarget)} className="space-y-4">
         <div>
           <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
           <input
@@ -276,7 +289,16 @@ export default function MediaDetailPanel({
                       {t}
                       <button
                         type="button"
-                        onClick={() => setTags((prev) => prev.filter((x) => x !== t))}
+                        onClick={(e) => {
+                          // setTimeout: the hidden "tags" input above
+                          // only reflects the new value on the next
+                          // render — autosave needs to fire after that
+                          // render lands, or FormData(form) would still
+                          // read the pre-removal value.
+                          const form = e.currentTarget.form;
+                          setTags((prev) => prev.filter((x) => x !== t));
+                          if (form) setTimeout(() => autosave(form), 0);
+                        }}
                         aria-label={`Remove tag ${t}`}
                         className="leading-none text-white/70 hover:text-white"
                       >
@@ -291,7 +313,11 @@ export default function MediaDetailPanel({
                   value=""
                   onChange={(e) => {
                     const value = e.target.value;
-                    if (value) setTags((prev) => [...prev, value]);
+                    const form = e.currentTarget.form;
+                    if (value) {
+                      setTags((prev) => [...prev, value]);
+                      if (form) setTimeout(() => autosave(form), 0);
+                    }
                   }}
                   className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-500"
                 >
@@ -310,12 +336,6 @@ export default function MediaDetailPanel({
         </div>
 
         <div className="flex items-center gap-3">
-          <button
-            type="submit"
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-          >
-            Save
-          </button>
           {saved && <span className="text-sm text-green-600">Saved</span>}
           {variant === "pendingRender" && onDiscard && (
             <button
