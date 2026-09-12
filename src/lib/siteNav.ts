@@ -152,14 +152,9 @@ export function buildSiteNavEntries({
     // its own section below, labelled with the site itself, so this one
     // only ever does the one job its label says).
     { label: "Sites", href: "/", active: false },
-    {
-      label: siteLabel,
-      section: true,
-      key: "site",
-      color: SITE_SECTION_COLOR,
-      active: active !== null && SITE_INFO_KEYS.includes(active),
-      customChildren: siteSectionBody,
-    },
+    // "Content" moved above the site's own section (2026-09-12, direct
+    // request) — Hopper/Artwork/Media Catalogue are what's used day to
+    // day; the site's own page list is reached less often.
     {
       label: "Content",
       section: true,
@@ -167,6 +162,14 @@ export function buildSiteNavEntries({
       color: SITE_SECTION_COLOR,
       active: active !== null && CONTENT_KEYS.includes(active),
       children: contentChildren,
+    },
+    {
+      label: siteLabel,
+      section: true,
+      key: "site",
+      color: SITE_SECTION_COLOR,
+      active: active !== null && SITE_INFO_KEYS.includes(active),
+      customChildren: siteSectionBody,
     },
     {
       label: "Financial",
