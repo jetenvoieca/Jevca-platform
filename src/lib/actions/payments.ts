@@ -463,6 +463,74 @@ export async function createGalleryPaymentLink(
   }
 }
 
+// ---------- Editing an already-started gallery sale's price/currency ----------
+
+// The "Edit Sale" popup (2026-09-12 mockup) — a small, deliberately
+// narrow escape hatch for a mistyped price or wrong currency on a sale
+// that's already been started, so it doesn't have to be cancelled and
+// re-entered from scratch. Nothing else about an in-progress gallery
+// sale is editable this way (matches Craig's own "only price and
+// currency" note on the mockup).
+//
+// Restricted to ACTIVE sales only (confirmed decision, 2026-09-12) —
+// once a sale is marked paid, its amount is a real financial record and
+// stays locked, same principle as the invoice preview already being
+// read-only.
+//
+// If a Stripe Payment Link was already generated for the OLD amount, it
+// encodes a now-wrong net-owed figure. Rather than leave it live and
+// silently stale, it's deactivated in Stripe and cleared here — the
+// next press of "Payment Link" (createGalleryPaymentLink) generates a
+// fresh one for the corrected amount, since the DB no longer has one on
+// file.
+export async function updateGallerySaleAmount(
+  purchaseId: string,
+  siteId: string,
+  formData: FormData
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase) return { ok: false, error: "Sale not found." };
+  if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a gallery sale." };
+  if (purchase.status !== "ACTIVE") {
+    return { ok: false, error: "This sale is no longer editable — it's already been paid." };
+  }
+
+  const totalAmount = (formData.get("totalAmount") as string)?.trim();
+  const currency = (formData.get("currency") as string)?.trim().toUpperCase();
+
+  if (!totalAmount) return { ok: false, error: "The sale price is required." };
+  if (!currency) return { ok: false, error: "The currency is required." };
+  if (Number.isNaN(parseFloat(totalAmount))) return { ok: false, error: "That price isn't valid." };
+
+  const amountChanged = totalAmount !== purchase.totalAmount.toString();
+  const currencyChanged = currency !== purchase.currency;
+  const linkNeedsClearing = (amountChanged || currencyChanged) && purchase.stripePaymentLinkId;
+
+  if (linkNeedsClearing) {
+    try {
+      const mode = await getStripeModeForArtwork(purchase.artworkId);
+      const stripe = getStripeClient(mode);
+      await stripe.paymentLinks.update(purchase.stripePaymentLinkId!, { active: false });
+    } catch {
+      // Deactivating the old link in Stripe failing shouldn't block
+      // correcting the price locally — worst case a now-stale-looking
+      // link stays technically active in Stripe a little longer, which
+      // is a Stripe-side cleanup, not a data-correctness problem here.
+    }
+  }
+
+  await db.purchase.update({
+    where: { id: purchaseId },
+    data: {
+      totalAmount,
+      currency,
+      ...(linkNeedsClearing ? { stripePaymentLinkId: null, stripePaymentLinkUrl: null } : {}),
+    },
+  });
+
+  return { ok: true };
+}
+
 // ---------- Past sales — backfilling history, already paid ----------
 
 // A sale that already happened, sometimes years ago, being entered into
