@@ -29,7 +29,16 @@ export default function SitesDirectoryView({
       publishEnabled={false}
       navItems={buildTopNavItems("sites", alertCount)}
       rightPanel={
-        <SitesListColumn sites={sites} q={q} sort={sort} status={status} />
+        <SitesListColumn
+          sites={sites}
+          q={q}
+          sort={sort}
+          status={status}
+          // 2026-09-12, direct request — picking a site from this list
+          // opens straight onto its Artwork Catalogue (Content section)
+          // rather than its Profile/Overview page.
+          siteLinkSuffix="/artworks"
+        />
       }
       content={
         <div className="flex h-full items-center justify-center p-6">
@@ -41,6 +50,3 @@ export default function SitesDirectoryView({
     />
   );
 }
-
-
-
