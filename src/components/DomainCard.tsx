@@ -3,8 +3,13 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import StatusSelect from "@/components/StatusSelect";
-import { updateSite, buildSiteFormData, type SiteFormFields } from "@/lib/actions";
-import { toSiteFormFields, type SiteRecord } from "@/lib/clientPanelTypes";
+import { updateSite } from "@/lib/actions";
+import {
+  toSiteFormFields,
+  buildSiteFormData,
+  type SiteFormFields,
+  type SiteRecord,
+} from "@/lib/clientPanelTypes";
 
 const labelCls = "mb-1 block text-xs text-neutral-500";
 const inputCls =
