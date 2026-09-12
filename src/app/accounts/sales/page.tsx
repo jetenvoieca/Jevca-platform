@@ -102,7 +102,7 @@ export default async function ConsolidatedSalesPage() {
       navItems={buildTopNavItems("sales", openAlerts.length)}
       content={
         <div className="mx-auto max-w-4xl px-6 py-6">
-          <div className="mb-1 flex items-center justify-between">
+          <div className="mb-6 flex items-center justify-between">
             <h1 className="text-2xl font-semibold text-neutral-900">Consolidated Sales</h1>
             <Link
               href="/accounts"
@@ -111,14 +111,6 @@ export default async function ConsolidatedSalesPage() {
               ← Accounts
             </Link>
           </div>
-          <p className="mb-6 text-sm text-neutral-500">
-            Every artist&apos;s sales to their own buyers, in one place, grouped by month —
-            individual sites still have their own Sales page for the day-to-day view. Amount
-            shown is <strong>net of gallery commission</strong> where a commission applies (the
-            same figure as the &quot;net paid&quot; line on that sale&apos;s own record) — not
-            yet-collected instalments are still included in full, and abandoned sales are
-            excluded. Totals are kept separate per currency.
-          </p>
 
           {sortedMonths.length === 0 ? (
             <p className="text-sm text-neutral-500">No sales recorded yet.</p>
