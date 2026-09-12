@@ -7,7 +7,7 @@ import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payme
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
-import GallerySaleCard from "@/components/GallerySaleCard";
+import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import type { SaleRow } from "@/lib/actions/sales";
 
@@ -72,6 +72,12 @@ export default function SalesView({
     });
   };
 
+  const closeModal = () => {
+    setSelectedArtworkId(null);
+    setSelectedPurchaseId(null);
+    setSelectedDetail(null);
+  };
+
   // Same warning logic as the equivalent delete inside PurchasePanel's
   // history list — this page is the other place a past gallery sale can
   // be viewed and needs the same capability (2026-08-13).
@@ -100,9 +106,7 @@ export default function SalesView({
             alert(res.error);
             return;
           }
-          setSelectedArtworkId(null);
-          setSelectedPurchaseId(null);
-          setSelectedDetail(null);
+          closeModal();
           router.refresh();
         });
       },
@@ -128,9 +132,7 @@ export default function SalesView({
             alert(res.error);
             return;
           }
-          setSelectedArtworkId(null);
-          setSelectedPurchaseId(null);
-          setSelectedDetail(null);
+          closeModal();
           router.refresh();
         });
       },
@@ -176,82 +178,92 @@ export default function SalesView({
         ))}
       </div>
 
-      <div className="grid gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
-        <div className="overflow-hidden rounded-lg border border-neutral-200">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
-                <th className="px-3 py-2 font-normal">Artwork</th>
-                <th className="px-3 py-2 font-normal">Buyer</th>
-                <th className="px-3 py-2 font-normal">Type</th>
-                <th className="px-3 py-2 font-normal">Amount</th>
-                <th className="px-3 py-2 font-normal">Status</th>
-                <th className="px-3 py-2 font-normal">Date</th>
+      {/* Full-width table now (2026-09-12) — the detail panel moved out
+          of this two-column grid into its own click-off-to-close modal
+          below, matching how Consolidated Sales and Galleries already
+          show a sale's detail. Previously this was a sticky 480px
+          sidebar that never closed itself and was the odd one out. */}
+      <div className="overflow-hidden rounded-lg border border-neutral-200">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
+              <th className="px-3 py-2 font-normal">Artwork</th>
+              <th className="px-3 py-2 font-normal">Buyer</th>
+              <th className="px-3 py-2 font-normal">Type</th>
+              <th className="px-3 py-2 font-normal">Amount</th>
+              <th className="px-3 py-2 font-normal">Status</th>
+              <th className="px-3 py-2 font-normal">Date</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filtered.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-6 text-center text-sm text-neutral-400">
+                  Nothing here yet.
+                </td>
               </tr>
-            </thead>
-            <tbody>
-              {filtered.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-3 py-6 text-center text-sm text-neutral-400">
-                    Nothing here yet.
-                  </td>
-                </tr>
-              )}
-              {filtered.map((s) => (
-                <tr
-                  key={s.purchaseId}
-                  onClick={() => openRow(s.artworkId, s.purchaseId)}
-                  className={`cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 ${
-                    selectedPurchaseId === s.purchaseId ? "bg-neutral-50" : ""
-                  }`}
-                >
-                  <td className="flex items-center gap-2 px-3 py-2">
-                    {s.artworkThumbnail ? (
-                      <img
-                        src={s.artworkThumbnail}
-                        alt=""
-                        className="h-8 w-8 rounded object-cover"
-                      />
-                    ) : (
-                      <div className="h-8 w-8 rounded bg-neutral-100" />
-                    )}
-                    <span className="truncate">{s.artworkTitle}</span>
-                  </td>
-                  <td className="px-3 py-2 text-neutral-600">{s.buyerName || s.buyerEmail}</td>
-                  <td className="px-3 py-2 text-neutral-500">
-                    {s.type === "FULL" ? "Full" : "Instalments"}
-                  </td>
-                  <td className="px-3 py-2">{formatMoney(s.totalAmount, s.currency)}</td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={
-                        s.status === "COMPLETED"
-                          ? "text-green-600"
-                          : s.status === "ABANDONED"
-                            ? "text-neutral-400"
-                            : "text-amber-600"
-                      }
-                    >
-                      {s.status.charAt(0) + s.status.slice(1).toLowerCase()}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-neutral-400">
-                    {new Date(s.createdAt).toLocaleDateString()}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            )}
+            {filtered.map((s) => (
+              <tr
+                key={s.purchaseId}
+                onClick={() => openRow(s.artworkId, s.purchaseId)}
+                className={`cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 ${
+                  selectedPurchaseId === s.purchaseId ? "bg-neutral-50" : ""
+                }`}
+              >
+                <td className="flex items-center gap-2 px-3 py-2">
+                  {s.artworkThumbnail ? (
+                    <img
+                      src={s.artworkThumbnail}
+                      alt=""
+                      className="h-8 w-8 rounded object-cover"
+                    />
+                  ) : (
+                    <div className="h-8 w-8 rounded bg-neutral-100" />
+                  )}
+                  <span className="truncate">{s.artworkTitle}</span>
+                </td>
+                <td className="px-3 py-2 text-neutral-600">{s.buyerName || s.buyerEmail}</td>
+                <td className="px-3 py-2 text-neutral-500">
+                  {s.type === "FULL" ? "Full" : "Instalments"}
+                </td>
+                <td className="px-3 py-2">{formatMoney(s.totalAmount, s.currency)}</td>
+                <td className="px-3 py-2">
+                  {/* Shared badge (2026-09-12) — was its own hand-rolled
+                      coloured span here, the one place on this page that
+                      didn't read invoiceEmailedAt like everywhere else
+                      does. Same component GalleriesView's Sales tab and
+                      GallerySaleCard itself use, so "Invoice sent" shows
+                      consistently everywhere a sale's status appears. */}
+                  <SaleStatusBadge status={s.status} invoiceEmailedAt={s.invoiceEmailedAt} />
+                </td>
+                <td className="px-3 py-2 text-neutral-400">
+                  {new Date(s.createdAt).toLocaleDateString()}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-        <div className="sticky top-4 self-start rounded-lg border border-neutral-200 bg-white p-5">
-          {!selectedPurchaseId ? (
-            <p className="text-center text-sm text-neutral-400">Select a sale to see its details.</p>
-          ) : loading || !selectedDetail ? (
-            <p className="text-sm text-neutral-400">Loading…</p>
-          ) : (
-            <>
-              <div className="mb-4 flex items-center justify-between">
+      {/* ---- Sale detail modal (2026-09-12) ---- */}
+      {/* Was a sticky 480px side panel embedded in the page grid above;
+          now a click-off-to-close modal, matching Consolidated Sales'
+          own detail modal and Galleries' artwork modal. */}
+      {selectedPurchaseId && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={closeModal}
+        >
+          <div
+            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {loading || !selectedDetail ? (
+              <p className="py-8 text-center text-sm text-neutral-400">Loading…</p>
+            ) : (
+              <>
+                <div className="mb-4 flex items-center justify-between">
                   <div className="flex items-center gap-3">
                     {selectedDetail.images[0] ? (
                       <img
@@ -271,18 +283,13 @@ export default function SalesView({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedArtworkId(null);
-                        setSelectedPurchaseId(null);
-                      }}
-                      className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                    >
-                      Close
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={closeModal}
+                    className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                  >
+                    Close
+                  </button>
                 </div>
 
                 {!selectedPurchase ? (
@@ -290,15 +297,16 @@ export default function SalesView({
                     This sale couldn&apos;t be found — it may have changed since the list loaded.
                   </p>
                 ) : selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "ABANDONED" ? (
-                  // The same shared card used on the Galleries page and
-                  // the Artwork Catalogue's Payment tab (2026-09-03) —
-                  // this page used to have its own separate, older
-                  // version (PurchasePanel's old gallery block for an
-                  // ACTIVE sale, SaleDetailCard's generic read-only view
-                  // for a COMPLETED one), which is exactly how it fell
-                  // behind. Covers both ACTIVE and COMPLETED here;
-                  // ABANDONED still falls through to SaleDetailCard
-                  // below, same as it always has everywhere else.
+                  // The same shared card used on the Galleries page,
+                  // Consolidated Sales, and the Artwork Catalogue's
+                  // Payment tab (2026-09-03) — this page used to have
+                  // its own separate, older version (PurchasePanel's old
+                  // gallery block for an ACTIVE sale, SaleDetailCard's
+                  // generic read-only view for a COMPLETED one), which
+                  // is exactly how it fell behind. Covers both ACTIVE
+                  // and COMPLETED here; ABANDONED still falls through to
+                  // SaleDetailCard below, same as it always has
+                  // everywhere else.
                   <GallerySaleCard
                     purchase={selectedPurchase}
                     siteId={siteId}
@@ -345,7 +353,8 @@ export default function SalesView({
               </>
             )}
           </div>
-      </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={pendingConfirm !== null}
