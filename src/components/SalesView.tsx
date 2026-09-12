@@ -8,6 +8,7 @@ import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
+import EditSaleButton from "@/components/EditSaleButton";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import type { SaleRow } from "@/lib/actions/sales";
 
@@ -148,6 +149,13 @@ export default function SalesView({
       ) || null
     : null;
 
+  // Re-fetches the currently open row's detail — used after both
+  // GallerySaleCard actions and the shared Edit Sale popup save.
+  const refreshSelected = () => {
+    if (!selectedArtworkId || !selectedPurchaseId) return;
+    openRow(selectedArtworkId, selectedPurchaseId);
+  };
+
   return (
     <div className="p-6">
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Sales</h1>
@@ -283,13 +291,23 @@ export default function SalesView({
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                  >
-                    Close
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {/* Shared component (2026-09-12) — see
+                        EditSaleButton.tsx. Renders nothing unless
+                        selectedPurchase is an ACTIVE gallery sale. */}
+                    <EditSaleButton
+                      purchase={selectedPurchase}
+                      siteId={siteId}
+                      onChanged={refreshSelected}
+                    />
+                    <button
+                      type="button"
+                      onClick={closeModal}
+                      className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
 
                 {!selectedPurchase ? (
@@ -311,7 +329,7 @@ export default function SalesView({
                     purchase={selectedPurchase}
                     siteId={siteId}
                     paymentMethods={paymentMethods}
-                    onChanged={() => openRow(selectedArtworkId!, selectedPurchaseId!)}
+                    onChanged={refreshSelected}
                   />
                 ) : selectedPurchase.status === "ACTIVE" ? (
                   // Only an in-progress STRIPE sale gets the interactive
@@ -325,7 +343,7 @@ export default function SalesView({
                     activePurchase={selectedDetail.activePurchase}
                     history={selectedDetail.purchaseHistory}
                     saleSources={saleSources}
-                    onChanged={() => openRow(selectedArtworkId!, selectedPurchaseId!)}
+                    onChanged={refreshSelected}
                   />
                 ) : (
                   // Completed/Abandoned STRIPE sale, or an Abandoned
