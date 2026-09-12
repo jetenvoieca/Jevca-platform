@@ -25,6 +25,10 @@ export default async function ConsolidatedSalesPage() {
         status: true,
         buyerName: true,
         createdAt: true,
+        // Added 2026-09-12 so this list's own Status column can use the
+        // same shared SaleStatusBadge as everywhere else, showing
+        // "Invoice sent" instead of "UNPAID" once one's gone out.
+        invoiceEmailedAt: true,
         artwork: {
           select: {
             id: true,
@@ -80,6 +84,7 @@ export default async function ConsolidatedSalesPage() {
       currency: p.currency,
       status: p.status,
       createdAt: p.createdAt.toISOString(),
+      invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
     });
   }
   const sortedMonths = Array.from(months.values()).sort((a, b) => (a.key < b.key ? 1 : -1));
