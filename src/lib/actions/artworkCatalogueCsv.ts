@@ -17,10 +17,10 @@ import { buildArtworkWhere, buildArtworkOrderBy, type ArtworkFilterInput } from 
 // behaves the same way in both formats.
 export async function generateArtworkCatalogueCsv(
   artistId: string,
-  filters: ArtworkFilterInput & { sort?: string }
+  filters: ArtworkFilterInput
 ): Promise<{ csv: string; filename: string }> {
   const where = buildArtworkWhere(artistId, filters);
-  const orderBy = buildArtworkOrderBy(filters.sort);
+  const orderBy = buildArtworkOrderBy();
 
   const artworks = await db.artwork.findMany({
     where,
