@@ -339,14 +339,12 @@ export default function ArtworkCatalogueFields({
       {hideTail ? (
         <input type="hidden" name="date" value={values.date} />
       ) : (
-        // col-span-2 (2026-09-11, direct request) — Date used to share a
-        // row with the first of the two children (Reference price),
-        // which pushed Offered price down onto its own row instead of
-        // sitting directly next to Reference price for comparison. Date
-        // now gets its own full-width row, so Reference price and
-        // Offered price (the two children right after it) land together
-        // in the next row instead.
-        <div className="col-span-2">
+        // Reverted to a plain single-column cell (2026-09-12, direct
+        // request — "date field too long, shorten and reposition") —
+        // sits right next to Location in the same row now, at the same
+        // width as every other field, rather than spanning the full row
+        // width on its own.
+        <div>
           <label className={labelCls}>Date</label>
           <input
             type="text"
