@@ -548,7 +548,7 @@ export default function GalleriesView({
                               </div>
                             </td>
                             <td className="whitespace-nowrap px-3 py-2">
-                              <SaleStatusBadge status={p.status} />
+                              <SaleStatusBadge status={p.status} invoiceEmailedAt={p.invoiceEmailedAt} />
                             </td>
                             <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
                               {formatMoney(p.totalAmount, p.currency)}
