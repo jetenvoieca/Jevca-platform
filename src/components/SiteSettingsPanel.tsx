@@ -16,11 +16,14 @@ import {
   saveArtistSignature,
   setArtistProfileImage,
   updateArtistStory,
+} from "@/lib/actions";
+import {
+  toArtistFormFields,
+  toSiteFormFields,
   buildArtistFormData,
   buildSiteFormData,
   type ArtistFormFields,
-} from "@/lib/actions";
-import { toArtistFormFields, toSiteFormFields } from "@/lib/clientPanelTypes";
+} from "@/lib/clientPanelTypes";
 import { requestUploadUrl } from "@/lib/actions/media";
 import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales";
 import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
@@ -151,8 +154,8 @@ export default function SiteSettingsPanel({
 
   // Default currency lives on the Financial tab (Owner/Domain/Status
   // moved to DomainCard, which handles its own updateSite calls) — see
-  // buildSiteFormData in lib/actions.ts for why this still has to
-  // resubmit every other site field unchanged.
+  // buildSiteFormData in lib/clientPanelTypes.ts for why this still has
+  // to resubmit every other site field unchanged.
   const saveDefaultCurrency = (value: string) => {
     const fd = buildSiteFormData(toSiteFormFields(site), { defaultCurrency: value });
     startTransition(async () => {
@@ -164,8 +167,8 @@ export default function SiteSettingsPanel({
 
   // The remaining Owner-record fields that live on the Financial tab
   // (Invoicing address/VAT/footer/language) — see buildArtistFormData in
-  // lib/actions.ts for why this still has to resubmit every other
-  // artist field unchanged.
+  // lib/clientPanelTypes.ts for why this still has to resubmit every
+  // other artist field unchanged.
   const saveFinancialField = (field: FinancialField, value: string) => {
     const fd = buildArtistFormData(
       toArtistFormFields(artist),
