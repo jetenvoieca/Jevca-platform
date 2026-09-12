@@ -90,6 +90,7 @@ export default function SitesListColumn({
   selectedId = null,
   liveSearch = true,
   basePath = "/sites",
+  siteLinkSuffix = "",
 }: {
   sites: SiteRow[];
   q: string;
@@ -113,6 +114,12 @@ export default function SitesListColumn({
   // instead ("/clients/[id]"), so it passes basePath="/clients" rather
   // than this component growing a second, near-identical list.
   basePath?: string;
+  // Appended after the site id (2026-09-12, direct request) — the Sites
+  // Directory and the per-site "jump to another site" panel both pass
+  // "/artworks" so picking a site opens straight onto its Artwork
+  // Catalogue (Content section) rather than its Profile/Overview page.
+  // Left empty for the Clients admin list, which has no such sub-page.
+  siteLinkSuffix?: string;
 }) {
   const router = useRouter();
 
@@ -364,7 +371,7 @@ export default function SitesListColumn({
               return (
                 <li key={site.id}>
                   <Link
-                    href={`${basePath}/${site.id}`}
+                    href={`${basePath}/${site.id}${siteLinkSuffix}`}
                     prefetch={false}
                     className={`flex items-center justify-between gap-2 px-4 py-2 text-xs text-neutral-800 ${
                       active ? "bg-[#E7E7E7]" : "hover:bg-neutral-50"
