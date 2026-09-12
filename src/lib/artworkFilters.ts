@@ -91,10 +91,13 @@ export function artworkMatchesFilters(
   return true;
 }
 
-export function buildArtworkOrderBy(sort?: string) {
-  return {
-    presentationPrice: sort === "price" ? ("desc" as const) : undefined,
-    presentationTitle: sort === "title" ? ("asc" as const) : undefined,
-    createdAt: sort === "price" || sort === "title" ? undefined : ("desc" as const),
-  };
+// Sort dropdown removed (2026-09-12, direct request — "never used it or
+// even know why I would"), same as its counterpart on the Media
+// Catalogue. Always oldest-first by creation date now — matches every
+// other catalogue-style list in the app ("add to the end of the list").
+// No longer takes a `sort` argument; kept as its own function (rather
+// than inlined at each of its three call sites) since it's still shared
+// by the on-screen grid, the PDF export, and the CSV export.
+export function buildArtworkOrderBy() {
+  return { createdAt: "desc" as const };
 }
