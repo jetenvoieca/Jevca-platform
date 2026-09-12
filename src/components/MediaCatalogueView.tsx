@@ -45,7 +45,6 @@ export default function MediaCatalogueView({
   q,
   tag,
   artworkId,
-  sort,
   counts,
   tagPresets,
   artistArtworks,
@@ -60,7 +59,6 @@ export default function MediaCatalogueView({
   q: string;
   tag: string;
   artworkId: string;
-  sort: string;
   counts: { marketing: number; related: number };
   tagPresets: string[];
   artistArtworks: { id: string; presentationTitle: string }[];
@@ -119,18 +117,18 @@ export default function MediaCatalogueView({
   // as you type, so remove button") — replaces the old GET-form-plus-
   // Apply-button. Search stays local state (qInput) so the box feels
   // instant while typing, debounced before it actually navigates;
-  // tag/artwork/sort each navigate immediately on change, since picking
-  // an option is already a single deliberate action with nothing to
-  // debounce. Reads the *current* URL for anything not being changed
-  // (rather than only the q/tag/artworkId/sort props) so it never drops
-  // an unrelated param — "selected", for instance, is tracked outside
-  // these props entirely, via updateUrlSelected above.
-  const applyFilters = (overrides: {
-    q?: string;
-    tag?: string;
-    artworkId?: string;
-    sort?: string;
-  }) => {
+  // tag/artwork navigate immediately on change, since picking an option
+  // is already a single deliberate action with nothing to debounce.
+  // Reads the *current* URL for anything not being changed (rather than
+  // only the q/tag/artworkId props) so it never drops an unrelated
+  // param — "selected", for instance, is tracked outside these props
+  // entirely, via updateUrlSelected above.
+  //
+  // Sort dropdown removed (2026-09-12, direct request — "never used it
+  // or even know why I would") along with this function's own sort
+  // handling; results are always Date added order now, same as the
+  // dropdown's own default.
+  const applyFilters = (overrides: { q?: string; tag?: string; artworkId?: string }) => {
     const params = new URLSearchParams(window.location.search);
     params.set("purpose", purpose);
 
@@ -149,10 +147,6 @@ export default function MediaCatalogueView({
       else params.delete("artworkId");
       params.delete("tag");
     }
-
-    const nextSort = overrides.sort ?? sort;
-    if (nextSort) params.set("sort", nextSort);
-    else params.delete("sort");
 
     router.push(`/sites/${siteId}/media?${params.toString()}`);
   };
@@ -250,7 +244,6 @@ export default function MediaCatalogueView({
           q: q || undefined,
           tag: tag || undefined,
           artworkId: artworkId || undefined,
-          sort: sort || undefined,
           offset: items.length,
           limit: pageSize,
         });
@@ -269,7 +262,7 @@ export default function MediaCatalogueView({
         setLoadingMore(false);
       }
     })();
-  }, [artistId, purpose, q, tag, artworkId, sort, items.length, pageSize]);
+  }, [artistId, purpose, q, tag, artworkId, items.length, pageSize]);
 
   // Infinite scroll (2026-08-13, matching the same change on the Artwork
   // Catalogue) — an invisible sentinel below the last row auto-triggers
@@ -410,14 +403,6 @@ export default function MediaCatalogueView({
                 ))}
               </select>
             )}
-            <select
-              value={sort}
-              onChange={(e) => applyFilters({ sort: e.target.value })}
-              className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-            >
-              <option value="">Sort: Date added</option>
-              <option value="caption">Sort: Caption</option>
-            </select>
           </div>
         </div>
         </div>
