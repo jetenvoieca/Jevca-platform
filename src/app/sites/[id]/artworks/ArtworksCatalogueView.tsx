@@ -32,6 +32,7 @@ const DENSITY_STORAGE_KEY = "jevca:artworks-density";
 
 export default function ArtworksCatalogueView({
   siteId,
+  basePath,
   artistId,
   artistName,
   artworks: initialArtworks,
@@ -49,6 +50,13 @@ export default function ArtworksCatalogueView({
   siteDefaultCurrency = "GBP",
 }: {
   siteId: string;
+  // Where this view's own in-page links (currently just "+ Add New" ->
+  // Hopper) should point. Defaults to the real site's own admin path so
+  // every existing caller is unaffected; the evaluation-only reduced
+  // menu (see previewSites.ts) passes its own basePath instead, so that
+  // link stays inside that reduced shell rather than jumping out to the
+  // full admin one (2026-09-12).
+  basePath?: string;
   artistId: string;
   artistName: string;
   artworks: ArtworkRow[];
@@ -65,6 +73,7 @@ export default function ArtworksCatalogueView({
   settings: ArtworkSettings;
   siteDefaultCurrency?: string;
 }) {
+  const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const [view, setView] = useState<"tile" | "list">("tile");
   // Export PDF now opens a small dialog first (2026-08-17) rather than
   // being a plain download link, so the header title/subtitle can be
@@ -469,10 +478,12 @@ export default function ArtworksCatalogueView({
   // that flow, not creating a blank row directly. Previously created an
   // empty artwork via createArtwork and opened it in this panel; that
   // action is untouched and still used elsewhere, just not from this
-  // button any more.
+  // button any more. Uses resolvedBasePath (2026-09-12) rather than a
+  // hardcoded /sites/${siteId} so this stays inside the evaluation
+  // reduced-menu shell when rendered there.
   const addNewTile = (
     <Link
-      href={`/sites/${siteId}/hopper`}
+      href={`${resolvedBasePath}/hopper`}
       className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
     >
       + Add New
@@ -848,7 +859,7 @@ export default function ArtworksCatalogueView({
                 <tr className="border-b border-neutral-100">
                   <td colSpan={5} className="py-2">
                     <Link
-                      href={`/sites/${siteId}/hopper`}
+                      href={`${resolvedBasePath}/hopper`}
                       className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
                     >
                       + Add New
