@@ -9,6 +9,7 @@ import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
+import EditSaleButton from "@/components/EditSaleButton";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 export type ConsolidatedSaleRow = {
@@ -195,14 +196,16 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
                     <td className="px-4 py-1.5">
                       {new Date(r.createdAt).toLocaleDateString("en-GB")}
                     </td>
-                    <td className="px-4 py-1.5">
+                    {/* Commentary removed (2026-09-12 mockup) — was
+                        "(net of X%, gross CUR Y)" appended after every
+                        commissioned row, which wrapped rows onto three
+                        lines and cluttered the table. The net figure
+                        alone is what the intro banner above already
+                        promises this column shows; gross/commission are
+                        still on the underlying row (and on the sale's
+                        own detail card) for anyone who needs them. */}
+                    <td className="whitespace-nowrap px-4 py-1.5">
                       {r.currency} {r.netAmount.toFixed(2)}
-                      {r.commissionPercent != null && (
-                        <span className="ml-1 text-neutral-400">
-                          (net of {r.commissionPercent}%, gross {r.currency}{" "}
-                          {r.grossAmount.toFixed(2)})
-                        </span>
-                      )}
                     </td>
                     <td className="px-4 py-1.5">
                       {/* Shared badge (2026-09-12) — was its own
@@ -256,13 +259,23 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
                       </p>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="shrink-0 rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
-                  >
-                    Close
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {/* Shared component (2026-09-12) — see
+                        EditSaleButton.tsx. Renders nothing unless
+                        selectedPurchase is an ACTIVE gallery sale. */}
+                    <EditSaleButton
+                      purchase={selectedPurchase}
+                      siteId={selectedRow.siteId ?? ""}
+                      onChanged={refreshSelected}
+                    />
+                    <button
+                      type="button"
+                      onClick={closeModal}
+                      className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
+                    >
+                      Close
+                    </button>
+                  </div>
                 </div>
 
                 {!selectedPurchase || !selectedRow.siteId ? (
