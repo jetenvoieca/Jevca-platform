@@ -19,7 +19,6 @@ type SearchParams = {
   q?: string;
   tag?: string;
   artworkId?: string;
-  sort?: string;
   // Deep-link to a specific item's detail panel (e.g. from the Hopper's
   // "Added to Media Catalogue" link) — read once on first load only.
   // Selecting a *different* item afterwards happens client-side, without
@@ -49,7 +48,6 @@ export default async function MediaCataloguePage({
         q: sp.q,
         tag: sp.tag,
         artworkId: sp.artworkId,
-        sort: sp.sort,
         limit: PAGE_SIZE,
       }),
       countMediaByPurpose(artistId),
@@ -99,7 +97,6 @@ export default async function MediaCataloguePage({
         q={sp.q || ""}
         tag={sp.tag || ""}
         artworkId={sp.artworkId || ""}
-        sort={sp.sort || ""}
         counts={counts}
         tagPresets={tagPresets}
         artistArtworks={artistArtworks}
