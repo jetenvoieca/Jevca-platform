@@ -253,9 +253,12 @@ export default function MediaCatalogueView({
               </button>
             </div>
 
+            {/* "Per row" label removed (2026-09-12, direct request) —
+                the buttons' own numbers already say what they do; the
+                Artwork Catalogue's matching density control has never
+                had a label either. */}
             {view === "tile" && (
               <div className="flex items-center gap-1 text-sm text-neutral-500">
-                <span>Per row</span>
                 {DENSITY_OPTIONS.map((n) => (
                   <button
                     key={n}
