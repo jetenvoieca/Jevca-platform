@@ -466,16 +466,18 @@ export default function MediaCatalogueView({
       </div>
 
       {/* Details panel is a modal (2026-09-12, direct request) — it used
-          to live permanently docked in a second grid column. Clicking
-          the backdrop closes it; the panel itself stops that click from
+          to live permanently docked in a second grid column. Centered,
+          same positioning as the Artwork Catalogue's own modal
+          (ArtworksCatalogueView.tsx), not docked to a side. Clicking the
+          backdrop closes it; the panel itself stops that click from
           bubbling so clicks inside it don't close it. */}
       {selected && (
         <div
-          className="fixed inset-0 z-40 flex justify-end bg-black/40 p-4"
+          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40 p-6"
           onClick={handleClose}
         >
           <div
-            className="h-full w-full max-w-[480px] overflow-y-auto"
+            className="max-h-[85vh] w-full max-w-[480px] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <MediaDetailPanel
