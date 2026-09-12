@@ -7,7 +7,10 @@ import { buildAccountsSection } from "@/lib/topNav";
 // distinct from the default grey used for Administration/Sites, so it's
 // visually obvious which groups are "always there" versus "belong to
 // this particular site" (2026-09-02, direct request).
-const SITE_SECTION_COLOR = "#635572";
+// Exported (2026-09-12) so the separate, reduced evaluation-only nav
+// (see lib/previewNav.ts) can reuse the exact same colour rather than
+// redefining it a second time.
+export const SITE_SECTION_COLOR = "#635572";
 
 // Which page (within a site) is currently active, for highlighting and
 // for deciding which of the four groups the accordion should open on.
