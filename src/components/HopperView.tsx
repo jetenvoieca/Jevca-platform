@@ -63,17 +63,29 @@ type HopperSortOrder = "newest" | "oldest";
 
 export default function HopperView({
   siteId,
+  basePath,
   artistId,
   queue,
   artworkSettings,
 }: {
   siteId: string;
+  // Where the Processed log's "Linked to X"/"New artwork" entries should
+  // point (Artwork Catalogue) — defaults to the real site's own admin
+  // path so every existing caller is unaffected. The evaluation-only
+  // reduced menu (see previewSites.ts) passes its own basePath instead,
+  // so those links stay inside that reduced shell (2026-09-12). The
+  // "Added to Media Catalogue"/"Added to Bucket" entries deliberately
+  // keep pointing at the real /sites/${siteId} path regardless — Media
+  // Catalogue and Bucket aren't part of the reduced menu, so there's no
+  // equivalent preview page for them to point to.
+  basePath?: string;
   artistId: string;
   queue: HopperItem[];
   // Used by the inline "quick catalogue" fields shown after "Add
   // Artwork" — see the note by that button in SortingCard.
   artworkSettings: ArtworkSettings;
 }) {
+  const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -310,7 +322,7 @@ export default function HopperView({
   const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
     startTransition(async () => {
       await addHopperItemToArtwork(item.id, siteId, artworkId, false);
-      logProcessed(item, `Linked to ${artworkTitle}`, `/sites/${siteId}/artworks?selected=${artworkId}`);
+      logProcessed(item, `Linked to ${artworkTitle}`, `${resolvedBasePath}/artworks?selected=${artworkId}`);
       advanceAfterAction();
     });
   };
@@ -344,7 +356,7 @@ export default function HopperView({
     }
     setAddError(null);
     const finalTitle = title.trim() || "Untitled";
-    logProcessed(item, `New artwork: ${finalTitle}`, `/sites/${siteId}/artworks?selected=${result.artwork.id}`);
+    logProcessed(item, `New artwork: ${finalTitle}`, `${resolvedBasePath}/artworks?selected=${result.artwork.id}`);
     advanceAfterAction();
     return true;
   };
