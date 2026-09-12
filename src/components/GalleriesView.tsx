@@ -11,7 +11,11 @@ import {
   type GalleryDetail,
 } from "@/lib/actions/customers";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
-import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
+import {
+  startGallerySale,
+  updateGallerySaleAmount,
+  type PurchaseDetail,
+} from "@/lib/actions/payments";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
@@ -84,6 +88,13 @@ export default function GalleriesView({
   const [saleCommission, setSaleCommission] = useState("");
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
 
+  // ---- Edit Sale popup — price/currency only, ACTIVE sales only
+  // (2026-09-12 mockup) ----
+  const [showEditSale, setShowEditSale] = useState(false);
+  const [editPrice, setEditPrice] = useState("");
+  const [editCurrency, setEditCurrency] = useState("GBP");
+  const [editSaleError, setEditSaleError] = useState<string | null>(null);
+
   const filtered = galleries.filter((g) => {
     if (!q.trim()) return true;
     const needle = q.trim().toLowerCase();
@@ -126,6 +137,11 @@ export default function GalleriesView({
     // everywhere else this default is used.
     setSaleCommission(selectedDetail?.defaultCommissionPercent || "");
     setSaleDate(new Date().toISOString().slice(0, 10));
+    // Edit Sale popup always starts closed on a freshly-opened work —
+    // it's re-populated from that work's own active purchase the moment
+    // "Edit Sale" is actually clicked (see handleOpenEditSale below).
+    setShowEditSale(false);
+    setEditSaleError(null);
     getArtworkDetailForClient(workId).then((detail) => {
       setSelectedWorkDetail(detail);
       // Sale price defaults to the artwork's own listed price
@@ -141,9 +157,10 @@ export default function GalleriesView({
   };
 
   // Refetches this work's detail (to pick up any change GallerySaleCard
-  // just made — paid, sent, cancelled, deleted, link generated) and the
-  // gallery's own detail (its Sales tab reads from the same Purchase
-  // rows), so the two panels never fall out of sync with each other.
+  // or the Edit Sale popup just made — paid, sent, cancelled, deleted,
+  // link generated, price/currency edited) and the gallery's own detail
+  // (its Sales tab reads from the same Purchase rows), so the panels
+  // never fall out of sync with each other.
   const refreshAfterSaleChange = () => {
     if (!selectedWorkId || !selectedId) return;
     getArtworkDetailForClient(selectedWorkId).then((detail) => setSelectedWorkDetail(detail));
@@ -284,6 +301,42 @@ export default function GalleriesView({
   const saleAmountNum = parseFloat(saleTotalAmount) || 0;
   const saleCommissionNum = parseFloat(saleCommission) || 0;
   const saleNetOwed = saleAmountNum - saleAmountNum * (saleCommissionNum / 100);
+
+  // ---- Edit Sale popup handlers ----
+  // Only ever shown for an ACTIVE gallery sale (confirmed decision,
+  // 2026-09-12) — once paid, the amount is a locked financial record.
+  const canEditSale =
+    activeWorkPurchase !== null &&
+    activeWorkPurchase.channel === "GALLERY" &&
+    activeWorkPurchase.status === "ACTIVE";
+
+  const handleOpenEditSale = () => {
+    if (!activeWorkPurchase) return;
+    setEditPrice(activeWorkPurchase.totalAmount);
+    setEditCurrency(activeWorkPurchase.currency);
+    setEditSaleError(null);
+    setShowEditSale(true);
+  };
+
+  // Autosaves a single field (matches the same defaultValue/onBlur
+  // pattern the Gallery Details tab already uses above) — always sends
+  // both totalAmount and currency together since updateGallerySaleAmount
+  // updates the whole row, using whichever value wasn't just edited.
+  const saveEditSaleField = (field: "totalAmount" | "currency", value: string) => {
+    if (!activeWorkPurchase) return;
+    setEditSaleError(null);
+    const fd = new FormData();
+    fd.set("totalAmount", field === "totalAmount" ? value : editPrice);
+    fd.set("currency", field === "currency" ? value : editCurrency);
+    startWorkTransition(async () => {
+      const res = await updateGallerySaleAmount(activeWorkPurchase.id, siteId, fd);
+      if (!res.ok) {
+        setEditSaleError(res.error);
+        return;
+      }
+      refreshAfterSaleChange();
+    });
+  };
 
   // Sum of every sale linked to this gallery, regardless of status —
   // "all invoices", not just completed ones (2026-08-31 decision). Kept
@@ -756,7 +809,10 @@ export default function GalleriesView({
               <p className="p-6 text-sm text-neutral-400">Loading…</p>
             ) : (
               <>
-                <div className="flex shrink-0 items-start justify-between gap-2 border-b border-neutral-200 px-5 py-4">
+                {/* relative so the Edit Sale popup (2026-09-12 mockup)
+                    can anchor itself under the header via absolute
+                    positioning. */}
+                <div className="relative flex shrink-0 items-start justify-between gap-2 border-b border-neutral-200 px-5 py-4">
                   <div>
                     <p className="text-sm font-semibold text-neutral-900">
                       {selectedWorkDetail.presentationTitle}
@@ -776,16 +832,79 @@ export default function GalleriesView({
                       </p>
                     )}
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedWorkId(null);
-                      setSelectedWorkDetail(null);
-                    }}
-                    className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                  >
-                    Close
-                  </button>
+                  <div className="flex shrink-0 items-center gap-2">
+                    {/* Edit Sale (2026-09-12 mockup) — only while the
+                        sale is still ACTIVE/UNPAID; price/currency only,
+                        nothing else. */}
+                    {canEditSale && (
+                      <button
+                        type="button"
+                        onClick={handleOpenEditSale}
+                        className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                      >
+                        Edit Sale
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedWorkId(null);
+                        setSelectedWorkDetail(null);
+                      }}
+                      className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                    >
+                      Close
+                    </button>
+                  </div>
+
+                  {showEditSale && activeWorkPurchase && (
+                    <>
+                      {/* Invisible click-outside layer — closes just the
+                          popup, not the whole artwork modal. */}
+                      <div
+                        className="fixed inset-0 z-40"
+                        onClick={() => setShowEditSale(false)}
+                      />
+                      <div
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute right-5 top-full z-50 mt-1 w-64 rounded-md border border-neutral-200 bg-[#F9F6EE] p-3 shadow-lg"
+                      >
+                        <p className="mb-2 text-xs font-semibold text-[#5E5E5E]">Edit Sale</p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="mb-1 block text-xs text-[#5E5E5E]">Price</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={editPrice}
+                              onChange={(e) => setEditPrice(e.target.value)}
+                              onBlur={(e) => saveEditSaleField("totalAmount", e.target.value.trim())}
+                              disabled={workPending}
+                              className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-[#5E5E5E] disabled:opacity-50"
+                            />
+                          </div>
+                          <div>
+                            <label className="mb-1 block text-xs text-[#5E5E5E]">Currency</label>
+                            <select
+                              value={editCurrency}
+                              onChange={(e) => {
+                                setEditCurrency(e.target.value);
+                                saveEditSaleField("currency", e.target.value);
+                              }}
+                              disabled={workPending}
+                              className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-[#5E5E5E] disabled:opacity-50"
+                            >
+                              <option value="GBP">GBP</option>
+                              <option value="EUR">EUR</option>
+                            </select>
+                          </div>
+                        </div>
+                        {editSaleError && (
+                          <p className="mt-2 text-xs text-red-600">{editSaleError}</p>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-5">
