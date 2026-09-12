@@ -14,7 +14,6 @@ export async function GET(req: NextRequest) {
       type: params.get("type") || undefined,
       group: params.get("group") || undefined,
       tier: params.get("tier") || undefined,
-      sort: params.get("sort") || undefined,
     });
     return new Response(csv, {
       headers: {
