@@ -14,7 +14,6 @@ export type CatalogueExportFilters = {
   // Settings-editable Tier dropdown filter (2026-09-07) — see
   // Artist.artworkTiers in schema.prisma.
   tier?: string;
-  sort?: string;
   // Editable per-export, via ExportPdfDialog.tsx (2026-08-17) — default
   // to the artist's real name / "Artwork Catalogue" when absent, so one
   // export flow covers whatever this particular PDF is for instead of
@@ -94,7 +93,7 @@ export async function generateArtworkCataloguePdf(
   filters: CatalogueExportFilters
 ): Promise<{ bytes: Uint8Array; filename: string }> {
   const where = buildArtworkWhere(artistId, filters);
-  const orderBy = buildArtworkOrderBy(filters.sort);
+  const orderBy = buildArtworkOrderBy();
 
   const artworks = await db.artwork.findMany({
     where,
