@@ -87,6 +87,13 @@ export default function SiteShell({
 
   const activeKey = resolveActiveKey(pathname, siteId);
   const menuActive = activeKey === "menu";
+  // The Owner/Financial/Personal Profile settings page (2026-09-12) —
+  // this is the site's bare /sites/[id] route, which resolveActiveKey
+  // already falls back to as "overview" for anything more specific it
+  // doesn't match. Previously only reachable by clicking the site's row
+  // in the Sites list column; this adds a direct link to it from inside
+  // the site's own section, next to Menu.
+  const profileActive = pathname === `/sites/${siteId}`;
 
   // No "All Sites" link here any more (2026-09-02) — "Sites" itself,
   // one level up, now does that job directly (see siteNav.ts), so
@@ -214,6 +221,12 @@ export default function SiteShell({
 
       <NavLink
         item={{ label: "Menu", href: `/sites/${siteId}/menus`, active: menuActive }}
+        indented
+      />
+      {/* Opens the site's Owner/Financial/Personal Profile settings page
+          (2026-09-12) — see profileActive above. */}
+      <NavLink
+        item={{ label: "Profile", href: `/sites/${siteId}`, active: profileActive }}
         indented
       />
     </>
