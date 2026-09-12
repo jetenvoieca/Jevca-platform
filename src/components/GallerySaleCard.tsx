@@ -39,7 +39,19 @@ function netOwed(totalAmount: string, commissionPercent: string | null) {
 // Exported so callers that list several sales at once (GalleriesView's
 // own Sales tab table, SalesView's list) can use the exact same badge
 // rather than a second copy of the same three-line component.
-export function SaleStatusBadge({ status }: { status: "ACTIVE" | "COMPLETED" | "ABANDONED" }) {
+//
+// invoiceEmailedAt is optional (2026-09-12) — once an invoice has
+// actually been sent for a still-unpaid sale, the badge reads "Invoice
+// sent" instead of the generic "UNPAID", so it's obvious at a glance
+// which unpaid sales are already being chased versus not yet invoiced
+// at all. Only relevant while ACTIVE; ignored for COMPLETED/ABANDONED.
+export function SaleStatusBadge({
+  status,
+  invoiceEmailedAt,
+}: {
+  status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+  invoiceEmailedAt?: string | null;
+}) {
   if (status === "COMPLETED") {
     return <span className="text-sm text-green-600">Completed</span>;
   }
@@ -48,7 +60,7 @@ export function SaleStatusBadge({ status }: { status: "ACTIVE" | "COMPLETED" | "
   }
   return (
     <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-      UNPAID
+      {invoiceEmailedAt ? "Invoice sent" : "UNPAID"}
     </span>
   );
 }
@@ -252,7 +264,7 @@ export default function GallerySaleCard({
           )}
         </p>
       </div>
-      <SaleStatusBadge status={purchase.status} />
+      <SaleStatusBadge status={purchase.status} invoiceEmailedAt={purchase.invoiceEmailedAt} />
       <p className="mt-2 text-xs text-neutral-400">
         Sold {new Date(purchase.createdAt).toLocaleDateString()}
       </p>
