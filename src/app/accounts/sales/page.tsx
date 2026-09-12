@@ -101,9 +101,11 @@ export default async function ConsolidatedSalesPage() {
       publishEnabled={false}
       navItems={buildTopNavItems("sales", openAlerts.length)}
       content={
-        // max-w-5xl, up from max-w-4xl (2026-09-12) — the Status column's
-        // "Invoice sent" was wrapping onto two lines at the old width.
-        <div className="mx-auto max-w-5xl px-6 py-6">
+        // Reverted to max-w-4xl (2026-09-12) — widening the whole page
+        // just spaced every column out further rather than helping the
+        // Status column specifically. See ConsolidatedSalesView's
+        // colgroup for the actual fix (column widths rebalanced instead).
+        <div className="mx-auto max-w-4xl px-6 py-6">
           <div className="mb-6 flex items-center justify-between">
             <h1 className="text-2xl font-semibold text-neutral-900">Consolidated Sales</h1>
             <Link
