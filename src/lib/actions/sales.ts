@@ -15,6 +15,11 @@ export type SaleRow = {
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
   createdAt: string;
   closedAt: string | null;
+  // Added 2026-09-12 so this list's own Status column can use the same
+  // shared SaleStatusBadge (GallerySaleCard.tsx) as everywhere else a
+  // sale's status is shown, rather than a second hand-rolled version —
+  // shows "Invoice sent" instead of "UNPAID" once one's gone out.
+  invoiceEmailedAt: string | null;
 };
 
 // Every Purchase across the artist's whole catalogue (same scoping as the
@@ -44,6 +49,7 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
     status: p.status,
     createdAt: p.createdAt.toISOString(),
     closedAt: p.closedAt ? p.closedAt.toISOString() : null,
+    invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
   }));
 }
 
