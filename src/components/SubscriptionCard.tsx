@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { updateArtist, buildArtistFormData } from "@/lib/actions";
-import { toArtistFormFields, type ArtistRecord } from "@/lib/clientPanelTypes";
+import { updateArtist } from "@/lib/actions";
+import { toArtistFormFields, buildArtistFormData, type ArtistRecord } from "@/lib/clientPanelTypes";
 import {
   updateArtistPaymentMethod,
   updateStripeSubscriptionCustomerId,
