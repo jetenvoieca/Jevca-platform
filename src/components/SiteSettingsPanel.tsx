@@ -2,8 +2,11 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import StatusSelect from "@/components/StatusSelect";
 import MediaPicker from "@/components/MediaPicker";
+import OwnerCard from "@/components/OwnerCard";
+import DomainCard from "@/components/DomainCard";
+import SubscriptionCard from "@/components/SubscriptionCard";
+import HopperTokenCard from "@/components/HopperTokenCard";
 import {
   updateSite,
   updateArtist,
@@ -13,20 +16,16 @@ import {
   saveArtistSignature,
   setArtistProfileImage,
   updateArtistStory,
-  regenerateHopperToken,
+  buildArtistFormData,
+  buildSiteFormData,
+  type ArtistFormFields,
 } from "@/lib/actions";
-import {
-  updateArtistPaymentMethod,
-  updateStripeSubscriptionCustomerId,
-  addManualSubscriptionPayment,
-  deleteManualSubscriptionPayment,
-} from "@/lib/actions/subscriptions";
+import { toArtistFormFields, toSiteFormFields } from "@/lib/clientPanelTypes";
 import { requestUploadUrl } from "@/lib/actions/media";
 import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales";
 import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
 import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
 import type { CertificateTemplateRow } from "@/lib/actions/certificateSettings";
-import { EMAIL_DOMAIN } from "@/lib/email";
 
 type SubscriptionPaymentRow = {
   id: string;
@@ -95,6 +94,20 @@ type ArtistData = {
   defaultReleaseTriggerCount: number;
 };
 
+// Financial-tab-only text fields — Owner/Domain/Subscription/Hopper
+// Token moved out to their own reusable cards (2026-09-12, shared with
+// the Administration → Clients page); everything left in this file is
+// specific to this page's Financial/Personal Profile tabs.
+type FinancialField =
+  | "addressLine1"
+  | "city"
+  | "postcode"
+  | "country"
+  | "vatNumber"
+  | "vatRate"
+  | "invoiceFooterText"
+  | "invoiceLanguage";
+
 export default function SiteSettingsPanel({
   site,
   artist,
@@ -110,21 +123,17 @@ export default function SiteSettingsPanel({
   // Financial/Invoicing row.
   certificateTemplates: CertificateTemplateRow[];
   // The Templates library (2026-09-06) — real records now, populating
-  // the "Template" dropdown below instead of a hardcoded "Default"
-  // option. See src/lib/actions/templates.ts.
+  // the "Template" dropdown in DomainCard instead of a hardcoded
+  // "Default" option. See src/lib/actions/templates.ts.
   templates: { id: string; name: string }[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
   const [signatureUploading, setSignatureUploading] = useState(false);
-  const [tokenCopied, setTokenCopied] = useState(false);
-  const [regeneratingToken, setRegeneratingToken] = useState(false);
   const [resettingSales, setResettingSales] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [switchingStripeMode, setSwitchingStripeMode] = useState(false);
-  const [addingPayment, setAddingPayment] = useState(false);
-  const [paymentError, setPaymentError] = useState<string | null>(null);
   // 2026-08-31, direct request — this page now splits into two panels:
   // a small Owner/Subscription panel that's always visible, and a large
   // panel that toggles between "Financial" and "Personal Profile".
@@ -140,81 +149,41 @@ export default function SiteSettingsPanel({
     setTimeout(() => setSavedField(null), 1500);
   };
 
-  const saveSite = (
-    field: "domain" | "defaultCurrency" | "templateId" | "domainStatus" | "domainRenewalDate",
-    value: string
-  ) => {
-    const fd = new FormData();
-    // Site renaming moved to the persistent header (2026-08-18) — this
-    // form has no name field of its own any more, so always sends the
-    // name through unchanged.
-    fd.set("name", site.name);
-    fd.set("domain", field === "domain" ? value : site.domain || "");
-    fd.set("defaultCurrency", field === "defaultCurrency" ? value : site.defaultCurrency);
-    fd.set("templateId", field === "templateId" ? value : site.templateId || "");
-    fd.set("domainStatus", field === "domainStatus" ? value : site.domainStatus || "");
-    fd.set("domainRenewalDate", field === "domainRenewalDate" ? value : site.domainRenewalDate);
+  // Default currency lives on the Financial tab (Owner/Domain/Status
+  // moved to DomainCard, which handles its own updateSite calls) — see
+  // buildSiteFormData in lib/actions.ts for why this still has to
+  // resubmit every other site field unchanged.
+  const saveDefaultCurrency = (value: string) => {
+    const fd = buildSiteFormData(toSiteFormFields(site), { defaultCurrency: value });
     startTransition(async () => {
       await updateSite(site.id, fd);
+      router.refresh();
+      flash("defaultCurrency");
+    });
+  };
+
+  // The remaining Owner-record fields that live on the Financial tab
+  // (Invoicing address/VAT/footer/language) — see buildArtistFormData in
+  // lib/actions.ts for why this still has to resubmit every other
+  // artist field unchanged.
+  const saveFinancialField = (field: FinancialField, value: string) => {
+    const fd = buildArtistFormData(
+      toArtistFormFields(artist),
+      { [field]: value } as Partial<ArtistFormFields>
+    );
+    startTransition(async () => {
+      await updateArtist(artist.id, fd);
       router.refresh();
       flash(field);
     });
   };
 
-  const saveOwner = (
-    field:
-      | "name"
-      | "firstName"
-      | "email"
-      | "phone"
-      | "subscriptionAmount"
-      | "addressLine1"
-      | "city"
-      | "postcode"
-      | "country"
-      | "vatNumber"
-      | "vatRate"
-      | "invoiceFooterText"
-      | "invoiceLanguage"
-      | "nextInvoiceNumber"
-      | "emailSlug",
-    value: string
-  ) => {
-    const fd = new FormData();
-    fd.set("name", field === "name" ? value : artist.name);
-    fd.set("firstName", field === "firstName" ? value : artist.firstName || "");
-    fd.set("email", field === "email" ? value : artist.email || "");
-    fd.set("phone", field === "phone" ? value : artist.phone || "");
-    // Notes has no field in this panel any more (2026-08-31, direct
-    // request — dropped from the UI, no real notes existed on any site
-    // yet). Still sent through unchanged rather than removed from the
-    // form entirely, so saving any other field here can never
-    // accidentally wipe a note that gets added directly in the database
-    // later.
-    fd.set("notes", artist.notes || "");
-    fd.set("subscriptionAmount", field === "subscriptionAmount" ? value : artist.subscriptionAmount);
-    // paymentMethod now saved via its own action (updateArtistPaymentMethod)
-    // but updateArtist still expects the field present so it doesn't get
-    // accidentally cleared.
-    fd.set("paymentMethod", artist.paymentMethod || "");
-    fd.set("addressLine1", field === "addressLine1" ? value : artist.addressLine1 || "");
-    fd.set("city", field === "city" ? value : artist.city || "");
-    fd.set("postcode", field === "postcode" ? value : artist.postcode || "");
-    fd.set("country", field === "country" ? value : artist.country || "");
-    fd.set("vatNumber", field === "vatNumber" ? value : artist.vatNumber || "");
-    fd.set("vatRate", field === "vatRate" ? value : artist.vatRate);
-    fd.set("invoiceFooterText", field === "invoiceFooterText" ? value : artist.invoiceFooterText || "");
-    fd.set("invoiceLanguage", field === "invoiceLanguage" ? value : artist.invoiceLanguage || "EN");
-    if (field === "nextInvoiceNumber") fd.set("nextInvoiceNumber", value);
-    // emailSlug is left off the FormData entirely unless it's the field
-    // actually being saved (2026-09-05) — updateArtist only re-runs the
-    // sanitise/dedupe check when the key is present at all, so every
-    // other autosave on this panel can't accidentally re-trigger it.
-    if (field === "emailSlug") fd.set("emailSlug", value);
+  const saveNextInvoiceNumber = (value: string) => {
+    const fd = buildArtistFormData(toArtistFormFields(artist), { nextInvoiceNumber: value });
     startTransition(async () => {
       await updateArtist(artist.id, fd);
       router.refresh();
-      flash(field);
+      flash("nextInvoiceNumber");
     });
   };
 
@@ -264,28 +233,6 @@ export default function SiteSettingsPanel({
     } finally {
       setResettingSales(false);
     }
-  };
-
-  const handleCopyToken = async (token: string) => {
-    await navigator.clipboard.writeText(token);
-    setTokenCopied(true);
-    setTimeout(() => setTokenCopied(false), 1500);
-  };
-
-  const handleRegenerateToken = () => {
-    if (
-      !confirm(
-        "Regenerate this artist's Hopper token? Any copy of their iPhone Shortcut still using the old token will stop working until it's updated with the new one."
-      )
-    ) {
-      return;
-    }
-    setRegeneratingToken(true);
-    startTransition(async () => {
-      await regenerateHopperToken(artist.id);
-      router.refresh();
-      setRegeneratingToken(false);
-    });
   };
 
   const handleLogoUpload = async (file: File) => {
@@ -354,42 +301,6 @@ export default function SiteSettingsPanel({
     });
   };
 
-  const handlePaymentMethodChange = (value: "" | "Stripe" | "PayPal" | "DD") => {
-    startTransition(async () => {
-      await updateArtistPaymentMethod(artist.id, site.id, value);
-      router.refresh();
-    });
-  };
-
-  const handleStripeCustomerIdBlur = (value: string) => {
-    startTransition(async () => {
-      await updateStripeSubscriptionCustomerId(artist.id, site.id, value);
-      router.refresh();
-      flash("stripeSubscriptionCustomerId");
-    });
-  };
-
-  const handleAddPayment = async (formData: FormData) => {
-    setPaymentError(null);
-    const result = await addManualSubscriptionPayment(artist.id, site.id, formData);
-    if (!result.ok) {
-      setPaymentError(result.error);
-      return;
-    }
-    setAddingPayment(false);
-    router.refresh();
-  };
-
-  const handleDeletePayment = (id: string) => {
-    if (!confirm("Delete this payment record? This can't be undone.")) return;
-    startTransition(async () => {
-      await deleteManualSubscriptionPayment(id, site.id);
-      router.refresh();
-    });
-  };
-
-  const subscriptionTotal = subscriptionPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
-
   const labelCls = "mb-1 block text-xs text-neutral-500";
   const inputCls =
     "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:opacity-50";
@@ -416,406 +327,21 @@ export default function SiteSettingsPanel({
           and used less often, so it's tucked behind an explicit tab
           instead of always on screen. */}
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        {/* ---- LEFT: OWNER + SUBSCRIPTION ---- */}
-        <div className={`${cardCls} lg:w-72 lg:shrink-0`}>
-          <p className={cardTitleCls}>Owner</p>
-
-          <div className="space-y-2">
-            <div>
-              <label className={labelCls}>Name</label>
-              <input
-                key={`owner-name-${artist.id}`}
-                type="text"
-                defaultValue={artist.name}
-                onBlur={(e) => e.target.value.trim() && saveOwner("name", e.target.value.trim())}
-                disabled={isPending}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>First name (for personalised emails)</label>
-              <input
-                key={`owner-firstname-${artist.id}`}
-                type="text"
-                defaultValue={artist.firstName || ""}
-                onBlur={(e) => saveOwner("firstName", e.target.value.trim())}
-                disabled={isPending}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Email</label>
-              <input
-                key={`owner-email-${artist.id}`}
-                type="email"
-                defaultValue={artist.email || ""}
-                onBlur={(e) => saveOwner("email", e.target.value.trim())}
-                disabled={isPending}
-                className={inputCls}
-              />
-            </div>
-            <div>
-              <label className={labelCls}>Phone</label>
-              <input
-                key={`owner-phone-${artist.id}`}
-                type="text"
-                defaultValue={artist.phone || ""}
-                onBlur={(e) => saveOwner("phone", e.target.value.trim())}
-                disabled={isPending}
-                className={inputCls}
-              />
-            </div>
-            {/* This artist's own sending/receiving address (2026-09-05,
-                Email Integration) — auto-suggested from their name when
-                created, editable here. The @jevca.art suffix is fixed and
-                shown alongside rather than typed, so it can never be
-                mistyped into something that isn't actually this
-                platform's domain. */}
-            <div>
-              <label className={labelCls}>Email address (for sending/receiving)</label>
-              <div className="flex items-center gap-1">
-                <input
-                  key={`owner-email-slug-${artist.id}`}
-                  type="text"
-                  defaultValue={artist.emailSlug || ""}
-                  placeholder="e.g. louise.dear"
-                  onBlur={(e) => e.target.value.trim() && saveOwner("emailSlug", e.target.value.trim())}
-                  disabled={isPending}
-                  className={inputCls}
-                />
-                <span className="shrink-0 text-sm text-neutral-400">@{EMAIL_DOMAIN}</span>
-              </div>
-              {!artist.emailSlug && (
-                <p className="mt-1 text-xs text-amber-700">
-                  Not set yet — invoices/receipts/certificates can't be emailed until this has a
-                  value.
-                </p>
-              )}
-            </div>
-            {(savedField === "name" ||
-              savedField === "firstName" ||
-              savedField === "email" ||
-              savedField === "phone" ||
-              savedField === "emailSlug") && <p className="text-xs text-green-600">Saved</p>}
-          </div>
-
-          <div className="mt-4 flex items-end gap-3 border-t border-neutral-200 pt-4">
-            <div className="flex-1">
-              <label className={labelCls}>Domain</label>
-              <input
-                key={`domain-${site.id}`}
-                type="text"
-                defaultValue={site.domain || ""}
-                placeholder="e.g. janedoeartist.com"
-                onBlur={(e) => saveSite("domain", e.target.value.trim())}
-                disabled={isPending}
-                className={inputCls}
-              />
-            </div>
-            {/* Moved here from the persistent per-site header
-                (2026-08-19, direct request, on reflection from
-                2026-08-18's earlier move) — sits next to Domain rather
-                than in a header shown on every page, since day-to-day
-                this is checked/changed while looking at the rest of the
-                site's record, not from other screens. "Archived" is
-                labelled "Site status" here specifically to avoid reading
-                as the same thing as "Domain renewal → Status" directly
-                below, which tracks something unrelated (whether the
-                domain registration itself needs renewing). */}
-            <div>
-              <label className={labelCls}>Site status</label>
-              <StatusSelect siteId={site.id} status={site.status} />
-            </div>
-          </div>
-          {savedField === "domain" && <p className="mt-1 text-xs text-green-600">Saved</p>}
-
-          <div className="mt-4 border-t border-neutral-200 pt-4">
-            <div className="rounded-md border border-neutral-200 p-2.5">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-                Domain renewal
-              </p>
-              <label className={labelCls}>Status</label>
-              <select
-                key={`domain-status-${site.id}`}
-                defaultValue={site.domainStatus || ""}
-                onChange={(e) => saveSite("domainStatus", e.target.value)}
-                disabled={isPending}
-                className={`${inputCls} mb-2`}
-              >
-                <option value="">— Not checked —</option>
-                <option value="Active">Active</option>
-                <option value="Expiring soon">Expiring soon</option>
-                <option value="Expired">Expired</option>
-              </select>
-
-              <label className={labelCls}>Renewal date</label>
-              <input
-                key={`domain-renewal-date-${site.id}`}
-                type="date"
-                defaultValue={site.domainRenewalDate}
-                onChange={(e) => saveSite("domainRenewalDate", e.target.value)}
-                disabled={isPending}
-                className={inputCls}
-              />
-              {(savedField === "domainStatus" || savedField === "domainRenewalDate") && (
-                <p className="mt-1 text-xs text-green-600">Saved</p>
-              )}
-              <p className="mt-2 text-xs text-neutral-400">
-                Editable here, or updated in bulk via Namecheap Sync.
-              </p>
-            </div>
-
-            {/* Real Templates now (2026-09-06) — was a hardcoded select
-                with only "Default" as an option. "— None —" (empty
-                value) means this site has no Template assigned, which
-                is a perfectly normal state (ordinary Section/Private/
-                Pavilion pages don't need one) — see Site.templateId in
-                schema.prisma. */}
-            <label className={`${labelCls} mt-3`}>Template</label>
-            <select
-              key={`template-${site.id}`}
-              defaultValue={site.templateId || ""}
-              onChange={(e) => saveSite("templateId", e.target.value)}
-              disabled={isPending}
-              className={inputCls}
-            >
-              <option value="">— None —</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                </option>
-              ))}
-            </select>
-            {templates.length === 0 && (
-              <p className="mt-1 text-xs text-neutral-400">
-                No templates yet — create one under Templates in the nav.
-              </p>
-            )}
-            {savedField === "templateId" && <p className="mt-1 text-xs text-green-600">Saved</p>}
-          </div>
-
-          <div className="mt-4 border-t border-neutral-200 pt-4">
-            <p className={cardTitleCls}>Subscription</p>
-
-            <label className={labelCls}>Current rate (informational)</label>
-            <div className="mb-3 flex items-center gap-1">
-              <span className="text-sm text-neutral-400">£</span>
-              <input
-                key={`owner-subscription-${artist.id}`}
-                type="text"
-                inputMode="decimal"
-                defaultValue={artist.subscriptionAmount}
-                onBlur={(e) => saveOwner("subscriptionAmount", e.target.value.trim())}
-                disabled={isPending}
-                placeholder="e.g. 9.95"
-                className={inputCls}
-              />
-            </div>
-
-            <label className={labelCls}>Payment method</label>
-            <select
-              key={`owner-payment-${artist.id}`}
-              defaultValue={artist.paymentMethod || ""}
-              onChange={(e) =>
-                handlePaymentMethodChange(e.target.value as "" | "Stripe" | "PayPal" | "DD")
-              }
-              disabled={isPending}
-              className={`${inputCls} mb-3`}
-            >
-              <option value="">—</option>
-              <option value="Stripe">Stripe</option>
-              <option value="PayPal">PayPal</option>
-              <option value="DD">Direct Debit</option>
-            </select>
-            {(savedField === "subscriptionAmount" ||
-              savedField === "stripeSubscriptionCustomerId") && (
-              <p className="mb-3 text-xs text-green-600">Saved</p>
-            )}
-
-            {artist.paymentMethod === "Stripe" && (
-              <div className="mb-3 rounded-md border border-neutral-200 p-2.5">
-                <label className={labelCls}>Stripe Customer ID</label>
-                <input
-                  key={`stripe-customer-id-${artist.id}`}
-                  type="text"
-                  defaultValue={artist.stripeSubscriptionCustomerId || ""}
-                  onBlur={(e) => handleStripeCustomerIdBlur(e.target.value.trim())}
-                  disabled={isPending}
-                  placeholder="cus_…"
-                  className={`${inputCls} font-mono`}
-                />
-                <p className="mt-1 text-xs text-neutral-400">
-                  From the platform Stripe account (separate from this artist&apos;s own Stripe
-                  Mode) — paste it in once to link this artist to their subscription.
-                </p>
-                {artist.stripeSubscriptionStatus && (
-                  <p className="mt-2 text-xs">
-                    Status: <span className="font-medium">{artist.stripeSubscriptionStatus}</span>
-                  </p>
-                )}
-                {!artist.stripeSubscriptionCustomerId && (
-                  <p className="mt-2 text-xs text-amber-700">
-                    Not linked yet — payments won&apos;t appear below until this is set.
-                  </p>
-                )}
-              </div>
-            )}
-
-            {artist.paymentMethod === "Stripe" ? (
-              <p className="mb-2 text-xs text-neutral-400">
-                Payments sync here automatically from Stripe once webhook syncing is switched on.
-              </p>
-            ) : (
-              (artist.paymentMethod === "PayPal" || artist.paymentMethod === "DD") && (
-                <div className="mb-2">
-                  {addingPayment ? (
-                    <form
-                      action={handleAddPayment}
-                      className="mb-2 flex flex-col gap-1.5 rounded-md border border-neutral-200 p-2"
-                    >
-                      <div className="flex gap-1.5">
-                        <input
-                          type="date"
-                          name="paidAt"
-                          required
-                          className="flex-1 rounded border border-neutral-300 px-2 py-1 text-xs"
-                        />
-                        <input
-                          type="text"
-                          name="amount"
-                          inputMode="decimal"
-                          required
-                          placeholder="Amount"
-                          className="w-24 rounded border border-neutral-300 px-2 py-1 text-xs"
-                        />
-                        <input type="hidden" name="currency" value={site.defaultCurrency} />
-                      </div>
-                      {paymentError && <p className="text-xs text-red-600">{paymentError}</p>}
-                      <div className="flex gap-1">
-                        <button
-                          type="submit"
-                          className="flex-1 rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700"
-                        >
-                          Add
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setAddingPayment(false);
-                            setPaymentError(null);
-                          }}
-                          className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </form>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setAddingPayment(true)}
-                      className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                    >
-                      + Add payment
-                    </button>
-                  )}
-                </div>
-              )
-            )}
-
-            {artist.paymentMethod && (
-              <div className="overflow-hidden rounded-md border border-neutral-200">
-                <table className="w-full text-xs">
-                  <thead className="bg-neutral-50 text-left text-neutral-400">
-                    <tr>
-                      <th className="px-2 py-1.5 font-medium">Date</th>
-                      <th className="px-2 py-1.5 font-medium">Amount</th>
-                      <th className="px-2 py-1.5"></th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {subscriptionPayments.length === 0 ? (
-                      <tr>
-                        <td colSpan={3} className="px-2 py-3 text-center text-neutral-400">
-                          No payments recorded yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      subscriptionPayments.map((p) => (
-                        <tr key={p.id} className="border-t border-neutral-100">
-                          <td className="px-2 py-1.5">
-                            {new Date(p.paidAt).toLocaleDateString()}
-                          </td>
-                          <td className="px-2 py-1.5">
-                            {p.currency} {parseFloat(p.amount).toFixed(2)}
-                          </td>
-                          <td className="px-2 py-1.5 text-right">
-                            {p.source === "MANUAL" ? (
-                              <button
-                                type="button"
-                                onClick={() => handleDeletePayment(p.id)}
-                                className="text-neutral-400 hover:text-red-600"
-                              >
-                                Delete
-                              </button>
-                            ) : (
-                              <span className="text-neutral-300">Stripe</span>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {subscriptionPayments.length > 0 && (
-                    <tfoot>
-                      <tr className="border-t border-neutral-200 bg-neutral-50 font-medium">
-                        <td className="px-2 py-1.5">Total</td>
-                        <td className="px-2 py-1.5" colSpan={2}>
-                          {subscriptionPayments[0]?.currency || site.defaultCurrency}{" "}
-                          {subscriptionTotal.toFixed(2)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="mt-4 rounded-md border border-neutral-200 p-3">
-            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-              Hopper Token
-            </p>
-            <p className="mb-2 text-xs text-neutral-400">
-              Paste this into this artist&apos;s copy of the iPhone Shortcut, so photos and video
-              they share land in their Hopper.
-            </p>
-            <div className="flex items-center gap-2">
-              <input
-                key={`owner-hopper-token-${artist.id}`}
-                type="text"
-                readOnly
-                value={artist.hopperToken}
-                onFocus={(e) => e.target.select()}
-                className="w-full rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 font-mono text-xs text-neutral-700"
-              />
-              <button
-                type="button"
-                onClick={() => handleCopyToken(artist.hopperToken)}
-                className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-              >
-                {tokenCopied ? "Copied" : "Copy"}
-              </button>
-            </div>
-            <button
-              type="button"
-              disabled={regeneratingToken}
-              onClick={handleRegenerateToken}
-              className="mt-2 text-xs text-red-600 hover:underline disabled:opacity-50"
-            >
-              {regeneratingToken ? "Regenerating…" : "Regenerate token"}
-            </button>
-          </div>
+        {/* ---- LEFT: OWNER + DOMAIN + SUBSCRIPTION + HOPPER TOKEN ----
+            2026-09-12: these four are now shared cards (also used,
+            without this narrow column wrapper, by the Administration →
+            Clients admin page) instead of one inline block — see
+            OwnerCard/DomainCard/SubscriptionCard/HopperTokenCard. */}
+        <div className="flex flex-col gap-4 lg:w-72 lg:shrink-0">
+          <OwnerCard artist={artist} />
+          <DomainCard site={site} templates={templates} />
+          <SubscriptionCard
+            artist={artist}
+            siteId={site.id}
+            defaultCurrency={site.defaultCurrency}
+            subscriptionPayments={subscriptionPayments}
+          />
+          <HopperTokenCard artistId={artist.id} hopperToken={artist.hopperToken} />
         </div>
 
         {/* ---- RIGHT: Financial / Personal Profile ---- */}
@@ -877,7 +403,7 @@ export default function SiteSettingsPanel({
                 <select
                   key={`currency-${site.id}`}
                   defaultValue={site.defaultCurrency}
-                  onChange={(e) => saveSite("defaultCurrency", e.target.value)}
+                  onChange={(e) => saveDefaultCurrency(e.target.value)}
                   disabled={isPending}
                   className={inputCls}
                 >
@@ -1011,7 +537,7 @@ export default function SiteSettingsPanel({
                   <textarea
                     key={`owner-address-line1-${artist.id}`}
                     defaultValue={artist.addressLine1 || ""}
-                    onBlur={(e) => saveOwner("addressLine1", e.target.value.trim())}
+                    onBlur={(e) => saveFinancialField("addressLine1", e.target.value.trim())}
                     disabled={isPending}
                     rows={2}
                     placeholder="Street address"
@@ -1024,7 +550,7 @@ export default function SiteSettingsPanel({
                         key={`owner-city-${artist.id}`}
                         type="text"
                         defaultValue={artist.city || ""}
-                        onBlur={(e) => saveOwner("city", e.target.value.trim())}
+                        onBlur={(e) => saveFinancialField("city", e.target.value.trim())}
                         disabled={isPending}
                         className={inputCls}
                       />
@@ -1035,7 +561,7 @@ export default function SiteSettingsPanel({
                         key={`owner-postcode-${artist.id}`}
                         type="text"
                         defaultValue={artist.postcode || ""}
-                        onBlur={(e) => saveOwner("postcode", e.target.value.trim())}
+                        onBlur={(e) => saveFinancialField("postcode", e.target.value.trim())}
                         disabled={isPending}
                         className={inputCls}
                       />
@@ -1046,7 +572,7 @@ export default function SiteSettingsPanel({
                         key={`owner-country-${artist.id}`}
                         type="text"
                         defaultValue={artist.country || ""}
-                        onBlur={(e) => saveOwner("country", e.target.value.trim())}
+                        onBlur={(e) => saveFinancialField("country", e.target.value.trim())}
                         disabled={isPending}
                         className={inputCls}
                       />
@@ -1060,7 +586,7 @@ export default function SiteSettingsPanel({
                         key={`owner-vat-number-${artist.id}`}
                         type="text"
                         defaultValue={artist.vatNumber || ""}
-                        onBlur={(e) => saveOwner("vatNumber", e.target.value.trim())}
+                        onBlur={(e) => saveFinancialField("vatNumber", e.target.value.trim())}
                         disabled={isPending}
                         placeholder="Blank = not VAT registered"
                         className={inputCls}
@@ -1073,7 +599,7 @@ export default function SiteSettingsPanel({
                         type="text"
                         inputMode="decimal"
                         defaultValue={artist.vatRate}
-                        onBlur={(e) => saveOwner("vatRate", e.target.value.trim())}
+                        onBlur={(e) => saveFinancialField("vatRate", e.target.value.trim())}
                         disabled={isPending}
                         placeholder="e.g. 20"
                         className={inputCls}
@@ -1085,7 +611,7 @@ export default function SiteSettingsPanel({
                   <select
                     key={`owner-invoice-language-${artist.id}`}
                     defaultValue={artist.invoiceLanguage || "EN"}
-                    onChange={(e) => saveOwner("invoiceLanguage", e.target.value)}
+                    onChange={(e) => saveFinancialField("invoiceLanguage", e.target.value)}
                     disabled={isPending}
                     className={`${inputCls} mb-3`}
                   >
@@ -1097,7 +623,7 @@ export default function SiteSettingsPanel({
                   <textarea
                     key={`owner-invoice-footer-${artist.id}`}
                     defaultValue={artist.invoiceFooterText || ""}
-                    onBlur={(e) => saveOwner("invoiceFooterText", e.target.value.trim())}
+                    onBlur={(e) => saveFinancialField("invoiceFooterText", e.target.value.trim())}
                     disabled={isPending}
                     placeholder="e.g. VAT exemption note, bank details, thank-you message…"
                     rows={3}
@@ -1110,7 +636,7 @@ export default function SiteSettingsPanel({
                     type="number"
                     defaultValue={artist.nextInvoiceNumber}
                     onBlur={(e) =>
-                      e.target.value.trim() && saveOwner("nextInvoiceNumber", e.target.value.trim())
+                      e.target.value.trim() && saveNextInvoiceNumber(e.target.value.trim())
                     }
                     disabled={isPending}
                     className={inputCls}
