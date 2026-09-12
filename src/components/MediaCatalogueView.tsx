@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { listMedia, getMediaDetail } from "@/lib/actions/mediaCatalogue";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import VideoThumb from "@/components/VideoThumb";
@@ -17,6 +18,11 @@ type MediaRow = {
 
 const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
 const DENSITY_STORAGE_KEY = "jevca:media-density";
+
+// Debounce for the search box, so "filters activate as you type"
+// (2026-09-12, direct request) doesn't fire a navigation on every
+// keystroke.
+const SEARCH_DEBOUNCE_MS = 400;
 
 // Reads the URL bar directly, bypassing Next's router, so bookmarking or
 // refreshing on a selected item still works without every click paying
@@ -60,17 +66,18 @@ export default function MediaCatalogueView({
   artistArtworks: { id: string; presentationTitle: string }[];
   initialSelected: MediaDetail | null;
 }) {
+  const router = useRouter();
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
 
   // The visible list, appended to by "Load more". Previously assumed a
   // purpose/filter change was always "a real page load, which remounts
   // this component with fresh props" — wrong: the Marketing/Related
-  // toggle and filters navigate via <Link>/<form method="get">, which in
-  // the Next.js App Router updates this component's props in place
-  // without remounting it, so useState(media)'s initial value was only
-  // ever applied once, on first mount. Switching tabs or filters then
-  // left `items` frozen at whatever was last loaded, which is what made
+  // toggle and filters navigate via <Link>/router.push, which in the
+  // Next.js App Router updates this component's props in place without
+  // remounting it, so useState(media)'s initial value was only ever
+  // applied once, on first mount. Switching tabs or filters then left
+  // `items` frozen at whatever was last loaded, which is what made
   // switching tabs look like it "didn't work" without a manual browser
   // refresh — and separately explains the reported "43 of 9" count: total
   // (a plain prop) updated correctly and immediately on every navigation,
@@ -107,6 +114,71 @@ export default function MediaCatalogueView({
 
   const toggleHref = (nextPurpose: "marketing" | "related") =>
     `/sites/${siteId}/media?purpose=${nextPurpose}`;
+
+  // Live filters (2026-09-12, direct request — "filters should activate
+  // as you type, so remove button") — replaces the old GET-form-plus-
+  // Apply-button. Search stays local state (qInput) so the box feels
+  // instant while typing, debounced before it actually navigates;
+  // tag/artwork/sort each navigate immediately on change, since picking
+  // an option is already a single deliberate action with nothing to
+  // debounce. Reads the *current* URL for anything not being changed
+  // (rather than only the q/tag/artworkId/sort props) so it never drops
+  // an unrelated param — "selected", for instance, is tracked outside
+  // these props entirely, via updateUrlSelected above.
+  const applyFilters = (overrides: {
+    q?: string;
+    tag?: string;
+    artworkId?: string;
+    sort?: string;
+  }) => {
+    const params = new URLSearchParams(window.location.search);
+    params.set("purpose", purpose);
+
+    const nextQ = overrides.q ?? q;
+    if (nextQ) params.set("q", nextQ);
+    else params.delete("q");
+
+    if (purpose === "marketing") {
+      const nextTag = overrides.tag ?? tag;
+      if (nextTag) params.set("tag", nextTag);
+      else params.delete("tag");
+      params.delete("artworkId");
+    } else {
+      const nextArtworkId = overrides.artworkId ?? artworkId;
+      if (nextArtworkId) params.set("artworkId", nextArtworkId);
+      else params.delete("artworkId");
+      params.delete("tag");
+    }
+
+    const nextSort = overrides.sort ?? sort;
+    if (nextSort) params.set("sort", nextSort);
+    else params.delete("sort");
+
+    router.push(`/sites/${siteId}/media?${params.toString()}`);
+  };
+
+  const [qInput, setQInput] = useState(q);
+  // Keeps the box in sync with the URL on browser back/forward, or if a
+  // pending debounce from a stale keystroke is still in flight when a
+  // fresh `q` prop lands.
+  useEffect(() => {
+    setQInput(q);
+  }, [q]);
+
+  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    };
+  }, []);
+
+  const handleSearchChange = (value: string) => {
+    setQInput(value);
+    if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
+    searchDebounceRef.current = setTimeout(() => {
+      applyFilters({ q: value });
+    }, SEARCH_DEBOUNCE_MS);
+  };
 
   const handleSelect = (mediaId: string) => {
     if (selectingId) return;
@@ -278,7 +350,9 @@ export default function MediaCatalogueView({
           </div>
         </div>
 
-        {/* Row 2: Marketing/Related toggle + filtering. */}
+        {/* Row 2: Marketing/Related toggle + filtering. Plain div, not a
+            <form>, now that filters apply live (2026-09-12) rather than
+            on submit — see applyFilters/handleSearchChange above. */}
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
             <Link
@@ -301,19 +375,18 @@ export default function MediaCatalogueView({
             </Link>
           </div>
 
-          <form method="get" className="flex flex-wrap items-center gap-2">
-            <input type="hidden" name="purpose" value={purpose} />
+          <div className="flex flex-wrap items-center gap-2">
             <input
               type="text"
-              name="q"
-              defaultValue={q}
+              value={qInput}
+              onChange={(e) => handleSearchChange(e.target.value)}
               placeholder="Search caption, alt text"
               className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
             />
             {purpose === "marketing" ? (
               <select
-                name="tag"
-                defaultValue={tag}
+                value={tag}
+                onChange={(e) => applyFilters({ tag: e.target.value })}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
                 <option value="">All tags</option>
@@ -325,8 +398,8 @@ export default function MediaCatalogueView({
               </select>
             ) : (
               <select
-                name="artworkId"
-                defaultValue={artworkId}
+                value={artworkId}
+                onChange={(e) => applyFilters({ artworkId: e.target.value })}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
                 <option value="">All artworks</option>
@@ -338,20 +411,14 @@ export default function MediaCatalogueView({
               </select>
             )}
             <select
-              name="sort"
-              defaultValue={sort}
+              value={sort}
+              onChange={(e) => applyFilters({ sort: e.target.value })}
               className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
             >
               <option value="">Sort: Date added</option>
               <option value="caption">Sort: Caption</option>
             </select>
-            <button
-              type="submit"
-              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-            >
-              Apply
-            </button>
-          </form>
+          </div>
         </div>
         </div>
 
