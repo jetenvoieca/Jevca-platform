@@ -11,7 +11,6 @@ type ListFilters = {
   q?: string;
   tag?: string;
   artworkId?: string;
-  sort?: string;
   // Pagination — added 2026-08-08. Previously this fetched every matching
   // row unconditionally, every time, including just to open one item's
   // detail panel — a real, measured contributor to Media Catalogue
@@ -46,7 +45,7 @@ const DEFAULT_PAGE_SIZE = 60;
 // item has a linked artwork or not. Avoids keeping a redundant flag in
 // sync with the artworkId it would just be describing.
 export async function listMedia(artistId: string, filters: ListFilters) {
-  const { purpose, q, tag, artworkId, sort, offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
+  const { purpose, q, tag, artworkId, offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
 
   const where = {
     artistId,
@@ -68,10 +67,13 @@ export async function listMedia(artistId: string, filters: ListFilters) {
   const [rows, total] = await Promise.all([
     db.image.findMany({
       where,
-      // Default is oldest-first — new uploads land at the end, matching
-      // the "add to the end of the list" expectation everywhere else in
-      // the app, rather than newest-first pushing everything else down.
-      orderBy: sort === "caption" ? { caption: "asc" } : { createdAt: "asc" },
+      // Oldest-first — new uploads land at the end, matching the "add to
+      // the end of the list" expectation everywhere else in the app,
+      // rather than newest-first pushing everything else down. Used to
+      // be selectable (a "Sort: Caption" option) until the Sort dropdown
+      // was removed entirely (2026-09-12, direct request — "never used
+      // it or even know why I would"); this is now the only order.
+      orderBy: { createdAt: "asc" },
       include: { artwork: { select: { id: true, presentationTitle: true } } },
       relationLoadStrategy: "query",
       skip: offset,
