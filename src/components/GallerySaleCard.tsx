@@ -16,8 +16,14 @@ import CertificateEmailModal from "@/components/CertificateEmailModal";
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
 const labelCls = "mb-1 block text-xs text-neutral-500";
+
+// Sale-management mockup (2026-09-12): every primary action button on
+// this card is #5E5E5E with #F9F6EE text — replaces the previous plain
+// neutral-900/white pairing. Kept as one shared class so the isPaid
+// (Send receipt/Certificate) and !isPaid (2x3 grid) branches can never
+// drift from each other again.
 const actionButtonCls =
-  "rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50";
+  "rounded-md bg-[#5E5E5E] px-3 py-[5px] text-sm font-medium text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50";
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
@@ -205,12 +211,14 @@ export default function GallerySaleCard({
     });
   };
 
+  // Idempotent — if this sale already has a link, it just returns the
+  // existing one rather than creating a duplicate, so this is safe to
+  // call every time the "Payment Link" grid button is pressed. The
+  // result renders inline below the grid (see the "Payment link reveal"
+  // block below), same spot it's always shown.
   const handleGetPaymentLink = () => {
     setPaymentLinkError(null);
     startTransition(async () => {
-      // Idempotent — if this sale already has a link, it just returns
-      // the existing one rather than creating a duplicate, so this is
-      // safe to call every time the button is pressed.
       const res = await createGalleryPaymentLink(purchase.id, siteId);
       if (!res.ok) {
         setPaymentLinkError(res.error);
@@ -228,7 +236,10 @@ export default function GallerySaleCard({
   };
 
   return (
-    <div>
+    // Tinted panel (2026-09-12 mockup) — wraps everything from the Sale
+    // Price/Net Sale row down through the action buttons, matching the
+    // #F9F6EE background shown in the mockup for this whole block.
+    <div className="rounded-lg bg-[#F9F6EE] p-4">
       <div className="mb-2 flex items-baseline justify-between">
         <p className="text-sm font-medium text-neutral-900">
           Sale Price {formatMoney(purchase.totalAmount, purchase.currency)}
@@ -300,8 +311,13 @@ export default function GallerySaleCard({
         </div>
       ) : (
         <>
-          {/* 2x2 action grid — all four sale actions as equal-weight
-              solid buttons. Cancel Sale and Delete Sale still get a
+          {/* 2x3 action grid (2026-09-12 mockup) — Send invoice/Cancel
+              Sale, Mark as Paid/Delete Sale, Certificate of
+              Authenticity/Payment Link, all equal-weight solid buttons.
+              Certificate of Authenticity and Payment Link both used to
+              live outside this grid (a full-width button and a separate
+              bordered section below); the mockup folds both into the
+              grid itself. Cancel Sale and Delete Sale still get a
               ConfirmDialog before anything actually happens. */}
           <div className="mt-3 grid grid-cols-2 gap-2">
             <button
@@ -330,7 +346,7 @@ export default function GallerySaleCard({
               disabled={isPending}
               className={actionButtonCls}
             >
-              Mark as paid
+              Mark as Paid
             </button>
             <button
               type="button"
@@ -340,26 +356,28 @@ export default function GallerySaleCard({
             >
               Delete Sale
             </button>
+            <button
+              type="button"
+              onClick={() => setShowCertificateModal(true)}
+              disabled={isPending}
+              className={actionButtonCls}
+            >
+              {purchase.certificateEmailedAt
+                ? "Send certificate again"
+                : "Certificate of Authenticity"}
+            </button>
+            <button
+              type="button"
+              onClick={handleGetPaymentLink}
+              disabled={isPending}
+              className={actionButtonCls}
+            >
+              {isPending && !purchase.stripePaymentLinkUrl ? "Generating…" : "Payment Link"}
+            </button>
           </div>
 
-          {/* Certificate of Authenticity — available regardless of
-              payment status (2026-09-10, direct request — "add to all
-              sales, completed or not"). Full width, below the 2x2 grid:
-              this isn't a payment action, so it doesn't belong crammed
-              into that grid alongside them. */}
-          <button
-            type="button"
-            onClick={() => setShowCertificateModal(true)}
-            disabled={isPending}
-            className={`${actionButtonCls} mt-2 w-full`}
-          >
-            {purchase.certificateEmailedAt
-              ? "Send certificate again"
-              : "Certificate of Authenticity"}
-          </button>
-
           {showMarkPaidForm && (
-            <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+            <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-white p-3">
               <div>
                 <label className={labelCls}>Date paid</label>
                 <input
@@ -405,44 +423,33 @@ export default function GallerySaleCard({
             </div>
           )}
 
-          {/* Payment link — persistent, net-owed link, separate from the
-              full-price links used for direct Stripe sales elsewhere.
-              Generated automatically the first time "Send invoice" is
-              used, but still shown and copyable here, and still
-              generatable on its own ahead of sending an invoice. */}
-          <div className="mt-3 border-t border-neutral-100 pt-3">
-            {purchase.stripePaymentLinkUrl ? (
-              <div>
-                <label className={labelCls}>Payment link</label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    readOnly
-                    value={purchase.stripePaymentLinkUrl}
-                    onFocus={(e) => e.currentTarget.select()}
-                    className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs text-neutral-600"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => handleCopyPaymentLink(purchase.stripePaymentLinkUrl!)}
-                    className="shrink-0 rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
-                  >
-                    {linkCopied ? "Copied" : "Copy"}
-                  </button>
-                </div>
+          {/* Payment link reveal — persistent, net-owed link, separate
+              from the full-price links used for direct Stripe sales
+              elsewhere. Only rendered once a link actually exists;
+              generating one is now the grid's "Payment Link" button
+              above (also used to re-check/re-show an existing one). */}
+          {purchase.stripePaymentLinkUrl && (
+            <div className="mt-3 border-t border-neutral-200 pt-3">
+              <label className={labelCls}>Payment link</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  readOnly
+                  value={purchase.stripePaymentLinkUrl}
+                  onFocus={(e) => e.currentTarget.select()}
+                  className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleCopyPaymentLink(purchase.stripePaymentLinkUrl!)}
+                  className="shrink-0 rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-white"
+                >
+                  {linkCopied ? "Copied" : "Copy"}
+                </button>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={handleGetPaymentLink}
-                disabled={isPending}
-                className="rounded-md border border-neutral-300 px-3 py-[4px] text-sm hover:bg-neutral-50 disabled:opacity-50"
-              >
-                {isPending ? "Generating…" : "Get payment link"}
-              </button>
-            )}
-            {paymentLinkError && <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>}
-          </div>
+            </div>
+          )}
+          {paymentLinkError && <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>}
         </>
       )}
 
