@@ -3,10 +3,6 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import MediaPicker from "@/components/MediaPicker";
-import OwnerCard from "@/components/OwnerCard";
-import DomainCard from "@/components/DomainCard";
-import SubscriptionCard from "@/components/SubscriptionCard";
-import HopperTokenCard from "@/components/HopperTokenCard";
 import {
   updateSite,
   updateArtist,
@@ -29,14 +25,6 @@ import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales"
 import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
 import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
 import type { CertificateTemplateRow } from "@/lib/actions/certificateSettings";
-
-type SubscriptionPaymentRow = {
-  id: string;
-  source: "STRIPE" | "MANUAL";
-  amount: string;
-  currency: string;
-  paidAt: string; // ISO date, yyyy-mm-dd
-};
 
 type SiteData = {
   id: string;
@@ -114,21 +102,14 @@ type FinancialField =
 export default function SiteSettingsPanel({
   site,
   artist,
-  subscriptionPayments,
   certificateTemplates,
-  templates,
 }: {
   site: SiteData;
   artist: ArtistData;
-  subscriptionPayments: SubscriptionPaymentRow[];
   // Certificate of Authenticity templates (2026-09-04) — see
   // CertificateTemplatesCard, rendered full-width below the
   // Financial/Invoicing row.
   certificateTemplates: CertificateTemplateRow[];
-  // The Templates library (2026-09-06) — real records now, populating
-  // the "Template" dropdown in DomainCard instead of a hardcoded
-  // "Default" option. See src/lib/actions/templates.ts.
-  templates: { id: string; name: string }[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
@@ -137,13 +118,11 @@ export default function SiteSettingsPanel({
   const [resettingSales, setResettingSales] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [switchingStripeMode, setSwitchingStripeMode] = useState(false);
-  // 2026-08-31, direct request — this page now splits into two panels:
-  // a small Owner/Subscription panel that's always visible, and a large
-  // panel that toggles between "Financial" and "Personal Profile".
-  // Financial defaults to hidden (Personal Profile shown first) since
-  // it's the more sensitive of the two — someone glancing at a shared
-  // screen sees the harmless tab, not payment details, unless they
-  // deliberately switch.
+  // 2026-08-31, direct request — this page toggles between "Financial"
+  // and "Personal Profile". Financial defaults to hidden (Personal
+  // Profile shown first) since it's the more sensitive of the two —
+  // someone glancing at a shared screen sees the harmless tab, not
+  // payment details, unless they deliberately switch.
   const [activeTab, setActiveTab] = useState<"financial" | "personal">("personal");
   const router = useRouter();
 
@@ -315,41 +294,20 @@ export default function SiteSettingsPanel({
     }`;
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-6">
+    <div className="mx-auto max-w-3xl px-6 py-6">
       {/* Former header (name/owner/status/archive) removed 2026-08-18,
           direct request — it duplicated the persistent per-site header
           in layout.tsx above this page, which now carries all of that
           instead (including an editable name field, moved there so
           renaming a site still works with this block gone). */}
 
-      {/* 2026-08-31, direct request — split into a small, always-visible
-          Owner/Subscription panel on the left, and a larger panel on the
-          right that toggles between Financial and Personal Profile,
-          rather than three same-size cards in a row. Owner/Subscription
-          info is what you need on every visit; Financial is sensitive
-          and used less often, so it's tucked behind an explicit tab
-          instead of always on screen. */}
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-        {/* ---- LEFT: OWNER + DOMAIN + SUBSCRIPTION + HOPPER TOKEN ----
-            2026-09-12: these four are now shared cards (also used,
-            without this narrow column wrapper, by the Administration →
-            Clients admin page) instead of one inline block — see
-            OwnerCard/DomainCard/SubscriptionCard/HopperTokenCard. */}
-        <div className="flex flex-col gap-4 lg:w-72 lg:shrink-0">
-          <OwnerCard artist={artist} />
-          <DomainCard site={site} templates={templates} />
-          <SubscriptionCard
-            artist={artist}
-            siteId={site.id}
-            defaultCurrency={site.defaultCurrency}
-            subscriptionPayments={subscriptionPayments}
-          />
-          <HopperTokenCard artistId={artist.id} hopperToken={artist.hopperToken} />
-        </div>
-
-        {/* ---- RIGHT: Financial / Personal Profile ---- */}
-        <div className="min-w-0 flex-1">
-          <div className="mb-4 inline-flex rounded-full border border-neutral-300 bg-white p-1">
+      {/* 2026-09-12, direct request — this page shows only the artist-
+          facing Financial/Personal Profile tabs now. Owner/Domain/
+          Subscription/Hopper Token moved entirely to the Administration
+          → Clients admin page (ClientOwnerPanel) — this "Profile" page,
+          reached from inside a site's own menu, is not the place for
+          that admin-only data. */}
+      <div className="mb-4 inline-flex rounded-full border border-neutral-300 bg-white p-1">
             <button
               type="button"
               onClick={() => setActiveTab("financial")}
@@ -695,8 +653,6 @@ export default function SiteSettingsPanel({
               )}
             </div>
           )}
-        </div>
-      </div>
     </div>
   );
 }
