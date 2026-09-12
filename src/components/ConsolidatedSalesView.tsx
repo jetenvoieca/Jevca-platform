@@ -8,7 +8,7 @@ import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payme
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
-import GallerySaleCard from "@/components/GallerySaleCard";
+import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 export type ConsolidatedSaleRow = {
@@ -27,6 +27,11 @@ export type ConsolidatedSaleRow = {
   // ISO string, not a Date — Server Components can only hand plain
   // serializable data across to a Client Component like this one.
   createdAt: string;
+  // Added 2026-09-12 so this list's own Status column can use the same
+  // shared SaleStatusBadge (GallerySaleCard.tsx) as everywhere else a
+  // sale's status is shown, rather than a second hand-rolled version —
+  // shows "Invoice sent" instead of "UNPAID" once one's gone out.
+  invoiceEmailedAt: string | null;
 };
 
 export type ConsolidatedMonthGroup = {
@@ -34,12 +39,6 @@ export type ConsolidatedMonthGroup = {
   label: string;
   totalsByCurrency: Record<string, number>;
   rows: ConsolidatedSaleRow[];
-};
-
-const STATUS_STYLE: Record<ConsolidatedSaleRow["status"], string> = {
-  COMPLETED: "text-green-600",
-  ABANDONED: "text-neutral-400",
-  ACTIVE: "text-amber-600",
 };
 
 // Click-through detail modal for a Consolidated Sales row (2026-09-09,
@@ -205,8 +204,15 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
                         </span>
                       )}
                     </td>
-                    <td className={`px-4 py-1.5 ${STATUS_STYLE[r.status]}`}>
-                      {r.status.charAt(0) + r.status.slice(1).toLowerCase()}
+                    <td className="px-4 py-1.5">
+                      {/* Shared badge (2026-09-12) — was its own
+                          hand-rolled coloured text here (STATUS_STYLE
+                          lookup), the one place on this page that didn't
+                          read invoiceEmailedAt like the detail modal
+                          below it already does. Same component used on
+                          the Sales page and Galleries' Sales tab, so
+                          "Invoice sent" is consistent everywhere. */}
+                      <SaleStatusBadge status={r.status} invoiceEmailedAt={r.invoiceEmailedAt} />
                     </td>
                   </tr>
                 ))}
