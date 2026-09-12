@@ -2,6 +2,7 @@ import type { AppShellNavEntry } from "@/components/SidebarNav";
 
 export type TopNavKey =
   | "sites"
+  | "clients"
   | "templates"
   | "alerts"
   | "inbox"
@@ -33,6 +34,12 @@ export type TopNavKey =
 // a new-reply alert links straight into here (see lib/alerts.ts), so
 // the two sit next to each other.
 //
+// "Clients" added 2026-09-12, direct request — the admin-only view of
+// every site's Owner/Domain/Subscription/Hopper Token details (see
+// ClientOwnerPanel), with no Financial or Personal Profile content
+// (that's the artist-facing per-site "Profile" page instead). Placed
+// first, above Alerts, per direct request.
+//
 // Split out as its own function (2026-08-31) so the per-site menu
 // (siteNav.ts) can render an identical group instead of duplicating
 // this list — the labels, hrefs, and active-state logic stay in
@@ -48,6 +55,7 @@ export function buildAccountsSection(
     section: true,
     key: "accounts",
     children: [
+      { label: "Clients", href: "/clients", active: active === "clients" },
       { label: "Alerts", href: "/alerts", active: active === "alerts", badge: alertCount },
       { label: "Inbox", href: "/accounts/inbox", active: active === "inbox" },
       { label: "Subscriptions", href: "/accounts", active: active === "subscriptions" },
