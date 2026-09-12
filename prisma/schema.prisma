@@ -822,7 +822,18 @@ model Artwork {
   images Image[]
 
   mainImageId String? @unique
-  mainImage   Image?  @relation("ArtworkMainImage", fields: [mainImageId], references: [id])
+  // onDelete: Restrict (2026-09-12 fix) — was left at Prisma/Postgres's
+  // default action for an optional FK, which is SetNull, not Restrict.
+  // deleteImagePermanently (lib/actions/imageDelete.ts) already has a
+  // catch block that assumes deleting a still-referenced main image
+  // fails with a friendly "remove that link first" error — that
+  // assumption was simply wrong: the delete was silently succeeding and
+  // quietly nulling out mainImageId instead, which is what let deleting
+  // a Related image in the Media Catalogue also silently wipe out that
+  // same artwork's main image (reported 2026-09-12). This makes the
+  // relation actually behave the way the error-handling code already
+  // expected.
+  mainImage   Image?  @relation("ArtworkMainImage", fields: [mainImageId], references: [id], onDelete: Restrict)
 
   // Which artwork (if any) this one was created as a "Create Derivative"
   // copy of (2026-09-11) — shown in the Catalogue tab's header as
@@ -1083,7 +1094,10 @@ model VideoRender {
   timeline Json?
 
   resultImageId String? @unique
-  resultImage   Image?  @relation(fields: [resultImageId], references: [id])
+  // onDelete: Restrict (2026-09-12 fix) — same issue and fix as
+  // Artwork.mainImage above: this was silently defaulting to SetNull on
+  // an Image delete instead of actually blocking it.
+  resultImage   Image?  @relation(fields: [resultImageId], references: [id], onDelete: Restrict)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
