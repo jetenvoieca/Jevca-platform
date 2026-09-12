@@ -44,7 +44,6 @@ export default function ArtworksCatalogueView({
   type: initialType,
   group: initialGroup,
   tier: initialTier,
-  sort: initialSort,
   initialSelected,
   settings,
   siteDefaultCurrency = "GBP",
@@ -62,7 +61,6 @@ export default function ArtworksCatalogueView({
   type: string;
   group: string;
   tier: string;
-  sort: string;
   initialSelected: ArtworkDetail | null;
   settings: ArtworkSettings;
   siteDefaultCurrency?: string;
@@ -97,7 +95,6 @@ export default function ArtworksCatalogueView({
   const [type, setType] = useState(initialType);
   const [group, setGroup] = useState(initialGroup);
   const [tier, setTier] = useState(initialTier);
-  const [sort, setSort] = useState(initialSort);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Declared up here, ahead of applyFilters below, specifically because
@@ -112,6 +109,12 @@ export default function ArtworksCatalogueView({
   // fuller selection-related comment further down, by selectingId.
   const [selected, setSelected] = useState<ArtworkDetail | null>(initialSelected);
 
+  // Sort dropdown removed (2026-09-12, direct request — "never used it
+  // or even know why I would"), same as its counterpart on the Media
+  // Catalogue. updateUrlFilters/applyFilters/handleLoadMore/
+  // handleDuplicated below no longer take or forward a sort value;
+  // listArtworks (and the CSV/PDF exports, which share the same
+  // filters) always return date-added order now.
   const updateUrlFilters = (next: {
     q: string;
     availability: string;
@@ -119,7 +122,6 @@ export default function ArtworksCatalogueView({
     type: string;
     group: string;
     tier: string;
-    sort: string;
   }) => {
     const params = new URLSearchParams(window.location.search);
     const setOrDelete = (key: string, value: string) => {
@@ -132,7 +134,6 @@ export default function ArtworksCatalogueView({
     setOrDelete("type", next.type);
     setOrDelete("group", next.group);
     setOrDelete("tier", next.tier);
-    setOrDelete("sort", next.sort);
     const qs = params.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   };
@@ -145,9 +146,8 @@ export default function ArtworksCatalogueView({
       type: string;
       group: string;
       tier: string;
-      sort: string;
     }>) => {
-      const next = { q, availability, location, type, group, tier, sort, ...overrides };
+      const next = { q, availability, location, type, group, tier, ...overrides };
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
         q: next.q || undefined,
         availability: next.availability || undefined,
@@ -155,7 +155,6 @@ export default function ArtworksCatalogueView({
         type: next.type || undefined,
         group: next.group || undefined,
         tier: next.tier || undefined,
-        sort: next.sort || undefined,
         limit: pageSize,
       });
       setArtworks(
@@ -190,7 +189,7 @@ export default function ArtworksCatalogueView({
         updateUrlSelected(null);
       }
     },
-    [artistId, q, availability, location, type, group, tier, sort, pageSize, selected]
+    [artistId, q, availability, location, type, group, tier, pageSize, selected]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -203,7 +202,6 @@ export default function ArtworksCatalogueView({
         type: type || undefined,
         group: group || undefined,
         tier: tier || undefined,
-        sort: sort || undefined,
         offset: artworks.length,
         limit: pageSize,
       });
@@ -224,7 +222,7 @@ export default function ArtworksCatalogueView({
     } finally {
       setLoadingMore(false);
     }
-  }, [artistId, artworks.length, q, availability, location, type, group, tier, sort, pageSize]);
+  }, [artistId, artworks.length, q, availability, location, type, group, tier, pageSize]);
 
   // Infinite scroll: an invisible sentinel sits just past the last row.
   // When it enters the viewport we auto-fetch the next page — no "Load
@@ -336,7 +334,6 @@ export default function ArtworksCatalogueView({
         type: type || undefined,
         group: group || undefined,
         tier: tier || undefined,
-        sort: sort || undefined,
         limit: pageSize,
       });
       setArtworks(
@@ -462,7 +459,6 @@ export default function ArtworksCatalogueView({
       ...(type ? { type } : {}),
       ...(group ? { group } : {}),
       ...(tier ? { tier } : {}),
-      ...(sort ? { sort } : {}),
     });
     return `/api/artwork-catalogue-csv?${params.toString()}`;
   };
@@ -658,7 +654,9 @@ export default function ArtworksCatalogueView({
 
           {/* Row 2: filtering/search — a separate functional group from
               the view controls above. Tier (2026-09-07) sits leftmost,
-              ahead of Search, matching the design mockup. */}
+              ahead of Search, matching the design mockup. Sort dropdown
+              removed (2026-09-12, direct request) from the end of this
+              row. */}
           <div className="mb-3 flex flex-wrap items-center gap-3">
             <select
               name="tier"
@@ -751,20 +749,6 @@ export default function ArtworksCatalogueView({
                     {g}
                   </option>
                 ))}
-              </select>
-              <select
-                name="sort"
-                value={sort}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setSort(v);
-                  applyFilters({ sort: v });
-                }}
-                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
-              >
-                <option value="">Sort: Date added</option>
-                <option value="title">Sort: Title</option>
-                <option value="price">Sort: Price</option>
               </select>
             </form>
           </div>
@@ -940,7 +924,6 @@ export default function ArtworksCatalogueView({
             ...(type ? { type } : {}),
             ...(group ? { group } : {}),
             ...(tier ? { tier } : {}),
-            ...(sort ? { sort } : {}),
           }).toString()}`;
           // Same as the plain link this replaces — a real navigation to
           // the download route, not a fetch+blob dance. window.open
