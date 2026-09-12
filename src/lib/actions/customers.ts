@@ -50,6 +50,10 @@ export type CustomerDetail = {
     status: "ACTIVE" | "COMPLETED" | "ABANDONED";
     channel: "STRIPE" | "GALLERY";
     createdAt: string;
+    // Added 2026-09-12 so the Sales tab table's status badge can show
+    // "Invoice sent" instead of "UNPAID" once an invoice has actually
+    // gone out — same field GallerySaleCard's own badge already reads.
+    invoiceEmailedAt: string | null;
   }[];
   // Other artists this same email address also buys from — computed live
   // by matching, not an explicit link (2026-08-13 decision: separate
@@ -216,6 +220,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
         status: p.status,
         channel: p.channel,
         createdAt: p.createdAt.toISOString(),
+        invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
       };
     }),
     alsoCustomerOf,
