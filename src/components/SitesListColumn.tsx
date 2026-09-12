@@ -89,6 +89,7 @@ export default function SitesListColumn({
   status,
   selectedId = null,
   liveSearch = true,
+  basePath = "/sites",
 }: {
   sites: SiteRow[];
   q: string;
@@ -105,6 +106,13 @@ export default function SitesListColumn({
   // navigation at all. That's what stops a search there from ever
   // knocking you off the site you're currently editing.
   liveSearch?: boolean;
+  // Where each row links to (2026-09-12) — defaults to the per-site
+  // Profile/Settings page ("/sites/[id]"), same as always. The
+  // Administration → Clients admin page reuses this exact list/search/
+  // sort UI but wants each row to open the stripped-down admin view
+  // instead ("/clients/[id]"), so it passes basePath="/clients" rather
+  // than this component growing a second, near-identical list.
+  basePath?: string;
 }) {
   const router = useRouter();
 
@@ -356,7 +364,7 @@ export default function SitesListColumn({
               return (
                 <li key={site.id}>
                   <Link
-                    href={`/sites/${site.id}`}
+                    href={`${basePath}/${site.id}`}
                     prefetch={false}
                     className={`flex items-center justify-between gap-2 px-4 py-2 text-xs text-neutral-800 ${
                       active ? "bg-[#E7E7E7]" : "hover:bg-neutral-50"
