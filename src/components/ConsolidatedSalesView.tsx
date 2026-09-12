@@ -175,12 +175,19 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
             <table className="w-full table-fixed border-t border-neutral-100 text-xs">
               <thead className="bg-neutral-50 text-left text-neutral-400">
                 <tr>
-                  <th className="w-[18%] px-4 py-1.5 font-medium">Artist</th>
-                  <th className="w-[24%] px-4 py-1.5 font-medium">Artwork</th>
-                  <th className="w-[18%] px-4 py-1.5 font-medium">Buyer</th>
-                  <th className="w-[14%] px-4 py-1.5 font-medium">Date</th>
-                  <th className="w-[16%] px-4 py-1.5 font-medium">Amount</th>
-                  <th className="w-[10%] px-4 py-1.5 font-medium">Status</th>
+                  {/* Rebalanced (2026-09-12) — Status was 10% and
+                      "Invoice sent" wrapped onto two lines. Widening the
+                      whole page just spaced every column out further
+                      without helping Status specifically, so instead
+                      Artist/Artwork/Buyer/Date/Amount are each tightened
+                      a little (also px-3 not px-4) and that room goes to
+                      Status. */}
+                  <th className="w-[15%] px-3 py-1.5 font-medium">Artist</th>
+                  <th className="w-[20%] px-3 py-1.5 font-medium">Artwork</th>
+                  <th className="w-[15%] px-3 py-1.5 font-medium">Buyer</th>
+                  <th className="w-[12%] px-3 py-1.5 font-medium">Date</th>
+                  <th className="w-[14%] px-3 py-1.5 font-medium">Amount</th>
+                  <th className="w-[24%] px-3 py-1.5 font-medium">Status</th>
                 </tr>
               </thead>
               <tbody>
@@ -190,10 +197,10 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
                     onClick={() => openRow(r)}
                     className="cursor-pointer border-t border-neutral-100 hover:bg-neutral-50"
                   >
-                    <td className="truncate px-4 py-1.5">{r.artistName}</td>
-                    <td className="truncate px-4 py-1.5">{r.artworkTitle}</td>
-                    <td className="truncate px-4 py-1.5 text-neutral-500">{r.buyerName || "—"}</td>
-                    <td className="px-4 py-1.5">
+                    <td className="truncate px-3 py-1.5">{r.artistName}</td>
+                    <td className="truncate px-3 py-1.5">{r.artworkTitle}</td>
+                    <td className="truncate px-3 py-1.5 text-neutral-500">{r.buyerName || "—"}</td>
+                    <td className="whitespace-nowrap px-3 py-1.5">
                       {new Date(r.createdAt).toLocaleDateString("en-GB")}
                     </td>
                     {/* Commentary removed (2026-09-12 mockup) — was
@@ -204,10 +211,10 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
                         promises this column shows; gross/commission are
                         still on the underlying row (and on the sale's
                         own detail card) for anyone who needs them. */}
-                    <td className="whitespace-nowrap px-4 py-1.5">
+                    <td className="whitespace-nowrap px-3 py-1.5">
                       {r.currency} {r.netAmount.toFixed(2)}
                     </td>
-                    <td className="px-4 py-1.5">
+                    <td className="whitespace-nowrap px-3 py-1.5">
                       {/* Shared badge (2026-09-12) — was its own
                           hand-rolled coloured text here (STATUS_STYLE
                           lookup), the one place on this page that didn't
