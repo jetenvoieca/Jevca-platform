@@ -101,86 +101,12 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
   revalidatePath(`/clients/${id}`);
 }
 
-// ---- Shared FormData builders for updateSite / updateArtist ----
-//
-// Neither action above is a true partial update (aside from the two
-// conditional fields noted on updateArtist) — every call is expected to
-// resubmit every field, changed or not, or the ones left out get wiped
-// back to empty. That was fine when one component (the old
-// SiteSettingsPanel) built the whole form in one place. Now that the
-// Owner/Domain/Subscription/Hopper Token fields are split into their own
-// small, reusable cards — shared between the per-site "Profile" page and
-// the Administration → Clients page (2026-09-12) — each card still needs
-// to resubmit every other field unchanged when it saves its own. These
-// two builders are the one place that knows the full field list, so that
-// never has to be copied into each card.
-
-export type ArtistFormFields = {
-  name: string;
-  firstName: string;
-  email: string;
-  phone: string;
-  notes: string;
-  subscriptionAmount: string;
-  paymentMethod: string;
-  addressLine1: string;
-  city: string;
-  postcode: string;
-  country: string;
-  vatNumber: string;
-  vatRate: string;
-  invoiceFooterText: string;
-  invoiceLanguage: string;
-};
-
-export function buildArtistFormData(
-  base: ArtistFormFields,
-  changes: Partial<ArtistFormFields> & { nextInvoiceNumber?: string; emailSlug?: string }
-): FormData {
-  const merged = { ...base, ...changes };
-  const fd = new FormData();
-  fd.set("name", merged.name);
-  fd.set("firstName", merged.firstName);
-  fd.set("email", merged.email);
-  fd.set("phone", merged.phone);
-  fd.set("notes", merged.notes);
-  fd.set("subscriptionAmount", merged.subscriptionAmount);
-  fd.set("paymentMethod", merged.paymentMethod);
-  fd.set("addressLine1", merged.addressLine1);
-  fd.set("city", merged.city);
-  fd.set("postcode", merged.postcode);
-  fd.set("country", merged.country);
-  fd.set("vatNumber", merged.vatNumber);
-  fd.set("vatRate", merged.vatRate);
-  fd.set("invoiceFooterText", merged.invoiceFooterText);
-  fd.set("invoiceLanguage", merged.invoiceLanguage);
-  // Left off entirely unless actually being changed — mirrors the
-  // conditional reads in updateArtist below.
-  if (changes.nextInvoiceNumber) fd.set("nextInvoiceNumber", changes.nextInvoiceNumber);
-  if (changes.emailSlug) fd.set("emailSlug", changes.emailSlug);
-  return fd;
-}
-
-export type SiteFormFields = {
-  name: string;
-  domain: string;
-  defaultCurrency: string;
-  templateId: string;
-  domainStatus: string;
-  domainRenewalDate: string;
-};
-
-export function buildSiteFormData(base: SiteFormFields, changes: Partial<SiteFormFields>): FormData {
-  const merged = { ...base, ...changes };
-  const fd = new FormData();
-  fd.set("name", merged.name);
-  fd.set("domain", merged.domain);
-  fd.set("defaultCurrency", merged.defaultCurrency);
-  fd.set("templateId", merged.templateId);
-  fd.set("domainStatus", merged.domainStatus);
-  fd.set("domainRenewalDate", merged.domainRenewalDate);
-  return fd;
-}
+// Shared FormData builders for updateSite/updateArtist (buildArtistFormData,
+// buildSiteFormData) now live in lib/clientPanelTypes.ts, not here —
+// Next.js requires every export from a "use server" file (this one) to
+// be an async Server Action, and Turbopack rejected these two plain
+// synchronous helpers when they briefly lived in this file (2026-09-12
+// build fix).
 
 // ---- Edit Owner (Artist) details ----
 
