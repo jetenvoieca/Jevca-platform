@@ -286,7 +286,6 @@ type ListFilters = {
   // Settings-editable Tier dropdown (2026-09-07) — see Artist.artworkTiers
   // in schema.prisma and the matching field on ArtworkFilterInput.
   tier?: string;
-  sort?: string;
   // Pagination — added 2026-08-11 once the catalogue reached real size
   // (~150 artworks after the CSV import). Previously fetched every
   // matching row unconditionally, every time, the same issue already
@@ -321,7 +320,7 @@ export async function countArtworksNeedingReview(artistId: string): Promise<numb
 export async function listArtworks(artistId: string, filters: ListFilters) {
   const { offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
 
-  const orderBy = buildArtworkOrderBy(filters.sort);
+  const orderBy = buildArtworkOrderBy();
   const where = buildArtworkWhere(artistId, filters);
 
   const [rows, total, soldCount] = await Promise.all([
