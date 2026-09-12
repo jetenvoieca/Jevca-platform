@@ -232,14 +232,23 @@ export default function MediaDetailPanel({
           />
         </div>
 
-        {/* Related Artwork dropdown removed 2026-08-19, direct request —
-            this set the exact same field an artwork's own Related
-            Images picker does, just from the other direction, which
-            risked feeling like a second, meaningful-looking way to
-            manage the same relationship when it was really just a
-            confusing shortcut. Linking now only happens by actually
-            adding this image to an artwork from that artwork's own
-            editor. */}
+        {/* Related to (2026-09-12, direct request) — read-only display of
+            which artwork this item is linked to. Not editable here: that
+            decision was reconsidered from the original screenshot ask on
+            purpose — changing the link still only happens from the
+            artwork's own Related Images picker (see the removal note
+            this replaces, dated 2026-08-19), so there's still only one
+            place that relationship actually gets edited. Only rendered
+            when a link exists, so plain Marketing media (never linked to
+            an artwork) doesn't show an empty field. */}
+        {media.artwork && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Related to</label>
+            <p className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+              {media.artwork.presentationTitle}
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
