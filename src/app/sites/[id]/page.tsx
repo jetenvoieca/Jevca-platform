@@ -5,7 +5,6 @@ import SiteSettingsPanel from "@/components/SiteSettingsPanel";
 import SitesListColumn from "@/components/SitesListColumn";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 import { getCertificateTemplates } from "@/lib/actions/certificateSettings";
-import { getTemplatesForDirectory } from "@/lib/actions/templates";
 
 export const dynamic = "force-dynamic";
 
@@ -35,11 +34,7 @@ export default async function SiteSettingsPage({
   const cookieStore = await cookies();
   const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
 
-  const [payments, allSites, certificateTemplates, templates] = await Promise.all([
-    db.subscriptionPayment.findMany({
-      where: { artistId: site.artistId },
-      orderBy: { paidAt: "desc" },
-    }),
+  const [allSites, certificateTemplates] = await Promise.all([
     // Kept deliberately simple (no search wiring) — this is the "jump to
     // another site without losing my place" list, not a replacement for
     // the full Sites list's filtering, which stays on "/" itself
@@ -62,10 +57,6 @@ export default async function SiteSettingsPage({
     // Certificate of Authenticity templates (2026-09-04) — see
     // CertificateTemplatesCard on the Financial tab below.
     getCertificateTemplates(site.artistId),
-    // The Templates library (2026-09-06) — populates the "Template"
-    // dropdown in SiteSettingsPanel, replacing the old hardcoded
-    // "Default" option. See src/lib/actions/templates.ts.
-    getTemplatesForDirectory(""),
   ]);
 
   return (
@@ -118,7 +109,8 @@ export default async function SiteSettingsPage({
             story: site.artist.story,
             signatureUrl: site.artist.signatureUrl,
             // This artist's own @jevca.art local part (2026-09-05, Email
-            // Integration) — see the Owner card in SiteSettingsPanel.
+            // Integration) — see the Owner card, now on the
+            // Administration → Clients admin page, not here.
             emailSlug: site.artist.emailSlug,
             // Payment plan defaults (2026-09-07) — moved here from the
             // Artwork Catalogue's own Settings page: these are financial
@@ -129,25 +121,6 @@ export default async function SiteSettingsPage({
             defaultReleaseTriggerCount: site.artist.defaultReleaseTriggerCount,
           }}
           certificateTemplates={certificateTemplates}
-          templates={templates.map((t) => ({ id: t.id, name: t.name }))}
-          subscriptionPayments={payments.map((p) => ({
-            id: p.id,
-            source: p.source as "STRIPE" | "MANUAL",
-            amount: p.amount.toString(),
-            currency: p.currency,
-            // 2026-08-19 fix — was `p.paidAt.toISOString()` unguarded,
-            // which throws for a genuinely invalid Date rather than
-            // returning anything. One bad row (root cause fixed in
-            // addManualSubscriptionPayment, but this guards against any
-            // that already exist) was enough to crash this entire page
-            // for that artist — no way to even load Settings to delete
-            // the bad row and fix it. Falls back to "" here, which the
-            // display side's `new Date(p.paidAt).toLocaleDateString()`
-            // already renders as the harmless text "Invalid Date" rather
-            // than crashing — letting the row actually show up so it can
-            // be deleted, instead of taking the whole page down with it.
-            paidAt: Number.isNaN(p.paidAt.getTime()) ? "" : p.paidAt.toISOString(),
-          }))}
         />
       </div>
       <div className="h-full w-[300px] shrink-0 overflow-y-auto border-l border-neutral-200">
