@@ -222,258 +222,262 @@ export default function MediaCatalogueView({
 
   return (
     <div className="px-6 py-4">
-      <div className="grid items-start gap-6" style={{ gridTemplateColumns: "1fr 480px" }}>
-        <div>
-          {/* Sticky, per the standing "fixed headers, independently-
-              scrolling columns" layout rule (2026-08-03) — never actually
-              applied here before. Only this left track needs it; the
-              detail panel on the right already has its own sticky
-              treatment below. No negative-margin full-bleed trick here
-              (unlike the Video Editor's single-column header) since this
-              sits inside a two-column grid — extending edge-to-edge would
-              overlap the detail panel column. */}
-          <div className="sticky top-0 z-10 -mt-4 space-y-3 border-b border-neutral-200 bg-white pb-3 pt-4">
-          {/* Row 1: title + view controls — same pattern as the Artwork
-              Catalogue, both govern how the whole catalogue displays. */}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
+      <div>
+        {/* Sticky, per the standing "fixed headers, independently-
+            scrolling columns" layout rule (2026-08-03). */}
+        <div className="sticky top-0 z-10 -mt-4 space-y-3 border-b border-neutral-200 bg-white pb-3 pt-4">
+        {/* Row 1: title + view controls — same pattern as the Artwork
+            Catalogue, both govern how the whole catalogue displays. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
 
-            <div className="flex items-center gap-3">
-              <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                <button
-                  type="button"
-                  onClick={() => setView("tile")}
-                  className={`px-3 py-1.5 ${
-                    view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                  }`}
-                >
-                  Tile
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("list")}
-                  className={`px-3 py-1.5 ${
-                    view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                  }`}
-                >
-                  List
-                </button>
-              </div>
-
-              {view === "tile" && (
-                <div className="flex items-center gap-1 text-sm text-neutral-500">
-                  <span>Per row</span>
-                  {DENSITY_OPTIONS.map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setDensityAndStore(n)}
-                      className={`h-7 w-7 rounded-md text-sm ${
-                        density === n
-                          ? "bg-neutral-900 text-white"
-                          : "border border-neutral-300 hover:bg-neutral-50"
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              )}
+          <div className="flex items-center gap-3">
+            <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+              <button
+                type="button"
+                onClick={() => setView("tile")}
+                className={`px-3 py-1.5 ${
+                  view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                }`}
+              >
+                Tile
+              </button>
+              <button
+                type="button"
+                onClick={() => setView("list")}
+                className={`px-3 py-1.5 ${
+                  view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                }`}
+              >
+                List
+              </button>
             </div>
+
+            {view === "tile" && (
+              <div className="flex items-center gap-1 text-sm text-neutral-500">
+                <span>Per row</span>
+                {DENSITY_OPTIONS.map((n) => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setDensityAndStore(n)}
+                    className={`h-7 w-7 rounded-md text-sm ${
+                      density === n
+                        ? "bg-neutral-900 text-white"
+                        : "border border-neutral-300 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Row 2: Marketing/Related toggle + filtering. */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
+            <Link
+              href={toggleHref("marketing")}
+              className={`px-4 py-1.5 ${
+                purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+              }`}
+            >
+              Marketing
+            </Link>
+            <Link
+              href={toggleHref("related")}
+              className={`px-4 py-1.5 font-medium ${
+                purpose === "related"
+                  ? "bg-neutral-900 text-white"
+                  : "bg-rose-100 text-rose-700 hover:bg-rose-200"
+              }`}
+            >
+              Related ({counts.related})
+            </Link>
           </div>
 
-          {/* Row 2: Marketing/Related toggle + filtering. */}
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
-              <Link
-                href={toggleHref("marketing")}
-                className={`px-4 py-1.5 ${
-                  purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                }`}
-              >
-                Marketing
-              </Link>
-              <Link
-                href={toggleHref("related")}
-                className={`px-4 py-1.5 font-medium ${
-                  purpose === "related"
-                    ? "bg-neutral-900 text-white"
-                    : "bg-rose-100 text-rose-700 hover:bg-rose-200"
-                }`}
-              >
-                Related ({counts.related})
-              </Link>
-            </div>
-
-            <form method="get" className="flex flex-wrap items-center gap-2">
-              <input type="hidden" name="purpose" value={purpose} />
-              <input
-                type="text"
-                name="q"
-                defaultValue={q}
-                placeholder="Search caption, alt text"
-                className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
-              />
-              {purpose === "marketing" ? (
-                <select
-                  name="tag"
-                  defaultValue={tag}
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="">All tags</option>
-                  {tagPresets.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <select
-                  name="artworkId"
-                  defaultValue={artworkId}
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-                >
-                  <option value="">All artworks</option>
-                  {artistArtworks.map((a) => (
-                    <option key={a.id} value={a.id}>
-                      {a.presentationTitle}
-                    </option>
-                  ))}
-                </select>
-              )}
+          <form method="get" className="flex flex-wrap items-center gap-2">
+            <input type="hidden" name="purpose" value={purpose} />
+            <input
+              type="text"
+              name="q"
+              defaultValue={q}
+              placeholder="Search caption, alt text"
+              className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
+            />
+            {purpose === "marketing" ? (
               <select
-                name="sort"
-                defaultValue={sort}
+                name="tag"
+                defaultValue={tag}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
-                <option value="">Sort: Date added</option>
-                <option value="caption">Sort: Caption</option>
+                <option value="">All tags</option>
+                {tagPresets.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
               </select>
-              <button
-                type="submit"
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+            ) : (
+              <select
+                name="artworkId"
+                defaultValue={artworkId}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
-                Apply
-              </button>
-            </form>
-          </div>
-          </div>
-
-          <p className="mb-3 mt-3 text-sm text-neutral-400">
-            {items.length} of {total} item{total === 1 ? "" : "s"}
-          </p>
-
-          {view === "tile" ? (
-            <div
-              className="grid gap-3"
-              style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
+                <option value="">All artworks</option>
+                {artistArtworks.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.presentationTitle}
+                  </option>
+                ))}
+              </select>
+            )}
+            <select
+              name="sort"
+              defaultValue={sort}
+              className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
             >
+              <option value="">Sort: Date added</option>
+              <option value="caption">Sort: Caption</option>
+            </select>
+            <button
+              type="submit"
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+            >
+              Apply
+            </button>
+          </form>
+        </div>
+        </div>
+
+        <p className="mb-3 mt-3 text-sm text-neutral-400">
+          {items.length} of {total} item{total === 1 ? "" : "s"}
+        </p>
+
+        {view === "tile" ? (
+          <div
+            className="grid gap-3"
+            style={{ gridTemplateColumns: `repeat(${density}, minmax(0, 1fr))` }}
+          >
+            {items.map((m) => (
+              <button
+                key={m.id}
+                type="button"
+                onClick={() => handleSelect(m.id)}
+                disabled={selectingId === m.id}
+                className={`block w-full rounded-md border-2 p-1 text-left ${
+                  selected?.id === m.id ? "border-neutral-900" : "border-transparent"
+                } ${selectingId === m.id ? "opacity-60" : ""}`}
+              >
+                {m.kind === "VIDEO" ? (
+                  <div className="relative">
+                    {m.posterUrl ? (
+                      <img
+                        src={m.posterUrl}
+                        alt=""
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                    ) : (
+                      <VideoThumb
+                        src={m.url}
+                        className="aspect-square w-full rounded-md object-cover"
+                      />
+                    )}
+                    <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+                      ▶ Video
+                    </span>
+                  </div>
+                ) : (
+                  <img
+                    src={m.url}
+                    alt=""
+                    className="aspect-square w-full rounded-md object-cover"
+                  />
+                )}
+                <p className="mt-1 truncate text-sm font-medium text-neutral-900">
+                  {m.caption || "Untitled"}
+                </p>
+                {m.artwork && (
+                  <p className="truncate text-xs font-medium text-rose-600">
+                    → {m.artwork.presentationTitle}
+                  </p>
+                )}
+              </button>
+            ))}
+            <AddNewTile siteId={siteId} />
+          </div>
+        ) : (
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="border-b border-neutral-200 text-left text-neutral-500">
+                <th className="py-2 font-medium"></th>
+                <th className="py-2 font-medium">Caption</th>
+                <th className="py-2 font-medium">Kind</th>
+                <th className="py-2 font-medium">Related Artwork</th>
+              </tr>
+            </thead>
+            <tbody>
               {items.map((m) => (
-                <button
+                <tr
                   key={m.id}
-                  type="button"
                   onClick={() => handleSelect(m.id)}
-                  disabled={selectingId === m.id}
-                  className={`block w-full rounded-md border-2 p-1 text-left ${
-                    selected?.id === m.id ? "border-neutral-900" : "border-transparent"
+                  className={`cursor-pointer border-b border-neutral-100 ${
+                    selected?.id === m.id ? "bg-neutral-100" : "hover:bg-neutral-50"
                   } ${selectingId === m.id ? "opacity-60" : ""}`}
                 >
-                  {m.kind === "VIDEO" ? (
-                    <div className="relative">
-                      {m.posterUrl ? (
+                  <td className="py-2">
+                    {m.kind === "VIDEO" ? (
+                      m.posterUrl ? (
                         <img
                           src={m.posterUrl}
                           alt=""
-                          className="aspect-square w-full rounded-md object-cover"
+                          className="h-10 w-10 rounded object-cover"
                         />
                       ) : (
-                        <VideoThumb
-                          src={m.url}
-                          className="aspect-square w-full rounded-md object-cover"
-                        />
-                      )}
-                      <span className="absolute bottom-1.5 right-1.5 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
-                        ▶ Video
-                      </span>
-                    </div>
-                  ) : (
-                    <img
-                      src={m.url}
-                      alt=""
-                      className="aspect-square w-full rounded-md object-cover"
-                    />
-                  )}
-                  <p className="mt-1 truncate text-sm font-medium text-neutral-900">
-                    {m.caption || "Untitled"}
-                  </p>
-                  {m.artwork && (
-                    <p className="truncate text-xs font-medium text-rose-600">
-                      → {m.artwork.presentationTitle}
-                    </p>
-                  )}
-                </button>
-              ))}
-              <AddNewTile siteId={siteId} />
-            </div>
-          ) : (
-            <table className="w-full border-collapse text-sm">
-              <thead>
-                <tr className="border-b border-neutral-200 text-left text-neutral-500">
-                  <th className="py-2 font-medium"></th>
-                  <th className="py-2 font-medium">Caption</th>
-                  <th className="py-2 font-medium">Kind</th>
-                  <th className="py-2 font-medium">Related Artwork</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((m) => (
-                  <tr
-                    key={m.id}
-                    onClick={() => handleSelect(m.id)}
-                    className={`cursor-pointer border-b border-neutral-100 ${
-                      selected?.id === m.id ? "bg-neutral-100" : "hover:bg-neutral-50"
-                    } ${selectingId === m.id ? "opacity-60" : ""}`}
-                  >
-                    <td className="py-2">
-                      {m.kind === "VIDEO" ? (
-                        m.posterUrl ? (
-                          <img
-                            src={m.posterUrl}
-                            alt=""
-                            className="h-10 w-10 rounded object-cover"
-                          />
-                        ) : (
-                          <VideoThumb src={m.url} className="h-10 w-10 rounded object-cover" />
-                        )
-                      ) : (
-                        <img src={m.url} alt="" className="h-10 w-10 rounded object-cover" />
-                      )}
-                    </td>
-                    <td className="py-2 font-medium text-neutral-900">{m.caption || "Untitled"}</td>
-                    <td className="py-2 text-neutral-500">{m.kind === "VIDEO" ? "Video" : "Photo"}</td>
-                    <td className="py-2 text-rose-600">
-                      {m.artwork ? m.artwork.presentationTitle : "—"}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="border-b border-neutral-100">
-                  <td colSpan={4} className="py-2">
-                    <AddNewRow siteId={siteId} />
+                        <VideoThumb src={m.url} className="h-10 w-10 rounded object-cover" />
+                      )
+                    ) : (
+                      <img src={m.url} alt="" className="h-10 w-10 rounded object-cover" />
+                    )}
+                  </td>
+                  <td className="py-2 font-medium text-neutral-900">{m.caption || "Untitled"}</td>
+                  <td className="py-2 text-neutral-500">{m.kind === "VIDEO" ? "Video" : "Photo"}</td>
+                  <td className="py-2 text-rose-600">
+                    {m.artwork ? m.artwork.presentationTitle : "—"}
                   </td>
                 </tr>
-              </tbody>
-            </table>
-          )}
+              ))}
+              <tr className="border-b border-neutral-100">
+                <td colSpan={4} className="py-2">
+                  <AddNewRow siteId={siteId} />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        )}
 
-          {hasMore && (
-            <div ref={sentinelRef} className="mt-4 flex h-8 items-center justify-center">
-              {loadingMore && <span className="text-sm text-neutral-400">Loading…</span>}
-            </div>
-          )}
-        </div>
+        {hasMore && (
+          <div ref={sentinelRef} className="mt-4 flex h-8 items-center justify-center">
+            {loadingMore && <span className="text-sm text-neutral-400">Loading…</span>}
+          </div>
+        )}
+      </div>
 
-        <div className="sticky top-4">
-          {selected ? (
+      {/* Details panel is a modal (2026-09-12, direct request) — it used
+          to live permanently docked in a second grid column. Clicking
+          the backdrop closes it; the panel itself stops that click from
+          bubbling so clicks inside it don't close it. */}
+      {selected && (
+        <div
+          className="fixed inset-0 z-40 flex justify-end bg-black/40 p-4"
+          onClick={handleClose}
+        >
+          <div
+            className="h-full w-full max-w-[480px] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
             <MediaDetailPanel
               key={selected.id}
               siteId={siteId}
@@ -483,13 +487,9 @@ export default function MediaCatalogueView({
               onArchived={handleArchived}
               onDataChanged={refreshSelected}
             />
-          ) : (
-            <div className="rounded-lg border border-dashed border-neutral-300 p-6 text-center text-sm text-neutral-400">
-              Select an item to see its details.
-            </div>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -522,4 +522,3 @@ function AddNewRow({ siteId }: { siteId: string }) {
     </Link>
   );
 }
-

@@ -2,7 +2,6 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
 import { updateMedia, deleteMedia } from "@/lib/actions/mediaCatalogue";
 import { addMediaToBucket } from "@/lib/actions/videoEditor";
 
@@ -39,7 +38,7 @@ export default function MediaDetailPanel({
   // Optional — when the parent manages selection as client-side state
   // (Media Catalogue, 2026-08-08 perf pass) it passes these to update its
   // own state directly instead of a full-page navigation. Falls back to
-  // the old Link/router.push behaviour when not provided.
+  // the old router.push behaviour when not provided.
   onClose?: () => void;
   onArchived?: () => void;
   // Called after a successful save (2026-08-11) instead of
@@ -56,6 +55,11 @@ export default function MediaDetailPanel({
   const [videoPlaying, setVideoPlaying] = useState(false);
   const [tags, setTags] = useState<string[]>(media.tags);
   const router = useRouter();
+
+  const handleClose = () => {
+    if (onClose) onClose();
+    else router.push(`/sites/${siteId}/media`);
+  };
 
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const handleDelete = () => {
@@ -117,18 +121,20 @@ export default function MediaDetailPanel({
               {deleteError && (
                 <p className="w-full text-xs text-red-600">{deleteError}</p>
               )}
-              <Link
-                href={`/sites/${siteId}/media`}
-                onClick={(e) => {
-                  if (onClose) {
-                    e.preventDefault();
-                    onClose();
-                  }
-                }}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              {/* Modal close (2026-09-12, direct request) — an icon
+                  reads as "dismiss this overlay" the way a text link
+                  labelled "Close" doesn't, and matches the click-outside
+                  behaviour the panel now also has. */}
+              <button
+                type="button"
+                onClick={handleClose}
+                aria-label="Close"
+                className="rounded-md border border-neutral-300 p-1.5 hover:bg-neutral-50"
               >
-                Close
-              </Link>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
             </div>
           </div>
           {bucketError && <p className="mt-2 text-xs text-red-600">{bucketError}</p>}
@@ -320,5 +326,3 @@ export default function MediaDetailPanel({
     </div>
   );
 }
-
-
