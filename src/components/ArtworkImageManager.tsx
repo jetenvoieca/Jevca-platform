@@ -30,9 +30,8 @@ export type ArtworkImage = {
 // now: the artwork's very first image becomes Main automatically (see
 // the auto-assign note on linkImagesToArtwork in actions/artworks.ts),
 // or a wrong one is fixed via "Delete & Replace" below — which deletes
-// it outright, then opens SetMainFromHopperModal, a limited window onto
-// the Hopper (just the newest incoming image, and one action: make it
-// this artwork's new Main) rather than a full page navigation.
+// it outright, then opens SetMainFromHopperModal to upload its
+// replacement directly, right there, rather than a full page navigation.
 //
 // Because the grid is now four fixed positions rather than a free-
 // flowing, reorderable list, the old pointer-based drag-to-reorder is
@@ -135,14 +134,12 @@ export default function ArtworkImageManager({
   // "Delete & Replace" (2026-09-13, direct request) — the only way left
   // to fix a wrong Main image. Deletes it outright (not just unlinks —
   // see deleteArtworkMainImage in actions/artworks.ts), then opens
-  // SetMainFromHopperModal so its replacement can be picked from the
-  // Hopper without leaving this panel.
+  // SetMainFromHopperModal so its replacement can be uploaded directly,
+  // without leaving this panel.
   const handleDeleteAndReplace = () => {
     if (!mainImage) return;
     if (
-      !confirm(
-        "Delete this image? You'll be shown the Hopper's next incoming image to set as its replacement."
-      )
+      !confirm("Delete this image? You'll be able to upload its replacement right away.")
     )
       return;
     setBusy(true);
