@@ -17,6 +17,7 @@ import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
+import HopperItemPreview from "@/components/HopperItemPreview";
 import { computeReferencePrice } from "@/lib/pricing";
 
 export type HopperItem = {
@@ -1010,24 +1011,9 @@ function SortingCard({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      <p className="mb-3 text-xs text-neutral-400">
-        Received {new Date(item.createdAt).toLocaleString()}
-      </p>
-
-      {item.kind === "VIDEO" ? (
-        <video
-          src={item.url}
-          poster={item.posterUrl || undefined}
-          controls
-          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
-        />
-      ) : (
-        <img
-          src={item.url}
-          alt=""
-          className="mb-4 max-h-[480px] w-full rounded-md bg-neutral-50 object-contain"
-        />
-      )}
+      {/* Shared with SetMainFromHopperModal.tsx (Delete & Replace) —
+          see the note on HopperItemPreview.tsx, 2026-09-13. */}
+      <HopperItemPreview item={item} />
 
       {/* No Name/Description fields at this stage any more (2026-09-13,
           direct request — "no name or description at this stage").
