@@ -330,16 +330,32 @@ export default function HopperView({
     });
   };
 
-  // Existing artwork → always ancillary, never touches that artwork's
-  // main image (per 2026-08-05 decision — changing an existing artwork's
-  // main image is a separate action). Button renamed "Manage Artwork"
-  // (2026-09-13, direct request) — its behaviour here is unchanged for
-  // now; the fuller "choose Main or Related, name the related image"
-  // form is a separate, later step.
-  const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
+  // Existing artwork, either as Main or Related (2026-09-13, reworked
+  // per direct spec — was always ancillary/never touched Main). Main
+  // reuses addHopperItemToArtwork's existing setAsMain flag; Related
+  // now also carries an optional name straight onto the image's own
+  // caption (see the matching note on addHopperItemToArtwork in
+  // hopper.ts), rather than there being no way to name it at all.
+  const handleManageArtwork = (
+    item: HopperItem,
+    artworkId: string,
+    artworkTitle: string,
+    mode: "main" | "related",
+    relatedName: string
+  ) => {
     startTransition(async () => {
-      await addHopperItemToArtwork(item.id, siteId, artworkId, false);
-      logProcessed(item, `Linked to ${artworkTitle}`, `${resolvedBasePath}/artworks?selected=${artworkId}`);
+      await addHopperItemToArtwork(
+        item.id,
+        siteId,
+        artworkId,
+        mode === "main",
+        mode === "related" ? relatedName.trim() || null : null
+      );
+      logProcessed(
+        item,
+        mode === "main" ? `Set as main image for ${artworkTitle}` : `Linked to ${artworkTitle}`,
+        `${resolvedBasePath}/artworks?selected=${artworkId}`
+      );
       advanceAfterAction();
     });
   };
@@ -815,8 +831,8 @@ export default function HopperView({
                 onBin={() => handleBin(current)}
                 onAddToMedia={() => handleAddToMedia(current)}
                 onAddToBucket={() => handleAddToBucket(current)}
-                onAddToExistingArtwork={(artworkId, artworkTitle) =>
-                  handleAddToExistingArtwork(current, artworkId, artworkTitle)
+                onManageArtwork={(artworkId, artworkTitle, mode, relatedName) =>
+                  handleManageArtwork(current, artworkId, artworkTitle, mode, relatedName)
                 }
                 onAddNewArtwork={(fields) => handleAddNewArtwork(current, fields)}
               />
@@ -953,7 +969,7 @@ function SortingCard({
   onBin,
   onAddToMedia,
   onAddToBucket,
-  onAddToExistingArtwork,
+  onManageArtwork,
   onAddNewArtwork,
 }: {
   siteId: string;
@@ -964,7 +980,16 @@ function SortingCard({
   onBin: () => void;
   onAddToMedia: () => void;
   onAddToBucket: () => void;
-  onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
+  // Fires once, from ManageArtworkPanel's "Done, next item" (2026-09-13,
+  // reworked — was a single immediate call the moment an artwork was
+  // picked, always Related; see the note on addHopperItemToArtwork in
+  // hopper.ts for what mode/relatedName now do).
+  onManageArtwork: (
+    artworkId: string,
+    artworkTitle: string,
+    mode: "main" | "related",
+    relatedName: string
+  ) => void;
   // Fires once, from the quick-catalogue form's "Done, next item" — the
   // form itself now collects Name (as `catalogueName`) alongside every
   // other Catalogue field, so there's nothing to pass alongside it
@@ -973,13 +998,15 @@ function SortingCard({
   // "no name or description at this stage").
   onAddNewArtwork: (fields: FormData) => Promise<boolean>;
 }) {
-  // Whether the inline "quick catalogue" form is open. Nothing is created
-  // in the database just by opening it (2026-08-18) — closing it again,
-  // whether via Cancel or by picking a different action button entirely,
-  // discards whatever was typed with no cleanup needed, since nothing was
-  // ever saved.
+  // Whether either inline form is open. Nothing is created/changed in
+  // the database just by opening either one (2026-08-18 pattern, now
+  // shared by both) — closing again, whether via Cancel or by picking a
+  // different action button entirely, discards whatever was
+  // selected/typed with no cleanup needed, since nothing was ever saved.
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
+  const [showManageForm, setShowManageForm] = useState(false);
+  const [managingArtwork, setManagingArtwork] = useState(false);
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
@@ -1041,33 +1068,52 @@ function SortingCard({
           Add to Bucket
         </button>
         {/* Renamed from "Add to Existing Artwork" (2026-09-13, direct
-            request). Behaviour unchanged for now — always links as a
-            Related image, never touches Main (see
-            onAddToExistingArtwork above). A fuller Main/Related form
-            behind this button is a separate, later step. */}
-        <ArtworkPicker
-          artistId={artistId}
-          mode="single"
-          variant="button"
-          label="Manage Artwork"
-          onSelect={(artworks) => {
-            if (artworks[0]) {
-              onAddToExistingArtwork(artworks[0].id, artworks[0].presentationTitle);
-            }
+            request), and reworked from an immediate action into an
+            inline form (see ManageArtworkPanel below) — picking an
+            artwork no longer links it on the spot; Main/Related and
+            (for Related) a name are chosen first, then "Done, next
+            item" commits everything together, same one-shot pattern as
+            Create new artwork. */}
+        <button
+          type="button"
+          onClick={() => {
+            setShowManageForm(true);
+            setShowQuickForm(false);
           }}
-        />
+          disabled={isPending || showManageForm}
+          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+        >
+          Manage Artwork
+        </button>
         {/* Renamed from "Add Artwork" (2026-09-13, direct request).
             Opens the form below; nothing is saved to the database until
             "Done, next item" inside it. */}
         <button
           type="button"
-          onClick={() => setShowQuickForm(true)}
+          onClick={() => {
+            setShowQuickForm(true);
+            setShowManageForm(false);
+          }}
           disabled={isPending || showQuickForm}
           className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
         >
           Create new artwork
         </button>
       </div>
+
+      {showManageForm && (
+        <ManageArtworkPanel
+          artistId={artistId}
+          managing={managingArtwork}
+          onCancel={() => setShowManageForm(false)}
+          onDone={async (artworkId, artworkTitle, mode, relatedName) => {
+            setManagingArtwork(true);
+            onManageArtwork(artworkId, artworkTitle, mode, relatedName);
+            setManagingArtwork(false);
+            setShowManageForm(false);
+          }}
+        />
+      )}
 
       {/* Inline "quick catalogue" fields (2026-08-18, reworked to a true
           one-shot flow per direct request; 2026-09-13, reworked again to
@@ -1098,6 +1144,130 @@ function SortingCard({
           }}
         />
       )}
+    </div>
+  );
+}
+
+// "Manage Artwork" (2026-09-13, direct request — replaces an instant
+// pick-and-link with a proper choice): pick an existing artwork
+// (ArtworkPicker's own searchable modal, reused as-is rather than a
+// plain <select> — the artist's real catalogue can run into the
+// hundreds, where a flat dropdown of names stops being usable but a
+// search box doesn't), then say whether this image becomes that
+// artwork's Main image or an ancillary Related one — Related also asks
+// for a name, saved onto the image's own caption (see the matching note
+// on addHopperItemToArtwork in hopper.ts). Nothing happens until "Done,
+// next item"; Cancel (or picking a different action button instead)
+// discards the in-progress choice with nothing to clean up, since
+// nothing was ever saved — same one-shot pattern as
+// QuickCatalogueFields below.
+function ManageArtworkPanel({
+  artistId,
+  managing,
+  onCancel,
+  onDone,
+}: {
+  artistId: string;
+  managing: boolean;
+  onCancel: () => void;
+  onDone: (
+    artworkId: string,
+    artworkTitle: string,
+    mode: "main" | "related",
+    relatedName: string
+  ) => void;
+}) {
+  const [selected, setSelected] = useState<{ id: string; presentationTitle: string } | null>(
+    null
+  );
+  const [mode, setMode] = useState<"main" | "related">("main");
+  const [relatedName, setRelatedName] = useState("");
+
+  return (
+    <div className="mt-4 space-y-4 rounded-md border border-neutral-300 p-4">
+      <div>
+        <label className="mb-1 block text-sm font-medium text-neutral-700">Name of artwork</label>
+        {selected ? (
+          <button
+            type="button"
+            onClick={() => setSelected(null)}
+            className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
+          >
+            {selected.presentationTitle}{" "}
+            <span className="text-neutral-400">(change)</span>
+          </button>
+        ) : (
+          <ArtworkPicker
+            artistId={artistId}
+            mode="single"
+            variant="button"
+            label="Choose artwork…"
+            onSelect={(artworks) => {
+              if (artworks[0]) {
+                setSelected({ id: artworks[0].id, presentationTitle: artworks[0].presentationTitle });
+              }
+            }}
+          />
+        )}
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          onClick={() => setMode("main")}
+          className={`flex-1 rounded-md border px-3 py-[6.4px] text-sm font-medium ${
+            mode === "main"
+              ? "border-neutral-900 bg-neutral-900 text-white"
+              : "border-neutral-300 hover:bg-neutral-50"
+          }`}
+        >
+          Make Main image
+        </button>
+        <button
+          type="button"
+          onClick={() => setMode("related")}
+          className={`flex-1 rounded-md border px-3 py-[6.4px] text-sm font-medium ${
+            mode === "related"
+              ? "border-neutral-900 bg-neutral-900 text-white"
+              : "border-neutral-300 hover:bg-neutral-50"
+          }`}
+        >
+          Make related image
+        </button>
+      </div>
+
+      {mode === "related" && (
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">
+            Name of Related image
+          </label>
+          <input
+            type="text"
+            value={relatedName}
+            onChange={(e) => setRelatedName(e.target.value)}
+            className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+          />
+        </div>
+      )}
+
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={() => selected && onDone(selected.id, selected.presentationTitle, mode, relatedName)}
+          disabled={!selected || managing}
+          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {managing ? "Saving…" : "Done, next item"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={managing}
+          className="text-sm text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }
