@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import MediaPicker from "@/components/MediaPicker";
 import VideoThumb from "@/components/VideoThumb";
-import { linkImagesToArtwork, unlinkImageFromArtwork, setMainImage } from "@/lib/actions/artworks";
+import { linkImagesToArtwork, unlinkImageFromArtwork, deleteArtworkMainImage } from "@/lib/actions/artworks";
 
 export type ArtworkImage = {
   id: string;
@@ -21,70 +21,79 @@ export type ArtworkImage = {
 // old two-per-row grid; the space to its right holds the fixed 2×2 mini
 // grid instead of a second big tile. Clicking any filled mini-grid tile
 // swaps it into the big preview — view-only, it doesn't change which
-// image is Main. Defaults to Main on load/whenever the active image is
-// removed.
+// image is Main.
+//
+// "Set as Main" removed entirely (2026-09-13, direct request) — Main is
+// the artwork's image of record, not something to be reassigned to an
+// already-linked image from in here. The only ways Main ever changes
+// now: the artwork's very first image becomes Main automatically (see
+// the auto-assign note on linkImagesToArtwork in actions/artworks.ts),
+// or a wrong one is fixed via "Delete & Replace" below, which deletes it
+// outright and immediately opens the picker for its replacement.
 //
 // Because the grid is now four fixed positions rather than a free-
 // flowing, reorderable list, the old pointer-based drag-to-reorder is
-// gone — promoting a different image to Main is now an explicit "Set as
-// Main" action shown on the big preview whenever it isn't already
-// showing the Main image, rather than a drag gesture.
-//
-// "Images & Videos" heading removed (2026-09-11, direct request) — the
-// section is visually obvious from the image grid itself; no label
-// needed above it.
+// gone.
 export default function ArtworkImageManager({
   artworkId,
   siteId,
   artistId,
   images: initialImages,
+  mainImageId,
   onDataChanged,
 }: {
   artworkId: string;
   siteId: string;
   artistId: string;
   images: ArtworkImage[];
+  // Which image (if any) is actually Main — an explicit id, not a
+  // positional guess (2026-09-13 fix — see the matching note on
+  // getArtworkDetailForClient in actions/artworks.ts). Everything below
+  // that needs to know "is this the Main image" compares against
+  // localMainId (this value, mirrored into local state so Add/Delete &
+  // Replace can update it optimistically without waiting on a refetch).
+  mainImageId: string | null;
   onDataChanged?: () => void;
 }) {
   const [images, setImages] = useState(initialImages);
-  const [activeId, setActiveId] = useState<string | null>(initialImages[0]?.id ?? null);
+  const [localMainId, setLocalMainId] = useState(mainImageId);
+  const [activeId, setActiveId] = useState<string | null>(mainImageId ?? initialImages[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
+  // Set right after Delete & Replace clears the old Main, so the now-
+  // empty Main slot's picker opens itself immediately instead of
+  // leaving an empty tile the person has to click into separately — see
+  // handleDeleteAndReplace below. Bumped as part of the same state
+  // change that clears localMainId, so the picker (which only auto-opens
+  // once per mount) is guaranteed to be freshly mounted when this is
+  // true.
+  const [autoOpenMain, setAutoOpenMain] = useState(false);
 
   // Stay in sync with the server. This component owns its own copy of
-  // the image list so an add/remove/Set as Main can update instantly
-  // without waiting on a round trip, but it must never go stale once
-  // the parent's data actually changes underneath it - e.g. after any
-  // other field on this artwork autosaves and the whole thing refetches.
+  // the image list (and of which one is Main) so an add/remove/Delete &
+  // Replace can update instantly without waiting on a round trip, but it
+  // must never go stale once the parent's data actually changes
+  // underneath it — e.g. after any other field on this artwork autosaves
+  // and the whole thing refetches.
   useEffect(() => {
     setImages(initialImages);
   }, [initialImages]);
 
+  useEffect(() => {
+    setLocalMainId(mainImageId);
+  }, [mainImageId]);
+
   // If whatever was showing in the big preview gets removed (or this is
-  // the very first load), fall back to Main.
+  // the very first load), fall back to Main, or the first related image
+  // if there isn't one yet.
   useEffect(() => {
     if (!activeId || !images.some((i) => i.id === activeId)) {
-      setActiveId(images[0]?.id ?? null);
+      setActiveId(localMainId ?? images[0]?.id ?? null);
     }
-  }, [images, activeId]);
+  }, [images, activeId, localMainId]);
 
+  const mainImage = localMainId ? images.find((i) => i.id === localMainId) ?? null : null;
+  const relatedImages = images.filter((i) => i.id !== localMainId);
   const activeImage = images.find((i) => i.id === activeId) ?? null;
-
-  const handleSetMain = (id: string) => {
-    setBusy(true);
-    setMainImage(artworkId, siteId, id)
-      .then(() => {
-        setImages((prev) => {
-          const idx = prev.findIndex((i) => i.id === id);
-          if (idx <= 0) return prev;
-          const next = prev.slice();
-          const [moved] = next.splice(idx, 1);
-          next.unshift(moved);
-          return next;
-        });
-        onDataChanged?.();
-      })
-      .finally(() => setBusy(false));
-  };
 
   const handleRemove = (id: string) => {
     setBusy(true);
@@ -96,11 +105,18 @@ export default function ArtworkImageManager({
       .finally(() => setBusy(false));
   };
 
+  // Adds one or more already-uploaded images — used by every "+ Add"
+  // tile below, including the Main slot's when it's empty. Whichever
+  // image ends up Main is decided server-side (linkImagesToArtwork
+  // auto-assigns Main whenever the artwork doesn't have one yet); the
+  // localMainId update here just mirrors that same rule locally so the
+  // UI doesn't have to wait on a refetch to show it correctly.
   const handleAdd = (
     added: { id: string; url: string; kind: string; posterUrl: string | null }[]
   ) => {
     const ids = added.map((i) => i.id);
     setBusy(true);
+    setAutoOpenMain(false);
     linkImagesToArtwork(artworkId, ids, siteId)
       .then(() => {
         setImages((prev) => [
@@ -115,6 +131,30 @@ export default function ArtworkImageManager({
               posterUrl: img.posterUrl,
             })),
         ]);
+        setLocalMainId((prev) => prev ?? ids[0] ?? prev);
+        onDataChanged?.();
+      })
+      .finally(() => setBusy(false));
+  };
+
+  // "Delete & Replace" (2026-09-13, direct request) — the only way left
+  // to fix a wrong Main image. Deletes it outright (not just unlinks —
+  // see deleteArtworkMainImage in actions/artworks.ts) and immediately
+  // reopens the now-empty Main slot's picker so a replacement can be
+  // chosen in the same step.
+  const handleDeleteAndReplace = () => {
+    if (!mainImage) return;
+    if (!confirm("Delete this image and choose its replacement? This can't be undone.")) return;
+    setBusy(true);
+    deleteArtworkMainImage(artworkId, mainImage.id, siteId)
+      .then((result) => {
+        if (!result.ok) {
+          alert(result.error);
+          return;
+        }
+        setImages((prev) => prev.filter((i) => i.id !== mainImage.id));
+        setLocalMainId(null);
+        setAutoOpenMain(true);
         onDataChanged?.();
       })
       .finally(() => setBusy(false));
@@ -125,8 +165,7 @@ export default function ArtworkImageManager({
       <div className="grid grid-cols-2 gap-3">
         {/* Big preview — left, same size as a single tile was in the
             old two-per-row grid. Defaults to Main; clicking a mini-grid
-            tile on the right swaps the preview only, it isn't itself a
-            way to change Main. */}
+            tile on the right swaps the preview only. */}
         <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
           {activeImage &&
             (activeImage.kind === "VIDEO" ? (
@@ -144,32 +183,79 @@ export default function ArtworkImageManager({
               // eslint-disable-next-line @next/next/no-img-element
               <img src={activeImage.url} alt="" className="h-full w-full object-cover" />
             ))}
-          {activeImage && images[0]?.id === activeImage.id && (
+          {activeImage && activeImage.id === localMainId && (
             <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1.5 py-0.5 text-[10px] text-white">
               Main
             </span>
-          )}
-          {activeImage && images[0]?.id !== activeImage.id && (
-            <button
-              type="button"
-              onClick={() => handleSetMain(activeImage.id)}
-              disabled={busy}
-              className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1.5 py-0.5 text-[10px] text-white hover:bg-neutral-900 disabled:opacity-50"
-            >
-              Set as Main
-            </button>
           )}
         </div>
 
         {/* Mini grid — right, a fixed 2×2 (Main's own slot plus up to 3
             related images). Capped at 4 total: once all four positions
-            hold an image there's no fifth "Add" tile. */}
+            hold an image there's no fifth "Add" tile. Slot 0 is always
+            Main — either its thumbnail (with Delete & Replace, not a
+            plain remove), or the "+ Add" tile if there isn't one yet. */}
         <div className="grid grid-cols-2 grid-rows-2 gap-2">
-          {[0, 1, 2, 3].map((i) => {
-            const img = images[i];
+          {mainImage ? (
+            <button
+              type="button"
+              onClick={() => setActiveId(mainImage.id)}
+              className={`group relative aspect-square overflow-hidden rounded-md ${
+                activeId === mainImage.id ? "ring-2 ring-neutral-900" : ""
+              }`}
+            >
+              {mainImage.kind === "VIDEO" ? (
+                mainImage.posterUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={mainImage.posterUrl} alt="" className="h-full w-full object-cover" />
+                ) : (
+                  <VideoThumb src={mainImage.url} className="h-full w-full object-cover" />
+                )
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={mainImage.url} alt="" className="h-full w-full object-cover" />
+              )}
+              <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1 py-0.5 text-[9px] text-white">
+                Main
+              </span>
+              {/* Delete & Replace, not a plain ✕ — this is the artwork's
+                  image of record, so removing it always means replacing
+                  it with something else, never just unlinking it into
+                  the Marketing pool the way a Related image can be. */}
+              <span
+                role="button"
+                tabIndex={0}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleDeleteAndReplace();
+                }}
+                className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 py-0.5 text-[9px] leading-tight text-white group-hover:block"
+              >
+                Delete &amp; Replace
+              </span>
+            </button>
+          ) : (
+            <div className="aspect-square">
+              <MediaPicker
+                key={autoOpenMain ? "main-replace" : "main-empty"}
+                artistId={artistId}
+                siteId={siteId}
+                mode="single"
+                label="Add"
+                linkedArtworkId={artworkId}
+                mediaKinds={["PHOTO", "VIDEO"]}
+                previewClassName="aspect-square h-full w-full"
+                autoOpen={autoOpenMain}
+                onSelect={(added) => handleAdd(added)}
+              />
+            </div>
+          )}
+
+          {[0, 1, 2].map((i) => {
+            const img = relatedImages[i];
             if (!img) {
               return (
-                <div key={`add-${i}`} className="aspect-square">
+                <div key={`add-related-${i}`} className="aspect-square">
                   <MediaPicker
                     artistId={artistId}
                     siteId={siteId}
@@ -206,11 +292,6 @@ export default function ArtworkImageManager({
                 ) : (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={img.url} alt="" className="h-full w-full object-cover" />
-                )}
-                {i === 0 && (
-                  <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1 py-0.5 text-[9px] text-white">
-                    Main
-                  </span>
                 )}
                 <span
                   role="button"
