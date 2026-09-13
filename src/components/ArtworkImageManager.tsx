@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import MediaPicker from "@/components/MediaPicker";
 import VideoThumb from "@/components/VideoThumb";
+import SetMainFromHopperModal from "@/components/SetMainFromHopperModal";
 import { linkImagesToArtwork, unlinkImageFromArtwork, deleteArtworkMainImage } from "@/lib/actions/artworks";
 
 export type ArtworkImage = {
@@ -30,9 +30,9 @@ export type ArtworkImage = {
 // now: the artwork's very first image becomes Main automatically (see
 // the auto-assign note on linkImagesToArtwork in actions/artworks.ts),
 // or a wrong one is fixed via "Delete & Replace" below — which deletes
-// it outright, then sends the person to the Hopper, where "Manage
-// Artwork"/the upcoming Main-image flow (see HopperView.tsx) sets
-// whichever image they sort there as this artwork's new Main.
+// it outright, then opens SetMainFromHopperModal, a limited window onto
+// the Hopper (just the newest incoming image, and one action: make it
+// this artwork's new Main) rather than a full page navigation.
 //
 // Because the grid is now four fixed positions rather than a free-
 // flowing, reorderable list, the old pointer-based drag-to-reorder is
@@ -55,11 +55,13 @@ export default function ArtworkImageManager({
   mainImageId: string | null;
   onDataChanged?: () => void;
 }) {
-  const router = useRouter();
   const [images, setImages] = useState(initialImages);
   const [localMainId, setLocalMainId] = useState(mainImageId);
   const [activeId, setActiveId] = useState<string | null>(mainImageId ?? initialImages[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
+  // Opened by "Delete & Replace" once the old Main image is gone — see
+  // handleDeleteAndReplace below.
+  const [showSetMainModal, setShowSetMainModal] = useState(false);
 
   // Stay in sync with the server. This component owns its own copy of
   // the image list (and of which one is Main) so an add/remove can
@@ -132,16 +134,14 @@ export default function ArtworkImageManager({
 
   // "Delete & Replace" (2026-09-13, direct request) — the only way left
   // to fix a wrong Main image. Deletes it outright (not just unlinks —
-  // see deleteArtworkMainImage in actions/artworks.ts), then sends the
-  // person to the Hopper to sort in its replacement. Kept as a real
-  // navigation rather than an inline picker here, per direct request —
-  // every new image goes through the Hopper's controlled intake, same
-  // as everywhere else media enters this app.
+  // see deleteArtworkMainImage in actions/artworks.ts), then opens
+  // SetMainFromHopperModal so its replacement can be picked from the
+  // Hopper without leaving this panel.
   const handleDeleteAndReplace = () => {
     if (!mainImage) return;
     if (
       !confirm(
-        "Delete this image? You'll be taken to the Hopper to sort in its replacement."
+        "Delete this image? You'll be shown the Hopper's next incoming image to set as its replacement."
       )
     )
       return;
@@ -153,7 +153,7 @@ export default function ArtworkImageManager({
           return;
         }
         onDataChanged?.();
-        router.push(`/sites/${siteId}/hopper`);
+        setShowSetMainModal(true);
       })
       .finally(() => setBusy(false));
   };
@@ -306,6 +306,16 @@ export default function ArtworkImageManager({
         </div>
       </div>
       {busy && <p className="mt-1 text-xs text-neutral-400">Saving…</p>}
+
+      {showSetMainModal && (
+        <SetMainFromHopperModal
+          artworkId={artworkId}
+          siteId={siteId}
+          artistId={artistId}
+          onClose={() => setShowSetMainModal(false)}
+          onDone={() => onDataChanged?.()}
+        />
+      )}
     </div>
   );
 }
