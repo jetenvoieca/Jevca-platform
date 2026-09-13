@@ -50,6 +50,11 @@ export type ArtworkDetail = {
   // itself a "Create Derivative" copy. See the matching note on
   // Artwork.derivedFromId in schema.prisma.
   derivedFromCatalogueNumber: string | null;
+  // Which image (if any) is actually Main (2026-09-13) — see the
+  // matching note in getArtworkDetailForClient (actions/artworks.ts).
+  // Passed straight through to ArtworkImageManager, which needs it to
+  // tell Main and Related apart with certainty.
+  mainImageId: string | null;
   images: {
     id: string;
     url: string;
@@ -499,6 +504,7 @@ export default function ArtworkDetailPanel({
         siteId={siteId}
         artistId={artistId}
         images={artwork.images}
+        mainImageId={artwork.mainImageId}
         onDataChanged={onDataChanged}
       />
 
