@@ -19,6 +19,14 @@ import EditSaleButton from "@/components/EditSaleButton";
 
 type DetailTab = "details" | "sales";
 
+// Below xl (1280px — covers iPad in both orientations, where the fixed
+// 600px + 300px side columns leave no usable room for the works grid),
+// the three columns below are shown one at a time instead of side by
+// side: Gallery list -> Consigned Works -> Details/Sales. This state
+// drives which one is visible; it's simply ignored at xl and above,
+// where all three show together as before.
+type MobileStep = "list" | "works" | "details";
+
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
 const labelCls = "mb-1 block text-xs text-neutral-500";
@@ -59,6 +67,9 @@ export default function GalleriesView({
   // this initial useState only covers the very first render, before any
   // gallery has been selected at all.
   const [detailTab, setDetailTab] = useState<DetailTab>("sales");
+  // Below-xl navigation only (see MobileStep above) — starts on the
+  // gallery list, same as the "nothing selected" state.
+  const [mobileStep, setMobileStep] = useState<MobileStep>("list");
   const router = useRouter();
 
   // ---- Consigned Works control panel (2026-08-31, Part Two) ----
@@ -100,11 +111,25 @@ export default function GalleriesView({
     // every gallery click and was silently overriding the "sales"
     // default above, so the panel always opened on Details regardless.
     setDetailTab("sales");
+    // Below xl, picking a gallery moves on to the Consigned Works step
+    // next (Works -> Details/Sales is its own explicit step from
+    // there — see the "Details & Sales" button below).
+    setMobileStep("works");
     setLoading(true);
     getGalleryDetail(customerId).then((detail) => {
       setSelectedDetail(detail);
       setLoading(false);
     });
+  };
+
+  // Returns to the gallery list (below xl only — ignored at xl and
+  // above, where the list column is always visible regardless).
+  const backToList = () => {
+    setSelectedId(null);
+    setSelectedDetail(null);
+    setSelectedWorkId(null);
+    setSelectedWorkDetail(null);
+    setMobileStep("list");
   };
 
   // Re-fetches just the gallery's own detail (used after a sale action,
@@ -233,8 +258,7 @@ export default function GalleriesView({
       await deleteCustomer(selectedDetail.id);
       setDeleting(false);
       setConfirmingDelete(false);
-      setSelectedId(null);
-      setSelectedDetail(null);
+      backToList();
       router.refresh();
     });
   };
@@ -323,9 +347,37 @@ export default function GalleriesView({
       {/* Grid only now (2026-09-10) — the per-work detail/action panel
           moved into its own modal below, so the grid no longer has to
           give up a w-80 slice of its own width whenever a work is
-          selected; it's always full width. */}
-      <div className="flex flex-1 flex-col overflow-hidden p-6">
-        <h1 className="mb-4 text-2xl font-semibold text-neutral-900">Consigned Works</h1>
+          selected; it's always full width.
+
+          Below xl (2026-09-13) — one of three drill-down steps instead
+          of a permanent column; see MobileStep above. Always visible
+          at xl and above, same as before. */}
+      <div
+        className={`w-full flex-col overflow-hidden p-6 xl:flex xl:w-auto xl:flex-1 ${
+          mobileStep === "works" ? "flex" : "hidden"
+        }`}
+      >
+        <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={backToList}
+              className="shrink-0 rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50 xl:hidden"
+            >
+              ← Galleries
+            </button>
+            <h1 className="text-2xl font-semibold text-neutral-900">Consigned Works</h1>
+          </div>
+          {selectedDetail && (
+            <button
+              type="button"
+              onClick={() => setMobileStep("details")}
+              className="shrink-0 rounded-md bg-neutral-900 px-3 py-[4px] text-xs font-medium text-white hover:bg-neutral-700 xl:hidden"
+            >
+              Details &amp; Sales →
+            </button>
+          )}
+        </div>
         {!selectedDetail ? (
           <p className="text-sm text-neutral-400">
             Select a gallery to see the works currently consigned there.
@@ -381,16 +433,34 @@ export default function GalleriesView({
           widened 25% (600px, up from 480px) to leave room for whatever
           gets added next. Headers never scroll (2026-09-09) — the
           name/tabs/Delete/Close row is fixed (shrink-0) and only the
-          tab content underneath scrolls. */}
-      <div className="flex w-[600px] shrink-0 flex-col overflow-hidden border-l border-neutral-200 p-6">
+          tab content underneath scrolls.
+
+          Below xl (2026-09-13) — the fixed 600px width made this
+          unusable on iPad (widths from 768–1024px), so below xl this is
+          full width and only shown as its own drill-down step; see
+          MobileStep above. Unchanged at xl and above. */}
+      <div
+        className={`w-full shrink-0 flex-col overflow-hidden p-6 xl:flex xl:w-[600px] xl:border-l xl:border-neutral-200 ${
+          mobileStep === "details" ? "flex" : "hidden"
+        }`}
+      >
         {!selectedId ? (
           <p className="text-sm text-neutral-400">Select a gallery to see its details.</p>
         ) : loading || !selectedDetail ? (
           <p className="text-sm text-neutral-400">Loading…</p>
         ) : (
           <div className="flex flex-1 flex-col overflow-hidden">
-            <div className="mb-4 flex shrink-0 items-center justify-between">
-              <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
+            <div className="mb-4 flex shrink-0 flex-wrap items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMobileStep("works")}
+                  className="shrink-0 rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50 xl:hidden"
+                >
+                  ← Works
+                </button>
+                <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
+              </div>
               <div className="flex items-center gap-3">
                 <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
                   <button
@@ -423,14 +493,7 @@ export default function GalleriesView({
                 >
                   Delete
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedId(null);
-                    setSelectedDetail(null);
-                  }}
-                  className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
-                >
+                <button type="button" onClick={backToList} className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50">
                   Close
                 </button>
               </div>
@@ -657,8 +720,16 @@ export default function GalleriesView({
       {/* overflow-hidden, not overflow-y-auto — headers never scroll
           (2026-09-09). The "+ Add Gallery"/search block below is fixed;
           only the list itself (its own flex-1 overflow-y-auto further
-          down) scrolls. */}
-      <div className="flex h-full w-[300px] shrink-0 flex-col overflow-hidden border-l border-neutral-200">
+          down) scrolls.
+
+          Below xl (2026-09-13) — full width and only shown as its own
+          drill-down step (the starting one); see MobileStep above.
+          Unchanged at xl and above. */}
+      <div
+        className={`h-full w-full shrink-0 flex-col overflow-hidden xl:flex xl:w-[300px] xl:border-l xl:border-neutral-200 ${
+          mobileStep === "list" ? "flex" : "hidden"
+        }`}
+      >
         <div className="border-b border-neutral-200 p-4">
           <button
             type="button"
@@ -750,7 +821,9 @@ export default function GalleriesView({
           grid can stay full width regardless of whether a work is
           selected. Opens on the same openWork() call as before (grid
           thumbnail or a Sales table row), and closes the same way
-          (clearing selectedWorkId/selectedWorkDetail). */}
+          (clearing selectedWorkId/selectedWorkDetail). Unaffected by
+          the drill-down change above — this is a fixed overlay on top
+          of everything, at every width. */}
       {selectedWorkId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
           <div className="flex max-h-[85vh] w-full max-w-[420px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
