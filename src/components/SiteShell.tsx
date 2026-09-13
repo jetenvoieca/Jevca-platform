@@ -30,6 +30,10 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey {
   if (pathname === `${base}/hopper`) return "hopper";
   if (pathname.startsWith(`${base}/purchases/settings`)) return "purchasesSettings";
   if (pathname.startsWith(`${base}/purchases`)) return "purchases";
+  // Checked before the plain /sales prefix below, even though it
+  // currently doesn't share that prefix — keeps this route resolved
+  // explicitly rather than accidentally depending on ordering.
+  if (pathname.startsWith(`${base}/payments-received`)) return "paymentsReceived";
   if (pathname.startsWith(`${base}/sales`)) return "sales";
   if (pathname.startsWith(`${base}/customers`)) return "customers";
   if (pathname.startsWith(`${base}/galleries`)) return "galleries";
