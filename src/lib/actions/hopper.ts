@@ -68,6 +68,28 @@ export async function listHopperQueue(artistId: string) {
   });
 }
 
+// Powers the limited "set new Main image" modal opened from Delete &
+// Replace (SetMainFromHopperModal.tsx, via ArtworkImageManager.tsx) —
+// just the single newest item currently awaiting sorting in the Hopper,
+// or null if it's empty. Deliberately its own lightweight query rather
+// than reusing listHopperQueue's full list plus the sort-order/
+// hasInteracted session state HopperView.tsx layers on top of it — that
+// modal only ever needs to offer one candidate image at a time, and
+// "newest" is already this app's default sort order everywhere else in
+// the Hopper. createdAt is converted to an ISO string here (not left as
+// a raw Date) since this is called directly from a client component,
+// the same reasoning as the Decimal-to-string conversions in
+// getArtworkDetailForClient (actions/artworks.ts).
+export async function getNextHopperItem(artistId: string) {
+  const item = await db.image.findFirst({
+    where: { artistId, status: "HOPPER" },
+    orderBy: { createdAt: "desc" },
+    select: { id: true, url: true, posterUrl: true, kind: true, createdAt: true },
+  });
+  if (!item) return null;
+  return { ...item, createdAt: item.createdAt.toISOString() };
+}
+
 // 2026-08-19, direct request — was `status: "ARCHIVED"` (the same
 // reversible-delete pattern used everywhere else in this app), changed
 // specifically for Images: there was never a Trash/Archived view to
