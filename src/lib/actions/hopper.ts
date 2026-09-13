@@ -7,8 +7,6 @@ import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
 import { deleteImagePermanently } from "./imageDelete";
 
-type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
-
 // None of these actions revalidate /sites/[id]/hopper OR /sites/[id]/
 // artworks (2026-08-17, second pass at this same fix) — both those
 // pages are already force-dynamic (never cached to begin with, so
@@ -68,23 +66,6 @@ export async function listHopperQueue(artistId: string) {
       createdAt: true,
     },
   });
-}
-
-// Caption ("Name") and Description are both editable from the Hopper
-// (2026-09-02 — Description added alongside the iPhone Shortcut's own
-// Name/Description prompt, replacing the old caption-only
-// updateHopperCaption). Tags and Alt text stay out of this screen (see
-// the matching note on SortingCard in HopperView.tsx for why) — this
-// still only ever touches these two fields, writing null for either one
-// that's blank rather than an empty string.
-export async function updateHopperFields(
-  id: string,
-  siteId: string,
-  formData: FormData
-): Promise<void> {
-  const caption = (formData.get("caption") as string)?.trim() || null;
-  const description = (formData.get("description") as string)?.trim() || null;
-  await db.image.update({ where: { id }, data: { caption, description } });
 }
 
 // 2026-08-19, direct request — was `status: "ARCHIVED"` (the same
@@ -177,10 +158,17 @@ export async function addHopperItemToArtwork(
 // since nothing was ever created — that's the main benefit over the old
 // approach, not just fewer clicks.
 //
-// description (2026-09-02) — the Hopper item's own Description carries
-// straight across into the new artwork's Description field, the same
-// way its Caption already carries across as the title. Optional, same
-// as every other quick-catalogue field.
+// Renamed "Add Artwork" → "Create new artwork" (2026-09-13, direct
+// request), and its form now matches the full Artwork Catalogue tab —
+// Name and Tier included, Reference/Offered price included — with only
+// the Available/SOLD toggle left out (a brand-new artwork always starts
+// AVAILABLE; see QuickCatalogueFields in HopperView.tsx). Name is no
+// longer collected earlier, on the plain sorting card, at all ("no name
+// or description at this stage") — it comes straight from this form's
+// own `catalogueName` field instead. Description is left blank — it's a
+// Presentation-tab field, out of scope for this Catalogue-only quick
+// form; Presentation's own default description (Type/Size/Medium strung
+// together) fills in for it until someone writes a real one.
 //
 // needsReview stays true here, same as the old quickCreateArtwork(...,
 // true) call did — filling in these fields is still optional, so a
@@ -192,13 +180,11 @@ export async function createArtworkFromHopperQuick(
   hopperImageId: string,
   siteId: string,
   artistId: string,
-  title: string,
-  description: string,
   formData: FormData
 ): Promise<{ ok: true; artwork: { id: string } } | { ok: false; error: string }> {
-  const finalTitle = title.trim() || "Untitled";
-  const finalDescription = description.trim() || null;
-
+  const title = ((formData.get("catalogueName") as string) || "").trim() || "Untitled";
+  const tier = (formData.get("tier") as string)?.trim() || null;
+  const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
   const dateRaw = (formData.get("date") as string)?.trim();
   const type = (formData.get("type") as string)?.trim() || null;
   const catalogueGroup = (formData.get("catalogueGroup") as string)?.trim() || null;
@@ -208,14 +194,19 @@ export async function createArtworkFromHopperQuick(
   const location = (formData.get("location") as string)?.trim() || null;
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
   const medium = (formData.get("medium") as string)?.trim() || null;
-  const availability = ((formData.get("availability") as string) || "AVAILABLE") as Availability;
 
   let artwork: { id: string };
   try {
     artwork = await createArtworkWithRetry(artistId, {
-      presentationTitle: finalTitle,
-      catalogueName: finalTitle,
-      description: finalDescription,
+      presentationTitle: title,
+      catalogueName: title,
+      tier,
+      offeredPrice: offeredPriceRaw || null,
+      // Mirrors updateCatalogue's own "Offered price also sets
+      // Presentation's Price" behaviour (see the note on
+      // Artwork.presentationPrice in schema.prisma) — kept in sync from
+      // the moment the artwork is first created, not just on later edits.
+      presentationPrice: offeredPriceRaw || null,
       type,
       catalogueGroup,
       size,
@@ -224,7 +215,9 @@ export async function createArtworkFromHopperQuick(
       location,
       studioNotes,
       medium,
-      availability,
+      // No Available/SOLD toggle on this form (2026-09-13, direct
+      // request) — every artwork created this way starts AVAILABLE.
+      availability: "AVAILABLE",
       date: dateRaw || null,
       needsReview: true,
     });
