@@ -1,6 +1,24 @@
 import { db } from "@/lib/db";
 import { deleteFromR2 } from "@/lib/r2";
 
+// Shared last step of any permanent image delete below — removing the
+// actual stored files from R2 once the DB row itself is confirmed gone.
+// Best-effort: a file that's already missing from R2, or a transient
+// storage error, shouldn't leave the DB row undeleted or surface as a
+// failure to the caller; the DB delete is what actually matters for the
+// person's immediate action.
+async function deleteImageFiles(image: {
+  key: string;
+  thumbnailKey: string | null;
+  displayKey: string | null;
+}) {
+  await Promise.all(
+    [image.key, image.thumbnailKey, image.displayKey]
+      .filter((key): key is string => !!key)
+      .map((key) => deleteFromR2(key).catch(() => {}))
+  );
+}
+
 // 2026-08-19, direct request — replaces the Archive pattern for Images
 // specifically (status: "ARCHIVED", same convention used everywhere else
 // in this app for a reversible "delete"). Decided against for Images
@@ -45,15 +63,43 @@ export async function deleteImagePermanently(
     };
   }
 
-  // Best-effort — a file that's already gone from R2, or a transient
-  // storage error, shouldn't leave the DB row undeleted or surface as a
-  // failure here; the DB delete above is what actually matters for the
-  // person's immediate action.
-  await Promise.all(
-    [image.key, image.thumbnailKey, image.displayKey]
-      .filter((key): key is string => !!key)
-      .map((key) => deleteFromR2(key).catch(() => {}))
-  );
+  await deleteImageFiles(image);
+
+  return { ok: true };
+}
+
+// "Delete & Replace" for an artwork's Main image (2026-09-13, direct
+// request). Main is the artwork's image of record — there is no more
+// "Set as Main" to reassign it to an already-existing image; the only
+// way to fix a wrong one is to delete it outright and add its
+// replacement, which becomes the new Main automatically the moment it's
+// linked (see the auto-assign note on linkImagesToArtwork in
+// actions/artworks.ts) because this clears mainImageId to null first.
+//
+// Deliberately its own function rather than a flag on
+// deleteImagePermanently above: that function's Restrict-triggered
+// failure whenever an image is still a Main image is the safety net for
+// every other, unrelated caller (Hopper Bin, Media Catalogue Delete) —
+// this is the one deliberate, narrow exception to that, and it should
+// stay visibly separate rather than quietly weakening the check for
+// everyone else.
+export async function deleteArtworkMainImage(
+  artworkId: string,
+  imageId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const image = await db.image.findUnique({
+    where: { id: imageId },
+    select: { key: true, thumbnailKey: true, displayKey: true },
+  });
+  if (!image) return { ok: true }; // Already gone — nothing to do.
+
+  // Order matters: mainImageId must be cleared before the Image row can
+  // be deleted, since that FK is onDelete: Restrict (2026-09-12 fix —
+  // see schema.prisma) and would otherwise reject the delete outright.
+  await db.artwork.update({ where: { id: artworkId }, data: { mainImageId: null } });
+  await db.image.delete({ where: { id: imageId } });
+
+  await deleteImageFiles(image);
 
   return { ok: true };
 }
