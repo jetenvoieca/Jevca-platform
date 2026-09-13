@@ -74,7 +74,18 @@ export async function listMedia(artistId: string, filters: ListFilters) {
       // was removed entirely (2026-09-12, direct request — "never used
       // it or even know why I would"); this is now the only order.
       orderBy: { createdAt: "asc" },
-      include: { artwork: { select: { id: true, presentationTitle: true } } },
+      // catalogueName, not presentationTitle (2026-09-12 fix, direct
+      // report — "rename an artwork's Name and its related image still
+      // shows the old name"). The two only stay in sync once, the first
+      // time Catalogue's Name is ever saved (see the "seed once, then
+      // independent" note on updateCatalogue in actions/artworks.ts) —
+      // after that, editing Name again no longer touches Title, so
+      // showing Title here went stale the moment someone renamed an
+      // artwork a second time. catalogueName is also simply the more
+      // correct field to show: it's the identity shown on the artwork's
+      // own tile in the Artwork Catalogue grid, which is what "which
+      // artwork is this related to" should mean.
+      include: { artwork: { select: { id: true, catalogueName: true } } },
       relationLoadStrategy: "query",
       skip: offset,
       take: limit,
@@ -105,7 +116,8 @@ export async function countMediaByPurpose(artistId: string) {
 export async function getMediaDetail(id: string) {
   const image = await db.image.findUnique({
     where: { id },
-    include: { artwork: { select: { id: true, presentationTitle: true } } },
+    // catalogueName — see the matching note in listMedia above.
+    include: { artwork: { select: { id: true, catalogueName: true } } },
     relationLoadStrategy: "query",
   });
   if (!image) return null;
@@ -116,12 +128,15 @@ export async function getMediaDetail(id: string) {
 }
 
 // Lightweight list for the "link to artwork" dropdown — every artwork this
-// artist has, regardless of which site it's tied to.
+// artist has, regardless of which site it's tied to. catalogueName, not
+// presentationTitle (2026-09-12, same fix/reasoning as listMedia above) —
+// so the artworks in this filter list are named exactly the way they're
+// named in the Artwork Catalogue itself.
 export async function getArtistArtworksForLinking(artistId: string) {
   return db.artwork.findMany({
     where: { artistId },
-    select: { id: true, presentationTitle: true },
-    orderBy: { presentationTitle: "asc" },
+    select: { id: true, catalogueName: true },
+    orderBy: { catalogueName: "asc" },
   });
 }
 
