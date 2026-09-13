@@ -1,8 +1,10 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
+import { db } from "@/lib/db";
 import { getWebhookSecret, type StripeMode } from "@/lib/stripe";
 import {
   handleFirstPaymentSucceeded,
+  handleGalleryPaymentLinkPaid,
   linkSubscriptionToSchedule,
   handleInstalmentInvoicePaid,
   handleInstalmentInvoiceFailed,
@@ -83,14 +85,34 @@ export async function POST(req: NextRequest) {
 
   try {
     switch (event.type) {
-      // Fires for BOTH collection routes — a hosted Payment Link and an
-      // in-app Stripe Elements card entry both end in a PaymentIntent
-      // succeeding, so this one handler covers the first payment either way.
+      // Fires for every collection route — a hosted Checkout Session, an
+      // in-app Stripe Elements card entry, and (2026-09-13) a gallery's
+      // persistent Payment Link all end in a PaymentIntent succeeding.
+      // Which of the two purchase-completing handlers applies depends
+      // on the sale's own channel: a GALLERY-channel purchase is only
+      // ever charged its net amount owed via the Payment Link
+      // (handleGalleryPaymentLinkPaid), never the direct/instalment
+      // Stripe flow (handleFirstPaymentSucceeded) — see the comment on
+      // handleGalleryPaymentLinkPaid in payments.ts for why these stay
+      // separate rather than one shared function.
       case "payment_intent.succeeded": {
         const intent = event.data.object as Stripe.PaymentIntent;
         const purchaseId = intent.metadata?.purchaseId;
         if (purchaseId) {
-          await handleFirstPaymentSucceeded(purchaseId, intent.id);
+          const purchase = await db.purchase.findUnique({
+            where: { id: purchaseId },
+            select: { channel: true },
+          });
+          if (purchase?.channel === "GALLERY") {
+            await handleGalleryPaymentLinkPaid(
+              purchaseId,
+              intent.id,
+              intent.amount_received,
+              intent.currency
+            );
+          } else {
+            await handleFirstPaymentSucceeded(purchaseId, intent.id);
+          }
         }
         break;
       }
