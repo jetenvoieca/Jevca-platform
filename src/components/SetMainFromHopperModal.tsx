@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { uploadFileDirect } from "@/lib/uploadDirect";
-import { linkImagesToArtwork } from "@/lib/actions/artworks";
+import { linkImagesToArtwork, deleteArtworkMainImage } from "@/lib/actions/artworks";
 
 // "Delete & Replace"'s own limited window onto adding a new image
 // (2026-09-13, direct request — "let them upload a brand-new file right
@@ -19,16 +19,30 @@ import { linkImagesToArtwork } from "@/lib/actions/artworks";
 // record image, not raw incoming material that needs sorting later.
 // "Open Hopper" stays as the way out to the full page for anything more
 // involved (picking an existing image, adding several, etc.).
+//
+// The old Main image is deliberately NOT deleted until the replacement
+// has actually finished uploading (2026-09-13 fix, direct report — the
+// previous version deleted it the moment "Delete & Replace" was
+// clicked, so cancelling this modal, or closing the tab mid-upload,
+// left the artwork with no Main image at all). oldMainImageId is only
+// ever acted on inside handleFileSelected below, after uploadFileDirect
+// has already succeeded — cancelling, or any failure before that point,
+// leaves the existing Main image completely untouched.
 export default function SetMainFromHopperModal({
   artworkId,
   siteId,
   artistId,
+  oldMainImageId,
   onClose,
   onDone,
 }: {
   artworkId: string;
   siteId: string;
   artistId: string;
+  // The Main image this replacement is standing in for — deleted only
+  // once the new upload has succeeded (see the note above), never
+  // before.
+  oldMainImageId: string;
   onClose: () => void;
   // Called once the new image is actually set as Main — the caller
   // (ArtworkImageManager) uses this to trigger its own refetch, the
@@ -45,6 +59,16 @@ export default function SetMainFromHopperModal({
     setUploading(true);
     try {
       const image = await uploadFileDirect(file, artistId, "SORTED", "Artwork main image replacement");
+      // Only from here on is anything destructive done — the upload
+      // above already succeeded, so the old Main image is now safe to
+      // remove. deleteArtworkMainImage clears mainImageId to null before
+      // deleting the row (that FK is Restrict); linkImagesToArtwork then
+      // auto-assigns Main to the new image, since there isn't one now.
+      const deleteResult = await deleteArtworkMainImage(artworkId, oldMainImageId, siteId);
+      if (!deleteResult.ok) {
+        setError(deleteResult.error);
+        return;
+      }
       await linkImagesToArtwork(artworkId, [image.id], siteId);
       onDone();
       onClose();
@@ -64,7 +88,7 @@ export default function SetMainFromHopperModal({
     >
       <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-neutral-900">Set new Main image</h2>
+          <h2 className="text-sm font-medium text-neutral-900">Replace Main image</h2>
           <button
             type="button"
             onClick={onClose}
@@ -76,6 +100,13 @@ export default function SetMainFromHopperModal({
             </svg>
           </button>
         </div>
+
+        {/* Makes the delete-on-upload behaviour explicit rather than a
+            silent side effect — the current Main image only actually
+            goes away once a replacement is chosen here. */}
+        <p className="mb-3 text-xs text-neutral-500">
+          The current Main image will be deleted once your replacement finishes uploading.
+        </p>
 
         {error && (
           <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
