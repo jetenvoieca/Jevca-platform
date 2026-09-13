@@ -7,6 +7,7 @@ import {
   getStripeClient,
   getPublishableKey,
   toMinorUnits,
+  fromMinorUnits,
   splitIntoInstalments,
   APP_URL,
   type StripeMode,
@@ -415,6 +416,17 @@ export async function startGallerySale(
 // Re-uses the same link on every later call rather than creating a new
 // one each time "Payment link" is pressed again, so it's stable to
 // paste into an already-sent email or invoice.
+//
+// payment_intent_data.metadata (2026-09-13) — carries purchaseId onto
+// the PaymentIntent this link eventually produces, not just the Payment
+// Link record itself (Payment Link metadata does NOT automatically
+// propagate to its PaymentIntent). This is what lets the webhook
+// (handleGalleryPaymentLinkPaid below) recognise a paid gallery invoice
+// and complete the sale automatically, the same way a direct Stripe
+// sale already does. Only links created from this point forward carry
+// it — a link generated before this change has no metadata on its
+// PaymentIntent, so a payment against it still needs "Mark as paid"
+// clicked by hand.
 export async function createGalleryPaymentLink(
   purchaseId: string,
   siteId: string
@@ -450,6 +462,7 @@ export async function createGalleryPaymentLink(
     const link = await stripe.paymentLinks.create({
       line_items: [{ price: price.id, quantity: 1 }],
       metadata: { purchaseId: purchase.id },
+      payment_intent_data: { metadata: { purchaseId: purchase.id } },
     });
 
     await db.purchase.update({
@@ -708,6 +721,11 @@ export async function forceDeleteCompletedSale(
 // the caller's point of view (validated only by GalleriesView's
 // <select>, sourced from Artist.paymentMethods) rather than a hard enum
 // here, same convention as Customer.kind elsewhere.
+//
+// Still needed even now that a gallery's Stripe Payment Link can
+// complete a sale automatically (see handleGalleryPaymentLinkPaid below)
+// — this remains the only path for a gallery that pays by bank
+// transfer, cash, cheque, etc. rather than the link.
 export async function markGallerySalePaid(
   purchaseId: string,
   siteId: string,
@@ -1072,6 +1090,70 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
         dueDate,
       },
     });
+  }
+}
+
+// A GALLERY-channel sale's persistent Payment Link being paid (2026-09-13)
+// — the automatic counterpart to markGallerySalePaid above, fired from
+// the same payment_intent.succeeded webhook event as a direct Stripe
+// sale, but kept as its own function rather than folded into
+// handleFirstPaymentSucceeded: that one assumes it's dealing with the
+// sale's full gross totalAmount (optionally split into instalments),
+// whereas a gallery invoice is only ever charged for the NET amount
+// (sale price less commission) and is never an instalment sale. Using
+// the actual amount Stripe confirms it received, rather than
+// recomputing net from totalAmount/commissionPercent again here, keeps
+// this in step with whatever the link was actually generated for even
+// if either figure was edited afterwards.
+//
+// Idempotent two ways: skipped entirely if the sale is already
+// COMPLETED (covers a redelivered webhook), and the Payment Link itself
+// is deactivated in Stripe the moment it's paid, so it can't be paid a
+// second time by mistake — it's meant for one gallery invoice, not a
+// reusable storefront link.
+export async function handleGalleryPaymentLinkPaid(
+  purchaseId: string,
+  stripePaymentIntentId: string,
+  amountReceivedMinor: number,
+  currency: string
+) {
+  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase) return;
+  if (purchase.channel !== "GALLERY") return;
+  if (purchase.status === "COMPLETED") return;
+
+  const paidDate = new Date();
+
+  await db.payment.create({
+    data: {
+      purchaseId: purchase.id,
+      sequence: 1,
+      amount: fromMinorUnits(amountReceivedMinor),
+      currency: currency.toUpperCase(),
+      status: "PAID",
+      paidDate,
+      stripePaymentIntentId,
+    },
+  });
+
+  await db.purchase.update({
+    where: { id: purchaseId },
+    data: { status: "COMPLETED", closedAt: paidDate },
+  });
+
+  await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
+
+  if (purchase.stripePaymentLinkId) {
+    try {
+      const mode = await getStripeModeForArtwork(purchase.artworkId);
+      const stripe = getStripeClient(mode);
+      await stripe.paymentLinks.update(purchase.stripePaymentLinkId, { active: false });
+    } catch {
+      // Same reasoning as updateGallerySaleAmount above — failing to
+      // deactivate the link in Stripe shouldn't block recording that
+      // the gallery has genuinely paid; worst case it stays technically
+      // payable in Stripe a little longer.
+    }
   }
 }
 
