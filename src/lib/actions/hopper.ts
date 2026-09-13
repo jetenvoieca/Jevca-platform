@@ -205,8 +205,11 @@ export async function createArtworkFromHopperQuick(
       // Mirrors updateCatalogue's own "Offered price also sets
       // Presentation's Price" behaviour (see the note on
       // Artwork.presentationPrice in schema.prisma) — kept in sync from
-      // the moment the artwork is first created, not just on later edits.
-      presentationPrice: offeredPriceRaw || null,
+      // the moment the artwork is first created, not just on later
+      // edits. presentationPrice is typed as a number here (unlike
+      // offeredPrice above, read as a raw string) — same conversion
+      // duplicateArtwork already does.
+      presentationPrice: offeredPriceRaw ? Number(offeredPriceRaw) : null,
       type,
       catalogueGroup,
       size,
