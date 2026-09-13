@@ -33,6 +33,9 @@ export type SiteNavKey =
   | "bucket"
   | "mediaSettings"
   | "sales"
+  // Read-only payments report (2026-09-13) — sits directly under Sales
+  // in the Financial section, sharing the same salesEnabled gate.
+  | "paymentsReceived"
   | "customers"
   | "purchases"
   | "purchasesSettings";
@@ -53,7 +56,13 @@ const CONTENT_KEYS: SiteNavKey[] = [
   "mediaSettings",
 ];
 
-const FINANCIAL_KEYS: SiteNavKey[] = ["sales", "customers", "purchases", "purchasesSettings"];
+const FINANCIAL_KEYS: SiteNavKey[] = [
+  "sales",
+  "paymentsReceived",
+  "customers",
+  "purchases",
+  "purchasesSettings",
+];
 
 export function buildSiteNavEntries({
   siteId,
@@ -125,6 +134,15 @@ export function buildSiteNavEntries({
     ...(salesEnabled
       ? [
           { label: "Sales", href: `${base}/sales`, active: active === "sales" },
+          // Payments received (2026-09-13) — a read-only report of every
+          // paid Payment, sits directly under Sales per the mockup, and
+          // shares its salesEnabled gate since it's the same sales data.
+          {
+            label: "Payments received",
+            href: `${base}/payments-received`,
+            active: active === "paymentsReceived",
+            subtle: true,
+          },
           { label: "Customers", href: `${base}/customers`, active: active === "customers" },
         ]
       : []),
