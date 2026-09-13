@@ -44,6 +44,21 @@ const DEFAULT_PAGE_SIZE = 60;
 // "Marketing" vs "Related" isn't a stored field — it's simply whether the
 // item has a linked artwork or not. Avoids keeping a redundant flag in
 // sync with the artworkId it would just be describing.
+//
+// An artwork's own Main image is deliberately excluded from "Related"
+// (2026-09-13 fix, direct report — "the artwork is showing as a related
+// image of itself"). Main and Related images share the same underlying
+// Image row shape (both just have artworkId set), so without this
+// exclusion the Main image — captioned with the artwork's own name —
+// showed up in its own Related list tagged "→ [same artwork name]",
+// reading as an artwork related to itself. Conceptually the two are not
+// the same kind of thing: Main is the artwork's image of record (fixed,
+// managed only from the Artwork Catalogue itself), while Related is
+// ancillary media that can be freely linked/unlinked — so Main has no
+// place in the Related bucket at all. Filtered via the
+// `mainImageOfArtwork` back-relation (null = this image isn't anyone's
+// main image) rather than comparing IDs by hand, so it stays correct
+// automatically if Set as Main ever moves to a different image.
 export async function listMedia(artistId: string, filters: ListFilters) {
   const { purpose, q, tag, artworkId, offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
 
@@ -51,7 +66,7 @@ export async function listMedia(artistId: string, filters: ListFilters) {
     artistId,
     status: { not: "ARCHIVED" as const },
     ...(purpose === "marketing" ? { artworkId: null } : {}),
-    ...(purpose === "related" ? { artworkId: { not: null } } : {}),
+    ...(purpose === "related" ? { artworkId: { not: null }, mainImageOfArtwork: null } : {}),
     ...(artworkId ? { artworkId } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
     ...(q
@@ -105,10 +120,19 @@ export async function listMedia(artistId: string, filters: ListFilters) {
   return { rows: rowsWithThumbnails, total };
 }
 
+// See the note on listMedia above — Related deliberately excludes each
+// artwork's own Main image, same reasoning and same exclusion.
 export async function countMediaByPurpose(artistId: string) {
   const [marketing, related] = await Promise.all([
     db.image.count({ where: { artistId, status: { not: "ARCHIVED" }, artworkId: null } }),
-    db.image.count({ where: { artistId, status: { not: "ARCHIVED" }, artworkId: { not: null } } }),
+    db.image.count({
+      where: {
+        artistId,
+        status: { not: "ARCHIVED" },
+        artworkId: { not: null },
+        mainImageOfArtwork: null,
+      },
+    }),
   ]);
   return { marketing, related };
 }
