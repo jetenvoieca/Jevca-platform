@@ -597,26 +597,8 @@ export default function HopperView({
         </div>
       )}
 
-      <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
-        Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
-      </h1>
-
       {addError && (
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
-      )}
-
-      {uploadProgress && (
-        <div className="mb-3 max-w-sm">
-          <p className="mb-1 text-xs text-neutral-500">
-            Uploading… {uploadProgress.done} of {uploadProgress.total}
-          </p>
-          <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
-            <div
-              className="h-full bg-neutral-900 transition-all"
-              style={{ width: `${(uploadProgress.done / uploadProgress.total) * 100}%` }}
-            />
-          </div>
-        </div>
       )}
 
       {/* Responsive layout, reworked 2026-08-18 — replaces a
@@ -813,6 +795,32 @@ export default function HopperView({
         </div>
 
         <div className="order-1 flex flex-col lg:order-none lg:min-w-[320px] lg:flex-1 lg:basis-[42%] lg:overflow-hidden">
+          {/* Title + counter, and the upload-progress bar, moved here
+              (2026-09-13, direct request — "move hopper title and
+              uploading from above Up next to above Incoming") — both
+              used to sit above the whole three-column row, spanning the
+              full page width; they now sit directly above the
+              Incoming/Folder/File/CSV row, scoped to this one column
+              like everything else that belongs to the sorting flow
+              itself. */}
+          <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
+            Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
+          </h1>
+
+          {uploadProgress && (
+            <div className="mb-3 max-w-sm">
+              <p className="mb-1 text-xs text-neutral-500">
+                Uploading… {uploadProgress.done} of {uploadProgress.total}
+              </p>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-neutral-100">
+                <div
+                  className="h-full bg-neutral-900 transition-all"
+                  style={{ width: `${(uploadProgress.done / uploadProgress.total) * 100}%` }}
+                />
+              </div>
+            </div>
+          )}
+
           <div className="mb-3">{importButtons}</div>
           <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
             {!current ? (
