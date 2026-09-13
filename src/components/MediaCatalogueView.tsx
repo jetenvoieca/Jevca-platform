@@ -13,7 +13,7 @@ type MediaRow = {
   posterUrl: string | null;
   kind: string;
   caption: string | null;
-  artwork: { id: string; presentationTitle: string } | null;
+  artwork: { id: string; catalogueName: string } | null;
 };
 
 const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
@@ -61,7 +61,7 @@ export default function MediaCatalogueView({
   artworkId: string;
   counts: { marketing: number; related: number };
   tagPresets: string[];
-  artistArtworks: { id: string; presentationTitle: string }[];
+  artistArtworks: { id: string; catalogueName: string }[];
   initialSelected: MediaDetail | null;
 }) {
   const router = useRouter();
@@ -398,7 +398,7 @@ export default function MediaCatalogueView({
                 <option value="">All artworks</option>
                 {artistArtworks.map((a) => (
                   <option key={a.id} value={a.id}>
-                    {a.presentationTitle}
+                    {a.catalogueName}
                   </option>
                 ))}
               </select>
@@ -456,7 +456,7 @@ export default function MediaCatalogueView({
                 </p>
                 {m.artwork && (
                   <p className="truncate text-xs font-medium text-rose-600">
-                    → {m.artwork.presentationTitle}
+                    → {m.artwork.catalogueName}
                   </p>
                 )}
               </button>
@@ -500,7 +500,7 @@ export default function MediaCatalogueView({
                   <td className="py-2 font-medium text-neutral-900">{m.caption || "Untitled"}</td>
                   <td className="py-2 text-neutral-500">{m.kind === "VIDEO" ? "Video" : "Photo"}</td>
                   <td className="py-2 text-rose-600">
-                    {m.artwork ? m.artwork.presentationTitle : "—"}
+                    {m.artwork ? m.artwork.catalogueName : "—"}
                   </td>
                 </tr>
               ))}
