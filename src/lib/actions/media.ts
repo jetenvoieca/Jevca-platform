@@ -137,7 +137,13 @@ export async function listImages(artistId: string, q?: string) {
     // is already related to (previously only its caption showed, so a
     // photo already tied to a specific piece looked no different from an
     // unrelated one until you'd actually picked it and looked closer).
-    include: { artwork: { select: { id: true, presentationTitle: true } } },
+    // catalogueName, not presentationTitle (2026-09-13 fix) — must stay
+    // consistent with mediaCatalogue.ts's listMedia, since
+    // MediaPicker.tsx uses both interchangeably through one shared
+    // local type. See the fuller reasoning there: Title only mirrors
+    // Name the first time Name is ever saved, so showing Title here
+    // could go stale the moment an artwork was renamed a second time.
+    include: { artwork: { select: { id: true, catalogueName: true } } },
     relationLoadStrategy: "query",
     take: 60,
   });
