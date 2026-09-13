@@ -12,7 +12,10 @@ type PickedImage = {
   posterUrl: string | null;
   caption: string | null;
   kind: string;
-  artwork: { id: string; presentationTitle: string } | null;
+  // catalogueName, not presentationTitle (2026-09-13 fix — must stay
+  // consistent with listMedia/listImages, which both now select
+  // catalogueName; see the fuller reasoning in mediaCatalogue.ts).
+  artwork: { id: string; catalogueName: string } | null;
 };
 
 type MediaRow = {
@@ -21,7 +24,7 @@ type MediaRow = {
   posterUrl: string | null;
   caption: string | null;
   kind: string;
-  artwork: { id: string; presentationTitle: string } | null;
+  artwork: { id: string; catalogueName: string } | null;
 };
 
 // videoOnly stays exactly as it was (used by the Video content block) —
@@ -366,9 +369,9 @@ export default function MediaPicker({
                   {img.artwork && (
                     <p
                       className="truncate text-xs font-medium text-rose-600"
-                      title={img.artwork.presentationTitle}
+                      title={img.artwork.catalogueName}
                     >
-                      → {img.artwork.presentationTitle}
+                      → {img.artwork.catalogueName}
                     </p>
                   )}
                 </button>
