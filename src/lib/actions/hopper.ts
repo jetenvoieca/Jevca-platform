@@ -132,14 +132,30 @@ export async function addHopperItemToBucket(
   return result;
 }
 
+// Links a Hopper item to an existing artwork, either as its Main image
+// or as an ancillary Related one. setAsMain decides which; relatedName
+// (2026-09-13, direct request — "Manage Artwork images") is an optional
+// name for the Related case only, saved straight onto the image's own
+// caption (the same field Media Catalogue and ArtworkImageManager
+// already read for a related image's display name) — omitted or
+// ignored entirely when setAsMain is true, since Main images aren't
+// named this way.
 export async function addHopperItemToArtwork(
   id: string,
   siteId: string,
   artworkId: string,
-  setAsMain: boolean
+  setAsMain: boolean,
+  relatedName?: string | null
 ): Promise<void> {
   await db.$transaction(async (tx) => {
-    await tx.image.update({ where: { id }, data: { status: "SORTED", artworkId } });
+    await tx.image.update({
+      where: { id },
+      data: {
+        status: "SORTED",
+        artworkId,
+        ...(!setAsMain && relatedName ? { caption: relatedName } : {}),
+      },
+    });
     if (setAsMain) {
       await tx.artwork.update({ where: { id: artworkId }, data: { mainImageId: id } });
     }
