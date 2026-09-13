@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState, useTransition } from "react";
-import Link from "next/link";
 import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
 import VideoThumb from "@/components/VideoThumb";
+import UploadNewImageModal from "@/components/UploadNewImageModal";
 
 type PickedImage = {
   id: string;
@@ -71,9 +71,9 @@ export default function MediaPicker({
   onSelect,
 }: {
   artistId: string;
-  // Needed only for the "Upload new" link, which now points at the
-  // Hopper rather than uploading inline (2026-08-17 — see the note by
-  // that link below for why).
+  // Needed for the "Upload new" button's shared upload modal (see
+  // UploadNewImageModal) — used both for its own "Open Hopper" fallback
+  // link, and to pass through to the upload primitive.
   siteId: string;
   mode?: "single" | "multi";
   videoOnly?: boolean;
@@ -138,6 +138,9 @@ export default function MediaPicker({
   const [selected, setSelected] = useState<PickedImage[]>([]);
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Whether the shared "cut down Hopper" upload modal is open — see the
+  // "Upload new" button below.
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // This picker searches across the whole catalogue rather than paging
   // through it (unlike the Media Catalogue screen itself, which now
@@ -382,14 +385,14 @@ export default function MediaPicker({
             <p className="py-12 text-center text-sm text-neutral-400">
               {linkedArtworkId && purpose === "related"
                 ? "No images related to this artwork yet."
-                : "No matches. Upload new images via the Hopper."}
+                : "No matches. Try Upload new."}
             </p>
           )}
         </div>
 
         {/* Right-hand control panel — everything lives here now: search,
             the Marketing/Related toggle (when scoped to one artwork),
-            the Hopper upload link, the selection count, "Add"/"Add
+            the upload button, the selection count, "Add"/"Add
             selected", and Close. Its own independent scroll (separate
             from the grid) means a long list of future controls never
             pushes Close off-screen or forces the grid to shrink. */}
@@ -439,18 +442,21 @@ export default function MediaPicker({
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             />
 
-            {/* Still a link to the Hopper, not inline upload — this
-                picker stays read-only/browse-only by deliberate decision
-                (2026-08-17): every new image goes through the Hopper's
-                controlled intake, captioning, and sort step first.
-                Reconfirmed 2026-08-18 when this panel was reworked — only
-                its position moved, not what it does. */}
-            <Link
-              href={`/sites/${siteId}/hopper`}
+            {/* Opens the shared "cut down Hopper" upload modal
+                (2026-09-13, direct request — "same idea as delete and
+                adding new main image", replacing a plain Link out to
+                the full Hopper page) rather than leaving this picker
+                entirely. A successful upload is picked immediately
+                (handlePick), same as clicking any existing thumbnail
+                above — single mode closes the whole picker with it
+                selected; multi mode adds it to the current selection. */}
+            <button
+              type="button"
+              onClick={() => setShowUploadModal(true)}
               className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-center text-sm hover:bg-neutral-50"
             >
               Upload new
-            </Link>
+            </button>
 
             {/* Selected items, shown as thumbnails with their own remove
                 control (2026-08-18, direct request) — previously this
@@ -532,6 +538,24 @@ export default function MediaPicker({
         </div>
       </div>
       </div>
+
+      {showUploadModal && (
+        <UploadNewImageModal
+          artistId={artistId}
+          siteId={siteId}
+          onClose={() => setShowUploadModal(false)}
+          onUploaded={(image) => {
+            handlePick({
+              id: image.id,
+              url: image.thumbnailUrl || image.url,
+              posterUrl: image.posterUrl,
+              caption: image.caption,
+              kind: image.kind,
+              artwork: null,
+            });
+          }}
+        />
+      )}
     </div>
   );
 }
