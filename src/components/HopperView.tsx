@@ -9,7 +9,6 @@ import {
   addHopperItemToMedia,
   addHopperItemToArtwork,
   addHopperItemToBucket,
-  updateHopperFields,
   createArtworkFromHopperQuick,
 } from "@/lib/actions/hopper";
 import { uploadFileDirect } from "@/lib/uploadDirect";
@@ -18,6 +17,7 @@ import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
+import { computeReferencePrice } from "@/lib/pricing";
 
 export type HopperItem = {
   id: string;
@@ -81,8 +81,8 @@ export default function HopperView({
   basePath?: string;
   artistId: string;
   queue: HopperItem[];
-  // Used by the inline "quick catalogue" fields shown after "Add
-  // Artwork" — see the note by that button in SortingCard.
+  // Used by the inline "quick catalogue" fields shown after "Create new
+  // artwork" — see the note by that button in SortingCard.
   artworkSettings: ArtworkSettings;
 }) {
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
@@ -238,6 +238,20 @@ export default function HopperView({
     router.refresh();
   };
 
+  // "When added from any source immediately fill the panel" (2026-09-13,
+  // direct request) — any of the four ways a new item can land in the
+  // Hopper (manual upload, drag-and-drop, CSV import, or just clicking
+  // Incoming to check for new arrivals) should open straight into the
+  // sorting card, not require an extra click on a thumbnail first. Since
+  // sortOrder defaults to "newest" and the server always returns the
+  // truly newest row first once sorted that way, marking hasInteracted
+  // (with no explicit selectedId) is enough — sortedQueue[0] after the
+  // next refresh is exactly the item that just arrived.
+  const revealLatestArrival = () => {
+    setHasInteracted(true);
+    setSelectedId(null);
+  };
+
   const handleBin = (item: HopperItem) => {
     startTransition(async () => {
       const result = await binHopperItem(item.id, siteId);
@@ -318,7 +332,10 @@ export default function HopperView({
 
   // Existing artwork → always ancillary, never touches that artwork's
   // main image (per 2026-08-05 decision — changing an existing artwork's
-  // main image is a separate action, done from the Artwork editor).
+  // main image is a separate action). Button renamed "Manage Artwork"
+  // (2026-09-13, direct request) — its behaviour here is unchanged for
+  // now; the fuller "choose Main or Related, name the related image"
+  // form is a separate, later step.
   const handleAddToExistingArtwork = (item: HopperItem, artworkId: string, artworkTitle: string) => {
     startTransition(async () => {
       await addHopperItemToArtwork(item.id, siteId, artworkId, false);
@@ -332,30 +349,25 @@ export default function HopperView({
   // was pressed, then saved each Catalogue field separately as it was
   // filled in afterwards). Nothing is written to the database until this
   // runs, fired once from SortingCard's "Done, next item" — the artwork
-  // (with title + description + whatever Catalogue fields were filled
-  // in), the image link, and setting it as the main image all happen
-  // together in createArtworkFromHopperQuick. Only then does the queue
-  // auto-advance, same rhythm as every other action on this screen.
-  const handleAddNewArtwork = async (
-    item: HopperItem,
-    title: string,
-    description: string,
-    fields: FormData
-  ): Promise<boolean> => {
-    const result = await createArtworkFromHopperQuick(
-      item.id,
-      siteId,
-      artistId,
-      title,
-      description,
-      fields
-    );
+  // (with every Catalogue field the quick-create form collected —
+  // Name/Tier/Type/Group/Medium/Size/Location/Date/Reference+Offered
+  // price/Studio notes, always AVAILABLE), the image link, and setting
+  // it as the main image all happen together in
+  // createArtworkFromHopperQuick. Only then does the queue auto-advance,
+  // same rhythm as every other action on this screen.
+  //
+  // No longer takes a separate title/description (2026-09-13) — Name is
+  // now one of the fields inside `fields` itself (see QuickCatalogueFields
+  // below), read straight off the form the same way every other field
+  // is.
+  const handleAddNewArtwork = async (item: HopperItem, fields: FormData): Promise<boolean> => {
+    const result = await createArtworkFromHopperQuick(item.id, siteId, artistId, fields);
     if (!result.ok) {
       setAddError(result.error);
       return false;
     }
     setAddError(null);
-    const finalTitle = title.trim() || "Untitled";
+    const finalTitle = ((fields.get("catalogueName") as string) || "").trim() || "Untitled";
     logProcessed(item, `New artwork: ${finalTitle}`, `${resolvedBasePath}/artworks?selected=${result.artwork.id}`);
     advanceAfterAction();
     return true;
@@ -438,6 +450,9 @@ export default function HopperView({
     } finally {
       setUploadProgress(null);
       setAddUploading(false);
+      // See revealLatestArrival above — a fresh upload should open
+      // straight into sorting it, not leave the panel blank.
+      revealLatestArrival();
       router.refresh();
     }
   };
@@ -482,7 +497,12 @@ export default function HopperView({
     <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
-        onClick={() => router.refresh()}
+        onClick={() => {
+          // "Incoming" is itself an explicit signal to start sorting
+          // (2026-09-13) — see revealLatestArrival above.
+          revealLatestArrival();
+          router.refresh();
+        }}
         className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
       >
         Incoming
@@ -798,9 +818,7 @@ export default function HopperView({
                 onAddToExistingArtwork={(artworkId, artworkTitle) =>
                   handleAddToExistingArtwork(current, artworkId, artworkTitle)
                 }
-                onAddNewArtwork={(title, description, fields) =>
-                  handleAddNewArtwork(current, title, description, fields)
-                }
+                onAddNewArtwork={(fields) => handleAddNewArtwork(current, fields)}
               />
             )}
           </div>
@@ -913,7 +931,13 @@ export default function HopperView({
         <HopperImportPanel
           artistId={artistId}
           siteId={siteId}
-          onClose={() => setShowCsvImport(false)}
+          onClose={() => {
+            setShowCsvImport(false);
+            // See revealLatestArrival above — a completed CSV import
+            // should open straight into sorting the newest item.
+            revealLatestArrival();
+            router.refresh();
+          }}
         />
       )}
     </div>
@@ -941,19 +965,14 @@ function SortingCard({
   onAddToMedia: () => void;
   onAddToBucket: () => void;
   onAddToExistingArtwork: (artworkId: string, artworkTitle: string) => void;
-  // Fires once, from the quick-catalogue form's "Done, next item" — not
-  // from "Add Artwork" any more (2026-08-18). Returns whether it
-  // succeeded so this card knows whether to keep the form open (on
-  // failure, so nothing typed is lost) or let the parent's advance take
-  // over (on success). description (2026-09-02) travels alongside title,
-  // same "carried straight into the new artwork" treatment.
-  onAddNewArtwork: (title: string, description: string, fields: FormData) => Promise<boolean>;
+  // Fires once, from the quick-catalogue form's "Done, next item" — the
+  // form itself now collects Name (as `catalogueName`) alongside every
+  // other Catalogue field, so there's nothing to pass alongside it
+  // (2026-09-13; previously took a separate title/description sourced
+  // from this card's own Name/Description inputs, both now removed —
+  // "no name or description at this stage").
+  onAddNewArtwork: (fields: FormData) => Promise<boolean>;
 }) {
-  // Local state, reset automatically each time this card remounts (the
-  // parent keys it by item.id) — no stale-caption/description bug when
-  // moving between queue items.
-  const [caption, setCaption] = useState(item.caption || "");
-  const [description, setDescription] = useState(item.description || "");
   // Whether the inline "quick catalogue" form is open. Nothing is created
   // in the database just by opening it (2026-08-18) — closing it again,
   // whether via Cancel or by picking a different action button entirely,
@@ -961,16 +980,6 @@ function SortingCard({
   // ever saved.
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
-
-
-  const saveFields = () => {
-    const fd = new FormData();
-    fd.set("caption", caption);
-    fd.set("description", description);
-    // Fire-and-forget — this is a background autosave, not the action
-    // that advances the queue, so it doesn't need its own pending state.
-    updateHopperFields(item.id, siteId, fd);
-  };
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
@@ -993,28 +1002,14 @@ function SortingCard({
         />
       )}
 
-      <div className="mb-4 space-y-3">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
-          <input
-            type="text"
-            value={caption}
-            onChange={(e) => setCaption(e.target.value)}
-            onBlur={() => saveFields()}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Description</label>
-          <textarea
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            onBlur={() => saveFields()}
-            rows={3}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
-      </div>
+      {/* No Name/Description fields at this stage any more (2026-09-13,
+          direct request — "no name or description at this stage").
+          Whichever routing button is chosen next collects only what
+          that specific destination actually needs: Create new artwork
+          collects Name itself (see QuickCatalogueFields below); Add to
+          Media/Add to Bucket/Manage Artwork need neither — a caption can
+          always be added afterwards from the Media Catalogue's own edit
+          form if wanted. */}
 
       {/* Four plain, equal-weight buttons — not the dashed "+ Add" tile.
           This screen assigns/routes an existing item rather than adding
@@ -1045,48 +1040,47 @@ function SortingCard({
         >
           Add to Bucket
         </button>
+        {/* Renamed from "Add to Existing Artwork" (2026-09-13, direct
+            request). Behaviour unchanged for now — always links as a
+            Related image, never touches Main (see
+            onAddToExistingArtwork above). A fuller Main/Related form
+            behind this button is a separate, later step. */}
         <ArtworkPicker
           artistId={artistId}
           mode="single"
           variant="button"
-          label="Add to Existing Artwork"
+          label="Manage Artwork"
           onSelect={(artworks) => {
             if (artworks[0]) {
               onAddToExistingArtwork(artworks[0].id, artworks[0].presentationTitle);
             }
           }}
         />
-        {/* Shortened from "Add New Artwork" (2026-08-17) specifically so
-            it fits alongside "Add to Existing Artwork" on the same row.
-            2026-08-18: no longer creates anything on this click — it only
-            opens the form below. Nothing is saved to the database until
-            "Done, next item" inside that form. */}
+        {/* Renamed from "Add Artwork" (2026-09-13, direct request).
+            Opens the form below; nothing is saved to the database until
+            "Done, next item" inside it. */}
         <button
           type="button"
           onClick={() => setShowQuickForm(true)}
           disabled={isPending || showQuickForm}
           className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
         >
-          Add Artwork
+          Create new artwork
         </button>
       </div>
-      {!showQuickForm && (
-        <p className="mt-2 text-xs text-neutral-400">
-          &quot;Add Artwork&quot; uses Name above as its title (or &quot;Untitled&quot; if
-          blank) and Description above as its description, and this image becomes its main
-          image automatically.
-        </p>
-      )}
 
       {/* Inline "quick catalogue" fields (2026-08-18, reworked to a true
-          one-shot flow per direct request). Opening this form no longer
-          creates the artwork — it's a plain local form, nothing is saved
-          anywhere until "Done, next item" is pressed. That single press
-          creates the artwork, fills in whatever fields were completed
-          (all optional), and links this image as its main image, all
-          together. "Cancel" (or just picking a different action button
-          instead) discards everything typed with nothing to clean up,
-          since nothing was ever written to the database. */}
+          one-shot flow per direct request; 2026-09-13, reworked again to
+          match the full Artwork Catalogue tab — see QuickCatalogueFields
+          below). Opening this form doesn't create the artwork — it's a
+          plain local form, nothing is saved anywhere until "Done, next
+          item" is pressed. That single press creates the artwork, fills
+          in whatever fields were completed (all optional except it
+          otherwise falls back to "Untitled"), and links this image as
+          its main image, all together. "Cancel" (or just picking a
+          different action button instead) discards everything typed
+          with nothing to clean up, since nothing was ever written to the
+          database. */}
       {showQuickForm && (
         <QuickCatalogueFields
           settings={settings}
@@ -1094,7 +1088,7 @@ function SortingCard({
           onCancel={() => setShowQuickForm(false)}
           onDone={async (fields) => {
             setCreatingArtwork(true);
-            const ok = await onAddNewArtwork(caption, description, fields);
+            const ok = await onAddNewArtwork(fields);
             setCreatingArtwork(false);
             // On failure, leave the form open (with whatever was typed
             // still in it, since it's a plain uncontrolled form) so
@@ -1108,20 +1102,34 @@ function SortingCard({
   );
 }
 
-// Same field set as the full Artwork editor's Catalogue tab — literally
-// the same shared component, ArtworkCatalogueFields (2026-09-07; see
-// that file for why). Deliberately not Name (comes from the caption
-// above instead) or Tier/Reference/Offered price (Catalogue-tab-only —
-// a brand-new Hopper-created artwork isn't priced or tiered yet).
-// Description also comes from the caption/description pair above, for
-// the same reason Name does.
+// Matches the full Artwork Catalogue tab (2026-09-13, direct request —
+// "update form to match Artwork catalogue form, except the available/
+// sold toggle"): Name and Tier up top, then the same shared
+// Type/Group/Medium/Size/Edition/Location/Date fields as everywhere else
+// (ArtworkCatalogueFields, 2026-09-07), then Reference/Offered price in
+// the same position the Catalogue tab puts them, then Studio notes.
+// Availability is the one deliberate omission — every artwork created
+// here starts AVAILABLE (see createArtworkFromHopperQuick), so there's
+// nothing to toggle; availabilityOverride below swaps in a plain hidden
+// input rather than showing the Available/SOLD control at all.
 //
-// 2026-08-18: no longer autosaves field-by-field, since there's no
+// This duplicates the Name/Tier/Reference+Offered-price JSX
+// ArtworkDetailPanel's Catalogue tab already has, rather than sharing
+// one component for it — a deliberate, temporary trade-off flagged here
+// rather than hidden: the two are about to be unified for real once this
+// same field set needs to render a third time, inside a modal, for
+// "Delete & Replace" (see the plan for that step). Consolidating now,
+// before that shape is known, risked guessing wrong and re-doing it
+// twice.
+//
+// 2026-09-13: no longer autosaves field-by-field, since there's no
 // artwork to save to until "Done, next item" is pressed — the artwork
-// doesn't exist until then. This is now a plain uncontrolled form; every
+// doesn't exist until then. This is a plain uncontrolled form; every
 // field's current value is only read once, from a single FormData
 // snapshot taken at that moment — so ArtworkCatalogueFields is used here
-// with no onAutosave.
+// with no onAutosave. Type/Size are still tracked live in local state
+// purely to drive the Reference price preview below, same reasoning as
+// ArtworkDetailPanel's own Catalogue tab.
 function QuickCatalogueFields({
   settings,
   creating,
@@ -1134,11 +1142,45 @@ function QuickCatalogueFields({
   onDone: (fields: FormData) => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const [typeValue, setTypeValue] = useState("");
+  const [sizeValue, setSizeValue] = useState("");
+  const selectedTypeRecord = settings.artworkTypeRecords.find(
+    (t) => t.name.toLowerCase() === typeValue.trim().toLowerCase()
+  );
+  const referencePrice = computeReferencePrice(
+    sizeValue,
+    selectedTypeRecord ? parseFloat(selectedTypeRecord.refValue) : null
+  );
 
   return (
     <div className="mt-4 rounded-md border border-neutral-300 p-4">
       <form ref={formRef} className="space-y-4">
         <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
+            <input
+              type="text"
+              name="catalogueName"
+              placeholder="Untitled"
+              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Tier</label>
+            <select
+              name="tier"
+              defaultValue=""
+              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+            >
+              <option value="">Choose from list…</option>
+              {settings.artworkTiers.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
+
           <ArtworkCatalogueFields
             settings={settings}
             values={{
@@ -1153,14 +1195,48 @@ function QuickCatalogueFields({
               studioNotes: "",
               availability: "AVAILABLE",
             }}
-          />
+            onTypeOrSizeChange={(type, size) => {
+              setTypeValue(type);
+              setSizeValue(size);
+            }}
+            // No Available/SOLD toggle on this form — see the note above.
+            availabilityOverride={<input type="hidden" name="availability" value="AVAILABLE" />}
+          >
+            {/* Reference/Offered price, same compact side-by-side pair
+                as the Catalogue tab (2026-09-11 layout). */}
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Reference price
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
+                  className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
+                />
+              </div>
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Offered price
+                </label>
+                <input
+                  type="text"
+                  name="offeredPrice"
+                  placeholder="e.g. 450.00"
+                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                />
+              </div>
+            </div>
+          </ArtworkCatalogueFields>
         </div>
       </form>
       {/* "Done, next item" (added 2026-08-17, since this form otherwise
-          has no explicit way to conclude) is now also the button that
+          has no explicit way to conclude) is also the button that
           actually creates the artwork (2026-08-18) — filling any/none of
-          the fields above is still optional, but this is the one
-          deliberate, single moment anything gets saved. "Cancel" is new
+          the fields above is still optional (an empty Name falls back to
+          "Untitled" — see createArtworkFromHopperQuick), but this is the
+          one deliberate, single moment anything gets saved. "Cancel" is
           alongside it: since nothing exists in the database until this
           click, backing out needs no cleanup at all — just closing the
           form. */}
