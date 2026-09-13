@@ -1,33 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { uploadFileDirect } from "@/lib/uploadDirect";
+import UploadNewImageModal, { type UploadedImage } from "@/components/UploadNewImageModal";
 import { linkImagesToArtwork, deleteArtworkMainImage } from "@/lib/actions/artworks";
 
 // "Delete & Replace"'s own limited window onto adding a new image
 // (2026-09-13, direct request — "let them upload a brand-new file right
-// there, no trip to the full Hopper page"). Reuses the exact same
-// upload primitive (uploadFileDirect) and the exact same linking action
-// (linkImagesToArtwork) every other upload/add flow in this app already
-// uses — not a second, separately-maintained version of either.
-// Deliberately narrow: one file in, becomes this artwork's new Main
-// image, done — no queue, no sorting, no other destinations. Uploads
-// straight in as SORTED (bypassing the Hopper queue entirely), the same
-// way MediaPicker/MediaCatalogueView's own direct uploads already do —
-// this is a single, purposeful replacement of one specific artwork's
-// record image, not raw incoming material that needs sorting later.
-// "Open Hopper" stays as the way out to the full page for anything more
-// involved (picking an existing image, adding several, etc.).
+// there, no trip to the full Hopper page"; reworked again the same day
+// to wrap the shared UploadNewImageModal instead of duplicating its
+// dropzone/chrome — "same idea as delete and adding new main image,
+// one set of code"). All this component adds on top of the shared
+// modal is what happens once a replacement has actually finished
+// uploading: delete the old Main image, then link the new one in as
+// the artwork's Main.
 //
 // The old Main image is deliberately NOT deleted until the replacement
-// has actually finished uploading (2026-09-13 fix, direct report — the
-// previous version deleted it the moment "Delete & Replace" was
-// clicked, so cancelling this modal, or closing the tab mid-upload,
-// left the artwork with no Main image at all). oldMainImageId is only
-// ever acted on inside handleFileSelected below, after uploadFileDirect
-// has already succeeded — cancelling, or any failure before that point,
-// leaves the existing Main image completely untouched.
+// has actually finished uploading (2026-09-13 fix, direct report — an
+// earlier version deleted it the moment "Delete & Replace" was
+// clicked, so cancelling this modal left the artwork with no Main image
+// at all). oldMainImageId is only ever acted on inside handleUploaded
+// below, which UploadNewImageModal only calls after the upload itself
+// has already succeeded — cancelling, or any upload failure, leaves the
+// existing Main image completely untouched. If the delete step itself
+// fails, that error propagates back up to UploadNewImageModal and is
+// shown there rather than the modal closing anyway.
 export default function SetMainFromHopperModal({
   artworkId,
   siteId,
@@ -49,102 +44,26 @@ export default function SetMainFromHopperModal({
   // same way every other change in that component does.
   onDone: () => void;
 }) {
-  const router = useRouter();
-  const [uploading, setUploading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleFileSelected = async (file: File | undefined) => {
-    if (!file) return;
-    setError(null);
-    setUploading(true);
-    try {
-      const image = await uploadFileDirect(file, artistId, "SORTED", "Artwork main image replacement");
-      // Only from here on is anything destructive done — the upload
-      // above already succeeded, so the old Main image is now safe to
-      // remove. deleteArtworkMainImage clears mainImageId to null before
-      // deleting the row (that FK is Restrict); linkImagesToArtwork then
-      // auto-assigns Main to the new image, since there isn't one now.
-      const deleteResult = await deleteArtworkMainImage(artworkId, oldMainImageId, siteId);
-      if (!deleteResult.ok) {
-        setError(deleteResult.error);
-        return;
-      }
-      await linkImagesToArtwork(artworkId, [image.id], siteId);
-      onDone();
-      onClose();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Upload failed. Try again.");
-    } finally {
-      setUploading(false);
+  const handleUploaded = async (image: UploadedImage) => {
+    // deleteArtworkMainImage clears mainImageId to null before deleting
+    // the row (that FK is Restrict); linkImagesToArtwork then
+    // auto-assigns Main to the new image, since there isn't one now.
+    const deleteResult = await deleteArtworkMainImage(artworkId, oldMainImageId, siteId);
+    if (!deleteResult.ok) {
+      throw new Error(deleteResult.error);
     }
+    await linkImagesToArtwork(artworkId, [image.id], siteId);
+    onDone();
   };
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) onClose();
-      }}
-    >
-      <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-medium text-neutral-900">Replace Main image</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close"
-            className="rounded-md p-1 text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
-            </svg>
-          </button>
-        </div>
-
-        {/* Makes the delete-on-upload behaviour explicit rather than a
-            silent side effect — the current Main image only actually
-            goes away once a replacement is chosen here. */}
-        <p className="mb-3 text-xs text-neutral-500">
-          The current Main image will be deleted once your replacement finishes uploading.
-        </p>
-
-        {error && (
-          <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{error}</p>
-        )}
-
-        <label
-          className={`flex w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 px-4 py-12 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600 ${
-            uploading ? "cursor-wait opacity-50" : "cursor-pointer"
-          }`}
-        >
-          {uploading ? "Uploading…" : "+ Upload new Main image"}
-          <input
-            type="file"
-            accept="image/*,video/*"
-            className="hidden"
-            disabled={uploading}
-            onChange={(e) => handleFileSelected(e.target.files?.[0])}
-          />
-        </label>
-
-        <div className="mt-4 flex items-center gap-3 border-t border-neutral-200 pt-4">
-          <button
-            type="button"
-            onClick={() => router.push(`/sites/${siteId}/hopper`)}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50"
-          >
-            Open Hopper
-          </button>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={uploading}
-            className="text-sm text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+    <UploadNewImageModal
+      artistId={artistId}
+      siteId={siteId}
+      title="Replace Main image"
+      note="The current Main image will be deleted once your replacement finishes uploading."
+      onClose={onClose}
+      onUploaded={handleUploaded}
+    />
   );
 }
