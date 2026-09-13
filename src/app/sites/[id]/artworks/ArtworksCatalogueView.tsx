@@ -90,6 +90,18 @@ export default function ArtworksCatalogueView({
   const [total, setTotal] = useState(initialTotal);
   const [soldCount, setSoldCount] = useState(initialSoldCount);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Set when a "load more" fetch fails (2026-09-13 fix, direct report —
+  // "loading sign keeps flickering, console errors every second or so").
+  // Without this, a failed fetch just reset loadingMore back to false
+  // with no new rows added, so hasMore stayed true, the sentinel was
+  // still on-screen, and the IntersectionObserver immediately fired
+  // handleLoadMore() again — an infinite retry loop hammering the server
+  // with the same failing request, which is exactly what the flicker and
+  // repeated console errors were. The observer effect below now skips
+  // auto-fetching while this is true; loadMoreRow shows a manual
+  // "Couldn't load more — Retry" instead of "Loading…", and retrying (or
+  // any successful load/filter change) clears it.
+  const [loadMoreError, setLoadMoreError] = useState(false);
   const hasMore = artworks.length < total;
 
   // Filters (2026-08-15) — used to be a plain <form method="get"> needing
@@ -181,6 +193,9 @@ export default function ArtworksCatalogueView({
       );
       setTotal(newTotal);
       setSoldCount(newSoldCount);
+      // Fresh list under the new filters — any previous "load more"
+      // failure no longer applies to it.
+      setLoadMoreError(false);
       updateUrlFilters(next);
 
       // 2026-08-16 fix: whatever was open in the detail panel used to
@@ -203,6 +218,7 @@ export default function ArtworksCatalogueView({
 
   const handleLoadMore = useCallback(async () => {
     setLoadingMore(true);
+    setLoadMoreError(false);
     try {
       const { rows } = await listArtworks(artistId, {
         q: q || undefined,
@@ -228,6 +244,13 @@ export default function ArtworksCatalogueView({
           imageUrl: a.images[0]?.url ?? null,
         })),
       ]);
+    } catch {
+      // See the note on loadMoreError above — this is what actually
+      // breaks the retry loop: without catching here, the error would
+      // propagate as an unhandled rejection and the observer effect
+      // below would just fire handleLoadMore() again on the very next
+      // tick, forever.
+      setLoadMoreError(true);
     } finally {
       setLoadingMore(false);
     }
@@ -242,7 +265,13 @@ export default function ArtworksCatalogueView({
 
   useEffect(() => {
     const node = sentinelRef.current;
-    if (!node || !hasMore) return;
+    // Also skipped while loadMoreError is true (2026-09-13 fix) — the
+    // sentinel can still be sitting on-screen after a failed fetch (no
+    // new rows arrived, so hasMore is still true), but auto-retrying it
+    // here is exactly the infinite loop this fix removes. Loading more
+    // after a failure now only happens via the explicit Retry button in
+    // loadMoreRow below.
+    if (!node || !hasMore || loadMoreError) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries[0].isIntersecting && !loadingMore) {
@@ -253,7 +282,7 @@ export default function ArtworksCatalogueView({
     );
     observer.observe(node);
     return () => observer.disconnect();
-  }, [hasMore, loadingMore, handleLoadMore]);
+  }, [hasMore, loadingMore, loadMoreError, handleLoadMore]);
 
   // Selecting an artwork used to navigate to a whole separate route,
   // which re-ran this component from scratch on every click — the direct
@@ -360,6 +389,7 @@ export default function ArtworksCatalogueView({
       );
       setTotal(newTotal);
       setSoldCount(newSoldCount);
+      setLoadMoreError(false);
       handleSelect(newArtworkId);
     })();
   };
@@ -492,7 +522,17 @@ export default function ArtworksCatalogueView({
 
   const loadMoreRow = hasMore && (
     <div ref={sentinelRef} className="mt-4 flex h-8 items-center justify-center">
-      {loadingMore && <span className="text-sm text-neutral-400">Loading…</span>}
+      {loadingMore ? (
+        <span className="text-sm text-neutral-400">Loading…</span>
+      ) : loadMoreError ? (
+        <button
+          type="button"
+          onClick={handleLoadMore}
+          className="text-sm text-red-600 hover:underline"
+        >
+          Couldn't load more — tap to retry
+        </button>
+      ) : null}
     </div>
   );
 
