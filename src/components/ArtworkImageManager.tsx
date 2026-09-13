@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import MediaPicker from "@/components/MediaPicker";
 import VideoThumb from "@/components/VideoThumb";
 import { linkImagesToArtwork, unlinkImageFromArtwork, deleteArtworkMainImage } from "@/lib/actions/artworks";
@@ -28,8 +29,10 @@ export type ArtworkImage = {
 // already-linked image from in here. The only ways Main ever changes
 // now: the artwork's very first image becomes Main automatically (see
 // the auto-assign note on linkImagesToArtwork in actions/artworks.ts),
-// or a wrong one is fixed via "Delete & Replace" below, which deletes it
-// outright and immediately opens the picker for its replacement.
+// or a wrong one is fixed via "Delete & Replace" below — which deletes
+// it outright, then sends the person to the Hopper, where "Manage
+// Artwork"/the upcoming Main-image flow (see HopperView.tsx) sets
+// whichever image they sort there as this artwork's new Main.
 //
 // Because the grid is now four fixed positions rather than a free-
 // flowing, reorderable list, the old pointer-based drag-to-reorder is
@@ -48,32 +51,22 @@ export default function ArtworkImageManager({
   images: ArtworkImage[];
   // Which image (if any) is actually Main — an explicit id, not a
   // positional guess (2026-09-13 fix — see the matching note on
-  // getArtworkDetailForClient in actions/artworks.ts). Everything below
-  // that needs to know "is this the Main image" compares against
-  // localMainId (this value, mirrored into local state so Add/Delete &
-  // Replace can update it optimistically without waiting on a refetch).
+  // getArtworkDetailForClient in actions/artworks.ts).
   mainImageId: string | null;
   onDataChanged?: () => void;
 }) {
+  const router = useRouter();
   const [images, setImages] = useState(initialImages);
   const [localMainId, setLocalMainId] = useState(mainImageId);
   const [activeId, setActiveId] = useState<string | null>(mainImageId ?? initialImages[0]?.id ?? null);
   const [busy, setBusy] = useState(false);
-  // Set right after Delete & Replace clears the old Main, so the now-
-  // empty Main slot's picker opens itself immediately instead of
-  // leaving an empty tile the person has to click into separately — see
-  // handleDeleteAndReplace below. Bumped as part of the same state
-  // change that clears localMainId, so the picker (which only auto-opens
-  // once per mount) is guaranteed to be freshly mounted when this is
-  // true.
-  const [autoOpenMain, setAutoOpenMain] = useState(false);
 
   // Stay in sync with the server. This component owns its own copy of
-  // the image list (and of which one is Main) so an add/remove/Delete &
-  // Replace can update instantly without waiting on a round trip, but it
-  // must never go stale once the parent's data actually changes
-  // underneath it — e.g. after any other field on this artwork autosaves
-  // and the whole thing refetches.
+  // the image list (and of which one is Main) so an add/remove can
+  // update instantly without waiting on a round trip, but it must never
+  // go stale once the parent's data actually changes underneath it —
+  // e.g. after any other field on this artwork autosaves and the whole
+  // thing refetches.
   useEffect(() => {
     setImages(initialImages);
   }, [initialImages]);
@@ -106,17 +99,17 @@ export default function ArtworkImageManager({
   };
 
   // Adds one or more already-uploaded images — used by every "+ Add"
-  // tile below, including the Main slot's when it's empty. Whichever
-  // image ends up Main is decided server-side (linkImagesToArtwork
-  // auto-assigns Main whenever the artwork doesn't have one yet); the
-  // localMainId update here just mirrors that same rule locally so the
-  // UI doesn't have to wait on a refetch to show it correctly.
+  // tile below, including the Main slot's when it's empty (a brand-new
+  // artwork's very first image). Whichever image ends up Main is decided
+  // server-side (linkImagesToArtwork auto-assigns Main whenever the
+  // artwork doesn't have one yet); the localMainId update here just
+  // mirrors that same rule locally so the UI doesn't have to wait on a
+  // refetch to show it correctly.
   const handleAdd = (
     added: { id: string; url: string; kind: string; posterUrl: string | null }[]
   ) => {
     const ids = added.map((i) => i.id);
     setBusy(true);
-    setAutoOpenMain(false);
     linkImagesToArtwork(artworkId, ids, siteId)
       .then(() => {
         setImages((prev) => [
@@ -139,12 +132,19 @@ export default function ArtworkImageManager({
 
   // "Delete & Replace" (2026-09-13, direct request) — the only way left
   // to fix a wrong Main image. Deletes it outright (not just unlinks —
-  // see deleteArtworkMainImage in actions/artworks.ts) and immediately
-  // reopens the now-empty Main slot's picker so a replacement can be
-  // chosen in the same step.
+  // see deleteArtworkMainImage in actions/artworks.ts), then sends the
+  // person to the Hopper to sort in its replacement. Kept as a real
+  // navigation rather than an inline picker here, per direct request —
+  // every new image goes through the Hopper's controlled intake, same
+  // as everywhere else media enters this app.
   const handleDeleteAndReplace = () => {
     if (!mainImage) return;
-    if (!confirm("Delete this image and choose its replacement? This can't be undone.")) return;
+    if (
+      !confirm(
+        "Delete this image? You'll be taken to the Hopper to sort in its replacement."
+      )
+    )
+      return;
     setBusy(true);
     deleteArtworkMainImage(artworkId, mainImage.id, siteId)
       .then((result) => {
@@ -152,10 +152,8 @@ export default function ArtworkImageManager({
           alert(result.error);
           return;
         }
-        setImages((prev) => prev.filter((i) => i.id !== mainImage.id));
-        setLocalMainId(null);
-        setAutoOpenMain(true);
         onDataChanged?.();
+        router.push(`/sites/${siteId}/hopper`);
       })
       .finally(() => setBusy(false));
   };
@@ -237,7 +235,6 @@ export default function ArtworkImageManager({
           ) : (
             <div className="aspect-square">
               <MediaPicker
-                key={autoOpenMain ? "main-replace" : "main-empty"}
                 artistId={artistId}
                 siteId={siteId}
                 mode="single"
@@ -245,7 +242,6 @@ export default function ArtworkImageManager({
                 linkedArtworkId={artworkId}
                 mediaKinds={["PHOTO", "VIDEO"]}
                 previewClassName="aspect-square h-full w-full"
-                autoOpen={autoOpenMain}
                 onSelect={(added) => handleAdd(added)}
               />
             </div>
