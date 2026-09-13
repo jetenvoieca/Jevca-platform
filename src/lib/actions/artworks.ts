@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
 import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
+import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
@@ -480,6 +481,14 @@ export async function getArtworkDetailForClient(id: string) {
     // isn't itself a derivative. See the matching note on
     // Artwork.derivedFromId in schema.prisma.
     derivedFromCatalogueNumber: artwork.derivedFrom?.catalogueNumber ?? null,
+    // Which image (if any) is actually Main (2026-09-13) — exposed
+    // explicitly rather than left for the client to infer from array
+    // position. The images array below is still sorted Main-first when
+    // one is set, but ArtworkImageManager now needs to tell Main and
+    // Related apart with certainty (no more "Set as Main" swapping
+    // between existing images — see actions/artworks.ts), so an id
+    // comparison against this replaces the old positional guess.
+    mainImageId: artwork.mainImageId,
     images: artwork.images
       .slice()
       .sort((a, b) => {
@@ -683,11 +692,34 @@ export async function deleteArtwork(siteId: string, id: string) {
   await db.artwork.delete({ where: { id } });
 }
 
+// Links one or more already-uploaded Images to this artwork as
+// (Main and/or Related — see the note below) — this is what the
+// Catalogue tab's "+ Add" tiles call after a picker selection.
+//
+// Auto-assigns Main (2026-09-13, direct request — "Set as Main" no
+// longer exists as a way to reassign an already-linked image, so the
+// artwork's very first image needs some way to become Main without a
+// button). Whenever this artwork doesn't have a Main image yet, the
+// first id in this batch becomes it. This is also exactly what makes
+// "Delete & Replace" work (see deleteArtworkMainImage in imageDelete.ts):
+// that clears mainImageId to null before deleting the old Main, so the
+// next image linked here — the replacement the person just picked —
+// automatically becomes the new Main.
 export async function linkImagesToArtwork(artworkId: string, imageIds: string[], siteId: string) {
   await db.image.updateMany({
     where: { id: { in: imageIds } },
     data: { artworkId },
   });
+
+  if (imageIds.length === 0) return;
+
+  const artwork = await db.artwork.findUnique({
+    where: { id: artworkId },
+    select: { mainImageId: true },
+  });
+  if (!artwork?.mainImageId) {
+    await db.artwork.update({ where: { id: artworkId }, data: { mainImageId: imageIds[0] } });
+  }
 }
 
 export async function unlinkImageFromArtwork(artworkId: string, imageId: string, siteId: string) {
@@ -697,17 +729,16 @@ export async function unlinkImageFromArtwork(artworkId: string, imageId: string,
   });
 }
 
-// Which of an artwork's images/videos shows first everywhere it's
-// represented by a single thumbnail (2026-08-16) — set by dragging one
-// to the front of the strip in the editor. Deliberately just this one
-// field rather than persisting a full custom order for every image:
-// only "which one is the main one" has meaning outside the editor
-// itself.
-export async function setMainImage(artworkId: string, siteId: string, imageId: string) {
-  await db.artwork.update({
-    where: { id: artworkId },
-    data: { mainImageId: imageId },
-  });
+// "Delete & Replace" (2026-09-13, direct request) — the only way left to
+// change a wrong Main image. Main is the artwork's image of record, so
+// there's no swap-to-an-existing-image action any more — the old
+// setMainImage action and ArtworkImageManager's "Set as Main" button are
+// both removed; a wrong Main is deleted outright via
+// deleteArtworkMainImage (imageDelete.ts), and its replacement becomes
+// the new Main automatically once linked (see linkImagesToArtwork's
+// auto-assign above).
+export async function deleteArtworkMainImage(artworkId: string, imageId: string, siteId: string) {
+  return deleteArtworkMainImageInternal(artworkId, imageId);
 }
 
 // Used to hydrate a Section's saved artwork grid — Prisma's `in` filter
