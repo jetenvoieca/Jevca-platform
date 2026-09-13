@@ -68,6 +68,7 @@ export default function MediaPicker({
   previewClassName,
   previewObjectFit = "cover",
   previewStyle,
+  autoOpen = false,
   onSelect,
 }: {
   artistId: string;
@@ -128,6 +129,14 @@ export default function MediaPicker({
   // whether or not previewUrl is set yet, so an empty slot can carry a
   // `minHeight` floor and never collapse to a sliver.
   previewStyle?: React.CSSProperties;
+  // Opens the picker itself immediately on mount, with no click needed
+  // (2026-09-13, "Delete & Replace") — the Catalogue tab's Main slot
+  // deletes the wrong Main image outright, then mounts a fresh instance
+  // of this picker with autoOpen so a replacement can be chosen in the
+  // same step, rather than leaving an empty tile the person has to
+  // click into separately. Every other existing caller omits this
+  // (defaults false), so nothing about them changes.
+  autoOpen?: boolean;
   onSelect: (images: PickedImage[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -182,6 +191,15 @@ export default function MediaPicker({
       });
     }
   };
+
+  // autoOpen (2026-09-13) — see the note on the prop above. Runs once on
+  // mount only; the caller remounts a fresh instance (e.g. via a `key`)
+  // any time it needs this to fire again, rather than this effect
+  // re-triggering on its own.
+  useEffect(() => {
+    if (autoOpen) handleOpen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Debounced search-as-you-type (2026-08-31) — previously fired a full
   // server request (fetching up to PICKER_FETCH_LIMIT rows) on every
