@@ -15,7 +15,11 @@ export type MediaDetail = {
   altText: string | null;
   tags: string[];
   artworkId: string | null;
-  artwork: { id: string; presentationTitle: string } | null;
+  // catalogueName, not presentationTitle (2026-09-12 fix, direct
+  // report — "rename an artwork's Name and its related image still
+  // shows the old name"). See the matching note in
+  // lib/actions/mediaCatalogue.ts for the full reasoning.
+  artwork: { id: string; catalogueName: string } | null;
 };
 
 export default function MediaDetailPanel({
@@ -258,7 +262,7 @@ export default function MediaDetailPanel({
           <div>
             <label className="mb-1 block text-sm font-medium text-neutral-700">Related to</label>
             <p className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
-              {media.artwork.presentationTitle}
+              {media.artwork.catalogueName}
             </p>
           </div>
         )}
