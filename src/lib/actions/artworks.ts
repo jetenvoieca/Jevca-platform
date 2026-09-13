@@ -88,6 +88,14 @@ export async function createArtworkWithRetry(
     // (2026-09-11) — see the matching note on Artwork.derivedFromId in
     // schema.prisma. Only ever set by duplicateArtwork below.
     derivedFromId: string | null;
+    // Added (2026-09-13) so the Hopper's "Create new artwork" form can
+    // set this at creation time too, now that its quick-create form
+    // matches the full Artwork Catalogue tab (Name/Tier/Reference+
+    // Offered price included) rather than the previous, more limited
+    // field set. Kept as a string, same as every other price-shaped
+    // field here — this is always read straight off a form field, same
+    // reasoning as presentationPrice above.
+    offeredPrice: string | null;
   }> & { presentationTitle: string; catalogueName: string }
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
