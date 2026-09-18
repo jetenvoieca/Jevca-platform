@@ -694,15 +694,6 @@ export default function HopperView({
                   Select
                 </button>
               )}
-              {/* Sort order (2026-08-18) — small ^/v arrows, replacing an
-                  earlier pill-button toggle per direct request ("neat
-                  little arrows instead [of] ugly buttons"). Up = newest
-                  first, down = oldest first; the active direction is
-                  solid black, the inactive one pale grey. Genuinely
-                  changes which item you're asked to sort next, not just
-                  how this list looks — see sortedQueue above. Hidden
-                  while bulk-selecting, since re-sorting mid-selection
-                  would just reshuffle the grid under someone's cursor. */}
               {!bulkSelectMode && (
                 <div className="flex items-center gap-0.5">
                   <button
@@ -739,13 +730,6 @@ export default function HopperView({
             {sortedQueue.length === 0 ? null : remaining.length === 0 ? (
               <p className="text-xs text-neutral-400">This is the last one.</p>
             ) : (
-              // auto-fill/minmax (2026-09-11) instead of a fixed
-              // grid-cols-7 — with this column now itself flexible in
-              // width (see the wrapping div above), a hardcoded column
-              // count either wasted space or overflowed depending on
-              // how much room the flex layout actually gave it. This
-              // way the thumbnail grid always fits whatever width it's
-              // handed, at a consistent thumbnail size, on any screen.
               <div className="grid grid-cols-6 gap-2 lg:grid-cols-[repeat(auto-fill,minmax(80px,1fr))]">
                 {remaining.map((item) => {
                   const isSelected = selectedForDelete.has(item.id);
@@ -795,14 +779,6 @@ export default function HopperView({
         </div>
 
         <div className="order-1 flex flex-col lg:order-none lg:min-w-[320px] lg:flex-1 lg:basis-[42%] lg:overflow-hidden">
-          {/* Title + counter, and the upload-progress bar, moved here
-              (2026-09-13, direct request — "move hopper title and
-              uploading from above Up next to above Incoming") — both
-              used to sit above the whole three-column row, spanning the
-              full page width; they now sit directly above the
-              Incoming/Folder/File/CSV row, scoped to this one column
-              like everything else that belongs to the sorting flow
-              itself. */}
           <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
             Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
           </h1>
@@ -849,9 +825,6 @@ export default function HopperView({
           </div>
         </div>
 
-        {/* Processed — a visual confirmation trail, not part of the
-            sorting flow itself, so it stays put once the queue on the
-            right runs out. */}
         <div className="order-3 flex flex-col lg:order-none lg:min-w-[220px] lg:max-w-[320px] lg:flex-1 lg:basis-[20%] lg:overflow-hidden">
           {processedLog.length > 0 && (
             <>
@@ -902,24 +875,11 @@ export default function HopperView({
                     <button
                       type="button"
                       onClick={(e) => {
-                        // Stops the surrounding Link (when this row has
-                        // one) from navigating — this button removing the
-                        // row is the only thing a click on it should do.
                         e.preventDefault();
                         e.stopPropagation();
                         setProcessedLog((prev) => prev.filter((p) => p.key !== entry.key));
                       }}
                       aria-label={`Remove ${entry.label} from the processed list`}
-                      // Absolutely positioned in the top-right corner
-                      // (2026-08-19, direct request) — was inline after
-                      // the text, which put it hard against a short
-                      // label ("New pump") but far to the right of a
-                      // long, truncated one ("Hats off to A…"), jumping
-                      // around from row to row instead of sitting
-                      // somewhere predictable. Matches the same
-                      // top-right-corner badge pattern already used for
-                      // the selected-thumbnail badges in the media
-                      // picker.
                       className="absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-base leading-none text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
                     >
                       ×
@@ -958,8 +918,6 @@ export default function HopperView({
           siteId={siteId}
           onClose={() => {
             setShowCsvImport(false);
-            // See revealLatestArrival above — a completed CSV import
-            // should open straight into sorting the newest item.
             revealLatestArrival();
             router.refresh();
           }}
@@ -989,29 +947,14 @@ function SortingCard({
   onBin: () => void;
   onAddToMedia: () => void;
   onAddToBucket: () => void;
-  // Fires once, from ManageArtworkPanel's "Done, next item" (2026-09-13,
-  // reworked — was a single immediate call the moment an artwork was
-  // picked, always Related; see the note on addHopperItemToArtwork in
-  // hopper.ts for what mode/relatedName now do).
   onManageArtwork: (
     artworkId: string,
     artworkTitle: string,
     mode: "main" | "related",
     relatedName: string
   ) => void;
-  // Fires once, from the quick-catalogue form's "Done, next item" — the
-  // form itself now collects Name (as `catalogueName`) alongside every
-  // other Catalogue field, so there's nothing to pass alongside it
-  // (2026-09-13; previously took a separate title/description sourced
-  // from this card's own Name/Description inputs, both now removed —
-  // "no name or description at this stage").
   onAddNewArtwork: (fields: FormData) => Promise<boolean>;
 }) {
-  // Whether either inline form is open. Nothing is created/changed in
-  // the database just by opening either one (2026-08-18 pattern, now
-  // shared by both) — closing again, whether via Cancel or by picking a
-  // different action button entirely, discards whatever was
-  // selected/typed with no cleanup needed, since nothing was ever saved.
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
   const [showManageForm, setShowManageForm] = useState(false);
@@ -1019,23 +962,8 @@ function SortingCard({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      {/* Shared with SetMainFromHopperModal.tsx (Delete & Replace) —
-          see the note on HopperItemPreview.tsx, 2026-09-13. */}
       <HopperItemPreview item={item} />
 
-      {/* No Name/Description fields at this stage any more (2026-09-13,
-          direct request — "no name or description at this stage").
-          Whichever routing button is chosen next collects only what
-          that specific destination actually needs: Create new artwork
-          collects Name itself (see QuickCatalogueFields below); Add to
-          Media/Add to Bucket/Manage Artwork need neither — a caption can
-          always be added afterwards from the Media Catalogue's own edit
-          form if wanted. */}
-
-      {/* Four plain, equal-weight buttons — not the dashed "+ Add" tile.
-          This screen assigns/routes an existing item rather than adding
-          new media, so the tile's "click to add something new" implication
-          would be misleading here. See decisions-log, 2026-08-05. */}
       <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
         <button
           type="button"
@@ -1061,13 +989,6 @@ function SortingCard({
         >
           Add to Bucket
         </button>
-        {/* Renamed from "Add to Existing Artwork" (2026-09-13, direct
-            request), and reworked from an immediate action into an
-            inline form (see ManageArtworkPanel below) — picking an
-            artwork no longer links it on the spot; Main/Related and
-            (for Related) a name are chosen first, then "Done, next
-            item" commits everything together, same one-shot pattern as
-            Create new artwork. */}
         <button
           type="button"
           onClick={() => {
@@ -1079,9 +1000,6 @@ function SortingCard({
         >
           Manage Artwork
         </button>
-        {/* Renamed from "Add Artwork" (2026-09-13, direct request).
-            Opens the form below; nothing is saved to the database until
-            "Done, next item" inside it. */}
         <button
           type="button"
           onClick={() => {
@@ -1109,20 +1027,9 @@ function SortingCard({
         />
       )}
 
-      {/* Inline "quick catalogue" fields (2026-08-18, reworked to a true
-          one-shot flow per direct request; 2026-09-13, reworked again to
-          match the full Artwork Catalogue tab — see QuickCatalogueFields
-          below). Opening this form doesn't create the artwork — it's a
-          plain local form, nothing is saved anywhere until "Done, next
-          item" is pressed. That single press creates the artwork, fills
-          in whatever fields were completed (all optional except it
-          otherwise falls back to "Untitled"), and links this image as
-          its main image, all together. "Cancel" (or just picking a
-          different action button instead) discards everything typed
-          with nothing to clean up, since nothing was ever written to the
-          database. */}
       {showQuickForm && (
         <QuickCatalogueFields
+          item={item}
           settings={settings}
           creating={creatingArtwork}
           onCancel={() => setShowQuickForm(false)}
@@ -1130,10 +1037,6 @@ function SortingCard({
             setCreatingArtwork(true);
             const ok = await onAddNewArtwork(fields);
             setCreatingArtwork(false);
-            // On failure, leave the form open (with whatever was typed
-            // still in it, since it's a plain uncontrolled form) so
-            // nothing is lost and the error banner above explains why —
-            // same pattern as every other action on this screen.
             if (ok) setShowQuickForm(false);
           }}
         />
@@ -1142,19 +1045,6 @@ function SortingCard({
   );
 }
 
-// "Manage Artwork" (2026-09-13, direct request — replaces an instant
-// pick-and-link with a proper choice): pick an existing artwork
-// (ArtworkPicker's own searchable modal, reused as-is rather than a
-// plain <select> — the artist's real catalogue can run into the
-// hundreds, where a flat dropdown of names stops being usable but a
-// search box doesn't), then say whether this image becomes that
-// artwork's Main image or an ancillary Related one — Related also asks
-// for a name, saved onto the image's own caption (see the matching note
-// on addHopperItemToArtwork in hopper.ts). Nothing happens until "Done,
-// next item"; Cancel (or picking a different action button instead)
-// discards the in-progress choice with nothing to clean up, since
-// nothing was ever saved — same one-shot pattern as
-// QuickCatalogueFields below.
 function ManageArtworkPanel({
   artistId,
   managing,
@@ -1266,6 +1156,65 @@ function ManageArtworkPanel({
   );
 }
 
+// Best-effort split of a Hopper item's caption/description (whatever
+// source added them — manual, iPhone Shortcut, CSV import, or the
+// browser importer extension) into the separate fields the quick-create
+// form actually has (2026-09-18, direct request — "match Name, Size,
+// Price to offered price and put the rest of the data in studio notes").
+// Deliberately conservative: a line is only pulled out of Studio notes
+// entirely when the WHOLE line is just that dimension/price (the common
+// case for a source site that puts each fact on its own line, as seen
+// on jillysuttonsculpture.com — "47.4cm x 34.5cm x 20cm" / "Limited
+// Edition" / "Edition of 12" each their own line). A match embedded in a
+// longer sentence is still picked up for Size/Price, but the sentence
+// itself stays in Studio notes rather than risk mangling it. Every
+// field this produces is still a plain editable form field, so a wrong
+// or missed guess costs nothing beyond a quick correction.
+const SIZE_PATTERN =
+  /\d{1,4}(?:\.\d+)?\s*(?:cm|mm|m|in|inches|")\s*[x×]\s*\d{1,4}(?:\.\d+)?\s*(?:cm|mm|m|in|inches|")?(?:\s*[x×]\s*\d{1,4}(?:\.\d+)?\s*(?:cm|mm|m|in|inches|")?)?/i;
+const PRICE_PATTERN = /[£$€]\s?\d[\d,]*(?:\.\d{1,2})?/;
+
+function parseHopperItemForQuickCatalogue(
+  caption: string | null,
+  description: string | null
+): { name: string; size: string; offeredPrice: string; studioNotes: string } {
+  const name = (caption || "").trim();
+  const lines = (description || "").split("\n");
+
+  let size = "";
+  let offeredPrice = "";
+  const keptLines: string[] = [];
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line) {
+      keptLines.push(rawLine);
+      continue;
+    }
+
+    const sizeMatch = line.match(SIZE_PATTERN);
+    const priceMatch = line.match(PRICE_PATTERN);
+    const isSizeOnlyLine = sizeMatch && line.replace(SIZE_PATTERN, "").trim() === "";
+    const isPriceOnlyLine = priceMatch && line.replace(PRICE_PATTERN, "").trim() === "";
+
+    if (isSizeOnlyLine && !size) {
+      size = sizeMatch![0];
+      continue; // whole line consumed — don't duplicate it into notes
+    }
+    if (isPriceOnlyLine && !offeredPrice) {
+      offeredPrice = priceMatch![0].replace(/[£$€,\s]/g, "");
+      continue;
+    }
+    if (sizeMatch && !size) size = sizeMatch[0];
+    if (priceMatch && !offeredPrice) offeredPrice = priceMatch[0].replace(/[£$€,\s]/g, "");
+    keptLines.push(rawLine);
+  }
+
+  const studioNotes = keptLines.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+
+  return { name, size, offeredPrice, studioNotes };
+}
+
 // Matches the full Artwork Catalogue tab (2026-09-13, direct request —
 // "update form to match Artwork catalogue form, except the available/
 // sold toggle"): Name and Tier up top, then the same shared
@@ -1294,20 +1243,30 @@ function ManageArtworkPanel({
 // with no onAutosave. Type/Size are still tracked live in local state
 // purely to drive the Reference price preview below, same reasoning as
 // ArtworkDetailPanel's own Catalogue tab.
+//
+// 2026-09-18, direct request — Name/Size/Offered price now default to a
+// best-effort parse of the Hopper item's own caption/description (see
+// parseHopperItemForQuickCatalogue above), with whatever's left over
+// going into Studio notes, instead of every field opening blank. Every
+// one of these stays a normal editable field — this only changes what's
+// pre-typed in it the moment the form opens.
 function QuickCatalogueFields({
+  item,
   settings,
   creating,
   onCancel,
   onDone,
 }: {
+  item: HopperItem;
   settings: ArtworkSettings;
   creating: boolean;
   onCancel: () => void;
   onDone: (fields: FormData) => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
+  const parsed = parseHopperItemForQuickCatalogue(item.caption, item.description);
   const [typeValue, setTypeValue] = useState("");
-  const [sizeValue, setSizeValue] = useState("");
+  const [sizeValue, setSizeValue] = useState(parsed.size);
   const selectedTypeRecord = settings.artworkTypeRecords.find(
     (t) => t.name.toLowerCase() === typeValue.trim().toLowerCase()
   );
@@ -1325,6 +1284,7 @@ function QuickCatalogueFields({
             <input
               type="text"
               name="catalogueName"
+              defaultValue={parsed.name}
               placeholder="Untitled"
               className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
             />
@@ -1351,23 +1311,20 @@ function QuickCatalogueFields({
               type: "",
               catalogueGroup: "",
               medium: "",
-              size: "",
+              size: parsed.size,
               edition: "",
               availableQty: "",
               location: "",
               date: "",
-              studioNotes: "",
+              studioNotes: parsed.studioNotes,
               availability: "AVAILABLE",
             }}
             onTypeOrSizeChange={(type, size) => {
               setTypeValue(type);
               setSizeValue(size);
             }}
-            // No Available/SOLD toggle on this form — see the note above.
             availabilityOverride={<input type="hidden" name="availability" value="AVAILABLE" />}
           >
-            {/* Reference/Offered price, same compact side-by-side pair
-                as the Catalogue tab (2026-09-11 layout). */}
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -1387,6 +1344,7 @@ function QuickCatalogueFields({
                 <input
                   type="text"
                   name="offeredPrice"
+                  defaultValue={parsed.offeredPrice}
                   placeholder="e.g. 450.00"
                   className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
                 />
@@ -1395,15 +1353,6 @@ function QuickCatalogueFields({
           </ArtworkCatalogueFields>
         </div>
       </form>
-      {/* "Done, next item" (added 2026-08-17, since this form otherwise
-          has no explicit way to conclude) is also the button that
-          actually creates the artwork (2026-08-18) — filling any/none of
-          the fields above is still optional (an empty Name falls back to
-          "Untitled" — see createArtworkFromHopperQuick), but this is the
-          one deliberate, single moment anything gets saved. "Cancel" is
-          alongside it: since nothing exists in the database until this
-          click, backing out needs no cleanup at all — just closing the
-          form. */}
       <div className="mt-4 flex items-center gap-3">
         <button
           type="button"
