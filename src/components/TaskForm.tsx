@@ -1,11 +1,15 @@
 "use client";
 
 import type { TaskInput } from "@/lib/actions/tasks";
+import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 
 // The task form shown in the Inbox's centre panel (2026-09-19, CRM
 // Phase 2) — purely presentational: the parent (AdminInboxPanel) owns
 // the form state and does the saving, since saving also has to refresh
-// the lists on either side.
+// the lists on either side. Save Task is always available (it creates a
+// new task, or saves changes to a loaded one); Task Completed only
+// appears once the task exists, i.e. was loaded from the list or has
+// just been saved.
 export default function TaskForm({
   form,
   categories,
@@ -29,8 +33,6 @@ export default function TaskForm({
 }) {
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
-  const btnCls =
-    "rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50";
 
   // A category removed in Settings after a task was saved with it still
   // shows (rather than silently blanking) until the task is changed.
@@ -105,14 +107,16 @@ export default function TaskForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
       {savedNote && <p className="text-sm text-green-600">Saved.</p>}
 
-      <div className="flex flex-col items-end gap-2 pt-1">
-        <button type="button" onClick={onSave} disabled={saving} className={btnCls}>
+      <ActionPanel>
+        <ActionButton onClick={onSave} disabled={saving}>
           {saving ? "Saving…" : "Save Task"}
-        </button>
-        <button type="button" onClick={onComplete} disabled={saving} className={btnCls}>
-          Task Completed
-        </button>
-      </div>
+        </ActionButton>
+        {form.id && (
+          <ActionButton onClick={onComplete} disabled={saving}>
+            Task Completed
+          </ActionButton>
+        )}
+      </ActionPanel>
     </div>
   );
 }
