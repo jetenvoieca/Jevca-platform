@@ -13,19 +13,31 @@ import { finalizeUpload } from "@/lib/actions/media";
 // the same two values along with every item's finalize call. Left blank
 // (or omitted, by an older copy of the Shortcut) is the same as before
 // this existed, not an error.
+//
+// source (2026-09-18) — optional, defaults to "iPhone Shortcut" so the
+// real Shortcut (which has never sent this field) is completely
+// unaffected. Added because this same endpoint is also used by the
+// browser "Hopper Importer" extension, which was previously getting
+// silently mislabeled as "iPhone Shortcut" too — now it sends its own
+// source explicitly instead. HopperView's sorting card shows a
+// Title/Description preview only when source is exactly "iPhone
+// Shortcut" (see the note there), so this distinction is what makes
+// that gating actually correct rather than lumping every caller of this
+// route together.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   if (!body) {
     return NextResponse.json({ error: "Invalid request body." }, { status: 400 });
   }
 
-  const { token, key, contentType, kind, caption, description } = body as {
+  const { token, key, contentType, kind, caption, description, source } = body as {
     token?: string;
     key?: string;
     contentType?: string;
     kind?: "PHOTO" | "VIDEO";
     caption?: string;
     description?: string;
+    source?: string;
   };
 
   if (!token || !key || !contentType || !kind) {
@@ -54,7 +66,7 @@ export async function POST(request: NextRequest) {
     kind,
     undefined,
     "HOPPER",
-    "iPhone Shortcut",
+    source || "iPhone Shortcut",
     caption,
     description
   );
