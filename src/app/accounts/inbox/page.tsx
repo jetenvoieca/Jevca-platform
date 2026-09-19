@@ -4,6 +4,8 @@ import { buildTopNavItems } from "@/lib/topNav";
 import { getOpenAlerts } from "@/lib/alerts";
 import { getInboxList, getArtistFilterOptions } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getAdminEmailAddress } from "@/lib/actions/adminEmail";
+import { getOpenTasks } from "@/lib/actions/tasks";
+import { getPlatformTaskCategories } from "@/lib/actions/platformTaskSettings";
 
 export const dynamic = "force-dynamic";
 
@@ -12,7 +14,8 @@ export const dynamic = "force-dynamic";
 // (?artistId=...) rather than client state, so an Alerts-page link
 // straight to a specific artist's messages (see lib/alerts.ts) works
 // with a plain <a>/redirect, no client-side wiring needed to land
-// already filtered.
+// already filtered. The same filter applies to the open Tasks list
+// (2026-09-19, CRM Phase 2), which shares the left-hand column.
 export default async function InboxPage({
   searchParams,
 }: {
@@ -20,13 +23,16 @@ export default async function InboxPage({
 }) {
   const { artistId } = await searchParams;
 
-  const [alerts, list, artistOptions, composeRecipients, adminEmailAddress] = await Promise.all([
-    getOpenAlerts(),
-    getInboxList(artistId || undefined),
-    getArtistFilterOptions(),
-    getComposeRecipients(),
-    getAdminEmailAddress(),
-  ]);
+  const [alerts, list, artistOptions, composeRecipients, adminEmailAddress, tasks, taskCategories] =
+    await Promise.all([
+      getOpenAlerts(),
+      getInboxList(artistId || undefined),
+      getArtistFilterOptions(),
+      getComposeRecipients(),
+      getAdminEmailAddress(),
+      getOpenTasks(artistId || undefined),
+      getPlatformTaskCategories(),
+    ]);
 
   return (
     <AppShell
@@ -35,6 +41,8 @@ export default async function InboxPage({
       content={
         <AdminInboxPanel
           initialList={list}
+          initialTasks={tasks}
+          taskCategories={taskCategories}
           artistOptions={artistOptions}
           selectedArtistId={artistId || null}
           composeRecipients={composeRecipients}
