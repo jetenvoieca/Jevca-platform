@@ -9,6 +9,7 @@ import {
   createGalleryPaymentLink,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
+import { formatDate } from "@/lib/formatDate";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import InvoiceEmailModal from "@/components/InvoiceEmailModal";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
@@ -265,13 +266,11 @@ export default function GallerySaleCard({
         </p>
       </div>
       <SaleStatusBadge status={purchase.status} invoiceEmailedAt={purchase.invoiceEmailedAt} />
-      <p className="mt-2 text-xs text-neutral-400">
-        Sold {new Date(purchase.createdAt).toLocaleDateString()}
-      </p>
+      <p className="mt-2 text-xs text-neutral-400">Sold {formatDate(purchase.createdAt)}</p>
 
       {isPaid && completedPayment?.paidDate && (
         <p className="mt-1 text-xs text-green-600">
-          Paid {new Date(completedPayment.paidDate).toLocaleDateString()}
+          Paid {formatDate(completedPayment.paidDate)}
           {completedPayment.method ? ` — ${completedPayment.method}` : ""}
         </p>
       )}
@@ -282,8 +281,7 @@ export default function GallerySaleCard({
           rather than accumulating a list. */}
       {purchase.invoiceEmailedAt && (
         <p className="mt-1 text-xs text-neutral-400">
-          {isPaid ? "Receipt sent" : "Invoice sent"}{" "}
-          {new Date(purchase.invoiceEmailedAt).toLocaleDateString()}
+          {isPaid ? "Receipt sent" : "Invoice sent"} {formatDate(purchase.invoiceEmailedAt)}
           {purchase.invoiceEmailedTo ? ` to ${purchase.invoiceEmailedTo}` : ""}
         </p>
       )}
@@ -293,7 +291,7 @@ export default function GallerySaleCard({
           current payment status (2026-09-10). */}
       {purchase.certificateEmailedAt && (
         <p className="mt-1 text-xs text-neutral-400">
-          Certificate sent {new Date(purchase.certificateEmailedAt).toLocaleDateString()}
+          Certificate sent {formatDate(purchase.certificateEmailedAt)}
           {purchase.certificateEmailedTo ? ` to ${purchase.certificateEmailedTo}` : ""}
         </p>
       )}

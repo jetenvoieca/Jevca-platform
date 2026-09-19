@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { PurchaseDetail } from "@/lib/actions/payments";
+import { formatDate } from "@/lib/formatDate";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 
 function formatMoney(amount: string, currency: string) {
@@ -68,7 +69,7 @@ export default function SaleDetailCard({
       <div className="flex items-center justify-between">
         <p className="text-xs text-neutral-400">
           {purchase.status === "COMPLETED" ? "Completed" : "Abandoned"}
-          {purchase.closedAt ? ` on ${new Date(purchase.closedAt).toLocaleDateString()}` : ""} — a
+          {purchase.closedAt ? ` on ${formatDate(purchase.closedAt)}` : ""} — a
           past transaction, shown for reference only.
         </p>
         <div className="flex items-center gap-2">
@@ -146,7 +147,7 @@ export default function SaleDetailCard({
           <>
             <Field
               label="Next instalment due"
-              value={nextDue.dueDate ? new Date(nextDue.dueDate).toLocaleDateString() : "—"}
+              value={nextDue.dueDate ? formatDate(nextDue.dueDate) : "—"}
             />
             <Field label="Next instalment amount" value={formatMoney(nextDue.amount, nextDue.currency)} />
           </>
@@ -197,11 +198,7 @@ export default function SaleDetailCard({
                     </span>
                   </td>
                   <td className="py-1.5 text-neutral-500">
-                    {p.paidDate
-                      ? new Date(p.paidDate).toLocaleDateString()
-                      : p.dueDate
-                        ? new Date(p.dueDate).toLocaleDateString()
-                        : "—"}
+                    {p.paidDate ? formatDate(p.paidDate) : p.dueDate ? formatDate(p.dueDate) : "—"}
                   </td>
                 </tr>
               ))}

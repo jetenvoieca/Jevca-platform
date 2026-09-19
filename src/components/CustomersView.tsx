@@ -10,6 +10,7 @@ import {
   type CustomerSummary,
   type CustomerDetail,
 } from "@/lib/actions/customers";
+import { formatDate } from "@/lib/formatDate";
 import CustomerImportPanel from "@/components/CustomerImportPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -203,9 +204,7 @@ export default function CustomersView({
                     </div>
                     <div>
                       <dt className="inline text-neutral-400">Date: </dt>
-                      <dd className="inline">
-                        {new Date(selectedWork.createdAt).toLocaleDateString()}
-                      </dd>
+                      <dd className="inline">{formatDate(selectedWork.createdAt)}</dd>
                     </div>
                     {selectedWork.artworkDescription && (
                       <p className="pt-2 text-neutral-600">{selectedWork.artworkDescription}</p>

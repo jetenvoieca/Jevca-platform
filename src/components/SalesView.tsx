@@ -4,6 +4,7 @@ import { useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payments";
+import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
@@ -245,9 +246,7 @@ export default function SalesView({
                       consistently everywhere a sale's status appears. */}
                   <SaleStatusBadge status={s.status} invoiceEmailedAt={s.invoiceEmailedAt} />
                 </td>
-                <td className="px-3 py-2 text-neutral-400">
-                  {new Date(s.createdAt).toLocaleDateString()}
-                </td>
+                <td className="px-3 py-2 text-neutral-400">{formatDate(s.createdAt)}</td>
               </tr>
             ))}
           </tbody>
