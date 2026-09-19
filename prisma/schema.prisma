@@ -285,6 +285,9 @@ model Artist {
   // below (2026-09-05, Email Integration).
   inboundEmails  InboundEmail[]
   outboundEmails OutboundEmail[]
+  // Tasks linked to this artist on the admin Inbox's Task view
+  // (2026-09-19, CRM Phase 2) — see Task below.
+  tasks Task[]
 }
 
 // Replaces the plain-string `Artist.artworkTypes` list (2026-08-28) — a
@@ -575,6 +578,38 @@ model OutboundEmail {
   @@index([customerId])
   @@index([inReplyToId])
   @@index([purchaseId])
+}
+
+// A to-do item on the admin Inbox's Task view (2026-09-19, CRM Phase 2)
+// — the start of a client-relationship-management panel. artistId is
+// optional: a task can be general ("renew the Netlify plan") or tied to
+// one artist, in which case the Inbox's artist filters apply to it.
+// `category` is free text matched against
+// PlatformSettings.taskCategories, same convention as
+// PlatformExpense.category — not a hard foreign key, so renaming or
+// removing a category never breaks an existing task. A task is open
+// while completedAt is null; completing it sets completedAt, which is
+// what the Done list reads.
+model Task {
+  id String @id @default(cuid())
+
+  artistId String?
+  artist   Artist? @relation(fields: [artistId], references: [id])
+
+  name        String
+  description String?
+  // A calendar date, not a moment — stored as a plain DATE so it can
+  // never drift by a day across timezones.
+  targetDate  DateTime? @db.Date
+  category    String?
+
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId])
+  @@index([completedAt])
 }
 
 model Site {
@@ -1166,6 +1201,12 @@ model PlatformSettings {
   id String @id @default("singleton")
 
   expenseCategories String[] @default(["Hosting", "Domains", "Software & APIs", "Legal & Accounting", "Marketing", "Other"])
+
+  // Settings-editable list offered as the Category dropdown on the
+  // Inbox's task form (2026-09-19, CRM Phase 2) — same pattern as
+  // expenseCategories above, but starts empty: the categories are
+  // entirely Craig's own to define. See Task.category.
+  taskCategories String[] @default([])
 
   // The address ad hoc admin emails are sent from (2026-09-05, Email
   // Integration) — one shared address, not per-artist: these are
