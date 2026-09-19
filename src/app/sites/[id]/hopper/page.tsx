@@ -27,6 +27,11 @@ export default async function HopperPage({
     kind: i.kind,
     caption: i.caption,
     description: i.description,
+    // Added 2026-09-19 alongside HopperItem.source (see the note in
+    // HopperView.tsx) — this mapping is a plain field-by-field copy of
+    // listHopperQueue's own row shape, so it has to be kept in step
+    // with that shape by hand; missing this broke the build.
+    source: i.source,
     altText: i.altText,
     tags: i.tags,
     createdAt: i.createdAt.toISOString(),
