@@ -14,7 +14,13 @@ import {
 } from "@/lib/actions/inboundEmail";
 import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail";
 import { getCompletedTasks, saveTask, type TaskItem, type TaskInput } from "@/lib/actions/tasks";
+import { dismissAlert } from "@/lib/actions/subscriptions";
+import type { AlertItem } from "@/lib/alerts";
+import type { ClientPanelData } from "@/lib/clientPanelData";
+import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
 import TaskForm from "@/components/TaskForm";
+import AlertDetail from "@/components/AlertDetail";
+import AlertClientPanel from "@/components/AlertClientPanel";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every reply received at any
@@ -27,19 +33,25 @@ import TaskForm from "@/components/TaskForm";
 // Three-column layout (2026-09-19, CRM Phase 1 — see mock-ups): the
 // left column lists what needs attention, the centre shows the open
 // item / form, and the right "Processed" column lists what's been dealt
-// with. A pill toggle at the top of the left column (Inbox | Task)
-// switches the whole screen between two modes, and the right column
-// follows it:
+// with. A pill toggle at the top of the left column (Inbox | Task |
+// Alert) switches the whole screen between three modes, and the right
+// column follows it:
 //   - Inbox mode: left = received messages, right = Sent list
 //     (every OutboundEmail — admin sends, replies, and invoice/receipt/
 //     certificate sends too, see getSentList).
 //   - Task mode (CRM Phase 2): left = open tasks, centre = task form,
 //     right = Done list (completed tasks).
-// Later phases add Alerts as a third mode.
+//   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
+//     old standalone Alerts page), centre = the selected alert, right =
+//     the same Done list. A payment-overdue alert opens the client's
+//     Owner/Domain/Subscription cards with an action panel (see
+//     AlertClientPanel); every other alert shows its message with a link
+//     and, where allowed, Dismiss (see AlertDetail).
 //
 // The two artist filters are independent: the left one lives in the URL
-// (so Alerts-page links can land already filtered) and applies to
-// whichever left list is showing; the right one is plain client state.
+// (so links can land already filtered) and applies to whichever left
+// list is showing; the right one is plain client state. The selected
+// alert also lives in the URL (?alert=...) — see the note on InboxPage.
 // Clicking a sent item shows its full content in the centre panel — no
 // server round-trip needed, since the full body is already in the list.
 //
@@ -70,7 +82,7 @@ const KIND_LABELS: Record<string, string> = {
   CERTIFICATE: "Certificate",
 };
 
-type Mode = "inbox" | "task";
+type Mode = "inbox" | "task" | "alert";
 
 const EMPTY_TASK_FORM: TaskInput = {
   id: null,
@@ -89,9 +101,22 @@ function formatDateOnly(iso: string): string {
   return new Date(y, m - 1, d).toLocaleDateString();
 }
 
+// The Inbox's address, with the left-hand artist filter and (optionally)
+// the selected alert carried in the query string.
+function inboxUrl(artistId: string | null, alertId?: string): string {
+  const params = new URLSearchParams();
+  if (artistId) params.set("artistId", artistId);
+  if (alertId) params.set("alert", alertId);
+  const qs = params.toString();
+  return qs ? `/accounts/inbox?${qs}` : "/accounts/inbox";
+}
+
 export default function AdminInboxPanel({
   initialList,
   initialTasks,
+  initialAlerts,
+  selectedAlertId,
+  clientPanel,
   taskCategories,
   artistOptions,
   selectedArtistId,
@@ -100,6 +125,9 @@ export default function AdminInboxPanel({
 }: {
   initialList: InboxSummaryItem[];
   initialTasks: TaskItem[];
+  initialAlerts: AlertItem[];
+  selectedAlertId: string | null;
+  clientPanel: ClientPanelData | null;
   taskCategories: string[];
   artistOptions: { id: string; name: string }[];
   selectedArtistId: string | null;
@@ -109,10 +137,13 @@ export default function AdminInboxPanel({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [mode, setMode] = useState<Mode>("inbox");
+  // Opens straight into Alert mode if the address already names an alert
+  // (e.g. after a page reload).
+  const [mode, setMode] = useState<Mode>(selectedAlertId ? "alert" : "inbox");
 
-  // Right-hand column: Sent list (Inbox mode) or Done list (Task mode).
-  // `null` means "still loading". One artist filter serves both.
+  // Right-hand column: Sent list (Inbox mode) or Done list (Task and
+  // Alert modes). `null` means "still loading". One artist filter serves
+  // both.
   const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
   const [doneList, setDoneList] = useState<TaskItem[] | null>(null);
   const [rightArtistId, setRightArtistId] = useState<string | null>(null);
@@ -154,6 +185,7 @@ export default function AdminInboxPanel({
     }`;
 
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
+  const selectedAlert = initialAlerts.find((a) => a.id === selectedAlertId) || null;
 
   const refreshRight = () => setRightRefreshKey((k) => k + 1);
 
@@ -176,14 +208,22 @@ export default function AdminInboxPanel({
     };
   }, [mode, rightArtistId, rightRefreshKey]);
 
-  const switchMode = (next: Mode) => {
-    if (next === mode) return;
-    setMode(next);
+  // Closes whatever is open in the centre panel.
+  const resetCentre = () => {
     setOpenId(null);
     setThread(null);
     setSelectedSentId(null);
     setComposing(false);
     setTaskForm(null);
+  };
+
+  const switchMode = (next: Mode) => {
+    if (next === mode) return;
+    setMode(next);
+    resetCentre();
+    // Leaving Alert mode drops the selected alert from the address, so
+    // the server stops loading its client panel.
+    if (selectedAlertId) router.replace(inboxUrl(selectedArtistId));
   };
 
   const openThread = (id: string) => {
@@ -212,7 +252,7 @@ export default function AdminInboxPanel({
   };
 
   const handleLeftFilterChange = (value: string) => {
-    router.push(value ? `/accounts/inbox?artistId=${value}` : "/accounts/inbox");
+    router.push(inboxUrl(value || null));
   };
 
   const handleRightFilterChange = (value: string) => {
@@ -396,19 +436,51 @@ export default function AdminInboxPanel({
     });
   };
 
+  const openAlert = (a: AlertItem) => {
+    router.push(inboxUrl(selectedArtistId, a.id));
+  };
+
+  // An alert's link normally leaves this screen for the page where it
+  // can be dealt with; the exception is a link back to the Inbox itself
+  // (a new-email-reply alert), which switches this screen to Inbox mode.
+  const handleAlertLink = (a: AlertItem) => {
+    if (!a.linkHref) return;
+    if (a.linkHref.startsWith("/accounts/inbox")) {
+      setMode("inbox");
+      resetCentre();
+    }
+    router.push(a.linkHref);
+  };
+
+  const handleAlertDismiss = (a: AlertItem) => {
+    startTransition(async () => {
+      await dismissAlert(a.id);
+      router.push(inboxUrl(selectedArtistId));
+    });
+  };
+
+  // The client was marked up to date — close the panel and show the new
+  // entry in Done.
+  const handleUpToDateDone = () => {
+    refreshRight();
+    router.push(inboxUrl(selectedArtistId));
+  };
+
   return (
     <div className="flex h-full gap-4 px-6 py-6">
-      {/* ---- LEFT: Inbox / Task list + filter ---- */}
+      {/* ---- LEFT: Inbox / Task / Alert list + filter ---- */}
       <div className="flex w-80 shrink-0 flex-col">
-        <div className="mb-3 flex items-center justify-between">
+        <div className="mb-3 flex h-[30px] items-center justify-between">
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
-          <button
-            type="button"
-            onClick={mode === "inbox" ? startCompose : startTask}
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
-          >
-            {mode === "inbox" ? "New message" : "New Task"}
-          </button>
+          {mode !== "alert" && (
+            <button
+              type="button"
+              onClick={mode === "inbox" ? startCompose : startTask}
+              className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
+            >
+              {mode === "inbox" ? "New message" : "New Task"}
+            </button>
+          )}
         </div>
 
         <div className={pillWrapCls}>
@@ -417,6 +489,9 @@ export default function AdminInboxPanel({
           </button>
           <button type="button" onClick={() => switchMode("task")} className={pillCls(mode === "task")}>
             Task
+          </button>
+          <button type="button" onClick={() => switchMode("alert")} className={pillCls(mode === "alert")}>
+            Alert
           </button>
         </div>
 
@@ -467,27 +542,65 @@ export default function AdminInboxPanel({
                 ))}
               </ul>
             )
-          ) : initialTasks.length === 0 ? (
-            <p className="p-4 text-center text-sm text-neutral-400">No open tasks.</p>
+          ) : mode === "task" ? (
+            initialTasks.length === 0 ? (
+              <p className="p-4 text-center text-sm text-neutral-400">No open tasks.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">
+                {initialTasks.map((t) => (
+                  <li key={t.id}>
+                    <button
+                      type="button"
+                      onClick={() => openTask(t)}
+                      className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                        taskForm?.id === t.id ? "bg-neutral-100" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm font-semibold text-neutral-900">{t.name}</span>
+                        <span className="shrink-0 text-[10px] text-neutral-400">
+                          {t.targetDate ? formatDateOnly(t.targetDate) : ""}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
+                      <p className="mt-0.5 truncate text-xs text-neutral-400">{t.artistName || "General"}</p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : initialAlerts.length === 0 ? (
+            <p className="p-4 text-center text-sm text-neutral-400">Nothing needs your attention.</p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {initialTasks.map((t) => (
-                <li key={t.id}>
+              {initialAlerts.map((a) => (
+                <li key={a.id}>
                   <button
                     type="button"
-                    onClick={() => openTask(t)}
+                    onClick={() => openAlert(a)}
                     className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                      taskForm?.id === t.id ? "bg-neutral-100" : ""
+                      selectedAlertId === a.id ? "bg-neutral-100" : ""
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm font-semibold text-neutral-900">{t.name}</span>
-                      <span className="shrink-0 text-[10px] text-neutral-400">
-                        {t.targetDate ? formatDateOnly(t.targetDate) : ""}
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <span
+                          className={`h-2 w-2 shrink-0 rounded-full ${
+                            a.severity === "CRITICAL" ? "bg-red-500" : "bg-amber-400"
+                          }`}
+                        />
+                        <span className="truncate text-sm font-semibold text-neutral-900">
+                          {ALERT_TYPE_LABELS[a.type] || a.type}
+                        </span>
                       </span>
+                      {new Date(a.createdAt).getTime() > 0 && (
+                        <span className="shrink-0 text-[10px] text-neutral-400">
+                          {new Date(a.createdAt).toLocaleDateString()}
+                        </span>
+                      )}
                     </div>
-                    <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
-                    <p className="mt-0.5 truncate text-xs text-neutral-400">{t.artistName || "General"}</p>
+                    <p className="truncate text-xs text-neutral-500">{a.artistName || "General"}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{a.message}</p>
                   </button>
                 </li>
               ))}
@@ -496,9 +609,22 @@ export default function AdminInboxPanel({
         </div>
       </div>
 
-      {/* ---- CENTRE: task form, thread, sent detail, or compose ---- */}
+      {/* ---- CENTRE: alert, task form, thread, sent detail, or compose ---- */}
       <div className={`${cardCls} min-w-0 flex-1 overflow-y-auto p-5`}>
-        {mode === "task" ? (
+        {mode === "alert" ? (
+          clientPanel ? (
+            <AlertClientPanel key={clientPanel.artist.id} data={clientPanel} onDone={handleUpToDateDone} />
+          ) : selectedAlert ? (
+            <AlertDetail
+              item={selectedAlert}
+              busy={isPending}
+              onLink={handleAlertLink}
+              onDismiss={handleAlertDismiss}
+            />
+          ) : (
+            <p className="text-center text-sm text-neutral-400">Select an alert.</p>
+          )
+        ) : mode === "task" ? (
           taskForm ? (
             <TaskForm
               form={taskForm}
@@ -730,7 +856,7 @@ export default function AdminInboxPanel({
           ) : !doneList ? (
             <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
           ) : doneList.length === 0 ? (
-            <p className="p-4 text-center text-sm text-neutral-400">No completed tasks yet.</p>
+            <p className="p-4 text-center text-sm text-neutral-400">Nothing completed yet.</p>
           ) : (
             <ul className="divide-y divide-neutral-100">
               {doneList.map((t) => (

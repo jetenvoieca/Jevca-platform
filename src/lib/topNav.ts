@@ -4,7 +4,6 @@ export type TopNavKey =
   | "sites"
   | "clients"
   | "templates"
-  | "alerts"
   | "inbox"
   | "subscriptions"
   | "expenses"
@@ -30,15 +29,15 @@ export type TopNavKey =
 //
 // "Inbox" added 2026-09-05, Email Integration — the unified admin inbox
 // for every reply to an artist's own @jevca.art address plus ad hoc
-// admin emails (see AdminInboxPanel.tsx). Placed right after Alerts:
-// a new-reply alert links straight into here (see lib/alerts.ts), so
-// the two sit next to each other.
+// admin emails (see AdminInboxPanel.tsx). Since 2026-09-19 (CRM Phase 3)
+// it also holds Tasks and the Alerts that used to have their own "Alerts"
+// page and menu item — so the open-alerts count badge lives on Inbox now.
 //
 // "Clients" added 2026-09-12, direct request — the admin-only view of
 // every site's Owner/Domain/Subscription/Hopper Token details (see
 // ClientOwnerPanel), with no Financial or Personal Profile content
 // (that's the artist-facing per-site "Profile" page instead). Placed
-// first, above Alerts, per direct request.
+// first, per direct request.
 //
 // Split out as its own function (2026-08-31) so the per-site menu
 // (siteNav.ts) can render an identical group instead of duplicating
@@ -56,8 +55,7 @@ export function buildAccountsSection(
     key: "accounts",
     children: [
       { label: "Clients", href: "/clients", active: active === "clients" },
-      { label: "Alerts", href: "/alerts", active: active === "alerts", badge: alertCount },
-      { label: "Inbox", href: "/accounts/inbox", active: active === "inbox" },
+      { label: "Inbox", href: "/accounts/inbox", active: active === "inbox", badge: alertCount },
       { label: "Subscriptions", href: "/accounts", active: active === "subscriptions" },
       { label: "Expenses", href: "/accounts/expenses", active: active === "expenses" },
       { label: "Account", href: "/accounts/summary", active: active === "accountSummary" },

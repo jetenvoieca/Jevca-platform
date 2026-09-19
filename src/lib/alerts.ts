@@ -12,6 +12,45 @@ const MANUAL_OVERDUE_DAYS = 30 + 14;
 // (2026-09-05, Email Integration) — see the storedItems mapping below.
 const EMAIL_ALERT_TYPE = "EMAIL_REPLY_RECEIVED";
 
+// Cache tag for the open-alerts scan below — server actions that change
+// what would be flagged (dismissing an alert, recording a subscription
+// payment, marking a client up to date) expire it with updateTag so the
+// Inbox's Alert list and the nav badge update straight away rather than
+// up to a minute later.
+export const OPEN_ALERTS_TAG = "open-alerts";
+
+// The overdue-payment alert is computed rather than stored, and its id
+// deliberately embeds the artist's id (2026-09-19, CRM Phase 3) — so the
+// Inbox can open that client's panel from the alert's id alone, even
+// after the alert itself has cleared (e.g. once a payment is recorded).
+const OVERDUE_ALERT_ID_PREFIX = "manual-overdue-";
+
+export function overdueAlertId(artistId: string): string {
+  return `${OVERDUE_ALERT_ID_PREFIX}${artistId}`;
+}
+
+// The artist id inside an overdue-payment alert's id, or null if this
+// isn't an overdue-payment alert id.
+export function overdueAlertArtistId(alertId: string): string | null {
+  return alertId.startsWith(OVERDUE_ALERT_ID_PREFIX) ? alertId.slice(OVERDUE_ALERT_ID_PREFIX.length) : null;
+}
+
+function daysSince(date: Date, now = Date.now()): number {
+  return Math.floor((now - date.getTime()) / (1000 * 60 * 60 * 24));
+}
+
+// Live check of the same rule the overdue-payment alert uses, for one
+// artist — used by "Up to date" (see markSubscriptionUpToDate) to refuse
+// clearing an alert whose underlying problem is still there.
+export async function isArtistSubscriptionOverdue(artistId: string): Promise<boolean> {
+  const artist = await db.artist.findFirst({
+    where: { id: artistId, paymentMethod: { in: ["PayPal", "DD"] } },
+    select: { subscriptionPayments: { orderBy: { paidAt: "desc" }, take: 1, select: { paidAt: true } } },
+  });
+  const last = artist?.subscriptionPayments[0];
+  return !!last && daysSince(last.paidAt) > MANUAL_OVERDUE_DAYS;
+}
+
 export type AlertItem = {
   id: string;
   type: string;
@@ -178,14 +217,14 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
   for (const artist of manualCandidates) {
     const last = artist.subscriptionPayments[0];
     if (!last) continue; // No history yet — not flagged (2026-08-13 decision).
-    const daysSince = Math.floor((now - last.paidAt.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysSince > MANUAL_OVERDUE_DAYS) {
+    const days = daysSince(last.paidAt, now);
+    if (days > MANUAL_OVERDUE_DAYS) {
       const siteId = artist.sites[0]?.id || null;
       overdueItems.push({
-        id: `manual-overdue-${artist.id}`,
+        id: overdueAlertId(artist.id),
         type: "SUBSCRIPTION_PAYMENT_OVERDUE",
         severity: "WARNING",
-        message: `${artist.name}: no subscription payment recorded in ${daysSince} days (last: ${last.paidAt.toLocaleDateString()}).`,
+        message: `${artist.name}: no subscription payment recorded in ${days} days (last: ${last.paidAt.toLocaleDateString()}).`,
         artistId: artist.id,
         artistName: artist.name,
         siteId,
@@ -217,9 +256,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
   const unpaidInvoiceItems: AlertItem[] = unpaidPayments.map((p) => {
     const artist = p.purchase.artwork.artist;
     const siteId = artist.sites[0]?.id || null;
-    const daysOverdue = p.dueDate
-      ? Math.floor((now - p.dueDate.getTime()) / (1000 * 60 * 60 * 24))
-      : 0;
+    const daysOverdue = p.dueDate ? daysSince(p.dueDate, now) : 0;
     const buyer = p.purchase.buyerName || "unnamed buyer";
     const failedNote = p.status === "FAILED" ? " (payment attempt failed)" : "";
     return {
@@ -247,7 +284,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
 
 const cachedGetOpenAlerts = unstable_cache(getOpenAlertsUncached, ["open-alerts"], {
   revalidate: 60,
-  tags: ["open-alerts"],
+  tags: [OPEN_ALERTS_TAG],
 });
 
 export async function getOpenAlerts(): Promise<AlertItem[]> {

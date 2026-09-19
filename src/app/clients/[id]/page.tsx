@@ -6,8 +6,8 @@ import ClientOwnerPanel from "@/components/ClientOwnerPanel";
 import SitesListColumn from "@/components/SitesListColumn";
 import { buildTopNavItems } from "@/lib/topNav";
 import { getOpenAlerts } from "@/lib/alerts";
+import { getClientPanelData } from "@/lib/clientPanelData";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
-import { getTemplatesForDirectory } from "@/lib/actions/templates";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +15,8 @@ export const dynamic = "force-dynamic";
 // Owner/Domain/Subscription/Hopper Token view of a site, deliberately
 // without the Financial (Sales/Invoicing) or Personal Profile content
 // that the artist-facing per-site "Profile" page shows — see
-// ClientOwnerPanel.
+// ClientOwnerPanel. The data itself comes from getClientPanelData, shared
+// with the Inbox's Alert view.
 export default async function ClientAdminPage({
   params,
 }: {
@@ -23,24 +24,14 @@ export default async function ClientAdminPage({
 }) {
   const { id } = await params;
 
-  const site = await db.site.findUnique({
-    where: { id },
-    include: { artist: true },
-    relationLoadStrategy: "query",
-  });
-  if (!site) notFound();
-
   // Same cookie the Sites Directory / per-site jump list read — see
   // sitesStatusFilter.ts — so this admin list stays in sync with
   // whatever status filter was last chosen anywhere else in the app.
   const cookieStore = await cookies();
   const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
 
-  const [payments, allSites, templates, openAlerts] = await Promise.all([
-    db.subscriptionPayment.findMany({
-      where: { artistId: site.artistId },
-      orderBy: { paidAt: "desc" },
-    }),
+  const [data, allSites, openAlerts] = await Promise.all([
+    getClientPanelData(id),
     db.site.findMany({
       where: status ? { status } : { status: { not: "ARCHIVED" } },
       select: {
@@ -53,9 +44,9 @@ export default async function ClientAdminPage({
       relationLoadStrategy: "query",
       orderBy: { artist: { name: "asc" } },
     }),
-    getTemplatesForDirectory(""),
     getOpenAlerts(),
   ]);
+  if (!data) notFound();
 
   return (
     <AppShell
@@ -81,50 +72,10 @@ export default async function ClientAdminPage({
       }
       content={
         <ClientOwnerPanel
-          site={{
-            id: site.id,
-            name: site.name,
-            domain: site.domain,
-            status: site.status,
-            defaultCurrency: site.defaultCurrency,
-            templateId: site.templateId,
-            domainStatus: site.domainStatus,
-            domainRenewalDate: site.domainRenewalDate
-              ? site.domainRenewalDate.toISOString().slice(0, 10)
-              : "",
-          }}
-          artist={{
-            id: site.artist.id,
-            name: site.artist.name,
-            firstName: site.artist.firstName,
-            email: site.artist.email,
-            phone: site.artist.phone,
-            notes: site.artist.notes,
-            subscriptionAmount: site.artist.subscriptionAmount
-              ? site.artist.subscriptionAmount.toString()
-              : "",
-            paymentMethod: site.artist.paymentMethod,
-            addressLine1: site.artist.addressLine1,
-            city: site.artist.city,
-            postcode: site.artist.postcode,
-            country: site.artist.country,
-            vatNumber: site.artist.vatNumber,
-            vatRate: site.artist.vatRate ? site.artist.vatRate.toString() : "",
-            invoiceFooterText: site.artist.invoiceFooterText,
-            invoiceLanguage: site.artist.invoiceLanguage,
-            emailSlug: site.artist.emailSlug,
-            hopperToken: site.artist.hopperToken,
-            stripeSubscriptionCustomerId: site.artist.stripeSubscriptionCustomerId,
-            stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
-          }}
-          templates={templates.map((t) => ({ id: t.id, name: t.name }))}
-          subscriptionPayments={payments.map((p) => ({
-            id: p.id,
-            source: p.source as "STRIPE" | "MANUAL",
-            amount: p.amount.toString(),
-            currency: p.currency,
-            paidAt: Number.isNaN(p.paidAt.getTime()) ? "" : p.paidAt.toISOString(),
-          }))}
+          site={data.site}
+          artist={data.artist}
+          templates={data.templates}
+          subscriptionPayments={data.subscriptionPayments}
         />
       }
     />

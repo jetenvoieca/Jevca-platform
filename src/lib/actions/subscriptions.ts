@@ -1,7 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
+import { OPEN_ALERTS_TAG } from "@/lib/alerts";
 
 // ---- Payment method (Stripe / PayPal / DD) — either/or, decided once ----
 // Reuses Artist.paymentMethod (already existed). Kept here rather than in
@@ -44,6 +45,11 @@ export async function updateStripeSubscriptionCustomerId(
 // resets elsewhere in this app) rather than autosave-on-blur, since a
 // payment row is a discrete fact ("they paid £9.95 on this date"), not a
 // field that's gradually being typed.
+//
+// Adding or deleting a payment changes whether the overdue-payment alert
+// applies, so both expire the open-alerts cache (2026-09-19, CRM Phase
+// 3) — otherwise the Inbox's Alert list would keep showing a stale
+// answer for up to a minute.
 
 export async function addManualSubscriptionPayment(
   artistId: string,
@@ -86,6 +92,7 @@ export async function addManualSubscriptionPayment(
       paidAt,
     },
   });
+  updateTag(OPEN_ALERTS_TAG);
   revalidatePath(`/sites/${siteId}`);
   return { ok: true };
 }
@@ -96,16 +103,19 @@ export async function deleteManualSubscriptionPayment(id: string, siteId: string
   const row = await db.subscriptionPayment.findUnique({ where: { id } });
   if (!row || row.source !== "MANUAL") return;
   await db.subscriptionPayment.delete({ where: { id } });
+  updateTag(OPEN_ALERTS_TAG);
   revalidatePath(`/sites/${siteId}`);
 }
 
-// ---- Alerts dashboard ----
+// ---- Alerts ----
 
+// Dismisses a stored alert (2026-09-19: the standalone Alerts page this
+// used to revalidate is gone — alerts now live in the Inbox's Alert view).
 export async function dismissAlert(id: string) {
   await db.alertEvent.update({
     where: { id },
     data: { resolvedAt: new Date() },
   });
-  revalidatePath("/alerts");
+  updateTag(OPEN_ALERTS_TAG);
+  revalidatePath("/accounts/inbox");
 }
-
