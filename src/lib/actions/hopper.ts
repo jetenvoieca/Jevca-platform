@@ -61,6 +61,12 @@ export async function listHopperQueue(artistId: string) {
       kind: true,
       caption: true,
       description: true,
+      // Added 2026-09-19, direct request — lets the sorting card show a
+      // Title/Description preview only for items that actually arrived
+      // via the iPhone Shortcut (see the matching note in
+      // HopperView.tsx), rather than for every source that happens to
+      // carry a caption/description.
+      source: true,
       altText: true,
       tags: true,
       createdAt: true,
