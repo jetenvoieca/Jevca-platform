@@ -22,15 +22,17 @@ import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail"
 // emails — kept inline here rather than a separate modal component,
 // since this is the only place either flow is used.
 //
-// "Sent" tab added same day, second request — a flat list of every
-// OutboundEmail (admin sends, replies, and now invoice/receipt/
-// certificate sends too — see getSentList), fetched on demand only when
-// this tab is actually opened rather than always loaded up front, since
-// this is meant to scale to 100+ artists' worth of sends over time.
-// Clicking a sent item shows its full content in the centre panel, same
-// idea as opening an inbox thread — third request, same day — except
-// there's no server round-trip needed: the full body is already in the
-// list we fetched, so this just reads from local state.
+// Three-column layout (2026-09-19, CRM Phase 1 — see mock-ups): Inbox on
+// the left, the open message / compose form in the centre, and a
+// "Processed" column on the right. The right column currently holds the
+// Sent list — a flat list of every OutboundEmail (admin sends, replies,
+// and invoice/receipt/certificate sends too — see getSentList). Later
+// phases add Done tasks and Alerts to this same column. It has its own
+// artist filter, independent of the Inbox one: the Inbox filter lives in
+// the URL (so Alerts-page links can land already filtered), while the
+// Sent filter is plain client state. Clicking a sent item shows its full
+// content in the centre panel — no server round-trip needed, since the
+// full body is already in the list.
 //
 // Delete added 2026-09-06, direct request ("enable deleting of messages
 // in inbox both received and sent") — every item in a thread (both the
@@ -75,9 +77,10 @@ export default function AdminInboxPanel({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  const [mainTab, setMainTab] = useState<"inbox" | "sent">("inbox");
+  // Right-hand column: Sent list. `null` means "still loading".
   const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
-  const [sentLoading, setSentLoading] = useState(false);
+  const [sentArtistId, setSentArtistId] = useState<string | null>(null);
+  const [sentRefreshKey, setSentRefreshKey] = useState(0);
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -102,22 +105,28 @@ export default function AdminInboxPanel({
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
   const deleteBtnCls = "text-xs text-neutral-400 hover:text-red-600 disabled:opacity-50";
+  const pillWrapCls = "mb-3 inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1";
+  const pillCls = "rounded-full bg-neutral-200 px-3 py-1 text-xs font-medium text-neutral-900";
 
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
 
-  // Fetches (or re-fetches, e.g. after the artist filter changes) the
-  // Sent list whenever the Sent tab is the active one.
+  const refreshSent = () => setSentRefreshKey((k) => k + 1);
+
+  // Loads the Sent list on first render, and again whenever the Sent
+  // artist filter changes or something is sent from this screen.
   useEffect(() => {
-    if (mainTab !== "sent") return;
-    setSentLoading(true);
-    getSentList(selectedArtistId || undefined).then((rows) => {
-      setSentList(rows);
-      setSentLoading(false);
+    let cancelled = false;
+    getSentList(sentArtistId || undefined).then((rows) => {
+      if (!cancelled) setSentList(rows);
     });
-  }, [mainTab, selectedArtistId]);
+    return () => {
+      cancelled = true;
+    };
+  }, [sentArtistId, sentRefreshKey]);
 
   const openThread = (id: string) => {
     setOpenId(id);
+    setSelectedSentId(null);
     setComposing(false);
     setThread(null);
     setThreadLoading(true);
@@ -133,8 +142,20 @@ export default function AdminInboxPanel({
     });
   };
 
-  const handleFilterChange = (value: string) => {
+  const openSent = (id: string) => {
+    setSelectedSentId(id);
+    setOpenId(null);
+    setThread(null);
+    setComposing(false);
+  };
+
+  const handleInboxFilterChange = (value: string) => {
     router.push(value ? `/accounts/inbox?artistId=${value}` : "/accounts/inbox");
+  };
+
+  const handleSentFilterChange = (value: string) => {
+    setSentArtistId(value || null);
+    setSelectedSentId(null);
   };
 
   const handleSendReply = () => {
@@ -151,6 +172,7 @@ export default function AdminInboxPanel({
         return;
       }
       setReplyBody("");
+      refreshSent();
       openThread(openId); // Reload the thread so the new reply shows up.
     });
   };
@@ -193,6 +215,7 @@ export default function AdminInboxPanel({
       startTransition(async () => {
         await deleteOutboundEmail(item.id);
         setDeletingId(null);
+        refreshSent();
         if (openId) openThread(openId);
       });
     }
@@ -241,12 +264,12 @@ export default function AdminInboxPanel({
         return;
       }
       setComposeSent(true);
+      refreshSent();
       router.refresh();
     });
   };
 
   const startCompose = () => {
-    setMainTab("inbox");
     setOpenId(null);
     setThread(null);
     setSelectedSentId(null);
@@ -260,17 +283,9 @@ export default function AdminInboxPanel({
     setComposeSent(false);
   };
 
-  const switchTab = (tab: "inbox" | "sent") => {
-    setMainTab(tab);
-    setComposing(false);
-    setOpenId(null);
-    setThread(null);
-    setSelectedSentId(null);
-  };
-
   return (
-    <div className="mx-auto flex h-full max-w-6xl gap-4 px-6 py-6">
-      {/* ---- LEFT: list + filter ---- */}
+    <div className="flex h-full gap-4 px-6 py-6">
+      {/* ---- LEFT: Inbox list + filter ---- */}
       <div className="flex w-80 shrink-0 flex-col">
         <div className="mb-3 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
@@ -283,30 +298,13 @@ export default function AdminInboxPanel({
           </button>
         </div>
 
-        <div className="mb-3 inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1">
-          <button
-            type="button"
-            onClick={() => switchTab("inbox")}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              mainTab === "inbox" ? "bg-neutral-200 text-neutral-900" : "text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            Inbox
-          </button>
-          <button
-            type="button"
-            onClick={() => switchTab("sent")}
-            className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-              mainTab === "sent" ? "bg-neutral-200 text-neutral-900" : "text-neutral-500 hover:text-neutral-700"
-            }`}
-          >
-            Sent
-          </button>
+        <div className={pillWrapCls}>
+          <span className={pillCls}>Inbox</span>
         </div>
 
         <select
           value={selectedArtistId || ""}
-          onChange={(e) => handleFilterChange(e.target.value)}
+          onChange={(e) => handleInboxFilterChange(e.target.value)}
           className={`${inputCls} mb-3`}
         >
           <option value="">All artists</option>
@@ -318,68 +316,32 @@ export default function AdminInboxPanel({
         </select>
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
-          {mainTab === "inbox" ? (
-            initialList.length === 0 ? (
-              <p className="p-4 text-center text-sm text-neutral-400">Nothing here yet.</p>
-            ) : (
-              <ul className="divide-y divide-neutral-100">
-                {initialList.map((m) => (
-                  <li key={m.id}>
-                    <button
-                      type="button"
-                      onClick={() => openThread(m.id)}
-                      className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                        openId === m.id ? "bg-neutral-100" : ""
-                      }`}
-                    >
-                      <div className="flex items-center justify-between gap-2">
-                        <span
-                          className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
-                        >
-                          {m.fromName || m.fromAddress}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-neutral-400">
-                          {new Date(m.receivedAt).toLocaleDateString()}
-                        </span>
-                      </div>
-                      <p className="truncate text-xs text-neutral-500">{m.subject || "(no subject)"}</p>
-                      <p className="mt-0.5 truncate text-xs text-neutral-400">
-                        {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
-                      </p>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : sentLoading || !sentList ? (
-            <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
-          ) : sentList.length === 0 ? (
-            <p className="p-4 text-center text-sm text-neutral-400">Nothing sent yet.</p>
+          {initialList.length === 0 ? (
+            <p className="p-4 text-center text-sm text-neutral-400">Nothing here yet.</p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {sentList.map((m) => (
+              {initialList.map((m) => (
                 <li key={m.id}>
                   <button
                     type="button"
-                    onClick={() => setSelectedSentId(m.id)}
+                    onClick={() => openThread(m.id)}
                     className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                      selectedSentId === m.id ? "bg-neutral-100" : ""
+                      openId === m.id ? "bg-neutral-100" : ""
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
+                      <span
+                        className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
+                      >
+                        {m.fromName || m.fromAddress}
+                      </span>
                       <span className="shrink-0 text-[10px] text-neutral-400">
-                        {new Date(m.sentAt).toLocaleDateString()}
+                        {new Date(m.receivedAt).toLocaleDateString()}
                       </span>
                     </div>
-                    <p className="truncate text-xs text-neutral-500">
-                      <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                        {KIND_LABELS[m.kind] || m.kind}
-                      </span>
-                      {m.subject || "(no subject)"}
-                    </p>
+                    <p className="truncate text-xs text-neutral-500">{m.subject || "(no subject)"}</p>
                     <p className="mt-0.5 truncate text-xs text-neutral-400">
-                      {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
+                      {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
                     </p>
                   </button>
                 </li>
@@ -389,7 +351,7 @@ export default function AdminInboxPanel({
         </div>
       </div>
 
-      {/* ---- RIGHT: thread, sent detail, or compose ---- */}
+      {/* ---- CENTRE: thread, sent detail, or compose ---- */}
       <div className={`${cardCls} min-w-0 flex-1 overflow-y-auto p-5`}>
         {composing ? (
           <div className="mx-auto max-w-xl space-y-3">
@@ -450,41 +412,37 @@ export default function AdminInboxPanel({
               </>
             )}
           </div>
-        ) : mainTab === "sent" ? (
-          !selectedSent ? (
-            <p className="text-center text-sm text-neutral-400">Select a message on the left, or start a new one.</p>
-          ) : (
-            <div className="mx-auto max-w-xl space-y-2">
-              <div className="flex items-start justify-between gap-2">
-                <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                  {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => handleDeleteSentItem(selectedSent.id)}
-                  disabled={deletingId === selectedSent.id || isPending}
-                  className={deleteBtnCls}
-                >
-                  {deletingId === selectedSent.id ? "Deleting…" : "Delete"}
-                </button>
-              </div>
-              <p className="text-sm font-medium text-neutral-800">{selectedSent.subject || "(no subject)"}</p>
-              <p className="text-xs text-neutral-400">
-                {selectedSent.fromAddress} → {selectedSent.toAddress}
-              </p>
-              <p className="text-xs text-neutral-400">{new Date(selectedSent.sentAt).toLocaleString()}</p>
-              {(selectedSent.artistName || selectedSent.customerName || selectedSent.artworkTitle) && (
-                <p className="text-xs text-neutral-400">
-                  {[selectedSent.artistName, selectedSent.customerName, selectedSent.artworkTitle]
-                    .filter(Boolean)
-                    .join(" — ")}
-                </p>
-              )}
-              <div className="mt-3 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
-                {selectedSent.body || "(empty)"}
-              </div>
+        ) : selectedSent ? (
+          <div className="mx-auto max-w-xl space-y-2">
+            <div className="flex items-start justify-between gap-2">
+              <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
+              </span>
+              <button
+                type="button"
+                onClick={() => handleDeleteSentItem(selectedSent.id)}
+                disabled={deletingId === selectedSent.id || isPending}
+                className={deleteBtnCls}
+              >
+                {deletingId === selectedSent.id ? "Deleting…" : "Delete"}
+              </button>
             </div>
-          )
+            <p className="text-sm font-medium text-neutral-800">{selectedSent.subject || "(no subject)"}</p>
+            <p className="text-xs text-neutral-400">
+              {selectedSent.fromAddress} → {selectedSent.toAddress}
+            </p>
+            <p className="text-xs text-neutral-400">{new Date(selectedSent.sentAt).toLocaleString()}</p>
+            {(selectedSent.artistName || selectedSent.customerName || selectedSent.artworkTitle) && (
+              <p className="text-xs text-neutral-400">
+                {[selectedSent.artistName, selectedSent.customerName, selectedSent.artworkTitle]
+                  .filter(Boolean)
+                  .join(" — ")}
+              </p>
+            )}
+            <div className="mt-3 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+              {selectedSent.body || "(empty)"}
+            </div>
+          </div>
         ) : !openId ? (
           <p className="text-center text-sm text-neutral-400">Select a message, or start a new one.</p>
         ) : threadLoading || !thread ? (
@@ -546,6 +504,68 @@ export default function AdminInboxPanel({
             </div>
           </div>
         )}
+      </div>
+
+      {/* ---- RIGHT: Processed (Sent list + its own filter) ---- */}
+      <div className="flex w-80 shrink-0 flex-col">
+        <div className="mb-3 flex h-[30px] items-center">
+          <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
+        </div>
+
+        <div className={pillWrapCls}>
+          <span className={pillCls}>Sent</span>
+        </div>
+
+        <select
+          value={sentArtistId || ""}
+          onChange={(e) => handleSentFilterChange(e.target.value)}
+          className={`${inputCls} mb-3`}
+        >
+          <option value="">All artists</option>
+          {artistOptions.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.name}
+            </option>
+          ))}
+        </select>
+
+        <div className={`${cardCls} flex-1 overflow-y-auto`}>
+          {!sentList ? (
+            <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
+          ) : sentList.length === 0 ? (
+            <p className="p-4 text-center text-sm text-neutral-400">Nothing sent yet.</p>
+          ) : (
+            <ul className="divide-y divide-neutral-100">
+              {sentList.map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    onClick={() => openSent(m.id)}
+                    className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                      selectedSentId === m.id ? "bg-neutral-100" : ""
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
+                      <span className="shrink-0 text-[10px] text-neutral-400">
+                        {new Date(m.sentAt).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <p className="truncate text-xs text-neutral-500">
+                      <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                        {KIND_LABELS[m.kind] || m.kind}
+                      </span>
+                      {m.subject || "(no subject)"}
+                    </p>
+                    <p className="mt-0.5 truncate text-xs text-neutral-400">
+                      {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
+                    </p>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
