@@ -27,6 +27,14 @@ export type HopperItem = {
   kind: string;
   caption: string | null;
   description: string | null;
+  // Which of the Hopper's several intake paths this item came in
+  // through — "iPhone Shortcut" for the real Shortcut, a distinct
+  // string for every other caller of /api/hopper/finalize (the browser
+  // importer extension included), or null for anything added a
+  // different way (manual upload, drag-and-drop, CSV import). Used only
+  // to gate SortingCard's Title/Description preview below — see the
+  // note there.
+  source: string | null;
   altText: string | null;
   tags: string[];
   createdAt: string;
@@ -571,16 +579,6 @@ export default function HopperView({
     </div>
   );
 
-  // Alignment spacers (importButtonsSpacer, and the matching invisible
-  // block in the centre column below) were removed 2026-08-18, direct
-  // request — they kept "Processed"/"Up next"'s headers level with the
-  // centre column's actual content, at the cost of a real, visible chunk
-  // of dead space at the top of both side columns doing nothing but
-  // holding a gap open. Traded away deliberately: the three columns'
-  // headers no longer sit on an exact shared baseline, but "Processed"
-  // and "Up next" now start right at the top of their own column,
-  // reclaiming that space for more visible thumbnails.
-
   return (
     <div
       className="relative mx-auto min-h-full max-w-[1700px] px-6 py-4"
@@ -601,54 +599,12 @@ export default function HopperView({
         <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{addError}</p>
       )}
 
-      {/* Responsive layout, reworked 2026-08-18 — replaces a
-          position:sticky-based approach that didn't actually give
-          independent scrolling (confirmed broken: scrolling the centre
-          column moved the whole page, dragging "Processed" and its
-          header along with it, rather than the side columns staying
-          fixed in place). This now follows the same proven pattern
-          already used elsewhere in this app (the Artwork editor's
-          grid/detail split, MediaPicker's grid/panel split): a row with
-          a genuinely fixed height at lg, three independent panes each
-          scrolling only themselves via their own overflow-y-auto, each
-          pane's header living outside that scrolling area entirely (not
-          reliant on `sticky`, so there's no ancestor-scroll-context
-          question to get wrong). Below lg: unchanged — a single stacked
-          column with natural page scroll, sorting card first via the
-          order-* classes (what matters when you've just dragged
-          something in), Up next second, Processed last.
-          Desktop left-to-right order (2026-09-10, direct request): Up
-          next, Hopper, Processed — set by DOM order below (lg:order-none
-          on every pane means desktop position simply follows source
-          order); the order-1/2/3 classes below are mobile-only and
-          unchanged, so the stacked-on-mobile order (sorting card, Up
-          next, Processed) stays exactly as it was.
-          Side columns now flex/shrink instead of being fixed-pixel
-          (2026-09-11, direct request — iPad landscape, roughly
-          1024-1366px wide, couldn't fit all three fixed-width columns
-          at once). Up next and Processed each get a proportional
-          flex-basis with a floor (min-w) and ceiling (max-w) instead of
-          a single fixed width, so all three panes keep shrinking
-          together down to tablet-landscape widths rather than one
-          column overflowing while the others stay locked at their
-          desktop size. The centre Hopper column keeps flex-1 (already
-          the flexible one) with its own floor added so its buttons
-          don't get squashed below a usable width either. */}
       <div className="flex flex-col gap-6 lg:h-[calc(100vh-7rem)] lg:flex-row lg:items-stretch">
-        {/* Up next — always rendered (not just while there's a current
-            item), so "Up next (0)" and this column's place in the layout
-            stay visible and stable even once the queue empties out. */}
         <div className="order-2 flex flex-col lg:order-none lg:min-w-[260px] lg:max-w-[700px] lg:flex-1 lg:basis-[38%] lg:overflow-hidden">
           <div className="mb-2 flex items-center justify-between">
             <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
               Up next ({remaining.length})
             </p>
-            {/* Bulk select-and-delete (2026-09-07, direct request) —
-                toggled separately from the sort arrows so the ordinary
-                one-click-to-sort flow on each thumbnail stays untouched
-                until this is deliberately switched on. While active, a
-                thumbnail click toggles its checkbox instead of opening
-                it for sorting — see the grid below. */}
             <div className="flex items-center gap-3">
               {bulkSelectMode ? (
                 <>
@@ -964,6 +920,42 @@ function SortingCard({
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
       <HopperItemPreview item={item} />
 
+      {/* Title/Description preview (2026-09-19, direct request — "add
+          back the title and description fields so when sent by
+          shortcut I can see what it's about", explicitly only for
+          Shortcut items, "other sources unchanged"). Read-only here —
+          both stay fully editable from the "Create new artwork" form
+          (see QuickCatalogueFields) or afterwards from Media Catalogue;
+          this is purely so the Shortcut's own Name/Description prompt
+          is visible while sorting, without having to open that form
+          first. Gated on source rather than "has a caption" so this
+          doesn't light up for the browser importer extension's
+          best-effort auto-detected text, or anything else that happens
+          to carry a caption — see the note on HopperItem.source above. */}
+      {item.source === "iPhone Shortcut" && (item.caption || item.description) && (
+        <div className="mb-4 rounded-md border border-neutral-200 bg-neutral-50 p-3">
+          {item.caption && (
+            <p className="text-sm font-medium text-neutral-800">{item.caption}</p>
+          )}
+          {item.description && (
+            <p className="mt-1 whitespace-pre-wrap text-sm text-neutral-600">
+              {item.description}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* No EDITABLE Name/Description fields at this stage (2026-09-13,
+          direct request — "no name or description at this stage"; the
+          read-only Shortcut-only preview above, added 2026-09-19, is a
+          deliberate later exception to that, not a reversal of it).
+          Whichever routing button is chosen next collects only what
+          that specific destination actually needs: Create new artwork
+          collects Name itself (see QuickCatalogueFields below); Add to
+          Media/Add to Bucket/Manage Artwork need neither — a caption can
+          always be added afterwards from the Media Catalogue's own edit
+          form if wanted. */}
+
       <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
         <button
           type="button"
@@ -1165,7 +1157,7 @@ function ManageArtworkPanel({
 // entirely when the WHOLE line is just that dimension/price (the common
 // case for a source site that puts each fact on its own line, as seen
 // on jillysuttonsculpture.com — "47.4cm x 34.5cm x 20cm" / "Limited
-// Edition" / "Edition of 12" each their own line). A match embedded in a
+// Edition" / "Edition of 9" each their own line). A match embedded in a
 // longer sentence is still picked up for Size/Price, but the sentence
 // itself stays in Studio notes rather than risk mangling it. Every
 // field this produces is still a plain editable form field, so a wrong
