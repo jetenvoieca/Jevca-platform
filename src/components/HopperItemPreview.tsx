@@ -6,6 +6,8 @@ export type HopperPreviewItem = {
   createdAt: string;
 };
 
+import { formatDateTime } from "@/lib/formatDate";
+
 // Shared image/video preview + "Received" timestamp — used identically
 // by the full Hopper's SortingCard (HopperView.tsx) and the limited
 // "set new Main image" modal opened from Delete & Replace
@@ -16,9 +18,7 @@ export type HopperPreviewItem = {
 export default function HopperItemPreview({ item }: { item: HopperPreviewItem }) {
   return (
     <>
-      <p className="mb-3 text-xs text-neutral-400">
-        Received {new Date(item.createdAt).toLocaleString()}
-      </p>
+      <p className="mb-3 text-xs text-neutral-400">Received {formatDateTime(item.createdAt)}</p>
       {item.kind === "VIDEO" ? (
         <video
           src={item.url}

@@ -1,5 +1,6 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { formatDate } from "@/lib/formatDate";
 
 // 2026-08-13 decision: manual (PayPal/DD) artists are expected roughly
 // monthly, flagged overdue 14 days after that's due — i.e. 44 days since
@@ -224,7 +225,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
         id: overdueAlertId(artist.id),
         type: "SUBSCRIPTION_PAYMENT_OVERDUE",
         severity: "WARNING",
-        message: `${artist.name}: no subscription payment recorded in ${days} days (last: ${last.paidAt.toLocaleDateString()}).`,
+        message: `${artist.name}: no subscription payment recorded in ${days} days (last: ${formatDate(last.paidAt)}).`,
         artistId: artist.id,
         artistName: artist.name,
         siteId,

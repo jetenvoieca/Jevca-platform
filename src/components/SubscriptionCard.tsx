@@ -10,6 +10,7 @@ import {
   addManualSubscriptionPayment,
   deleteManualSubscriptionPayment,
 } from "@/lib/actions/subscriptions";
+import { formatDate } from "@/lib/formatDate";
 
 const labelCls = "mb-1 block text-xs text-neutral-500";
 const inputCls =
@@ -247,7 +248,7 @@ export default function SubscriptionCard({
               ) : (
                 subscriptionPayments.map((p) => (
                   <tr key={p.id} className="border-t border-neutral-100">
-                    <td className="px-2 py-1.5">{new Date(p.paidAt).toLocaleDateString()}</td>
+                    <td className="px-2 py-1.5">{formatDate(p.paidAt)}</td>
                     <td className="px-2 py-1.5">
                       {p.currency} {parseFloat(p.amount).toFixed(2)}
                     </td>
