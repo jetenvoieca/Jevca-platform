@@ -1,3 +1,5 @@
+import { formatDateTime } from "@/lib/formatDate";
+
 export type HopperPreviewItem = {
   id: string;
   url: string;
@@ -5,8 +7,6 @@ export type HopperPreviewItem = {
   kind: string;
   createdAt: string;
 };
-
-import { formatDateTime } from "@/lib/formatDate";
 
 // Shared image/video preview + "Received" timestamp — used identically
 // by the full Hopper's SortingCard (HopperView.tsx) and the limited

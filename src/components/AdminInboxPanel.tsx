@@ -18,6 +18,7 @@ import { dismissAlert } from "@/lib/actions/subscriptions";
 import type { AlertItem } from "@/lib/alerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
 import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
+import { formatDate, formatDateTime } from "@/lib/formatDate";
 import TaskForm from "@/components/TaskForm";
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
@@ -92,14 +93,6 @@ const EMPTY_TASK_FORM: TaskInput = {
   category: "",
   artistId: "",
 };
-
-// A task's target date is a calendar date, not a moment — built from its
-// parts rather than parsed as a Date string, which would read it as UTC
-// midnight and could display as the previous day in some timezones.
-function formatDateOnly(iso: string): string {
-  const [y, m, d] = iso.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString();
-}
 
 // The Inbox's address, with the left-hand artist filter and (optionally)
 // the selected alert carried in the query string.
@@ -530,7 +523,7 @@ export default function AdminInboxPanel({
                           {m.fromName || m.fromAddress}
                         </span>
                         <span className="shrink-0 text-[10px] text-neutral-400">
-                          {new Date(m.receivedAt).toLocaleDateString()}
+                          {formatDate(m.receivedAt)}
                         </span>
                       </div>
                       <p className="truncate text-xs text-neutral-500">{m.subject || "(no subject)"}</p>
@@ -559,7 +552,7 @@ export default function AdminInboxPanel({
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm font-semibold text-neutral-900">{t.name}</span>
                         <span className="shrink-0 text-[10px] text-neutral-400">
-                          {t.targetDate ? formatDateOnly(t.targetDate) : ""}
+                          {t.targetDate ? formatDate(t.targetDate) : ""}
                         </span>
                       </div>
                       <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
@@ -595,7 +588,7 @@ export default function AdminInboxPanel({
                       </span>
                       {new Date(a.createdAt).getTime() > 0 && (
                         <span className="shrink-0 text-[10px] text-neutral-400">
-                          {new Date(a.createdAt).toLocaleDateString()}
+                          {formatDate(a.createdAt)}
                         </span>
                       )}
                     </div>
@@ -718,7 +711,7 @@ export default function AdminInboxPanel({
             <p className="text-xs text-neutral-400">
               {selectedSent.fromAddress} → {selectedSent.toAddress}
             </p>
-            <p className="text-xs text-neutral-400">{new Date(selectedSent.sentAt).toLocaleString()}</p>
+            <p className="text-xs text-neutral-400">{formatDateTime(selectedSent.sentAt)}</p>
             {(selectedSent.artistName || selectedSent.customerName || selectedSent.artworkTitle) && (
               <p className="text-xs text-neutral-400">
                 {[selectedSent.artistName, selectedSent.customerName, selectedSent.artworkTitle]
@@ -748,7 +741,7 @@ export default function AdminInboxPanel({
                     {item.direction === "OUT" ? "You" : item.fromName || item.fromAddress}
                   </span>
                   <div className="flex items-center gap-2">
-                    <span>{new Date(item.at).toLocaleString()}</span>
+                    <span>{formatDateTime(item.at)}</span>
                     <button
                       type="button"
                       onClick={() => handleDeleteThreadItem(item)}
@@ -836,7 +829,7 @@ export default function AdminInboxPanel({
                       <div className="flex items-center justify-between gap-2">
                         <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
                         <span className="shrink-0 text-[10px] text-neutral-400">
-                          {new Date(m.sentAt).toLocaleDateString()}
+                          {formatDate(m.sentAt)}
                         </span>
                       </div>
                       <p className="truncate text-xs text-neutral-500">
@@ -865,9 +858,7 @@ export default function AdminInboxPanel({
                   <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
                   <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-neutral-400">
                     <span>Date completed</span>
-                    <span className="text-[10px]">
-                      {t.completedAt ? new Date(t.completedAt).toLocaleDateString() : ""}
-                    </span>
+                    <span className="text-[10px]">{t.completedAt ? formatDate(t.completedAt) : ""}</span>
                   </div>
                 </li>
               ))}
