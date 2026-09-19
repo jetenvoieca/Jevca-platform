@@ -13,6 +13,7 @@ import {
   type SaleTermsDetail,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
+import { formatDate } from "@/lib/formatDate";
 import StripeCardForm from "@/components/StripeCardForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import CustomerPicker from "@/components/CustomerPicker";
@@ -589,9 +590,9 @@ export default function PurchasePanel({
                           </td>
                           <td className="py-1.5 text-neutral-500">
                             {p.paidDate
-                              ? new Date(p.paidDate).toLocaleDateString()
+                              ? formatDate(p.paidDate)
                               : p.dueDate
-                                ? new Date(p.dueDate).toLocaleDateString()
+                                ? formatDate(p.dueDate)
                                 : "—"}
                           </td>
                         </tr>
@@ -715,9 +716,7 @@ export default function PurchasePanel({
                   >
                     {p.status === "COMPLETED" ? "Completed" : "Abandoned"}
                   </span>
-                  <span className="text-neutral-400">
-                    {p.closedAt ? new Date(p.closedAt).toLocaleDateString() : ""}
-                  </span>
+                  <span className="text-neutral-400">{p.closedAt ? formatDate(p.closedAt) : ""}</span>
                   <button
                     type="button"
                     onClick={() => downloadInvoice(p.id)}

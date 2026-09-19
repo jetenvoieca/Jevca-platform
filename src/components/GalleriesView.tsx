@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/customers";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
+import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
@@ -566,7 +567,7 @@ export default function GalleriesView({
                               {formatMoney(p.totalAmount, p.currency)}
                             </td>
                             <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
-                              {new Date(p.createdAt).toLocaleDateString()}
+                              {formatDate(p.createdAt)}
                             </td>
                           </tr>
                         ))
