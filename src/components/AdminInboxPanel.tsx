@@ -13,6 +13,8 @@ import {
   type SentSummaryItem,
 } from "@/lib/actions/inboundEmail";
 import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail";
+import { getCompletedTasks, saveTask, type TaskItem, type TaskInput } from "@/lib/actions/tasks";
+import TaskForm from "@/components/TaskForm";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every reply received at any
@@ -22,17 +24,24 @@ import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail"
 // emails — kept inline here rather than a separate modal component,
 // since this is the only place either flow is used.
 //
-// Three-column layout (2026-09-19, CRM Phase 1 — see mock-ups): Inbox on
-// the left, the open message / compose form in the centre, and a
-// "Processed" column on the right. The right column currently holds the
-// Sent list — a flat list of every OutboundEmail (admin sends, replies,
-// and invoice/receipt/certificate sends too — see getSentList). Later
-// phases add Done tasks and Alerts to this same column. It has its own
-// artist filter, independent of the Inbox one: the Inbox filter lives in
-// the URL (so Alerts-page links can land already filtered), while the
-// Sent filter is plain client state. Clicking a sent item shows its full
-// content in the centre panel — no server round-trip needed, since the
-// full body is already in the list.
+// Three-column layout (2026-09-19, CRM Phase 1 — see mock-ups): the
+// left column lists what needs attention, the centre shows the open
+// item / form, and the right "Processed" column lists what's been dealt
+// with. A pill toggle at the top of the left column (Inbox | Task)
+// switches the whole screen between two modes, and the right column
+// follows it:
+//   - Inbox mode: left = received messages, right = Sent list
+//     (every OutboundEmail — admin sends, replies, and invoice/receipt/
+//     certificate sends too, see getSentList).
+//   - Task mode (CRM Phase 2): left = open tasks, centre = task form,
+//     right = Done list (completed tasks).
+// Later phases add Alerts as a third mode.
+//
+// The two artist filters are independent: the left one lives in the URL
+// (so Alerts-page links can land already filtered) and applies to
+// whichever left list is showing; the right one is plain client state.
+// Clicking a sent item shows its full content in the centre panel — no
+// server round-trip needed, since the full body is already in the list.
 //
 // Delete added 2026-09-06, direct request ("enable deleting of messages
 // in inbox both received and sent") — every item in a thread (both the
@@ -61,14 +70,37 @@ const KIND_LABELS: Record<string, string> = {
   CERTIFICATE: "Certificate",
 };
 
+type Mode = "inbox" | "task";
+
+const EMPTY_TASK_FORM: TaskInput = {
+  id: null,
+  name: "",
+  description: "",
+  targetDate: "",
+  category: "",
+  artistId: "",
+};
+
+// A task's target date is a calendar date, not a moment — built from its
+// parts rather than parsed as a Date string, which would read it as UTC
+// midnight and could display as the previous day in some timezones.
+function formatDateOnly(iso: string): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString();
+}
+
 export default function AdminInboxPanel({
   initialList,
+  initialTasks,
+  taskCategories,
   artistOptions,
   selectedArtistId,
   composeRecipients,
   adminEmailAddress,
 }: {
   initialList: InboxSummaryItem[];
+  initialTasks: TaskItem[];
+  taskCategories: string[];
   artistOptions: { id: string; name: string }[];
   selectedArtistId: string | null;
   composeRecipients: ComposeRecipient[];
@@ -77,10 +109,14 @@ export default function AdminInboxPanel({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Right-hand column: Sent list. `null` means "still loading".
+  const [mode, setMode] = useState<Mode>("inbox");
+
+  // Right-hand column: Sent list (Inbox mode) or Done list (Task mode).
+  // `null` means "still loading". One artist filter serves both.
   const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
-  const [sentArtistId, setSentArtistId] = useState<string | null>(null);
-  const [sentRefreshKey, setSentRefreshKey] = useState(0);
+  const [doneList, setDoneList] = useState<TaskItem[] | null>(null);
+  const [rightArtistId, setRightArtistId] = useState<string | null>(null);
+  const [rightRefreshKey, setRightRefreshKey] = useState(0);
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -101,28 +137,54 @@ export default function AdminInboxPanel({
   const [composeError, setComposeError] = useState<string | null>(null);
   const [composeSent, setComposeSent] = useState(false);
 
+  // `null` = no task open in the centre panel.
+  const [taskForm, setTaskForm] = useState<TaskInput | null>(null);
+  const [taskSaving, setTaskSaving] = useState(false);
+  const [taskError, setTaskError] = useState<string | null>(null);
+  const [taskSavedNote, setTaskSavedNote] = useState(false);
+
   const cardCls = "rounded-lg border border-neutral-200 bg-white";
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
   const deleteBtnCls = "text-xs text-neutral-400 hover:text-red-600 disabled:opacity-50";
   const pillWrapCls = "mb-3 inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1";
-  const pillCls = "rounded-full bg-neutral-200 px-3 py-1 text-xs font-medium text-neutral-900";
+  const pillCls = (active: boolean) =>
+    `rounded-full px-3 py-1 text-xs font-medium transition ${
+      active ? "bg-neutral-200 text-neutral-900" : "text-neutral-500 hover:text-neutral-700"
+    }`;
 
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
 
-  const refreshSent = () => setSentRefreshKey((k) => k + 1);
+  const refreshRight = () => setRightRefreshKey((k) => k + 1);
 
-  // Loads the Sent list on first render, and again whenever the Sent
-  // artist filter changes or something is sent from this screen.
+  // Loads whichever list the right-hand column is currently showing —
+  // on first render, when the mode or the right-hand artist filter
+  // changes, and after something is sent/completed from this screen.
   useEffect(() => {
     let cancelled = false;
-    getSentList(sentArtistId || undefined).then((rows) => {
-      if (!cancelled) setSentList(rows);
-    });
+    if (mode === "inbox") {
+      getSentList(rightArtistId || undefined).then((rows) => {
+        if (!cancelled) setSentList(rows);
+      });
+    } else {
+      getCompletedTasks(rightArtistId || undefined).then((rows) => {
+        if (!cancelled) setDoneList(rows);
+      });
+    }
     return () => {
       cancelled = true;
     };
-  }, [sentArtistId, sentRefreshKey]);
+  }, [mode, rightArtistId, rightRefreshKey]);
+
+  const switchMode = (next: Mode) => {
+    if (next === mode) return;
+    setMode(next);
+    setOpenId(null);
+    setThread(null);
+    setSelectedSentId(null);
+    setComposing(false);
+    setTaskForm(null);
+  };
 
   const openThread = (id: string) => {
     setOpenId(id);
@@ -149,12 +211,12 @@ export default function AdminInboxPanel({
     setComposing(false);
   };
 
-  const handleInboxFilterChange = (value: string) => {
+  const handleLeftFilterChange = (value: string) => {
     router.push(value ? `/accounts/inbox?artistId=${value}` : "/accounts/inbox");
   };
 
-  const handleSentFilterChange = (value: string) => {
-    setSentArtistId(value || null);
+  const handleRightFilterChange = (value: string) => {
+    setRightArtistId(value || null);
     setSelectedSentId(null);
   };
 
@@ -172,7 +234,7 @@ export default function AdminInboxPanel({
         return;
       }
       setReplyBody("");
-      refreshSent();
+      refreshRight();
       openThread(openId); // Reload the thread so the new reply shows up.
     });
   };
@@ -215,7 +277,7 @@ export default function AdminInboxPanel({
       startTransition(async () => {
         await deleteOutboundEmail(item.id);
         setDeletingId(null);
-        refreshSent();
+        refreshRight();
         if (openId) openThread(openId);
       });
     }
@@ -264,7 +326,7 @@ export default function AdminInboxPanel({
         return;
       }
       setComposeSent(true);
-      refreshSent();
+      refreshRight();
       router.refresh();
     });
   };
@@ -283,28 +345,84 @@ export default function AdminInboxPanel({
     setComposeSent(false);
   };
 
+  const openTask = (t: TaskItem) => {
+    setTaskForm({
+      id: t.id,
+      name: t.name,
+      description: t.description ?? "",
+      targetDate: t.targetDate ?? "",
+      category: t.category ?? "",
+      artistId: t.artistId ?? "",
+    });
+    setTaskError(null);
+    setTaskSavedNote(false);
+  };
+
+  const startTask = () => {
+    setTaskForm(EMPTY_TASK_FORM);
+    setTaskError(null);
+    setTaskSavedNote(false);
+  };
+
+  const handleTaskChange = (patch: Partial<TaskInput>) => {
+    setTaskForm((f) => (f ? { ...f, ...patch } : f));
+    setTaskSavedNote(false);
+  };
+
+  // Save Task keeps the saved task open in the form; Task Completed
+  // saves (if needed) and completes it in one go, then closes the form —
+  // the task leaves the open list on the left and appears in Done on the
+  // right.
+  const handleSaveTask = (complete: boolean) => {
+    if (!taskForm) return;
+    setTaskError(null);
+    setTaskSavedNote(false);
+    setTaskSaving(true);
+    startTransition(async () => {
+      const res = await saveTask(taskForm, complete);
+      setTaskSaving(false);
+      if (!res.ok) {
+        setTaskError(res.error);
+        return;
+      }
+      router.refresh();
+      if (complete) {
+        setTaskForm(null);
+        refreshRight();
+      } else {
+        setTaskForm({ ...taskForm, id: res.id });
+        setTaskSavedNote(true);
+      }
+    });
+  };
+
   return (
     <div className="flex h-full gap-4 px-6 py-6">
-      {/* ---- LEFT: Inbox list + filter ---- */}
+      {/* ---- LEFT: Inbox / Task list + filter ---- */}
       <div className="flex w-80 shrink-0 flex-col">
         <div className="mb-3 flex items-center justify-between">
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
           <button
             type="button"
-            onClick={startCompose}
+            onClick={mode === "inbox" ? startCompose : startTask}
             className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
           >
-            New message
+            {mode === "inbox" ? "New message" : "New Task"}
           </button>
         </div>
 
         <div className={pillWrapCls}>
-          <span className={pillCls}>Inbox</span>
+          <button type="button" onClick={() => switchMode("inbox")} className={pillCls(mode === "inbox")}>
+            Inbox
+          </button>
+          <button type="button" onClick={() => switchMode("task")} className={pillCls(mode === "task")}>
+            Task
+          </button>
         </div>
 
         <select
           value={selectedArtistId || ""}
-          onChange={(e) => handleInboxFilterChange(e.target.value)}
+          onChange={(e) => handleLeftFilterChange(e.target.value)}
           className={`${inputCls} mb-3`}
         >
           <option value="">All artists</option>
@@ -316,33 +434,60 @@ export default function AdminInboxPanel({
         </select>
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
-          {initialList.length === 0 ? (
-            <p className="p-4 text-center text-sm text-neutral-400">Nothing here yet.</p>
+          {mode === "inbox" ? (
+            initialList.length === 0 ? (
+              <p className="p-4 text-center text-sm text-neutral-400">Nothing here yet.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">
+                {initialList.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => openThread(m.id)}
+                      className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                        openId === m.id ? "bg-neutral-100" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span
+                          className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
+                        >
+                          {m.fromName || m.fromAddress}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-neutral-400">
+                          {new Date(m.receivedAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-neutral-500">{m.subject || "(no subject)"}</p>
+                      <p className="mt-0.5 truncate text-xs text-neutral-400">
+                        {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : initialTasks.length === 0 ? (
+            <p className="p-4 text-center text-sm text-neutral-400">No open tasks.</p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {initialList.map((m) => (
-                <li key={m.id}>
+              {initialTasks.map((t) => (
+                <li key={t.id}>
                   <button
                     type="button"
-                    onClick={() => openThread(m.id)}
+                    onClick={() => openTask(t)}
                     className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                      openId === m.id ? "bg-neutral-100" : ""
+                      taskForm?.id === t.id ? "bg-neutral-100" : ""
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
-                      <span
-                        className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
-                      >
-                        {m.fromName || m.fromAddress}
-                      </span>
+                      <span className="truncate text-sm font-semibold text-neutral-900">{t.name}</span>
                       <span className="shrink-0 text-[10px] text-neutral-400">
-                        {new Date(m.receivedAt).toLocaleDateString()}
+                        {t.targetDate ? formatDateOnly(t.targetDate) : ""}
                       </span>
                     </div>
-                    <p className="truncate text-xs text-neutral-500">{m.subject || "(no subject)"}</p>
-                    <p className="mt-0.5 truncate text-xs text-neutral-400">
-                      {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
-                    </p>
+                    <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
+                    <p className="mt-0.5 truncate text-xs text-neutral-400">{t.artistName || "General"}</p>
                   </button>
                 </li>
               ))}
@@ -351,9 +496,25 @@ export default function AdminInboxPanel({
         </div>
       </div>
 
-      {/* ---- CENTRE: thread, sent detail, or compose ---- */}
+      {/* ---- CENTRE: task form, thread, sent detail, or compose ---- */}
       <div className={`${cardCls} min-w-0 flex-1 overflow-y-auto p-5`}>
-        {composing ? (
+        {mode === "task" ? (
+          taskForm ? (
+            <TaskForm
+              form={taskForm}
+              categories={taskCategories}
+              artistOptions={artistOptions}
+              saving={taskSaving || isPending}
+              error={taskError}
+              savedNote={taskSavedNote}
+              onChange={handleTaskChange}
+              onSave={() => handleSaveTask(false)}
+              onComplete={() => handleSaveTask(true)}
+            />
+          ) : (
+            <p className="text-center text-sm text-neutral-400">Select a task, or start a new one.</p>
+          )
+        ) : composing ? (
           <div className="mx-auto max-w-xl space-y-3">
             <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
               New message — from {adminEmailAddress}
@@ -506,19 +667,19 @@ export default function AdminInboxPanel({
         )}
       </div>
 
-      {/* ---- RIGHT: Processed (Sent list + its own filter) ---- */}
+      {/* ---- RIGHT: Processed (Sent list or Done list, own filter) ---- */}
       <div className="flex w-80 shrink-0 flex-col">
         <div className="mb-3 flex h-[30px] items-center">
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
         </div>
 
         <div className={pillWrapCls}>
-          <span className={pillCls}>Sent</span>
+          <span className={pillCls(true)}>{mode === "inbox" ? "Sent" : "Done"}</span>
         </div>
 
         <select
-          value={sentArtistId || ""}
-          onChange={(e) => handleSentFilterChange(e.target.value)}
+          value={rightArtistId || ""}
+          onChange={(e) => handleRightFilterChange(e.target.value)}
           className={`${inputCls} mb-3`}
         >
           <option value="">All artists</option>
@@ -530,37 +691,58 @@ export default function AdminInboxPanel({
         </select>
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
-          {!sentList ? (
+          {mode === "inbox" ? (
+            !sentList ? (
+              <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
+            ) : sentList.length === 0 ? (
+              <p className="p-4 text-center text-sm text-neutral-400">Nothing sent yet.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">
+                {sentList.map((m) => (
+                  <li key={m.id}>
+                    <button
+                      type="button"
+                      onClick={() => openSent(m.id)}
+                      className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                        selectedSentId === m.id ? "bg-neutral-100" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
+                        <span className="shrink-0 text-[10px] text-neutral-400">
+                          {new Date(m.sentAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                      <p className="truncate text-xs text-neutral-500">
+                        <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                          {KIND_LABELS[m.kind] || m.kind}
+                        </span>
+                        {m.subject || "(no subject)"}
+                      </p>
+                      <p className="mt-0.5 truncate text-xs text-neutral-400">
+                        {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : !doneList ? (
             <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
-          ) : sentList.length === 0 ? (
-            <p className="p-4 text-center text-sm text-neutral-400">Nothing sent yet.</p>
+          ) : doneList.length === 0 ? (
+            <p className="p-4 text-center text-sm text-neutral-400">No completed tasks yet.</p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {sentList.map((m) => (
-                <li key={m.id}>
-                  <button
-                    type="button"
-                    onClick={() => openSent(m.id)}
-                    className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                      selectedSentId === m.id ? "bg-neutral-100" : ""
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
-                      <span className="shrink-0 text-[10px] text-neutral-400">
-                        {new Date(m.sentAt).toLocaleDateString()}
-                      </span>
-                    </div>
-                    <p className="truncate text-xs text-neutral-500">
-                      <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                        {KIND_LABELS[m.kind] || m.kind}
-                      </span>
-                      {m.subject || "(no subject)"}
-                    </p>
-                    <p className="mt-0.5 truncate text-xs text-neutral-400">
-                      {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
-                    </p>
-                  </button>
+              {doneList.map((t) => (
+                <li key={t.id} className="px-3 py-2.5">
+                  <p className="truncate text-sm font-semibold text-neutral-900">{t.name}</p>
+                  <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
+                  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-neutral-400">
+                    <span>Date completed</span>
+                    <span className="text-[10px]">
+                      {t.completedAt ? new Date(t.completedAt).toLocaleDateString() : ""}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>
