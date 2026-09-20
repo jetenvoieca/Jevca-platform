@@ -89,6 +89,31 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
   return artwork.artist.stripeMode;
 }
 
+// ---------- Shared: refuse to start a new sale on an already-SOLD
+// artwork ----------
+
+// Every way a sale can be started for a given artwork — startPurchase
+// (the Sold panel's Get payment link/Enter card now), recordPastSale
+// (the Sold panel's own Record sale, and the historical gallery
+// backfill), startGallerySale (the Galleries page) — funnels through
+// this one check (2026-09-20, direct request: "not allow another sale
+// unless existing one cancelled or deleted"). The existing "already an
+// ACTIVE purchase" guards each of those already had only ever caught a
+// sale still in progress; they said nothing about an artwork that's
+// already sold and paid for. Cancelling (abandonPurchase) or deleting
+// (forceDeleteCompletedSale, which resets Availability back to
+// AVAILABLE — see the note there) is the only way past this.
+async function assertArtworkAvailableForSale(artworkId: string): Promise<string | null> {
+  const artwork = await db.artwork.findUnique({
+    where: { id: artworkId },
+    select: { availability: true },
+  });
+  if (artwork?.availability === "SOLD") {
+    return "This artwork is already marked SOLD — cancel or delete the existing sale first.";
+  }
+  return null;
+}
+
 // ---------- Sale Terms — autosave, no buyer info, ever ----------
 
 // Sale Terms merged into the Presentation tab (2026-08-15) — there's no
@@ -219,13 +244,17 @@ async function seedSaleTermsFromOfferedPrice(
 // ---------- Starting a sale — explicit action, not autosaved ----------
 
 // Creates the actual Purchase, snapshotting SaleTerms at this moment.
-// Refuses if there's already an ACTIVE purchase for this artwork — only
-// one at a time (see schema comment).
+// Refuses if there's already an ACTIVE purchase for this artwork, or if
+// the artwork is already marked SOLD (2026-09-20 — see
+// assertArtworkAvailableForSale above) — only one sale at a time, ever.
 export async function startPurchase(
   artworkId: string,
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
+  const soldError = await assertArtworkAvailableForSale(artworkId);
+  if (soldError) return { ok: false, error: soldError };
+
   const terms = await db.saleTerms.findUnique({ where: { artworkId } });
   if (!terms) return { ok: false, error: "Set the sale terms first." };
 
@@ -361,6 +390,9 @@ export async function startGallerySale(
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
+  const soldError = await assertArtworkAvailableForSale(artworkId);
+  if (soldError) return { ok: false, error: soldError };
+
   const existingActive = await db.purchase.findFirst({
     where: { artworkId, status: "ACTIVE" },
   });
@@ -568,6 +600,9 @@ export async function recordPastSale(
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
+  const soldError = await assertArtworkAvailableForSale(artworkId);
+  if (soldError) return { ok: false, error: soldError };
+
   const existingActive = await db.purchase.findFirst({
     where: { artworkId, status: "ACTIVE" },
   });
@@ -692,6 +727,14 @@ export async function deleteGallerySale(
 // this is never the default "Delete" button, only a separate,
 // clearly-labelled option shown specifically for completed sales, with
 // its own stronger confirmation wording.
+//
+// Resets Availability back to AVAILABLE (2026-09-20, direct request —
+// "not allow another sale unless existing one cancelled or deleted")
+// — this is exactly the "deleted" half of that escape hatch (abandonPurchase
+// is the "cancelled" half, for a sale still in progress). Only resets
+// when no other COMPLETED purchase remains for the same artwork — the
+// normal case is exactly one, but this stays correct even if more than
+// one historical record somehow exists.
 export async function forceDeleteCompletedSale(
   purchaseId: string,
   siteId: string
@@ -700,6 +743,16 @@ export async function forceDeleteCompletedSale(
   if (!purchase) return { ok: false, error: "Sale not found." };
 
   await db.purchase.delete({ where: { id: purchaseId } });
+
+  const stillSold = await db.purchase.findFirst({
+    where: { artworkId: purchase.artworkId, status: "COMPLETED" },
+  });
+  if (!stillSold) {
+    await db.artwork.update({
+      where: { id: purchase.artworkId },
+      data: { availability: "AVAILABLE" },
+    });
+  }
 
   return { ok: true };
 }
@@ -803,7 +856,11 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
 // The sale didn't go ahead. Kept as history (status ABANDONED), not
 // deleted — SaleTerms is completely untouched, ready for the next buyer.
 // If instalments had already started, also cancels the Stripe schedule so
-// nothing keeps auto-charging a sale that isn't happening.
+// nothing keeps auto-charging a sale that isn't happening. Doesn't touch
+// Availability (2026-09-20 check) — an abandoned sale was never ACTIVE
+// long enough to have marked the artwork SOLD in the first place, so
+// there's nothing to reset here; only a COMPLETED sale can do that (see
+// forceDeleteCompletedSale above).
 export async function abandonPurchase(
   purchaseId: string,
   siteId: string
