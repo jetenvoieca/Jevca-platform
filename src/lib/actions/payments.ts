@@ -99,19 +99,29 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 // moving between them — nothing else touches Availability:
 //
 //   AVAILABLE  — nothing started.
-//   RESERVED   — "Sold - Not Paid" in the UI. A payment link has been
-//                sent, or a card is being entered — a real, named
-//                Purchase now exists for this artwork, just not paid
+//   RESERVED   — "Sold - Not Paid" in the UI. A real, named Purchase now
+//                exists for this artwork — a payment link has been
+//                created, or a card is being entered — just not paid
 //                yet.
 //   SOLD       — money has actually been taken or logged: a card
 //                payment confirmed, a Record sale form submitted, or a
 //                gallery invoice marked paid.
 //
 // The three commit points, matching Craig's own numbering:
-//   1. Enter card + payment succeeds           → SOLD
-//   2. Record sale submitted                   → SOLD (already a single
-//                                                  atomic step)
-//   3. Get payment link generated               → RESERVED
+//   1. Enter card clicked                       → RESERVED immediately;
+//      → payment succeeds                       → SOLD
+//   2. Record sale submitted                     → SOLD (already a
+//                                                   single atomic step)
+//   3. Get payment link generated                → RESERVED
+// Marking RESERVED at the same moment for both 1 and 3 (rather than only
+// once a card payment succeeds) is deliberate, not just consistency for
+// its own sake: it means a genuine Purchase existing for an artwork
+// always matches what Availability says, with no window where a real,
+// named sale is quietly in progress behind an artwork that still claims
+// to be AVAILABLE. That gap was a real edge case — closing the app
+// mid-card-entry used to leave exactly that kind of invisible,
+// unmanageable reservation.
+//
 // A gallery consignment sale (startGallerySale) follows the same idea —
 // raising the invoice reserves the piece; markGallerySalePaid promotes
 // it to SOLD once the gallery actually pays.
@@ -119,9 +129,11 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 // Once RESERVED or SOLD, the Catalogue tab's own Available/SOLD toggle
 // disappears entirely — no delete-this-sale link, no reopenable panel.
 // Managing or cancelling that sale happens from the Sales page
-// (PurchasePanel), which already has the tools for it. This is
-// deliberate: the toggle's only job is starting a fresh sale on an
-// artwork with nothing going on yet.
+// (PurchasePanel), which already has the tools for it. This also means
+// every Back/Close action inside the Catalogue tab's own sale panel can
+// safely be a plain local UI step with no server call at all: by the
+// time there's anything worth backing out of, it's already committed,
+// and un-committing only ever happens from the Sales page.
 
 // Refuses to start a second sale once the artwork is RESERVED or SOLD —
 // used by every way a sale can begin (startPurchase, startGallerySale,
@@ -284,10 +296,9 @@ async function seedSaleTermsFromOfferedPrice(
 // Creates the actual Purchase, snapshotting SaleTerms at this moment.
 // Refuses if there's already an ACTIVE purchase for this artwork, or if
 // the artwork is already RESERVED/SOLD. Does NOT touch Availability
-// itself any more (2026-09-20 rebuild) — that's now the caller's job:
-// startArtworkSaleAndGetLink marks RESERVED, startArtworkSaleAndEnterCard
-// leaves it AVAILABLE until the card payment actually succeeds. See the
-// file-level note above for why.
+// itself (2026-09-20 rebuild) — that's the caller's job, so each of
+// startArtworkSaleAndGetLink and startArtworkSaleAndEnterCard marks
+// RESERVED right after this succeeds. See the file-level note above.
 export async function startPurchase(
   artworkId: string,
   siteId: string,
@@ -358,14 +369,12 @@ export async function startPurchase(
 
 // ---------- Starting a sale from the Catalogue tab's Sold panel ----------
 
-// Get payment link (2026-09-20 rebuild, Craig's rule 3): once the
-// Purchase itself is successfully started, this marks the artwork
-// RESERVED ("Sold - Not Paid") immediately — before attempting to
-// actually generate the Stripe link — so the reservation holds even if
-// link-creation itself then fails; the Purchase already exists and can
-// be retried from the Sales page either way. Deliberately not tied to
-// the link succeeding, since generating the link isn't really the
-// commit point — starting the sale is.
+// Get payment link (Craig's rule 3): once the Purchase itself is
+// successfully started, this marks the artwork RESERVED ("Sold - Not
+// Paid") immediately — before attempting to actually generate the
+// Stripe link — so the reservation holds even if link-creation itself
+// then fails; the Purchase already exists and can be retried from the
+// Sales page either way.
 export async function startArtworkSaleAndGetLink(
   artworkId: string,
   siteId: string,
@@ -385,15 +394,15 @@ export async function startArtworkSaleAndGetLink(
   return { ok: true, purchaseId: started.purchaseId, url: link.url };
 }
 
-// Enter card now (2026-09-20 rebuild, Craig's rule 1): deliberately does
-// NOT touch Availability here — it stays AVAILABLE while the card form
-// is showing, and only becomes SOLD the moment the payment actually
-// succeeds (handleFirstPaymentSucceeded/completeIfAllPaid, reached
-// either via the Stripe webhook or the direct client-side confirmation
-// call — see StripeCardForm). If the card is never completed and the
-// artist backs out, abandonPurchase cancels this Purchase and
-// Availability was never anything other than AVAILABLE in the first
-// place — nothing to revert.
+// Enter card now (Craig's rule 1): marks RESERVED the moment the
+// Purchase itself is started — the same instant as Get payment link
+// above, before the card form has even loaded — rather than waiting
+// for the payment to actually succeed. SOLD only happens later, once
+// the card payment genuinely confirms (handleFirstPaymentSucceeded/
+// completeIfAllPaid, reached via the Stripe webhook or the direct
+// client-side confirmation call — see StripeCardForm). See the
+// file-level note above for why RESERVED happens this early rather than
+// only on success.
 export async function startArtworkSaleAndEnterCard(
   artworkId: string,
   siteId: string,
@@ -407,6 +416,8 @@ export async function startArtworkSaleAndEnterCard(
 
   const started = await startPurchase(artworkId, siteId, formData);
   if (!started.ok) return started;
+
+  await db.artwork.update({ where: { id: artworkId }, data: { availability: "RESERVED" } });
 
   const card = await createCardEntryIntent(started.purchaseId, siteId);
   if (!card.ok) return { ok: false, error: card.error };
@@ -648,15 +659,15 @@ export async function updateGallerySaleAmount(
 // overdue on the Alerts dashboard.
 //
 // Also reused as-is (2026-09-10) by the Catalogue tab's Sold panel's own
-// "Record sale" form (2026-09-20 rebuild, Craig's rule 2) — a direct/
-// studio sale recorded after the fact, same shape as a historical
-// gallery backfill (Purchase.channel only distinguishes STRIPE from
-// "not taken through Stripe", not literally "gallery"). Submitting this
-// form is itself the single commit step — SOLD the moment it succeeds,
-// same as it's always worked. commissionPercent is simply left out of
-// that form's FormData (direct instruction — a direct sale is always 0%
-// commission here), so it falls through to null/0 exactly like any
-// other caller that doesn't set it.
+// "Record sale" form (Craig's rule 2) — a direct/studio sale recorded
+// after the fact, same shape as a historical gallery backfill
+// (Purchase.channel only distinguishes STRIPE from "not taken through
+// Stripe", not literally "gallery"). Submitting this form is itself the
+// single commit step — SOLD the moment it succeeds, same as it's always
+// worked. commissionPercent is simply left out of that form's FormData
+// (direct instruction — a direct sale is always 0% commission here), so
+// it falls through to null/0 exactly like any other caller that doesn't
+// set it.
 export async function recordPastSale(
   artworkId: string,
   siteId: string,
@@ -912,11 +923,10 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
 // nothing keeps auto-charging a sale that isn't happening.
 //
 // Reverts Availability back to AVAILABLE if this Purchase was the one
-// holding it RESERVED (a payment-link sale being cancelled). For a
-// card-entry Purchase that was simply never completed, Availability was
-// never anything other than AVAILABLE in the first place (see
-// startArtworkSaleAndEnterCard above), so this is a harmless no-op in
-// that case.
+// holding it RESERVED — since starting either kind of sale marks
+// RESERVED immediately now (2026-09-20 rebuild), this always applies:
+// cancelling a sale, at any point after it started, is the way back to
+// AVAILABLE. See resetAvailabilityIfNothingSoldOrActive.
 export async function abandonPurchase(
   purchaseId: string,
   siteId: string
@@ -1101,12 +1111,9 @@ function stripeErrorMessage(err: unknown): string {
 // Marks a Purchase COMPLETED once every one of its Payments is Paid — a
 // Full sale completes immediately (one payment); an Instalment sale
 // completes once the last one clears. Also sets the artwork's own
-// Availability to SOLD at that same moment — this is the actual, single
-// commit point for a Stripe-channel sale of either kind (see the
-// file-level note above): a Full sale was AVAILABLE right up until this
-// runs; an Instalment sale's later instalments were already RESERVED
-// from its first payment, and this is simply the final promotion to
-// SOLD once every instalment has cleared.
+// Availability to SOLD at that same moment — the final promotion from
+// RESERVED (already set the moment this sale started — see the
+// file-level note above) to genuinely SOLD.
 async function completeIfAllPaid(purchaseId: string) {
   const remaining = await db.payment.count({
     where: { purchaseId, status: { not: "PAID" } },
@@ -1134,11 +1141,11 @@ async function completeIfAllPaid(purchaseId: string) {
 // check below), so calling this from both places is safe: whichever
 // arrives first does the work, the other is a no-op.
 //
-// For an INSTALMENTS sale, this first payment doesn't complete the
-// Purchase (more are still DUE below) — Availability is set to RESERVED
-// here for that case specifically, since the card has genuinely started
-// paying but isn't finished; completeIfAllPaid (above) promotes it the
-// rest of the way to SOLD once the final instalment clears.
+// Doesn't touch Availability itself for the INSTALMENTS branch below —
+// RESERVED was already set the moment this sale started (see the
+// file-level note above), so there's nothing to change here until
+// completeIfAllPaid promotes it the rest of the way to SOLD once the
+// final instalment clears.
 export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaymentIntentId: string) {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -1171,11 +1178,6 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
     await completeIfAllPaid(purchase.id);
     return;
   }
-
-  await db.artwork.update({
-    where: { id: purchase.artworkId },
-    data: { availability: "RESERVED" },
-  });
 
   const remaining = amounts.slice(1);
 
