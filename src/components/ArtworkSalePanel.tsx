@@ -1,15 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import {
-  startArtworkSaleAndGetLink,
-  startArtworkSaleAndEnterCard,
-  createPaymentLink,
-  createCardEntryIntent,
-  recordPastSale,
-  abandonPurchase,
-  deleteGallerySale,
-} from "@/lib/actions/payments";
+import { recordPastSale } from "@/lib/actions/payments";
 import StripeCardForm from "@/components/StripeCardForm";
 
 // Panel tint colours (2026-09-11, direct request — "payment panels need
@@ -58,26 +50,33 @@ function formatMoney(amount: number, currency: string) {
 // Price/Currency/Date paid/Source/Name/Email/Address form, replacing
 // the Deposit paid/Purchase option/3-button sale card entirely.
 //
-// Stripe wiring (2026-09-10) — Get payment link/Enter card now/Record
-// sale all now call the real actions in lib/actions/payments.ts:
-// startArtworkSaleAndGetLink/startArtworkSaleAndEnterCard (which seed
-// SaleTerms from Offered price minus any Deposit paid, then reuse the
-// existing startPurchase/createPaymentLink/createCardEntryIntent chain
-// unchanged) and recordPastSale (the same action the old gallery-sale
-// backfill already used). Card entry renders the real Stripe Elements
-// form (StripeCardForm) once a client secret comes back — the manual
-// Card number/Expiry/Security code fields this used to show were only
-// ever a layout placeholder and are gone now that there's a real,
-// PCI-compliant form to use instead.
+// Stripe wiring (2026-09-10) — Get payment link/Enter card now call the
+// real actions in lib/actions/payments.ts (startArtworkSaleAndGetLink/
+// startArtworkSaleAndEnterCard, createPaymentLink/createCardEntryIntent),
+// but now entirely from ArtworkDetailPanel, not here (2026-09-11 fix —
+// see the note below). Record sale still calls recordPastSale directly
+// from this component, since record mode never has the remount problem
+// that motivated moving the other two up.
 //
-// Deposit paid/Date paid/Purchase option/Name/Email are controlled from
-// the parent (2026-09-10 fix) rather than local useState — switching
-// into card mode renders a structurally different branch of the
-// parent's JSX (ArtworkCatalogueFields' afterLocation slot vs. the
+// Deposit paid/Date paid/Purchase option/Name/Email/link URL/card
+// secret/publishable key/the action's own pending+error state are all
+// controlled from the parent (2026-09-10 fix, extended 2026-09-11) —
+// switching into card mode renders a structurally different branch of
+// the parent's JSX (ArtworkCatalogueFields' afterLocation slot vs. the
 // card-mode branch that skips it entirely), which mounts a genuinely
-// new instance of this component; local state was silently reset by
-// that remount. Record mode doesn't have this problem (same afterLocation
-// slot, same instance), so its own fields stay simple local state.
+// new instance of this component. Local state — including an in-flight
+// fetch's own local useState — is silently dropped by that remount:
+// Enter card now would kick off the real Stripe call, but the async
+// callback's setCardSecret/setCardPublishableKey landed on the now-
+// unmounted old instance and were discarded, leaving the freshly-
+// mounted card-mode instance stuck showing "—" forever with no card
+// form and no error. Lifting the fetch itself (not just its resulting
+// values) up to ArtworkDetailPanel — which never unmounts across this
+// switch — fixes it: the parent starts the fetch, and whichever
+// instance of this component is currently rendered just displays
+// whatever the parent currently holds. Record mode never remounts (it's
+// rendered from the same branch as sale mode), so its own fields and
+// action stay simple and local, same as before.
 //
 // Tinted "payment panel" styling (2026-09-11, direct request) — the
 // whole panel background is #F9F6EE, all its own text is #5E5E5E, and
@@ -93,7 +92,6 @@ export default function ArtworkSalePanel({
   currency,
   defaultInstalmentCount,
   saleSources,
-  activePurchaseId,
   mode,
   depositPaid,
   onDepositPaidChange,
@@ -105,8 +103,16 @@ export default function ArtworkSalePanel({
   onBuyerNameChange,
   buyerEmail,
   onBuyerEmailChange,
+  linkUrl,
+  cardSecret,
+  cardPublishableKey,
+  actionPending,
+  actionError,
+  onGetPaymentLink,
+  onEnterCardClick,
   onBackToAvailable,
-  onEnterCard,
+  onCancelCardSale,
+  onDeleteCardSale,
   onRecordSale,
   onBackFromRecord,
   onSaleCompleted,
@@ -117,11 +123,6 @@ export default function ArtworkSalePanel({
   currency: string;
   defaultInstalmentCount: number;
   saleSources: string[];
-  // An already-active STRIPE-channel purchase for this artwork, if one
-  // exists when the panel opens (2026-09-10) — reuses it (createPaymentLink/
-  // createCardEntryIntent directly) instead of trying to start a second
-  // one, which startPurchase would just refuse anyway.
-  activePurchaseId: string | null;
   // "sale" — the normal Deposit paid/Purchase option/Name/Email/3-button
   // view. "card" — the telephone-sale card entry view, entered via
   // Enter card now. "record" — the simple record-a-sale form, entered
@@ -137,17 +138,28 @@ export default function ArtworkSalePanel({
   onBuyerNameChange: (value: string) => void;
   buyerEmail: string;
   onBuyerEmailChange: (value: string) => void;
+  // Result of Get payment link, owned by the parent (2026-09-11) — see
+  // the file-level note above.
+  linkUrl: string | null;
+  // Result of Enter card now, owned by the parent (2026-09-11).
+  cardSecret: string | null;
+  cardPublishableKey: string | null;
+  // Covers Get payment link/Enter card now/Back to Available/Cancel
+  // sale/Delete — all owned by the parent now (2026-09-11).
+  actionPending: boolean;
+  actionError: string | null;
+  onGetPaymentLink: () => void;
+  onEnterCardClick: () => void;
   // 2026-09-10 — everything below this panel (Date, Reference/Offered
   // price, the Available/SOLD toggle itself, Studio notes) is hidden
   // while the panel is open, so this link (sale mode only) takes the
-  // toggle's place as the way back to Available. Now also abandons
-  // whatever ACTIVE purchase this session may have started, so nothing
-  // is left dangling in Stripe/the database just because the panel was
-  // closed rather than completed.
+  // toggle's place as the way back to Available. Abandons whatever
+  // ACTIVE purchase this session may have started (parent-side,
+  // 2026-09-11), so nothing is left dangling in Stripe/the database
+  // just because the panel was closed rather than completed.
   onBackToAvailable: () => void;
-  // Switches this panel into card mode (sale mode's "Enter card now"
-  // button).
-  onEnterCard: () => void;
+  onCancelCardSale: () => void;
+  onDeleteCardSale: () => void;
   // Switches this panel into record mode (sale mode's "Record sale"
   // button).
   onRecordSale: () => void;
@@ -165,18 +177,10 @@ export default function ArtworkSalePanel({
   const [recordSource, setRecordSource] = useState("");
   const [recordAddress, setRecordAddress] = useState("");
   const [recordError, setRecordError] = useState<string | null>(null);
-
-  const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const [linkUrl, setLinkUrl] = useState<string | null>(null);
-  const [cardSecret, setCardSecret] = useState<string | null>(null);
-  const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
-  // Tracks a purchase started this session, on top of whatever
-  // activePurchaseId came in already active — either way, once set, a
-  // real Purchase exists and Get payment link/Enter card now (if
-  // pressed again) should talk to that same one rather than trying to
-  // start a second.
-  const [startedPurchaseId, setStartedPurchaseId] = useState<string | null>(activePurchaseId);
+  // Record mode's own pending/action — local is fine here (unlike Get
+  // payment link/Enter card now above) since record mode never remounts
+  // this component; it's rendered from the same branch as sale mode.
+  const [recordPending, startRecordTransition] = useTransition();
 
   // Slide-up entrance (2026-09-10, direct request — "sale panel slides
   // up into view") — starts a touch below/faded and animates to its
@@ -205,128 +209,6 @@ export default function ArtworkSalePanel({
       active ? "border-2 border-[#5E5E5E]" : "border-neutral-300 hover:border-neutral-400"
     }`;
 
-  const buildStartFormData = () => {
-    const fd = new FormData();
-    fd.set("buyerName", buyerName.trim());
-    fd.set("buyerEmail", buyerEmail.trim());
-    fd.set("type", option === "instalments" ? "INSTALMENTS" : "FULL");
-    fd.set("depositPaid", depositPaid.trim());
-    fd.set("currency", currency);
-    return fd;
-  };
-
-  // Split into two explicit branches (2026-09-10 build fix) rather than
-  // a single ternary feeding one `result` variable — createPaymentLink
-  // and startArtworkSaleAndGetLink return differently-shaped success
-  // objects (the latter also carries a fresh purchaseId), and merging
-  // them into one union made a plain `"purchaseId" in result` check
-  // fail to narrow cleanly under this project's TS settings (it was
-  // typing result.purchaseId as unknown). Each branch below now talks
-  // to exactly one action with its own precisely-typed result, which
-  // needs no runtime property check at all.
-  const handleGetPaymentLink = () => {
-    if (!buyerEmail.trim()) {
-      setError("Buyer email is required to get a payment link.");
-      return;
-    }
-    setError(null);
-    setLinkUrl(null);
-    startTransition(async () => {
-      if (startedPurchaseId) {
-        const result = await createPaymentLink(startedPurchaseId, siteId, artworkId);
-        if (result.ok) {
-          setLinkUrl(result.url);
-        } else {
-          setError(result.error);
-        }
-        return;
-      }
-
-      const result = await startArtworkSaleAndGetLink(artworkId, siteId, buildStartFormData());
-      if (result.ok) {
-        setStartedPurchaseId(result.purchaseId);
-        setLinkUrl(result.url);
-      } else {
-        setError(result.error);
-      }
-    });
-  };
-
-  const handleEnterCardClick = () => {
-    if (!buyerEmail.trim()) {
-      setError("Buyer email is required to take a card payment.");
-      return;
-    }
-    setError(null);
-    setCardSecret(null);
-    setCardPublishableKey(null);
-    onEnterCard();
-    startTransition(async () => {
-      if (startedPurchaseId) {
-        const result = await createCardEntryIntent(startedPurchaseId, siteId);
-        if (result.ok) {
-          setCardSecret(result.clientSecret);
-          setCardPublishableKey(result.publishableKey);
-        } else {
-          setError(result.error);
-        }
-        return;
-      }
-
-      const result = await startArtworkSaleAndEnterCard(artworkId, siteId, buildStartFormData());
-      if (result.ok) {
-        setStartedPurchaseId(result.purchaseId);
-        setCardSecret(result.clientSecret);
-        setCardPublishableKey(result.publishableKey);
-      } else {
-        setError(result.error);
-      }
-    });
-  };
-
-  const handleBackToAvailable = () => {
-    const idToAbandon = startedPurchaseId;
-    setStartedPurchaseId(null);
-    setLinkUrl(null);
-    setCardSecret(null);
-    setCardPublishableKey(null);
-    setError(null);
-    onBackToAvailable();
-    if (idToAbandon) {
-      startTransition(async () => {
-        await abandonPurchase(idToAbandon, siteId);
-      });
-    }
-  };
-
-  const handleCancelCardSale = () => {
-    const idToAbandon = startedPurchaseId;
-    if (!idToAbandon) return;
-    startTransition(async () => {
-      await abandonPurchase(idToAbandon, siteId);
-      setStartedPurchaseId(null);
-      setCardSecret(null);
-      setCardPublishableKey(null);
-      onBackToAvailable();
-    });
-  };
-
-  const handleDeleteCardSale = () => {
-    const idToDelete = startedPurchaseId;
-    if (!idToDelete) return;
-    startTransition(async () => {
-      const result = await deleteGallerySale(idToDelete, siteId);
-      if (!result.ok) {
-        setError(result.error);
-        return;
-      }
-      setStartedPurchaseId(null);
-      setCardSecret(null);
-      setCardPublishableKey(null);
-      onBackToAvailable();
-    });
-  };
-
   const handleRecordSale = () => {
     if (!recordPrice.trim()) {
       setRecordError("Price is required.");
@@ -345,7 +227,7 @@ export default function ArtworkSalePanel({
     fd.set("currency", recordCurrency);
     fd.set("source", recordSource);
     fd.set("saleDate", recordDatePaid);
-    startTransition(async () => {
+    startRecordTransition(async () => {
       const result = await recordPastSale(artworkId, siteId, fd);
       if (!result.ok) {
         setRecordError(result.error);
@@ -436,8 +318,13 @@ export default function ArtworkSalePanel({
 
           {recordError && <p className="text-sm text-red-600">{recordError}</p>}
 
-          <button type="button" onClick={handleRecordSale} disabled={isPending} className={`w-full ${buttonCls}`}>
-            {isPending ? "Recording…" : "Record sale"}
+          <button
+            type="button"
+            onClick={handleRecordSale}
+            disabled={recordPending}
+            className={`w-full ${buttonCls}`}
+          >
+            {recordPending ? "Recording…" : "Record sale"}
           </button>
         </>
       ) : (
@@ -446,7 +333,7 @@ export default function ArtworkSalePanel({
             <>
               <button
                 type="button"
-                onClick={handleBackToAvailable}
+                onClick={onBackToAvailable}
                 className="text-sm hover:underline"
               >
                 ← Back to Available
@@ -511,23 +398,23 @@ export default function ArtworkSalePanel({
             className={boxCls}
           />
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {actionError && <p className="text-sm text-red-600">{actionError}</p>}
 
           {mode === "sale" ? (
             <>
               <div className="flex gap-3">
                 <button
                   type="button"
-                  onClick={handleGetPaymentLink}
-                  disabled={isPending}
+                  onClick={onGetPaymentLink}
+                  disabled={actionPending}
                   className={`flex-1 ${buttonCls}`}
                 >
-                  {isPending ? "Working…" : "Get payment link"}
+                  {actionPending ? "Working…" : "Get payment link"}
                 </button>
                 <button
                   type="button"
-                  onClick={handleEnterCardClick}
-                  disabled={isPending}
+                  onClick={onEnterCardClick}
+                  disabled={actionPending}
                   className={`flex-1 ${buttonCls}`}
                 >
                   Enter card now
@@ -555,12 +442,8 @@ export default function ArtworkSalePanel({
           ) : (
             // Card entry — telephone sale, no customer personalisation
             // (direct instruction). Renders the real Stripe Elements
-            // form once a client secret comes back from
-            // startArtworkSaleAndEnterCard/createCardEntryIntent. No
-            // longer its own separately-bordered box (2026-09-11) — it
-            // already sits inside the tinted outer panel, so a second,
-            // differently-coloured box around it just doubled up the
-            // framing for no reason.
+            // form once a client secret comes back from the parent
+            // (see the file-level note on why this state lives there).
             <div className="space-y-4">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
@@ -582,14 +465,14 @@ export default function ArtworkSalePanel({
                   </p>
                 </>
               ) : (
-                <p className="text-sm">{isPending ? "Preparing card entry…" : "—"}</p>
+                <p className="text-sm">{actionPending ? "Preparing card entry…" : "—"}</p>
               )}
 
               <div className="flex items-center gap-2 text-sm">
                 <button
                   type="button"
-                  onClick={handleCancelCardSale}
-                  disabled={isPending}
+                  onClick={onCancelCardSale}
+                  disabled={actionPending}
                   className="text-red-600 hover:underline disabled:opacity-50"
                 >
                   Cancel sale
@@ -597,8 +480,8 @@ export default function ArtworkSalePanel({
                 <span>·</span>
                 <button
                   type="button"
-                  onClick={handleDeleteCardSale}
-                  disabled={isPending}
+                  onClick={onDeleteCardSale}
+                  disabled={actionPending}
                   className="text-red-600 hover:underline disabled:opacity-50"
                 >
                   Delete
