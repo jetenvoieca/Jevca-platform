@@ -15,6 +15,7 @@ import {
 import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail";
 import { getCompletedTasks, saveTask, type TaskItem, type TaskInput } from "@/lib/actions/tasks";
 import { dismissAlert } from "@/lib/actions/subscriptions";
+import { refreshOpenAlerts } from "@/lib/actions/clientAlerts";
 import type { AlertItem } from "@/lib/alerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
 import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
@@ -22,6 +23,7 @@ import { formatDate, formatDateTime } from "@/lib/formatDate";
 import TaskForm from "@/components/TaskForm";
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
+import SaleModal from "@/components/SaleModal";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every reply received at any
@@ -50,14 +52,19 @@ import AlertClientPanel from "@/components/AlertClientPanel";
 //     old standalone Alerts page), modal = the selected alert, right =
 //     the same Done list. A payment-overdue alert opens the client's
 //     Owner/Domain/Subscription cards with an action panel (see
-//     AlertClientPanel); every other alert shows its message with a link
-//     and, where allowed, Dismiss (see AlertDetail).
+//     AlertClientPanel); an overdue-invoice alert opens the same sale
+//     modal as Consolidated Sales (see SaleModal); every other alert
+//     shows its message with a link and, where allowed, Dismiss (see
+//     AlertDetail).
 //
 // The two artist filters are independent: the left one lives in the URL
 // (so links can land already filtered) and applies to whichever left
 // list is showing; the right one is plain client state. The selected
 // alert also lives in the URL (?alert=...) — see the note on InboxPage —
 // so closing the modal on an alert has to clear it from the address too.
+// (The exception is a sale alert, which is plain client state: the sale
+// modal loads its own data, and has to stay open even after the alert
+// itself clears — e.g. once the sale is marked paid.)
 // Clicking a sent item shows its full content in the modal — no server
 // round-trip needed, since the full body is already in the list.
 //
@@ -176,6 +183,11 @@ export default function AdminInboxPanel({
   const [taskError, setTaskError] = useState<string | null>(null);
   const [taskSavedNote, setTaskSavedNote] = useState(false);
 
+  // The overdue-invoice alert whose sale modal is open, if any. Kept as
+  // a copy of the alert (rather than looked up in the list) so the modal
+  // stays open even after the alert itself clears.
+  const [saleAlert, setSaleAlert] = useState<AlertItem | null>(null);
+
   const cardCls = "rounded-lg border border-neutral-200 bg-white";
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
@@ -191,6 +203,7 @@ export default function AdminInboxPanel({
 
   // Whether the modal is showing, and whether tapping outside it may
   // close it (not while a form is being filled in — see the header note).
+  // A sale alert's modal is separate (SaleModal draws its own overlay).
   const modalOpen =
     mode === "alert"
       ? !!(clientPanel || selectedAlert)
@@ -234,6 +247,7 @@ export default function AdminInboxPanel({
     setSelectedSentId(null);
     setComposing(false);
     setTaskForm(null);
+    setSaleAlert(null);
     if (selectedAlertId) router.replace(inboxUrl(selectedArtistId));
   };
 
@@ -453,7 +467,13 @@ export default function AdminInboxPanel({
     });
   };
 
+  // A sale alert opens the sale modal straight away; every other alert
+  // goes into the address, so the server can load what its modal needs.
   const openAlert = (a: AlertItem) => {
+    if (a.sale) {
+      setSaleAlert(a);
+      return;
+    }
     router.push(inboxUrl(selectedArtistId, a.id));
   };
 
@@ -485,6 +505,13 @@ export default function AdminInboxPanel({
   const handleUpToDateDone = () => {
     refreshRight();
     router.push(inboxUrl(selectedArtistId));
+  };
+
+  // Something changed the sale in the sale modal (paid, cancelled,
+  // deleted, invoice sent) — bring the Alert list and nav badge up to
+  // date.
+  const handleSaleChanged = () => {
+    refreshOpenAlerts().then(() => router.refresh());
   };
 
   return (
@@ -600,7 +627,7 @@ export default function AdminInboxPanel({
                     type="button"
                     onClick={() => openAlert(a)}
                     className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                      selectedAlertId === a.id ? "bg-neutral-100" : ""
+                      selectedAlertId === a.id || saleAlert?.id === a.id ? "bg-neutral-100" : ""
                     }`}
                   >
                     <div className="flex items-center justify-between gap-2">
@@ -710,6 +737,16 @@ export default function AdminInboxPanel({
           )}
         </div>
       </div>
+
+      {/* ---- SALE MODAL: an overdue-invoice alert (same as Consolidated Sales) ---- */}
+      {saleAlert?.sale && (
+        <SaleModal
+          key={saleAlert.sale.purchaseId}
+          target={saleAlert.sale}
+          onClose={() => setSaleAlert(null)}
+          onChanged={handleSaleChanged}
+        />
+      )}
 
       {/* ---- MODAL: alert, task form, thread, sent detail, or compose ---- */}
       {modalOpen && (
