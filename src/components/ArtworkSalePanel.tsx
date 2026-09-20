@@ -107,6 +107,7 @@ export default function ArtworkSalePanel({
   currency,
   defaultInstalmentCount,
   saleSources,
+  purchaseId,
   mode,
   depositPaid,
   onDepositPaidChange,
@@ -139,6 +140,13 @@ export default function ArtworkSalePanel({
   currency: string;
   defaultInstalmentCount: number;
   saleSources: string[];
+  // The Purchase this panel is currently working with, if one's been
+  // started this session or was already active (2026-09-20) — passed
+  // through to StripeCardForm in card mode, which needs it to record a
+  // confirmed payment directly rather than relying solely on the Stripe
+  // webhook (see StripeCardForm's own note). Null in sale mode before
+  // anything's been started yet.
+  purchaseId: string | null;
   // "sale" — the normal Deposit paid/Purchase option/Name/Email/3-button
   // view. "card" — the telephone-sale card entry view, entered via
   // Enter card now. "record" — the simple record-a-sale form, entered
@@ -479,15 +487,16 @@ export default function ArtworkSalePanel({
                 Card
               </div>
 
-              {cardSecret && cardPublishableKey ? (
+              {cardSecret && cardPublishableKey && purchaseId ? (
                 <>
                   <StripeCardForm
                     clientSecret={cardSecret}
                     publishableKey={cardPublishableKey}
+                    purchaseId={purchaseId}
                     onDone={onSaleCompleted}
                   />
                   <p className="text-xs">
-                    Status below updates within a few seconds of Stripe confirming the charge.
+                    Confirms as soon as Stripe accepts the card — no separate wait.
                   </p>
                 </>
               ) : (
