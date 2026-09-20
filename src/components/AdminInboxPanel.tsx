@@ -31,19 +31,23 @@ import AlertClientPanel from "@/components/AlertClientPanel";
 // emails — kept inline here rather than a separate modal component,
 // since this is the only place either flow is used.
 //
-// Three-column layout (2026-09-19, CRM Phase 1 — see mock-ups): the
-// left column lists what needs attention, the centre shows the open
-// item / form, and the right "Processed" column lists what's been dealt
-// with. A pill toggle at the top of the left column (Inbox | Task |
-// Alert) switches the whole screen between three modes, and the right
-// column follows it:
+// Two columns plus a modal (2026-09-19, CRM Phase 1–3 — see mock-ups):
+// the left column lists what needs attention, and the right "Processed"
+// column lists what's been dealt with. Whatever is opened — a message
+// thread, a sent item, the compose form, a task, an alert — appears in a
+// modal over both columns rather than a third column, so the two lists
+// always have room to breathe and the screen works on an iPad.
+//
+// A pill toggle at the top of the left column (Inbox | Task | Alert)
+// switches the whole screen between three modes, and the right column
+// follows it:
 //   - Inbox mode: left = received messages, right = Sent list
 //     (every OutboundEmail — admin sends, replies, and invoice/receipt/
 //     certificate sends too, see getSentList).
-//   - Task mode (CRM Phase 2): left = open tasks, centre = task form,
+//   - Task mode (CRM Phase 2): left = open tasks, modal = task form,
 //     right = Done list (completed tasks).
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
-//     old standalone Alerts page), centre = the selected alert, right =
+//     old standalone Alerts page), modal = the selected alert, right =
 //     the same Done list. A payment-overdue alert opens the client's
 //     Owner/Domain/Subscription cards with an action panel (see
 //     AlertClientPanel); every other alert shows its message with a link
@@ -52,9 +56,14 @@ import AlertClientPanel from "@/components/AlertClientPanel";
 // The two artist filters are independent: the left one lives in the URL
 // (so links can land already filtered) and applies to whichever left
 // list is showing; the right one is plain client state. The selected
-// alert also lives in the URL (?alert=...) — see the note on InboxPage.
-// Clicking a sent item shows its full content in the centre panel — no
-// server round-trip needed, since the full body is already in the list.
+// alert also lives in the URL (?alert=...) — see the note on InboxPage —
+// so closing the modal on an alert has to clear it from the address too.
+// Clicking a sent item shows its full content in the modal — no server
+// round-trip needed, since the full body is already in the list.
+//
+// Tapping outside the modal closes it, except while a form is open
+// (compose, task, or a reply being typed) — there only the Close button
+// does, so a stray tap can't throw away what's been typed.
 //
 // Delete added 2026-09-06, direct request ("enable deleting of messages
 // in inbox both received and sent") — every item in a thread (both the
@@ -66,10 +75,10 @@ import AlertClientPanel from "@/components/AlertClientPanel";
 // Auto-select-next added same day, second delete-related request —
 // deleting the message currently open (an inbox thread's original
 // message, or a selected Sent item) moves straight to whichever item
-// was next in that same list, rather than leaving the centre panel
-// blank. "Next" is worked out from the list as it stood immediately
-// before the delete, falling back to the previous item if the deleted
-// one was last, and to nothing only once the list is genuinely empty.
+// was next in that same list, rather than closing the modal. "Next" is
+// worked out from the list as it stood immediately before the delete,
+// falling back to the previous item if the deleted one was last, and to
+// nothing only once the list is genuinely empty.
 //
 // Plain, minimalist styling, consistent with InvoiceEmailModal/
 // SiteSettingsPanel elsewhere in the app — no separate visual language
@@ -161,7 +170,7 @@ export default function AdminInboxPanel({
   const [composeError, setComposeError] = useState<string | null>(null);
   const [composeSent, setComposeSent] = useState(false);
 
-  // `null` = no task open in the centre panel.
+  // `null` = no task open.
   const [taskForm, setTaskForm] = useState<TaskInput | null>(null);
   const [taskSaving, setTaskSaving] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
@@ -179,6 +188,21 @@ export default function AdminInboxPanel({
 
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
   const selectedAlert = initialAlerts.find((a) => a.id === selectedAlertId) || null;
+
+  // Whether the modal is showing, and whether tapping outside it may
+  // close it (not while a form is being filled in — see the header note).
+  const modalOpen =
+    mode === "alert"
+      ? !!(clientPanel || selectedAlert)
+      : mode === "task"
+        ? taskForm !== null
+        : composing || selectedSent !== null || openId !== null;
+  const editingForm =
+    mode === "task"
+      ? taskForm !== null
+      : mode === "inbox"
+        ? (composing && !composeSent) || (openId !== null && replyBody.trim() !== "")
+        : false;
 
   const refreshRight = () => setRightRefreshKey((k) => k + 1);
 
@@ -201,22 +225,22 @@ export default function AdminInboxPanel({
     };
   }, [mode, rightArtistId, rightRefreshKey]);
 
-  // Closes whatever is open in the centre panel.
-  const resetCentre = () => {
+  // Closes the modal, whatever it is showing. An open alert is also
+  // dropped from the address, so the server stops loading its client
+  // panel.
+  const closeModal = () => {
     setOpenId(null);
     setThread(null);
     setSelectedSentId(null);
     setComposing(false);
     setTaskForm(null);
+    if (selectedAlertId) router.replace(inboxUrl(selectedArtistId));
   };
 
   const switchMode = (next: Mode) => {
     if (next === mode) return;
     setMode(next);
-    resetCentre();
-    // Leaving Alert mode drops the selected alert from the address, so
-    // the server stops loading its client panel.
-    if (selectedAlertId) router.replace(inboxUrl(selectedArtistId));
+    closeModal();
   };
 
   const openThread = (id: string) => {
@@ -275,7 +299,7 @@ export default function AdminInboxPanel({
   // Deletes one item from an open thread. Deleting the original received
   // message (direction IN) deletes the whole thread, so this moves
   // straight on to whichever message was next in the Inbox list (or the
-  // previous one if this was the last, or closes the panel only once the
+  // previous one if this was the last, or closes the modal only once the
   // list is genuinely empty). Deleting a reply (direction OUT) just
   // removes that reply and reloads the same thread underneath it.
   const handleDeleteThreadItem = (item: InboxThreadItem) => {
@@ -322,7 +346,7 @@ export default function AdminInboxPanel({
     const idx = currentList.findIndex((s) => s.id === id);
     const remaining = currentList.filter((s) => s.id !== id);
     // Moves on to whichever item was next, or the previous one if this
-    // was the last, rather than leaving the centre panel blank.
+    // was the last, rather than closing the modal.
     const nextSelectedId =
       selectedSentId === id ? remaining[idx]?.id ?? remaining[idx - 1]?.id ?? null : selectedSentId;
 
@@ -403,7 +427,7 @@ export default function AdminInboxPanel({
   };
 
   // Save Task keeps the saved task open in the form; Task Completed
-  // saves (if needed) and completes it in one go, then closes the form —
+  // saves (if needed) and completes it in one go, then closes the modal —
   // the task leaves the open list on the left and appears in Done on the
   // right.
   const handleSaveTask = (complete: boolean) => {
@@ -440,7 +464,11 @@ export default function AdminInboxPanel({
     if (!a.linkHref) return;
     if (a.linkHref.startsWith("/accounts/inbox")) {
       setMode("inbox");
-      resetCentre();
+      setOpenId(null);
+      setThread(null);
+      setSelectedSentId(null);
+      setComposing(false);
+      setTaskForm(null);
     }
     router.push(a.linkHref);
   };
@@ -452,7 +480,7 @@ export default function AdminInboxPanel({
     });
   };
 
-  // The client was marked up to date — close the panel and show the new
+  // The client was marked up to date — close the modal and show the new
   // entry in Done.
   const handleUpToDateDone = () => {
     refreshRight();
@@ -460,9 +488,9 @@ export default function AdminInboxPanel({
   };
 
   return (
-    <div className="flex h-full gap-4 px-6 py-6">
+    <div className="mx-auto flex h-full w-full max-w-5xl gap-6 px-6 py-6">
       {/* ---- LEFT: Inbox / Task / Alert list + filter ---- */}
-      <div className="flex w-80 shrink-0 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <div className="mb-3 flex h-[30px] items-center justify-between">
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
           {mode !== "alert" && (
@@ -602,192 +630,8 @@ export default function AdminInboxPanel({
         </div>
       </div>
 
-      {/* ---- CENTRE: alert, task form, thread, sent detail, or compose ---- */}
-      <div className={`${cardCls} min-w-0 flex-1 overflow-y-auto p-5`}>
-        {mode === "alert" ? (
-          clientPanel ? (
-            <AlertClientPanel key={clientPanel.artist.id} data={clientPanel} onDone={handleUpToDateDone} />
-          ) : selectedAlert ? (
-            <AlertDetail
-              item={selectedAlert}
-              busy={isPending}
-              onLink={handleAlertLink}
-              onDismiss={handleAlertDismiss}
-            />
-          ) : (
-            <p className="text-center text-sm text-neutral-400">Select an alert.</p>
-          )
-        ) : mode === "task" ? (
-          taskForm ? (
-            <TaskForm
-              form={taskForm}
-              categories={taskCategories}
-              artistOptions={artistOptions}
-              saving={taskSaving || isPending}
-              error={taskError}
-              savedNote={taskSavedNote}
-              onChange={handleTaskChange}
-              onSave={() => handleSaveTask(false)}
-              onComplete={() => handleSaveTask(true)}
-            />
-          ) : (
-            <p className="text-center text-sm text-neutral-400">Select a task, or start a new one.</p>
-          )
-        ) : composing ? (
-          <div className="mx-auto max-w-xl space-y-3">
-            <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-              New message — from {adminEmailAddress}
-            </p>
-            {composeSent ? (
-              <p className="text-sm text-green-600">Sent to {composeTo}.</p>
-            ) : (
-              <>
-                <div>
-                  <label className={labelCls}>To</label>
-                  <input
-                    list="compose-recipients"
-                    type="email"
-                    value={composeTo}
-                    onChange={(e) => handleRecipientPick(e.target.value)}
-                    placeholder="Type an address, or pick from the list"
-                    className={inputCls}
-                  />
-                  <datalist id="compose-recipients">
-                    {composeRecipients.map((r) => (
-                      <option key={`${r.artistId || "c"}-${r.email}`} value={r.email}>
-                        {r.label}
-                      </option>
-                    ))}
-                  </datalist>
-                </div>
-                <div>
-                  <label className={labelCls}>Subject</label>
-                  <input
-                    type="text"
-                    value={composeSubject}
-                    onChange={(e) => setComposeSubject(e.target.value)}
-                    className={inputCls}
-                  />
-                </div>
-                <div>
-                  <label className={labelCls}>Message</label>
-                  <textarea
-                    value={composeBody}
-                    onChange={(e) => setComposeBody(e.target.value)}
-                    rows={10}
-                    className={inputCls}
-                  />
-                </div>
-                {composeError && <p className="text-sm text-red-600">{composeError}</p>}
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSendCompose}
-                    disabled={composeSending || isPending}
-                    className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-                  >
-                    {composeSending ? "Sending…" : "Send"}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        ) : selectedSent ? (
-          <div className="mx-auto max-w-xl space-y-2">
-            <div className="flex items-start justify-between gap-2">
-              <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
-              </span>
-              <button
-                type="button"
-                onClick={() => handleDeleteSentItem(selectedSent.id)}
-                disabled={deletingId === selectedSent.id || isPending}
-                className={deleteBtnCls}
-              >
-                {deletingId === selectedSent.id ? "Deleting…" : "Delete"}
-              </button>
-            </div>
-            <p className="text-sm font-medium text-neutral-800">{selectedSent.subject || "(no subject)"}</p>
-            <p className="text-xs text-neutral-400">
-              {selectedSent.fromAddress} → {selectedSent.toAddress}
-            </p>
-            <p className="text-xs text-neutral-400">{formatDateTime(selectedSent.sentAt)}</p>
-            {(selectedSent.artistName || selectedSent.customerName || selectedSent.artworkTitle) && (
-              <p className="text-xs text-neutral-400">
-                {[selectedSent.artistName, selectedSent.customerName, selectedSent.artworkTitle]
-                  .filter(Boolean)
-                  .join(" — ")}
-              </p>
-            )}
-            <div className="mt-3 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
-              {selectedSent.body || "(empty)"}
-            </div>
-          </div>
-        ) : !openId ? (
-          <p className="text-center text-sm text-neutral-400">Select a message, or start a new one.</p>
-        ) : threadLoading || !thread ? (
-          <p className="text-sm text-neutral-400">Loading…</p>
-        ) : (
-          <div className="mx-auto max-w-xl space-y-4">
-            {thread.map((item) => (
-              <div
-                key={item.id}
-                className={`rounded-md border p-3 ${
-                  item.direction === "OUT" ? "border-neutral-200 bg-neutral-50" : "border-neutral-200 bg-white"
-                }`}
-              >
-                <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
-                  <span className="font-medium text-neutral-700">
-                    {item.direction === "OUT" ? "You" : item.fromName || item.fromAddress}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <span>{formatDateTime(item.at)}</span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteThreadItem(item)}
-                      disabled={deletingId === item.id || isPending}
-                      className={deleteBtnCls}
-                    >
-                      {deletingId === item.id ? "Deleting…" : "Delete"}
-                    </button>
-                  </div>
-                </div>
-                {item.direction === "IN" && (
-                  <p className="mb-1 text-xs text-neutral-400">
-                    {item.fromAddress} → {item.toAddress}
-                  </p>
-                )}
-                <p className="mb-1 text-sm font-medium text-neutral-800">{item.subject}</p>
-                <p className="whitespace-pre-wrap text-sm text-neutral-700">{item.textBody}</p>
-              </div>
-            ))}
-
-            <div className="border-t border-neutral-200 pt-3">
-              <label className={labelCls}>Reply</label>
-              <textarea
-                value={replyBody}
-                onChange={(e) => setReplyBody(e.target.value)}
-                rows={6}
-                className={inputCls}
-              />
-              {replyError && <p className="mt-1 text-sm text-red-600">{replyError}</p>}
-              <div className="mt-2 flex justify-end">
-                <button
-                  type="button"
-                  onClick={handleSendReply}
-                  disabled={replySending || isPending || !replyBody.trim()}
-                  className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-                >
-                  {replySending ? "Sending…" : "Send reply"}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-
       {/* ---- RIGHT: Processed (Sent list or Done list, own filter) ---- */}
-      <div className="flex w-80 shrink-0 flex-col">
+      <div className="flex min-w-0 flex-1 flex-col">
         <div className="mb-3 flex h-[30px] items-center">
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
         </div>
@@ -866,6 +710,212 @@ export default function AdminInboxPanel({
           )}
         </div>
       </div>
+
+      {/* ---- MODAL: alert, task form, thread, sent detail, or compose ---- */}
+      {modalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          onClick={() => {
+            if (!editingForm) closeModal();
+          }}
+        >
+          <div
+            className={`flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-lg ${
+              mode === "alert" && clientPanel ? "max-w-5xl" : "max-w-2xl"
+            }`}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex shrink-0 justify-end border-b border-neutral-100 px-4 py-2">
+              <button
+                type="button"
+                onClick={closeModal}
+                className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-5">
+              {mode === "alert" ? (
+                clientPanel ? (
+                  <AlertClientPanel key={clientPanel.artist.id} data={clientPanel} onDone={handleUpToDateDone} />
+                ) : (
+                  selectedAlert && (
+                    <AlertDetail
+                      item={selectedAlert}
+                      busy={isPending}
+                      onLink={handleAlertLink}
+                      onDismiss={handleAlertDismiss}
+                    />
+                  )
+                )
+              ) : mode === "task" ? (
+                taskForm && (
+                  <TaskForm
+                    form={taskForm}
+                    categories={taskCategories}
+                    artistOptions={artistOptions}
+                    saving={taskSaving || isPending}
+                    error={taskError}
+                    savedNote={taskSavedNote}
+                    onChange={handleTaskChange}
+                    onSave={() => handleSaveTask(false)}
+                    onComplete={() => handleSaveTask(true)}
+                  />
+                )
+              ) : composing ? (
+                <div className="mx-auto max-w-xl space-y-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    New message — from {adminEmailAddress}
+                  </p>
+                  {composeSent ? (
+                    <p className="text-sm text-green-600">Sent to {composeTo}.</p>
+                  ) : (
+                    <>
+                      <div>
+                        <label className={labelCls}>To</label>
+                        <input
+                          list="compose-recipients"
+                          type="email"
+                          value={composeTo}
+                          onChange={(e) => handleRecipientPick(e.target.value)}
+                          placeholder="Type an address, or pick from the list"
+                          className={inputCls}
+                        />
+                        <datalist id="compose-recipients">
+                          {composeRecipients.map((r) => (
+                            <option key={`${r.artistId || "c"}-${r.email}`} value={r.email}>
+                              {r.label}
+                            </option>
+                          ))}
+                        </datalist>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Subject</label>
+                        <input
+                          type="text"
+                          value={composeSubject}
+                          onChange={(e) => setComposeSubject(e.target.value)}
+                          className={inputCls}
+                        />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Message</label>
+                        <textarea
+                          value={composeBody}
+                          onChange={(e) => setComposeBody(e.target.value)}
+                          rows={10}
+                          className={inputCls}
+                        />
+                      </div>
+                      {composeError && <p className="text-sm text-red-600">{composeError}</p>}
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={handleSendCompose}
+                          disabled={composeSending || isPending}
+                          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                        >
+                          {composeSending ? "Sending…" : "Send"}
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ) : selectedSent ? (
+                <div className="mx-auto max-w-xl space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                      {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteSentItem(selectedSent.id)}
+                      disabled={deletingId === selectedSent.id || isPending}
+                      className={deleteBtnCls}
+                    >
+                      {deletingId === selectedSent.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
+                  <p className="text-sm font-medium text-neutral-800">{selectedSent.subject || "(no subject)"}</p>
+                  <p className="text-xs text-neutral-400">
+                    {selectedSent.fromAddress} → {selectedSent.toAddress}
+                  </p>
+                  <p className="text-xs text-neutral-400">{formatDateTime(selectedSent.sentAt)}</p>
+                  {(selectedSent.artistName || selectedSent.customerName || selectedSent.artworkTitle) && (
+                    <p className="text-xs text-neutral-400">
+                      {[selectedSent.artistName, selectedSent.customerName, selectedSent.artworkTitle]
+                        .filter(Boolean)
+                        .join(" — ")}
+                    </p>
+                  )}
+                  <div className="mt-3 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+                    {selectedSent.body || "(empty)"}
+                  </div>
+                </div>
+              ) : threadLoading || !thread ? (
+                <p className="text-sm text-neutral-400">Loading…</p>
+              ) : (
+                <div className="mx-auto max-w-xl space-y-4">
+                  {thread.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`rounded-md border p-3 ${
+                        item.direction === "OUT" ? "border-neutral-200 bg-neutral-50" : "border-neutral-200 bg-white"
+                      }`}
+                    >
+                      <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
+                        <span className="font-medium text-neutral-700">
+                          {item.direction === "OUT" ? "You" : item.fromName || item.fromAddress}
+                        </span>
+                        <div className="flex items-center gap-2">
+                          <span>{formatDateTime(item.at)}</span>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteThreadItem(item)}
+                            disabled={deletingId === item.id || isPending}
+                            className={deleteBtnCls}
+                          >
+                            {deletingId === item.id ? "Deleting…" : "Delete"}
+                          </button>
+                        </div>
+                      </div>
+                      {item.direction === "IN" && (
+                        <p className="mb-1 text-xs text-neutral-400">
+                          {item.fromAddress} → {item.toAddress}
+                        </p>
+                      )}
+                      <p className="mb-1 text-sm font-medium text-neutral-800">{item.subject}</p>
+                      <p className="whitespace-pre-wrap text-sm text-neutral-700">{item.textBody}</p>
+                    </div>
+                  ))}
+
+                  <div className="border-t border-neutral-200 pt-3">
+                    <label className={labelCls}>Reply</label>
+                    <textarea
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                      rows={6}
+                      className={inputCls}
+                    />
+                    {replyError && <p className="mt-1 text-sm text-red-600">{replyError}</p>}
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSendReply}
+                        disabled={replySending || isPending || !replyBody.trim()}
+                        className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                      >
+                        {replySending ? "Sending…" : "Send reply"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
