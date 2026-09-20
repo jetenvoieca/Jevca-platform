@@ -13,7 +13,13 @@ import {
   type SentSummaryItem,
 } from "@/lib/actions/inboundEmail";
 import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail";
-import { getCompletedTasks, saveTask, type TaskItem, type TaskInput } from "@/lib/actions/tasks";
+import {
+  getCompletedTasks,
+  saveTask,
+  deleteCompletedTask,
+  type TaskItem,
+  type TaskInput,
+} from "@/lib/actions/tasks";
 import { dismissAlert } from "@/lib/actions/subscriptions";
 import { refreshOpenAlerts } from "@/lib/actions/clientAlerts";
 import type { AlertItem } from "@/lib/alerts";
@@ -47,7 +53,7 @@ import SaleModal from "@/components/SaleModal";
 //     (every OutboundEmail — admin sends, replies, and invoice/receipt/
 //     certificate sends too, see getSentList).
 //   - Task mode (CRM Phase 2): left = open tasks, modal = task form,
-//     right = Done list (completed tasks).
+//     right = Done list (completed tasks, each deletable from the list).
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
 //     old standalone Alerts page), modal = the selected alert, right =
 //     the same Done list. A payment-overdue alert opens the client's
@@ -68,16 +74,17 @@ import SaleModal from "@/components/SaleModal";
 // Clicking a sent item shows its full content in the modal — no server
 // round-trip needed, since the full body is already in the list.
 //
-// Tapping outside the modal closes it, except while a form is open
-// (compose, task, or a reply being typed) — there only the Close button
-// does, so a stray tap can't throw away what's been typed.
+// Tapping outside the modal closes it. If a form has something typed in
+// it that hasn't been saved or sent (compose, task, or a reply), that
+// asks first, so a stray tap can't throw the typing away.
 //
 // Delete added 2026-09-06, direct request ("enable deleting of messages
 // in inbox both received and sent") — every item in a thread (both the
 // original received message and any replies) and every Sent item gets
 // its own delete control, each with a confirm() first since this is
 // permanent, same pattern as every other destructive action in the app
-// (handleResetSalesData, handleDeletePayment, etc. elsewhere).
+// (handleResetSalesData, handleDeletePayment, etc. elsewhere). Done
+// tasks got the same in the list itself (2026-09-20).
 //
 // Auto-select-next added same day, second delete-related request —
 // deleting the message currently open (an inbox thread's original
@@ -177,11 +184,12 @@ export default function AdminInboxPanel({
   const [composeError, setComposeError] = useState<string | null>(null);
   const [composeSent, setComposeSent] = useState(false);
 
-  // `null` = no task open.
+  // `null` = no task open. `taskDirty` = something has been typed since
+  // it was opened (drives the discard warning on tap-outside).
   const [taskForm, setTaskForm] = useState<TaskInput | null>(null);
+  const [taskDirty, setTaskDirty] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
-  const [taskSavedNote, setTaskSavedNote] = useState(false);
 
   // The overdue-invoice alert whose sale modal is open, if any. Kept as
   // a copy of the alert (rather than looked up in the list) so the modal
@@ -201,20 +209,23 @@ export default function AdminInboxPanel({
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
   const selectedAlert = initialAlerts.find((a) => a.id === selectedAlertId) || null;
 
-  // Whether the modal is showing, and whether tapping outside it may
-  // close it (not while a form is being filled in — see the header note).
-  // A sale alert's modal is separate (SaleModal draws its own overlay).
+  // Whether the modal is showing (a sale alert's modal is separate —
+  // SaleModal draws its own overlay), and whether it holds typing that
+  // hasn't been saved or sent.
   const modalOpen =
     mode === "alert"
       ? !!(clientPanel || selectedAlert)
       : mode === "task"
         ? taskForm !== null
         : composing || selectedSent !== null || openId !== null;
-  const editingForm =
+  const hasUnsavedInput =
     mode === "task"
-      ? taskForm !== null
+      ? taskDirty
       : mode === "inbox"
-        ? (composing && !composeSent) || (openId !== null && replyBody.trim() !== "")
+        ? (composing &&
+            !composeSent &&
+            (composeTo.trim() !== "" || composeSubject.trim() !== "" || composeBody.trim() !== "")) ||
+          (openId !== null && replyBody.trim() !== "")
         : false;
 
   const refreshRight = () => setRightRefreshKey((k) => k + 1);
@@ -249,6 +260,13 @@ export default function AdminInboxPanel({
     setTaskForm(null);
     setSaleAlert(null);
     if (selectedAlertId) router.replace(inboxUrl(selectedArtistId));
+  };
+
+  // Tapping outside the modal: closes it, after checking first if
+  // there's unsaved typing that would be lost.
+  const handleBackdropClick = () => {
+    if (hasUnsavedInput && !confirm("Close without saving what you've typed?")) return;
+    closeModal();
   };
 
   const switchMode = (next: Mode) => {
@@ -373,6 +391,18 @@ export default function AdminInboxPanel({
     });
   };
 
+  // Deletes a completed task straight from the Done list, without
+  // opening it.
+  const handleDeleteDoneTask = (id: string) => {
+    if (!confirm("Delete this completed task? This can't be undone.")) return;
+    setDeletingId(id);
+    startTransition(async () => {
+      await deleteCompletedTask(id);
+      setDeletingId(null);
+      setDoneList((list) => (list ? list.filter((t) => t.id !== id) : list));
+    });
+  };
+
   const handleRecipientPick = (value: string) => {
     const match = composeRecipients.find((r) => r.email === value);
     setComposeTo(value);
@@ -425,29 +455,27 @@ export default function AdminInboxPanel({
       category: t.category ?? "",
       artistId: t.artistId ?? "",
     });
+    setTaskDirty(false);
     setTaskError(null);
-    setTaskSavedNote(false);
   };
 
   const startTask = () => {
     setTaskForm(EMPTY_TASK_FORM);
+    setTaskDirty(false);
     setTaskError(null);
-    setTaskSavedNote(false);
   };
 
   const handleTaskChange = (patch: Partial<TaskInput>) => {
     setTaskForm((f) => (f ? { ...f, ...patch } : f));
-    setTaskSavedNote(false);
+    setTaskDirty(true);
   };
 
-  // Save Task keeps the saved task open in the form; Task Completed
-  // saves (if needed) and completes it in one go, then closes the modal —
-  // the task leaves the open list on the left and appears in Done on the
-  // right.
+  // Save Task saves (or creates) the task and closes the modal; Task
+  // Completed does the same and completes it too, so it moves from the
+  // open list on the left into Done on the right.
   const handleSaveTask = (complete: boolean) => {
     if (!taskForm) return;
     setTaskError(null);
-    setTaskSavedNote(false);
     setTaskSaving(true);
     startTransition(async () => {
       const res = await saveTask(taskForm, complete);
@@ -457,13 +485,8 @@ export default function AdminInboxPanel({
         return;
       }
       router.refresh();
-      if (complete) {
-        setTaskForm(null);
-        refreshRight();
-      } else {
-        setTaskForm({ ...taskForm, id: res.id });
-        setTaskSavedNote(true);
-      }
+      setTaskForm(null);
+      if (complete) refreshRight();
     });
   };
 
@@ -725,7 +748,17 @@ export default function AdminInboxPanel({
             <ul className="divide-y divide-neutral-100">
               {doneList.map((t) => (
                 <li key={t.id} className="px-3 py-2.5">
-                  <p className="truncate text-sm font-semibold text-neutral-900">{t.name}</p>
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="truncate text-sm font-semibold text-neutral-900">{t.name}</p>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDoneTask(t.id)}
+                      disabled={deletingId === t.id || isPending}
+                      className={`shrink-0 ${deleteBtnCls}`}
+                    >
+                      {deletingId === t.id ? "Deleting…" : "Delete"}
+                    </button>
+                  </div>
                   <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
                   <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-neutral-400">
                     <span>Date completed</span>
@@ -752,9 +785,7 @@ export default function AdminInboxPanel({
       {modalOpen && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={() => {
-            if (!editingForm) closeModal();
-          }}
+          onClick={handleBackdropClick}
         >
           <div
             className={`flex max-h-[90dvh] w-full flex-col overflow-hidden rounded-2xl bg-white shadow-lg ${
@@ -794,7 +825,6 @@ export default function AdminInboxPanel({
                     artistOptions={artistOptions}
                     saving={taskSaving || isPending}
                     error={taskError}
-                    savedNote={taskSavedNote}
                     onChange={handleTaskChange}
                     onSave={() => handleSaveTask(false)}
                     onComplete={() => handleSaveTask(true)}

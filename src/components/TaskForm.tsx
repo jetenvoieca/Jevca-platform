@@ -3,20 +3,19 @@
 import type { TaskInput } from "@/lib/actions/tasks";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 
-// The task form shown in the Inbox's centre panel (2026-09-19, CRM
-// Phase 2) — purely presentational: the parent (AdminInboxPanel) owns
-// the form state and does the saving, since saving also has to refresh
-// the lists on either side. Save Task is always available (it creates a
-// new task, or saves changes to a loaded one); Task Completed only
-// appears once the task exists, i.e. was loaded from the list or has
-// just been saved.
+// The task form shown in the Inbox's modal (2026-09-19, CRM Phase 2) —
+// purely presentational: the parent (AdminInboxPanel) owns the form state
+// and does the saving, since saving also has to refresh the lists behind
+// it, and closes the modal once a save succeeds. Save Task is always
+// available (it creates a new task, or saves changes to a loaded one);
+// Task Completed only appears once the task exists, i.e. was loaded from
+// the list.
 export default function TaskForm({
   form,
   categories,
   artistOptions,
   saving,
   error,
-  savedNote,
   onChange,
   onSave,
   onComplete,
@@ -26,7 +25,6 @@ export default function TaskForm({
   artistOptions: { id: string; name: string }[];
   saving: boolean;
   error: string | null;
-  savedNote: boolean;
   onChange: (patch: Partial<TaskInput>) => void;
   onSave: () => void;
   onComplete: () => void;
@@ -105,7 +103,6 @@ export default function TaskForm({
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
-      {savedNote && <p className="text-sm text-green-600">Saved.</p>}
 
       <ActionPanel>
         <ActionButton onClick={onSave} disabled={saving}>

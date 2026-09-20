@@ -114,3 +114,12 @@ export async function saveTask(
   revalidatePath("/accounts/inbox");
   return { ok: true, id: created.id };
 }
+
+// Removes a processed (completed) task from the Done list. Only ever
+// touches completed tasks — an open task can't be deleted this way. That
+// includes the Done entries the app writes itself, e.g. "Subscription
+// payments updated" (see markSubscriptionUpToDate).
+export async function deleteCompletedTask(id: string): Promise<void> {
+  await db.task.deleteMany({ where: { id, completedAt: { not: null } } });
+  revalidatePath("/accounts/inbox");
+}
