@@ -87,6 +87,12 @@ export default function PurchasePanel({
   // longer describes the customer it came from — falls back to the
   // existing email-match-or-create behaviour in that case, unchanged.
   const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
+  // The Purchase started this session, if any (2026-09-20) — needed so
+  // the "Start a sale" form's own StripeCardForm (below) has a
+  // purchaseId to record its payment confirmation against directly,
+  // same as the already-active branch further down already can via
+  // activePurchase.id.
+  const [startedPurchaseId, setStartedPurchaseId] = useState<string | null>(null);
 
   // The two possible sale options — Full or Instalments (2026-08-28,
   // simplified from a four-way Framed/Unframed × Full/Instalments
@@ -157,6 +163,7 @@ export default function PurchasePanel({
         setError(res.error);
         return;
       }
+      setStartedPurchaseId(res.purchaseId);
       const linkResult = await createPaymentLink(res.purchaseId, siteId, artworkId);
       if (linkResult.ok) setLinkUrl(linkResult.url);
       else setError(linkResult.error);
@@ -175,6 +182,7 @@ export default function PurchasePanel({
         setError(res.error);
         return;
       }
+      setStartedPurchaseId(res.purchaseId);
       const cardResult = await createCardEntryIntent(res.purchaseId, siteId);
       if (cardResult.ok) {
         setCardSecret(cardResult.clientSecret);
@@ -464,6 +472,25 @@ export default function PurchasePanel({
                 </div>
               </form>
               {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+              {cardSecret && cardPublishableKey && startedPurchaseId && (
+                <div className="mt-3">
+                  <StripeCardForm
+                    clientSecret={cardSecret}
+                    publishableKey={cardPublishableKey}
+                    purchaseId={startedPurchaseId}
+                    onDone={() => {
+                      setCardSecret(null);
+                      setCardPublishableKey(null);
+                      if (onChanged) onChanged();
+                      else router.refresh();
+                    }}
+                  />
+                  <p className="mt-2 text-xs text-neutral-400">
+                    Status below updates within a few seconds of Stripe confirming the charge.
+                  </p>
+                </div>
+              )}
             </>
           ) : activePurchase.channel === "GALLERY" ? (
             // One shared component for the whole GALLERY-channel sale
@@ -546,6 +573,7 @@ export default function PurchasePanel({
                       <StripeCardForm
                         clientSecret={cardSecret}
                         publishableKey={cardPublishableKey}
+                        purchaseId={activePurchase.id}
                         onDone={() => {
                           setCardSecret(null);
                           setCardPublishableKey(null);
