@@ -17,6 +17,7 @@ import {
   createCardEntryIntent,
   abandonPurchase,
   deleteGallerySale,
+  forceDeleteCompletedSale,
 } from "@/lib/actions/payments";
 import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
@@ -173,6 +174,20 @@ export default function ArtworkDetailPanel({
     sizeValue,
     selectedTypeRecord ? parseFloat(selectedTypeRecord.refValue) : null
   );
+
+  // Whether the artwork is genuinely, persistently SOLD (2026-09-20,
+  // direct request) — distinct from saleOpen below, which only tracks
+  // whether the Sold panel is currently expanded on screen. Reading
+  // this straight from artwork.availability (rather than from saleOpen)
+  // means the Availability toggle keeps correctly showing SOLD even
+  // after onSaleCompleted collapses the panel back down — saleOpen
+  // alone, initialised only once at mount, would otherwise go stale the
+  // moment a sale completes without the whole panel remounting.
+  const isSold = artwork.availability === "SOLD";
+  // The purchase that made it SOLD, if any — purchaseHistory is already
+  // ordered most-recent-first (same convention used elsewhere, e.g.
+  // GalleriesView), so the first COMPLETED entry is the current sale.
+  const completedPurchase = artwork.purchaseHistory.find((p) => p.status === "COMPLETED") ?? null;
 
   // ---- Catalogue / Presentation (2026-09-10, direct request) ----
   // A completely separate panel now, switched via the header toggle
@@ -511,6 +526,37 @@ export default function ArtworkDetailPanel({
       setCardPublishableKey(null);
       setSaleOpen(false);
       setCardMode(false);
+    });
+  };
+
+  // Deletes the completed sale that made this artwork SOLD (2026-09-20,
+  // direct request — "not allow another sale unless existing one
+  // cancelled or deleted"). Uses forceDeleteCompletedSale, which also
+  // resets Availability back to AVAILABLE once no other COMPLETED
+  // purchase remains for this artwork — a completed sale is a real
+  // financial record, so this carries its own strong confirmation
+  // wording rather than the plain Delete button's.
+  const handleDeleteCompletedSale = () => {
+    if (!completedPurchase) return;
+    if (
+      !confirm(
+        "This sale has already been paid — deleting it removes that financial record entirely and makes this artwork Available again. This can't be undone. Continue?"
+      )
+    ) {
+      return;
+    }
+    startSaleActionTransition(async () => {
+      const result = await forceDeleteCompletedSale(completedPurchase.id, siteId);
+      if (!result.ok) {
+        setSaleActionError(result.error);
+        return;
+      }
+      setSaleOpen(false);
+      setCardMode(false);
+      setRecordMode(false);
+      setStartedPurchaseId(null);
+      if (onDataChanged) onDataChanged();
+      else router.refresh();
     });
   };
 
@@ -880,6 +926,15 @@ export default function ArtworkDetailPanel({
                     // when the panel is closed — reopening it is what SOLD
                     // does; closing it is the sale panel's own "Back to
                     // Available" link, not this toggle, once open.
+                    //
+                    // SOLD stays highlighted, and can't be pressed to start
+                    // a second sale, once the artwork is genuinely SOLD
+                    // (2026-09-20, direct request — "not allow another sale
+                    // unless existing one cancelled or deleted") — isSold
+                    // overrides saleOpen for the highlight so this stays
+                    // correct even after onSaleCompleted collapses the
+                    // panel back down. "Delete this sale" underneath is the
+                    // only way back to Available from here.
                     <div>
                       <label className="mb-1 block text-sm font-medium text-neutral-700">
                         Availability
@@ -889,26 +944,26 @@ export default function ArtworkDetailPanel({
                           type="button"
                           onClick={() => setSaleOpen(false)}
                           className={`flex-1 px-3 py-[6.4px] font-medium ${
-                            !saleOpen
+                            !saleOpen && !isSold
                               ? "bg-neutral-900 text-white"
                               : "bg-white text-neutral-600 hover:bg-neutral-50"
                           }`}
                         >
                           Available
                         </button>
-                        {/* Disabled without an Offered price (2026-09-11,
-                            direct request) — there's nothing for the sale
-                            panel's Purchase option to be based on otherwise.
-                            Checks artwork.offeredPrice (the saved value) since
-                            the field below autosaves on blur — type a price,
-                            click elsewhere, then SOLD becomes available. */}
                         <button
                           type="button"
                           onClick={() => setSaleOpen(true)}
-                          disabled={!artwork.offeredPrice}
-                          title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
+                          disabled={!artwork.offeredPrice || isSold}
+                          title={
+                            isSold
+                              ? "Already sold — delete the sale below to make it available again"
+                              : !artwork.offeredPrice
+                                ? "Set an Offered price first"
+                                : undefined
+                          }
                           className={`flex-1 px-3 py-[6.4px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
-                            saleOpen
+                            saleOpen || isSold
                               ? "bg-neutral-900 text-white"
                               : "bg-white text-neutral-600 hover:bg-neutral-50"
                           }`}
@@ -916,6 +971,19 @@ export default function ArtworkDetailPanel({
                           SOLD
                         </button>
                       </div>
+                      {isSold && completedPurchase && (
+                        <button
+                          type="button"
+                          onClick={handleDeleteCompletedSale}
+                          disabled={saleActionPending}
+                          className="mt-1 text-xs text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          Delete this sale to make Available again
+                        </button>
+                      )}
+                      {saleActionError && (
+                        <p className="mt-1 text-xs text-red-600">{saleActionError}</p>
+                      )}
                       <input type="hidden" name="availability" value={artwork.availability} />
                     </div>
                   }
