@@ -34,7 +34,17 @@ function CardEntryForm({ onDone }: { onDone: () => void }) {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-3">
-      <PaymentElement />
+      {/* wallets.link: "never" (2026-09-20, direct request — "don't
+          need the Save details part") — this form is filled in by the
+          artist over the phone, entering the buyer's card on their
+          behalf, not by the buyer themselves. Stripe's default Link
+          prompt ("Save your info for secure 1-click checkout") asks
+          whether to remember the card for next time and offers email-
+          based autofill — neither makes sense here, since it's not the
+          cardholder's own browser/account doing the saving. Turning
+          Link off removes that prompt entirely, leaving just the plain
+          card fields. */}
+      <PaymentElement options={{ wallets: { link: "never" } }} />
       {error && <p className="text-sm text-red-600">{error}</p>}
       <button
         type="submit"
