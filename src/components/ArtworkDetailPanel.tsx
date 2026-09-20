@@ -432,6 +432,7 @@ export default function ArtworkDetailPanel({
       if (result.ok) {
         setStartedPurchaseId(result.purchaseId);
         setLinkUrl(result.url);
+        if (onDataChanged) onDataChanged();
       } else {
         setSaleActionError(result.error);
       }
@@ -463,6 +464,11 @@ export default function ArtworkDetailPanel({
         setStartedPurchaseId(result.purchaseId);
         setCardSecret(result.clientSecret);
         setCardPublishableKey(result.publishableKey);
+        // The artwork is now SOLD server-side the instant this started
+        // (2026-09-20 — see startArtworkSaleAndEnterCard/startPurchase)
+        // — refresh so the grid tile/Availability catch up immediately,
+        // not only once the card payment itself later completes.
+        if (onDataChanged) onDataChanged();
       } else {
         setSaleActionError(result.error);
       }
@@ -486,6 +492,8 @@ export default function ArtworkDetailPanel({
     if (idToAbandon) {
       startSaleActionTransition(async () => {
         await abandonPurchase(idToAbandon, siteId);
+        if (onDataChanged) onDataChanged();
+        else router.refresh();
       });
     }
   };
@@ -509,6 +517,8 @@ export default function ArtworkDetailPanel({
       setCardPublishableKey(null);
       setSaleOpen(false);
       setCardMode(false);
+      if (onDataChanged) onDataChanged();
+      else router.refresh();
     });
   };
 
@@ -526,6 +536,8 @@ export default function ArtworkDetailPanel({
       setCardPublishableKey(null);
       setSaleOpen(false);
       setCardMode(false);
+      if (onDataChanged) onDataChanged();
+      else router.refresh();
     });
   };
 
@@ -570,6 +582,10 @@ export default function ArtworkDetailPanel({
     currency: artwork.saleTerms?.currency ?? siteDefaultCurrency,
     defaultInstalmentCount: settings.defaultInstalmentCount,
     saleSources: settings.saleSources,
+    // The Purchase currently in play, so card mode can pass it to
+    // StripeCardForm (2026-09-20) — see the note on startedPurchaseId
+    // above and on StripeCardForm itself.
+    purchaseId: startedPurchaseId,
     depositPaid,
     onDepositPaidChange: setDepositPaid,
     datePaid,
