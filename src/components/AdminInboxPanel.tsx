@@ -26,6 +26,7 @@ import type { AlertItem } from "@/lib/alerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
 import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
+import { capitaliseParagraphs } from "@/lib/text";
 import TaskForm from "@/components/TaskForm";
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
@@ -63,20 +64,33 @@ import SaleModal from "@/components/SaleModal";
 //     shows its message with a link and, where allowed, Dismiss (see
 //     AlertDetail).
 //
-// The two artist filters are independent: the left one lives in the URL
-// (so links can land already filtered) and applies to whichever left
-// list is showing; the right one is plain client state. The selected
-// alert also lives in the URL (?alert=...) — see the note on InboxPage —
-// so closing the modal on an alert has to clear it from the address too.
-// (The exception is a sale alert, which is plain client state: the sale
-// modal loads its own data, and has to stay open even after the alert
-// itself clears — e.g. once the sale is marked paid.)
-// Clicking a sent item shows its full content in the modal — no server
-// round-trip needed, since the full body is already in the list.
+// The left column has two filters side by side: the artist filter (all
+// modes) and, in Task and Alert modes, a type filter — task category or
+// alert type (2026-09-20). Received messages have no type, so Inbox mode
+// has no type filter. The type filter is plain client state applied to
+// the lists already loaded; the artist filter lives in the URL (so links
+// can land already filtered) and is applied on the server. The right
+// column has its own artist filter, independent of the left, also plain
+// client state. The selected alert also lives in the URL (?alert=...) —
+// see the note on InboxPage — so closing the modal on an alert has to
+// clear it from the address too. (The exception is a sale alert, which
+// is plain client state: the sale modal loads its own data, and has to
+// stay open even after the alert itself clears — e.g. once the sale is
+// marked paid.) Clicking a sent item shows its full content in the modal
+// — no server round-trip needed, since the full body is already in the
+// list.
 //
 // Tapping outside the modal closes it. If a form has something typed in
 // it that hasn't been saved or sent (compose, task, or a reply), that
 // asks first, so a stray tap can't throw the typing away.
+//
+// Text is capitalised paragraph by paragraph (2026-09-20, see
+// capitaliseParagraphs): what's typed as it's saved or sent (task
+// description, new message, reply), and what's shown in the lists and
+// alerts.
+//
+// In each list, an item's date sits beside its title on a tablet or
+// wider, and under it on a phone (below Tailwind's `sm`).
 //
 // Delete added 2026-09-06, direct request ("enable deleting of messages
 // in inbox both received and sent") — every item in a thread (both the
@@ -157,6 +171,10 @@ export default function AdminInboxPanel({
   // (e.g. after a page reload).
   const [mode, setMode] = useState<Mode>(selectedAlertId ? "alert" : "inbox");
 
+  // The left column's type filter: a task category in Task mode, an alert
+  // type in Alert mode. "" = all. Cleared whenever the mode changes.
+  const [typeFilter, setTypeFilter] = useState("");
+
   // Right-hand column: Sent list (Inbox mode) or Done list (Task and
   // Alert modes). `null` means "still loading". One artist filter serves
   // both.
@@ -205,9 +223,21 @@ export default function AdminInboxPanel({
     `rounded-full px-3 py-1 text-xs font-medium transition ${
       active ? "bg-neutral-200 text-neutral-900" : "text-neutral-500 hover:text-neutral-700"
     }`;
+  // The title row of a list item: date beside the title on a tablet or
+  // wider, under it on a phone.
+  const itemHeadCls =
+    "flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2";
 
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
   const selectedAlert = initialAlerts.find((a) => a.id === selectedAlertId) || null;
+
+  // The left column's lists, after the type filter.
+  const visibleTasks = typeFilter ? initialTasks.filter((t) => t.category === typeFilter) : initialTasks;
+  const visibleAlerts = typeFilter ? initialAlerts.filter((a) => a.type === typeFilter) : initialAlerts;
+  const typeOptions =
+    mode === "task"
+      ? taskCategories.map((c) => ({ value: c, label: c }))
+      : Object.entries(ALERT_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
   // Whether the modal is showing (a sale alert's modal is separate —
   // SaleModal draws its own overlay), and whether it holds typing that
@@ -272,6 +302,7 @@ export default function AdminInboxPanel({
   const switchMode = (next: Mode) => {
     if (next === mode) return;
     setMode(next);
+    setTypeFilter("");
     closeModal();
   };
 
@@ -314,7 +345,7 @@ export default function AdminInboxPanel({
     setReplyError(null);
     setReplySending(true);
     const fd = new FormData();
-    fd.set("body", replyBody);
+    fd.set("body", capitaliseParagraphs(replyBody));
     startTransition(async () => {
       const res = await sendInboxReply(openId, fd);
       setReplySending(false);
@@ -416,7 +447,7 @@ export default function AdminInboxPanel({
     const fd = new FormData();
     fd.set("to", composeTo);
     fd.set("subject", composeSubject);
-    fd.set("body", composeBody);
+    fd.set("body", capitaliseParagraphs(composeBody));
     if (composeArtistId) fd.set("artistId", composeArtistId);
     if (composeCustomerId) fd.set("customerId", composeCustomerId);
     startTransition(async () => {
@@ -478,7 +509,10 @@ export default function AdminInboxPanel({
     setTaskError(null);
     setTaskSaving(true);
     startTransition(async () => {
-      const res = await saveTask(taskForm, complete);
+      const res = await saveTask(
+        { ...taskForm, description: capitaliseParagraphs(taskForm.description) },
+        complete
+      );
       setTaskSaving(false);
       if (!res.ok) {
         setTaskError(res.error);
@@ -507,6 +541,7 @@ export default function AdminInboxPanel({
     if (!a.linkHref) return;
     if (a.linkHref.startsWith("/accounts/inbox")) {
       setMode("inbox");
+      setTypeFilter("");
       setOpenId(null);
       setThread(null);
       setSelectedSentId(null);
@@ -539,7 +574,7 @@ export default function AdminInboxPanel({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-5xl gap-6 px-6 py-6">
-      {/* ---- LEFT: Inbox / Task / Alert list + filter ---- */}
+      {/* ---- LEFT: Inbox / Task / Alert list + filters ---- */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="mb-3 flex h-[30px] items-center justify-between">
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
@@ -566,18 +601,34 @@ export default function AdminInboxPanel({
           </button>
         </div>
 
-        <select
-          value={selectedArtistId || ""}
-          onChange={(e) => handleLeftFilterChange(e.target.value)}
-          className={`${inputCls} mb-3`}
-        >
-          <option value="">All artists</option>
-          {artistOptions.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
+        <div className="mb-3 flex gap-2">
+          <select
+            value={selectedArtistId || ""}
+            onChange={(e) => handleLeftFilterChange(e.target.value)}
+            className={`${inputCls} min-w-0 flex-1`}
+          >
+            <option value="">All artists</option>
+            {artistOptions.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+          {mode !== "inbox" && (
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className={`${inputCls} min-w-0 flex-1`}
+            >
+              <option value="">All types</option>
+              {typeOptions.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           {mode === "inbox" ? (
@@ -594,7 +645,7 @@ export default function AdminInboxPanel({
                         openId === m.id ? "bg-neutral-100" : ""
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className={itemHeadCls}>
                         <span
                           className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
                         >
@@ -604,7 +655,9 @@ export default function AdminInboxPanel({
                           {formatDate(m.receivedAt)}
                         </span>
                       </div>
-                      <p className="truncate text-xs text-neutral-500">{m.subject || "(no subject)"}</p>
+                      <p className="truncate text-xs text-neutral-500">
+                        {capitaliseParagraphs(m.subject) || "(no subject)"}
+                      </p>
                       <p className="mt-0.5 truncate text-xs text-neutral-400">
                         {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
                       </p>
@@ -614,11 +667,13 @@ export default function AdminInboxPanel({
               </ul>
             )
           ) : mode === "task" ? (
-            initialTasks.length === 0 ? (
-              <p className="p-4 text-center text-sm text-neutral-400">No open tasks.</p>
+            visibleTasks.length === 0 ? (
+              <p className="p-4 text-center text-sm text-neutral-400">
+                {initialTasks.length === 0 ? "No open tasks." : "Nothing matches this filter."}
+              </p>
             ) : (
               <ul className="divide-y divide-neutral-100">
-                {initialTasks.map((t) => (
+                {visibleTasks.map((t) => (
                   <li key={t.id}>
                     <button
                       type="button"
@@ -627,8 +682,10 @@ export default function AdminInboxPanel({
                         taskForm?.id === t.id ? "bg-neutral-100" : ""
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="truncate text-sm font-semibold text-neutral-900">{t.name}</span>
+                      <div className={itemHeadCls}>
+                        <span className="truncate text-sm font-semibold text-neutral-900">
+                          {capitaliseParagraphs(t.name)}
+                        </span>
                         <span className="shrink-0 text-[10px] text-neutral-400">
                           {t.targetDate ? formatDate(t.targetDate) : ""}
                         </span>
@@ -640,11 +697,13 @@ export default function AdminInboxPanel({
                 ))}
               </ul>
             )
-          ) : initialAlerts.length === 0 ? (
-            <p className="p-4 text-center text-sm text-neutral-400">Nothing needs your attention.</p>
+          ) : visibleAlerts.length === 0 ? (
+            <p className="p-4 text-center text-sm text-neutral-400">
+              {initialAlerts.length === 0 ? "Nothing needs your attention." : "Nothing matches this filter."}
+            </p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {initialAlerts.map((a) => (
+              {visibleAlerts.map((a) => (
                 <li key={a.id}>
                   <button
                     type="button"
@@ -653,7 +712,7 @@ export default function AdminInboxPanel({
                       selectedAlertId === a.id || saleAlert?.id === a.id ? "bg-neutral-100" : ""
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-2">
+                    <div className={itemHeadCls}>
                       <span className="flex min-w-0 items-center gap-1.5">
                         <span
                           className={`h-2 w-2 shrink-0 rounded-full ${
@@ -671,7 +730,9 @@ export default function AdminInboxPanel({
                       )}
                     </div>
                     <p className="truncate text-xs text-neutral-500">{a.artistName || "General"}</p>
-                    <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{a.message}</p>
+                    <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">
+                      {capitaliseParagraphs(a.message)}
+                    </p>
                   </button>
                 </li>
               ))}
@@ -720,7 +781,7 @@ export default function AdminInboxPanel({
                         selectedSentId === m.id ? "bg-neutral-100" : ""
                       }`}
                     >
-                      <div className="flex items-center justify-between gap-2">
+                      <div className={itemHeadCls}>
                         <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
                         <span className="shrink-0 text-[10px] text-neutral-400">
                           {formatDate(m.sentAt)}
@@ -730,7 +791,7 @@ export default function AdminInboxPanel({
                         <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
                           {KIND_LABELS[m.kind] || m.kind}
                         </span>
-                        {m.subject || "(no subject)"}
+                        {capitaliseParagraphs(m.subject) || "(no subject)"}
                       </p>
                       <p className="mt-0.5 truncate text-xs text-neutral-400">
                         {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
@@ -749,7 +810,9 @@ export default function AdminInboxPanel({
               {doneList.map((t) => (
                 <li key={t.id} className="px-3 py-2.5">
                   <div className="flex items-start justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-neutral-900">{t.name}</p>
+                    <p className="truncate text-sm font-semibold text-neutral-900">
+                      {capitaliseParagraphs(t.name)}
+                    </p>
                     <button
                       type="button"
                       onClick={() => handleDeleteDoneTask(t.id)}
