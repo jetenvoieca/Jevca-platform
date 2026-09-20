@@ -205,7 +205,23 @@ export default function ArtworkDetailPanel({
   // the mockup — "sales panel ends with payment link row". Offered
   // price's value is preserved via its own hidden input alongside the
   // panel, so it survives an unrelated field autosaving while hidden.
-  const [saleOpen, setSaleOpen] = useState(artwork.availability === "SOLD");
+  //
+  // Initialises from whether there's a genuinely ACTIVE (unpaid) sale in
+  // progress — artwork.activePurchase — not from artwork.availability
+  // === "SOLD" (2026-09-20 fix). Availability now goes SOLD the moment
+  // any sale starts, completed or not (see startPurchase), so tying this
+  // to Availability meant reopening an artwork whose sale had already
+  // completed and been paid reopened this same blank "start a new sale"
+  // form every single time, instead of the disabled SOLD toggle + "Delete
+  // this sale" link the isSold block below already provides. Worse,
+  // closing that wrongly-reopened panel (Back/X → onBackToAvailable)
+  // looked exactly like abandoning a real, already-paid sale, even
+  // though nothing was actually touched server-side in that case (there
+  // was no ACTIVE purchase id to abandon) — it just read that way.
+  // activePurchase is only ever populated for an ACTIVE-status Purchase,
+  // so this now only reopens the panel for a sale that's genuinely still
+  // in progress, letting the artist pick up where they left off.
+  const [saleOpen, setSaleOpen] = useState(!!artwork.activePurchase);
 
   // Enter card now — moves the sale panel up further still, to sit
   // right under Name/Tier, matching the mockup's "slides up further to
