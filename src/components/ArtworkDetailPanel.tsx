@@ -475,6 +475,15 @@ export default function ArtworkDetailPanel({
     }
   };
 
+  // Card mode's own Back (2026-09-20) — unlike Close/Back to Available
+  // above, this does NOT abandon a purchase already started; it just
+  // returns to the sale form so the deposit/purchase option/buyer
+  // details can be reviewed or changed before trying again. Cancel sale
+  // (in card mode, red) is the one that actually abandons it.
+  const handleBackToSale = () => {
+    setCardMode(false);
+  };
+
   const handleCancelCardSale = () => {
     const idToAbandon = startedPurchaseId;
     if (!idToAbandon) return;
@@ -533,6 +542,7 @@ export default function ArtworkDetailPanel({
     onGetPaymentLink: handleGetPaymentLink,
     onEnterCardClick: handleEnterCardClick,
     onBackToAvailable: handleBackToAvailable,
+    onBackToSale: handleBackToSale,
     onCancelCardSale: handleCancelCardSale,
     onDeleteCardSale: handleDeleteCardSale,
     onRecordSale: () => setRecordMode(true),
