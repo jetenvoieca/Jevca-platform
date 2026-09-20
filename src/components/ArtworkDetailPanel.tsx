@@ -10,6 +10,14 @@ import {
   duplicateArtwork,
 } from "@/lib/actions/artworks";
 import { addArtworkType, addSettingOption } from "@/lib/actions/artworkSettings";
+import {
+  startArtworkSaleAndGetLink,
+  startArtworkSaleAndEnterCard,
+  createPaymentLink,
+  createCardEntryIntent,
+  abandonPurchase,
+  deleteGallerySale,
+} from "@/lib/actions/payments";
 import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
 import ArtworkSalePanel from "@/components/ArtworkSalePanel";
@@ -216,6 +224,27 @@ export default function ArtworkDetailPanel({
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
 
+  // ---- Get payment link/Enter card now, owned here (2026-09-20 fix)
+  // ----
+  // Same remount problem as the fields above, but for the fetch itself:
+  // clicking Enter card now sets cardMode true, which switches which
+  // branch renders ArtworkSalePanel — a genuinely new instance. The old
+  // instance's in-flight startArtworkSaleAndEnterCard/createCardEntryIntent
+  // call kept running, but its setCardSecret/setCardPublishableKey landed
+  // on the now-unmounted component and were silently dropped, leaving the
+  // freshly-mounted card-mode instance permanently stuck on "—" with no
+  // form and no error shown. Moving the fetch itself up here (this
+  // component never unmounts across the mode switch) fixes it — see the
+  // matching note in ArtworkSalePanel.
+  const [startedPurchaseId, setStartedPurchaseId] = useState<string | null>(
+    artwork.activePurchase?.channel === "STRIPE" ? artwork.activePurchase.id : null
+  );
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const [cardSecret, setCardSecret] = useState<string | null>(null);
+  const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
+  const [saleActionPending, startSaleActionTransition] = useTransition();
+  const [saleActionError, setSaleActionError] = useState<string | null>(null);
+
   // ---- Presentation panel state (2026-09-10) ----
   // Description defaults to Type/Size/Medium strung together — a
   // starting point only, filled in once from whatever Catalogue already
@@ -357,6 +386,125 @@ export default function ArtworkDetailPanel({
     await addSettingOption(artistId, siteId, "artworkLocations", fd);
   };
 
+  // ---- Get payment link/Enter card now handlers (2026-09-20) — see the
+  // note on the state above for why these live here rather than in
+  // ArtworkSalePanel.
+  const buildSaleFormData = () => {
+    const fd = new FormData();
+    fd.set("buyerName", buyerName.trim());
+    fd.set("buyerEmail", buyerEmail.trim());
+    fd.set("type", purchaseOption === "instalments" ? "INSTALMENTS" : "FULL");
+    fd.set("depositPaid", depositPaid.trim());
+    fd.set("currency", artwork.saleTerms?.currency ?? siteDefaultCurrency);
+    return fd;
+  };
+
+  const handleGetPaymentLink = () => {
+    if (!buyerEmail.trim()) {
+      setSaleActionError("Buyer email is required to get a payment link.");
+      return;
+    }
+    setSaleActionError(null);
+    setLinkUrl(null);
+    startSaleActionTransition(async () => {
+      if (startedPurchaseId) {
+        const result = await createPaymentLink(startedPurchaseId, siteId, artwork.id);
+        if (result.ok) setLinkUrl(result.url);
+        else setSaleActionError(result.error);
+        return;
+      }
+      const result = await startArtworkSaleAndGetLink(artwork.id, siteId, buildSaleFormData());
+      if (result.ok) {
+        setStartedPurchaseId(result.purchaseId);
+        setLinkUrl(result.url);
+      } else {
+        setSaleActionError(result.error);
+      }
+    });
+  };
+
+  const handleEnterCardClick = () => {
+    if (!buyerEmail.trim()) {
+      setSaleActionError("Buyer email is required to take a card payment.");
+      return;
+    }
+    setSaleActionError(null);
+    setCardSecret(null);
+    setCardPublishableKey(null);
+    setCardMode(true);
+    startSaleActionTransition(async () => {
+      if (startedPurchaseId) {
+        const result = await createCardEntryIntent(startedPurchaseId, siteId);
+        if (result.ok) {
+          setCardSecret(result.clientSecret);
+          setCardPublishableKey(result.publishableKey);
+        } else {
+          setSaleActionError(result.error);
+        }
+        return;
+      }
+      const result = await startArtworkSaleAndEnterCard(artwork.id, siteId, buildSaleFormData());
+      if (result.ok) {
+        setStartedPurchaseId(result.purchaseId);
+        setCardSecret(result.clientSecret);
+        setCardPublishableKey(result.publishableKey);
+      } else {
+        setSaleActionError(result.error);
+      }
+    });
+  };
+
+  // Shared "give up on this sale" — Back to Available (sale mode) and
+  // Cancel sale (card mode) both abandon whatever ACTIVE purchase this
+  // session may have started, so nothing is left dangling in Stripe/the
+  // database just because the panel was closed rather than completed.
+  const handleBackToAvailable = () => {
+    const idToAbandon = startedPurchaseId;
+    setStartedPurchaseId(null);
+    setLinkUrl(null);
+    setCardSecret(null);
+    setCardPublishableKey(null);
+    setSaleActionError(null);
+    setSaleOpen(false);
+    setCardMode(false);
+    setRecordMode(false);
+    if (idToAbandon) {
+      startSaleActionTransition(async () => {
+        await abandonPurchase(idToAbandon, siteId);
+      });
+    }
+  };
+
+  const handleCancelCardSale = () => {
+    const idToAbandon = startedPurchaseId;
+    if (!idToAbandon) return;
+    startSaleActionTransition(async () => {
+      await abandonPurchase(idToAbandon, siteId);
+      setStartedPurchaseId(null);
+      setCardSecret(null);
+      setCardPublishableKey(null);
+      setSaleOpen(false);
+      setCardMode(false);
+    });
+  };
+
+  const handleDeleteCardSale = () => {
+    const idToDelete = startedPurchaseId;
+    if (!idToDelete) return;
+    startSaleActionTransition(async () => {
+      const result = await deleteGallerySale(idToDelete, siteId);
+      if (!result.ok) {
+        setSaleActionError(result.error);
+        return;
+      }
+      setStartedPurchaseId(null);
+      setCardSecret(null);
+      setCardPublishableKey(null);
+      setSaleOpen(false);
+      setCardMode(false);
+    });
+  };
+
   // Shared props every ArtworkSalePanel instance needs, regardless of
   // which mode/branch is rendering it — keeps the two call sites below
   // from drifting out of sync with each other.
@@ -367,12 +515,6 @@ export default function ArtworkDetailPanel({
     currency: artwork.saleTerms?.currency ?? siteDefaultCurrency,
     defaultInstalmentCount: settings.defaultInstalmentCount,
     saleSources: settings.saleSources,
-    // Reuses an already-active STRIPE-channel purchase if one exists
-    // (2026-09-10) — Get payment link/Enter card now talk to that one
-    // directly instead of trying to start a second, which the backend
-    // would refuse anyway. A GALLERY-channel active purchase (shouldn't
-    // normally coexist with this flow, but just in case) is left alone.
-    activePurchaseId: artwork.activePurchase?.channel === "STRIPE" ? artwork.activePurchase.id : null,
     depositPaid,
     onDepositPaidChange: setDepositPaid,
     datePaid,
@@ -383,16 +525,31 @@ export default function ArtworkDetailPanel({
     onBuyerNameChange: setBuyerName,
     buyerEmail,
     onBuyerEmailChange: setBuyerEmail,
+    linkUrl,
+    cardSecret,
+    cardPublishableKey,
+    actionPending: saleActionPending,
+    actionError: saleActionError,
+    onGetPaymentLink: handleGetPaymentLink,
+    onEnterCardClick: handleEnterCardClick,
+    onBackToAvailable: handleBackToAvailable,
+    onCancelCardSale: handleCancelCardSale,
+    onDeleteCardSale: handleDeleteCardSale,
     onRecordSale: () => setRecordMode(true),
     onBackFromRecord: () => setRecordMode(false),
     // A sale actually finished — a card payment confirmed, or Record
     // sale submitted (2026-09-10). Closes the whole Sold flow back down
-    // (the artwork is now SOLD, so there's nothing left to do here) and
-    // refreshes so the rest of the panel picks up the new state.
+    // (the artwork is now SOLD, so there's nothing left to do here),
+    // clears the now-stale card/link state, and refreshes so the rest
+    // of the panel picks up the new state.
     onSaleCompleted: () => {
       setSaleOpen(false);
       setCardMode(false);
       setRecordMode(false);
+      setStartedPurchaseId(null);
+      setLinkUrl(null);
+      setCardSecret(null);
+      setCardPublishableKey(null);
       if (onDataChanged) onDataChanged();
       else router.refresh();
     },
@@ -633,15 +790,7 @@ export default function ArtworkDetailPanel({
                 // so nothing is lost when Name/Tier next autosaves.
                 <>
                   <div className="col-span-2">
-                    <ArtworkSalePanel
-                      {...salePanelSharedProps}
-                      mode="card"
-                      onBackToAvailable={() => {
-                        setCardMode(false);
-                        setSaleOpen(false);
-                      }}
-                      onEnterCard={() => {}}
-                    />
+                    <ArtworkSalePanel {...salePanelSharedProps} mode="card" />
                   </div>
                   <input type="hidden" name="type" value={artwork.type || ""} />
                   <input type="hidden" name="catalogueGroup" value={artwork.catalogueGroup || ""} />
@@ -703,8 +852,6 @@ export default function ArtworkDetailPanel({
                         <ArtworkSalePanel
                           {...salePanelSharedProps}
                           mode={panelMode === "record" ? "record" : "sale"}
-                          onBackToAvailable={() => setSaleOpen(false)}
-                          onEnterCard={() => setCardMode(true)}
                         />
                         {/* Offered price's own input is hidden while the panel
                             is open (hideTail hides the Reference/Offered price
