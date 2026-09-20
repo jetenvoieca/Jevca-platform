@@ -89,41 +89,60 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
   return artwork.artist.stripeMode;
 }
 
-// ---------- Shared: refuse to start a new sale on an already-SOLD
-// artwork ----------
+// ---------- The Availability model (2026-09-20 rebuild) ----------
+//
+// Rebuilt from scratch at Craig's explicit request, replacing several
+// earlier, increasingly-tangled attempts that kept producing confusing
+// edge cases (a payment panel reopening after a sale had already
+// completed; closing that panel looking exactly like abandoning a real,
+// paid sale). Exactly three states now, and exactly three rules for
+// moving between them — nothing else touches Availability:
+//
+//   AVAILABLE  — nothing started.
+//   RESERVED   — "Sold - Not Paid" in the UI. A payment link has been
+//                sent, or a card is being entered — a real, named
+//                Purchase now exists for this artwork, just not paid
+//                yet.
+//   SOLD       — money has actually been taken or logged: a card
+//                payment confirmed, a Record sale form submitted, or a
+//                gallery invoice marked paid.
+//
+// The three commit points, matching Craig's own numbering:
+//   1. Enter card + payment succeeds           → SOLD
+//   2. Record sale submitted                   → SOLD (already a single
+//                                                  atomic step)
+//   3. Get payment link generated               → RESERVED
+// A gallery consignment sale (startGallerySale) follows the same idea —
+// raising the invoice reserves the piece; markGallerySalePaid promotes
+// it to SOLD once the gallery actually pays.
+//
+// Once RESERVED or SOLD, the Catalogue tab's own Available/SOLD toggle
+// disappears entirely — no delete-this-sale link, no reopenable panel.
+// Managing or cancelling that sale happens from the Sales page
+// (PurchasePanel), which already has the tools for it. This is
+// deliberate: the toggle's only job is starting a fresh sale on an
+// artwork with nothing going on yet.
 
-// Every way a sale can be started for a given artwork — startPurchase
-// (the Sold panel's Get payment link/Enter card now), recordPastSale
-// (the Sold panel's own Record sale, and the historical gallery
-// backfill), startGallerySale (the Galleries page) — funnels through
-// this one check (2026-09-20, direct request: "not allow another sale
-// unless existing one cancelled or deleted"). The existing "already an
-// ACTIVE purchase" guards each of those already had only ever caught a
-// sale still in progress; now that starting a sale marks Availability
-// SOLD immediately too (see the note on startPurchase/startGallerySale
-// below), this check alone actually covers both cases — an ACTIVE sale
-// in progress and a COMPLETED one — since either now leaves the artwork
-// SOLD. The separate "already ACTIVE" checks stay in place anyway, for
-// a clearer, more specific error message in that particular case.
+// Refuses to start a second sale once the artwork is RESERVED or SOLD —
+// used by every way a sale can begin (startPurchase, startGallerySale,
+// recordPastSale).
 async function assertArtworkAvailableForSale(artworkId: string): Promise<string | null> {
   const artwork = await db.artwork.findUnique({
     where: { id: artworkId },
     select: { availability: true },
   });
-  if (artwork?.availability === "SOLD") {
-    return "This artwork is already marked SOLD — cancel or delete the existing sale first.";
+  if (artwork?.availability === "SOLD" || artwork?.availability === "RESERVED") {
+    return "This artwork already has a sale in progress or completed — manage it from the Sales page first.";
   }
   return null;
 }
 
-// Reverts Availability back to AVAILABLE once a sale that had reserved
-// the artwork (ACTIVE) or completed it (COMPLETED) is gone — cancelled
-// (abandonPurchase), deleted while still unpaid (deleteGallerySale), or
-// deleted after being paid (forceDeleteCompletedSale). Shared by all
-// three so "make it available again" means the same thing everywhere
-// (2026-09-20). Only resets when nothing else is holding the artwork
-// SOLD/reserved — the normal case is exactly one such Purchase, but this
-// stays correct even if more than one somehow exists.
+// Reverts Availability back to AVAILABLE once nothing is left holding
+// the artwork RESERVED/SOLD — a sale cancelled (abandonPurchase), an
+// unpaid one deleted (deleteGallerySale), or a paid one force-deleted
+// (forceDeleteCompletedSale). Only resets when no ACTIVE or COMPLETED
+// Purchase remains for this artwork — the normal case is exactly one,
+// but this stays correct even if more than one somehow exists.
 async function resetAvailabilityIfNothingSoldOrActive(artworkId: string) {
   const stillHeld = await db.purchase.findFirst({
     where: { artworkId, status: { in: ["COMPLETED", "ACTIVE"] } },
@@ -264,8 +283,11 @@ async function seedSaleTermsFromOfferedPrice(
 
 // Creates the actual Purchase, snapshotting SaleTerms at this moment.
 // Refuses if there's already an ACTIVE purchase for this artwork, or if
-// the artwork is already marked SOLD (2026-09-20 — see
-// assertArtworkAvailableForSale above) — only one sale at a time, ever.
+// the artwork is already RESERVED/SOLD. Does NOT touch Availability
+// itself any more (2026-09-20 rebuild) — that's now the caller's job:
+// startArtworkSaleAndGetLink marks RESERVED, startArtworkSaleAndEnterCard
+// leaves it AVAILABLE until the card payment actually succeeds. See the
+// file-level note above for why.
 export async function startPurchase(
   artworkId: string,
   siteId: string,
@@ -331,26 +353,19 @@ export async function startPurchase(
     },
   });
 
-  // Marks SOLD the moment a real sale starts, not only once it's paid
-  // (2026-09-20, direct request — "products are discrete items... stop
-  // a second sale"): a one-of-a-kind piece needs reserving as soon as a
-  // genuine sale is under way, otherwise two different buyers could
-  // both end up mid-checkout for the same artwork at once. Cancelling
-  // (abandonPurchase) or deleting this sale reverts Availability back
-  // to AVAILABLE — see resetAvailabilityIfNothingSoldOrActive above.
-  await db.artwork.update({ where: { id: artworkId }, data: { availability: "SOLD" } });
-
   return { ok: true, purchaseId: purchase.id };
 }
 
 // ---------- Starting a sale from the Catalogue tab's Sold panel ----------
 
-// The Sold panel's own "Get payment link"/"Enter card now" (2026-09-10)
-// — seeds SaleTerms from Offered price (less any deposit noted) and
-// then reuses startPurchase/createPaymentLink/createCardEntryIntent
-// completely unchanged. Kept as two thin wrappers rather than one
-// combined function so each still returns exactly the same shape its
-// underlying create* call already does, alongside the new purchaseId.
+// Get payment link (2026-09-20 rebuild, Craig's rule 3): once the
+// Purchase itself is successfully started, this marks the artwork
+// RESERVED ("Sold - Not Paid") immediately — before attempting to
+// actually generate the Stripe link — so the reservation holds even if
+// link-creation itself then fails; the Purchase already exists and can
+// be retried from the Sales page either way. Deliberately not tied to
+// the link succeeding, since generating the link isn't really the
+// commit point — starting the sale is.
 export async function startArtworkSaleAndGetLink(
   artworkId: string,
   siteId: string,
@@ -362,12 +377,23 @@ export async function startArtworkSaleAndGetLink(
   const started = await startPurchase(artworkId, siteId, formData);
   if (!started.ok) return started;
 
+  await db.artwork.update({ where: { id: artworkId }, data: { availability: "RESERVED" } });
+
   const link = await createPaymentLink(started.purchaseId, siteId, artworkId);
   if (!link.ok) return { ok: false, error: link.error };
 
   return { ok: true, purchaseId: started.purchaseId, url: link.url };
 }
 
+// Enter card now (2026-09-20 rebuild, Craig's rule 1): deliberately does
+// NOT touch Availability here — it stays AVAILABLE while the card form
+// is showing, and only becomes SOLD the moment the payment actually
+// succeeds (handleFirstPaymentSucceeded/completeIfAllPaid, reached
+// either via the Stripe webhook or the direct client-side confirmation
+// call — see StripeCardForm). If the card is never completed and the
+// artist backs out, abandonPurchase cancels this Purchase and
+// Availability was never anything other than AVAILABLE in the first
+// place — nothing to revert.
 export async function startArtworkSaleAndEnterCard(
   artworkId: string,
   siteId: string,
@@ -462,11 +488,11 @@ export async function startGallerySale(
     },
   });
 
-  // Same reservation-on-start reasoning as startPurchase above
-  // (2026-09-20) — a gallery consignment sale reserves the piece the
-  // moment it's raised as an invoice, not only once the gallery
-  // actually pays.
-  await db.artwork.update({ where: { id: artworkId }, data: { availability: "SOLD" } });
+  // Raising the gallery invoice reserves the piece — matches "Get
+  // payment link" (rule 3): RESERVED ("Sold - Not Paid"), promoted to
+  // SOLD once markGallerySalePaid confirms the gallery has actually
+  // paid.
+  await db.artwork.update({ where: { id: artworkId }, data: { availability: "RESERVED" } });
 
   return { ok: true, purchaseId: purchase.id };
 }
@@ -622,13 +648,15 @@ export async function updateGallerySaleAmount(
 // overdue on the Alerts dashboard.
 //
 // Also reused as-is (2026-09-10) by the Catalogue tab's Sold panel's own
-// "Record sale" form — a direct/studio sale recorded after the fact,
-// same shape as a historical gallery backfill (Purchase.channel only
-// distinguishes STRIPE from "not taken through Stripe", not literally
-// "gallery"). commissionPercent is simply left out of that form's
-// FormData (direct instruction — a direct sale is always 0% commission
-// here), so it falls through to null/0 exactly like any other caller
-// that doesn't set it.
+// "Record sale" form (2026-09-20 rebuild, Craig's rule 2) — a direct/
+// studio sale recorded after the fact, same shape as a historical
+// gallery backfill (Purchase.channel only distinguishes STRIPE from
+// "not taken through Stripe", not literally "gallery"). Submitting this
+// form is itself the single commit step — SOLD the moment it succeeds,
+// same as it's always worked. commissionPercent is simply left out of
+// that form's FormData (direct instruction — a direct sale is always 0%
+// commission here), so it falls through to null/0 exactly like any
+// other caller that doesn't set it.
 export async function recordPastSale(
   artworkId: string,
   siteId: string,
@@ -736,10 +764,8 @@ export async function recordPastSale(
 // separate, more careful case. Cascades to delete any Payment rows too
 // (schema-level onDelete: Cascade).
 //
-// Also reverts Availability back to AVAILABLE (2026-09-20) — the
-// deleted sale may well have been the one holding it reserved since
-// startPurchase/startGallerySale now mark SOLD immediately on start,
-// not only on completion. See resetAvailabilityIfNothingSoldOrActive.
+// Also reverts Availability back to AVAILABLE if this was the sale
+// holding it RESERVED — see resetAvailabilityIfNothingSoldOrActive.
 export async function deleteGallerySale(
   purchaseId: string,
   siteId: string
@@ -768,11 +794,10 @@ export async function deleteGallerySale(
 // clearly-labelled option shown specifically for completed sales, with
 // its own stronger confirmation wording.
 //
-// Resets Availability back to AVAILABLE (2026-09-20, direct request —
-// "not allow another sale unless existing one cancelled or deleted")
-// — this is exactly the "deleted" half of that escape hatch (abandonPurchase
-// is the "cancelled" half, for a sale still in progress). Uses the same
-// shared reset as deleteGallerySale/abandonPurchase now.
+// Resets Availability back to AVAILABLE — this is the "manage/cancel it
+// from the Sales page" escape hatch the Catalogue tab's own toggle no
+// longer offers directly (2026-09-20 rebuild). Uses the same shared
+// reset as deleteGallerySale/abandonPurchase.
 export async function forceDeleteCompletedSale(
   purchaseId: string,
   siteId: string
@@ -852,9 +877,9 @@ export async function markGallerySalePaid(
     data: { status: "COMPLETED", closedAt: paidDate },
   });
 
-  // Already marked SOLD when this sale started (startGallerySale,
-  // 2026-09-20) — this stays a harmless no-op re-set covering any older
-  // sale started before that change existed.
+  // Promotes RESERVED ("Sold - Not Paid", set when the gallery invoice
+  // was first raised — startGallerySale) to SOLD, now that the gallery
+  // has actually paid.
   await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
 
   return { ok: true };
@@ -886,9 +911,12 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
 // If instalments had already started, also cancels the Stripe schedule so
 // nothing keeps auto-charging a sale that isn't happening.
 //
-// Reverts Availability back to AVAILABLE (2026-09-20) — now that
-// starting a sale marks SOLD immediately (see startPurchase above),
-// abandoning it has to be the way back, the same as deleting one does.
+// Reverts Availability back to AVAILABLE if this Purchase was the one
+// holding it RESERVED (a payment-link sale being cancelled). For a
+// card-entry Purchase that was simply never completed, Availability was
+// never anything other than AVAILABLE in the first place (see
+// startArtworkSaleAndEnterCard above), so this is a harmless no-op in
+// that case.
 export async function abandonPurchase(
   purchaseId: string,
   siteId: string
@@ -1072,10 +1100,13 @@ function stripeErrorMessage(err: unknown): string {
 
 // Marks a Purchase COMPLETED once every one of its Payments is Paid — a
 // Full sale completes immediately (one payment); an Instalment sale
-// completes once the last one clears. Also (re-)sets the artwork's own
-// Availability to SOLD at that same moment — already true since
-// startPurchase (2026-09-20), so this is now a harmless confirmation
-// rather than the only place it happened.
+// completes once the last one clears. Also sets the artwork's own
+// Availability to SOLD at that same moment — this is the actual, single
+// commit point for a Stripe-channel sale of either kind (see the
+// file-level note above): a Full sale was AVAILABLE right up until this
+// runs; an Instalment sale's later instalments were already RESERVED
+// from its first payment, and this is simply the final promotion to
+// SOLD once every instalment has cleared.
 async function completeIfAllPaid(purchaseId: string) {
   const remaining = await db.payment.count({
     where: { purchaseId, status: { not: "PAID" } },
@@ -1102,6 +1133,12 @@ async function completeIfAllPaid(purchaseId: string) {
 // a cosmetic one. Already idempotent (the sequence-1 payments.some()
 // check below), so calling this from both places is safe: whichever
 // arrives first does the work, the other is a no-op.
+//
+// For an INSTALMENTS sale, this first payment doesn't complete the
+// Purchase (more are still DUE below) — Availability is set to RESERVED
+// here for that case specifically, since the card has genuinely started
+// paying but isn't finished; completeIfAllPaid (above) promotes it the
+// rest of the way to SOLD once the final instalment clears.
 export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaymentIntentId: string) {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -1134,6 +1171,11 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
     await completeIfAllPaid(purchase.id);
     return;
   }
+
+  await db.artwork.update({
+    where: { id: purchase.artworkId },
+    data: { availability: "RESERVED" },
+  });
 
   const remaining = amounts.slice(1);
 
