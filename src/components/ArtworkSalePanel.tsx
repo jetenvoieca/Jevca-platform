@@ -85,6 +85,21 @@ function formatMoney(amount: number, currency: string) {
 // ordinary white/neutral-900/outlined look. Cancel sale/Delete stay red
 // — those are destructive actions and deliberately keep their own
 // distinct colour regardless of this panel's tint.
+//
+// Close (X) + Back, unified across all three modes (2026-09-20, direct
+// request) — previously each mode had its own inconsistent scattering
+// (sale had "← Back to Available", record had "← Back", card had
+// neither). Now every mode gets the same top row: a Back link on the
+// left, an X close icon on the right. Close always means the same thing
+// everywhere — hand off to onBackToAvailable, which abandons whatever
+// ACTIVE purchase this session may have started and returns all the way
+// to Available. Back means "one step less committed than where I am
+// now": in sale mode there's nothing less committed than Available
+// itself, so Back and Close both go there; in card mode Back returns to
+// the sale form without abandoning the purchase already started
+// (onBackToSale) — Cancel sale (red, further down) is the one that
+// actually abandons it; in record mode Back returns to the sale form
+// the same way it always has (onBackFromRecord).
 export default function ArtworkSalePanel({
   artworkId,
   siteId,
@@ -111,6 +126,7 @@ export default function ArtworkSalePanel({
   onGetPaymentLink,
   onEnterCardClick,
   onBackToAvailable,
+  onBackToSale,
   onCancelCardSale,
   onDeleteCardSale,
   onRecordSale,
@@ -150,20 +166,22 @@ export default function ArtworkSalePanel({
   actionError: string | null;
   onGetPaymentLink: () => void;
   onEnterCardClick: () => void;
-  // 2026-09-10 — everything below this panel (Date, Reference/Offered
-  // price, the Available/SOLD toggle itself, Studio notes) is hidden
-  // while the panel is open, so this link (sale mode only) takes the
-  // toggle's place as the way back to Available. Abandons whatever
-  // ACTIVE purchase this session may have started (parent-side,
-  // 2026-09-11), so nothing is left dangling in Stripe/the database
-  // just because the panel was closed rather than completed.
+  // The X close, every mode (2026-09-20) — abandons whatever ACTIVE
+  // purchase this session may have started and returns all the way to
+  // Available, so nothing is left dangling in Stripe/the database just
+  // because the panel was closed rather than completed. Also sale
+  // mode's own Back link, since Available is the only place "back" from
+  // sale mode.
   onBackToAvailable: () => void;
+  // Card mode's own Back — returns to the sale form without abandoning
+  // the purchase already started (2026-09-20).
+  onBackToSale: () => void;
   onCancelCardSale: () => void;
   onDeleteCardSale: () => void;
   // Switches this panel into record mode (sale mode's "Record sale"
   // button).
   onRecordSale: () => void;
-  // Back out of record mode, to sale mode (record mode's own "← Back").
+  // Back out of record mode, to sale mode (record mode's own Back).
   onBackFromRecord: () => void;
   // Fired once a sale is genuinely done — a card payment confirmed, or
   // Record sale submitted successfully (2026-09-10). The parent
@@ -237,6 +255,9 @@ export default function ArtworkSalePanel({
     });
   };
 
+  const backHandler =
+    mode === "sale" ? onBackToAvailable : mode === "card" ? onBackToSale : onBackFromRecord;
+
   return (
     <div
       style={{ backgroundColor: PANEL_BG, color: PANEL_TEXT }}
@@ -244,6 +265,25 @@ export default function ArtworkSalePanel({
         shown ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
       }`}
     >
+      {/* Back (left) + Close (right), same row, every mode (2026-09-20,
+          direct request). See the component-level note above for what
+          each does in each mode. */}
+      <div className="flex items-center justify-between">
+        <button type="button" onClick={backHandler} className="text-sm hover:underline">
+          ← Back
+        </button>
+        <button
+          type="button"
+          onClick={onBackToAvailable}
+          aria-label="Close"
+          className="rounded-md p-1 hover:bg-black/5"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
+          </svg>
+        </button>
+      </div>
+
       {mode === "record" ? (
         // Simple record-a-sale form (2026-09-10) — replaces the whole
         // Deposit paid/Purchase option/3-button sale card. Calls the
@@ -251,10 +291,6 @@ export default function ArtworkSalePanel({
         // uses, with commissionPercent left unset (always 0% for a
         // direct sale here, per direct instruction).
         <>
-          <button type="button" onClick={onBackFromRecord} className="text-sm hover:underline">
-            ← Back
-          </button>
-
           <div className="grid grid-cols-3 gap-3">
             <input
               type="text"
@@ -330,33 +366,23 @@ export default function ArtworkSalePanel({
       ) : (
         <>
           {mode === "sale" && (
-            <>
-              <button
-                type="button"
-                onClick={onBackToAvailable}
-                className="text-sm hover:underline"
-              >
-                ← Back to Available
-              </button>
-
-              <div className="grid grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={depositPaid}
-                  onChange={(e) => onDepositPaidChange(e.target.value)}
-                  placeholder="Deposit paid"
-                  className={boxCls}
-                />
-                <input
-                  type="date"
-                  value={datePaid}
-                  onChange={(e) => onDatePaidChange(e.target.value)}
-                  placeholder="Date paid"
-                  className={boxCls}
-                />
-              </div>
-            </>
+            <div className="grid grid-cols-2 gap-3">
+              <input
+                type="text"
+                inputMode="decimal"
+                value={depositPaid}
+                onChange={(e) => onDepositPaidChange(e.target.value)}
+                placeholder="Deposit paid"
+                className={boxCls}
+              />
+              <input
+                type="date"
+                value={datePaid}
+                onChange={(e) => onDatePaidChange(e.target.value)}
+                placeholder="Date paid"
+                className={boxCls}
+              />
+            </div>
           )}
 
           <div>
