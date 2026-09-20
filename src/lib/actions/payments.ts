@@ -99,10 +99,12 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 // this one check (2026-09-20, direct request: "not allow another sale
 // unless existing one cancelled or deleted"). The existing "already an
 // ACTIVE purchase" guards each of those already had only ever caught a
-// sale still in progress; they said nothing about an artwork that's
-// already sold and paid for. Cancelling (abandonPurchase) or deleting
-// (forceDeleteCompletedSale, which resets Availability back to
-// AVAILABLE — see the note there) is the only way past this.
+// sale still in progress; now that starting a sale marks Availability
+// SOLD immediately too (see the note on startPurchase/startGallerySale
+// below), this check alone actually covers both cases — an ACTIVE sale
+// in progress and a COMPLETED one — since either now leaves the artwork
+// SOLD. The separate "already ACTIVE" checks stay in place anyway, for
+// a clearer, more specific error message in that particular case.
 async function assertArtworkAvailableForSale(artworkId: string): Promise<string | null> {
   const artwork = await db.artwork.findUnique({
     where: { id: artworkId },
@@ -112,6 +114,23 @@ async function assertArtworkAvailableForSale(artworkId: string): Promise<string 
     return "This artwork is already marked SOLD — cancel or delete the existing sale first.";
   }
   return null;
+}
+
+// Reverts Availability back to AVAILABLE once a sale that had reserved
+// the artwork (ACTIVE) or completed it (COMPLETED) is gone — cancelled
+// (abandonPurchase), deleted while still unpaid (deleteGallerySale), or
+// deleted after being paid (forceDeleteCompletedSale). Shared by all
+// three so "make it available again" means the same thing everywhere
+// (2026-09-20). Only resets when nothing else is holding the artwork
+// SOLD/reserved — the normal case is exactly one such Purchase, but this
+// stays correct even if more than one somehow exists.
+async function resetAvailabilityIfNothingSoldOrActive(artworkId: string) {
+  const stillHeld = await db.purchase.findFirst({
+    where: { artworkId, status: { in: ["COMPLETED", "ACTIVE"] } },
+  });
+  if (!stillHeld) {
+    await db.artwork.update({ where: { id: artworkId }, data: { availability: "AVAILABLE" } });
+  }
 }
 
 // ---------- Sale Terms — autosave, no buyer info, ever ----------
@@ -312,6 +331,15 @@ export async function startPurchase(
     },
   });
 
+  // Marks SOLD the moment a real sale starts, not only once it's paid
+  // (2026-09-20, direct request — "products are discrete items... stop
+  // a second sale"): a one-of-a-kind piece needs reserving as soon as a
+  // genuine sale is under way, otherwise two different buyers could
+  // both end up mid-checkout for the same artwork at once. Cancelling
+  // (abandonPurchase) or deleting this sale reverts Availability back
+  // to AVAILABLE — see resetAvailabilityIfNothingSoldOrActive above.
+  await db.artwork.update({ where: { id: artworkId }, data: { availability: "SOLD" } });
+
   return { ok: true, purchaseId: purchase.id };
 }
 
@@ -433,6 +461,12 @@ export async function startGallerySale(
       ...(createdAt ? { createdAt } : {}),
     },
   });
+
+  // Same reservation-on-start reasoning as startPurchase above
+  // (2026-09-20) — a gallery consignment sale reserves the piece the
+  // moment it's raised as an invoice, not only once the gallery
+  // actually pays.
+  await db.artwork.update({ where: { id: artworkId }, data: { availability: "SOLD" } });
 
   return { ok: true, purchaseId: purchase.id };
 }
@@ -701,6 +735,11 @@ export async function recordPastSale(
 // turns out to be wrong — see forceDeleteCompletedSale below for that
 // separate, more careful case. Cascades to delete any Payment rows too
 // (schema-level onDelete: Cascade).
+//
+// Also reverts Availability back to AVAILABLE (2026-09-20) — the
+// deleted sale may well have been the one holding it reserved since
+// startPurchase/startGallerySale now mark SOLD immediately on start,
+// not only on completion. See resetAvailabilityIfNothingSoldOrActive.
 export async function deleteGallerySale(
   purchaseId: string,
   siteId: string
@@ -715,6 +754,7 @@ export async function deleteGallerySale(
   }
 
   await db.purchase.delete({ where: { id: purchaseId } });
+  await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
 
   return { ok: true };
 }
@@ -731,10 +771,8 @@ export async function deleteGallerySale(
 // Resets Availability back to AVAILABLE (2026-09-20, direct request —
 // "not allow another sale unless existing one cancelled or deleted")
 // — this is exactly the "deleted" half of that escape hatch (abandonPurchase
-// is the "cancelled" half, for a sale still in progress). Only resets
-// when no other COMPLETED purchase remains for the same artwork — the
-// normal case is exactly one, but this stays correct even if more than
-// one historical record somehow exists.
+// is the "cancelled" half, for a sale still in progress). Uses the same
+// shared reset as deleteGallerySale/abandonPurchase now.
 export async function forceDeleteCompletedSale(
   purchaseId: string,
   siteId: string
@@ -743,16 +781,7 @@ export async function forceDeleteCompletedSale(
   if (!purchase) return { ok: false, error: "Sale not found." };
 
   await db.purchase.delete({ where: { id: purchaseId } });
-
-  const stillSold = await db.purchase.findFirst({
-    where: { artworkId: purchase.artworkId, status: "COMPLETED" },
-  });
-  if (!stillSold) {
-    await db.artwork.update({
-      where: { id: purchase.artworkId },
-      data: { availability: "AVAILABLE" },
-    });
-  }
+  await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
 
   return { ok: true };
 }
@@ -823,10 +852,9 @@ export async function markGallerySalePaid(
     data: { status: "COMPLETED", closedAt: paidDate },
   });
 
-  // Matches recordPastSale's own behaviour (2026-09-10) — completing a
-  // gallery sale by marking it paid is just as real a sale as any other
-  // path, so it flips Availability to SOLD too, rather than only the
-  // Stripe/record-sale paths doing so.
+  // Already marked SOLD when this sale started (startGallerySale,
+  // 2026-09-20) — this stays a harmless no-op re-set covering any older
+  // sale started before that change existed.
   await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
 
   return { ok: true };
@@ -856,11 +884,11 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
 // The sale didn't go ahead. Kept as history (status ABANDONED), not
 // deleted — SaleTerms is completely untouched, ready for the next buyer.
 // If instalments had already started, also cancels the Stripe schedule so
-// nothing keeps auto-charging a sale that isn't happening. Doesn't touch
-// Availability (2026-09-20 check) — an abandoned sale was never ACTIVE
-// long enough to have marked the artwork SOLD in the first place, so
-// there's nothing to reset here; only a COMPLETED sale can do that (see
-// forceDeleteCompletedSale above).
+// nothing keeps auto-charging a sale that isn't happening.
+//
+// Reverts Availability back to AVAILABLE (2026-09-20) — now that
+// starting a sale marks SOLD immediately (see startPurchase above),
+// abandoning it has to be the way back, the same as deleting one does.
 export async function abandonPurchase(
   purchaseId: string,
   siteId: string
@@ -884,6 +912,7 @@ export async function abandonPurchase(
       where: { id: purchaseId },
       data: { status: "ABANDONED", closedAt: new Date() },
     });
+    await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
     return { ok: false, error: stripeErrorMessage(err) };
   }
 
@@ -891,6 +920,7 @@ export async function abandonPurchase(
     where: { id: purchaseId },
     data: { status: "ABANDONED", closedAt: new Date() },
   });
+  await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
 
   return { ok: true };
 }
@@ -1042,12 +1072,10 @@ function stripeErrorMessage(err: unknown): string {
 
 // Marks a Purchase COMPLETED once every one of its Payments is Paid — a
 // Full sale completes immediately (one payment); an Instalment sale
-// completes once the last one clears. Also flips the artwork's own
-// Availability to SOLD at that same moment (2026-09-10, direct request)
-// — the one shared point every completion path (a Full Stripe sale, the
-// last instalment of a Stripe plan) actually finishes through, so this
-// is the single place that needs to know about it rather than
-// duplicating the same update at every call site.
+// completes once the last one clears. Also (re-)sets the artwork's own
+// Availability to SOLD at that same moment — already true since
+// startPurchase (2026-09-20), so this is now a harmless confirmation
+// rather than the only place it happened.
 async function completeIfAllPaid(purchaseId: string) {
   const remaining = await db.payment.count({
     where: { purchaseId, status: { not: "PAID" } },
@@ -1064,6 +1092,16 @@ async function completeIfAllPaid(purchaseId: string) {
   }
 }
 
+// Marks the first Payment on a Purchase PAID and completes it if that
+// was the only one due. Normally reached via the Stripe webhook
+// (payment_intent.succeeded), but also called directly, client-side,
+// the moment stripe.confirmPayment() itself reports success
+// (2026-09-20 — see StripeCardForm's own note) — the webhook can be
+// slow, misconfigured, or simply not reach this environment at all, and
+// a confirmed charge sitting unrecorded as "UNPAID" is a real gap, not
+// a cosmetic one. Already idempotent (the sequence-1 payments.some()
+// check below), so calling this from both places is safe: whichever
+// arrives first does the work, the other is a no-op.
 export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaymentIntentId: string) {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -1072,7 +1110,8 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
   });
   if (!purchase) return;
 
-  // Idempotent — Stripe can deliver the same webhook event more than once.
+  // Idempotent — Stripe can deliver the same webhook event more than
+  // once, and this can now also race the client-side call above.
   if (purchase.payments.some((p) => p.sequence === 1)) return;
 
   const total = parseFloat(purchase.totalAmount.toString());
