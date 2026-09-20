@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/formatDate";
+import type { SaleModalTarget } from "@/components/SaleModal";
 
 // 2026-08-13 decision: manual (PayPal/DD) artists are expected roughly
 // monthly, flagged overdue 14 days after that's due — i.e. 44 days since
@@ -8,6 +9,11 @@ import { formatDate } from "@/lib/formatDate";
 // deliberately not flagged (nothing to measure from — likely still
 // onboarding).
 const MANUAL_OVERDUE_DAYS = 30 + 14;
+
+// 2026-09-19 decision: a sale whose invoice has been emailed but has had
+// no payment received or recorded is overdue once more than 30 days have
+// passed since that email went out. See SALE_INVOICE_OVERDUE below.
+const INVOICE_OVERDUE_DAYS = 30;
 
 // Alert types that link to the Inbox rather than a site's Settings page
 // (2026-09-05, Email Integration) — see the storedItems mapping below.
@@ -64,6 +70,9 @@ export type AlertItem = {
   linkLabel: string;
   createdAt: string;
   dismissable: boolean;
+  // Set for alerts about one specific sale — the Inbox opens the same
+  // sale modal as Consolidated Sales for these (see SaleModal).
+  sale?: SaleModalTarget;
 };
 
 // Generic "raise this alert if one isn't already open for this artist +
@@ -116,77 +125,115 @@ export async function resolveAlertsOfType(artistId: string, type: string): Promi
 // re-querying. This is the main fix for the "everything feels sluggish"
 // reports — this scan was being paid for on almost every click.
 const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
-  const [stored, manualCandidates, noPaymentMethodArtists, unpaidPayments] = await Promise.all([
-    db.alertEvent.findMany({
-      where: { resolvedAt: null },
-      include: { artist: { select: { id: true, name: true, sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 } } } },
-      orderBy: [{ severity: "desc" }, { createdAt: "desc" }],
-    }),
-    db.artist.findMany({
-      where: {
-        paymentMethod: { in: ["PayPal", "DD"] },
-        sites: { some: { status: { not: "ARCHIVED" } } },
-      },
-      select: {
-        id: true,
-        name: true,
-        sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
-        subscriptionPayments: { orderBy: { paidAt: "desc" }, take: 1 },
-      },
-    }),
-    // No payment method chosen at all yet — an ongoing gap, not a
-    // point-in-time event, so computed live like the overdue check below
-    // rather than stored (2026-08-13).
-    db.artist.findMany({
-      where: {
-        OR: [{ paymentMethod: null }, { paymentMethod: "" }],
-        sites: { some: { status: { not: "ARCHIVED" } } },
-      },
-      select: {
-        id: true,
-        name: true,
-        sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
-      },
-    }),
-    // A buyer's own invoice that's past its due date and still unpaid —
-    // this is about the ARTIST's sale to THEIR buyer, unrelated to the
-    // artist's own subscription to us, but the same "needs chasing"
-    // shape, so it lives on the same dashboard (2026-08-13). A row with
-    // no dueDate set never matches `lt: now` in Postgres, so those are
-    // naturally excluded without an extra null check.
-    db.payment.findMany({
-      where: {
-        status: { in: ["DUE", "FAILED"] },
-        dueDate: { lt: new Date() },
-        purchase: { status: "ACTIVE" },
-      },
-      select: {
-        id: true,
-        amount: true,
-        currency: true,
-        status: true,
-        dueDate: true,
-        purchase: {
-          select: {
-            buyerName: true,
-            artwork: {
-              select: {
-                presentationTitle: true,
-                artistId: true,
-                artist: {
-                  select: {
-                    name: true,
-                    sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+  const now = Date.now();
+
+  const [stored, manualCandidates, noPaymentMethodArtists, unpaidPayments, overdueInvoices] =
+    await Promise.all([
+      db.alertEvent.findMany({
+        where: { resolvedAt: null },
+        include: { artist: { select: { id: true, name: true, sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 } } } },
+        orderBy: [{ severity: "desc" }, { createdAt: "desc" }],
+      }),
+      db.artist.findMany({
+        where: {
+          paymentMethod: { in: ["PayPal", "DD"] },
+          sites: { some: { status: { not: "ARCHIVED" } } },
+        },
+        select: {
+          id: true,
+          name: true,
+          sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+          subscriptionPayments: { orderBy: { paidAt: "desc" }, take: 1 },
+        },
+      }),
+      // No payment method chosen at all yet — an ongoing gap, not a
+      // point-in-time event, so computed live like the overdue check below
+      // rather than stored (2026-08-13).
+      db.artist.findMany({
+        where: {
+          OR: [{ paymentMethod: null }, { paymentMethod: "" }],
+          sites: { some: { status: { not: "ARCHIVED" } } },
+        },
+        select: {
+          id: true,
+          name: true,
+          sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+        },
+      }),
+      // A buyer's own invoice that's past its due date and still unpaid —
+      // this is about the ARTIST's sale to THEIR buyer, unrelated to the
+      // artist's own subscription to us, but the same "needs chasing"
+      // shape, so it lives on the same dashboard (2026-08-13). A row with
+      // no dueDate set never matches `lt: now` in Postgres, so those are
+      // naturally excluded without an extra null check.
+      db.payment.findMany({
+        where: {
+          status: { in: ["DUE", "FAILED"] },
+          dueDate: { lt: new Date() },
+          purchase: { status: "ACTIVE" },
+        },
+        select: {
+          id: true,
+          amount: true,
+          currency: true,
+          status: true,
+          dueDate: true,
+          purchase: {
+            select: {
+              buyerName: true,
+              artwork: {
+                select: {
+                  presentationTitle: true,
+                  artistId: true,
+                  artist: {
+                    select: {
+                      name: true,
+                      sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+                    },
                   },
                 },
               },
             },
           },
         },
-      },
-      orderBy: { dueDate: "asc" },
-    }),
-  ]);
+        orderBy: { dueDate: "asc" },
+      }),
+      // A sale whose invoice was emailed more than INVOICE_OVERDUE_DAYS ago
+      // and still has no payment received or recorded (2026-09-19). Gallery
+      // sales have no Payment rows at all until they're marked paid, so
+      // the Payment-based check above can never see them — this looks at
+      // the sale itself instead.
+      db.purchase.findMany({
+        where: {
+          status: "ACTIVE",
+          invoiceEmailedAt: { lt: new Date(now - INVOICE_OVERDUE_DAYS * 24 * 60 * 60 * 1000) },
+          payments: { none: { status: "PAID" } },
+        },
+        select: {
+          id: true,
+          artworkId: true,
+          channel: true,
+          buyerName: true,
+          totalAmount: true,
+          commissionPercent: true,
+          currency: true,
+          invoiceEmailedAt: true,
+          artwork: {
+            select: {
+              presentationTitle: true,
+              artistId: true,
+              artist: {
+                select: {
+                  name: true,
+                  sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+                },
+              },
+            },
+          },
+        },
+        orderBy: { invoiceEmailedAt: "asc" },
+      }),
+    ]);
 
   const storedItems: AlertItem[] = stored.map((a) => {
     const siteId = a.artist?.sites[0]?.id || null;
@@ -213,7 +260,6 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     };
   });
 
-  const now = Date.now();
   const overdueItems: AlertItem[] = [];
   for (const artist of manualCandidates) {
     const last = artist.subscriptionPayments[0];
@@ -275,12 +321,43 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     };
   });
 
-  return [...storedItems, ...overdueItems, ...noPaymentMethodItems, ...unpaidInvoiceItems].sort(
-    (a, b) => {
-      if (a.severity !== b.severity) return a.severity === "CRITICAL" ? -1 : 1;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    }
-  );
+  const overdueInvoiceItems: AlertItem[] = overdueInvoices.map((p) => {
+    const artist = p.artwork.artist;
+    const siteId = artist.sites[0]?.id || null;
+    const sentAt = p.invoiceEmailedAt!; // Never null — the query above requires it.
+    const days = daysSince(sentAt, now);
+    // A gallery is invoiced for the net amount (sale price less
+    // commission); a Stripe sale for the full price.
+    const total = parseFloat(p.totalAmount.toString());
+    const commission = p.commissionPercent ? parseFloat(p.commissionPercent.toString()) : 0;
+    const owed = p.channel === "GALLERY" ? total - total * (commission / 100) : total;
+    const buyer = p.buyerName || "unnamed buyer";
+    return {
+      id: `invoice-overdue-${p.id}`,
+      type: "SALE_INVOICE_OVERDUE",
+      severity: days - INVOICE_OVERDUE_DAYS > 30 ? "CRITICAL" : "WARNING",
+      message: `${artist.name}: invoice to ${buyer} for "${p.artwork.presentationTitle}" — ${p.currency} ${owed.toFixed(2)}, sent ${formatDate(sentAt)} (${days} days ago) and still unpaid.`,
+      artistId: p.artwork.artistId,
+      artistName: artist.name,
+      siteId,
+      linkHref: null,
+      linkLabel: "View sale",
+      createdAt: sentAt.toISOString(),
+      dismissable: false,
+      sale: { purchaseId: p.id, artworkId: p.artworkId, artistId: p.artwork.artistId, siteId },
+    };
+  });
+
+  return [
+    ...storedItems,
+    ...overdueItems,
+    ...noPaymentMethodItems,
+    ...unpaidInvoiceItems,
+    ...overdueInvoiceItems,
+  ].sort((a, b) => {
+    if (a.severity !== b.severity) return a.severity === "CRITICAL" ? -1 : 1;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
 };
 
 const cachedGetOpenAlerts = unstable_cache(getOpenAlertsUncached, ["open-alerts"], {

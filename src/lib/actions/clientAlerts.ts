@@ -34,3 +34,12 @@ export async function markSubscriptionUpToDate(
   revalidatePath("/accounts/inbox");
   return { ok: true };
 }
+
+// Expires the cached open-alerts scan (see OPEN_ALERTS_TAG) — called
+// after something changed a sale from the Inbox's sale modal (marked
+// paid, cancelled, deleted, invoice sent), which the sale actions
+// themselves don't do, so the Alert list and nav badge catch up straight
+// away.
+export async function refreshOpenAlerts(): Promise<void> {
+  updateTag(OPEN_ALERTS_TAG);
+}
