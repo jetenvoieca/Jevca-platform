@@ -38,6 +38,7 @@ export async function POST(request: NextRequest) {
     currency,
     saleDate,
     source: text(fields.source),
+    method: text(fields.method),
     buyerName,
     buyerEmail: text(fields.buyerEmail),
   });

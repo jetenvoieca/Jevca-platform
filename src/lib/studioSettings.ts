@@ -19,6 +19,8 @@ export type StudioSettings = {
   artworkLocations: string[];
   sizePresets: string[];
   saleSources: string[];
+  // How a sale was paid: bank transfer, cash, ...
+  paymentMethods: string[];
   // How many payments an instalment plan is split into.
   defaultInstalmentCount: number;
   // Pre-selected when recording a sale: the currency of the artist's
@@ -42,6 +44,7 @@ export async function getStudioSettings(artistId: string): Promise<StudioSetting
     artworkLocations: settings.artworkLocations,
     sizePresets: settings.sizePresets,
     saleSources: settings.saleSources,
+    paymentMethods: settings.paymentMethods,
     defaultInstalmentCount: settings.defaultInstalmentCount,
     defaultCurrency,
   };

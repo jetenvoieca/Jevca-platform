@@ -40,7 +40,7 @@ export default function ConsignArtwork({
     setNotice({ text: "Consigning…", tone: "info" });
     try {
       await consignArtwork(token, artwork.id, chosen);
-      onDone({ text: `Consigned to ${chosen}`, tone: "info" });
+      onDone({ text: `Consigned ${artwork.title} to ${chosen}`, tone: "info" });
     } catch (err) {
       setNotice({
         text: err instanceof Error ? err.message : "Couldn't consign. Please try again.",

@@ -23,6 +23,8 @@ export type RecordSaleInput = {
   // YYYY-MM-DD
   saleDate: string;
   source: string;
+  // The payment type, from the artist's own list ("" if they have none).
+  method: string;
   buyerName: string;
   buyerEmail: string;
 };

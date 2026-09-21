@@ -675,6 +675,12 @@ export async function updateGallerySaleAmount(
 // (direct instruction — a direct sale is always 0% commission here), so
 // it falls through to null/0 exactly like any other caller that doesn't
 // set it.
+//
+// `method` (2026-09-21) — how the sale was paid (bank transfer, cash,
+// ...), optional and stored on the Payment, same free-text convention as
+// markGallerySalePaid's method. The Studio app sends one chosen from the
+// artist's Payment methods list; callers that don't send one leave it
+// blank exactly as before.
 export async function recordPastSale(
   artworkId: string,
   siteId: string,
@@ -700,6 +706,7 @@ export async function recordPastSale(
   const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
   const commissionPercent = (formData.get("commissionPercent") as string)?.trim() || null;
   const saleDateRaw = (formData.get("saleDate") as string)?.trim();
+  const method = (formData.get("method") as string)?.trim() || null;
   // Defaulted rather than left blank, so these are easy to spot and
   // filter separately from real-time gallery sales later if that's ever
   // useful — the person can still overwrite it with something more
@@ -755,6 +762,7 @@ export async function recordPastSale(
           currency,
           status: "PAID",
           paidDate: saleDate,
+          method,
         },
       },
     },

@@ -65,6 +65,7 @@ export default function SellArtwork({
         initialPrice={price}
         currency={currency}
         saleSources={settings.saleSources}
+        paymentMethods={settings.paymentMethods}
         onDone={onDone}
         onBusyChange={onBusyChange}
       />

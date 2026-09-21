@@ -23,6 +23,7 @@ export default function RecordSale({
   initialPrice,
   currency,
   saleSources,
+  paymentMethods,
   onDone,
   onBusyChange,
 }: {
@@ -32,6 +33,8 @@ export default function RecordSale({
   initialPrice: string;
   currency: string;
   saleSources: string[];
+  // The artist's own payment types. If they have any, one is required.
+  paymentMethods: string[];
   // Called once the sale is recorded — the app returns to its first
   // screen showing this message.
   onDone: (notice: Notice) => void;
@@ -41,6 +44,7 @@ export default function RecordSale({
   const [price, setPrice] = useState(initialPrice);
   const [date, setDate] = useState(todayIso());
   const [source, setSource] = useState("");
+  const [paymentType, setPaymentType] = useState("");
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [recording, setRecording] = useState(false);
@@ -60,6 +64,10 @@ export default function RecordSale({
       setNotice({ text: "Date is required.", tone: "error" });
       return;
     }
+    if (paymentMethods.length > 0 && !paymentType) {
+      setNotice({ text: "Payment type is required.", tone: "error" });
+      return;
+    }
     if (!buyerName.trim()) {
       setNotice({ text: "Customer name is required.", tone: "error" });
       return;
@@ -75,6 +83,7 @@ export default function RecordSale({
         currency,
         saleDate: date,
         source,
+        method: paymentType,
         buyerName: buyerName.trim(),
         buyerEmail: buyerEmail.trim(),
       });
@@ -117,6 +126,12 @@ export default function RecordSale({
         </div>
         <ReadOnlyField label="Title / name" value={artwork.title} />
         <Dropdown label="Source" value={source} options={saleSources} onChange={setSource} />
+        <Dropdown
+          label="Payment type"
+          value={paymentType}
+          options={paymentMethods}
+          onChange={setPaymentType}
+        />
         <input
           type="text"
           placeholder="Customer name"

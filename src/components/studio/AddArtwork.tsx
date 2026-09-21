@@ -116,7 +116,12 @@ export default function AddArtwork({
             }
           : {}
       );
-      onDone({ text: "Sent to your hopper.", tone: "info" });
+      // Named after the artwork when the artist gave it a title.
+      const name = withDetails ? details.title.trim() : "";
+      onDone({
+        text: name ? `Sent to your hopper: ${name}` : "Sent to your hopper.",
+        tone: "info",
+      });
     } catch (err) {
       setNotice({
         text: err instanceof Error ? err.message : "Couldn't send. Please try again.",
