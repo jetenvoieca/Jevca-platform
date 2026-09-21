@@ -1059,6 +1059,18 @@ model Image {
   // Hopper sorting card and carried into a new artwork's own
   // `description` the same way Caption is carried into its title.
   description String?
+  // Details captured alongside the photo by the artist's own capture app
+  // (Studio, 2026-09-21) — what this image is going to become, carried
+  // into the new artwork's Size / Offered price / Type when the Hopper
+  // item is turned into one. Named artwork* so they can't be mistaken
+  // for anything about the image file itself. Size and type are free
+  // text, matched by name against the artist's own lists (same
+  // convention as Artwork.size / Artwork.type); price is money, so
+  // Decimal like Artwork.offeredPrice. All optional — null for every
+  // image not sent from Studio, or sent without details.
+  artworkSize  String?
+  artworkPrice Decimal? @db.Decimal(10, 2)
+  artworkType  String?
   altText   String?
   tags      String[]    @default([])
   status    ImageStatus @default(SORTED)

@@ -56,14 +56,10 @@ export async function uploadFileDirect(
     }
   }
 
-  const step2 = await finalizeUpload(
-    artistId,
-    step1.key,
-    file.type,
-    step1.kind,
+  const step2 = await finalizeUpload(artistId, step1.key, file.type, step1.kind, {
     posterUrl,
     status,
-    source
-  );
+    source,
+  });
   return step2.image;
 }

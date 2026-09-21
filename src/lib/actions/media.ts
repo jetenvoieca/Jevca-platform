@@ -35,32 +35,53 @@ export async function requestUploadUrl(
   return { uploadUrl, key, kind: isVideo ? ("VIDEO" as const) : ("PHOTO" as const) };
 }
 
-// Step 2 of 2: once the browser (or the iPhone Shortcut, for the Hopper —
-// see src/app/api/hopper/finalize/route.ts) has PUT the file straight to
-// R2 using the URL above, this creates the actual database record —
-// again a tiny request, just the key and a couple of strings.
+// Everything finalizeUpload accepts beyond the four required arguments.
+// All optional; leaving them all out gives exactly the behaviour every
+// early caller (MediaPicker, uploadDirect.ts) relied on — a SORTED image
+// with no source, caption or details.
 //
-// status/source default to exactly today's behaviour (SORTED, no
-// source) so every existing caller — MediaPicker, uploadDirect.ts — is
-// unaffected. The Hopper route is the only caller that passes
-// status: "HOPPER" and source: "iPhone Shortcut".
-//
-// caption/description (2026-09-02) — optional, both start null for every
-// existing caller. The Hopper route is currently the only caller that can
-// pass them, carrying across whatever "Name"/"Description" text the
-// iPhone Shortcut asked for before sending. Both stay freely editable
-// afterwards from the Hopper sorting card either way.
+// - status/source: only the Hopper's callers pass status: "HOPPER" and a
+//   source ("iPhone Shortcut", "Studio", the browser importer, ...).
+// - caption/description: the Hopper's "Name"/"Description" (2026-09-02),
+//   carried across from whatever the sender asked for before sending.
+//   Both stay freely editable afterwards from the Hopper sorting card.
+// - artworkSize/artworkPrice/artworkType (2026-09-21): details the
+//   Studio capture app collects — see the matching note on Image in
+//   schema.prisma. artworkPrice is a plain numeric string, validated by
+//   the caller before it gets here.
+type FinalizeUploadOptions = {
+  posterUrl?: string;
+  status?: "SORTED" | "HOPPER";
+  source?: string;
+  caption?: string;
+  description?: string;
+  artworkSize?: string;
+  artworkPrice?: string;
+  artworkType?: string;
+};
+
+// Step 2 of 2: once the browser (or the iPhone Shortcut / Studio app, for
+// the Hopper — see src/app/api/hopper/finalize/route.ts) has PUT the file
+// straight to R2 using the URL above, this creates the actual database
+// record — again a tiny request, just the key and a few strings.
 export async function finalizeUpload(
   artistId: string,
   key: string,
   contentType: string,
   kind: "PHOTO" | "VIDEO",
-  posterUrl?: string,
-  status: "SORTED" | "HOPPER" = "SORTED",
-  source?: string,
-  caption?: string,
-  description?: string
+  options: FinalizeUploadOptions = {}
 ) {
+  const {
+    posterUrl,
+    status = "SORTED",
+    source,
+    caption,
+    description,
+    artworkSize,
+    artworkPrice,
+    artworkType,
+  } = options;
+
   // Generate the smaller display/thumbnail versions now, once, rather than
   // making every future page view pay the cost of loading the full-size
   // original (2026-08-13 — see decisions log). The browser already PUT the
@@ -107,11 +128,17 @@ export async function finalizeUpload(
       source: source || null,
       caption: caption || null,
       description: description || null,
+      artworkSize: artworkSize || null,
+      artworkPrice: artworkPrice || null,
+      artworkType: artworkType || null,
     },
   });
   return {
     image: {
       ...image,
+      // Decimal isn't a plain value, so it can't be handed back to a
+      // client component from a server action as-is — sent as a string.
+      artworkPrice: image.artworkPrice?.toString() ?? null,
       thumbnailUrl: publicMediaUrl(thumbnailKey),
       displayUrl: publicMediaUrl(displayKey),
     },
