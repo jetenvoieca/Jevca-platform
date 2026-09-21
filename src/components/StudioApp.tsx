@@ -4,11 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent, ReactNode } from "react";
 import { sendToHopper } from "@/lib/hopperUpload";
 
-// Phase one, part one of the Studio app: choose a photo from the phone's
-// library and send it to the artist's Hopper, with or without details.
-// Screens follow the design mock-ups: home → add (+) → [phone's own
-// photo picker] → review → details. "Take a photo" and "Manage existing"
-// are placeholders for later phases.
+// Phase one of the Studio app: get a photo — from the phone's library or
+// straight from its camera — and send it to the artist's Hopper, with or
+// without details. Screens follow the design mock-ups: home → add (+) →
+// [the phone's own photo picker or camera] → review → details.
+// "Manage existing" is a placeholder for a later phase.
 
 type Screen = "home" | "add" | "review" | "details";
 type Notice = { text: string; tone: "info" | "error" };
@@ -112,7 +112,8 @@ export default function StudioApp({
   const [details, setDetails] = useState<Details>(EMPTY_DETAILS);
   const [sending, setSending] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
-  const pickerRef = useRef<HTMLInputElement>(null);
+  const libraryRef = useRef<HTMLInputElement>(null);
+  const cameraRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!file) {
@@ -131,8 +132,11 @@ export default function StudioApp({
 
   const comingSoon = () => setNotice({ text: "Coming soon", tone: "info" });
 
-  const openPicker = () => pickerRef.current?.click();
+  const openLibrary = () => libraryRef.current?.click();
+  const openCamera = () => cameraRef.current?.click();
 
+  // Shared by the library picker and the camera — either way the result
+  // is one photo, handled identically from here on.
   const onPicked = (e: ChangeEvent<HTMLInputElement>) => {
     const picked = e.target.files?.[0];
     // Cleared so choosing the same photo again still fires onChange.
@@ -196,9 +200,18 @@ export default function StudioApp({
       style={{ fontFamily: '"Gill Sans", "Gill Sans MT", Calibri, sans-serif' }}
     >
       <input
-        ref={pickerRef}
+        ref={libraryRef}
         type="file"
         accept="image/*"
+        onChange={onPicked}
+        className="hidden"
+      />
+      {/* capture="environment" opens the phone's back camera directly. */}
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
         onChange={onPicked}
         className="hidden"
       />
@@ -232,7 +245,7 @@ export default function StudioApp({
           <section className={`${panelCls} aspect-square`}>
             <button
               type="button"
-              onClick={openPicker}
+              onClick={openLibrary}
               aria-label="Choose from pictures"
               className="flex h-full w-full items-center justify-center text-7xl text-[#8a8a8a]"
             >
@@ -242,8 +255,8 @@ export default function StudioApp({
           <NoticeLine notice={notice} />
           <section className={`${panelCls} p-4`}>
             <div className="flex gap-4">
-              <StudioButton onClick={openPicker}>Choose from pictures</StudioButton>
-              <StudioButton onClick={comingSoon}>Take a photo</StudioButton>
+              <StudioButton onClick={openLibrary}>Choose from pictures</StudioButton>
+              <StudioButton onClick={openCamera}>Take a photo</StudioButton>
             </div>
           </section>
         </>
