@@ -1,3 +1,4 @@
+import { postJson } from "@/lib/postJson";
 import { putToR2 } from "@/lib/putToR2";
 
 // What the Studio app can attach to a photo on its way to the Hopper —
@@ -10,19 +11,6 @@ export type HopperDetails = {
   artworkPrice?: string;
   artworkType?: string;
 };
-
-async function postJson<T>(url: string, body: unknown): Promise<T> {
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body),
-  });
-  const data = await res.json().catch(() => null);
-  if (!res.ok) {
-    throw new Error(data?.error ?? `Request failed (status ${res.status}).`);
-  }
-  return data as T;
-}
 
 // Sends one photo to an artist's Hopper using their own hopperToken —
 // the same two-step route the iPhone Shortcut uses (see

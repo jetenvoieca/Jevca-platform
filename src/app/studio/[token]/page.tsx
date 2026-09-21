@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
-import { db } from "@/lib/db";
+import { findArtistByToken } from "@/lib/studioAuth";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import StudioApp from "@/components/StudioApp";
 
@@ -22,18 +22,15 @@ export const viewport: Viewport = {
 
 // Each artist's own Studio app, opened from their personal link
 // (/studio/<hopperToken>) — the token is the only credential, the same
-// one the /api/hopper routes check. Deliberately outside the app's
-// shared login (see src/middleware.ts).
+// one the /api/hopper and /api/studio routes check. Deliberately outside
+// the app's shared login (see src/middleware.ts).
 export default async function StudioPage({
   params,
 }: {
   params: Promise<{ token: string }>;
 }) {
   const { token } = await params;
-  const artist = await db.artist.findUnique({
-    where: { hopperToken: token },
-    select: { id: true, name: true, logoUrl: true },
-  });
+  const artist = await findArtistByToken(token);
   if (!artist) notFound();
 
   const settings = await getArtworkSettings(artist.id);
