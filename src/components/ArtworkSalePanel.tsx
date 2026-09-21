@@ -34,9 +34,16 @@ function formatMoney(amount: number, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
 }
 
-// The "Sold" sale panel (2026-09-10) — opens right under Size/Location
-// (see ArtworkCatalogueFields' afterLocation slot) when the Availability
-// toggle further down the form is switched to SOLD.
+// The "Sold" sale panel — opens right under Size/Location (see
+// ArtworkCatalogueFields' afterLocation slot) when the Available/SOLD
+// toggle further down the form is switched to SOLD. Only ever rendered
+// while the artwork is genuinely still AVAILABLE — see the "Availability
+// model" note in lib/actions/payments.ts. Nothing this panel does can
+// leave the artwork in a state this panel itself can't correctly
+// display, and once a sale is committed (RESERVED or SOLD), this panel
+// simply doesn't render again — the Catalogue tab's Availability area
+// shows plain static text instead, and managing/cancelling that sale
+// happens from the Sales page.
 //
 // Enter card now switches this panel into "card" mode — telephone-sale
 // card entry, no customer personalisation needed (direct instruction:
@@ -47,59 +54,37 @@ function formatMoney(amount: number, currency: string) {
 //
 // Record sale swaps this same panel — still in its normal afterLocation
 // position, no repositioning like card mode — for a simple
-// Price/Currency/Date paid/Source/Name/Email/Address form, replacing
-// the Deposit paid/Purchase option/3-button sale card entirely.
+// Price/Currency/Date paid/Source/Name/Email/Address form.
 //
-// Stripe wiring (2026-09-10) — Get payment link/Enter card now call the
-// real actions in lib/actions/payments.ts (startArtworkSaleAndGetLink/
-// startArtworkSaleAndEnterCard, createPaymentLink/createCardEntryIntent),
-// but now entirely from ArtworkDetailPanel, not here (2026-09-11 fix —
-// see the note below). Record sale still calls recordPastSale directly
-// from this component, since record mode never has the remount problem
-// that motivated moving the other two up.
+// Get payment link/Enter card now call the real actions in
+// lib/actions/payments.ts, but entirely from ArtworkDetailPanel, not
+// here — deposit/date paid/purchase option/name/email/link URL/card
+// secret/the action's own pending+error state are all controlled from
+// the parent, since switching into card mode renders a structurally
+// different branch of the parent's JSX (a genuinely new instance of
+// this component), and local state — including an in-flight fetch's own
+// local useState — would otherwise be silently dropped by that remount.
+// Record mode never remounts (it's rendered from the same branch as
+// sale mode), so its own fields and action stay simple and local.
 //
-// Deposit paid/Date paid/Purchase option/Name/Email/link URL/card
-// secret/publishable key/the action's own pending+error state are all
-// controlled from the parent (2026-09-10 fix, extended 2026-09-11) —
-// switching into card mode renders a structurally different branch of
-// the parent's JSX (ArtworkCatalogueFields' afterLocation slot vs. the
-// card-mode branch that skips it entirely), which mounts a genuinely
-// new instance of this component. Local state — including an in-flight
-// fetch's own local useState — is silently dropped by that remount:
-// Enter card now would kick off the real Stripe call, but the async
-// callback's setCardSecret/setCardPublishableKey landed on the now-
-// unmounted old instance and were discarded, leaving the freshly-
-// mounted card-mode instance stuck showing "—" forever with no card
-// form and no error. Lifting the fetch itself (not just its resulting
-// values) up to ArtworkDetailPanel — which never unmounts across this
-// switch — fixes it: the parent starts the fetch, and whichever
-// instance of this component is currently rendered just displays
-// whatever the parent currently holds. Record mode never remounts (it's
-// rendered from the same branch as sale mode), so its own fields and
-// action stay simple and local, same as before.
+// Tinted "payment panel" styling — the whole panel background is
+// #F9F6EE, all its own text is #5E5E5E, and every actual action button
+// (Get payment link, Enter card now, Record sale) is filled #5E5E5E
+// with #F9F6EE text.
 //
-// Tinted "payment panel" styling (2026-09-11, direct request) — the
-// whole panel background is #F9F6EE, all its own text is #5E5E5E, and
-// every actual action button (Get payment link, Enter card now, Record
-// sale) is filled #5E5E5E with #F9F6EE text, replacing the previous
-// ordinary white/neutral-900/outlined look. Cancel sale/Delete stay red
-// — those are destructive actions and deliberately keep their own
-// distinct colour regardless of this panel's tint.
-//
-// Close (X) + Back, unified across all three modes (2026-09-20, direct
-// request) — previously each mode had its own inconsistent scattering
-// (sale had "← Back to Available", record had "← Back", card had
-// neither). Now every mode gets the same top row: a Back link on the
-// left, an X close icon on the right. Close always means the same thing
-// everywhere — hand off to onBackToAvailable, which abandons whatever
-// ACTIVE purchase this session may have started and returns all the way
-// to Available. Back means "one step less committed than where I am
-// now": in sale mode there's nothing less committed than Available
-// itself, so Back and Close both go there; in card mode Back returns to
-// the sale form without abandoning the purchase already started
-// (onBackToSale) — Cancel sale (red, further down) is the one that
-// actually abandons it; in record mode Back returns to the sale form
-// the same way it always has (onBackFromRecord).
+// Back/Close (2026-09-20 rebuild) — every Back or X in this panel is now
+// a plain, local step with no server call at all: onClose (sale/record
+// modes) just collapses the panel, since nothing is committed until one
+// of the three action buttons actually succeeds; onBackToSale (card
+// mode) is only reachable before a Purchase has been started (still
+// preparing, or the start itself failed) — once card entry is genuinely
+// under way (cardSecret present), the sale is already RESERVED and
+// there's nothing left to "go back" from; the panel just shows the card
+// form with no Back/Close at all, and leaving it (closing the whole
+// artwork modal) is fine, since RESERVED already correctly reflects
+// what's happening. Cancel sale/Delete are gone entirely from this
+// panel for the same reason — cancelling a committed sale happens from
+// the Sales page now, not here.
 export default function ArtworkSalePanel({
   artworkId,
   siteId,
@@ -126,10 +111,8 @@ export default function ArtworkSalePanel({
   actionError,
   onGetPaymentLink,
   onEnterCardClick,
-  onBackToAvailable,
+  onClose,
   onBackToSale,
-  onCancelCardSale,
-  onDeleteCardSale,
   onRecordSale,
   onBackFromRecord,
   onSaleCompleted,
@@ -140,12 +123,11 @@ export default function ArtworkSalePanel({
   currency: string;
   defaultInstalmentCount: number;
   saleSources: string[];
-  // The Purchase this panel is currently working with, if one's been
-  // started this session or was already active (2026-09-20) — passed
-  // through to StripeCardForm in card mode, which needs it to record a
-  // confirmed payment directly rather than relying solely on the Stripe
-  // webhook (see StripeCardForm's own note). Null in sale mode before
-  // anything's been started yet.
+  // The Purchase this panel is currently working with, once Enter card
+  // now has actually started one — passed through to StripeCardForm,
+  // which needs it to record a confirmed payment directly rather than
+  // relying solely on the Stripe webhook (see StripeCardForm's own
+  // note). Null before that.
   purchaseId: string | null;
   // "sale" — the normal Deposit paid/Purchase option/Name/Email/3-button
   // view. "card" — the telephone-sale card entry view, entered via
@@ -162,39 +144,34 @@ export default function ArtworkSalePanel({
   onBuyerNameChange: (value: string) => void;
   buyerEmail: string;
   onBuyerEmailChange: (value: string) => void;
-  // Result of Get payment link, owned by the parent (2026-09-11) — see
-  // the file-level note above.
+  // Result of Get payment link, owned by the parent — see the
+  // file-level note above.
   linkUrl: string | null;
-  // Result of Enter card now, owned by the parent (2026-09-11).
+  // Result of Enter card now, owned by the parent.
   cardSecret: string | null;
   cardPublishableKey: string | null;
-  // Covers Get payment link/Enter card now/Back to Available/Cancel
-  // sale/Delete — all owned by the parent now (2026-09-11).
+  // Covers Get payment link/Enter card now — owned by the parent.
   actionPending: boolean;
   actionError: string | null;
   onGetPaymentLink: () => void;
   onEnterCardClick: () => void;
-  // The X close, every mode (2026-09-20) — abandons whatever ACTIVE
-  // purchase this session may have started and returns all the way to
-  // Available, so nothing is left dangling in Stripe/the database just
-  // because the panel was closed rather than completed. Also sale
-  // mode's own Back link, since Available is the only place "back" from
-  // sale mode.
-  onBackToAvailable: () => void;
-  // Card mode's own Back — returns to the sale form without abandoning
-  // the purchase already started (2026-09-20).
+  // Sale/record modes' Back and X, both the same plain local reset —
+  // nothing has been committed yet in either mode until one of the
+  // action buttons actually succeeds (2026-09-20 rebuild).
+  onClose: () => void;
+  // Card mode's own Back — only shown before a Purchase has actually
+  // started (still preparing, or the start failed); once it succeeds,
+  // the sale is committed and this is never shown again.
   onBackToSale: () => void;
-  onCancelCardSale: () => void;
-  onDeleteCardSale: () => void;
   // Switches this panel into record mode (sale mode's "Record sale"
   // button).
   onRecordSale: () => void;
   // Back out of record mode, to sale mode (record mode's own Back).
   onBackFromRecord: () => void;
   // Fired once a sale is genuinely done — a card payment confirmed, or
-  // Record sale submitted successfully (2026-09-10). The parent
-  // refreshes the artwork (picking up the now-SOLD availability) and
-  // closes the whole panel.
+  // Record sale submitted successfully. The parent refreshes the
+  // artwork (picking up the now-SOLD availability) and closes the whole
+  // panel.
   onSaleCompleted: () => void;
 }) {
   const [recordPrice, setRecordPrice] = useState("");
@@ -208,11 +185,11 @@ export default function ArtworkSalePanel({
   // this component; it's rendered from the same branch as sale mode.
   const [recordPending, startRecordTransition] = useTransition();
 
-  // Slide-up entrance (2026-09-10, direct request — "sale panel slides
-  // up into view") — starts a touch below/faded and animates to its
-  // resting position right after mount, rather than just popping in.
-  // Re-triggers on mode change too, so switching mode gets its own
-  // small "slides up further" motion, not just the initial open.
+  // Slide-up entrance (direct request — "sale panel slides up into
+  // view") — starts a touch below/faded and animates to its resting
+  // position right after mount, rather than just popping in. Re-triggers
+  // on mode change too, so switching mode gets its own small "slides up
+  // further" motion, not just the initial open.
   const [shown, setShown] = useState(false);
   useEffect(() => {
     setShown(false);
@@ -221,9 +198,9 @@ export default function ArtworkSalePanel({
   }, [mode]);
 
   // Full payment defaults to the Offered price; a recorded deposit
-  // reduces both the full-payment figure and each instalment
-  // (2026-09-10, direct request) — both options are simply the
-  // remaining balance after the deposit, split differently.
+  // reduces both the full-payment figure and each instalment (direct
+  // request) — both options are simply the remaining balance after the
+  // deposit, split differently.
   const offered = parseFloat(offeredPrice || "") || 0;
   const deposit = parseFloat(depositPaid || "") || 0;
   const remaining = Math.max(offered - deposit, 0);
@@ -263,8 +240,12 @@ export default function ArtworkSalePanel({
     });
   };
 
-  const backHandler =
-    mode === "sale" ? onBackToAvailable : mode === "card" ? onBackToSale : onBackFromRecord;
+  // Card mode has genuinely committed once a client secret is in hand —
+  // from that point there's no Back/Close shown at all (see the
+  // component-level note above).
+  const cardCommitted = mode === "card" && !!(cardSecret && cardPublishableKey && purchaseId);
+  const showBackCloseRow = mode !== "card" || !cardCommitted;
+  const backHandler = mode === "sale" ? onClose : mode === "card" ? onBackToSale : onBackFromRecord;
 
   return (
     <div
@@ -273,31 +254,30 @@ export default function ArtworkSalePanel({
         shown ? "translate-y-0 opacity-100" : "-translate-y-2 opacity-0"
       }`}
     >
-      {/* Back (left) + Close (right), same row, every mode (2026-09-20,
-          direct request). See the component-level note above for what
-          each does in each mode. */}
-      <div className="flex items-center justify-between">
-        <button type="button" onClick={backHandler} className="text-sm hover:underline">
-          ← Back
-        </button>
-        <button
-          type="button"
-          onClick={onBackToAvailable}
-          aria-label="Close"
-          className="rounded-md p-1 hover:bg-black/5"
-        >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
-          </svg>
-        </button>
-      </div>
+      {showBackCloseRow && (
+        <div className="flex items-center justify-between">
+          <button type="button" onClick={backHandler} className="text-sm hover:underline">
+            ← Back
+          </button>
+          <button
+            type="button"
+            onClick={mode === "card" ? onBackToSale : onClose}
+            aria-label="Close"
+            className="rounded-md p-1 hover:bg-black/5"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
+            </svg>
+          </button>
+        </div>
+      )}
 
       {mode === "record" ? (
-        // Simple record-a-sale form (2026-09-10) — replaces the whole
-        // Deposit paid/Purchase option/3-button sale card. Calls the
-        // same recordPastSale action the gallery-sale backfill already
-        // uses, with commissionPercent left unset (always 0% for a
-        // direct sale here, per direct instruction).
+        // Simple record-a-sale form — replaces the whole Deposit paid/
+        // Purchase option/3-button sale card. Calls the same
+        // recordPastSale action the gallery-sale backfill already uses,
+        // with commissionPercent left unset (always 0% for a direct
+        // sale here, per direct instruction).
         <>
           <div className="grid grid-cols-3 gap-3">
             <input
@@ -371,27 +351,25 @@ export default function ArtworkSalePanel({
             {recordPending ? "Recording…" : "Record sale"}
           </button>
         </>
-      ) : (
+      ) : mode === "sale" ? (
         <>
-          {mode === "sale" && (
-            <div className="grid grid-cols-2 gap-3">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={depositPaid}
-                onChange={(e) => onDepositPaidChange(e.target.value)}
-                placeholder="Deposit paid"
-                className={boxCls}
-              />
-              <input
-                type="date"
-                value={datePaid}
-                onChange={(e) => onDatePaidChange(e.target.value)}
-                placeholder="Date paid"
-                className={boxCls}
-              />
-            </div>
-          )}
+          <div className="grid grid-cols-2 gap-3">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={depositPaid}
+              onChange={(e) => onDepositPaidChange(e.target.value)}
+              placeholder="Deposit paid"
+              className={boxCls}
+            />
+            <input
+              type="date"
+              value={datePaid}
+              onChange={(e) => onDatePaidChange(e.target.value)}
+              placeholder="Date paid"
+              className={boxCls}
+            />
+          </div>
 
           <div>
             <p className="mb-1 text-sm font-medium">Purchase option</p>
@@ -434,97 +412,80 @@ export default function ArtworkSalePanel({
 
           {actionError && <p className="text-sm text-red-600">{actionError}</p>}
 
-          {mode === "sale" ? (
-            <>
-              <div className="flex gap-3">
-                <button
-                  type="button"
-                  onClick={onGetPaymentLink}
-                  disabled={actionPending}
-                  className={`flex-1 ${buttonCls}`}
-                >
-                  {actionPending ? "Working…" : "Get payment link"}
-                </button>
-                <button
-                  type="button"
-                  onClick={onEnterCardClick}
-                  disabled={actionPending}
-                  className={`flex-1 ${buttonCls}`}
-                >
-                  Enter card now
-                </button>
-                <button type="button" onClick={onRecordSale} className={`flex-1 ${buttonCls}`}>
-                  Record sale
-                </button>
-              </div>
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={onGetPaymentLink}
+              disabled={actionPending}
+              className={`flex-1 ${buttonCls}`}
+            >
+              {actionPending ? "Working…" : "Get payment link"}
+            </button>
+            <button
+              type="button"
+              onClick={onEnterCardClick}
+              disabled={actionPending}
+              className={`flex-1 ${buttonCls}`}
+            >
+              Enter card now
+            </button>
+            <button type="button" onClick={onRecordSale} className={`flex-1 ${buttonCls}`}>
+              Record sale
+            </button>
+          </div>
 
-              {linkUrl && (
-                <div className="rounded-md bg-white/60 p-3">
-                  <p className="mb-1 text-xs">
-                    Send this link to the buyer (copy and paste — nothing is emailed
-                    automatically):
-                  </p>
-                  <input
-                    readOnly
-                    value={linkUrl}
-                    onFocus={(e) => e.target.select()}
-                    className="w-full rounded border border-neutral-300 bg-white px-2 py-[3.2px] text-xs"
-                  />
-                </div>
-              )}
-            </>
-          ) : (
-            // Card entry — telephone sale, no customer personalisation
-            // (direct instruction). Renders the real Stripe Elements
-            // form once a client secret comes back from the parent
-            // (see the file-level note on why this state lives there).
-            <div className="space-y-4">
-              <div className="flex items-center gap-2 text-sm font-medium">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
-                  <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.6" />
-                  <rect x="2" y="9" width="20" height="3" fill="currentColor" />
-                </svg>
-                Card
-              </div>
-
-              {cardSecret && cardPublishableKey && purchaseId ? (
-                <>
-                  <StripeCardForm
-                    clientSecret={cardSecret}
-                    publishableKey={cardPublishableKey}
-                    purchaseId={purchaseId}
-                    onDone={onSaleCompleted}
-                  />
-                  <p className="text-xs">
-                    Confirms as soon as Stripe accepts the card — no separate wait.
-                  </p>
-                </>
-              ) : (
-                <p className="text-sm">{actionPending ? "Preparing card entry…" : "—"}</p>
-              )}
-
-              <div className="flex items-center gap-2 text-sm">
-                <button
-                  type="button"
-                  onClick={onCancelCardSale}
-                  disabled={actionPending}
-                  className="text-red-600 hover:underline disabled:opacity-50"
-                >
-                  Cancel sale
-                </button>
-                <span>·</span>
-                <button
-                  type="button"
-                  onClick={onDeleteCardSale}
-                  disabled={actionPending}
-                  className="text-red-600 hover:underline disabled:opacity-50"
-                >
-                  Delete
-                </button>
-              </div>
+          {linkUrl && (
+            <div className="rounded-md bg-white/60 p-3">
+              <p className="mb-1 text-xs">
+                Send this link to the buyer (copy and paste — nothing is emailed automatically).
+                This artwork is now Sold - Not Paid:
+              </p>
+              <input
+                readOnly
+                value={linkUrl}
+                onFocus={(e) => e.target.select()}
+                className="w-full rounded border border-neutral-300 bg-white px-2 py-[3.2px] text-xs"
+              />
             </div>
           )}
         </>
+      ) : (
+        // Card entry — telephone sale, no customer personalisation
+        // (direct instruction). Renders the real Stripe Elements form
+        // once a client secret comes back from the parent (see the
+        // file-level note on why this state lives there). Once it does,
+        // the sale is already committed (RESERVED) — no Back/Close, no
+        // Cancel/Delete; the Sales page is where this sale gets managed
+        // from here on.
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 text-sm font-medium">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+              <rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.6" />
+              <rect x="2" y="9" width="20" height="3" fill="currentColor" />
+            </svg>
+            Card
+          </div>
+
+          {cardCommitted ? (
+            <>
+              <StripeCardForm
+                clientSecret={cardSecret!}
+                publishableKey={cardPublishableKey!}
+                purchaseId={purchaseId!}
+                onDone={onSaleCompleted}
+              />
+              <p className="text-xs">
+                This artwork is now Sold - Not Paid while the card is processed. If you need to
+                cancel this sale, do that from the Sales page.
+              </p>
+            </>
+          ) : (
+            <>
+              {actionError && <p className="text-sm text-red-600">{actionError}</p>}
+              <p className="text-sm">{actionPending ? "Preparing card entry…" : "—"}</p>
+            </>
+          )}
+        </div>
       )}
     </div>
   );
