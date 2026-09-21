@@ -17,19 +17,21 @@ export default function StudioApp({
   artistName,
   logoUrl,
   artworkTypes,
+  artworkLocations,
   sizePresets,
 }: {
   token: string;
   artistName: string;
   logoUrl: string | null;
   artworkTypes: string[];
+  artworkLocations: string[];
   sizePresets: string[];
 }) {
   const [mode, setMode] = useState<Mode>("home");
   const [notice, setNotice] = useState<Notice | null>(null);
-  // True while a photo is being sent — leaving then would hide whether
-  // it arrived.
-  const [sending, setSending] = useState(false);
+  // True while a flow is saving something — leaving then would hide
+  // whether it worked.
+  const [busy, setBusy] = useState(false);
 
   const goHome = (message: Notice | null = null) => {
     setNotice(message);
@@ -49,7 +51,7 @@ export default function StudioApp({
       <button
         type="button"
         onClick={() => goHome()}
-        disabled={sending}
+        disabled={busy}
         className="py-2 text-center text-xl leading-snug"
       >
         <div>JEVCA Studio</div>
@@ -81,11 +83,18 @@ export default function StudioApp({
           artworkTypes={artworkTypes}
           sizePresets={sizePresets}
           onDone={goHome}
-          onSendingChange={setSending}
+          onBusyChange={setBusy}
         />
       )}
 
-      {mode === "manage" && <ManageArtworks token={token} />}
+      {mode === "manage" && (
+        <ManageArtworks
+          token={token}
+          locations={artworkLocations}
+          onDone={goHome}
+          onBusyChange={setBusy}
+        />
+      )}
     </main>
   );
 }

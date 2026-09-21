@@ -10,3 +10,7 @@ export function fetchStudioArtworks(token: string, q: string, offset: number) {
     offset,
   });
 }
+
+export function consignArtwork(token: string, artworkId: string, location: string) {
+  return postJson<{ location: string }>("/api/studio/consign", { token, artworkId, location });
+}

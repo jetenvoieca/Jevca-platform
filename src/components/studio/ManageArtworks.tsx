@@ -1,19 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { fetchStudioArtworks } from "@/lib/studioApi";
+import { consignArtwork, fetchStudioArtworks } from "@/lib/studioApi";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
 import { fieldCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 
 // "Manage existing": pick one of the artist's existing artworks, then
-// (later steps) mark it Sold or Consign it. Screens follow the design
+// mark it Sold (later step) or Consign it. Screens follow the design
 // mock-ups: catalogue grid (with a search box that opens above the
-// buttons) → the chosen artwork with Sold / Consigned.
+// buttons) → the chosen artwork with Sold / Consigned → the list of
+// locations to consign it to.
 
 const SEARCH_DEBOUNCE_MS = 350;
 
-type Screen = "catalogue" | "artwork";
+type Screen = "catalogue" | "artwork" | "consign";
 
 function soldMessage(availability: StudioArtworkTile["availability"]): string {
   return availability === "SOLD"
@@ -21,7 +22,22 @@ function soldMessage(availability: StudioArtworkTile["availability"]): string {
     : "That work is already sold, payment still due.";
 }
 
-export default function ManageArtworks({ token }: { token: string }) {
+export default function ManageArtworks({
+  token,
+  locations,
+  onDone,
+  onBusyChange,
+}: {
+  token: string;
+  // The artist's own Locations list from Settings — what a work can be
+  // consigned to.
+  locations: string[];
+  // Called once a change has been saved — the app returns to its first
+  // screen showing this message.
+  onDone: (notice: Notice) => void;
+  // Lets the app stop the artist leaving while a change is being saved.
+  onBusyChange: (busy: boolean) => void;
+}) {
   const [screen, setScreen] = useState<Screen>("catalogue");
   const [artworks, setArtworks] = useState<StudioArtworkTile[]>([]);
   const [total, setTotal] = useState(0);
@@ -30,6 +46,8 @@ export default function ManageArtworks({ token }: { token: string }) {
   const [q, setQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<StudioArtworkTile | null>(null);
+  const [chosenLocation, setChosenLocation] = useState<string | null>(null);
+  const [consigning, setConsigning] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   // Only the newest request may update the list — typing fires several in
@@ -86,6 +104,11 @@ export default function ManageArtworks({ token }: { token: string }) {
     return () => observer.disconnect();
   }, [artworks.length, total, loading, loadError, runQuery]);
 
+  const go = (next: Screen) => {
+    setNotice(null);
+    setScreen(next);
+  };
+
   const searchFor = (value: string) => {
     setQ(value);
     setSelected(null);
@@ -119,11 +142,34 @@ export default function ManageArtworks({ token }: { token: string }) {
       setNotice({ text: "Tap an artwork first.", tone: "info" });
       return;
     }
-    setNotice(null);
-    setScreen("artwork");
+    go("artwork");
   };
 
   const comingSoon = () => setNotice({ text: "Coming soon", tone: "info" });
+
+  const consign = async () => {
+    if (!selected) return;
+    if (!chosenLocation) {
+      setNotice({ text: "Choose a gallery first.", tone: "info" });
+      return;
+    }
+
+    setConsigning(true);
+    onBusyChange(true);
+    setNotice({ text: "Consigning…", tone: "info" });
+    try {
+      await consignArtwork(token, selected.id, chosenLocation);
+      onDone({ text: `Consigned to ${chosenLocation}`, tone: "info" });
+    } catch (err) {
+      setNotice({
+        text: err instanceof Error ? err.message : "Couldn't consign. Please try again.",
+        tone: "error",
+      });
+    } finally {
+      setConsigning(false);
+      onBusyChange(false);
+    }
+  };
 
   if (screen === "artwork" && selected) {
     return (
@@ -145,7 +191,41 @@ export default function ManageArtworks({ token }: { token: string }) {
         <section className={`${panelCls} p-4`}>
           <div className="flex gap-4">
             <StudioButton onClick={comingSoon}>Sold</StudioButton>
-            <StudioButton onClick={comingSoon}>Consigned</StudioButton>
+            <StudioButton onClick={() => go("consign")}>Consigned</StudioButton>
+          </div>
+        </section>
+      </>
+    );
+  }
+
+  if (screen === "consign" && selected) {
+    return (
+      <>
+        <section className="aspect-square overflow-y-auto rounded-lg border border-[#cfcac0] bg-white">
+          {locations.length === 0 ? (
+            <p className="p-6 text-center text-[#8a8a8a]">No locations set up yet.</p>
+          ) : (
+            locations.map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setChosenLocation(name)}
+                disabled={consigning}
+                className={`block w-full border-b border-[#e5e5e5] px-4 py-4 text-left text-lg text-[#333] ${
+                  chosenLocation === name ? "bg-[#e6e6e6]" : ""
+                }`}
+              >
+                {name}
+              </button>
+            ))
+          )}
+        </section>
+        <NoticeLine notice={notice} />
+        <section className={`${panelCls} p-4`}>
+          <div className="flex gap-4">
+            <StudioButton onClick={consign} disabled={consigning}>
+              Consign to gallery
+            </StudioButton>
           </div>
         </section>
       </>

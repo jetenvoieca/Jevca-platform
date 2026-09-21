@@ -41,6 +41,7 @@ export default async function StudioPage({
       artistName={artist.name}
       logoUrl={artist.logoUrl}
       artworkTypes={settings.artworkTypes}
+      artworkLocations={settings.artworkLocations}
       sizePresets={settings.sizePresets}
     />
   );

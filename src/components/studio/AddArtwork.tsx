@@ -64,7 +64,7 @@ export default function AddArtwork({
   artworkTypes,
   sizePresets,
   onDone,
-  onSendingChange,
+  onBusyChange,
 }: {
   token: string;
   artworkTypes: string[];
@@ -73,7 +73,7 @@ export default function AddArtwork({
   // its first screen showing this message.
   onDone: (notice: Notice) => void;
   // Lets the app stop the artist leaving while a photo is being sent.
-  onSendingChange: (sending: boolean) => void;
+  onBusyChange: (busy: boolean) => void;
 }) {
   const [screen, setScreen] = useState<Screen>("add");
   const [file, setFile] = useState<File | null>(null);
@@ -131,7 +131,7 @@ export default function AddArtwork({
     }
 
     setSending(true);
-    onSendingChange(true);
+    onBusyChange(true);
     setNotice({ text: "Sending…", tone: "info" });
     try {
       await sendToHopper(
@@ -156,7 +156,7 @@ export default function AddArtwork({
       });
     } finally {
       setSending(false);
-      onSendingChange(false);
+      onBusyChange(false);
     }
   };
 

@@ -60,3 +60,27 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
 
   return { artworks, total };
 }
+
+// Consigning is just setting the artwork's Location to the chosen entry
+// from the artist's own Locations list — the same field the admin
+// Catalogue edits, and what puts a work on a gallery's Consigned Works
+// list (matched by name, see getGalleryDetail in actions/customers.ts).
+// Only that artist's own, still-available artworks can be consigned, and
+// only to a location that really is on their list.
+export async function consignStudioArtwork(artistId: string, artworkId: string, location: string) {
+  const [artist, artwork] = await Promise.all([
+    db.artist.findUnique({ where: { id: artistId }, select: { artworkLocations: true } }),
+    db.artwork.findFirst({ where: { id: artworkId, artistId }, select: { availability: true } }),
+  ]);
+
+  if (!artwork) return { error: "Artwork not found.", status: 404 as const };
+  if (artwork.availability !== "AVAILABLE") {
+    return { error: "That work is already sold.", status: 409 as const };
+  }
+  if (!artist?.artworkLocations.includes(location)) {
+    return { error: "That location isn't on your list.", status: 400 as const };
+  }
+
+  await db.artwork.update({ where: { id: artworkId }, data: { location } });
+  return { location };
+}
