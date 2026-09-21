@@ -15,9 +15,6 @@ import {
   startArtworkSaleAndEnterCard,
   createPaymentLink,
   createCardEntryIntent,
-  abandonPurchase,
-  deleteGallerySale,
-  forceDeleteCompletedSale,
 } from "@/lib/actions/payments";
 import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
@@ -175,19 +172,14 @@ export default function ArtworkDetailPanel({
     selectedTypeRecord ? parseFloat(selectedTypeRecord.refValue) : null
   );
 
-  // Whether the artwork is genuinely, persistently SOLD (2026-09-20,
-  // direct request) — distinct from saleOpen below, which only tracks
-  // whether the Sold panel is currently expanded on screen. Reading
-  // this straight from artwork.availability (rather than from saleOpen)
-  // means the Availability toggle keeps correctly showing SOLD even
-  // after onSaleCompleted collapses the panel back down — saleOpen
-  // alone, initialised only once at mount, would otherwise go stale the
-  // moment a sale completes without the whole panel remounting.
-  const isSold = artwork.availability === "SOLD";
-  // The purchase that made it SOLD, if any — purchaseHistory is already
-  // ordered most-recent-first (same convention used elsewhere, e.g.
-  // GalleriesView), so the first COMPLETED entry is the current sale.
-  const completedPurchase = artwork.purchaseHistory.find((p) => p.status === "COMPLETED") ?? null;
+  // Whether this artwork has a sale committed at all — RESERVED ("Sold -
+  // Not Paid") or genuinely SOLD (2026-09-20 rebuild — see the
+  // "Availability model" note in lib/actions/payments.ts for the full
+  // picture). Once true, the Available/SOLD toggle below is replaced
+  // entirely by plain static text: there's nothing left to start, and
+  // managing or cancelling that sale happens from the Sales page, not
+  // here.
+  const committed = artwork.availability === "SOLD" || artwork.availability === "RESERVED";
 
   // ---- Catalogue / Presentation (2026-09-10, direct request) ----
   // A completely separate panel now, switched via the header toggle
@@ -196,32 +188,24 @@ export default function ArtworkDetailPanel({
   // renders once, above this toggle's content, regardless of view).
   const [view, setView] = useState<"catalogue" | "presentation">("catalogue");
 
-  // ---- The Sold sale panel (2026-09-10, direct request) ----
+  // ---- The Sold sale panel ----
   // Toggling SOLD (in the Availability control below) opens
   // ArtworkSalePanel, positioned right after Size/Location via
   // ArtworkCatalogueFields' afterLocation slot. Everything below it
   // (Date, Reference/Offered price, the Available/SOLD toggle itself,
-  // Studio notes) is hidden entirely while open (hideTail), matching
-  // the mockup — "sales panel ends with payment link row". Offered
+  // Studio notes) is hidden entirely while open (hideTail). Offered
   // price's value is preserved via its own hidden input alongside the
   // panel, so it survives an unrelated field autosaving while hidden.
   //
-  // Initialises from whether there's a genuinely ACTIVE (unpaid) sale in
-  // progress — artwork.activePurchase — not from artwork.availability
-  // === "SOLD" (2026-09-20 fix). Availability now goes SOLD the moment
-  // any sale starts, completed or not (see startPurchase), so tying this
-  // to Availability meant reopening an artwork whose sale had already
-  // completed and been paid reopened this same blank "start a new sale"
-  // form every single time, instead of the disabled SOLD toggle + "Delete
-  // this sale" link the isSold block below already provides. Worse,
-  // closing that wrongly-reopened panel (Back/X → onBackToAvailable)
-  // looked exactly like abandoning a real, already-paid sale, even
-  // though nothing was actually touched server-side in that case (there
-  // was no ACTIVE purchase id to abandon) — it just read that way.
-  // activePurchase is only ever populated for an ACTIVE-status Purchase,
-  // so this now only reopens the panel for a sale that's genuinely still
-  // in progress, letting the artist pick up where they left off.
-  const [saleOpen, setSaleOpen] = useState(!!artwork.activePurchase);
+  // Always starts closed (2026-09-20 rebuild) — the toggle is only ever
+  // shown at all when the artwork is not `committed` (see above), and an
+  // artwork with nothing committed never has a sale panel worth
+  // reopening automatically. There's no scenario any more where a
+  // fresh mount needs to jump straight back into an in-progress sale:
+  // both Get payment link and Enter card now commit (RESERVED) the
+  // instant they're started, so "in progress but AVAILABLE" can't
+  // happen.
+  const [saleOpen, setSaleOpen] = useState(false);
 
   // Enter card now — moves the sale panel up further still, to sit
   // right under Name/Tier, matching the mockup's "slides up further to
@@ -255,21 +239,20 @@ export default function ArtworkDetailPanel({
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
 
-  // ---- Get payment link/Enter card now, owned here (2026-09-20 fix)
-  // ----
+  // ---- Get payment link/Enter card now, owned here ----
   // Same remount problem as the fields above, but for the fetch itself:
   // clicking Enter card now sets cardMode true, which switches which
-  // branch renders ArtworkSalePanel — a genuinely new instance. The old
-  // instance's in-flight startArtworkSaleAndEnterCard/createCardEntryIntent
-  // call kept running, but its setCardSecret/setCardPublishableKey landed
-  // on the now-unmounted component and were silently dropped, leaving the
-  // freshly-mounted card-mode instance permanently stuck on "—" with no
-  // form and no error shown. Moving the fetch itself up here (this
-  // component never unmounts across the mode switch) fixes it — see the
-  // matching note in ArtworkSalePanel.
-  const [startedPurchaseId, setStartedPurchaseId] = useState<string | null>(
-    artwork.activePurchase?.channel === "STRIPE" ? artwork.activePurchase.id : null
-  );
+  // branch renders ArtworkSalePanel — a genuinely new instance. Moving
+  // the fetch itself up here (this component never unmounts across the
+  // mode switch) means whichever instance is currently rendered just
+  // displays whatever the parent currently holds — see the matching
+  // note in ArtworkSalePanel.
+  //
+  // Always starts null (2026-09-20 rebuild, matching saleOpen above) —
+  // there's no longer a scenario where an ACTIVE Purchase exists for an
+  // artwork that's still showing as not-committed on a fresh mount, so
+  // there's nothing to seed this from at mount time any more.
+  const [startedPurchaseId, setStartedPurchaseId] = useState<string | null>(null);
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [cardSecret, setCardSecret] = useState<string | null>(null);
   const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
@@ -372,7 +355,7 @@ export default function ArtworkDetailPanel({
     });
   };
 
-  const handleClose = () => {
+  const handleClosePanel = () => {
     startTransition(async () => {
       // Quietly removes this record if it's still exactly as it was when
       // created (see deleteArtworkIfBlank) — a no-op if you've actually
@@ -417,9 +400,8 @@ export default function ArtworkDetailPanel({
     await addSettingOption(artistId, siteId, "artworkLocations", fd);
   };
 
-  // ---- Get payment link/Enter card now handlers (2026-09-20) — see the
-  // note on the state above for why these live here rather than in
-  // ArtworkSalePanel.
+  // ---- Get payment link/Enter card now handlers — see the note on the
+  // state above for why these live here rather than in ArtworkSalePanel.
   const buildSaleFormData = () => {
     const fd = new FormData();
     fd.set("buyerName", buyerName.trim());
@@ -430,6 +412,12 @@ export default function ArtworkDetailPanel({
     return fd;
   };
 
+  // Both handlers below always call onDataChanged the moment the
+  // Purchase itself is successfully started, regardless of whether the
+  // secondary step (generating the link, creating the card intent) then
+  // succeeds — that's the actual commit point (RESERVED), so the grid
+  // tile and this panel's own Availability display need to catch up
+  // immediately, not only once the secondary step also finishes.
   const handleGetPaymentLink = () => {
     if (!buyerEmail.trim()) {
       setSaleActionError("Buyer email is required to get a payment link.");
@@ -448,10 +436,13 @@ export default function ArtworkDetailPanel({
       if (result.ok) {
         setStartedPurchaseId(result.purchaseId);
         setLinkUrl(result.url);
-        if (onDataChanged) onDataChanged();
       } else {
         setSaleActionError(result.error);
       }
+      // Runs regardless of ok/fail — startPurchase may well have
+      // succeeded (and marked RESERVED) even if generating the link
+      // itself then failed.
+      if (onDataChanged) onDataChanged();
     });
   };
 
@@ -480,112 +471,39 @@ export default function ArtworkDetailPanel({
         setStartedPurchaseId(result.purchaseId);
         setCardSecret(result.clientSecret);
         setCardPublishableKey(result.publishableKey);
-        // The artwork is now SOLD server-side the instant this started
-        // (2026-09-20 — see startArtworkSaleAndEnterCard/startPurchase)
-        // — refresh so the grid tile/Availability catch up immediately,
-        // not only once the card payment itself later completes.
-        if (onDataChanged) onDataChanged();
       } else {
         setSaleActionError(result.error);
       }
+      if (onDataChanged) onDataChanged();
     });
   };
 
-  // Shared "give up on this sale" — Back to Available (sale mode) and
-  // Cancel sale (card mode) both abandon whatever ACTIVE purchase this
-  // session may have started, so nothing is left dangling in Stripe/the
-  // database just because the panel was closed rather than completed.
-  const handleBackToAvailable = () => {
-    const idToAbandon = startedPurchaseId;
-    setStartedPurchaseId(null);
+  // Sale/record modes' Back and X — a plain local reset (2026-09-20
+  // rebuild). Nothing has been committed yet in either mode until one of
+  // the action buttons actually succeeds (Get payment link/Enter card
+  // now/Record sale), so there's no server call to make here: if
+  // something WAS already committed (e.g. Get payment link succeeded,
+  // then the artist closes the panel), Availability is already RESERVED
+  // and will correctly show as such once this collapses.
+  const handleClose = () => {
+    setSaleOpen(false);
+    setCardMode(false);
+    setRecordMode(false);
     setLinkUrl(null);
     setCardSecret(null);
     setCardPublishableKey(null);
     setSaleActionError(null);
-    setSaleOpen(false);
-    setCardMode(false);
-    setRecordMode(false);
-    if (idToAbandon) {
-      startSaleActionTransition(async () => {
-        await abandonPurchase(idToAbandon, siteId);
-        if (onDataChanged) onDataChanged();
-        else router.refresh();
-      });
-    }
   };
 
-  // Card mode's own Back (2026-09-20) — unlike Close/Back to Available
-  // above, this does NOT abandon a purchase already started; it just
-  // returns to the sale form so the deposit/purchase option/buyer
-  // details can be reviewed or changed before trying again. Cancel sale
-  // (in card mode, red) is the one that actually abandons it.
+  // Card mode's own Back — only ever reachable before a Purchase has
+  // actually started (still preparing, or the start failed); a plain
+  // local reset back to the sale form, same reasoning as handleClose
+  // above.
   const handleBackToSale = () => {
     setCardMode(false);
-  };
-
-  const handleCancelCardSale = () => {
-    const idToAbandon = startedPurchaseId;
-    if (!idToAbandon) return;
-    startSaleActionTransition(async () => {
-      await abandonPurchase(idToAbandon, siteId);
-      setStartedPurchaseId(null);
-      setCardSecret(null);
-      setCardPublishableKey(null);
-      setSaleOpen(false);
-      setCardMode(false);
-      if (onDataChanged) onDataChanged();
-      else router.refresh();
-    });
-  };
-
-  const handleDeleteCardSale = () => {
-    const idToDelete = startedPurchaseId;
-    if (!idToDelete) return;
-    startSaleActionTransition(async () => {
-      const result = await deleteGallerySale(idToDelete, siteId);
-      if (!result.ok) {
-        setSaleActionError(result.error);
-        return;
-      }
-      setStartedPurchaseId(null);
-      setCardSecret(null);
-      setCardPublishableKey(null);
-      setSaleOpen(false);
-      setCardMode(false);
-      if (onDataChanged) onDataChanged();
-      else router.refresh();
-    });
-  };
-
-  // Deletes the completed sale that made this artwork SOLD (2026-09-20,
-  // direct request — "not allow another sale unless existing one
-  // cancelled or deleted"). Uses forceDeleteCompletedSale, which also
-  // resets Availability back to AVAILABLE once no other COMPLETED
-  // purchase remains for this artwork — a completed sale is a real
-  // financial record, so this carries its own strong confirmation
-  // wording rather than the plain Delete button's.
-  const handleDeleteCompletedSale = () => {
-    if (!completedPurchase) return;
-    if (
-      !confirm(
-        "This sale has already been paid — deleting it removes that financial record entirely and makes this artwork Available again. This can't be undone. Continue?"
-      )
-    ) {
-      return;
-    }
-    startSaleActionTransition(async () => {
-      const result = await forceDeleteCompletedSale(completedPurchase.id, siteId);
-      if (!result.ok) {
-        setSaleActionError(result.error);
-        return;
-      }
-      setSaleOpen(false);
-      setCardMode(false);
-      setRecordMode(false);
-      setStartedPurchaseId(null);
-      if (onDataChanged) onDataChanged();
-      else router.refresh();
-    });
+    setCardSecret(null);
+    setCardPublishableKey(null);
+    setSaleActionError(null);
   };
 
   // Shared props every ArtworkSalePanel instance needs, regardless of
@@ -599,8 +517,8 @@ export default function ArtworkDetailPanel({
     defaultInstalmentCount: settings.defaultInstalmentCount,
     saleSources: settings.saleSources,
     // The Purchase currently in play, so card mode can pass it to
-    // StripeCardForm (2026-09-20) — see the note on startedPurchaseId
-    // above and on StripeCardForm itself.
+    // StripeCardForm — see the note on startedPurchaseId above and on
+    // StripeCardForm itself.
     purchaseId: startedPurchaseId,
     depositPaid,
     onDepositPaidChange: setDepositPaid,
@@ -619,17 +537,15 @@ export default function ArtworkDetailPanel({
     actionError: saleActionError,
     onGetPaymentLink: handleGetPaymentLink,
     onEnterCardClick: handleEnterCardClick,
-    onBackToAvailable: handleBackToAvailable,
+    onClose: handleClose,
     onBackToSale: handleBackToSale,
-    onCancelCardSale: handleCancelCardSale,
-    onDeleteCardSale: handleDeleteCardSale,
     onRecordSale: () => setRecordMode(true),
     onBackFromRecord: () => setRecordMode(false),
     // A sale actually finished — a card payment confirmed, or Record
-    // sale submitted (2026-09-10). Closes the whole Sold flow back down
-    // (the artwork is now SOLD, so there's nothing left to do here),
-    // clears the now-stale card/link state, and refreshes so the rest
-    // of the panel picks up the new state.
+    // sale submitted. Closes the whole Sold flow back down (the artwork
+    // is now SOLD, so there's nothing left to do here), clears the
+    // now-stale card/link state, and refreshes so the rest of the panel
+    // picks up the new state.
     onSaleCompleted: () => {
       setSaleOpen(false);
       setCardMode(false);
@@ -727,11 +643,11 @@ export default function ArtworkDetailPanel({
           </button>
           {showCloseButton && (
             // X icon instead of the word "Close" (2026-09-11, direct
-            // request) — same handleClose behaviour, just an icon
+            // request) — same handleClosePanel behaviour, just an icon
             // button now.
             <button
               type="button"
-              onClick={handleClose}
+              onClick={handleClosePanel}
               disabled={isPending}
               aria-label="Close"
               className="rounded-md border border-neutral-300 p-[4.8px] text-neutral-600 hover:bg-neutral-50 disabled:opacity-50"
@@ -836,12 +752,7 @@ export default function ArtworkDetailPanel({
               functionality isn't deleted from the app —
               PurchasePanel/RecordPastSaleForm are still used exactly as
               before from the Galleries and Sales pages — just not from
-              here any more, pending whatever replaces them next. */}
-          {/* "Your private working record…" caption removed (2026-09-11,
-              direct request) — same commentary-removal instruction as
-              the image grid's caption; the form is self-explanatory
-              without it. */}
-
+              here any more. */}
           <form key="catalogue-form" onBlur={(e) => autosaveCatalogue(e.currentTarget)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -903,13 +814,13 @@ export default function ArtworkDetailPanel({
                    (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
                    and Reference/Offered price (passed as children, rendered
                    between Date and Availability) stay Catalogue-tab-only.
-                   afterLocation/availabilityOverride/hideTail (2026-09-10)
-                   slot in the sale panel, the Available/SOLD toggle, and hide
-                   everything below the panel while it's open. onAddType/
-                   onAddGroup/onAddMedium/onAddLocation (2026-09-11) give
-                   Type/Group/Medium/Location their own inline "+ Add new…"
-                   option — Hopper's own use of this component doesn't pass
-                   these, so its selects are unaffected. */
+                   afterLocation/availabilityOverride/hideTail slot in the
+                   sale panel, the Available/SOLD toggle, and hide everything
+                   below the panel while it's open. onAddType/onAddGroup/
+                   onAddMedium/onAddLocation give Type/Group/Medium/Location
+                   their own inline "+ Add new…" option — Hopper's own use of
+                   this component doesn't pass these, so its selects are
+                   unaffected. */
                 <ArtworkCatalogueFields
                   settings={settings}
                   values={{
@@ -951,73 +862,57 @@ export default function ArtworkDetailPanel({
                     ) : null
                   }
                   availabilityOverride={
-                    // Available/SOLD toggle (2026-09-10, direct request) —
-                    // replaces the plain Availability <select>, in the same
-                    // spot it used to sit. hideTail (above) takes over
-                    // entirely while saleOpen, so this only actually renders
-                    // when the panel is closed — reopening it is what SOLD
-                    // does; closing it is the sale panel's own "Back to
-                    // Available" link, not this toggle, once open.
-                    //
-                    // SOLD stays highlighted, and can't be pressed to start
-                    // a second sale, once the artwork is genuinely SOLD
-                    // (2026-09-20, direct request — "not allow another sale
-                    // unless existing one cancelled or deleted") — isSold
-                    // overrides saleOpen for the highlight so this stays
-                    // correct even after onSaleCompleted collapses the
-                    // panel back down. "Delete this sale" underneath is the
-                    // only way back to Available from here.
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Availability
-                      </label>
-                      <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                        <button
-                          type="button"
-                          onClick={() => setSaleOpen(false)}
-                          className={`flex-1 px-3 py-[6.4px] font-medium ${
-                            !saleOpen && !isSold
-                              ? "bg-neutral-900 text-white"
-                              : "bg-white text-neutral-600 hover:bg-neutral-50"
-                          }`}
-                        >
-                          Available
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setSaleOpen(true)}
-                          disabled={!artwork.offeredPrice || isSold}
-                          title={
-                            isSold
-                              ? "Already sold — delete the sale below to make it available again"
-                              : !artwork.offeredPrice
-                                ? "Set an Offered price first"
-                                : undefined
-                          }
-                          className={`flex-1 px-3 py-[6.4px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
-                            saleOpen || isSold
-                              ? "bg-neutral-900 text-white"
-                              : "bg-white text-neutral-600 hover:bg-neutral-50"
-                          }`}
-                        >
-                          SOLD
-                        </button>
+                    // Available/SOLD toggle (2026-09-20 rebuild) — only
+                    // ever shown at all when the artwork isn't `committed`
+                    // (see the note on that above); once RESERVED or SOLD,
+                    // this whole control is replaced by plain static text
+                    // with no buttons at all — starting a second sale isn't
+                    // possible from here, and neither is undoing the one
+                    // that exists. Both happen from the Sales page.
+                    committed ? (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-neutral-700">
+                          Availability
+                        </label>
+                        <p className="rounded-md border border-neutral-300 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-700">
+                          {artwork.availability === "SOLD" ? "SOLD" : "Sold - Not Paid"}
+                        </p>
+                        <input type="hidden" name="availability" value={artwork.availability} />
                       </div>
-                      {isSold && completedPurchase && (
-                        <button
-                          type="button"
-                          onClick={handleDeleteCompletedSale}
-                          disabled={saleActionPending}
-                          className="mt-1 text-xs text-red-600 hover:underline disabled:opacity-50"
-                        >
-                          Delete this sale to make Available again
-                        </button>
-                      )}
-                      {saleActionError && (
-                        <p className="mt-1 text-xs text-red-600">{saleActionError}</p>
-                      )}
-                      <input type="hidden" name="availability" value={artwork.availability} />
-                    </div>
+                    ) : (
+                      <div>
+                        <label className="mb-1 block text-sm font-medium text-neutral-700">
+                          Availability
+                        </label>
+                        <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+                          <button
+                            type="button"
+                            onClick={() => setSaleOpen(false)}
+                            className={`flex-1 px-3 py-[6.4px] font-medium ${
+                              !saleOpen
+                                ? "bg-neutral-900 text-white"
+                                : "bg-white text-neutral-600 hover:bg-neutral-50"
+                            }`}
+                          >
+                            Available
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setSaleOpen(true)}
+                            disabled={!artwork.offeredPrice}
+                            title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
+                            className={`flex-1 px-3 py-[6.4px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
+                              saleOpen
+                                ? "bg-neutral-900 text-white"
+                                : "bg-white text-neutral-600 hover:bg-neutral-50"
+                            }`}
+                          >
+                            SOLD
+                          </button>
+                        </div>
+                        <input type="hidden" name="availability" value={artwork.availability} />
+                      </div>
+                    )
                   }
                 >
                   {!saleOpen && (
