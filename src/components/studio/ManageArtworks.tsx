@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { fetchStudioArtworks } from "@/lib/studioApi";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
 import { fieldCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
@@ -8,8 +9,8 @@ import type { Notice } from "@/components/studio/StudioUi";
 
 // "Manage existing": pick one of the artist's existing artworks, then
 // (later steps) mark it Sold or Consign it. Screens follow the design
-// mock-ups: catalogue grid (with a search box that slides down) → the
-// chosen artwork with Sold / Consigned.
+// mock-ups: catalogue grid (with a search box that opens above the
+// buttons) → the chosen artwork with Sold / Consigned.
 
 const SEARCH_DEBOUNCE_MS = 350;
 
@@ -102,7 +103,11 @@ export default function ManageArtworks({ token }: { token: string }) {
       }
       return;
     }
-    setSearchOpen(true);
+    // The field is put on screen at full size *before* it is focused —
+    // iPhone only lifts a field clear of the keyboard when it is already
+    // in place at the moment it gets focus (focusing it while it was
+    // still sliding open left it hidden behind the keyboard).
+    flushSync(() => setSearchOpen(true));
     searchRef.current?.focus();
   };
 
@@ -212,31 +217,25 @@ export default function ManageArtworks({ token }: { token: string }) {
       <NoticeLine notice={notice} />
 
       <div>
-        {/* The search box slides down by animating its row from 0 to full
-            height; the panel above never changes size. */}
-        <div
-          className={`grid transition-[grid-template-rows] duration-300 ${
-            searchOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
-          }`}
-          aria-hidden={!searchOpen}
-        >
-          <div className="overflow-hidden">
-            <div className="pb-4">
-              <input
-                ref={searchRef}
-                type="text"
-                placeholder="Title / name"
-                aria-label="Title / name"
-                autoComplete="off"
-                enterKeyHint="search"
-                tabIndex={searchOpen ? 0 : -1}
-                value={q}
-                onChange={(e) => searchFor(e.target.value)}
-                className={`${fieldCls} text-[#555] placeholder:text-[#8a8a8a]`}
-              />
-            </div>
+        {searchOpen && (
+          <div className="animate-studio-fade-in pb-4">
+            <input
+              ref={searchRef}
+              type="text"
+              placeholder="Title / name"
+              aria-label="Title / name"
+              autoComplete="off"
+              enterKeyHint="search"
+              value={q}
+              onChange={(e) => searchFor(e.target.value)}
+              // Return closes the keyboard so the Select button is visible again.
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+              className={`${fieldCls} text-[#555] placeholder:text-[#8a8a8a]`}
+            />
           </div>
-        </div>
+        )}
 
         <section className={`${panelCls} p-4`}>
           <div className="flex gap-4">
