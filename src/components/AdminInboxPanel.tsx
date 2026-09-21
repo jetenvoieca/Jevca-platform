@@ -60,9 +60,10 @@ import SaleModal from "@/components/SaleModal";
 //     the same Done list. A payment-overdue alert opens the client's
 //     Owner/Domain/Subscription cards with an action panel (see
 //     AlertClientPanel); an overdue-invoice alert opens the same sale
-//     modal as Consolidated Sales (see SaleModal); every other alert
-//     shows its message with a link and, where allowed, Dismiss (see
-//     AlertDetail).
+//     modal as Consolidated Sales (see SaleModal), as does a sale alert
+//     raised by the Studio app — which, being only for information, can
+//     also be deleted straight from the list; every other alert shows its
+//     message with a link and, where allowed, Dismiss (see AlertDetail).
 //
 // The left column has two filters side by side: the artist filter (all
 // modes) and, in Task and Alert modes, a type filter — task category or
@@ -558,6 +559,16 @@ export default function AdminInboxPanel({
     });
   };
 
+  // Deletes an alert straight from the list, without opening it — for the
+  // sale alerts, which are only there for information.
+  const handleAlertDelete = (a: AlertItem) => {
+    startTransition(async () => {
+      await dismissAlert(a.id);
+      await refreshOpenAlerts();
+      router.refresh();
+    });
+  };
+
   // The client was marked up to date — close the modal and show the new
   // entry in Done.
   const handleUpToDateDone = () => {
@@ -704,11 +715,11 @@ export default function AdminInboxPanel({
           ) : (
             <ul className="divide-y divide-neutral-100">
               {visibleAlerts.map((a) => (
-                <li key={a.id}>
+                <li key={a.id} className="flex items-stretch">
                   <button
                     type="button"
                     onClick={() => openAlert(a)}
-                    className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                    className={`block min-w-0 flex-1 px-3 py-2.5 text-left hover:bg-neutral-50 ${
                       selectedAlertId === a.id || saleAlert?.id === a.id ? "bg-neutral-100" : ""
                     }`}
                   >
@@ -734,6 +745,18 @@ export default function AdminInboxPanel({
                       {capitaliseParagraphs(a.message)}
                     </p>
                   </button>
+                  {/* Sale alerts are only there for information, so they can be
+                      deleted straight from the list. */}
+                  {a.sale && a.dismissable && (
+                    <button
+                      type="button"
+                      onClick={() => handleAlertDelete(a)}
+                      disabled={isPending}
+                      className={`shrink-0 px-3 ${deleteBtnCls}`}
+                    >
+                      Delete
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
