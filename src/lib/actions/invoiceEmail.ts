@@ -25,6 +25,9 @@ import { artistFromAddress } from "@/lib/email";
 // shows up in the Inbox's unified Sent list. Purchase's own
 // invoiceEmailedAt/invoiceEmailedTo fields are untouched and still what
 // the sale card itself reads.
+//
+// 2026-09-21: also used for an ordinary (direct, non-gallery) sale, to
+// its buyer — see recipientForPurchase below for who each kind goes to.
 
 export type InvoiceEmailDraft = { to: string; subject: string; body: string };
 
@@ -39,6 +42,8 @@ async function loadPurchaseForEmail(purchaseId: string) {
   });
 }
 
+type PurchaseForEmail = NonNullable<Awaited<ReturnType<typeof loadPurchaseForEmail>>>;
+
 // The gallery's actual contact person gets it, not the general gallery
 // inbox, if one's on file — same "sold to and invoiced through a named
 // person there" idea as everywhere else a gallery's contact fields are
@@ -48,34 +53,56 @@ function recipientFor(customer: { contactEmail: string | null; email: string | n
   return customer.contactEmail || customer.email;
 }
 
-// Builds the default subject/body for a gallery-sale email, with
-// placeholders already filled from real data — still fully editable
-// before sending (InvoiceEmailModal). Wording branches on whether the
-// sale is already paid (2026-09-03 fix): an unpaid sale gets asked for
-// payment (mentioning the Stripe link only if one's been generated —
-// createGalleryPaymentLink in payments.ts — since a gallery invoice is
-// just as often settled by bank transfer); a paid sale gets thanked and
-// sent its receipt, with no payment request at all — the earlier wording
-// asked a gallery that had *already paid* to pay again, which read as a
-// genuine mistake, not just a labelling quirk.
+// Who the email goes to: a gallery sale to the gallery's contact (see
+// above), any other sale to the buyer's own email address recorded on the
+// sale.
+function recipientForPurchase(purchase: PurchaseForEmail) {
+  if (purchase.channel === "GALLERY") {
+    return purchase.customer ? recipientFor(purchase.customer) : null;
+  }
+  return purchase.buyerEmail;
+}
+
+// Builds the default subject/body for a sale email, with placeholders
+// already filled from real data — still fully editable before sending
+// (InvoiceEmailModal). Wording branches on whether the sale is already
+// paid (2026-09-03 fix): an unpaid sale gets asked for payment (mentioning
+// the Stripe link only if one's been generated — createGalleryPaymentLink
+// in payments.ts — since an invoice is just as often settled by bank
+// transfer); a paid sale gets thanked and sent its receipt, with no
+// payment request at all — the earlier wording asked a gallery that had
+// *already paid* to pay again, which read as a genuine mistake, not just a
+// labelling quirk. A gallery is congratulated on its sale; a direct buyer
+// is thanked for their purchase.
 export async function getInvoiceEmailDraft(
   purchaseId: string
 ): Promise<InvoiceEmailDraft | { error: string }> {
   const purchase = await loadPurchaseForEmail(purchaseId);
   if (!purchase) return { error: "Sale not found." };
-  if (purchase.channel !== "GALLERY") return { error: "This isn't a gallery sale." };
-  if (!purchase.customer) return { error: "No gallery is linked to this sale." };
 
-  const recipient = recipientFor(purchase.customer);
+  const isGallery = purchase.channel === "GALLERY";
+  if (isGallery && !purchase.customer) return { error: "No gallery is linked to this sale." };
+
+  const recipient = recipientForPurchase(purchase);
   if (!recipient) {
-    return { error: "This gallery has no email address on file — add one on the Details tab first." };
+    return {
+      error: isGallery
+        ? "This gallery has no email address on file — add one on the Details tab first."
+        : "This sale has no buyer email on file.",
+    };
   }
 
   const sym = currencySymbol(purchase.currency);
   const total = parseFloat(purchase.totalAmount.toString());
-  const contactFirstName =
-    purchase.customer.contactName?.trim().split(/\s+/)[0] || purchase.customer.name;
+  const firstName =
+    (isGallery
+      ? purchase.customer?.contactName?.trim().split(/\s+/)[0] || purchase.customer?.name
+      : purchase.buyerName?.trim().split(/\s+/)[0]) || "there";
   const isPaid = purchase.status === "COMPLETED";
+
+  const opening = isGallery
+    ? `It's great that you have sold ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`
+    : `Thank you for your purchase of ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`;
 
   const middleParagraphs = isPaid
     ? ["Thank you for the payment — I enclose our receipt for your records."]
@@ -88,9 +115,9 @@ export async function getInvoiceEmailDraft(
       ];
 
   const body = [
-    `Dear ${contactFirstName},`,
+    `Dear ${firstName},`,
     "",
-    `It's great that you have sold ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`,
+    opening,
     "",
     ...middleParagraphs,
     "",
@@ -108,9 +135,9 @@ export async function getInvoiceEmailDraft(
 // Actually sends it, via Resend, with the real invoice/receipt PDF
 // attached (generateInvoicePdf itself already picks the right document —
 // "Invoice" or "Receipt" — based on the sale's paid status). The
-// recipient is always re-derived from the Customer record here
-// server-side — never taken from the submitted form — so an edited
-// subject/body can never redirect where the email actually goes.
+// recipient is always re-derived from the sale server-side — never taken
+// from the submitted form — so an edited subject/body can never redirect
+// where the email actually goes.
 export async function sendInvoiceEmail(
   purchaseId: string,
   siteId: string,
@@ -118,11 +145,20 @@ export async function sendInvoiceEmail(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await loadPurchaseForEmail(purchaseId);
   if (!purchase) return { ok: false, error: "Sale not found." };
-  if (!purchase.customer) return { ok: false, error: "No gallery is linked to this sale." };
 
-  const recipient = recipientFor(purchase.customer);
+  const isGallery = purchase.channel === "GALLERY";
+  if (isGallery && !purchase.customer) {
+    return { ok: false, error: "No gallery is linked to this sale." };
+  }
+
+  const recipient = recipientForPurchase(purchase);
   if (!recipient) {
-    return { ok: false, error: "This gallery has no email address on file." };
+    return {
+      ok: false,
+      error: isGallery
+        ? "This gallery has no email address on file."
+        : "This sale has no buyer email on file.",
+    };
   }
 
   const apiKey = process.env.RESEND_API_KEY;
