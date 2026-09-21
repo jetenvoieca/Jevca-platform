@@ -132,6 +132,15 @@ const EMPTY_TASK_FORM: TaskInput = {
   artistId: "",
 };
 
+// The sale alerts the Studio app raises (SALE_RECORDED, SALE_LINK_CREATED)
+// are only there for information, so they can be deleted straight from the
+// list — whether or not they know which sale they are about (the earliest
+// ones don't). The overdue-invoice alerts share the SALE_ prefix but are
+// worked out live and can't be dismissed, so `dismissable` rules them out.
+function isInformationalSaleAlert(alert: AlertItem): boolean {
+  return alert.dismissable && alert.type.startsWith("SALE_");
+}
+
 // The Inbox's address, with the left-hand artist filter and (optionally)
 // the selected alert carried in the query string.
 function inboxUrl(artistId: string | null, alertId?: string): string {
@@ -745,9 +754,7 @@ export default function AdminInboxPanel({
                       {capitaliseParagraphs(a.message)}
                     </p>
                   </button>
-                  {/* Sale alerts are only there for information, so they can be
-                      deleted straight from the list. */}
-                  {a.sale && a.dismissable && (
+                  {isInformationalSaleAlert(a) && (
                     <button
                       type="button"
                       onClick={() => handleAlertDelete(a)}
