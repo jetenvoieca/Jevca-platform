@@ -20,7 +20,9 @@ const INVOICE_OVERDUE_DAYS = 30;
 // Email Integration) links to the Inbox. The two sale types (2026-09-21)
 // are raised by the Studio app and link to the site's Sales page:
 // SALE_RECORDED when a sale is recorded or a card payment is taken,
-// SALE_LINK_CREATED when a payment link is created for a buyer.
+// SALE_LINK_CREATED when a payment link is created for a buyer. Each
+// carries the sale it is about (AlertEvent.purchaseId), so the Inbox
+// opens that sale just as the Sales page does.
 const EMAIL_ALERT_TYPE = "EMAIL_REPLY_RECEIVED";
 export const SALE_RECORDED_ALERT_TYPE = "SALE_RECORDED";
 export const SALE_LINK_ALERT_TYPE = "SALE_LINK_CREATED";
@@ -113,11 +115,13 @@ export async function raiseAlertIfNotAlreadyOpen(params: {
 // same artist at once — each sale is its own piece of news, dismissed
 // individually from the Inbox — but an identical open alert is never
 // duplicated, so repeating the same step (a retry, or the Stripe webhook
-// and the app both reporting one payment) raises it only once. WARNING
+// and the app both reporting one payment) raises it only once. Remembers
+// which sale it is about, so the Inbox can open that sale. WARNING
 // because the Alerts list only distinguishes WARNING (amber) from
 // CRITICAL (red).
 export async function raiseSaleAlert(params: {
   artistId: string;
+  purchaseId: string;
   type: typeof SALE_RECORDED_ALERT_TYPE | typeof SALE_LINK_ALERT_TYPE;
   message: string;
 }): Promise<void> {
@@ -133,6 +137,7 @@ export async function raiseSaleAlert(params: {
   await db.alertEvent.create({
     data: {
       artistId: params.artistId,
+      purchaseId: params.purchaseId,
       type: params.type,
       severity: "WARNING",
       message: params.message,
@@ -190,7 +195,11 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     await Promise.all([
       db.alertEvent.findMany({
         where: { resolvedAt: null },
-        include: { artist: { select: { id: true, name: true, sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 } } } },
+        include: {
+          artist: { select: { id: true, name: true, sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 } } },
+          // Which artwork a sale alert's sale is for, so the Inbox can open it.
+          purchase: { select: { artworkId: true } },
+        },
         orderBy: [{ severity: "desc" }, { createdAt: "desc" }],
       }),
       db.artist.findMany({
@@ -309,6 +318,16 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       linkLabel: link.label,
       createdAt: a.createdAt.toISOString(),
       dismissable: true,
+      // A sale alert opens its sale, like the overdue-invoice alerts below.
+      sale:
+        a.purchaseId && a.purchase && a.artistId
+          ? {
+              purchaseId: a.purchaseId,
+              artworkId: a.purchase.artworkId,
+              artistId: a.artistId,
+              siteId,
+            }
+          : undefined,
     };
   });
 

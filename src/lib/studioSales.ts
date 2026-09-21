@@ -16,7 +16,8 @@ import type { StudioPaymentDetails } from "@/lib/studioShared";
 
 // The Studio app's sales. Each one runs the same routine as the admin
 // Catalogue's Sold panel, so a sale behaves identically however it was
-// started — and raises an alert so it shows on the Alerts list.
+// started — and raises an alert so it shows on the Alerts list. Each
+// alert remembers its sale, so the Inbox opens it like the Sales page.
 //
 // Only that artist's own artworks can be sold; the routines themselves
 // refuse an artwork that already has a sale.
@@ -75,6 +76,7 @@ export async function recordStudioSale(
 
   await raiseSaleAlert({
     artistId: artist.id,
+    purchaseId: result.purchaseId,
     type: SALE_RECORDED_ALERT_TYPE,
     message: `${artist.name}: sold "${artwork.presentationTitle}" to ${sale.buyerName} — ${sale.currency} ${parseFloat(sale.totalAmount).toFixed(2)}${method ? `, ${method}` : ""} (recorded in Studio).`,
   });
@@ -149,6 +151,7 @@ export async function startStudioPaymentLink(artist: Artist, details: StudioPaym
   const sale = await describePurchase(result.purchaseId);
   await raiseSaleAlert({
     artistId: artist.id,
+    purchaseId: result.purchaseId,
     type: SALE_LINK_ALERT_TYPE,
     message: `${artist.name}: payment link created for "${sale.title}" to ${sale.buyer} — ${sale.amount} (via Studio). Sold - Not Paid until they pay.`,
   });
@@ -209,6 +212,7 @@ export async function confirmStudioCardPayment(
   const sale = await describePurchase(purchaseId);
   await raiseSaleAlert({
     artistId: artist.id,
+    purchaseId,
     type: SALE_RECORDED_ALERT_TYPE,
     message: `${artist.name}: ${sale.inInstalments ? "first instalment" : "card payment"} taken for "${sale.title}" from ${sale.buyer} — ${sale.amount} (via Studio).`,
   });

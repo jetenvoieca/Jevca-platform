@@ -375,19 +375,31 @@ model SubscriptionPayment {
 // time that reply is actually opened in the inbox (getThread in
 // lib/actions/inboundEmail.ts), same self-clearing pattern as the
 // subscription alerts.
+//
+// And for SALE_RECORDED / SALE_LINK_CREATED (2026-09-21) — raised by the
+// Studio app when an artist records a sale, takes a card payment, or
+// creates a payment link; see purchaseId below.
 model AlertEvent {
   id       String @id @default(cuid())
-  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED" | "EMAIL_REPLY_RECEIVED"
+  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED" | "EMAIL_REPLY_RECEIVED" | "SALE_RECORDED" | "SALE_LINK_CREATED"
   severity String @default("WARNING") // "INFO" | "WARNING" | "CRITICAL"
   message  String
 
   artistId String?
   artist   Artist? @relation(fields: [artistId], references: [id])
 
+  // The sale this alert is about, for the two sale alert types above
+  // (2026-09-21) — lets the Inbox open that sale exactly as the Sales page
+  // does. Null for every other alert type, and set back to null if the
+  // sale is later deleted (the alert itself stays).
+  purchaseId String?
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
   resolvedAt DateTime?
   createdAt  DateTime  @default(now())
 
   @@index([artistId])
+  @@index([purchaseId])
   @@index([resolvedAt])
 }
 
@@ -995,6 +1007,8 @@ model Purchase {
   // alongside invoiceEmailedAt/certificateEmailedAt above, which remain
   // the source for the per-sale "Invoice sent [date]" line.
   outboundEmails OutboundEmail[]
+  // Alerts raised about this sale (2026-09-21) — see AlertEvent.purchaseId.
+  alertEvents AlertEvent[]
 
   createdAt DateTime  @default(now())
   closedAt DateTime?
