@@ -15,9 +15,13 @@ const MANUAL_OVERDUE_DAYS = 30 + 14;
 // passed since that email went out. See SALE_INVOICE_OVERDUE below.
 const INVOICE_OVERDUE_DAYS = 30;
 
-// Alert types that link to the Inbox rather than a site's Settings page
-// (2026-09-05, Email Integration) — see the storedItems mapping below.
+// Stored alert types that link somewhere other than a site's Settings
+// page — see storedAlertLink below. EMAIL_REPLY_RECEIVED (2026-09-05,
+// Email Integration) links to the Inbox; SALE_RECORDED (2026-09-21, raised
+// when an artist records a sale from the Studio app) links to the site's
+// Sales page.
 const EMAIL_ALERT_TYPE = "EMAIL_REPLY_RECEIVED";
+const SALE_RECORDED_ALERT_TYPE = "SALE_RECORDED";
 
 // Cache tag for the open-alerts scan below — server actions that change
 // what would be flagged (dismissing an alert, recording a subscription
@@ -101,6 +105,25 @@ export async function raiseAlertIfNotAlreadyOpen(params: {
   });
 }
 
+// One alert for every sale recorded from the Studio app (2026-09-21).
+// Deliberately NOT de-duplicated like raiseAlertIfNotAlreadyOpen above:
+// each sale is its own piece of news, dismissed individually from the
+// Inbox. WARNING because the Alerts list only distinguishes WARNING
+// (amber) from CRITICAL (red).
+export async function raiseSaleRecordedAlert(params: {
+  artistId: string;
+  message: string;
+}): Promise<void> {
+  await db.alertEvent.create({
+    data: {
+      artistId: params.artistId,
+      type: SALE_RECORDED_ALERT_TYPE,
+      severity: "WARNING",
+      message: params.message,
+    },
+  });
+}
+
 // Resolves every currently-open alert of a given type for an artist —
 // the other half of raiseAlertIfNotAlreadyOpen above, same shared-helper
 // reasoning.
@@ -109,6 +132,26 @@ export async function resolveAlertsOfType(artistId: string, type: string): Promi
     where: { artistId, type, resolvedAt: null },
     data: { resolvedAt: new Date() },
   });
+}
+
+// Where a stored alert's link goes and what it says: the Inbox for an
+// email reply, the site's Sales page for a recorded sale, otherwise the
+// site's Settings page.
+function storedAlertLink(
+  type: string,
+  artistId: string | null,
+  siteId: string | null
+): { href: string | null; label: string } {
+  if (type === EMAIL_ALERT_TYPE) {
+    return {
+      href: `/accounts/inbox${artistId ? `?artistId=${artistId}` : ""}`,
+      label: "View inbox",
+    };
+  }
+  if (type === SALE_RECORDED_ALERT_TYPE) {
+    return { href: siteId ? `/sites/${siteId}/sales` : null, label: "View sales" };
+  }
+  return { href: siteId ? `/sites/${siteId}` : null, label: "View settings" };
 }
 
 // getOpenAlerts scans every artist and every payment across the whole
@@ -237,10 +280,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
 
   const storedItems: AlertItem[] = stored.map((a) => {
     const siteId = a.artist?.sites[0]?.id || null;
-    // Email alerts link straight to the Inbox (filtered to the artist
-    // where possible), not to a site's Settings page like every other
-    // stored alert type (2026-09-05, Email Integration).
-    const isEmailAlert = a.type === EMAIL_ALERT_TYPE;
+    const link = storedAlertLink(a.type, a.artistId, siteId);
     return {
       id: a.id,
       type: a.type,
@@ -249,12 +289,8 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       artistId: a.artistId,
       artistName: a.artist?.name || null,
       siteId,
-      linkHref: isEmailAlert
-        ? `/accounts/inbox${a.artistId ? `?artistId=${a.artistId}` : ""}`
-        : siteId
-        ? `/sites/${siteId}`
-        : null,
-      linkLabel: isEmailAlert ? "View inbox" : "View settings",
+      linkHref: link.href,
+      linkLabel: link.label,
       createdAt: a.createdAt.toISOString(),
       dismissable: true,
     };

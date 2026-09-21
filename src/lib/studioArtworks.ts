@@ -4,14 +4,21 @@ import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
 
 const PAGE_SIZE = 24;
 
-// Everything one tile in the Studio app's "Manage existing" grid needs.
+// Everything the Studio app's "Manage existing" screens need to know about
+// one artwork: its tile in the grid, and the details shown when it is
+// chosen.
 export type StudioArtworkTile = {
   id: string;
   title: string;
   // "Type - Edition", the same line the Consigned Works tiles show —
   // empty when the artwork has neither.
   typeEdition: string;
+  // "Type - Medium", shown as the description on the sale panel.
+  typeMedium: string;
   group: string | null;
+  size: string | null;
+  // The artwork's asking price (Offered price), e.g. "450.00".
+  price: string | null;
   availability: "AVAILABLE" | "RESERVED" | "SOLD";
   thumbnailUrl: string | null;
   displayUrl: string | null;
@@ -35,7 +42,10 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
         catalogueName: true,
         type: true,
         edition: true,
+        medium: true,
         catalogueGroup: true,
+        size: true,
+        offeredPrice: true,
         availability: true,
         mainImage: { select: { url: true, thumbnailKey: true, displayKey: true } },
         images: { take: 1, select: { url: true, thumbnailKey: true, displayKey: true } },
@@ -51,7 +61,10 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
       id: a.id,
       title: a.catalogueName,
       typeEdition: [a.type, a.edition].filter(Boolean).join(" - "),
+      typeMedium: [a.type, a.medium].filter(Boolean).join(" - "),
       group: a.catalogueGroup,
+      size: a.size,
+      price: a.offeredPrice != null ? a.offeredPrice.toString() : null,
       availability: a.availability,
       thumbnailUrl,
       displayUrl: image ? publicMediaUrl(image.displayKey) || thumbnailUrl : null,

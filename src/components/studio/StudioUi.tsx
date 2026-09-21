@@ -41,3 +41,35 @@ export function NoticeLine({ notice }: { notice: Notice | null }) {
     </p>
   );
 }
+
+// A dropdown whose first entry is its own name ("Size", "Type", "Source")
+// and which stays grey until something is chosen.
+export function Dropdown({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      aria-label={label}
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      className={`${fieldCls} appearance-none [text-align-last:center] ${
+        value ? "text-[#555]" : "text-[#8a8a8a]"
+      }`}
+    >
+      <option value="">{label}</option>
+      {options.map((o) => (
+        <option key={o} value={o}>
+          {o}
+        </option>
+      ))}
+    </select>
+  );
+}

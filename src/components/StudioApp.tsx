@@ -5,6 +5,7 @@ import AddArtwork from "@/components/studio/AddArtwork";
 import ManageArtworks from "@/components/studio/ManageArtworks";
 import { NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
+import type { StudioSettings } from "@/lib/studioSettings";
 
 // The Studio app for one artist: the first screen (logo + two options)
 // and whichever flow the artist chose. Tapping the "JEVCA Studio" title
@@ -16,16 +17,12 @@ export default function StudioApp({
   token,
   artistName,
   logoUrl,
-  artworkTypes,
-  artworkLocations,
-  sizePresets,
+  settings,
 }: {
   token: string;
   artistName: string;
   logoUrl: string | null;
-  artworkTypes: string[];
-  artworkLocations: string[];
-  sizePresets: string[];
+  settings: StudioSettings;
 }) {
   const [mode, setMode] = useState<Mode>("home");
   const [notice, setNotice] = useState<Notice | null>(null);
@@ -80,8 +77,8 @@ export default function StudioApp({
       {mode === "add" && (
         <AddArtwork
           token={token}
-          artworkTypes={artworkTypes}
-          sizePresets={sizePresets}
+          artworkTypes={settings.artworkTypes}
+          sizePresets={settings.sizePresets}
           onDone={goHome}
           onBusyChange={setBusy}
         />
@@ -90,7 +87,7 @@ export default function StudioApp({
       {mode === "manage" && (
         <ManageArtworks
           token={token}
-          locations={artworkLocations}
+          settings={settings}
           onDone={goHome}
           onBusyChange={setBusy}
         />

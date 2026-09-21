@@ -1,7 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { notFound } from "next/navigation";
 import { findArtistByToken } from "@/lib/studioAuth";
-import { getArtworkSettings } from "@/lib/actions/artworkSettings";
+import { getStudioSettings } from "@/lib/studioSettings";
 import StudioApp from "@/components/StudioApp";
 
 export const dynamic = "force-dynamic";
@@ -33,16 +33,14 @@ export default async function StudioPage({
   const artist = await findArtistByToken(token);
   if (!artist) notFound();
 
-  const settings = await getArtworkSettings(artist.id);
+  const settings = await getStudioSettings(artist.id);
 
   return (
     <StudioApp
       token={token}
       artistName={artist.name}
       logoUrl={artist.logoUrl}
-      artworkTypes={settings.artworkTypes}
-      artworkLocations={settings.artworkLocations}
-      sizePresets={settings.sizePresets}
+      settings={settings}
     />
   );
 }

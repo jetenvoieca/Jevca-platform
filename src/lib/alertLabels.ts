@@ -10,6 +10,9 @@ export const ALERT_TYPE_LABELS: Record<string, string> = {
   SALE_INVOICE_UNPAID: "Invoice unpaid",
   // 2026-09-19 — invoice emailed over 30 days ago with no payment.
   SALE_INVOICE_OVERDUE: "Invoice overdue",
+  // 2026-09-21 — raised when an artist records a sale from the Studio app;
+  // see raiseSaleRecordedAlert in lib/alerts.ts.
+  SALE_RECORDED: "Sale recorded",
   // 2026-09-05, Email Integration — see raiseAlertIfNotAlreadyOpen in
   // lib/actions/inboundEmail.ts.
   EMAIL_REPLY_RECEIVED: "New email reply",

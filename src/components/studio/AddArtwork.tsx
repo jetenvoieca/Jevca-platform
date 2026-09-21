@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 import { sendToHopper } from "@/lib/hopperUpload";
-import { fieldCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
+import { parsePrice } from "@/lib/studioShared";
+import {
+  Dropdown,
+  fieldCls,
+  NoticeLine,
+  panelCls,
+  StudioButton,
+} from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 
 // "Add new Artwork": get a photo — from the phone's library or straight
@@ -19,45 +26,6 @@ const EMPTY_DETAILS: Details = { title: "", size: "", price: "", type: "", descr
 // Recorded on every Hopper item sent from here — see the note on
 // `source` in src/app/api/hopper/finalize/route.ts.
 const SOURCE = "Studio";
-
-// Accepts "1200", "1 200", "1200,50" or "1200.50". Returns the plain
-// number string the server expects, "" when left blank, or null when
-// it isn't a valid price.
-function parsePrice(raw: string): string | null {
-  const cleaned = raw.replace(/\s/g, "").replace(",", ".");
-  if (cleaned === "") return "";
-  return /^\d+(\.\d{1,2})?$/.test(cleaned) ? cleaned : null;
-}
-
-function Dropdown({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: string[];
-  onChange: (value: string) => void;
-}) {
-  return (
-    <select
-      aria-label={label}
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-      className={`${fieldCls} appearance-none [text-align-last:center] ${
-        value ? "text-[#555]" : "text-[#8a8a8a]"
-      }`}
-    >
-      <option value="">{label}</option>
-      {options.map((o) => (
-        <option key={o} value={o}>
-          {o}
-        </option>
-      ))}
-    </select>
-  );
-}
 
 export default function AddArtwork({
   token,
