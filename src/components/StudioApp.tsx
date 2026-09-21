@@ -246,7 +246,7 @@ export default function StudioApp({
             <button
               type="button"
               onClick={openLibrary}
-              aria-label="Choose from pictures"
+              aria-label="Choose Photos"
               className="flex h-full w-full items-center justify-center text-7xl text-[#8a8a8a]"
             >
               +
@@ -255,7 +255,7 @@ export default function StudioApp({
           <NoticeLine notice={notice} />
           <section className={`${panelCls} p-4`}>
             <div className="flex gap-4">
-              <StudioButton onClick={openLibrary}>Choose from pictures</StudioButton>
+              <StudioButton onClick={openLibrary}>Choose Photos</StudioButton>
               <StudioButton onClick={openCamera}>Take a photo</StudioButton>
             </div>
           </section>
