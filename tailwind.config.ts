@@ -8,13 +8,13 @@ const config: Config = {
   theme: {
     extend: {
       keyframes: {
-        "studio-fade-in": {
-          from: { opacity: "0" },
-          to: { opacity: "1" },
+        "studio-slide-down": {
+          from: { opacity: "0", transform: "translateY(-1rem)" },
+          to: { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
-        "studio-fade-in": "studio-fade-in 250ms ease-out",
+        "studio-slide-down": "studio-slide-down 250ms ease-out",
       },
     },
   },

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { flushSync } from "react-dom";
 import { fetchStudioArtworks } from "@/lib/studioApi";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
 import { fieldCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
@@ -40,7 +39,6 @@ export default function ManageArtworks({ token }: { token: string }) {
   // continues that list even while a newer search is still being typed.
   const queryRef = useRef("");
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const searchRef = useRef<HTMLInputElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
   const runQuery = useCallback(
@@ -95,20 +93,16 @@ export default function ManageArtworks({ token }: { token: string }) {
     debounceRef.current = setTimeout(() => void runQuery(value.trim(), 0), SEARCH_DEBOUNCE_MS);
   };
 
+  // Opens or closes the search box. The keyboard only appears once the
+  // artist taps into the box — opening it and raising the keyboard in the
+  // same tap left the box hidden behind the keyboard on iPhone.
   const toggleSearch = () => {
     if (searchOpen) {
       setSearchOpen(false);
-      if (q) {
-        searchFor("");
-      }
+      if (q) searchFor("");
       return;
     }
-    // The field is put on screen at full size *before* it is focused —
-    // iPhone only lifts a field clear of the keyboard when it is already
-    // in place at the moment it gets focus (focusing it while it was
-    // still sliding open left it hidden behind the keyboard).
-    flushSync(() => setSearchOpen(true));
-    searchRef.current?.focus();
+    setSearchOpen(true);
   };
 
   const onTile = (artwork: StudioArtworkTile) => {
@@ -218,9 +212,8 @@ export default function ManageArtworks({ token }: { token: string }) {
 
       <div>
         {searchOpen && (
-          <div className="animate-studio-fade-in pb-4">
+          <div className="animate-studio-slide-down pb-4">
             <input
-              ref={searchRef}
               type="text"
               placeholder="Title / name"
               aria-label="Title / name"
@@ -244,6 +237,11 @@ export default function ManageArtworks({ token }: { token: string }) {
           </div>
         </section>
       </div>
+
+      {/* Spare room below while searching. The page is otherwise exactly one
+          screen tall, so when the keyboard opens iPhone has nowhere to scroll
+          the search box to and leaves it hidden behind the keyboard. */}
+      {searchOpen && <div aria-hidden className="h-[45dvh] shrink-0" />}
     </>
   );
 }
