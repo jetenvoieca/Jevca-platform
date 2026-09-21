@@ -6,6 +6,20 @@
 // "Record sale" form offers.
 export const SALE_CURRENCIES = ["GBP", "EUR"] as const;
 
+// What the app sends to start taking payment for an artwork, by card or by
+// payment link. All values are plain text; `deposit` is "" when there is
+// none.
+export type StudioPaymentDetails = {
+  artworkId: string;
+  price: string;
+  currency: string;
+  deposit: string;
+  option: "FULL" | "INSTALMENTS";
+  source: string;
+  buyerName: string;
+  buyerEmail: string;
+};
+
 // Accepts "1200", "1 200", "1200,50" or "1200.50". Returns the plain
 // number string the server expects, "" when left blank, or null when
 // it isn't a valid price.
@@ -21,6 +35,10 @@ export function priceToInput(price: string | null): string {
   if (!price) return "";
   const n = parseFloat(price);
   return Number.isFinite(n) ? String(n) : "";
+}
+
+export function formatMoney(amount: number, currency: string): string {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
 }
 
 // Today's date on the phone's own calendar, as a date field expects it

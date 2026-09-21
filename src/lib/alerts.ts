@@ -17,11 +17,14 @@ const INVOICE_OVERDUE_DAYS = 30;
 
 // Stored alert types that link somewhere other than a site's Settings
 // page — see storedAlertLink below. EMAIL_REPLY_RECEIVED (2026-09-05,
-// Email Integration) links to the Inbox; SALE_RECORDED (2026-09-21, raised
-// when an artist records a sale from the Studio app) links to the site's
-// Sales page.
+// Email Integration) links to the Inbox. The two sale types (2026-09-21)
+// are raised by the Studio app and link to the site's Sales page:
+// SALE_RECORDED when a sale is recorded or a card payment is taken,
+// SALE_LINK_CREATED when a payment link is created for a buyer.
 const EMAIL_ALERT_TYPE = "EMAIL_REPLY_RECEIVED";
-const SALE_RECORDED_ALERT_TYPE = "SALE_RECORDED";
+export const SALE_RECORDED_ALERT_TYPE = "SALE_RECORDED";
+export const SALE_LINK_ALERT_TYPE = "SALE_LINK_CREATED";
+const SALE_ALERT_TYPES = [SALE_RECORDED_ALERT_TYPE, SALE_LINK_ALERT_TYPE];
 
 // Cache tag for the open-alerts scan below — server actions that change
 // what would be flagged (dismissing an alert, recording a subscription
@@ -105,19 +108,32 @@ export async function raiseAlertIfNotAlreadyOpen(params: {
   });
 }
 
-// One alert for every sale recorded from the Studio app (2026-09-21).
-// Deliberately NOT de-duplicated like raiseAlertIfNotAlreadyOpen above:
-// each sale is its own piece of news, dismissed individually from the
-// Inbox. WARNING because the Alerts list only distinguishes WARNING
-// (amber) from CRITICAL (red).
-export async function raiseSaleRecordedAlert(params: {
+// One alert per sale event raised from the Studio app (2026-09-21).
+// Unlike raiseAlertIfNotAlreadyOpen above, several can be open for the
+// same artist at once — each sale is its own piece of news, dismissed
+// individually from the Inbox — but an identical open alert is never
+// duplicated, so repeating the same step (a retry, or the Stripe webhook
+// and the app both reporting one payment) raises it only once. WARNING
+// because the Alerts list only distinguishes WARNING (amber) from
+// CRITICAL (red).
+export async function raiseSaleAlert(params: {
   artistId: string;
+  type: typeof SALE_RECORDED_ALERT_TYPE | typeof SALE_LINK_ALERT_TYPE;
   message: string;
 }): Promise<void> {
+  const existing = await db.alertEvent.findFirst({
+    where: {
+      artistId: params.artistId,
+      type: params.type,
+      message: params.message,
+      resolvedAt: null,
+    },
+  });
+  if (existing) return;
   await db.alertEvent.create({
     data: {
       artistId: params.artistId,
-      type: SALE_RECORDED_ALERT_TYPE,
+      type: params.type,
       severity: "WARNING",
       message: params.message,
     },
@@ -135,8 +151,8 @@ export async function resolveAlertsOfType(artistId: string, type: string): Promi
 }
 
 // Where a stored alert's link goes and what it says: the Inbox for an
-// email reply, the site's Sales page for a recorded sale, otherwise the
-// site's Settings page.
+// email reply, the site's Sales page for a sale, otherwise the site's
+// Settings page.
 function storedAlertLink(
   type: string,
   artistId: string | null,
@@ -148,7 +164,7 @@ function storedAlertLink(
       label: "View inbox",
     };
   }
-  if (type === SALE_RECORDED_ALERT_TYPE) {
+  if (SALE_ALERT_TYPES.includes(type)) {
     return { href: siteId ? `/sites/${siteId}/sales` : null, label: "View sales" };
   }
   return { href: siteId ? `/sites/${siteId}` : null, label: "View settings" };
