@@ -61,16 +61,23 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
   return { artworks, total };
 }
 
-// Consigning is just setting the artwork's Location to the chosen entry
-// from the artist's own Locations list — the same field the admin
-// Catalogue edits, and what puts a work on a gallery's Consigned Works
-// list (matched by name, see getGalleryDetail in actions/customers.ts).
+// Consigning sets the artwork's Location to the chosen entry from the
+// artist's own Locations list — the same field the admin Catalogue
+// edits, and what puts a work on a gallery's Consigned Works list
+// (matched by name, see getGalleryDetail in actions/customers.ts). Like
+// the admin Catalogue (updateCatalogue in actions/artworks.ts), it also
+// fills "Can be viewed at" with the same name, but only if that is still
+// empty — never overwriting one already set.
+//
 // Only that artist's own, still-available artworks can be consigned, and
 // only to a location that really is on their list.
 export async function consignStudioArtwork(artistId: string, artworkId: string, location: string) {
   const [artist, artwork] = await Promise.all([
     db.artist.findUnique({ where: { id: artistId }, select: { artworkLocations: true } }),
-    db.artwork.findFirst({ where: { id: artworkId, artistId }, select: { availability: true } }),
+    db.artwork.findFirst({
+      where: { id: artworkId, artistId },
+      select: { availability: true, viewingLocation: true },
+    }),
   ]);
 
   if (!artwork) return { error: "Artwork not found.", status: 404 as const };
@@ -81,6 +88,12 @@ export async function consignStudioArtwork(artistId: string, artworkId: string, 
     return { error: "That location isn't on your list.", status: 400 as const };
   }
 
-  await db.artwork.update({ where: { id: artworkId }, data: { location } });
+  await db.artwork.update({
+    where: { id: artworkId },
+    data: {
+      location,
+      ...(artwork.viewingLocation ? {} : { viewingLocation: location }),
+    },
+  });
   return { location };
 }
