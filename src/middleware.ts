@@ -5,6 +5,10 @@ import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 // without the app's shared password:
 // - /api/hopper/*         — the iPhone Shortcut, authenticated by its own
 //   per-artist hopperToken (see hopper-design.md)
+// - /studio/*             — each artist's own Studio capture app, opened
+//   from a personal link containing that same per-artist hopperToken
+//   (2026-09-21) — the page itself checks the token and 404s if it's
+//   wrong, same as /api/hopper/* does
 // - /api/stripe/webhook   — authenticated by Stripe's own signature check
 // - /api/platform-subscriptions/webhook — same: authenticated by Stripe's
 //   own signature check (the PLATFORM account, not an artist's — see
@@ -35,6 +39,7 @@ import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 // - /login                — has to be reachable before you're logged in
 const PUBLIC_PATH_PREFIXES = [
   "/api/hopper",
+  "/studio/",
   "/api/stripe/webhook",
   "/api/platform-subscriptions/webhook",
   "/api/shotstack/render-webhook",

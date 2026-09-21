@@ -1,16 +1,6 @@
 import { requestUploadUrl, finalizeUpload } from "@/lib/actions/media";
+import { putToR2 } from "@/lib/putToR2";
 import { generateVideoThumbnail } from "@/lib/videoThumbnail";
-
-async function putToR2(uploadUrl: string, body: File | Blob, contentType: string) {
-  const res = await fetch(uploadUrl, {
-    method: "PUT",
-    body,
-    headers: { "Content-Type": contentType },
-  });
-  if (!res.ok) {
-    throw new Error(`Upload to storage failed (status ${res.status}).`);
-  }
-}
 
 // Two tiny server calls bookending a direct browser-to-R2 upload — see
 // requestUploadUrl/finalizeUpload in actions/media.ts for why this exists
