@@ -30,6 +30,18 @@ type ArtworkRow = {
 const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
 const DENSITY_STORAGE_KEY = "jevca:artworks-density";
 
+// Availability now has three real values — AVAILABLE, RESERVED ("Sold -
+// Not Paid"), SOLD (2026-09-20 rebuild, see the "Availability model"
+// note in lib/actions/payments.ts). This is the one place that maps the
+// raw value to what the grid actually shows, so the tile ribbon and the
+// list view's Availability column can't drift out of sync with each
+// other.
+function formatAvailability(value: string): string {
+  if (value === "SOLD") return "SOLD";
+  if (value === "RESERVED") return "Sold - Not Paid";
+  return "Available";
+}
+
 export default function ArtworksCatalogueView({
   siteId,
   basePath,
@@ -556,7 +568,13 @@ export default function ArtworksCatalogueView({
             importer, since it covers both directions. Button/field
             heights cut ~20% throughout this row and the filter row
             below (2026-09-11, direct request — "catalogue will be a
-            high usage area"), same treatment as the detail panel. */}
+            high usage area"), same treatment as the detail panel.
+            The "Sold" filter still matches only the literal SOLD value
+            — a RESERVED ("Sold - Not Paid") artwork currently falls
+            under neither Available nor Sold here; it still shows
+            correctly labelled under "All" (see formatAvailability
+            above), this is just a known gap in the two quick filters
+            themselves. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 
@@ -840,9 +858,13 @@ export default function ArtworksCatalogueView({
                         No image
                       </div>
                     )}
-                    {a.availability === "SOLD" && (
+                    {/* Includes RESERVED now (2026-09-20 rebuild) — a
+                        "Sold - Not Paid" piece is just as unavailable to
+                        browse as a fully SOLD one, so it gets a ribbon
+                        too, just with different wording. */}
+                    {(a.availability === "SOLD" || a.availability === "RESERVED") && (
                       <span className="absolute right-1.5 top-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
-                        Sold
+                        {a.availability === "SOLD" ? "Sold" : "Not Paid"}
                       </span>
                     )}
                   </div>
@@ -893,7 +915,7 @@ export default function ArtworksCatalogueView({
                     <td className="py-2 text-neutral-500">
                       {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
                     </td>
-                    <td className="py-2 text-neutral-500">{a.availability}</td>
+                    <td className="py-2 text-neutral-500">{formatAvailability(a.availability)}</td>
                   </tr>
                 ))}
                 <tr className="border-b border-neutral-100">
