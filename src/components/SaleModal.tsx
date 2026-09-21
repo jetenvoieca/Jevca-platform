@@ -223,6 +223,7 @@ export default function SaleModal({
                   activePurchase={selectedDetail.activePurchase}
                   history={selectedDetail.purchaseHistory}
                   saleSources={saleSources}
+                  paymentMethods={paymentMethods}
                   onChanged={refreshSelected}
                 />
               ) : (

@@ -342,6 +342,7 @@ export default function SalesView({
                     activePurchase={selectedDetail.activePurchase}
                     history={selectedDetail.purchaseHistory}
                     saleSources={saleSources}
+                    paymentMethods={paymentMethods}
                     onChanged={refreshSelected}
                   />
                 ) : (

@@ -10,6 +10,7 @@ import {
   abandonPurchase,
   createPaymentLink,
   createCardEntryIntent,
+  markSalePaid,
   type SaleTermsDetail,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
@@ -19,6 +20,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import CustomerPicker from "@/components/CustomerPicker";
 import GallerySaleCard from "@/components/GallerySaleCard";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
+import InvoiceEmailModal from "@/components/InvoiceEmailModal";
 import type { CustomerSummary } from "@/lib/actions/customers";
 
 function formatMoney(amount: string, currency: string) {
@@ -41,11 +43,12 @@ export default function PurchasePanel({
   activePurchase,
   history,
   saleSources = [],
-  // Offered in GallerySaleCard's "Mark as paid" Method dropdown, for a
-  // GALLERY-channel activePurchase below (2026-09-03) — same
-  // Settings-editable list as everywhere else it's used. Defaults to an
-  // empty array so this stays optional for any caller that never shows
-  // a gallery sale here in the first place.
+  // Offered in the Method dropdown when a sale is marked as paid — both
+  // GallerySaleCard's "Mark as paid" for a GALLERY-channel activePurchase
+  // below (2026-09-03) and this panel's own "Record sale" form for an
+  // unpaid ordinary sale (2026-09-21). Same Settings-editable list as
+  // everywhere else it's used. Defaults to an empty array so this stays
+  // optional for any caller that never needs it.
   paymentMethods = [],
   onChanged,
 }: {
@@ -69,6 +72,14 @@ export default function PurchasePanel({
   // active purchase's own button and any completed history row's,
   // holding whichever purchase id it's currently open for (or null).
   const [certificateModalId, setCertificateModalId] = useState<string | null>(null);
+  // "Send invoice" on an unpaid sale (2026-09-21) — the invoice preview
+  // and email window.
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  // "Record sale" on an unpaid sale (2026-09-21) — the inline Date paid /
+  // Payment type form, same idea as GallerySaleCard's "Mark as Paid".
+  const [showRecordForm, setShowRecordForm] = useState(false);
+  const [paidDate, setPaidDate] = useState("");
+  const [paidMethod, setPaidMethod] = useState("");
   const [cardSecret, setCardSecret] = useState<string | null>(null);
   const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
   const [selectedOption, setSelectedOption] = useState<"full" | "instalments">("full");
@@ -296,20 +307,6 @@ export default function PurchasePanel({
     });
   };
 
-  const handleGetLink = () => {
-    if (!activePurchase) return;
-    setError(null);
-    setLinkUrl(null);
-    startTransition(async () => {
-      const result = await createPaymentLink(activePurchase.id, siteId, artworkId);
-      if (result.ok) {
-        setLinkUrl(result.url);
-      } else {
-        setError(result.error);
-      }
-    });
-  };
-
   const handleEnterCard = () => {
     if (!activePurchase) return;
     setError(null);
@@ -323,6 +320,33 @@ export default function PurchasePanel({
       } else {
         setError(result.error);
       }
+    });
+  };
+
+  // Opens the inline "Record sale" form on an unpaid sale, starting from
+  // today's date with no payment type chosen yet.
+  const handleRecordSaleClick = () => {
+    setError(null);
+    setPaidDate(new Date().toISOString().slice(0, 10));
+    setPaidMethod("");
+    setShowRecordForm(true);
+  };
+
+  const handleConfirmRecordSale = () => {
+    if (!activePurchase) return;
+    setError(null);
+    const fd = new FormData();
+    fd.set("paidDate", paidDate);
+    fd.set("method", paidMethod);
+    startTransition(async () => {
+      const res = await markSalePaid(activePurchase.id, siteId, fd);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setShowRecordForm(false);
+      if (onChanged) onChanged();
+      else router.refresh();
     });
   };
 
@@ -516,6 +540,12 @@ export default function PurchasePanel({
                   {activePurchase.framed && (
                     <span className="ml-1.5 text-xs font-normal text-neutral-400">(Framed)</span>
                   )}
+                  {/* Nothing paid yet (2026-09-21). */}
+                  {activePurchase.payments.length === 0 && (
+                    <span className="ml-2 text-sm font-medium uppercase tracking-wide text-teal-800">
+                      Due
+                    </span>
+                  )}
                 </h4>
                 <span className="text-sm text-neutral-900">
                   {formatMoney(activePurchase.totalAmount, activePurchase.currency)}
@@ -530,18 +560,14 @@ export default function PurchasePanel({
 
               {activePurchase.payments.length === 0 ? (
                 <>
-                  <p className="mb-3 text-xs text-neutral-400">
-                    Either option saves the buyer&apos;s card on file, so future instalments (if
-                    any) can be charged automatically without them needing to be present.
-                  </p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={handleGetLink}
+                      onClick={() => setShowInvoiceModal(true)}
                       disabled={isPending}
                       className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
                     >
-                      Get payment link
+                      Send invoice
                     </button>
                     <button
                       type="button"
@@ -551,7 +577,64 @@ export default function PurchasePanel({
                     >
                       Enter card now
                     </button>
+                    <button
+                      type="button"
+                      onClick={handleRecordSaleClick}
+                      disabled={isPending}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                    >
+                      Record sale
+                    </button>
                   </div>
+
+                  {showRecordForm && (
+                    <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-white p-3">
+                      <div>
+                        <label className="mb-1 block text-xs text-neutral-500">Date paid</label>
+                        <input
+                          type="date"
+                          value={paidDate}
+                          onChange={(e) => setPaidDate(e.target.value)}
+                          className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="mb-1 block text-xs text-neutral-500">Payment type</label>
+                        <select
+                          value={paidMethod}
+                          onChange={(e) => setPaidMethod(e.target.value)}
+                          className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                        >
+                          <option value="">Choose…</option>
+                          {paymentMethods.map((m) => (
+                            <option key={m} value={m}>
+                              {m}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex gap-2">
+                        <button
+                          type="button"
+                          onClick={handleConfirmRecordSale}
+                          disabled={
+                            isPending || !paidDate || (paymentMethods.length > 0 && !paidMethod)
+                          }
+                          className="flex-1 rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-semibold uppercase tracking-wide text-white hover:bg-neutral-700 disabled:opacity-50"
+                        >
+                          Paid
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setShowRecordForm(false)}
+                          disabled={isPending}
+                          className="rounded-md border border-neutral-300 px-3 py-[5px] text-sm hover:bg-white disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  )}
 
                   {linkUrl && (
                     <div className="mt-3 rounded-md bg-neutral-50 p-3">
@@ -795,6 +878,15 @@ export default function PurchasePanel({
         onConfirm={() => pendingConfirm?.onConfirm()}
         onCancel={() => setPendingConfirm(null)}
       />
+
+      {showInvoiceModal && activePurchase && (
+        <InvoiceEmailModal
+          purchaseId={activePurchase.id}
+          siteId={siteId}
+          onClose={() => setShowInvoiceModal(false)}
+          onSent={onChanged ?? (() => router.refresh())}
+        />
+      )}
 
       {certificateModalId && (
         <CertificateEmailModal

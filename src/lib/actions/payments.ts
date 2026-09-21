@@ -124,7 +124,9 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 //
 // A gallery consignment sale (startGallerySale) follows the same idea —
 // raising the invoice reserves the piece; markGallerySalePaid promotes
-// it to SOLD once the gallery actually pays.
+// it to SOLD once the gallery actually pays. An ordinary sale paid
+// outside Stripe (cash, bank transfer) is promoted the same way by
+// markSalePaid.
 //
 // Once RESERVED or SOLD, the Catalogue tab's own Available/SOLD toggle
 // disappears entirely — no delete-this-sale link, no reopenable panel.
@@ -837,6 +839,63 @@ export async function forceDeleteCompletedSale(
   return { ok: true };
 }
 
+// Reads the optional Date paid and Method a "mark as paid" form sends
+// (shared by markGallerySalePaid and markSalePaid below). No date means
+// now; no method means none recorded.
+function readPaidDetails(
+  formData?: FormData
+): { paidDate: Date; method: string | null } | { error: string } {
+  const paidDateRaw = (formData?.get("paidDate") as string | null)?.trim();
+  const method = (formData?.get("method") as string | null)?.trim() || null;
+
+  if (!paidDateRaw) return { paidDate: new Date(), method };
+  const parsed = new Date(paidDateRaw);
+  if (Number.isNaN(parsed.getTime())) return { error: "That date isn't valid." };
+  return { paidDate: parsed, method };
+}
+
+// The common ending of every "the money has arrived outside Stripe"
+// action: one PAID Payment for what's owed (the sale price less any
+// commission — a gallery's cut; an ordinary sale has none), the sale
+// COMPLETED, and the artwork promoted from RESERVED ("Sold - Not Paid")
+// to SOLD.
+async function completeSaleAsPaid(
+  purchase: {
+    id: string;
+    artworkId: string;
+    totalAmount: { toString(): string };
+    commissionPercent: { toString(): string } | null;
+    currency: string;
+  },
+  paidDate: Date,
+  method: string | null
+) {
+  const total = parseFloat(purchase.totalAmount.toString());
+  const commissionPercent = purchase.commissionPercent
+    ? parseFloat(purchase.commissionPercent.toString())
+    : 0;
+  const net = total - total * (commissionPercent / 100);
+
+  await db.payment.create({
+    data: {
+      purchaseId: purchase.id,
+      sequence: 1,
+      amount: net,
+      currency: purchase.currency,
+      status: "PAID",
+      paidDate,
+      method,
+    },
+  });
+
+  await db.purchase.update({
+    where: { id: purchase.id },
+    data: { status: "COMPLETED", closedAt: paidDate },
+  });
+
+  await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
+}
+
 // The manual equivalent of a Stripe webhook confirming payment — you
 // click this once the gallery has actually paid (e.g. by bank transfer),
 // since nothing in this flow can confirm that automatically.
@@ -870,44 +929,44 @@ export async function markGallerySalePaid(
     return { ok: false, error: "This isn't a gallery sale." };
   }
 
-  const paidDateRaw = (formData?.get("paidDate") as string | null)?.trim();
-  const method = (formData?.get("method") as string | null)?.trim() || null;
+  const paid = readPaidDetails(formData);
+  if ("error" in paid) return { ok: false, error: paid.error };
 
-  let paidDate = new Date();
-  if (paidDateRaw) {
-    const parsed = new Date(paidDateRaw);
-    if (Number.isNaN(parsed.getTime())) return { ok: false, error: "That date isn't valid." };
-    paidDate = parsed;
+  await completeSaleAsPaid(purchase, paid.paidDate, paid.method);
+  return { ok: true };
+}
+
+// The ordinary-sale counterpart of markGallerySalePaid (2026-09-21) — the
+// "Record sale" button on an unpaid sale: the buyer has paid outside
+// Stripe (bank transfer after an invoice, cash, ...), so the whole amount
+// is recorded as paid on the date and by the method given. Only for a sale
+// nothing has been paid on yet — one already part-paid by Stripe has its
+// own payment schedule.
+export async function markSalePaid(
+  purchaseId: string,
+  siteId: string,
+  formData?: FormData
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { payments: true },
+    relationLoadStrategy: "query",
+  });
+  if (!purchase) return { ok: false, error: "Purchase not found." };
+  if (purchase.channel === "GALLERY") {
+    return { ok: false, error: "This is a gallery sale — mark it as paid from its own card." };
+  }
+  if (purchase.status !== "ACTIVE") {
+    return { ok: false, error: "This sale is no longer open." };
+  }
+  if (purchase.payments.length > 0) {
+    return { ok: false, error: "Payments have already started on this sale." };
   }
 
-  const total = parseFloat(purchase.totalAmount.toString());
-  const commissionPercent = purchase.commissionPercent
-    ? parseFloat(purchase.commissionPercent.toString())
-    : 0;
-  const net = total - total * (commissionPercent / 100);
+  const paid = readPaidDetails(formData);
+  if ("error" in paid) return { ok: false, error: paid.error };
 
-  await db.payment.create({
-    data: {
-      purchaseId: purchase.id,
-      sequence: 1,
-      amount: net,
-      currency: purchase.currency,
-      status: "PAID",
-      paidDate,
-      method,
-    },
-  });
-
-  await db.purchase.update({
-    where: { id: purchaseId },
-    data: { status: "COMPLETED", closedAt: paidDate },
-  });
-
-  // Promotes RESERVED ("Sold - Not Paid", set when the gallery invoice
-  // was first raised — startGallerySale) to SOLD, now that the gallery
-  // has actually paid.
-  await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
-
+  await completeSaleAsPaid(purchase, paid.paidDate, paid.method);
   return { ok: true };
 }
 
