@@ -219,22 +219,26 @@ export async function saveSaleTerms(artworkId: string, siteId: string, formData:
 
 }
 
-// Seeds/refreshes SaleTerms straight from the Catalogue tab's own
-// Offered price (2026-09-10) — the new Sold panel's "Full payment"/
-// instalment figures are computed live from Offered price minus any
-// Deposit paid noted in the panel, not from a separately-saved SaleTerms
-// row the way the old Presentation tab's price used to work. Rather than
-// inventing a second, parallel start-a-sale pathway, this upserts
-// SaleTerms to match exactly what the panel is showing right before
-// handing off to the existing startPurchase — so instalment splitting,
-// webhooks, invoices and everything else downstream keep working
-// completely unchanged, on a totalAmount that's actually correct for
-// what was agreed in the panel.
+// Seeds/refreshes SaleTerms straight from the price being charged
+// (2026-09-10) — the Sold panel's "Full payment"/instalment figures are
+// computed live from that price minus any Deposit paid noted in the
+// panel, not from a separately-saved SaleTerms row the way the old
+// Presentation tab's price used to work. Rather than inventing a second,
+// parallel start-a-sale pathway, this upserts SaleTerms to match exactly
+// what the panel is showing right before handing off to the existing
+// startPurchase — so instalment splitting, webhooks, invoices and
+// everything else downstream keep working completely unchanged, on a
+// totalAmount that's actually correct for what was agreed in the panel.
+//
+// The price is the artwork's own Offered price, unless the caller passes
+// a `price` of its own (2026-09-21) — the Studio app lets the artist
+// adjust the price on the spot. The admin never sends one, so it always
+// charges the Offered price exactly as before.
 //
 // Deposit paid isn't recorded as its own Payment row (direct instruction,
 // 2026-09-10 — "no deposit handling needed yet, just wire the remaining
 // flow") — it only reduces the amount Stripe is asked to collect here.
-async function seedSaleTermsFromOfferedPrice(
+async function seedSaleTerms(
   artworkId: string,
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -243,13 +247,16 @@ async function seedSaleTermsFromOfferedPrice(
     select: { offeredPrice: true, artistId: true },
   });
   if (!artwork) return { ok: false, error: "Artwork not found." };
-  if (!artwork.offeredPrice) {
+
+  const priceRaw =
+    (formData.get("price") as string)?.trim() || artwork.offeredPrice?.toString();
+  if (!priceRaw) {
     return { ok: false, error: "Set an Offered price on the Catalogue tab first." };
   }
 
   const depositRaw = (formData.get("depositPaid") as string)?.trim();
   const deposit = depositRaw ? parseFloat(depositRaw) : 0;
-  const offered = parseFloat(artwork.offeredPrice.toString());
+  const offered = parseFloat(priceRaw);
   const remaining = Math.max(offered - (Number.isFinite(deposit) ? deposit : 0), 0);
   if (remaining <= 0) {
     return { ok: false, error: "Nothing left to charge after the deposit already noted." };
@@ -380,7 +387,7 @@ export async function startArtworkSaleAndGetLink(
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true; purchaseId: string; url: string } | { ok: false; error: string }> {
-  const seeded = await seedSaleTermsFromOfferedPrice(artworkId, formData);
+  const seeded = await seedSaleTerms(artworkId, formData);
   if (!seeded.ok) return seeded;
 
   const started = await startPurchase(artworkId, siteId, formData);
@@ -411,7 +418,7 @@ export async function startArtworkSaleAndEnterCard(
   | { ok: true; purchaseId: string; clientSecret: string; publishableKey: string }
   | { ok: false; error: string }
 > {
-  const seeded = await seedSaleTermsFromOfferedPrice(artworkId, formData);
+  const seeded = await seedSaleTerms(artworkId, formData);
   if (!seeded.ok) return seeded;
 
   const started = await startPurchase(artworkId, siteId, formData);

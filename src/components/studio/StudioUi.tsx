@@ -11,6 +11,9 @@ export const panelCls = "rounded-lg border border-[#cfcac0] bg-[#f8f5ee]";
 export const fieldCls =
   "w-full rounded-md border border-[#c4c4c4] bg-white px-3 py-3 text-center text-lg";
 
+// A field the artist types into.
+export const inputCls = `${fieldCls} text-[#555] placeholder:text-[#8a8a8a]`;
+
 const buttonCls =
   "flex h-32 flex-1 items-center justify-center rounded-lg bg-[#5a5a5a] px-2 text-center text-xl leading-tight text-white active:bg-[#444] disabled:opacity-50";
 
@@ -71,5 +74,26 @@ export function Dropdown({
         </option>
       ))}
     </select>
+  );
+}
+
+// A box that looks like a field but only shows the artwork's own detail.
+export function ReadOnlyField({
+  label,
+  value,
+  tall,
+}: {
+  label: string;
+  value: string | null;
+  tall?: boolean;
+}) {
+  return (
+    <div
+      className={`${fieldCls} ${tall ? "flex min-h-24 items-center justify-center" : ""} ${
+        value ? "text-[#555]" : "text-[#8a8a8a]"
+      }`}
+    >
+      {value || label}
+    </div>
   );
 }

@@ -6,7 +6,7 @@ import { sendToHopper } from "@/lib/hopperUpload";
 import { parsePrice } from "@/lib/studioShared";
 import {
   Dropdown,
-  fieldCls,
+  inputCls,
   NoticeLine,
   panelCls,
   StudioButton,
@@ -221,7 +221,7 @@ export default function AddArtwork({
                   aria-label="Price"
                   value={details.price}
                   onChange={(e) => setDetail("price")(e.target.value)}
-                  className={`${fieldCls} text-[#555] placeholder:text-[#8a8a8a]`}
+                  className={inputCls}
                 />
               </div>
             </div>
@@ -231,7 +231,7 @@ export default function AddArtwork({
               aria-label="Title / name"
               value={details.title}
               onChange={(e) => setDetail("title")(e.target.value)}
-              className={`${fieldCls} text-[#555] placeholder:text-[#8a8a8a]`}
+              className={inputCls}
             />
             <Dropdown
               label="Type"
@@ -245,9 +245,7 @@ export default function AddArtwork({
               rows={5}
               value={details.description}
               onChange={(e) => setDetail("description")(e.target.value)}
-              className={`${fieldCls} text-[#555] placeholder:text-[#8a8a8a] ${
-                details.description ? "text-left" : "text-center"
-              }`}
+              className={`${inputCls} ${details.description ? "text-left" : "text-center"}`}
             />
           </section>
           <NoticeLine notice={notice} />

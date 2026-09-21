@@ -37,6 +37,10 @@ export function priceToInput(price: string | null): string {
   return Number.isFinite(n) ? String(n) : "";
 }
 
+export function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export function formatMoney(amount: number, currency: string): string {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
 }

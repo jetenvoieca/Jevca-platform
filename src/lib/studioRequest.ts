@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findArtistByToken } from "@/lib/studioAuth";
-import { SALE_CURRENCIES } from "@/lib/studioShared";
+import { SALE_CURRENCIES, isValidEmail } from "@/lib/studioShared";
 import type { StudioPaymentDetails } from "@/lib/studioShared";
 
 // Shared plumbing for the /api/studio routes: who is calling, and
@@ -9,7 +9,6 @@ import type { StudioPaymentDetails } from "@/lib/studioShared";
 // At most 99,999,999.99 — what the database's money columns can hold.
 const MAX_AMOUNT = 99999999.99;
 const AMOUNT_PATTERN = /^\d+(\.\d{1,2})?$/;
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // Reads the JSON body and finds the artist its `token` belongs to. Returns
 // either the artist and the body's fields, or the error response to send
@@ -55,7 +54,7 @@ export function readPaymentDetails(
   if (!isValidCurrency(currency)) return { error: "Currency must be GBP or EUR." };
   if (deposit && !AMOUNT_PATTERN.test(deposit)) return { error: "Deposit must be a number." };
   if (!buyerName) return { error: "Customer name is required." };
-  if (!EMAIL_PATTERN.test(buyerEmail)) return { error: "A valid email is required." };
+  if (!isValidEmail(buyerEmail)) return { error: "A valid email is required." };
 
   return {
     details: {

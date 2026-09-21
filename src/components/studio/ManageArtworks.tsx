@@ -6,7 +6,7 @@ import type { StudioArtworkTile } from "@/lib/studioArtworks";
 import type { StudioSettings } from "@/lib/studioSettings";
 import ConsignArtwork from "@/components/studio/ConsignArtwork";
 import SellArtwork from "@/components/studio/SellArtwork";
-import { fieldCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
+import { inputCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 
 // "Manage existing": pick one of the artist's existing artworks, then
@@ -148,8 +148,7 @@ export default function ManageArtworks({
       <SellArtwork
         token={token}
         artwork={selected}
-        saleSources={settings.saleSources}
-        defaultCurrency={settings.defaultCurrency}
+        settings={settings}
         onDone={onDone}
         onBusyChange={onBusyChange}
       />
@@ -267,7 +266,7 @@ export default function ManageArtworks({
               onKeyDown={(e) => {
                 if (e.key === "Enter") e.currentTarget.blur();
               }}
-              className={`${fieldCls} text-[#555] placeholder:text-[#8a8a8a]`}
+              className={inputCls}
             />
           </div>
         )}
