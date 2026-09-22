@@ -3,13 +3,12 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { findOrCreateCustomer } from "./customers";
-import { netOwed, type SaleAmounts } from "@/lib/saleMath";
+import { netOwed, saleBreakdown, splitIntoInstalments } from "@/lib/saleMath";
 import {
   getStripeClient,
   getPublishableKey,
   toMinorUnits,
   fromMinorUnits,
-  splitIntoInstalments,
   APP_URL,
   type StripeMode,
 } from "@/lib/stripe";
@@ -45,7 +44,7 @@ export type PaymentDetail = {
   paidDate: string | null;
   // Only ever set for a GALLERY-channel sale's payment, chosen from
   // Artist.paymentMethods at the moment it's marked paid (2026-09-03) —
-  // see markGallerySalePaid below. Null for Stripe-channel payments and
+  // see recordGalleryPayment below. Null for Stripe-channel payments and
   // for anything paid before this existed.
   method: string | null;
 };
@@ -74,6 +73,10 @@ export type PurchaseDetail = {
   invoiceNumber: number | null;
   // Part Three (2026-09-01) — see the matching schema.prisma comments.
   stripePaymentLinkUrl: string | null;
+  // Instalment-plan payment link (2026-09-23) — see the matching
+  // schema.prisma comment.
+  stripeInstalmentLinkUrl: string | null;
+  stripeInstalmentLinkCount: number | null;
   invoiceEmailedAt: string | null;
   invoiceEmailedTo: string | null;
   // Certificate of Authenticity sent-log (2026-09-03) — same simple
@@ -137,7 +140,7 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 // the commit, regardless of whether it's been paid yet. Net Due (via
 // netOwed(), lib/saleMath.ts) is what actually tracks the outstanding
 // balance from here on; Purchase.status stays ACTIVE ("UNPAID" in the
-// UI) until markGallerySalePaid confirms it, same as before.
+// UI) until the balance is fully paid (completeIfSettled).
 //
 // Once RESERVED or SOLD, the Catalogue tab's own Available/SOLD toggle
 // disappears entirely — no delete-this-sale link, no reopenable panel.
@@ -423,7 +426,7 @@ export async function startArtworkSaleAndGetLink(
 // above, before the card form has even loaded — rather than waiting
 // for the payment to actually succeed. SOLD only happens later, once
 // the card payment genuinely confirms (handleFirstPaymentSucceeded/
-// completeIfAllPaid, reached via the Stripe webhook or the direct
+// completeIfSettled, reached via the Stripe webhook or the direct
 // client-side confirmation call — see StripeCardForm). See the
 // file-level note above for why RESERVED happens this early rather than
 // only on success.
@@ -483,7 +486,7 @@ export async function startArtworkSaleAndEnterCard(
 // recording the sale here IS the commit, regardless of whether the
 // balance has actually been collected yet. The sale itself
 // (Purchase.status) stays ACTIVE ("UNPAID" in the UI) until
-// markGallerySalePaid confirms the balance has come in. `saleDate` is
+// the balance is fully paid (completeIfSettled). `saleDate` is
 // when the sale actually happened (can be backdated), not today's date,
 // so it's used as the Purchase's own createdAt rather than defaulting
 // to now.
@@ -550,73 +553,119 @@ export async function startGallerySale(
   return { ok: true, purchaseId: purchase.id };
 }
 
-// A persistent, non-expiring Stripe Payment Link (2026-09-01, Part
-// Three) for the NET amount owed on this sale (sale price less
-// commission for a Gallery-type Location, less any deposit already
-// collected for an Own-type one — see netOwed(), lib/saleMath.ts) —
-// deliberately the Payment Links API, not Checkout Sessions (used by
-// createPaymentLink below, for a live Stripe-channel sale): this kind
-// of invoice can sit unpaid for weeks, and a Checkout Session's URL
-// expires within a day or so, whereas a Payment Link is meant to be
-// reusable and doesn't expire. Doesn't require a buyer email on file —
-// Stripe collects one at checkout if needed. Re-uses the same link on
-// every later call rather than creating a new one each time "Payment
-// link" is pressed again, so it's stable to paste into an already-sent
-// email or invoice.
+// A persistent, non-expiring Stripe Payment Link for what's still owed
+// on a consigned sale (its balance — see saleBreakdown(),
+// lib/saleMath.ts). The Payment Links API rather than Checkout Sessions
+// (used by createPaymentLink below): an invoice can sit unpaid for
+// weeks, and a Checkout Session expires within a day.
 //
-// payment_intent_data.metadata (2026-09-13) — carries purchaseId onto
-// the PaymentIntent this link eventually produces, not just the Payment
-// Link record itself (Payment Link metadata does NOT automatically
-// propagate to its PaymentIntent). This is what lets the webhook
-// (handleGalleryPaymentLinkPaid below) recognise a paid invoice and
-// complete the sale automatically, the same way a direct Stripe sale
-// already does. Only links created from this point forward carry it —
-// a link generated before this change has no metadata on its
-// PaymentIntent, so a payment against it still needs "Mark as paid"/
-// "Record Payment" clicked by hand.
+// Two kinds (2026-09-23, "Stripe payment link" panel):
+//   - Full amount (no `instalments`): one link for the whole balance.
+//   - Instalments (`instalments` >= 2): a link for the FIRST of that
+//     many equal instalments. It saves the buyer's card, and once paid
+//     the rest are charged monthly (handleGalleryPaymentLinkPaid) — the
+//     same model as a direct Stripe instalment sale.
+// Each kind is stored and reused until the balance changes (a payment,
+// or a price/framing/delivery edit), at which point both are retired
+// (retireGalleryPaymentLinks) — so a link always charges the current
+// figure. Changing the instalment count replaces just the instalment
+// link.
+//
+// purchaseId (and, for the instalment kind, the count) ride on the
+// PaymentIntent's own metadata, since Payment Link metadata doesn't
+// propagate to it — that's how the webhook recognises the payment.
 export async function createGalleryPaymentLink(
   purchaseId: string,
-  siteId: string
+  siteId: string,
+  instalments?: number
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   try {
     const purchase = await db.purchase.findUnique({
       where: { id: purchaseId },
-      include: { artwork: true },
+      include: { artwork: true, payments: true },
       relationLoadStrategy: "query",
     });
     if (!purchase) return { ok: false, error: "Sale not found." };
     if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
-
-    if (purchase.stripePaymentLinkUrl) {
-      return { ok: true, url: purchase.stripePaymentLinkUrl };
+    if (purchase.status !== "ACTIVE") return { ok: false, error: "This sale has already been paid." };
+    if (purchase.stripeSubscriptionScheduleId) {
+      return { ok: false, error: "This sale is already being paid by instalments." };
     }
 
-    const net = netOwed(purchase);
+    const { balance } = saleBreakdown(purchase);
+    if (balance <= 0) return { ok: false, error: "Nothing is left to pay on this sale." };
+
+    const isInstalments = instalments !== undefined;
+    if (isInstalments && (!Number.isInteger(instalments) || instalments < 2 || instalments > 36)) {
+      return { ok: false, error: "The number of instalments must be between 2 and 36." };
+    }
+
+    if (!isInstalments && purchase.stripePaymentLinkUrl) {
+      return { ok: true, url: purchase.stripePaymentLinkUrl };
+    }
+    if (isInstalments && purchase.stripeInstalmentLinkUrl) {
+      if (purchase.stripeInstalmentLinkCount === instalments) {
+        return { ok: true, url: purchase.stripeInstalmentLinkUrl };
+      }
+      await deactivatePaymentLink(purchase.artworkId, purchase.stripeInstalmentLinkId);
+    }
 
     const mode = await getStripeModeForArtwork(purchase.artworkId);
     const stripe = getStripeClient(mode);
+    const title = purchase.artwork.presentationTitle;
+    const amount = isInstalments ? splitIntoInstalments(balance, instalments)[0] : balance;
 
     const price = await stripe.prices.create({
-      unit_amount: toMinorUnits(net),
+      unit_amount: toMinorUnits(amount),
       currency: purchase.currency.toLowerCase(),
-      product_data: { name: `${purchase.artwork.presentationTitle} — balance owed` },
+      product_data: {
+        name: isInstalments ? `${title} — instalment 1 of ${instalments}` : `${title} — balance owed`,
+      },
     });
 
     const link = await stripe.paymentLinks.create({
       line_items: [{ price: price.id, quantity: 1 }],
       metadata: { purchaseId: purchase.id },
-      payment_intent_data: { metadata: { purchaseId: purchase.id } },
+      ...(isInstalments
+        ? {
+            customer_creation: "always" as const,
+            payment_intent_data: {
+              setup_future_usage: "off_session" as const,
+              metadata: { purchaseId: purchase.id, instalments: String(instalments) },
+            },
+          }
+        : { payment_intent_data: { metadata: { purchaseId: purchase.id } } }),
     });
 
     await db.purchase.update({
       where: { id: purchase.id },
-      data: { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
+      data: isInstalments
+        ? {
+            stripeInstalmentLinkId: link.id,
+            stripeInstalmentLinkUrl: link.url,
+            stripeInstalmentLinkCount: instalments,
+          }
+        : { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
     });
 
     return { ok: true, url: link.url };
   } catch (err) {
     return { ok: false, error: stripeErrorMessage(err) };
   }
+}
+
+// The starting instalment count for the "Stripe payment link" panel —
+// the artist's own Settings default, or the count of an instalment link
+// already generated for this sale.
+export async function getGalleryInstalmentDefault(purchaseId: string): Promise<number> {
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    select: {
+      stripeInstalmentLinkCount: true,
+      artwork: { select: { artist: { select: { defaultInstalmentCount: true } } } },
+    },
+  });
+  return purchase?.stripeInstalmentLinkCount || purchase?.artwork.artist.defaultInstalmentCount || 5;
 }
 
 // ---------- Editing an already-started gallery sale's price/currency ----------
@@ -633,12 +682,8 @@ export async function createGalleryPaymentLink(
 // stays locked, same principle as the invoice preview already being
 // read-only.
 //
-// If a Stripe Payment Link was already generated for the OLD amount, it
-// encodes a now-wrong net-owed figure. Rather than leave it live and
-// silently stale, it's deactivated in Stripe and cleared here — the
-// next press of "Payment Link" (createGalleryPaymentLink) generates a
-// fresh one for the corrected amount, since the DB no longer has one on
-// file.
+// Any payment link already generated encodes the old amount, so a
+// price or currency change retires it (retireGalleryPaymentLinks).
 export async function updateGallerySaleAmount(
   purchaseId: string,
   siteId: string,
@@ -660,37 +705,46 @@ export async function updateGallerySaleAmount(
 
   const amountChanged = totalAmount !== purchase.totalAmount.toString();
   const currencyChanged = currency !== purchase.currency;
-  const linkNeedsClearing = (amountChanged || currencyChanged) && purchase.stripePaymentLinkId;
+  if (amountChanged || currencyChanged) await retireGalleryPaymentLinks(purchase);
 
-  if (linkNeedsClearing) await retireGalleryPaymentLink(purchase);
-
-  await db.purchase.update({
-    where: { id: purchaseId },
-    data: {
-      totalAmount,
-      currency,
-      ...(linkNeedsClearing ? { stripePaymentLinkId: null, stripePaymentLinkUrl: null } : {}),
-    },
-  });
+  await db.purchase.update({ where: { id: purchaseId }, data: { totalAmount, currency } });
 
   return { ok: true };
 }
 
-// Deactivates a consigned sale's Payment Link in Stripe once its amount
-// is out of date (price, currency, framing or delivery changed). The
-// caller clears the stored id/url in its own update, so the next
-// "Payment link" press generates a fresh one for the current Net Due.
-// A Stripe-side failure never blocks the local change — worst case the
-// old link stays technically live in Stripe a little longer.
-async function retireGalleryPaymentLink(purchase: {
+// Retires both of a consigned sale's payment links (full amount and
+// instalments) once the balance they encode is out of date — a payment
+// received, or the price, currency, framing or delivery changed. Each is
+// deactivated in Stripe and cleared here, so the next press of a
+// payment-link option generates a fresh one for the current balance.
+async function retireGalleryPaymentLinks(purchase: {
+  id: string;
   artworkId: string;
   stripePaymentLinkId: string | null;
+  stripeInstalmentLinkId: string | null;
 }) {
-  if (!purchase.stripePaymentLinkId) return;
+  if (!purchase.stripePaymentLinkId && !purchase.stripeInstalmentLinkId) return;
+  await deactivatePaymentLink(purchase.artworkId, purchase.stripePaymentLinkId);
+  await deactivatePaymentLink(purchase.artworkId, purchase.stripeInstalmentLinkId);
+  await db.purchase.update({
+    where: { id: purchase.id },
+    data: {
+      stripePaymentLinkId: null,
+      stripePaymentLinkUrl: null,
+      stripeInstalmentLinkId: null,
+      stripeInstalmentLinkUrl: null,
+      stripeInstalmentLinkCount: null,
+    },
+  });
+}
+
+// A Stripe-side failure never blocks the local change — worst case the
+// old link stays technically live in Stripe a little longer.
+async function deactivatePaymentLink(artworkId: string, linkId: string | null) {
+  if (!linkId) return;
   try {
-    const mode = await getStripeModeForArtwork(purchase.artworkId);
-    const stripe = getStripeClient(mode);
-    await stripe.paymentLinks.update(purchase.stripePaymentLinkId, { active: false });
+    const mode = await getStripeModeForArtwork(artworkId);
+    await getStripeClient(mode).paymentLinks.update(linkId, { active: false });
   } catch {
     // See note above.
   }
@@ -701,8 +755,8 @@ async function retireGalleryPaymentLink(purchase: {
 // Saves (or, with both fields blank, removes) the one framing or one
 // delivery entry on an ACTIVE consigned sale (2026-09-23). The cost is
 // paid by the buyer/gallery, so it adds to Net Due; commission is never
-// charged on it. Any existing Payment Link is retired, since it encodes
-// the old Net Due.
+// charged on it. Any existing payment link is retired, since it encodes
+// the old balance.
 export async function saveSaleExtra(
   purchaseId: string,
   siteId: string,
@@ -728,15 +782,11 @@ export async function saveSaleExtra(
 
   const current = kind === "framing" ? purchase.framingCost : purchase.deliveryCost;
   const currentCost = current != null ? parseFloat(current.toString()).toFixed(2) : null;
-  const costChanged = currentCost !== cost;
-  if (costChanged) await retireGalleryPaymentLink(purchase);
+  if (currentCost !== cost) await retireGalleryPaymentLinks(purchase);
 
   await db.purchase.update({
     where: { id: purchaseId },
-    data: {
-      ...(kind === "framing" ? { framer: name, framingCost: cost } : { courier: name, deliveryCost: cost }),
-      ...(costChanged ? { stripePaymentLinkId: null, stripePaymentLinkUrl: null } : {}),
-    },
+    data: kind === "framing" ? { framer: name, framingCost: cost } : { courier: name, deliveryCost: cost },
   });
 
   return { ok: true };
@@ -766,7 +816,7 @@ export async function saveSaleExtra(
 //
 // `method` (2026-09-21) — how the sale was paid (bank transfer, cash,
 // ...), optional and stored on the Payment, same free-text convention as
-// markGallerySalePaid's method. The Studio app sends one chosen from the
+// recordGalleryPayment's method. The Studio app sends one chosen from the
 // artist's Payment methods list; callers that don't send one leave it
 // blank exactly as before.
 export async function recordPastSale(
@@ -923,14 +973,13 @@ export async function forceDeleteCompletedSale(
   return { ok: true };
 }
 
-// Reads the optional Date paid and Method a "mark as paid" form sends
-// (shared by markGallerySalePaid and markSalePaid below). No date means
-// now; no method means none recorded.
+// Reads the optional Date paid and Method a payment form sends. No date
+// means now; no method means none recorded.
 function readPaidDetails(
-  formData?: FormData
+  formData: FormData
 ): { paidDate: Date; method: string | null } | { error: string } {
-  const paidDateRaw = (formData?.get("paidDate") as string | null)?.trim();
-  const method = (formData?.get("method") as string | null)?.trim() || null;
+  const paidDateRaw = (formData.get("paidDate") as string | null)?.trim();
+  const method = (formData.get("method") as string | null)?.trim() || null;
 
   if (!paidDateRaw) return { paidDate: new Date(), method };
   const parsed = new Date(paidDateRaw);
@@ -938,92 +987,69 @@ function readPaidDetails(
   return { paidDate: parsed, method };
 }
 
-// The common ending of every "the money has arrived outside Stripe"
-// action: one PAID Payment for what's owed (the sale price less any
-// commission — a gallery's cut — and less any deposit already
-// collected for an Own-location sale, via netOwed() — see
-// lib/saleMath.ts; an ordinary direct sale has neither), the sale
-// COMPLETED, and the artwork promoted from RESERVED ("Sold - Not Paid")
-// — or, as of 2026-09-22, already SOLD for a Consigned Works sale — to
-// (still) SOLD.
-async function completeSaleAsPaid(
-  purchase: SaleAmounts & { id: string; artworkId: string; currency: string },
-  paidDate: Date,
-  method: string | null
-) {
-  const net = netOwed(purchase);
-
-  await db.payment.create({
-    data: {
-      purchaseId: purchase.id,
-      sequence: 1,
-      amount: net,
-      currency: purchase.currency,
-      status: "PAID",
-      paidDate,
-      method,
-    },
-  });
-
-  await db.purchase.update({
-    where: { id: purchase.id },
-    data: { status: "COMPLETED", closedAt: paidDate },
-  });
-
-  await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
+// The next Payment.sequence for a sale — payments on a consigned sale
+// can now arrive in any number and order (partial payments, a link,
+// instalments), so this is always "after the last one", never a fixed 1.
+function nextSequence(payments: { sequence: number }[]): number {
+  return payments.reduce((max, p) => Math.max(max, p.sequence), 0) + 1;
 }
 
-// The manual equivalent of a Stripe webhook confirming payment — "Record
-// Payment"/"Mark as Paid" (GallerySaleCard), pressed once the Net Due
-// balance has actually come in (e.g. by bank transfer), since nothing in
-// this flow can confirm that automatically.
-//
-// Takes an optional Date paid and Method (2026-09-03, matching the
-// inline "Mark as paid" form in GallerySaleCard) rather than always
-// stamping the exact moment the button is pressed — payment is often
-// reported a few days after it actually landed, and knowing how it was
-// paid (bank transfer, cash, etc.) is worth keeping alongside the
-// amount. `formData` is optional because PurchasePanel (the Artwork
-// Catalogue's own Payment tab) still has its own simpler one-click "Mark
-// as paid" for a gallery-channel sale, with no date/method form of its
-// own — that caller passes nothing and just gets today's date, no
-// method, exactly as before this existed. Method is free-form text from
-// the caller's point of view (validated only by GallerySaleCard's
-// <select>, sourced from Artist.paymentMethods) rather than a hard enum
-// here, same convention as Customer.kind elsewhere.
-//
-// Still needed even now that a Payment Link can complete a sale
-// automatically (see handleGalleryPaymentLinkPaid below) — this remains
-// the only path for a balance paid by bank transfer, cash, cheque, etc.
-// rather than the link.
-export async function markGallerySalePaid(
+// "Record Payment" on a consigned sale (2026-09-23, partial payments) —
+// money received outside Stripe (bank transfer, cash, cheque...), of any
+// amount up to the balance still owed. Each one is its own PAID Payment
+// with its date, amount and method; the sale completes once the balance
+// reaches zero (completeIfSettled). Any payment link is retired, since
+// the balance it encodes has just changed.
+export async function recordGalleryPayment(
   purchaseId: string,
   siteId: string,
-  formData?: FormData
+  formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
-  if (!purchase) return { ok: false, error: "Purchase not found." };
-  if (purchase.channel !== "GALLERY") {
-    return { ok: false, error: "This isn't a consigned sale." };
-  }
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { payments: true },
+    relationLoadStrategy: "query",
+  });
+  if (!purchase) return { ok: false, error: "Sale not found." };
+  if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
+  if (purchase.status !== "ACTIVE") return { ok: false, error: "This sale has already been paid." };
 
   const paid = readPaidDetails(formData);
   if ("error" in paid) return { ok: false, error: paid.error };
 
-  await completeSaleAsPaid(purchase, paid.paidDate, paid.method);
+  const amount = parseFloat((formData.get("amount") as string)?.trim() || "");
+  if (!Number.isFinite(amount) || amount <= 0) return { ok: false, error: "Please enter the amount paid." };
+  const { balance } = saleBreakdown(purchase);
+  if (Math.round(amount * 100) > Math.round(balance * 100)) {
+    return { ok: false, error: `That's more than the ${balance.toFixed(2)} still due.` };
+  }
+
+  await db.payment.create({
+    data: {
+      purchaseId: purchase.id,
+      sequence: nextSequence(purchase.payments),
+      amount: amount.toFixed(2),
+      currency: purchase.currency,
+      status: "PAID",
+      paidDate: paid.paidDate,
+      method: paid.method,
+    },
+  });
+
+  await retireGalleryPaymentLinks(purchase);
+  await completeIfSettled(purchase.id, paid.paidDate);
   return { ok: true };
 }
 
-// The ordinary-sale counterpart of markGallerySalePaid (2026-09-21) — the
-// "Record sale" button on an unpaid sale: the buyer has paid outside
-// Stripe (bank transfer after an invoice, cash, ...), so the whole amount
-// is recorded as paid on the date and by the method given. Only for a sale
-// nothing has been paid on yet — one already part-paid by Stripe has its
-// own payment schedule.
+// The ordinary-sale "Record sale" button on an unpaid sale (2026-09-21):
+// the buyer has paid outside Stripe (bank transfer after an invoice,
+// cash, ...), so the whole amount is recorded as paid on the date and by
+// the method given. Only for a sale nothing has been paid on yet — one
+// already part-paid by Stripe has its own payment schedule.
 export async function markSalePaid(
   purchaseId: string,
   siteId: string,
-  formData?: FormData
+  formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -1032,7 +1058,7 @@ export async function markSalePaid(
   });
   if (!purchase) return { ok: false, error: "Purchase not found." };
   if (purchase.channel === "GALLERY") {
-    return { ok: false, error: "This is a consigned sale — mark it as paid from its own card." };
+    return { ok: false, error: "This is a consigned sale — record payments from its own card." };
   }
   if (purchase.status !== "ACTIVE") {
     return { ok: false, error: "This sale is no longer open." };
@@ -1044,7 +1070,18 @@ export async function markSalePaid(
   const paid = readPaidDetails(formData);
   if ("error" in paid) return { ok: false, error: paid.error };
 
-  await completeSaleAsPaid(purchase, paid.paidDate, paid.method);
+  await db.payment.create({
+    data: {
+      purchaseId: purchase.id,
+      sequence: 1,
+      amount: purchase.totalAmount,
+      currency: purchase.currency,
+      status: "PAID",
+      paidDate: paid.paidDate,
+      method: paid.method,
+    },
+  });
+  await completeIfSettled(purchase.id, paid.paidDate);
   return { ok: true };
 }
 
@@ -1260,43 +1297,110 @@ function stripeErrorMessage(err: unknown): string {
 
 // ---------- Webhook-side handlers (called from /api/stripe/webhook) ----------
 
-// Marks a Purchase COMPLETED once every one of its Payments is Paid — a
-// Full sale completes immediately (one payment); an Instalment sale
-// completes once the last one clears. Also sets the artwork's own
-// Availability to SOLD at that same moment — the final promotion from
-// RESERVED (already set the moment this sale started — see the
-// file-level note above) to genuinely SOLD.
-async function completeIfAllPaid(purchaseId: string) {
-  const remaining = await db.payment.count({
-    where: { purchaseId, status: { not: "PAID" } },
+// Completes a sale once it's fully paid, and marks its artwork SOLD.
+// "Fully paid" depends on the channel:
+//   - GALLERY (consigned): the balance — Net Due less every PAID
+//     payment (saleBreakdown(), lib/saleMath.ts) — has reached zero.
+//     Payments can arrive in any mix: partial payments recorded by hand,
+//     a payment link, or an instalment plan.
+//   - STRIPE (direct): every scheduled Payment row is PAID — a Full
+//     sale has one; an instalment sale completes once the last clears.
+// Safe to call after any payment; does nothing until the sale is settled.
+async function completeIfSettled(purchaseId: string, closedAt: Date = new Date()) {
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { payments: true },
+    relationLoadStrategy: "query",
   });
-  if (remaining === 0) {
-    const purchase = await db.purchase.update({
-      where: { id: purchaseId },
-      data: { status: "COMPLETED", closedAt: new Date() },
+  if (!purchase || purchase.status !== "ACTIVE") return;
+
+  const settled =
+    purchase.channel === "GALLERY"
+      ? saleBreakdown(purchase).balance <= 0
+      : purchase.payments.every((p) => p.status === "PAID");
+  if (!settled) return;
+
+  await db.purchase.update({ where: { id: purchaseId }, data: { status: "COMPLETED", closedAt } });
+  await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
+}
+
+// Sets up the monthly auto-charges for the rest of an instalment plan
+// once its first instalment has been paid and the buyer's card saved:
+// a Stripe Subscription Schedule (one monthly phase per remaining
+// instalment) plus one DUE Payment row per instalment, which
+// handleInstalmentInvoicePaid/Failed then mark as each charge happens.
+// Shared by a direct Stripe instalment sale (handleFirstPaymentSucceeded)
+// and a consigned sale's instalment payment link
+// (handleGalleryPaymentLinkPaid).
+async function scheduleRemainingInstalments(opts: {
+  purchase: { id: string; artworkId: string; currency: string; title: string };
+  customerId: string;
+  paymentMethodId?: string | null;
+  remaining: number[];
+  firstSequence: number;
+}) {
+  const { purchase, customerId, paymentMethodId, remaining, firstSequence } = opts;
+  const mode = await getStripeModeForArtwork(purchase.artworkId);
+  const stripe = getStripeClient(mode);
+
+  const product = await stripe.products.create({ name: `${purchase.title} — instalment plan` });
+
+  const phases = [];
+  for (const amt of remaining) {
+    const price = await stripe.prices.create({
+      unit_amount: toMinorUnits(amt),
+      currency: purchase.currency.toLowerCase(),
+      recurring: { interval: "month" },
+      product: product.id,
     });
-    await db.artwork.update({
-      where: { id: purchase.artworkId },
-      data: { availability: "SOLD" },
+    phases.push({
+      items: [{ price: price.id, quantity: 1 }],
+      duration: { interval: "month" as const, interval_count: 1 },
+    });
+  }
+
+  const schedule = await stripe.subscriptionSchedules.create({
+    customer: customerId,
+    start_date: Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60,
+    end_behavior: "cancel",
+    ...(paymentMethodId ? { default_settings: { default_payment_method: paymentMethodId } } : {}),
+    phases,
+  });
+
+  await db.purchase.update({
+    where: { id: purchase.id },
+    data: { stripeSubscriptionScheduleId: schedule.id },
+  });
+
+  let dueDate = new Date();
+  for (let i = 0; i < remaining.length; i++) {
+    dueDate = new Date(dueDate);
+    dueDate.setMonth(dueDate.getMonth() + 1);
+    await db.payment.create({
+      data: {
+        purchaseId: purchase.id,
+        sequence: firstSequence + i,
+        amount: remaining[i],
+        currency: purchase.currency,
+        status: "DUE",
+        dueDate,
+      },
     });
   }
 }
 
-// Marks the first Payment on a Purchase PAID and completes it if that
-// was the only one due. Normally reached via the Stripe webhook
-// (payment_intent.succeeded), but also called directly, client-side,
-// the moment stripe.confirmPayment() itself reports success
+// Marks the first Payment on a direct Stripe Purchase PAID and completes
+// it if that was the only one due. Normally reached via the Stripe
+// webhook (payment_intent.succeeded), but also called directly,
+// client-side, the moment stripe.confirmPayment() itself reports success
 // (2026-09-20 — see StripeCardForm's own note) — the webhook can be
 // slow, misconfigured, or simply not reach this environment at all, and
 // a confirmed charge sitting unrecorded as "UNPAID" is a real gap, not
-// a cosmetic one. Already idempotent (the sequence-1 payments.some()
-// check below), so calling this from both places is safe: whichever
-// arrives first does the work, the other is a no-op.
+// a cosmetic one. Idempotent (the sequence-1 check below), so calling
+// this from both places is safe: whichever arrives first does the work.
 //
-// Doesn't touch Availability itself for the INSTALMENTS branch below —
 // RESERVED was already set the moment this sale started (see the
-// file-level note above), so there's nothing to change here until
-// completeIfAllPaid promotes it the rest of the way to SOLD once the
+// file-level note above); completeIfSettled promotes it to SOLD once the
 // final instalment clears.
 export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaymentIntentId: string) {
   const purchase = await db.purchase.findUnique({
@@ -1326,115 +1430,92 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
     },
   });
 
-  if (purchase.type !== "INSTALMENTS" || count <= 1) {
-    await completeIfAllPaid(purchase.id);
-    return;
-  }
-
-  const remaining = amounts.slice(1);
-
-  const mode = await getStripeModeForArtwork(purchase.artworkId);
-  const stripe = getStripeClient(mode);
-
-  const product = await stripe.products.create({
-    name: `${purchase.artwork.presentationTitle} — instalment plan`,
-  });
-
-  const phases = [];
-  for (const amt of remaining) {
-    const price = await stripe.prices.create({
-      unit_amount: toMinorUnits(amt),
-      currency: purchase.currency.toLowerCase(),
-      recurring: { interval: "month" },
-      product: product.id,
-    });
-    phases.push({
-      items: [{ price: price.id, quantity: 1 }],
-      duration: { interval: "month" as const, interval_count: 1 },
-    });
-  }
-
-  const startDate = Math.floor(Date.now() / 1000) + 30 * 24 * 60 * 60;
-
-  const schedule = await stripe.subscriptionSchedules.create({
-    customer: purchase.stripeCustomerId!,
-    start_date: startDate,
-    end_behavior: "cancel",
-    phases,
-  });
-
-  await db.purchase.update({
-    where: { id: purchase.id },
-    data: { stripeSubscriptionScheduleId: schedule.id },
-  });
-
-  let dueDate = new Date();
-  for (let i = 0; i < remaining.length; i++) {
-    dueDate = new Date(dueDate);
-    dueDate.setMonth(dueDate.getMonth() + 1);
-    await db.payment.create({
-      data: {
-        purchaseId: purchase.id,
-        sequence: i + 2,
-        amount: remaining[i],
+  if (count > 1) {
+    await scheduleRemainingInstalments({
+      purchase: {
+        id: purchase.id,
+        artworkId: purchase.artworkId,
         currency: purchase.currency,
-        status: "DUE",
-        dueDate,
+        title: purchase.artwork.presentationTitle,
       },
+      customerId: purchase.stripeCustomerId!,
+      remaining: amounts.slice(1),
+      firstSequence: 2,
     });
   }
+
+  await completeIfSettled(purchase.id);
 }
 
-// A consigned sale's persistent Payment Link being paid (2026-09-13) —
-// the automatic counterpart to markGallerySalePaid above, fired from the
-// same payment_intent.succeeded webhook event as a direct Stripe sale,
-// but kept as its own function rather than folded into
-// handleFirstPaymentSucceeded: that one assumes it's dealing with the
-// sale's full gross totalAmount (optionally split into instalments),
-// whereas this kind of invoice is only ever charged for the NET amount
-// owed (see netOwed(), lib/saleMath.ts) and is never an instalment sale.
-// Using the actual amount Stripe confirms it received, rather than
-// recomputing net again here, keeps this in step with whatever the link
-// was actually generated for even if a figure was edited afterwards.
+// A consigned sale's payment link being paid — the automatic
+// counterpart to recordGalleryPayment, fired from the same
+// payment_intent.succeeded webhook event as a direct Stripe sale.
 //
-// Idempotent two ways: skipped entirely if the sale is already
-// COMPLETED (covers a redelivered webhook), and the Payment Link itself
-// is deactivated in Stripe the moment it's paid, so it can't be paid a
-// second time by mistake — it's meant for one invoice, not a reusable
-// storefront link.
-export async function handleGalleryPaymentLinkPaid(
-  purchaseId: string,
-  stripePaymentIntentId: string,
-  amountReceivedMinor: number,
-  currency: string
-) {
-  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
-  if (!purchase) return;
-  if (purchase.channel !== "GALLERY") return;
-  if (purchase.status === "COMPLETED") return;
+// Records the amount Stripe actually received as its own PAID Payment
+// (so it can sit alongside any partial payments already recorded). If
+// the link was the instalment kind (`instalments` in the PaymentIntent's
+// metadata — see createGalleryPaymentLink), this was instalment 1: the
+// buyer's saved card is then scheduled for the remaining instalments of
+// the balance as it stood when the link was made (links are retired
+// whenever the balance changes, so that is the balance just before this
+// payment). Both links are retired either way, so neither can be paid
+// again, and the sale completes if nothing is left owing.
+//
+// Idempotent: a redelivered webhook for the same PaymentIntent is ignored.
+export async function handleGalleryPaymentLinkPaid(payment: {
+  purchaseId: string;
+  paymentIntentId: string;
+  amountReceivedMinor: number;
+  currency: string;
+  customerId: string | null;
+  paymentMethodId: string | null;
+  instalments: number | null;
+}) {
+  const purchase = await db.purchase.findUnique({
+    where: { id: payment.purchaseId },
+    include: { artwork: true, payments: true },
+    relationLoadStrategy: "query",
+  });
+  if (!purchase || purchase.channel !== "GALLERY" || purchase.status !== "ACTIVE") return;
+  if (purchase.payments.some((p) => p.stripePaymentIntentId === payment.paymentIntentId)) return;
 
-  const paidDate = new Date();
+  const balanceBefore = saleBreakdown(purchase).balance;
+  const sequence = nextSequence(purchase.payments);
 
   await db.payment.create({
     data: {
       purchaseId: purchase.id,
-      sequence: 1,
-      amount: fromMinorUnits(amountReceivedMinor),
-      currency: currency.toUpperCase(),
+      sequence,
+      amount: fromMinorUnits(payment.amountReceivedMinor),
+      currency: payment.currency.toUpperCase(),
       status: "PAID",
-      paidDate,
-      stripePaymentIntentId,
+      paidDate: new Date(),
+      stripePaymentIntentId: payment.paymentIntentId,
     },
   });
 
-  await db.purchase.update({
-    where: { id: purchaseId },
-    data: { status: "COMPLETED", closedAt: paidDate },
-  });
+  const count = payment.instalments;
+  if (count && count >= 2 && payment.customerId) {
+    await db.purchase.update({
+      where: { id: purchase.id },
+      data: { type: "INSTALMENTS", instalmentCount: count, stripeCustomerId: payment.customerId },
+    });
+    await scheduleRemainingInstalments({
+      purchase: {
+        id: purchase.id,
+        artworkId: purchase.artworkId,
+        currency: purchase.currency,
+        title: purchase.artwork.presentationTitle,
+      },
+      customerId: payment.customerId,
+      paymentMethodId: payment.paymentMethodId,
+      remaining: splitIntoInstalments(balanceBefore, count).slice(1),
+      firstSequence: sequence + 1,
+    });
+  }
 
-  await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
-
-  await retireGalleryPaymentLink(purchase);
+  await retireGalleryPaymentLinks(purchase);
+  await completeIfSettled(purchase.id);
 }
 
 export async function linkSubscriptionToSchedule(scheduleId: string, subscriptionId: string) {
@@ -1456,7 +1537,7 @@ export async function handleInstalmentInvoicePaid(subscriptionId: string, invoic
     where: { id: next.id },
     data: { status: "PAID", paidDate: new Date(), stripeInvoiceId: invoiceId },
   });
-  await completeIfAllPaid(purchase.id);
+  await completeIfSettled(purchase.id);
 }
 
 export async function handleInstalmentInvoiceFailed(subscriptionId: string, invoiceId: string) {
