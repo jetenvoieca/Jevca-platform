@@ -41,7 +41,14 @@ export async function getStudioSettings(artistId: string): Promise<StudioSetting
 
   return {
     artworkTypes: settings.artworkTypes,
-    artworkLocations: settings.artworkLocations,
+    // getArtworkSettings returns the new Location model now (2026-09-22
+    // — see actions/locations.ts), not a plain string[] — the Studio
+    // app's own dropdown here still just needs names. Note this list can
+    // differ from what studioArtworks.ts's consignArtwork() actually
+    // validates against (still the older Artist.artworkLocations DB
+    // column directly, a known follow-up, not yet unified with the new
+    // Location model).
+    artworkLocations: settings.locations.map((l) => l.name),
     sizePresets: settings.sizePresets,
     saleSources: settings.saleSources,
     paymentMethods: settings.paymentMethods,
