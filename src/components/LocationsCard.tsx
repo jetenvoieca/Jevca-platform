@@ -5,6 +5,7 @@ import {
   createLocation,
   renameLocationByCustomer,
   deleteLocation,
+  updateLocationType,
   type LocationSummary,
   type LocationType,
 } from "@/lib/actions/locations";
@@ -17,6 +18,12 @@ import {
 // a Gallery, commission fixed at 0% for Own — see Location in
 // schema.prisma), so it's also what the Artwork Catalogue's Location
 // dropdown and the "Sold" button's routing both read from.
+//
+// Type is a real <select> here, not a static badge (2026-09-22 fix) —
+// it used to be fixed for good the moment a Location was created, which
+// meant a wrong answer (e.g. "Studio" created as Gallery by mistake) had
+// no fix except deleting and recreating the Location. See
+// updateLocationType in actions/locations.ts.
 export default function LocationsCard({
   artistId,
   siteId,
@@ -36,6 +43,15 @@ export default function LocationsCard({
     if (!trimmed || trimmed === loc.name) return;
     startTransition(async () => {
       const result = await renameLocationByCustomer(loc.customerId, siteId, trimmed);
+      if ("error" in result) setError(result.error);
+      else setError(null);
+    });
+  };
+
+  const handleTypeChange = (loc: LocationSummary, type: LocationType) => {
+    if (type === loc.type) return;
+    startTransition(async () => {
+      const result = await updateLocationType(loc.id, siteId, type);
       if ("error" in result) setError(result.error);
       else setError(null);
     });
@@ -61,7 +77,8 @@ export default function LocationsCard({
       <p className="mb-3 text-xs text-neutral-500">
         Offered in the Location dropdown, and where "Sold" routes to. Gallery = a third-party
         gallery (its own contact details, commission, consigned works). Own = anywhere you keep
-        your own stock (studio, storage, framer) — no commission.
+        your own stock (studio, storage, framer) — no commission. Change the Type here any time —
+        it isn't locked in once a Location is created.
       </p>
 
       <div className="mb-3 flex flex-col gap-2">
@@ -77,15 +94,19 @@ export default function LocationsCard({
               onBlur={(e) => handleRename(l, e.target.value)}
               className="flex-1 rounded-md border border-transparent px-1 py-0.5 hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
             />
-            <span
-              className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide ${
+            <select
+              value={l.type}
+              disabled={isPending}
+              onChange={(e) => handleTypeChange(l, e.target.value as LocationType)}
+              className={`shrink-0 rounded-full border-0 px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide focus:outline-none focus:ring-1 focus:ring-neutral-400 disabled:opacity-50 ${
                 l.type === "GALLERY"
                   ? "bg-blue-100 text-blue-700"
                   : "bg-neutral-200 text-neutral-600"
               }`}
             >
-              {l.type === "GALLERY" ? "Gallery" : "Own"}
-            </span>
+              <option value="GALLERY">Gallery</option>
+              <option value="OWN">Own</option>
+            </select>
             <button
               type="button"
               disabled={isPending}
