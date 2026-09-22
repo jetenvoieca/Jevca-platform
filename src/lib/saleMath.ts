@@ -1,28 +1,46 @@
-// Shared net-owed calculation for a consigned (Gallery- or Own-location)
-// sale (2026-09-22) — used both server-side (lib/actions/payments.ts,
-// when generating a payment link or completing a sale as paid) and
-// client-side (GallerySaleCard, GalleriesView, for the live preview
-// before anything is saved). One formula, so the amount actually
-// charged/recorded can never drift from what's shown on screen.
+// The one Net Due formula for a consigned (Gallery- or Own-location)
+// sale. Used server-side (payment link amount, marking paid, invoice
+// PDF) and client-side (sale card, Record Sale preview), so what's shown,
+// charged and invoiced can never drift apart.
 //
-// Not a server action (no "use server") — a plain, synchronous, pure
-// function so it can be called directly from client components too,
-// with no network round trip.
+// A plain synchronous function (not a server action), so client
+// components can call it directly.
 //
-// commissionPercent is only ever set for a GALLERY-type Location's sale
-// (the gallery's cut); depositPaid is only ever set for an OWN-type
-// Location's sale (money already collected on the spot from the actual
-// buyer). A sale only ever has one of the two in practice — Own
-// locations always have 0% commission, Gallery sales never record a
-// deposit — but both are subtracted unconditionally here so the formula
-// works the same way regardless of which one actually applies.
-export function netOwed(
-  totalAmount: string,
-  commissionPercent: string | null | undefined,
-  depositPaid?: string | null
-): number {
-  const total = parseFloat(totalAmount) || 0;
-  const commission = commissionPercent ? parseFloat(commissionPercent) || 0 : 0;
-  const deposit = depositPaid ? parseFloat(depositPaid) || 0 : 0;
-  return total - total * (commission / 100) - deposit;
+//   Net Due = sale price
+//           − commission (a gallery's % cut — sale price only)
+//           − deposit already paid (Own-location sales)
+//           + framing cost   (paid by the buyer/gallery)
+//           + delivery cost  (paid by the buyer/gallery)
+//
+// Accepts either client-side strings (PurchaseDetail) or Prisma Decimal
+// values, so a Purchase row or a PurchaseDetail can be passed as-is.
+
+type Amount = string | number | { toString(): string } | null | undefined;
+
+export type SaleAmounts = {
+  totalAmount: Amount;
+  commissionPercent?: Amount;
+  depositPaid?: Amount;
+  framingCost?: Amount;
+  deliveryCost?: Amount;
+};
+
+function num(value: Amount): number {
+  if (value == null || value === "") return 0;
+  return parseFloat(String(value)) || 0;
+}
+
+export function saleBreakdown(a: SaleAmounts) {
+  const salePrice = num(a.totalAmount);
+  const commissionPercent = num(a.commissionPercent);
+  const commission = salePrice * (commissionPercent / 100);
+  const deposit = num(a.depositPaid);
+  const framing = num(a.framingCost);
+  const delivery = num(a.deliveryCost);
+  const net = salePrice - commission - deposit + framing + delivery;
+  return { salePrice, commissionPercent, commission, deposit, framing, delivery, net };
+}
+
+export function netOwed(a: SaleAmounts): number {
+  return saleBreakdown(a).net;
 }

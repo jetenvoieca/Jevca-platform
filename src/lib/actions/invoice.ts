@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { APP_URL } from "@/lib/stripe";
+import { saleBreakdown } from "@/lib/saleMath";
 
 // Assigned once, lazily, the first time an invoice is actually generated
 // for a Purchase — re-downloading the same invoice later always returns
@@ -67,6 +68,9 @@ const LABELS = {
     billTo: "Bill to:",
     salePrice: "Sale price",
     commission: "Commission",
+    deposit: "Deposit paid",
+    framing: "Framing",
+    delivery: "Delivery",
     invoiceTotal: "Invoice total",
     total: "Total",
     salePriceExVat: "Sale price (ex. VAT)",
@@ -86,6 +90,9 @@ const LABELS = {
     billTo: "Facturé à :",
     salePrice: "Prix de vente",
     commission: "Commission",
+    deposit: "Acompte versé",
+    framing: "Encadrement",
+    delivery: "Livraison",
     invoiceTotal: "Total facture",
     total: "Total",
     salePriceExVat: "Prix de vente (HT)",
@@ -231,17 +238,18 @@ export async function generateInvoicePdf(
   let amountPaid = 0;
 
   if (purchase.channel === "GALLERY") {
-    const commissionPercent = purchase.commissionPercent
-      ? parseFloat(purchase.commissionPercent.toString())
-      : 0;
-    const commissionAmount = total * (commissionPercent / 100);
-    const net = total - commissionAmount;
-    invoiceTotal = net;
-    drawRow(t.salePrice, fmt(total));
-    drawRow(`${t.commission} (${commissionPercent}%)`, `-${fmt(commissionAmount)}`);
+    // Same breakdown the sale card and payment link use (lib/saleMath.ts);
+    // only the lines that apply to this sale are printed.
+    const b = saleBreakdown(purchase);
+    invoiceTotal = b.net;
+    drawRow(t.salePrice, fmt(b.salePrice));
+    if (b.commission) drawRow(`${t.commission} (${b.commissionPercent}%)`, `-${fmt(b.commission)}`);
+    if (b.deposit) drawRow(t.deposit, `-${fmt(b.deposit)}`);
+    if (b.framing) drawRow(t.framing, fmt(b.framing));
+    if (b.delivery) drawRow(t.delivery, fmt(b.delivery));
     y -= 4;
-    drawRow(t.invoiceTotal, fmt(net), true);
-    amountPaid = isPaid ? net : 0;
+    drawRow(t.invoiceTotal, fmt(b.net), true);
+    amountPaid = isPaid ? b.net : 0;
   } else {
     // STRIPE — a record of what was (or will be) paid via card, not a
     // request for payment. VAT breakdown only shown if the artist has a
