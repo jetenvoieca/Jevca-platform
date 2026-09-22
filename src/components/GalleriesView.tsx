@@ -21,7 +21,7 @@ import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
-import EditSaleButton from "@/components/EditSaleButton";
+import SaleHeader from "@/components/SaleHeader";
 
 type DetailTab = "details" | "sales";
 
@@ -221,6 +221,11 @@ export default function GalleriesView({
       setSaleTotalAmount(detail?.presentationPrice || "");
       setWorkLoading(false);
     });
+  };
+
+  const closeWork = () => {
+    setSelectedWorkId(null);
+    setSelectedWorkDetail(null);
   };
 
   // Auto-opens a Location (and, if given, one of its works) from the
@@ -954,79 +959,28 @@ export default function GalleriesView({
         </div>
       </div>
 
-      {/* ---- Artwork detail / sale actions modal (2026-09-10) ---- */}
-      {/* Was the inline w-80 panel next to the grid; moved here so the
-          grid can stay full width regardless of whether a work is
-          selected. Opens on the same openWork() call as before (grid
-          thumbnail or a Sales table row), and closes the same way
-          (clearing selectedWorkId/selectedWorkDetail). Unaffected by
-          the drill-down change above — this is a fixed overlay on top
-          of everything, at every width. */}
+      {/* ---- Artwork sale modal ---- */}
+      {/* Fixed overlay on top of everything, at every width. Shared
+          SaleHeader on top; below it either the sale card (sale already
+          recorded) or the blank Record Sale form. */}
       {selectedWorkId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
-          <div className="flex max-h-[85vh] w-full max-w-[420px] flex-col overflow-hidden rounded-lg bg-white shadow-xl">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+          <div className="flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
             {workLoading || !selectedWorkDetail ? (
               <p className="p-6 text-sm text-neutral-400">Loading…</p>
             ) : (
               <>
-                <div className="flex shrink-0 items-start justify-between gap-2 border-b border-neutral-200 px-5 py-4">
-                  <div>
-                    <p className="text-sm font-semibold text-neutral-900">
-                      {selectedWorkDetail.presentationTitle}
-                    </p>
-                    {/* Catalogue number (2026-09-10, direct request) —
-                        same "Catalogue #…" wording ArtworkDetailPanel
-                        already uses, so it reads as the same field
-                        wherever it shows up. */}
-                    <p className="text-xs text-neutral-400">
-                      Catalogue #{selectedWorkDetail.catalogueNumber}
-                    </p>
-                    {(selectedWorkDetail.type || selectedWorkDetail.edition) && (
-                      <p className="mt-1 text-xs text-neutral-400">
-                        {selectedWorkDetail.type}
-                        {selectedWorkDetail.type && selectedWorkDetail.edition ? " - " : ""}
-                        {selectedWorkDetail.edition}
-                      </p>
-                    )}
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {/* Shared component (2026-09-12) — see
-                        EditSaleButton.tsx. Renders nothing unless
-                        activeWorkPurchase is an ACTIVE gallery sale. */}
-                    <EditSaleButton
-                      purchase={activeWorkPurchase}
-                      siteId={siteId}
-                      onChanged={refreshAfterSaleChange}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedWorkId(null);
-                        setSelectedWorkDetail(null);
-                      }}
-                      className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                    >
-                      Close
-                    </button>
-                  </div>
+                <div className="shrink-0">
+                  <SaleHeader
+                    artwork={selectedWorkDetail}
+                    purchase={activeWorkPurchase ?? completedGallerySale}
+                    siteId={siteId}
+                    onChanged={refreshAfterSaleChange}
+                    onClose={closeWork}
+                  />
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-5">
-                  <dl className="mb-4 space-y-1 text-xs text-neutral-500">
-                    {selectedWorkDetail.size && (
-                      <div>
-                        <dt className="inline text-neutral-400">Size: </dt>
-                        <dd className="inline">{selectedWorkDetail.size}</dd>
-                      </div>
-                    )}
-                    {selectedWorkDetail.presentationPrice && (
-                      <div>
-                        <dt className="inline text-neutral-400">Price: </dt>
-                        <dd className="inline">£{selectedWorkDetail.presentationPrice}</dd>
-                      </div>
-                    )}
-                  </dl>
-
+                <div className="flex-1 overflow-y-auto px-5 py-5">
                   {activeWorkPurchase ? (
                     activeWorkPurchase.channel === "GALLERY" ? (
                       <GallerySaleCard
@@ -1034,7 +988,6 @@ export default function GalleriesView({
                         siteId={siteId}
                         paymentMethods={paymentMethods}
                         onChanged={refreshAfterSaleChange}
-                        layout="consigned"
                       />
                     ) : (
                       <p className="text-sm text-neutral-500">
@@ -1048,11 +1001,20 @@ export default function GalleriesView({
                       siteId={siteId}
                       paymentMethods={paymentMethods}
                       onChanged={refreshAfterSaleChange}
-                      layout="consigned"
                     />
                   ) : (
-                    <div>
-                      <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-3">
+                      {/* Row 1: Date · Sale price · Currency */}
+                      <div className="grid grid-cols-[1fr_1fr_6rem] gap-3">
+                        <div>
+                          <label className={labelCls}>Date</label>
+                          <input
+                            type="date"
+                            value={saleDate}
+                            onChange={(e) => setSaleDate(e.target.value)}
+                            className={inputCls}
+                          />
+                        </div>
                         <div>
                           <label className={labelCls}>Sale price</label>
                           <input
@@ -1075,12 +1037,11 @@ export default function GalleriesView({
                             <option value="EUR">EUR</option>
                           </select>
                         </div>
-                        {/* Third field is conditional on Location type
-                            (2026-09-22): a Gallery location's cut
-                            (Commission %) vs an Own location's deposit
-                            already in hand (Deposit paid) — a sale only
-                            ever has one of the two. Both feed the same
-                            shared netOwed() formula below. */}
+                      </div>
+
+                      {/* Row 2: Commission % (Gallery) or Deposit paid
+                          (Own) · Net Due. Both feed netOwed(). */}
+                      <div className="grid grid-cols-2 gap-3">
                         {selectedLocationType === "OWN" ? (
                           <div>
                             <label className={labelCls}>Deposit paid</label>
@@ -1116,7 +1077,9 @@ export default function GalleriesView({
                           />
                         </div>
                       </div>
-                      <div className="mt-2 grid grid-cols-2 gap-2">
+
+                      {/* Row 3: Customer · Customer email (wider) */}
+                      <div className="grid grid-cols-[2fr_3fr] gap-3">
                         <div>
                           <label className={labelCls}>Customer</label>
                           <input
@@ -1142,26 +1105,17 @@ export default function GalleriesView({
                           />
                         </div>
                       </div>
-                      <div className="mt-2">
-                        <label className={labelCls}>Date</label>
-                        <input
-                          type="date"
-                          value={saleDate}
-                          onChange={(e) => setSaleDate(e.target.value)}
-                          className={inputCls}
-                        />
-                      </div>
-                      {saleError && <p className="mt-2 text-xs text-red-600">{saleError}</p>}
-                      <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={handleRecordSale}
-                          disabled={workPending || !saleTotalAmount.trim()}
-                          className="w-full rounded-md bg-neutral-900 px-3 py-[6px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-                        >
-                          Record Sale
-                        </button>
-                      </div>
+
+                      {saleError && <p className="text-xs text-red-600">{saleError}</p>}
+
+                      <button
+                        type="button"
+                        onClick={handleRecordSale}
+                        disabled={workPending || !saleTotalAmount.trim()}
+                        className="mt-3 w-full rounded-md bg-[#5E5E5E] px-3 py-2 text-sm text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50"
+                      >
+                        Record Sale
+                      </button>
                     </div>
                   )}
                 </div>
