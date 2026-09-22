@@ -432,7 +432,11 @@ export default function GalleriesView({
   // below), so passing both here unconditionally is safe: the one not
   // shown just stays at its default "0"/"" and contributes nothing.
   const saleAmountNum = parseFloat(saleTotalAmount) || 0;
-  const saleNetOwed = netOwed(saleTotalAmount, saleCommission, saleDepositPaid);
+  const saleNetOwed = netOwed({
+    totalAmount: saleTotalAmount,
+    commissionPercent: saleCommission,
+    depositPaid: saleDepositPaid,
+  });
 
   // Sum of every sale linked to this gallery, regardless of status —
   // "all invoices", not just completed ones (2026-08-31 decision). Kept
