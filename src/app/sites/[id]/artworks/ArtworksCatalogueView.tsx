@@ -779,9 +779,9 @@ export default function ArtworksCatalogueView({
                 className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
               >
                 <option value="">All locations</option>
-                {settings.artworkLocations.map((l) => (
-                  <option key={l} value={l}>
-                    {l}
+                {settings.locations.map((l) => (
+                  <option key={l.id} value={l.name}>
+                    {l.name}
                   </option>
                 ))}
               </select>
