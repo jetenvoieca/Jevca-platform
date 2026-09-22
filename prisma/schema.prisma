@@ -238,7 +238,7 @@ model Artist {
   // Offered as the "Method" dropdown when marking a gallery sale paid
   // (2026-09-03) — same Settings-editable-list pattern as
   // expenseCategories/saleSources above, edited via the same
-  // SettingsListCard. See markGallerySalePaid in lib/actions/payments.ts
+  // SettingsListCard. See recordGalleryPayment in lib/actions/payments.ts
   // and Payment.method below.
   paymentMethods String[] @default(["Bank transfer", "Cash", "Cheque", "Card", "PayPal"])
 
@@ -1074,6 +1074,15 @@ model Purchase {
   stripePaymentLinkId  String?
   stripePaymentLinkUrl String?
 
+  // The instalment-plan counterpart of the link above (2026-09-23): a
+  // Payment Link for the FIRST of stripeInstalmentLinkCount instalments
+  // of the balance, saving the buyer's card so the rest are charged
+  // monthly (see handleGalleryPaymentLinkPaid). Both links are retired
+  // whenever the balance changes, since each encodes a fixed amount.
+  stripeInstalmentLinkId    String?
+  stripeInstalmentLinkUrl   String?
+  stripeInstalmentLinkCount Int?
+
   // When the invoice for this sale was last actually emailed, and to
   // which address — set only by sendInvoiceEmail
   // (lib/actions/invoiceEmail.ts, 2026-09-01, Part Three). Purely a log
@@ -1129,7 +1138,7 @@ model Payment {
   paidDate DateTime?
 
   // Only ever set on a GALLERY-channel sale's payment, by
-  // markGallerySalePaid (2026-09-03) — chosen from Artist.paymentMethods
+  // recordGalleryPayment (2026-09-03) — chosen from Artist.paymentMethods
   // at the moment it's marked paid. Left null for Stripe-channel
   // payments (always card, not worth recording) and for every row
   // created before this existed.
