@@ -2,10 +2,10 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { listLocations, type LocationSummary } from "./locations";
 
 export type SettingsField =
   | "artworkGroups"
-  | "artworkLocations"
   | "mediumPresets"
   | "sizePresets"
   | "artworkTiers"
@@ -25,13 +25,21 @@ export type SettingsField =
 // `artworkTypeRecords` alongside it carries the full {id, name,
 // refValue} shape for the Settings screen and the Catalogue tab's
 // Reference price calculation.
+//
+// Locations moved off this same mechanism (2026-09-22) — same reasoning
+// as Types: a Location now carries a real Type (Gallery/Own) and a
+// linked Customer record (see Location in schema.prisma), which this
+// plain-string-list mechanism has nowhere to hold. `locations` below
+// carries the full {id, name, type, customerId} shape everywhere that
+// used to read `artworkLocations` — the Artwork Catalogue's Location
+// dropdown, the Settings screen's Locations card, and the "Sold"
+// button's routing.
 export async function getArtworkSettings(artistId: string) {
-  const [artist, artworkTypeRows] = await Promise.all([
+  const [artist, artworkTypeRows, locations] = await Promise.all([
     db.artist.findUnique({
       where: { id: artistId },
       select: {
         artworkGroups: true,
-        artworkLocations: true,
         mediumPresets: true,
         sizePresets: true,
         artworkTiers: true,
@@ -43,6 +51,7 @@ export async function getArtworkSettings(artistId: string) {
       },
     }),
     db.artworkType.findMany({ where: { artistId }, orderBy: { name: "asc" } }),
+    listLocations(artistId),
   ]);
 
   return {
@@ -53,7 +62,7 @@ export async function getArtworkSettings(artistId: string) {
       name: t.name,
       refValue: t.refValue.toString(),
     })),
-    artworkLocations: artist?.artworkLocations ?? [],
+    locations: locations as LocationSummary[],
     mediumPresets: artist?.mediumPresets ?? [],
     sizePresets: artist?.sizePresets ?? [],
     artworkTiers: artist?.artworkTiers ?? [],
@@ -153,9 +162,6 @@ async function updateList(
   switch (field) {
     case "artworkGroups":
       await db.artist.update({ where: { id: artistId }, data: { artworkGroups: next } });
-      break;
-    case "artworkLocations":
-      await db.artist.update({ where: { id: artistId }, data: { artworkLocations: next } });
       break;
     case "mediumPresets":
       await db.artist.update({ where: { id: artistId }, data: { mediumPresets: next } });
