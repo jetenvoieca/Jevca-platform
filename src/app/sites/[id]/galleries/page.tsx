@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { listGalleries } from "@/lib/actions/customers";
+import { listLocationCustomers } from "@/lib/actions/locations";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import GalleriesView from "@/components/GalleriesView";
 
@@ -22,7 +22,11 @@ export default async function GalleriesPage({ params }: { params: Promise<{ id: 
   // gallery is worth tracking (approaching, negotiating, sending
   // consignment) long before any sale has happened, which is the whole
   // point (2026-08-14).
-  const galleries = await listGalleries(site.artistId);
+  //
+  // Every Location now (2026-09-22 rework) — Gallery and Own alike, not
+  // just Gallery — via the new Location model (actions/locations.ts);
+  // see the matching note on GalleriesView's own "galleries" prop.
+  const galleries = await listLocationCustomers(site.artistId);
 
   // Just the paymentMethods list is actually needed here (the "Mark as
   // paid" Method dropdown, 2026-09-03) — reusing getArtworkSettings
