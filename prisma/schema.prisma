@@ -135,6 +135,13 @@ enum PurchaseStatus {
   ABANDONED
 }
 
+// What a follow-on charge sale is for (2026-09-23) — see
+// Purchase.parentPurchaseId.
+enum ChargeKind {
+  FRAMING
+  DELIVERY
+}
+
 enum PaymentStatus {
   DUE
   PAID
@@ -1045,6 +1052,18 @@ model Purchase {
 
   commissionPercent Decimal? @db.Decimal(5, 2)
 
+  // A framing or delivery charge arranged AFTER the artwork's sale was
+  // paid (2026-09-23) is its own separate sale — its own invoice,
+  // payments and receipt — linked back to the sale it belongs to, and
+  // titled "[artwork] Framing Charge" / "... Delivery Charge" (see
+  // saleTitle(), lib/saleMath.ts). At most one of each kind per sale.
+  // Never gets a Certificate of Authenticity. Deleting the parent sale
+  // deletes its charges too.
+  parentPurchaseId String?
+  parentPurchase   Purchase?   @relation("PurchaseCharges", fields: [parentPurchaseId], references: [id], onDelete: Cascade)
+  charges          Purchase[]  @relation("PurchaseCharges")
+  chargeKind       ChargeKind?
+
   // Money already collected at the moment the sale was recorded
   // (2026-09-22, Phase 1 sale-recording rework) — only ever set for an
   // OWN-location sale (a deposit collected on the spot from the actual
@@ -1077,7 +1096,7 @@ model Purchase {
   // The instalment-plan counterpart of the link above (2026-09-23): a
   // Payment Link for the FIRST of stripeInstalmentLinkCount instalments
   // of the balance, saving the buyer's card so the rest are charged
-  // monthly (see handleGalleryPaymentLinkPaid). Both links are retired
+  // monthly (see recordGalleryStripePayment). Both links are retired
   // whenever the balance changes, since each encodes a fixed amount.
   stripeInstalmentLinkId    String?
   stripeInstalmentLinkUrl   String?
@@ -1089,6 +1108,12 @@ model Purchase {
   // for display; re-sending overwrites both rather than keeping history.
   invoiceEmailedAt DateTime?
   invoiceEmailedTo String?
+
+  // The same log for the receipt (2026-09-23) — kept separate so the
+  // sale shows both "Invoice sent" and "Receipt sent". Set by
+  // sendInvoiceEmail when the sale is already paid.
+  receiptEmailedAt DateTime?
+  receiptEmailedTo String?
 
   // Same simple sent-log, for the Certificate of Authenticity
   // (2026-09-03) — see the matching invoiceEmailedAt/invoiceEmailedTo
@@ -1122,6 +1147,7 @@ model Purchase {
 
   @@index([artworkId])
   @@index([customerId])
+  @@index([parentPurchaseId])
 }
 
 model Payment {
