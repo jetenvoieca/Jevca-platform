@@ -433,6 +433,10 @@ export async function getArtworkDetailForClient(id: string) {
     // ever set for an Own-location sale. See the matching note on
     // Purchase.depositPaid in schema.prisma.
     depositPaid: p.depositPaid != null ? p.depositPaid.toString() : null,
+    framer: p.framer,
+    framingCost: p.framingCost != null ? p.framingCost.toString() : null,
+    courier: p.courier,
+    deliveryCost: p.deliveryCost != null ? p.deliveryCost.toString() : null,
     invoiceNumber: p.invoiceNumber,
     // Part Three (2026-09-01) — see the matching schema.prisma comments.
     stripePaymentLinkUrl: p.stripePaymentLinkUrl,
