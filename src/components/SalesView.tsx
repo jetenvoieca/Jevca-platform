@@ -1,16 +1,10 @@
 "use client";
 
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getArtworkDetailForClient } from "@/lib/actions/artworks";
-import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payments";
 import { formatDate } from "@/lib/formatDate";
-import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
-import PurchasePanel from "@/components/PurchasePanel";
-import SaleDetailCard from "@/components/SaleDetailCard";
-import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
-import EditSaleButton from "@/components/EditSaleButton";
-import ConfirmDialog from "@/components/ConfirmDialog";
+import { SaleStatusBadge } from "@/components/GallerySaleCard";
+import SaleModal, { type SaleModalTarget } from "@/components/SaleModal";
 import type { SaleRow } from "@/lib/actions/sales";
 
 const STATUS_FILTERS = ["ALL", "ACTIVE", "COMPLETED", "ABANDONED"] as const;
@@ -20,28 +14,20 @@ function formatMoney(amount: string, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
 }
 
+// One site's Sales list. Clicking a row opens the shared SaleModal —
+// the same modal Consolidated Sales and the Inbox use, so a sale looks
+// and behaves identically wherever it's opened.
 export default function SalesView({
   siteId,
   artistId,
   sales,
-  saleSources,
-  paymentMethods,
 }: {
   siteId: string;
   artistId: string;
   sales: SaleRow[];
-  saleSources: string[];
-  // Offered in GallerySaleCard's "Mark as paid" Method dropdown
-  // (2026-09-03) — same Settings-editable list as everywhere else it's
-  // used (artworkSettings.ts).
-  paymentMethods: string[];
 }) {
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("ALL");
-  const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
-  const [selectedPurchaseId, setSelectedPurchaseId] = useState<string | null>(null);
-  const [selectedDetail, setSelectedDetail] = useState<ArtworkDetail | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [, startTransition] = useTransition();
+  const [target, setTarget] = useState<SaleModalTarget | null>(null);
   const router = useRouter();
 
   const filtered = useMemo(
@@ -49,9 +35,7 @@ export default function SalesView({
     [sales, filter]
   );
 
-  // Completed sales, summed per currency (kept separate rather than
-  // added together, since GBP and EUR totals shouldn't be combined into
-  // one number).
+  // Completed sales, summed per currency (GBP and EUR kept separate).
   const totals = useMemo(() => {
     const byCurrency: Record<string, number> = {};
     let count = 0;
@@ -62,100 +46,6 @@ export default function SalesView({
     }
     return { count, byCurrency };
   }, [sales]);
-
-  const openRow = (artworkId: string, purchaseId: string) => {
-    setSelectedArtworkId(artworkId);
-    setSelectedPurchaseId(purchaseId);
-    setSelectedDetail(null);
-    setLoading(true);
-    getArtworkDetailForClient(artworkId).then((detail) => {
-      setSelectedDetail(detail);
-      setLoading(false);
-    });
-  };
-
-  const closeModal = () => {
-    setSelectedArtworkId(null);
-    setSelectedPurchaseId(null);
-    setSelectedDetail(null);
-  };
-
-  // Same warning logic as the equivalent delete inside PurchasePanel's
-  // history list — this page is the other place a past gallery sale can
-  // be viewed and needs the same capability (2026-08-13).
-  const [pendingConfirm, setPendingConfirm] = useState<{
-    title: string;
-    message: string;
-    confirmLabel: string;
-    danger?: boolean;
-    onConfirm: () => void;
-  } | null>(null);
-
-  const handleDeleteSale = (purchaseId: string, invoiceNumber: number | null) => {
-    const message = invoiceNumber
-      ? `An invoice (#${invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely, not just from this list.`
-      : "This removes the sale entirely, not just from this list — it cannot be undone.";
-    setPendingConfirm({
-      title: "Delete this sale permanently?",
-      message,
-      confirmLabel: "Delete permanently",
-      danger: true,
-      onConfirm: () => {
-        setPendingConfirm(null);
-        startTransition(async () => {
-          const res = await deleteGallerySale(purchaseId, siteId);
-          if (!res.ok) {
-            alert(res.error);
-            return;
-          }
-          closeModal();
-          router.refresh();
-        });
-      },
-    });
-  };
-
-  // Separate, deliberately harder-to-reach path for a genuinely
-  // completed, paid sale (2026-08-13, at the person's explicit request
-  // for cleaning up test data) — see the matching handler in
-  // PurchasePanel for the full reasoning.
-  const handleForceDeleteSale = (purchaseId: string) => {
-    setPendingConfirm({
-      title: "Force delete this completed sale?",
-      message:
-        "This sale is marked as paid — deleting it removes it as a financial record entirely, permanently, including its invoice/receipt number. Only do this for test or clearly erroneous data, never for a real transaction.",
-      confirmLabel: "Force delete",
-      danger: true,
-      onConfirm: () => {
-        setPendingConfirm(null);
-        startTransition(async () => {
-          const res = await forceDeleteCompletedSale(purchaseId, siteId);
-          if (!res.ok) {
-            alert(res.error);
-            return;
-          }
-          closeModal();
-          router.refresh();
-        });
-      },
-    });
-  };
-
-  // The one specific row that was actually clicked — an artwork can have
-  // several Purchases (an active one plus history), and only one of them
-  // is what the person asked to see.
-  const selectedPurchase = selectedDetail
-    ? [selectedDetail.activePurchase, ...selectedDetail.purchaseHistory].find(
-        (p) => p?.id === selectedPurchaseId
-      ) || null
-    : null;
-
-  // Re-fetches the currently open row's detail — used after both
-  // GallerySaleCard actions and the shared Edit Sale popup save.
-  const refreshSelected = () => {
-    if (!selectedArtworkId || !selectedPurchaseId) return;
-    openRow(selectedArtworkId, selectedPurchaseId);
-  };
 
   return (
     <div className="p-6">
@@ -187,11 +77,6 @@ export default function SalesView({
         ))}
       </div>
 
-      {/* Full-width table now (2026-09-12) — the detail panel moved out
-          of this two-column grid into its own click-off-to-close modal
-          below, matching how Consolidated Sales and Galleries already
-          show a sale's detail. Previously this was a sticky 480px
-          sidebar that never closed itself and was the odd one out. */}
       <div className="overflow-hidden rounded-lg border border-neutral-200">
         <table className="w-full text-sm">
           <thead>
@@ -215,18 +100,17 @@ export default function SalesView({
             {filtered.map((s) => (
               <tr
                 key={s.purchaseId}
-                onClick={() => openRow(s.artworkId, s.purchaseId)}
+                onClick={() =>
+                  setTarget({ purchaseId: s.purchaseId, artworkId: s.artworkId, artistId, siteId })
+                }
                 className={`cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50 ${
-                  selectedPurchaseId === s.purchaseId ? "bg-neutral-50" : ""
+                  target?.purchaseId === s.purchaseId ? "bg-neutral-50" : ""
                 }`}
               >
                 <td className="flex items-center gap-2 px-3 py-2">
                   {s.artworkThumbnail ? (
-                    <img
-                      src={s.artworkThumbnail}
-                      alt=""
-                      className="h-8 w-8 rounded object-cover"
-                    />
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={s.artworkThumbnail} alt="" className="h-8 w-8 rounded object-cover" />
                   ) : (
                     <div className="h-8 w-8 rounded bg-neutral-100" />
                   )}
@@ -238,12 +122,6 @@ export default function SalesView({
                 </td>
                 <td className="px-3 py-2">{formatMoney(s.totalAmount, s.currency)}</td>
                 <td className="px-3 py-2">
-                  {/* Shared badge (2026-09-12) — was its own hand-rolled
-                      coloured span here, the one place on this page that
-                      didn't read invoiceEmailedAt like everywhere else
-                      does. Same component GalleriesView's Sales tab and
-                      GallerySaleCard itself use, so "Invoice sent" shows
-                      consistently everywhere a sale's status appears. */}
                   <SaleStatusBadge status={s.status} invoiceEmailedAt={s.invoiceEmailedAt} />
                 </td>
                 <td className="px-3 py-2 text-neutral-400">{formatDate(s.createdAt)}</td>
@@ -253,136 +131,13 @@ export default function SalesView({
         </table>
       </div>
 
-      {/* ---- Sale detail modal (2026-09-12) ---- */}
-      {/* Was a sticky 480px side panel embedded in the page grid above;
-          now a click-off-to-close modal, matching Consolidated Sales'
-          own detail modal and Galleries' artwork modal. */}
-      {selectedPurchaseId && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-          onClick={closeModal}
-        >
-          <div
-            className="max-h-[90vh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {loading || !selectedDetail ? (
-              <p className="py-8 text-center text-sm text-neutral-400">Loading…</p>
-            ) : (
-              <>
-                <div className="mb-4 flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    {selectedDetail.images[0] ? (
-                      <img
-                        src={selectedDetail.images[0].url}
-                        alt=""
-                        className="h-12 w-12 rounded object-cover"
-                      />
-                    ) : (
-                      <div className="h-12 w-12 rounded bg-neutral-100" />
-                    )}
-                    <div>
-                      <h2 className="text-sm font-semibold text-neutral-900">
-                        {selectedDetail.presentationTitle}
-                      </h2>
-                      <p className="text-xs text-neutral-400">
-                        #{selectedDetail.catalogueNumber}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    {/* Shared component (2026-09-12) — see
-                        EditSaleButton.tsx. Renders nothing unless
-                        selectedPurchase is an ACTIVE gallery sale. */}
-                    <EditSaleButton
-                      purchase={selectedPurchase}
-                      siteId={siteId}
-                      onChanged={refreshSelected}
-                    />
-                    <button
-                      type="button"
-                      onClick={closeModal}
-                      className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                    >
-                      Close
-                    </button>
-                  </div>
-                </div>
-
-                {!selectedPurchase ? (
-                  <p className="text-sm text-neutral-400">
-                    This sale couldn&apos;t be found — it may have changed since the list loaded.
-                  </p>
-                ) : selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "ABANDONED" ? (
-                  // The same shared card used on the Galleries page,
-                  // Consolidated Sales, and the Artwork Catalogue's
-                  // Payment tab (2026-09-03) — this page used to have
-                  // its own separate, older version (PurchasePanel's old
-                  // gallery block for an ACTIVE sale, SaleDetailCard's
-                  // generic read-only view for a COMPLETED one), which
-                  // is exactly how it fell behind. Covers both ACTIVE
-                  // and COMPLETED here; ABANDONED still falls through to
-                  // SaleDetailCard below, same as it always has
-                  // everywhere else.
-                  <GallerySaleCard
-                    purchase={selectedPurchase}
-                    siteId={siteId}
-                    paymentMethods={paymentMethods}
-                    onChanged={refreshSelected}
-                  />
-                ) : selectedPurchase.status === "ACTIVE" ? (
-                  // Only an in-progress STRIPE sale gets the interactive
-                  // panel — take payment, cancel, etc. all still make
-                  // sense here.
-                  <PurchasePanel
-                    artworkId={selectedArtworkId!}
-                    artistId={artistId}
-                    siteId={siteId}
-                    terms={selectedDetail.saleTerms}
-                    activePurchase={selectedDetail.activePurchase}
-                    history={selectedDetail.purchaseHistory}
-                    saleSources={saleSources}
-                    paymentMethods={paymentMethods}
-                    onChanged={refreshSelected}
-                  />
-                ) : (
-                  // Completed/Abandoned STRIPE sale, or an Abandoned
-                  // gallery one — a past transaction, shown read-only
-                  // rather than as an editable form.
-                  <SaleDetailCard
-                    purchase={selectedPurchase}
-                    siteId={siteId}
-                    artworkType={selectedDetail.type}
-                    artworkSize={selectedDetail.size}
-                    artworkGroup={selectedDetail.catalogueGroup}
-                    artworkMedium={selectedDetail.medium}
-                    onDelete={
-                      selectedPurchase.status !== "COMPLETED"
-                        ? () => handleDeleteSale(selectedPurchase.id, selectedPurchase.invoiceNumber)
-                        : undefined
-                    }
-                    onForceDelete={
-                      selectedPurchase.status === "COMPLETED"
-                        ? () => handleForceDeleteSale(selectedPurchase.id)
-                        : undefined
-                    }
-                  />
-                )}
-              </>
-            )}
-          </div>
-        </div>
+      {target && (
+        <SaleModal
+          target={target}
+          onClose={() => setTarget(null)}
+          onChanged={() => router.refresh()}
+        />
       )}
-
-      <ConfirmDialog
-        open={pendingConfirm !== null}
-        title={pendingConfirm?.title ?? ""}
-        message={pendingConfirm?.message ?? ""}
-        confirmLabel={pendingConfirm?.confirmLabel ?? ""}
-        danger={pendingConfirm?.danger}
-        onConfirm={() => pendingConfirm?.onConfirm()}
-        onCancel={() => setPendingConfirm(null)}
-      />
     </div>
   );
 }

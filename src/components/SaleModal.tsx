@@ -9,7 +9,7 @@ import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
 import GallerySaleCard from "@/components/GallerySaleCard";
-import EditSaleButton from "@/components/EditSaleButton";
+import SaleHeader from "@/components/SaleHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 // Which sale to show — just enough to look it up.
@@ -25,8 +25,8 @@ export type SaleModalTarget = {
 // own Sales page as the only place to actually act on a sale). Pulled
 // out into its own component (2026-09-19) so the Inbox's overdue-invoice
 // alerts can open exactly the same modal rather than a second copy of it.
-// Reuses the same three-way GallerySaleCard/PurchasePanel/SaleDetailCard
-// branching SalesView.tsx uses per-site.
+// Also used by each site's own Sales page (SalesView), so a sale looks
+// and behaves the same wherever it's opened.
 //
 // Loads its own data (the artwork's detail plus the artist's Settings-
 // editable payment methods/sale sources) when it opens, and renders its
@@ -115,7 +115,7 @@ export default function SaleModal({
   };
 
   // Deliberately harder-to-reach path for a genuinely completed, paid
-  // sale — same reasoning as the matching handler in SalesView/
+  // sale — same reasoning as the matching handler in
   // PurchasePanel: only for cleaning up test or clearly erroneous data.
   const handleForceDeleteSale = (purchaseId: string, siteId: string) => {
     setPendingConfirm({
@@ -154,103 +154,75 @@ export default function SaleModal({
         onClick={onClose}
       >
         <div
-          className="max-h-[90dvh] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg"
+          className="flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
           onClick={(e) => e.stopPropagation()}
         >
           {loading || !selectedDetail ? (
             <p className="py-8 text-center text-sm text-neutral-400">Loading…</p>
           ) : (
             <>
-              <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3">
-                  {selectedDetail.images[0] ? (
-                    <img
-                      src={selectedDetail.images[0].url}
-                      alt=""
-                      className="h-16 w-16 rounded object-cover"
-                    />
-                  ) : (
-                    <div className="h-16 w-16 rounded bg-neutral-100" />
-                  )}
-                  <div>
-                    <h2 className="text-sm font-semibold text-neutral-900">
-                      {selectedDetail.presentationTitle}
-                    </h2>
-                    <p className="text-xs text-neutral-400">
-                      #{selectedDetail.catalogueNumber}
-                      {selectedDetail.type ? ` · ${selectedDetail.type}` : ""}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  {/* Shared component (2026-09-12) — see
-                      EditSaleButton.tsx. Renders nothing unless
-                      selectedPurchase is an ACTIVE gallery sale. */}
-                  <EditSaleButton
-                    purchase={selectedPurchase}
-                    siteId={target.siteId ?? ""}
-                    onChanged={refreshSelected}
-                  />
-                  <button
-                    type="button"
-                    onClick={onClose}
-                    className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
-                  >
-                    Close
-                  </button>
-                </div>
+              <div className="shrink-0">
+                <SaleHeader
+                  artwork={selectedDetail}
+                  purchase={selectedPurchase}
+                  siteId={target.siteId ?? ""}
+                  onChanged={refreshSelected}
+                  onClose={onClose}
+                />
               </div>
 
-              {!selectedPurchase || !target.siteId ? (
-                <p className="text-sm text-neutral-400">
-                  {!target.siteId
-                    ? "This artist has no active site to manage the sale from."
-                    : "This sale couldn't be found — it may have changed since the list loaded."}
-                </p>
-              ) : selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "ABANDONED" ? (
-                <GallerySaleCard
-                  purchase={selectedPurchase}
-                  siteId={target.siteId}
-                  paymentMethods={paymentMethods}
-                  onChanged={refreshSelected}
-                />
-              ) : selectedPurchase.status === "ACTIVE" ? (
-                <PurchasePanel
-                  artworkId={target.artworkId}
-                  artistId={target.artistId}
-                  siteId={target.siteId}
-                  terms={selectedDetail.saleTerms}
-                  activePurchase={selectedDetail.activePurchase}
-                  history={selectedDetail.purchaseHistory}
-                  saleSources={saleSources}
-                  paymentMethods={paymentMethods}
-                  onChanged={refreshSelected}
-                />
-              ) : (
-                <SaleDetailCard
-                  purchase={selectedPurchase}
-                  siteId={target.siteId}
-                  artworkType={selectedDetail.type}
-                  artworkSize={selectedDetail.size}
-                  artworkGroup={selectedDetail.catalogueGroup}
-                  artworkMedium={selectedDetail.medium}
-                  onDelete={
-                    selectedPurchase.status !== "COMPLETED"
-                      ? () =>
-                          handleDeleteSale(
-                            selectedPurchase.id,
-                            target.siteId!,
-                            selectedPurchase.invoiceNumber
-                          )
-                      : undefined
-                  }
-                  onForceDelete={
-                    selectedPurchase.status === "COMPLETED"
-                      ? () => handleForceDeleteSale(selectedPurchase.id, target.siteId!)
-                      : undefined
-                  }
-                />
-              )}
+              <div className="flex-1 overflow-y-auto px-5 py-5">
+                {!selectedPurchase || !target.siteId ? (
+                  <p className="text-sm text-neutral-400">
+                    {!target.siteId
+                      ? "This artist has no active site to manage the sale from."
+                      : "This sale couldn't be found — it may have changed since the list loaded."}
+                  </p>
+                ) : selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "ABANDONED" ? (
+                  <GallerySaleCard
+                    purchase={selectedPurchase}
+                    siteId={target.siteId}
+                    paymentMethods={paymentMethods}
+                    onChanged={refreshSelected}
+                  />
+                ) : selectedPurchase.status === "ACTIVE" ? (
+                  <PurchasePanel
+                    artworkId={target.artworkId}
+                    artistId={target.artistId}
+                    siteId={target.siteId}
+                    terms={selectedDetail.saleTerms}
+                    activePurchase={selectedDetail.activePurchase}
+                    history={selectedDetail.purchaseHistory}
+                    saleSources={saleSources}
+                    paymentMethods={paymentMethods}
+                    onChanged={refreshSelected}
+                  />
+                ) : (
+                  <SaleDetailCard
+                    purchase={selectedPurchase}
+                    siteId={target.siteId}
+                    artworkType={selectedDetail.type}
+                    artworkSize={selectedDetail.size}
+                    artworkGroup={selectedDetail.catalogueGroup}
+                    artworkMedium={selectedDetail.medium}
+                    onDelete={
+                      selectedPurchase.status !== "COMPLETED"
+                        ? () =>
+                            handleDeleteSale(
+                              selectedPurchase.id,
+                              target.siteId!,
+                              selectedPurchase.invoiceNumber
+                            )
+                        : undefined
+                    }
+                    onForceDelete={
+                      selectedPurchase.status === "COMPLETED"
+                        ? () => handleForceDeleteSale(selectedPurchase.id, target.siteId!)
+                        : undefined
+                    }
+                  />
+                )}
+              </div>
             </>
           )}
         </div>

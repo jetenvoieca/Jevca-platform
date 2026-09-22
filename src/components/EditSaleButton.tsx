@@ -7,15 +7,10 @@ const labelCls = "mb-1 block text-xs text-[#5E5E5E]";
 const fieldCls =
   "w-full rounded-md border border-neutral-300 bg-white px-2 py-1 text-sm text-[#5E5E5E] disabled:opacity-50";
 
-// The "Edit Sale" button + popup (price/currency only), extracted into
+// The "Edit" button + popup (price/currency only), extracted into
 // its own component (2026-09-12) rather than copy-pasted into a third
-// modal header — it was first built inline in GalleriesView, and was
-// about to be duplicated again for the Sales and Consolidated Sales
-// pages. A shared component is the actual fix for the "these tables
-// don't all work the same way" risk raised alongside this request: one
-// place to get the popup, its autosave behaviour, and the ACTIVE-only
-// restriction right, used identically everywhere a gallery sale can be
-// opened.
+// modal header. Now rendered by SaleHeader, the one header every sale
+// modal uses.
 //
 // Self-contained: returns null entirely unless the purchase handed to it
 // is an ACTIVE gallery sale, so callers don't need their own visibility
@@ -72,9 +67,9 @@ export default function EditSaleButton({
       <button
         type="button"
         onClick={open}
-        className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+        className="rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
       >
-        Edit Sale
+        Edit
       </button>
 
       {show && (

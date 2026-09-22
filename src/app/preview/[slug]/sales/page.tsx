@@ -1,7 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getSalesForArtist } from "@/lib/actions/sales";
-import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { resolvePreviewSiteId } from "@/lib/previewSites";
 import SalesView from "@/components/SalesView";
 
@@ -33,18 +32,13 @@ export default async function PreviewSalesPage({
     );
   }
 
-  const [sales, settings] = await Promise.all([
-    getSalesForArtist(site.artistId),
-    getArtworkSettings(site.artistId),
-  ]);
+  const sales = await getSalesForArtist(site.artistId);
 
   return (
     <SalesView
       siteId={siteId}
       artistId={site.artistId}
       sales={sales}
-      saleSources={settings.saleSources}
-      paymentMethods={settings.paymentMethods}
     />
   );
 }

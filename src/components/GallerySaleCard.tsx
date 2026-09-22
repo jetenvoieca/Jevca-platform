@@ -19,17 +19,12 @@ const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
 const labelCls = "mb-1 block text-xs text-neutral-500";
 
-// Sale-management mockup (2026-09-12): every primary action button on
-// this card is #5E5E5E with #F9F6EE text — replaces the previous plain
-// neutral-900/white pairing. Kept as one shared class so every layout's
-// grid below can't drift from each other.
+// Every action-panel button: #5E5E5E with #F9F6EE text.
 const actionButtonCls =
-  "rounded-md bg-[#5E5E5E] px-3 py-[5px] text-sm font-medium text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50";
+  "rounded-md bg-[#5E5E5E] px-3 py-2 text-sm text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50";
 
-// Phase 2 placeholders (2026-09-22) — Arrange Framing/Arrange Delivery/
-// Take Card aren't built yet; styled identically to a real action button
-// so the grid reads as one consistent set, but simply say so rather than
-// silently doing nothing.
+// Arrange Framing / Arrange Delivery / Take Card — built in later parts.
+// Styled like a real action button so the grid reads as one set.
 const placeholderButtonCls = `${actionButtonCls} opacity-60`;
 
 function formatMoney(amount: string, currency: string) {
@@ -37,15 +32,9 @@ function formatMoney(amount: string, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
 }
 
-// Exported so callers that list several sales at once (GalleriesView's
-// own Sales tab table, SalesView's list) can use the exact same badge
-// rather than a second copy of the same three-line component.
-//
-// invoiceEmailedAt is optional (2026-09-12) — once an invoice has
-// actually been sent for a still-unpaid sale, the badge reads "Invoice
-// sent" instead of the generic "UNPAID", so it's obvious at a glance
-// which unpaid sales are already being chased versus not yet invoiced
-// at all. Only relevant while ACTIVE; ignored for COMPLETED/ABANDONED.
+// Status badge for list/table rows (Locations Sales tab, Sales page,
+// Consolidated Sales). Not shown inside the card itself — the card's
+// own status area replaces it there.
 export function SaleStatusBadge({
   status,
   invoiceEmailedAt,
@@ -66,59 +55,29 @@ export function SaleStatusBadge({
   );
 }
 
-// The single, shared view of one GALLERY-channel sale — ACTIVE (unpaid,
-// still being chased) or COMPLETED (paid) — used everywhere a
-// Gallery/Own-location sale can be opened: the Locations page's own
-// Consigned Works panel, the Artwork Catalogue's Payment tab
-// (PurchasePanel), and the Sales page (2026-09-03). Previously each of
-// those three places had its own hand-rolled version of this UI, which
-// is exactly how the Sales page's copy drifted behind GalleriesView's —
-// old plain "Mark as paid" confirm dialog with no Date paid/Method
-// capture, "Download invoice" instead of the newer Send invoice/Send
-// receipt flow, a single amount instead of the Sale Price/Net Due row.
-// Pulling it into one component is what actually stops that happening
-// again, rather than just re-syncing the three copies once more.
-//
-// Deliberately never rendered for an ABANDONED sale — none of the three
-// callers ever showed a bespoke abandoned-sale view before either; that
-// status still falls through to SaleDetailCard's generic read-only card
-// everywhere, unchanged.
+// The single shared view of one GALLERY-channel sale (ACTIVE or
+// COMPLETED), used everywhere such a sale can be opened. Three parts,
+// top to bottom: Sales details (price / Net Due), Sales status (what's
+// been paid and sent), and the Action panel. ABANDONED sales never come
+// here — callers show SaleDetailCard for those.
 export default function GallerySaleCard({
   purchase,
   siteId,
   paymentMethods,
   onChanged,
-  layout = "full",
 }: {
   purchase: PurchaseDetail;
   siteId: string;
-  // Offered in the "Mark as paid" Method dropdown — Settings-editable,
-  // same list the Payment Methods card on the Artwork Catalogue's
-  // Settings screen manages.
+  // Offered in the Record Payment Method dropdown (Settings-editable).
   paymentMethods: string[];
-  // Called after any action that changes this sale (paid, cancelled,
-  // deleted, invoice sent, payment link generated) — the caller owns
-  // re-fetching whatever data it's displaying elsewhere (a row in a
-  // table, a gallery's totals, etc.); this component holds no server
-  // data itself beyond the `purchase` it was handed.
+  // Called after any action that changes this sale; the caller re-fetches.
   onChanged: () => void;
-  // "full" (default) — the original action grid: Send invoice/Cancel
-  // Sale, Mark as Paid/Delete Sale, Certificate/Payment Link. Used by
-  // PurchasePanel and the Sales page, unchanged.
-  //
-  // "consigned" (2026-09-22, Phase 1 sale-recording rework) — the new
-  // Consigned Works action panel: Arrange Framing/Arrange Delivery
-  // (placeholders, Phase 2), Send invoice/Record Payment, Payment link/
-  // Take Card (placeholder). Same underlying handlers as "full" for
-  // everything that's actually wired — only which buttons show, and
-  // their labels, differ. Only ever passed by GalleriesView.
-  layout?: "full" | "consigned";
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // ---- Mark as paid — inline Date paid / Method form ----
+  // ---- Record Payment — inline Date paid / Method form ----
   const [showMarkPaidForm, setShowMarkPaidForm] = useState(false);
   const [paidDate, setPaidDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [paidMethod, setPaidMethod] = useState("");
@@ -129,8 +88,7 @@ export default function GallerySaleCard({
   const [paymentLinkError, setPaymentLinkError] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
 
-  // ---- Certificate of Authenticity — offered regardless of payment
-  // status (2026-09-10) ----
+  // ---- Certificate of Authenticity ----
   const [showCertificateModal, setShowCertificateModal] = useState(false);
 
   const [pendingConfirm, setPendingConfirm] = useState<{
@@ -212,16 +170,12 @@ export default function GallerySaleCard({
     });
   };
 
-  // Send invoice auto-generates the payment link first if this sale is
-  // still ACTIVE and doesn't already have one, so the emailed invoice
-  // always includes a way to pay without a separate manual step. A paid
-  // sale never needs a link generated first — it opens the modal
-  // straight away. If link generation fails, the modal still opens
-  // rather than blocking the invoice — the email falls back to its
-  // non-link wording, and a link can always be generated afterwards from
-  // the Payment link section below.
+  // Send invoice generates the payment link first (if the sale is still
+  // unpaid and has none), so the emailed invoice always includes a way to
+  // pay. If link generation fails the modal still opens — the email falls
+  // back to its non-link wording.
   const handleOpenInvoiceModal = () => {
-    if (purchase.status !== "ACTIVE" || purchase.stripePaymentLinkUrl) {
+    if (isPaid || purchase.stripePaymentLinkUrl) {
       setShowInvoiceModal(true);
       return;
     }
@@ -236,11 +190,7 @@ export default function GallerySaleCard({
     });
   };
 
-  // Idempotent — if this sale already has a link, it just returns the
-  // existing one rather than creating a duplicate, so this is safe to
-  // call every time the "Payment Link" grid button is pressed. The
-  // result renders inline below the grid (see the "Payment link reveal"
-  // block below), same spot it's always shown.
+  // Idempotent — returns the existing link if there is one.
   const handleGetPaymentLink = () => {
     setPaymentLinkError(null);
     startTransition(async () => {
@@ -260,82 +210,124 @@ export default function GallerySaleCard({
     });
   };
 
-  // Phase 2 placeholders (2026-09-22) — see the note on
-  // placeholderButtonCls above.
   const handleArrangeFraming = () => alert("Arrange Framing — coming in a later phase.");
   const handleArrangeDelivery = () => alert("Arrange Delivery — coming in a later phase.");
   const handleTakeCard = () => alert("Take Card — coming in a later phase.");
 
+  const netDue = netOwed(purchase.totalAmount, purchase.commissionPercent, purchase.depositPaid);
+
   return (
-    // Tinted panel (2026-09-12 mockup) — wraps everything from the Sale
-    // Price/Net Due row down through the action buttons, matching the
-    // #F9F6EE background shown in the mockup for this whole block.
-    <div className="rounded-lg bg-[#F9F6EE] p-4">
-      <div className="mb-2 flex items-baseline justify-between">
-        <p className="text-sm font-medium text-neutral-900">
-          Sale Price {formatMoney(purchase.totalAmount, purchase.currency)}
-        </p>
-        <p className="text-sm font-medium text-neutral-900">
-          Net Due{" "}
-          {formatMoney(
-            netOwed(purchase.totalAmount, purchase.commissionPercent, purchase.depositPaid).toFixed(2),
-            purchase.currency
-          )}
-        </p>
+    <div>
+      {/* ---- Sales details ---- */}
+      <div className="flex items-end justify-between gap-4 text-sm font-medium text-neutral-900">
+        <p>Sale price {formatMoney(purchase.totalAmount, purchase.currency)}</p>
+        <p>Net Due {formatMoney((isPaid ? 0 : netDue).toFixed(2), purchase.currency)}</p>
       </div>
-      <SaleStatusBadge status={purchase.status} invoiceEmailedAt={purchase.invoiceEmailedAt} />
-      <p className="mt-2 text-xs text-neutral-400">Sold {formatDate(purchase.createdAt)}</p>
 
-      {isPaid && completedPayment?.paidDate && (
-        <p className="mt-1 text-xs text-green-600">
-          Paid {formatDate(completedPayment.paidDate)}
-          {completedPayment.method ? ` — ${completedPayment.method}` : ""}
-        </p>
-      )}
-
-      {/* A simple sent-log, not a full send history — shows the most
-          recent send only. Matches Purchase's invoiceEmailedAt/
-          invoiceEmailedTo columns, which are overwritten on each send
-          rather than accumulating a list. */}
-      {purchase.invoiceEmailedAt && (
-        <p className="mt-1 text-xs text-neutral-400">
-          {isPaid ? "Receipt sent" : "Invoice sent"} {formatDate(purchase.invoiceEmailedAt)}
-          {purchase.invoiceEmailedTo ? ` to ${purchase.invoiceEmailedTo}` : ""}
-        </p>
-      )}
-
-      {/* Same simple sent-log pattern as invoiceEmailedAt above — shown
-          whenever a certificate has been sent, regardless of the sale's
-          current payment status (2026-09-10). */}
-      {purchase.certificateEmailedAt && (
-        <p className="mt-1 text-xs text-neutral-400">
-          Certificate sent {formatDate(purchase.certificateEmailedAt)}
-          {purchase.certificateEmailedTo ? ` to ${purchase.certificateEmailedTo}` : ""}
-        </p>
-      )}
+      {/* ---- Sales status ---- */}
+      <div className="mt-3 min-h-[1.25rem] space-y-0.5 text-xs text-neutral-500">
+        {isPaid && completedPayment?.paidDate && (
+          <p>
+            Paid {formatDate(completedPayment.paidDate)}
+            {completedPayment.method ? ` — ${completedPayment.method}` : ""}
+          </p>
+        )}
+        {purchase.invoiceEmailedAt && (
+          <p>
+            {isPaid ? "Receipt sent" : "Invoice sent"} {formatDate(purchase.invoiceEmailedAt)}
+          </p>
+        )}
+        {purchase.certificateEmailedAt && (
+          <p>Certificate of authenticity sent {formatDate(purchase.certificateEmailedAt)}</p>
+        )}
+      </div>
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
-      {isPaid ? (
-        layout === "consigned" ? (
-          // Consigned Works action panel, paid (2026-09-22) — Record
-          // Payment/Payment link/Take Card no longer apply once paid;
-          // Framing/Delivery stay relevant post-sale, and
-          // Send receipt/Certificate are still the real, wired actions.
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            <button type="button" onClick={handleArrangeFraming} className={placeholderButtonCls}>
-              Arrange Framing
+      {showMarkPaidForm && !isPaid && (
+        <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-white p-3">
+          <div>
+            <label className={labelCls}>Date paid</label>
+            <input
+              type="date"
+              value={paidDate}
+              onChange={(e) => setPaidDate(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Method</label>
+            <select
+              value={paidMethod}
+              onChange={(e) => setPaidMethod(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Choose…</option>
+              {paymentMethods.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={handleConfirmMarkPaid}
+              disabled={isPending || !paidMethod}
+              className={`flex-1 ${actionButtonCls}`}
+            >
+              Paid
             </button>
-            <button type="button" onClick={handleArrangeDelivery} className={placeholderButtonCls}>
-              Arrange Delivery
+            <button
+              type="button"
+              onClick={() => setShowMarkPaidForm(false)}
+              disabled={isPending}
+              className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+            >
+              Cancel
             </button>
+          </div>
+        </div>
+      )}
+
+      {!isPaid && purchase.stripePaymentLinkUrl && (
+        <div className="mt-3 flex gap-2">
+          <input
+            type="text"
+            readOnly
+            value={purchase.stripePaymentLinkUrl}
+            onFocus={(e) => e.currentTarget.select()}
+            className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600"
+          />
+          <button
+            type="button"
+            onClick={() => handleCopyPaymentLink(purchase.stripePaymentLinkUrl!)}
+            className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+          >
+            {linkCopied ? "Copied" : "Copy"}
+          </button>
+        </div>
+      )}
+      {paymentLinkError && <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>}
+
+      {/* ---- Action panel ---- */}
+      <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
+        <button type="button" onClick={handleArrangeFraming} className={placeholderButtonCls}>
+          Arrange Framing
+        </button>
+        <button type="button" onClick={handleArrangeDelivery} className={placeholderButtonCls}>
+          Arrange Delivery
+        </button>
+        {isPaid ? (
+          <>
             <button
               type="button"
               onClick={handleOpenInvoiceModal}
               disabled={isPending}
               className={actionButtonCls}
             >
-              {purchase.invoiceEmailedAt ? "Send receipt again" : "Send receipt"}
+              Send Receipt
             </button>
             <button
               type="button"
@@ -343,231 +335,62 @@ export default function GallerySaleCard({
               disabled={isPending}
               className={actionButtonCls}
             >
-              {purchase.certificateEmailedAt
-                ? "Send certificate again"
-                : "Certificate of Authenticity"}
+              Certificate of Authenticity
             </button>
-          </div>
+          </>
         ) : (
-          <div className="mt-3 flex gap-2">
+          <>
             <button
               type="button"
               onClick={handleOpenInvoiceModal}
               disabled={isPending}
               className={actionButtonCls}
             >
-              {purchase.invoiceEmailedAt ? "Send receipt again" : "Send receipt"}
+              {preparingInvoice ? "Preparing…" : "Send invoice"}
             </button>
             <button
               type="button"
-              onClick={() => setShowCertificateModal(true)}
+              onClick={handleMarkPaidClick}
               disabled={isPending}
               className={actionButtonCls}
             >
-              {purchase.certificateEmailedAt
-                ? "Send certificate again"
-                : "Certificate of Authenticity"}
+              Record Payment
             </button>
-          </div>
-        )
-      ) : (
-        <>
-          {/* 2x3 action grid (2026-09-12 mockup) — Send invoice/Cancel
-              Sale, Mark as Paid/Delete Sale, Certificate of
-              Authenticity/Payment Link, all equal-weight solid buttons.
-              Certificate of Authenticity and Payment Link both used to
-              live outside this grid (a full-width button and a separate
-              bordered section below); the mockup folds both into the
-              grid itself. Cancel Sale and Delete Sale still get a
-              ConfirmDialog before anything actually happens.
+            <button
+              type="button"
+              onClick={handleGetPaymentLink}
+              disabled={isPending}
+              className={actionButtonCls}
+            >
+              {isPending && !purchase.stripePaymentLinkUrl ? "Generating…" : "Payment link"}
+            </button>
+            <button type="button" onClick={handleTakeCard} className={placeholderButtonCls}>
+              Take Card
+            </button>
+          </>
+        )}
+      </div>
 
-              "consigned" layout (2026-09-22, Phase 1 sale-recording
-              rework) — a different 2x3 grid for the Consigned Works
-              panel: Arrange Framing/Arrange Delivery (placeholders,
-              Phase 2), Send invoice/Record Payment (same handlers as
-              "full", just relabelled — "Record Payment" reads better
-              than "Mark as Paid" once recording the sale itself already
-              happened as its own earlier step), Payment link/Take Card
-              (placeholder). Cancel Sale/Delete Sale/Certificate of
-              Authenticity aren't offered here — still reachable from the
-              Sales page (PurchasePanel/SalesView), which keeps the
-              "full" layout. */}
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {layout === "consigned" ? (
-              <>
-                <button type="button" onClick={handleArrangeFraming} className={placeholderButtonCls}>
-                  Arrange Framing
-                </button>
-                <button type="button" onClick={handleArrangeDelivery} className={placeholderButtonCls}>
-                  Arrange Delivery
-                </button>
-                <button
-                  type="button"
-                  onClick={handleOpenInvoiceModal}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  {preparingInvoice
-                    ? "Preparing…"
-                    : purchase.invoiceEmailedAt
-                      ? "Send invoice again"
-                      : "Send invoice"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleMarkPaidClick}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  Record Payment
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGetPaymentLink}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  {isPending && !purchase.stripePaymentLinkUrl ? "Generating…" : "Payment link"}
-                </button>
-                <button type="button" onClick={handleTakeCard} className={placeholderButtonCls}>
-                  Take Card
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={handleOpenInvoiceModal}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  {preparingInvoice
-                    ? "Preparing…"
-                    : purchase.invoiceEmailedAt
-                      ? "Send invoice again"
-                      : "Send invoice"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCancelSale}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  Cancel Sale
-                </button>
-                <button
-                  type="button"
-                  onClick={handleMarkPaidClick}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  Mark as Paid
-                </button>
-                <button
-                  type="button"
-                  onClick={handleDeleteSale}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  Delete Sale
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowCertificateModal(true)}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  {purchase.certificateEmailedAt
-                    ? "Send certificate again"
-                    : "Certificate of Authenticity"}
-                </button>
-                <button
-                  type="button"
-                  onClick={handleGetPaymentLink}
-                  disabled={isPending}
-                  className={actionButtonCls}
-                >
-                  {isPending && !purchase.stripePaymentLinkUrl ? "Generating…" : "Payment Link"}
-                </button>
-              </>
-            )}
-          </div>
-
-          {showMarkPaidForm && (
-            <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-white p-3">
-              <div>
-                <label className={labelCls}>Date paid</label>
-                <input
-                  type="date"
-                  value={paidDate}
-                  onChange={(e) => setPaidDate(e.target.value)}
-                  className={inputCls}
-                />
-              </div>
-              <div>
-                <label className={labelCls}>Method</label>
-                <select
-                  value={paidMethod}
-                  onChange={(e) => setPaidMethod(e.target.value)}
-                  className={inputCls}
-                >
-                  <option value="">Choose…</option>
-                  {paymentMethods.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleConfirmMarkPaid}
-                  disabled={isPending || !paidMethod}
-                  className="flex-1 rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-semibold uppercase tracking-wide text-white hover:bg-neutral-700 disabled:opacity-50"
-                >
-                  Paid
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowMarkPaidForm(false)}
-                  disabled={isPending}
-                  className="rounded-md border border-neutral-300 px-3 py-[5px] text-sm hover:bg-white disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Payment link reveal — persistent, net-owed link, separate
-              from the full-price links used for direct Stripe sales
-              elsewhere. Only rendered once a link actually exists;
-              generating one is now the grid's "Payment Link" button
-              above (also used to re-check/re-show an existing one). */}
-          {purchase.stripePaymentLinkUrl && (
-            <div className="mt-3 border-t border-neutral-200 pt-3">
-              <label className={labelCls}>Payment link</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={purchase.stripePaymentLinkUrl}
-                  onFocus={(e) => e.currentTarget.select()}
-                  className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600"
-                />
-                <button
-                  type="button"
-                  onClick={() => handleCopyPaymentLink(purchase.stripePaymentLinkUrl!)}
-                  className="shrink-0 rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-white"
-                >
-                  {linkCopied ? "Copied" : "Copy"}
-                </button>
-              </div>
-            </div>
-          )}
-          {paymentLinkError && <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>}
-        </>
+      {/* ---- Cancel / Delete ---- */}
+      {!isPaid && (
+        <div className="mt-6 grid grid-cols-2 text-center text-sm text-red-700">
+          <button
+            type="button"
+            onClick={handleCancelSale}
+            disabled={isPending}
+            className="hover:underline disabled:opacity-50"
+          >
+            Cancel Sale
+          </button>
+          <button
+            type="button"
+            onClick={handleDeleteSale}
+            disabled={isPending}
+            className="hover:underline disabled:opacity-50"
+          >
+            Delete Sale
+          </button>
+        </div>
       )}
 
       <ConfirmDialog
