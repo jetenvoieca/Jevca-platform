@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { generateInvoicePdf } from "./invoice";
 import { artistFromAddress } from "@/lib/email";
+import { saleTitle } from "@/lib/saleMath";
 
 // Part Three (2026-09-01) — sending an invoice email for a gallery sale.
 // Deliberately its own file, not folded into payments.ts or invoice.ts:
@@ -122,9 +123,15 @@ export async function getInvoiceEmailDraft(
       : purchase.buyerName?.trim().split(/\s+/)[0]) || "there";
   const isPaid = purchase.status === "COMPLETED";
 
-  const opening = isGallery
-    ? `It's great that you have sold ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`
-    : `Thank you for your purchase of ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`;
+  // A framing/delivery charge sale (2026-09-23) is about the charge,
+  // not a sale of the artwork itself.
+  const chargeLabel =
+    purchase.chargeKind === "FRAMING" ? "framing" : purchase.chargeKind === "DELIVERY" ? "delivery" : null;
+  const opening = chargeLabel
+    ? `This is for the ${chargeLabel} of ${purchase.artwork.presentationTitle}: ${sym}${total.toFixed(2)}.`
+    : isGallery
+      ? `It's great that you have sold ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`
+      : `Thank you for your purchase of ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`;
 
   const middleParagraphs = isPaid
     ? ["Thank you for the payment — I enclose our receipt for your records."]
@@ -149,7 +156,7 @@ export async function getInvoiceEmailDraft(
 
   return {
     to: recipient,
-    subject: `Sale "${purchase.artwork.presentationTitle}"`,
+    subject: `Sale "${saleTitle(purchase.artwork.presentationTitle, purchase.chargeKind)}"`,
     body,
   };
 }
@@ -224,7 +231,11 @@ export async function sendInvoiceEmail(
 
   await db.purchase.update({
     where: { id: purchaseId },
-    data: { invoiceEmailedAt: new Date(), invoiceEmailedTo: recipient },
+    // Invoice and receipt each keep their own sent-log (2026-09-23), so
+    // sending the receipt no longer overwrites when the invoice went.
+    data: isPaid
+      ? { receiptEmailedAt: new Date(), receiptEmailedTo: recipient }
+      : { invoiceEmailedAt: new Date(), invoiceEmailedTo: recipient },
   });
 
   // Logged purely for the Inbox's unified Sent list (2026-09-05) —

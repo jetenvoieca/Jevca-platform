@@ -109,6 +109,9 @@ export async function generateCertificatePdf(
   if (purchase.status === "ABANDONED") {
     throw new Error("This sale was abandoned — a certificate can't be issued for a sale that didn't go ahead.");
   }
+  if (purchase.chargeKind) {
+    throw new Error("A framing or delivery charge doesn't have a Certificate of Authenticity — issue it from the artwork's own sale.");
+  }
 
   const artwork = purchase.artwork;
   const artist = artwork.artist;

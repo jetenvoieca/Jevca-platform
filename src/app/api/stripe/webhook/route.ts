@@ -1,10 +1,8 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
-import { db } from "@/lib/db";
 import { getWebhookSecret, type StripeMode } from "@/lib/stripe";
 import {
-  handleFirstPaymentSucceeded,
-  handleGalleryPaymentLinkPaid,
+  recordPaymentIntent,
   linkSubscriptionToSchedule,
   handleInstalmentInvoicePaid,
   handleInstalmentInvoiceFailed,
@@ -86,39 +84,15 @@ export async function POST(req: NextRequest) {
   try {
     switch (event.type) {
       // Fires for every collection route — a hosted Checkout Session, an
-      // in-app Stripe Elements card entry, and (2026-09-13) a gallery's
-      // persistent Payment Link all end in a PaymentIntent succeeding.
-      // Which handler applies depends on the sale's own channel: a
-      // GALLERY-channel purchase is paid through its own payment links
-      // — the full balance, or the first instalment of a plan
-      // (handleGalleryPaymentLinkPaid) — never the direct Stripe flow
-      // (handleFirstPaymentSucceeded).
+      // in-app card entry, and a consigned sale's payment links all end
+      // in a PaymentIntent succeeding. recordPaymentIntent (payments.ts)
+      // works out which sale it belongs to and records it — the same
+      // call the in-app card form makes, so whichever arrives first
+      // does the work and the other is a no-op.
       case "payment_intent.succeeded": {
         const intent = event.data.object as Stripe.PaymentIntent;
         const purchaseId = intent.metadata?.purchaseId;
-        if (purchaseId) {
-          const purchase = await db.purchase.findUnique({
-            where: { id: purchaseId },
-            select: { channel: true },
-          });
-          if (purchase?.channel === "GALLERY") {
-            const instalments = parseInt(intent.metadata?.instalments || "", 10);
-            await handleGalleryPaymentLinkPaid({
-              purchaseId,
-              paymentIntentId: intent.id,
-              amountReceivedMinor: intent.amount_received,
-              currency: intent.currency,
-              customerId: typeof intent.customer === "string" ? intent.customer : intent.customer?.id ?? null,
-              paymentMethodId:
-                typeof intent.payment_method === "string"
-                  ? intent.payment_method
-                  : intent.payment_method?.id ?? null,
-              instalments: Number.isFinite(instalments) ? instalments : null,
-            });
-          } else {
-            await handleFirstPaymentSucceeded(purchaseId, intent.id);
-          }
-        }
+        if (purchaseId) await recordPaymentIntent(purchaseId, intent.id);
         break;
       }
 
