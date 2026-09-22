@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { findOrCreateCustomer } from "./customers";
-import { netOwed } from "@/lib/saleMath";
+import { netOwed, type SaleAmounts } from "@/lib/saleMath";
 import {
   getStripeClient,
   getPublishableKey,
@@ -65,6 +65,12 @@ export type PurchaseDetail = {
   // (2026-09-22) — only ever set for an Own-location sale. See the
   // matching note on Purchase.depositPaid in schema.prisma.
   depositPaid: string | null;
+  // Framing / delivery (2026-09-23) — at most one of each; costs add to
+  // Net Due. See Purchase.framer in schema.prisma.
+  framer: string | null;
+  framingCost: string | null;
+  courier: string | null;
+  deliveryCost: string | null;
   invoiceNumber: number | null;
   // Part Three (2026-09-01) — see the matching schema.prisma comments.
   stripePaymentLinkUrl: string | null;
@@ -585,11 +591,7 @@ export async function createGalleryPaymentLink(
       return { ok: true, url: purchase.stripePaymentLinkUrl };
     }
 
-    const net = netOwed(
-      purchase.totalAmount.toString(),
-      purchase.commissionPercent?.toString(),
-      purchase.depositPaid?.toString()
-    );
+    const net = netOwed(purchase);
 
     const mode = await getStripeModeForArtwork(purchase.artworkId);
     const stripe = getStripeClient(mode);
@@ -660,18 +662,7 @@ export async function updateGallerySaleAmount(
   const currencyChanged = currency !== purchase.currency;
   const linkNeedsClearing = (amountChanged || currencyChanged) && purchase.stripePaymentLinkId;
 
-  if (linkNeedsClearing) {
-    try {
-      const mode = await getStripeModeForArtwork(purchase.artworkId);
-      const stripe = getStripeClient(mode);
-      await stripe.paymentLinks.update(purchase.stripePaymentLinkId!, { active: false });
-    } catch {
-      // Deactivating the old link in Stripe failing shouldn't block
-      // correcting the price locally — worst case a now-stale-looking
-      // link stays technically active in Stripe a little longer, which
-      // is a Stripe-side cleanup, not a data-correctness problem here.
-    }
-  }
+  if (linkNeedsClearing) await retireGalleryPaymentLink(purchase);
 
   await db.purchase.update({
     where: { id: purchaseId },
@@ -679,6 +670,72 @@ export async function updateGallerySaleAmount(
       totalAmount,
       currency,
       ...(linkNeedsClearing ? { stripePaymentLinkId: null, stripePaymentLinkUrl: null } : {}),
+    },
+  });
+
+  return { ok: true };
+}
+
+// Deactivates a consigned sale's Payment Link in Stripe once its amount
+// is out of date (price, currency, framing or delivery changed). The
+// caller clears the stored id/url in its own update, so the next
+// "Payment link" press generates a fresh one for the current Net Due.
+// A Stripe-side failure never blocks the local change — worst case the
+// old link stays technically live in Stripe a little longer.
+async function retireGalleryPaymentLink(purchase: {
+  artworkId: string;
+  stripePaymentLinkId: string | null;
+}) {
+  if (!purchase.stripePaymentLinkId) return;
+  try {
+    const mode = await getStripeModeForArtwork(purchase.artworkId);
+    const stripe = getStripeClient(mode);
+    await stripe.paymentLinks.update(purchase.stripePaymentLinkId, { active: false });
+  } catch {
+    // See note above.
+  }
+}
+
+// ---------- Framing / delivery on a consigned sale ----------
+
+// Saves (or, with both fields blank, removes) the one framing or one
+// delivery entry on an ACTIVE consigned sale (2026-09-23). The cost is
+// paid by the buyer/gallery, so it adds to Net Due; commission is never
+// charged on it. Any existing Payment Link is retired, since it encodes
+// the old Net Due.
+export async function saveSaleExtra(
+  purchaseId: string,
+  siteId: string,
+  kind: "framing" | "delivery",
+  formData: FormData
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  if (!purchase) return { ok: false, error: "Sale not found." };
+  if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
+  if (purchase.status !== "ACTIVE") {
+    return { ok: false, error: "This sale has already been paid." };
+  }
+
+  const name = (formData.get("name") as string)?.trim() || null;
+  const costRaw = (formData.get("cost") as string)?.trim() || "";
+  let cost: string | null = null;
+  if (costRaw) {
+    const n = parseFloat(costRaw);
+    if (Number.isNaN(n) || n < 0) return { ok: false, error: "That cost isn't valid." };
+    cost = n.toFixed(2);
+  }
+  if (name && !cost) return { ok: false, error: "Please enter the cost." };
+
+  const current = kind === "framing" ? purchase.framingCost : purchase.deliveryCost;
+  const currentCost = current != null ? parseFloat(current.toString()).toFixed(2) : null;
+  const costChanged = currentCost !== cost;
+  if (costChanged) await retireGalleryPaymentLink(purchase);
+
+  await db.purchase.update({
+    where: { id: purchaseId },
+    data: {
+      ...(kind === "framing" ? { framer: name, framingCost: cost } : { courier: name, deliveryCost: cost }),
+      ...(costChanged ? { stripePaymentLinkId: null, stripePaymentLinkUrl: null } : {}),
     },
   });
 
@@ -766,7 +823,7 @@ export async function recordPastSale(
     customerId,
   });
 
-  const net = netOwed(totalAmount, commissionPercent);
+  const net = netOwed({ totalAmount, commissionPercent });
 
   const purchase = await db.purchase.create({
     data: {
@@ -890,22 +947,11 @@ function readPaidDetails(
 // — or, as of 2026-09-22, already SOLD for a Consigned Works sale — to
 // (still) SOLD.
 async function completeSaleAsPaid(
-  purchase: {
-    id: string;
-    artworkId: string;
-    totalAmount: { toString(): string };
-    commissionPercent: { toString(): string } | null;
-    depositPaid: { toString(): string } | null;
-    currency: string;
-  },
+  purchase: SaleAmounts & { id: string; artworkId: string; currency: string },
   paidDate: Date,
   method: string | null
 ) {
-  const net = netOwed(
-    purchase.totalAmount.toString(),
-    purchase.commissionPercent?.toString(),
-    purchase.depositPaid?.toString()
-  );
+  const net = netOwed(purchase);
 
   await db.payment.create({
     data: {
@@ -1388,18 +1434,7 @@ export async function handleGalleryPaymentLinkPaid(
 
   await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
 
-  if (purchase.stripePaymentLinkId) {
-    try {
-      const mode = await getStripeModeForArtwork(purchase.artworkId);
-      const stripe = getStripeClient(mode);
-      await stripe.paymentLinks.update(purchase.stripePaymentLinkId, { active: false });
-    } catch {
-      // Same reasoning as updateGallerySaleAmount above — failing to
-      // deactivate the link in Stripe shouldn't block recording that
-      // the balance has genuinely been paid; worst case it stays
-      // technically payable in Stripe a little longer.
-    }
-  }
+  await retireGalleryPaymentLink(purchase);
 }
 
 export async function linkSubscriptionToSchedule(scheduleId: string, subscriptionId: string) {
