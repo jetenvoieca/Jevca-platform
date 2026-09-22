@@ -1,15 +1,19 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   getGalleryDetail,
   updateCustomer,
-  createCustomer,
-  deleteCustomer,
-  type CustomerSummary,
   type GalleryDetail,
 } from "@/lib/actions/customers";
+import {
+  createLocation,
+  renameLocationByCustomer,
+  deleteLocationByCustomer,
+  type LocationCustomerSummary,
+  type LocationType,
+} from "@/lib/actions/locations";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
 import { formatDate } from "@/lib/formatDate";
@@ -23,7 +27,7 @@ type DetailTab = "details" | "sales";
 // Below xl (1280px — covers iPad in both orientations, where the fixed
 // 600px + 300px side columns leave no usable room for the works grid),
 // the three columns below are shown one at a time instead of side by
-// side: Gallery list -> Consigned Works -> Details/Sales. This state
+// side: Location list -> Consigned Works -> Details/Sales. This state
 // drives which one is visible; it's simply ignored at xl and above,
 // where all three show together as before.
 type MobileStep = "list" | "works" | "details";
@@ -37,6 +41,21 @@ function formatMoney(amount: string, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
 }
 
+// Small Gallery/Own badge (2026-09-22) — same visual pattern as
+// LocationsCard.tsx's own badge, reused here so a Location's Type reads
+// consistently wherever it shows up.
+function LocationTypeBadge({ type }: { type: LocationType }) {
+  return (
+    <span
+      className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${
+        type === "GALLERY" ? "bg-blue-100 text-blue-700" : "bg-neutral-200 text-neutral-600"
+      }`}
+    >
+      {type === "GALLERY" ? "Gallery" : "Own"}
+    </span>
+  );
+}
+
 export default function GalleriesView({
   siteId,
   artistId,
@@ -45,7 +64,12 @@ export default function GalleriesView({
 }: {
   siteId: string;
   artistId: string;
-  galleries: CustomerSummary[];
+  // Every Location this artist has (2026-09-22 rework of the old
+  // Galleries-only page) — Gallery (third-party, consignment,
+  // commission) and Own (the artist's own stock: studio, storage,
+  // framer) alike, keyed by their linked Customer id throughout, same
+  // as before this rework. See actions/locations.ts.
+  galleries: LocationCustomerSummary[];
   // Offered in GallerySaleCard's "Mark as paid" Method dropdown
   // (2026-09-03) — Settings-editable, same list the Payment Methods
   // card on the Artwork Catalogue's Settings screen manages.
@@ -59,6 +83,7 @@ export default function GalleriesView({
   const [savedField, setSavedField] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
+  const [newLocationType, setNewLocationType] = useState<LocationType>("GALLERY");
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Defaults to "sales" (2026-09-09, direct request) — the sales history
@@ -72,6 +97,13 @@ export default function GalleriesView({
   // gallery list, same as the "nothing selected" state.
   const [mobileStep, setMobileStep] = useState<MobileStep>("list");
   const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // This Location's Type, looked up from the list prop (2026-09-22) —
+  // drives the Own-locations-have-no-commission rule below (Default
+  // commission % in Details, Commission % on the Start-sale form both
+  // lock to 0 and stop being editable).
+  const selectedLocationType = galleries.find((g) => g.id === selectedId)?.locationType ?? null;
 
   // ---- Consigned Works control panel (2026-08-31, Part Two) ----
   // Clicking a consigned artwork fetches its own full detail (same call
@@ -150,8 +182,9 @@ export default function GalleriesView({
     setSaleCurrency("GBP");
     // Defaults to this gallery's own default commission — still
     // editable per sale, same "starting point, not binding" idea as
-    // everywhere else this default is used.
-    setSaleCommission(selectedDetail?.defaultCommissionPercent || "");
+    // everywhere else this default is used. Always 0 for an Own
+    // location (2026-09-22) — see selectedLocationType above.
+    setSaleCommission(selectedLocationType === "OWN" ? "0" : selectedDetail?.defaultCommissionPercent || "");
     setSaleDate(new Date().toISOString().slice(0, 10));
     getArtworkDetailForClient(workId).then((detail) => {
       setSelectedWorkDetail(detail);
@@ -166,6 +199,30 @@ export default function GalleriesView({
       setWorkLoading(false);
     });
   };
+
+  // Auto-opens a Location (and, if given, one of its works) from the
+  // URL's own ?location=&work= query params (2026-09-22) — this is what
+  // the Artwork Catalogue's "Sold" button navigates to, so pressing it
+  // lands here with the right gallery/work already open, matching the
+  // mockup, rather than just dropping onto a blank Locations page.
+  // Runs once, on mount, straight from the URL Next.js already parsed
+  // for this page — not re-run on every render.
+  useEffect(() => {
+    const locationParam = searchParams.get("location");
+    const workParam = searchParams.get("work");
+    if (!locationParam) return;
+    setSelectedId(locationParam);
+    setSelectedDetail(null);
+    setDetailTab("sales");
+    setMobileStep("works");
+    setLoading(true);
+    getGalleryDetail(locationParam).then((detail) => {
+      setSelectedDetail(detail);
+      setLoading(false);
+      if (workParam) openWork(workParam);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Refetches this work's detail (to pick up any change GallerySaleCard
   // or the Edit Sale popup just made — paid, sent, cancelled, deleted,
@@ -196,9 +253,30 @@ export default function GalleriesView({
     value: string
   ) => {
     if (!selectedDetail) return;
+
+    // A rename has to cascade to Location.name and every matching
+    // Artwork.location string too (2026-09-22) — plain updateCustomer
+    // can't do that, so it goes through renameLocationByCustomer
+    // instead; every other field below is still a normal Customer field
+    // update.
+    if (field === "name") {
+      startTransition(async () => {
+        const result = await renameLocationByCustomer(selectedDetail.id, siteId, value);
+        if ("error" in result) {
+          setAddError(result.error);
+          return;
+        }
+        router.refresh();
+        openRow(selectedDetail.id);
+        setSavedField(field);
+        setTimeout(() => setSavedField(null), 1500);
+      });
+      return;
+    }
+
     const fd = new FormData();
-    fd.set("kind", "GALLERY");
-    fd.set("name", field === "name" ? value : selectedDetail.name);
+    fd.set("kind", selectedDetail.kind);
+    fd.set("name", selectedDetail.name);
     fd.set("email", field === "email" ? value : selectedDetail.email || "");
     fd.set("phone", field === "phone" ? value : selectedDetail.phone || "");
     fd.set("address", field === "address" ? value : selectedDetail.address || "");
@@ -225,38 +303,40 @@ export default function GalleriesView({
     startTransition(async () => {
       await updateCustomer(selectedDetail.id, fd);
       router.refresh();
-      // A rename directly affects which artworks show as Consigned
-      // Works below (matched by exact name — see getGalleryDetail), so
-      // re-fetch rather than just patching local state for that one
-      // field, to keep the two panels honest with each other.
-      if (field === "name") {
-        openRow(selectedDetail.id);
-      } else {
-        setSelectedDetail((prev) => (prev ? { ...prev, [field]: value || null } : prev));
-      }
+      setSelectedDetail((prev) => (prev ? { ...prev, [field]: value || null } : prev));
       setSavedField(field);
       setTimeout(() => setSavedField(null), 1500);
     });
   };
 
-  const handleAddGallery = async (formData: FormData) => {
+  // "+ Add Location" (2026-09-22, replaces "+ Add Gallery") — goes
+  // through createLocation now (actions/locations.ts), which creates
+  // the linked Customer record in the same call, rather than calling
+  // createCustomer directly; openRow still just needs the returned
+  // customerId, same as before.
+  const handleAddLocation = async (formData: FormData) => {
     setAddError(null);
-    formData.set("kind", "GALLERY");
-    const result = await createCustomer(artistId, formData);
+    const name = (formData.get("name") as string)?.trim();
+    if (!name) return;
+    const result = await createLocation(artistId, siteId, name, newLocationType);
     if ("error" in result) {
       setAddError(result.error);
       return;
     }
     setAdding(false);
     router.refresh();
-    openRow(result.id);
+    openRow(result.customerId);
   };
 
   const handleDeleteGallery = () => {
     if (!selectedDetail) return;
     setDeleting(true);
     startTransition(async () => {
-      await deleteCustomer(selectedDetail.id);
+      // Deletes the Location row first, then its Customer (2026-09-22)
+      // — deleteCustomer directly would now fail: Location.customerId
+      // has no cascade, so an orphaned Location row would be left
+      // pointing at a deleted Customer. See actions/locations.ts.
+      await deleteLocationByCustomer(selectedDetail.id, siteId);
       setDeleting(false);
       setConfirmingDelete(false);
       backToList();
@@ -279,7 +359,10 @@ export default function GalleriesView({
     const fd = new FormData();
     fd.set("totalAmount", saleTotalAmount.trim());
     fd.set("currency", saleCurrency);
-    fd.set("commissionPercent", saleCommission.trim());
+    // Always 0 for an Own location (2026-09-22), regardless of whatever
+    // is in saleCommission's own state — belt and braces alongside the
+    // disabled input below.
+    fd.set("commissionPercent", selectedLocationType === "OWN" ? "0" : saleCommission.trim());
     fd.set("saleDate", saleDate);
     startWorkTransition(async () => {
       const res = await startGallerySale(selectedWorkId, selectedId, siteId, fd);
@@ -365,7 +448,7 @@ export default function GalleriesView({
               onClick={backToList}
               className="shrink-0 rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50 xl:hidden"
             >
-              ← Galleries
+              ← Locations
             </button>
             <h1 className="text-2xl font-semibold text-neutral-900">Consigned Works</h1>
           </div>
@@ -381,13 +464,13 @@ export default function GalleriesView({
         </div>
         {!selectedDetail ? (
           <p className="text-sm text-neutral-400">
-            Select a gallery to see the works currently consigned there.
+            Select a location to see the works currently there.
           </p>
         ) : (
           <div className="flex-1 overflow-y-auto">
             {selectedDetail.consignedWorks.length === 0 ? (
               <p className="text-sm text-neutral-400">
-                Nothing currently has its Location set to this gallery.
+                Nothing currently has its Location set to this one.
               </p>
             ) : (
               <div className="flex flex-wrap gap-3">
@@ -446,7 +529,7 @@ export default function GalleriesView({
         }`}
       >
         {!selectedId ? (
-          <p className="text-sm text-neutral-400">Select a gallery to see its details.</p>
+          <p className="text-sm text-neutral-400">Select a location to see its details.</p>
         ) : loading || !selectedDetail ? (
           <p className="text-sm text-neutral-400">Loading…</p>
         ) : (
@@ -461,6 +544,7 @@ export default function GalleriesView({
                   ← Works
                 </button>
                 <h2 className="text-lg font-semibold text-neutral-900">{selectedDetail.name}</h2>
+                {selectedLocationType && <LocationTypeBadge type={selectedLocationType} />}
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
@@ -579,7 +663,7 @@ export default function GalleriesView({
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className={labelCls}>Gallery name</label>
+                  <label className={labelCls}>{selectedLocationType === "OWN" ? "Location name" : "Gallery name"}</label>
                   <input
                     key={`name-${selectedDetail.id}`}
                     type="text"
@@ -702,9 +786,12 @@ export default function GalleriesView({
                     key={`defaultCommissionPercent-${selectedDetail.id}`}
                     type="text"
                     inputMode="decimal"
-                    defaultValue={selectedDetail.defaultCommissionPercent || ""}
+                    // Always 0 and non-editable for an Own location
+                    // (2026-09-22) — you don't pay yourself commission.
+                    value={selectedLocationType === "OWN" ? "0" : undefined}
+                    defaultValue={selectedLocationType === "OWN" ? undefined : selectedDetail.defaultCommissionPercent || ""}
                     onBlur={(e) => saveField("defaultCommissionPercent", e.target.value.trim())}
-                    disabled={isPending}
+                    disabled={isPending || selectedLocationType === "OWN"}
                     placeholder="e.g. 30"
                     className={inputCls}
                   />
@@ -717,15 +804,20 @@ export default function GalleriesView({
         )}
       </div>
 
-      {/* ---- Gallery list (right) ---- */}
+      {/* ---- Location list (right) ---- */}
       {/* overflow-hidden, not overflow-y-auto — headers never scroll
-          (2026-09-09). The "+ Add Gallery"/search block below is fixed;
-          only the list itself (its own flex-1 overflow-y-auto further
-          down) scrolls.
+          (2026-09-09). The "+ Add Location"/search block below is
+          fixed; only the list itself (its own flex-1 overflow-y-auto
+          further down) scrolls.
 
           Below xl (2026-09-13) — full width and only shown as its own
           drill-down step (the starting one); see MobileStep above.
-          Unchanged at xl and above. */}
+          Unchanged at xl and above.
+
+          Lists BOTH Gallery and Own locations now (2026-09-22 rework)
+          — previously Gallery-only ("Galleries" page); a Gallery/Own
+          badge next to each name (see LocationTypeBadge above) tells
+          them apart. */}
       <div
         className={`h-full w-full shrink-0 flex-col overflow-hidden xl:flex xl:w-[300px] xl:border-l xl:border-neutral-200 ${
           mobileStep === "list" ? "flex" : "hidden"
@@ -737,7 +829,7 @@ export default function GalleriesView({
             onClick={() => setAdding(true)}
             className="mb-3 w-full rounded-md bg-neutral-900 px-3 py-[4px] text-sm font-medium text-white hover:bg-neutral-700"
           >
-            + Add Gallery
+            + Add Location
           </button>
           <input
             type="text"
@@ -747,29 +839,31 @@ export default function GalleriesView({
             className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-xs"
           />
           <p className="mt-2 text-[11px] text-neutral-400">
-            {galleries.length} galler{galleries.length === 1 ? "y" : "ies"}
+            {galleries.length} location{galleries.length === 1 ? "" : "s"}
           </p>
         </div>
 
         {adding && (
           <form
-            action={handleAddGallery}
+            action={handleAddLocation}
             className="space-y-2 border-b border-neutral-200 bg-neutral-50 p-3"
           >
             <input
               type="text"
               name="name"
-              placeholder="Gallery name"
+              placeholder="Location name"
               required
               autoFocus
               className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs"
             />
-            <input
-              type="email"
-              name="email"
-              placeholder="Email (optional)"
+            <select
+              value={newLocationType}
+              onChange={(e) => setNewLocationType(e.target.value as LocationType)}
               className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs"
-            />
+            >
+              <option value="GALLERY">Gallery (third-party)</option>
+              <option value="OWN">Own (e.g. your studio)</option>
+            </select>
             {addError && <p className="text-xs text-red-600">{addError}</p>}
             <div className="flex gap-2">
               <button
@@ -809,6 +903,7 @@ export default function GalleriesView({
                     }`}
                   >
                     <span className="truncate">{g.name}</span>
+                    <LocationTypeBadge type={g.locationType} />
                   </button>
                 </li>
               ))}
@@ -941,8 +1036,11 @@ export default function GalleriesView({
                           <input
                             type="text"
                             inputMode="decimal"
-                            value={saleCommission}
+                            // Locked to 0 for an Own location (2026-09-22)
+                            // — no commission owed to yourself.
+                            value={selectedLocationType === "OWN" ? "0" : saleCommission}
                             onChange={(e) => setSaleCommission(e.target.value)}
+                            disabled={selectedLocationType === "OWN"}
                             placeholder="e.g. 45"
                             className={inputCls}
                           />
@@ -988,11 +1086,11 @@ export default function GalleriesView({
 
       <ConfirmDialog
         open={confirmingDelete}
-        title={`Delete ${selectedDetail?.name ?? "this gallery"}?`}
+        title={`Delete ${selectedDetail?.name ?? "this location"}?`}
         message={
           selectedDetail && selectedDetail.purchases.length > 0
             ? `This removes the contact record only — their ${selectedDetail.purchases.length} sale${selectedDetail.purchases.length === 1 ? "" : "s"} stay exactly as they are (invoices, amounts, everything), just no longer linked to a customer record. Consigned Works (matched by name, not a real link) are unaffected either way. Can't be undone.`
-            : "This removes the contact record. Can't be undone."
+            : "This removes the location. Can't be undone."
         }
         confirmLabel={deleting ? "Deleting…" : "Delete permanently"}
         danger
