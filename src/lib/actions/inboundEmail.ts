@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import { raiseAlertIfNotAlreadyOpen, resolveAlertsOfType } from "@/lib/alerts";
+import { saleTitle } from "@/lib/saleMath";
 
 // The unified admin inbox (2026-09-05, Email Integration) — processing
 // of inbound webhook events, plus reading/replying to what lands here.
@@ -220,7 +221,7 @@ export async function getSentList(artistId?: string): Promise<SentSummaryItem[]>
     include: {
       artist: { select: { name: true } },
       customer: { select: { name: true } },
-      purchase: { select: { artwork: { select: { presentationTitle: true } } } },
+      purchase: { select: { chargeKind: true, artwork: { select: { presentationTitle: true } } } },
     },
   });
   return rows.map((r) => ({
@@ -234,7 +235,7 @@ export async function getSentList(artistId?: string): Promise<SentSummaryItem[]>
     artistName: r.artist?.name || null,
     customerId: r.customerId,
     customerName: r.customer?.name || null,
-    artworkTitle: r.purchase?.artwork.presentationTitle || null,
+    artworkTitle: r.purchase ? saleTitle(r.purchase.artwork.presentationTitle, r.purchase.chargeKind) : null,
     sentAt: r.sentAt.toISOString(),
   }));
 }

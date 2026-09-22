@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
+import { saleTitle } from "@/lib/saleMath";
 
 export type CustomerKind = "INDIVIDUAL" | "GALLERY" | "OWN";
 
@@ -208,7 +209,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
       return {
         id: p.id,
         artworkId: p.artworkId,
-        artworkTitle: p.artwork.presentationTitle,
+        artworkTitle: saleTitle(p.artwork.presentationTitle, p.chargeKind),
         artworkImageUrl: effectiveImage
           ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
           : null,
