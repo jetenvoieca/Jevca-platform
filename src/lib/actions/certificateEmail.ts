@@ -15,6 +15,15 @@ import { artistFromAddress } from "@/lib/email";
 //
 // Available regardless of payment status (2026-09-10) — see the matching
 // note in certificate.ts for why. Still refused for ABANDONED.
+//
+// 2026-09-22, Location rework: recipient/name now prefer the linked
+// Customer only when it's a real GALLERY-type Location — same fix, same
+// reasoning as invoiceEmail.ts. An Own-type Location's own Customer
+// record typically has no email at all, so falling back to it (as this
+// used to, for ANY linked customer) meant a certificate for an
+// Own-location sale silently had nowhere to send to. The real buyer's
+// buyerEmail/buyerName (captured on the Record Sale form) is what an
+// Own-location — or an ordinary direct — sale should use instead.
 
 export type CertificateEmailDraft = { to: string; subject: string; body: string };
 
@@ -26,18 +35,20 @@ async function loadPurchaseForEmail(purchaseId: string) {
 }
 
 function recipientFor(purchase: {
-  customer: { contactEmail: string | null; email: string | null } | null;
+  customer: { kind: string; contactEmail: string | null; email: string | null } | null;
   buyerEmail: string | null;
 }) {
-  if (purchase.customer) return purchase.customer.contactEmail || purchase.customer.email;
+  if (purchase.customer?.kind === "GALLERY") {
+    return purchase.customer.contactEmail || purchase.customer.email;
+  }
   return purchase.buyerEmail;
 }
 
 function firstNameFor(purchase: {
-  customer: { contactName: string | null; name: string } | null;
+  customer: { kind: string; contactName: string | null; name: string } | null;
   buyerName: string | null;
 }) {
-  if (purchase.customer) {
+  if (purchase.customer?.kind === "GALLERY") {
     return purchase.customer.contactName?.trim().split(/\s+/)[0] || purchase.customer.name;
   }
   return purchase.buyerName?.trim().split(/\s+/)[0] || "there";
