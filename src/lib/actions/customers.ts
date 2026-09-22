@@ -239,16 +239,26 @@ export type GalleryConsignedWork = {
 
 export type GalleryDetail = CustomerDetail & { consignedWorks: GalleryConsignedWork[] };
 
-// Consigned Works is a first cut (2026-08-14): matched by exact string
-// equality between this gallery's name and Artwork.location — the same
-// free-text field and matching already used by the Artwork Catalogue's
-// own Location filter, not a new mechanism. That means a typo or a
-// gallery rename can silently break the match (already visible in real
-// data — "La Galerie" vs "La Galarie"). Deliberately not fixed here per
-// explicit instruction to validate the workflow before investing more.
+// Consigned/held Works, matched by exact string equality between this
+// Location's name and Artwork.location — the same free-text field and
+// matching already used by the Artwork Catalogue's own Location
+// dropdown. Used to be typo-prone (a rename could silently break the
+// match, e.g. "La Galerie" vs "La Galarie") until the Location model
+// (2026-09-22, schema.prisma) made this the single canonical source
+// both sides read from, so the two can no longer drift apart —
+// renameLocationByCustomer (actions/locations.ts) keeps them in sync on
+// every rename.
+//
+// Accepts both "GALLERY" and "OWN" kind Customer records (2026-09-22) —
+// every Location, third-party gallery or the artist's own stock, has one
+// of these behind it; see Customer.kind in schema.prisma. Only a plain
+// "INDIVIDUAL" buyer is rejected here. Name kept as getGalleryDetail
+// (rather than renamed to getLocationDetail) purely to minimise the
+// diff on every existing caller (GalleriesView, PurchasePanel) — it's
+// exactly the same shape/behaviour for either Location type now.
 export async function getGalleryDetail(customerId: string): Promise<GalleryDetail | null> {
   const detail = await getCustomerDetail(customerId);
-  if (!detail || detail.kind !== "GALLERY") return null;
+  if (!detail || detail.kind === "INDIVIDUAL") return null;
 
   const customer = await db.customer.findUnique({
     where: { id: customerId },
@@ -347,7 +357,10 @@ export async function createCustomer(
   formData: FormData
 ): Promise<{ id: string } | { error: string }> {
   const kindRaw = (formData.get("kind") as string)?.trim();
-  const kind = kindRaw === "GALLERY" ? "GALLERY" : "INDIVIDUAL";
+  // "INDIVIDUAL" | "GALLERY" | "OWN" (2026-09-22 — see the note on
+  // Customer.kind in schema.prisma for what "OWN" is). Anything else
+  // typed in falls back to "INDIVIDUAL", same as before.
+  const kind = kindRaw === "GALLERY" || kindRaw === "OWN" ? kindRaw : "INDIVIDUAL";
   // Individuals submit firstName/lastName and no `name` at all; Galleries
   // (which have no first/last concept) submit `name` directly. Whichever
   // arrives, `name` ends up as the single source of truth used
@@ -399,7 +412,7 @@ export async function createCustomer(
 
 export async function updateCustomer(customerId: string, formData: FormData): Promise<void> {
   const kindRaw = (formData.get("kind") as string)?.trim();
-  const kind = kindRaw === "GALLERY" ? "GALLERY" : "INDIVIDUAL";
+  const kind = kindRaw === "GALLERY" || kindRaw === "OWN" ? kindRaw : "INDIVIDUAL";
   const firstName = (formData.get("firstName") as string)?.trim() || null;
   const lastName = (formData.get("lastName") as string)?.trim() || null;
   const nameRaw = (formData.get("name") as string)?.trim();
@@ -461,6 +474,12 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
 // a Customer can only ever unlink it from its past sales, never delete
 // or alter a sale itself. The UI still surfaces the sale count before
 // deleting so it's an informed choice, not a hidden one.
+//
+// A Customer backing a Location (2026-09-22 — kind "GALLERY" or "OWN")
+// is deleted only via deleteLocationByCustomer (actions/locations.ts),
+// which removes the Location row first — Location.customerId has no
+// cascade, so calling this directly on one would fail with a foreign
+// key error rather than leaving an orphaned Location behind.
 export async function deleteCustomer(customerId: string): Promise<void> {
   await db.customer.delete({ where: { id: customerId } });
   revalidatePath(`/sites`);
