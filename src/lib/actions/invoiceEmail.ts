@@ -28,6 +28,18 @@ import { artistFromAddress } from "@/lib/email";
 //
 // 2026-09-21: also used for an ordinary (direct, non-gallery) sale, to
 // its buyer — see recipientForPurchase below for who each kind goes to.
+//
+// 2026-09-22, Location rework: "gallery wording/gallery contact" below
+// now means specifically a GALLERY-type Location (Customer.kind ===
+// "GALLERY") — NOT simply `purchase.channel === "GALLERY"`, which is
+// also true for an Own-type Location's sale (see the note on
+// startGallerySale in payments.ts: `channel` only ever distinguishes
+// "not taken through Stripe", never "at a real third-party gallery").
+// Getting this wrong would have sent every Own-location invoice to that
+// Location's own auto-created Customer record, which typically has no
+// email on file at all — the real buyer's own email/name, captured on
+// the Record Sale form and snapshotted onto Purchase.buyerEmail/
+// buyerName, is what an Own-location sale should actually use.
 
 export type InvoiceEmailDraft = { to: string; subject: string; body: string };
 
@@ -44,6 +56,14 @@ async function loadPurchaseForEmail(purchaseId: string) {
 
 type PurchaseForEmail = NonNullable<Awaited<ReturnType<typeof loadPurchaseForEmail>>>;
 
+// True only for a real, third-party Gallery Location — see the
+// file-level note above. An Own-location sale (customer.kind "OWN") and
+// an ordinary direct sale (no linked customer, or an "INDIVIDUAL" one)
+// both fall through to the buyer-email path below.
+function isGalleryLocationSale(purchase: PurchaseForEmail): boolean {
+  return purchase.customer?.kind === "GALLERY";
+}
+
 // The gallery's actual contact person gets it, not the general gallery
 // inbox, if one's on file — same "sold to and invoiced through a named
 // person there" idea as everywhere else a gallery's contact fields are
@@ -53,11 +73,12 @@ function recipientFor(customer: { contactEmail: string | null; email: string | n
   return customer.contactEmail || customer.email;
 }
 
-// Who the email goes to: a gallery sale to the gallery's contact (see
-// above), any other sale to the buyer's own email address recorded on the
-// sale.
+// Who the email goes to: a real Gallery-location sale to the gallery's
+// contact (see above); everything else (an Own-location sale, or an
+// ordinary direct sale) to the buyer's own email address recorded on
+// the sale.
 function recipientForPurchase(purchase: PurchaseForEmail) {
-  if (purchase.channel === "GALLERY") {
+  if (isGalleryLocationSale(purchase)) {
     return purchase.customer ? recipientFor(purchase.customer) : null;
   }
   return purchase.buyerEmail;
@@ -72,15 +93,16 @@ function recipientForPurchase(purchase: PurchaseForEmail) {
 // transfer); a paid sale gets thanked and sent its receipt, with no
 // payment request at all — the earlier wording asked a gallery that had
 // *already paid* to pay again, which read as a genuine mistake, not just a
-// labelling quirk. A gallery is congratulated on its sale; a direct buyer
-// is thanked for their purchase.
+// labelling quirk. A real Gallery-location sale is congratulated on its
+// sale; an Own-location or ordinary direct sale thanks the buyer for
+// their purchase.
 export async function getInvoiceEmailDraft(
   purchaseId: string
 ): Promise<InvoiceEmailDraft | { error: string }> {
   const purchase = await loadPurchaseForEmail(purchaseId);
   if (!purchase) return { error: "Sale not found." };
 
-  const isGallery = purchase.channel === "GALLERY";
+  const isGallery = isGalleryLocationSale(purchase);
   if (isGallery && !purchase.customer) return { error: "No gallery is linked to this sale." };
 
   const recipient = recipientForPurchase(purchase);
@@ -146,7 +168,7 @@ export async function sendInvoiceEmail(
   const purchase = await loadPurchaseForEmail(purchaseId);
   if (!purchase) return { ok: false, error: "Sale not found." };
 
-  const isGallery = purchase.channel === "GALLERY";
+  const isGallery = isGalleryLocationSale(purchase);
   if (isGallery && !purchase.customer) {
     return { ok: false, error: "No gallery is linked to this sale." };
   }
