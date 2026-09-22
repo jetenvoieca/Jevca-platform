@@ -16,6 +16,7 @@ import {
 } from "@/lib/actions/locations";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
+import { netOwed } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -101,14 +102,15 @@ export default function GalleriesView({
 
   // This Location's Type, looked up from the list prop (2026-09-22) —
   // drives the Own-locations-have-no-commission rule below (Default
-  // commission % in Details, Commission % on the Start-sale form both
-  // lock to 0 and stop being editable).
+  // commission % in Details, Commission % on the Record Sale form both
+  // lock to 0 and stop being editable), and which third field/buyer
+  // defaults the Record Sale form shows (see openWork below).
   const selectedLocationType = galleries.find((g) => g.id === selectedId)?.locationType ?? null;
 
   // ---- Consigned Works control panel (2026-08-31, Part Two) ----
   // Clicking a consigned artwork fetches its own full detail (same call
   // the Artwork Catalogue itself uses) so this panel can tell whether
-  // it already has a sale on it — a blank "Start a sale" form only ever
+  // it already has a sale on it — a blank "Record Sale" form only ever
   // shows for an artwork with no active sale; otherwise its live status
   // shows instead (via GallerySaleCard, 2026-09-03). Kept as a separate
   // fetch/loading pair from the gallery's own selectedDetail above,
@@ -127,6 +129,20 @@ export default function GalleriesView({
   const [saleTotalAmount, setSaleTotalAmount] = useState("");
   const [saleCurrency, setSaleCurrency] = useState("GBP");
   const [saleCommission, setSaleCommission] = useState("");
+  // Deposit already paid (2026-09-22, Phase 1 sale-recording rework) —
+  // the Own-location counterpart to Commission % above: only ever shown
+  // (and only ever sent) for an Own location's Record Sale form, where
+  // it stands in for a gallery's commission as the thing that reduces
+  // Net Due. See netOwed(), lib/saleMath.ts.
+  const [saleDepositPaid, setSaleDepositPaid] = useState("");
+  // Buyer name/email (2026-09-22) — for a Gallery location this defaults
+  // to the gallery's own contact (still fully overridable, e.g. if the
+  // gallery is willing to name the actual end buyer); for an Own
+  // location it starts blank, since there's no gallery standing in for
+  // the real buyer here. See openWork below and the matching note on
+  // startGallerySale in payments.ts.
+  const [saleBuyerName, setSaleBuyerName] = useState("");
+  const [saleBuyerEmail, setSaleBuyerEmail] = useState("");
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const filtered = galleries.filter((g) => {
@@ -185,14 +201,21 @@ export default function GalleriesView({
     // everywhere else this default is used. Always 0 for an Own
     // location (2026-09-22) — see selectedLocationType above.
     setSaleCommission(selectedLocationType === "OWN" ? "0" : selectedDetail?.defaultCommissionPercent || "");
+    setSaleDepositPaid("");
+    // Buyer defaults (2026-09-22, Phase 1 — see the matching note on
+    // saleBuyerName/saleBuyerEmail above): a Gallery location prefills
+    // its own contact, still overridable; an Own location starts blank
+    // so the artist types the real buyer.
+    setSaleBuyerName(selectedLocationType === "GALLERY" ? selectedDetail?.name || "" : "");
+    setSaleBuyerEmail(selectedLocationType === "GALLERY" ? selectedDetail?.email || "" : "");
     setSaleDate(new Date().toISOString().slice(0, 10));
     getArtworkDetailForClient(workId).then((detail) => {
       setSelectedWorkDetail(detail);
       // Sale price defaults to the artwork's own listed price
-      // (2026-09-03) — still fully editable before "Start sale" is
+      // (2026-09-03) — still fully editable before "Record Sale" is
       // pressed, this just saves retyping a figure that's almost always
       // the same as what's already on the Catalogue. Only meaningful for
-      // the blank "Start a sale" form (no active/completed purchase);
+      // the blank "Record Sale" form (no active/completed purchase);
       // harmless to set unconditionally since saleTotalAmount is never
       // read once a sale already exists.
       setSaleTotalAmount(detail?.presentationPrice || "");
@@ -344,12 +367,11 @@ export default function GalleriesView({
     });
   };
 
-  // ---- Starting a gallery sale for a consigned work ----
+  // ---- Recording a sale for a consigned work ----
   // Once a sale exists (active or completed), managing it entirely goes
   // through GallerySaleCard below — this is only ever reached from the
-  // blank "Start a sale" form, before any Purchase exists yet.
-
-  const handleStartSale = () => {
+  // blank "Record Sale" form, before any Purchase exists yet.
+  const handleRecordSale = () => {
     if (!selectedWorkId || !selectedId) return;
     if (!saleTotalAmount.trim()) {
       setSaleError("The sale price is required.");
@@ -363,6 +385,12 @@ export default function GalleriesView({
     // is in saleCommission's own state — belt and braces alongside the
     // disabled input below.
     fd.set("commissionPercent", selectedLocationType === "OWN" ? "0" : saleCommission.trim());
+    // Deposit paid is only ever meaningful for an Own location — sent
+    // regardless (it's simply blank for a Gallery location's form,
+    // since that field isn't shown there at all).
+    fd.set("depositPaid", selectedLocationType === "OWN" ? saleDepositPaid.trim() : "");
+    fd.set("buyerName", saleBuyerName.trim());
+    fd.set("buyerEmail", saleBuyerEmail.trim());
     fd.set("saleDate", saleDate);
     startWorkTransition(async () => {
       const res = await startGallerySale(selectedWorkId, selectedId, siteId, fd);
@@ -391,9 +419,15 @@ export default function GalleriesView({
       ) ?? null)
     : null;
 
+  // Live Net Due preview on the blank Record Sale form (2026-09-22) —
+  // same shared formula used everywhere else a sale's Net Due is shown
+  // (GallerySaleCard, payments.ts). saleCommission and saleDepositPaid
+  // are never both meaningful at once (the form only shows whichever
+  // one applies to this Location's type — see the third-field switch
+  // below), so passing both here unconditionally is safe: the one not
+  // shown just stays at its default "0"/"" and contributes nothing.
   const saleAmountNum = parseFloat(saleTotalAmount) || 0;
-  const saleCommissionNum = parseFloat(saleCommission) || 0;
-  const saleNetOwed = saleAmountNum - saleAmountNum * (saleCommissionNum / 100);
+  const saleNetOwed = netOwed(saleTotalAmount, saleCommission, saleDepositPaid);
 
   // Sum of every sale linked to this gallery, regardless of status —
   // "all invoices", not just completed ones (2026-08-31 decision). Kept
@@ -415,13 +449,20 @@ export default function GalleriesView({
           .map(([cur, amt]) => formatMoney(amt.toFixed(2), cur))
           .join(" · ")}`;
 
-  // Which consigned works have a completed gallery sale on record
-  // (2026-09-03) — drawn straight from selectedDetail.purchases (which
+  // Which consigned works have a sale on record (2026-09-03; widened
+  // 2026-09-22) — drawn straight from selectedDetail.purchases (which
   // already has artworkId per row) rather than a separate query, so the
-  // "SOLD" ribbon below stays in sync with the Sales tab table for free.
+  // "SOLD" ribbon below stays in sync with the Sales tab table for
+  // free. Now includes ACTIVE (not just COMPLETED) gallery-channel
+  // purchases: recording a Consigned Works sale marks the artwork SOLD
+  // immediately (see the file-level Availability note in payments.ts),
+  // so "has a recorded sale" — not "has been paid" — is what this
+  // ribbon should reflect from here on. status !== "ABANDONED" rather
+  // than an explicit ACTIVE/COMPLETED list, so a future third non-final
+  // status doesn't quietly fall through this filter unnoticed.
   const soldWorkIds = new Set(
     (selectedDetail?.purchases ?? [])
-      .filter((p) => p.channel === "GALLERY" && p.status === "COMPLETED")
+      .filter((p) => p.channel === "GALLERY" && p.status !== "ABANDONED")
       .map((p) => p.artworkId)
   );
 
@@ -490,8 +531,9 @@ export default function GalleriesView({
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={w.imageUrl} alt="" className="h-full w-full object-cover" />
                       ) : null}
-                      {/* SOLD ribbon — only for a completed gallery
-                          sale, not just an active (UNPAID) one. */}
+                      {/* SOLD ribbon — any recorded (not abandoned)
+                          gallery-channel sale, paid or not (2026-09-22
+                          — see the note on soldWorkIds above). */}
                       {soldWorkIds.has(w.id) && (
                         <span className="absolute right-1 top-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
                           Sold
@@ -992,6 +1034,7 @@ export default function GalleriesView({
                         siteId={siteId}
                         paymentMethods={paymentMethods}
                         onChanged={refreshAfterSaleChange}
+                        layout="consigned"
                       />
                     ) : (
                       <p className="text-sm text-neutral-500">
@@ -1005,6 +1048,7 @@ export default function GalleriesView({
                       siteId={siteId}
                       paymentMethods={paymentMethods}
                       onChanged={refreshAfterSaleChange}
+                      layout="consigned"
                     />
                   ) : (
                     <div>
@@ -1031,27 +1075,70 @@ export default function GalleriesView({
                             <option value="EUR">EUR</option>
                           </select>
                         </div>
+                        {/* Third field is conditional on Location type
+                            (2026-09-22): a Gallery location's cut
+                            (Commission %) vs an Own location's deposit
+                            already in hand (Deposit paid) — a sale only
+                            ever has one of the two. Both feed the same
+                            shared netOwed() formula below. */}
+                        {selectedLocationType === "OWN" ? (
+                          <div>
+                            <label className={labelCls}>Deposit paid</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={saleDepositPaid}
+                              onChange={(e) => setSaleDepositPaid(e.target.value)}
+                              placeholder="e.g. 50.00"
+                              className={inputCls}
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            <label className={labelCls}>Commission %</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={saleCommission}
+                              onChange={(e) => setSaleCommission(e.target.value)}
+                              placeholder="e.g. 45"
+                              className={inputCls}
+                            />
+                          </div>
+                        )}
                         <div>
-                          <label className={labelCls}>Commission %</label>
-                          <input
-                            type="text"
-                            inputMode="decimal"
-                            // Locked to 0 for an Own location (2026-09-22)
-                            // — no commission owed to yourself.
-                            value={selectedLocationType === "OWN" ? "0" : saleCommission}
-                            onChange={(e) => setSaleCommission(e.target.value)}
-                            disabled={selectedLocationType === "OWN"}
-                            placeholder="e.g. 45"
-                            className={inputCls}
-                          />
-                        </div>
-                        <div>
-                          <label className={labelCls}>Net owed</label>
+                          <label className={labelCls}>Net Due</label>
                           <input
                             type="text"
                             readOnly
                             value={saleAmountNum ? formatMoney(saleNetOwed.toFixed(2), saleCurrency) : "—"}
                             className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
+                          />
+                        </div>
+                      </div>
+                      <div className="mt-2 grid grid-cols-2 gap-2">
+                        <div>
+                          <label className={labelCls}>Customer</label>
+                          <input
+                            type="text"
+                            value={saleBuyerName}
+                            onChange={(e) => setSaleBuyerName(e.target.value)}
+                            placeholder={
+                              selectedLocationType === "OWN" ? "Buyer's name" : "Defaults to gallery name"
+                            }
+                            className={inputCls}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>Customer email</label>
+                          <input
+                            type="email"
+                            value={saleBuyerEmail}
+                            onChange={(e) => setSaleBuyerEmail(e.target.value)}
+                            placeholder={
+                              selectedLocationType === "OWN" ? "Buyer's email" : "Defaults to gallery email"
+                            }
+                            className={inputCls}
                           />
                         </div>
                       </div>
@@ -1068,11 +1155,11 @@ export default function GalleriesView({
                       <div className="mt-3">
                         <button
                           type="button"
-                          onClick={handleStartSale}
+                          onClick={handleRecordSale}
                           disabled={workPending || !saleTotalAmount.trim()}
                           className="w-full rounded-md bg-neutral-900 px-3 py-[6px] text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                         >
-                          Start sale
+                          Record Sale
                         </button>
                       </div>
                     </div>
