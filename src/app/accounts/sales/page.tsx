@@ -1,6 +1,7 @@
 import Link from "next/link";
 import AppShell from "@/components/AppShell";
 import { db } from "@/lib/db";
+import { saleTitle } from "@/lib/saleMath";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
 import ConsolidatedSalesView, {
@@ -29,6 +30,7 @@ export default async function ConsolidatedSalesPage() {
         // same shared SaleStatusBadge as everywhere else, showing
         // "Invoice sent" instead of "UNPAID" once one's gone out.
         invoiceEmailedAt: true,
+        chargeKind: true,
         artwork: {
           select: {
             id: true,
@@ -76,7 +78,7 @@ export default async function ConsolidatedSalesPage() {
       artistId: p.artwork.artist.id,
       siteId: p.artwork.artist.sites[0]?.id || null,
       artistName: p.artwork.artist.name,
-      artworkTitle: p.artwork.presentationTitle,
+      artworkTitle: saleTitle(p.artwork.presentationTitle, p.chargeKind),
       buyerName: p.buyerName,
       grossAmount,
       netAmount,

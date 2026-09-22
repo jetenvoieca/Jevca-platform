@@ -140,10 +140,11 @@ export default function SaleModal({
 
   // The one specific Purchase that was actually asked for — an artwork
   // can have several (an active one plus history), and only one of them
-  // is what was clicked.
+  // is what was clicked. A framing/delivery charge sale (2026-09-23)
+  // opens as the sale it belongs to, with the charge shown beneath it.
   const selectedPurchase = selectedDetail
     ? [selectedDetail.activePurchase, ...selectedDetail.purchaseHistory].find(
-        (p) => p?.id === target.purchaseId
+        (p) => p?.id === target.purchaseId || p?.charges.some((c) => c.id === target.purchaseId)
       ) || null
     : null;
 

@@ -68,3 +68,14 @@ export function splitIntoInstalments(total: number, count: number): number[] {
   amounts.push(last);
   return amounts;
 }
+
+// A sale's display title: the artwork's title, or for a framing/delivery
+// charge sale (Purchase.chargeKind) "[artwork] Framing Charge" /
+// "[artwork] Delivery Charge". Used everywhere a sale is named — lists,
+// invoices, emails, alerts — so a charge is never mistaken for the
+// artwork's own sale.
+export function saleTitle(artworkTitle: string, chargeKind?: string | null): string {
+  if (chargeKind === "FRAMING") return `${artworkTitle} Framing Charge`;
+  if (chargeKind === "DELIVERY") return `${artworkTitle} Delivery Charge`;
+  return artworkTitle;
+}
