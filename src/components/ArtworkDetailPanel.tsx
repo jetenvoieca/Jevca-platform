@@ -8,8 +8,14 @@ import {
   deleteArtwork,
   deleteArtworkIfBlank,
   duplicateArtwork,
+  setArtworkLocation,
 } from "@/lib/actions/artworks";
 import { addArtworkType, addSettingOption } from "@/lib/actions/artworkSettings";
+import {
+  findLocationByName,
+  createLocation,
+  type LocationSummary,
+} from "@/lib/actions/locations";
 import {
   startArtworkSaleAndGetLink,
   startArtworkSaleAndEnterCard,
@@ -83,7 +89,11 @@ export type ArtworkSettings = {
   // price. artworkTypes above stays around for anywhere that only ever
   // needed the plain name list.
   artworkTypeRecords: { id: string; name: string; refValue: string }[];
-  artworkLocations: string[];
+  // Real Location model now (2026-09-22, Gallery/Own — see Location in
+  // schema.prisma), replacing the old plain-string artworkLocations
+  // list. Used by the Location dropdown, and by the "Sold" button's
+  // routing below (findLocationByName/createLocation).
+  locations: LocationSummary[];
   mediumPresets: string[];
   sizePresets: string[];
   // Offered in the Catalogue tab's Tier dropdown (2026-09-07) — see
@@ -189,22 +199,14 @@ export default function ArtworkDetailPanel({
   const [view, setView] = useState<"catalogue" | "presentation">("catalogue");
 
   // ---- The Sold sale panel ----
-  // Toggling SOLD (in the Availability control below) opens
-  // ArtworkSalePanel, positioned right after Size/Location via
-  // ArtworkCatalogueFields' afterLocation slot. Everything below it
-  // (Date, Reference/Offered price, the Available/SOLD toggle itself,
-  // Studio notes) is hidden entirely while open (hideTail). Offered
-  // price's value is preserved via its own hidden input alongside the
-  // panel, so it survives an unrelated field autosaving while hidden.
-  //
-  // Always starts closed (2026-09-20 rebuild) — the toggle is only ever
-  // shown at all when the artwork is not `committed` (see above), and an
-  // artwork with nothing committed never has a sale panel worth
-  // reopening automatically. There's no scenario any more where a
-  // fresh mount needs to jump straight back into an in-progress sale:
-  // both Get payment link and Enter card now commit (RESERVED) the
-  // instant they're started, so "in progress but AVAILABLE" can't
-  // happen.
+  // The old inline sale panel below (ArtworkSalePanel — Get payment
+  // link/Enter card now/Record sale) is left exactly as it was and
+  // still fully wired up (2026-09-22 instruction — keep it in place in
+  // case of a revert), but the SOLD button no longer opens it directly.
+  // Pressing SOLD now routes to the artwork's Location instead (see
+  // handleSoldClick below) — saleOpen only still exists to control
+  // hideTail/afterLocation on ArtworkCatalogueFields for that unreachable
+  // panel, and never becomes true from the button any more.
   const [saleOpen, setSaleOpen] = useState(false);
 
   // Enter card now — moves the sale panel up further still, to sit
@@ -258,6 +260,47 @@ export default function ArtworkDetailPanel({
   const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
   const [saleActionPending, startSaleActionTransition] = useTransition();
   const [saleActionError, setSaleActionError] = useState<string | null>(null);
+
+  // ---- "Sold" button routing (2026-09-22) ----
+  // Pressing SOLD no longer opens the inline sale panel above — it
+  // takes you to the artwork's Location (a Gallery you consign to, or
+  // one of your own — studio, storage — see Location in schema.prisma)
+  // and opens the consignment sale panel there, matching the mockup. If
+  // Location is blank, or doesn't match a saved one, this asks for one
+  // first (creating it on the fly) rather than guessing.
+  const [soldRoutingPending, setSoldRoutingPending] = useState(false);
+  const handleSoldClick = async () => {
+    if (soldRoutingPending) return;
+    setSoldRoutingPending(true);
+    try {
+      const currentName = (artwork.location || "").trim();
+      let target = currentName ? await findLocationByName(artistId, currentName) : null;
+      if (!target) {
+        const name = window
+          .prompt(
+            currentName
+              ? `"${currentName}" isn't a saved Location yet. Name it:`
+              : "Where is this piece going? (a gallery, or your own studio/storage):",
+            currentName
+          )
+          ?.trim();
+        if (!name) return;
+        const isGallery = window.confirm(
+          `Is "${name}" a Gallery you consign to?\n\nOK = Gallery\nCancel = Own (e.g. your studio)`
+        );
+        const result = await createLocation(artistId, siteId, name, isGallery ? "GALLERY" : "OWN");
+        if ("error" in result) {
+          alert(result.error);
+          return;
+        }
+        target = result;
+        await setArtworkLocation(artwork.id, siteId, result.name);
+      }
+      router.push(`/sites/${siteId}/galleries?location=${target.customerId}&work=${artwork.id}`);
+    } finally {
+      setSoldRoutingPending(false);
+    }
+  };
 
   // ---- Presentation panel state (2026-09-10) ----
   // Description defaults to Type/Size/Medium strung together — a
@@ -372,8 +415,8 @@ export default function ArtworkDetailPanel({
   // ---- Inline "add new preset" (2026-09-11, direct request — "all
   // drop-downs add ability to add to lists") — each just persists the
   // new value to the artist's own Settings list (Type has its own table
-  // with a Ref value, hence its own action; Group/Medium/Location are
-  // plain string lists via addSettingOption) and fires-and-forgets;
+  // with a Ref value, hence its own action; Group/Medium are plain
+  // string lists via addSettingOption) and fires-and-forgets;
   // ArtworkCatalogueFields already updates its own local state so the
   // new value shows as selected immediately, and autosaves it onto this
   // artwork right after. No router.refresh() needed here specifically
@@ -394,10 +437,16 @@ export default function ArtworkDetailPanel({
     fd.set("value", name);
     await addSettingOption(artistId, siteId, "mediumPresets", fd);
   };
+  // Persists to the new Location model now (2026-09-22, see
+  // actions/locations.ts) — asks Gallery vs Own the same way
+  // handleSoldClick above does, since a Location needs a Type to be
+  // created at all.
   const handleAddLocation = async (name: string) => {
-    const fd = new FormData();
-    fd.set("value", name);
-    await addSettingOption(artistId, siteId, "artworkLocations", fd);
+    const isGallery = window.confirm(
+      `Is "${name}" a Gallery you consign to?\n\nOK = Gallery\nCancel = Own (e.g. your studio)`
+    );
+    const result = await createLocation(artistId, siteId, name, isGallery ? "GALLERY" : "OWN");
+    if ("error" in result) alert(result.error);
   };
 
   // ---- Get payment link/Enter card now handlers — see the note on the
@@ -862,13 +911,17 @@ export default function ArtworkDetailPanel({
                     ) : null
                   }
                   availabilityOverride={
-                    // Available/SOLD toggle (2026-09-20 rebuild) — only
+                    // Available/SOLD toggle (2026-09-22 update) — only
                     // ever shown at all when the artwork isn't `committed`
                     // (see the note on that above); once RESERVED or SOLD,
                     // this whole control is replaced by plain static text
                     // with no buttons at all — starting a second sale isn't
                     // possible from here, and neither is undoing the one
-                    // that exists. Both happen from the Sales page.
+                    // that exists. Both happen from the Sales page. SOLD
+                    // itself no longer toggles the inline panel open — it
+                    // routes to the artwork's Location instead (see
+                    // handleSoldClick above), so this is a plain button,
+                    // not a two-way toggle.
                     committed ? (
                       <div>
                         <label className="mb-1 block text-sm font-medium text-neutral-700">
@@ -898,16 +951,12 @@ export default function ArtworkDetailPanel({
                           </button>
                           <button
                             type="button"
-                            onClick={() => setSaleOpen(true)}
-                            disabled={!artwork.offeredPrice}
+                            onClick={handleSoldClick}
+                            disabled={!artwork.offeredPrice || soldRoutingPending}
                             title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
-                            className={`flex-1 px-3 py-[6.4px] font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
-                              saleOpen
-                                ? "bg-neutral-900 text-white"
-                                : "bg-white text-neutral-600 hover:bg-neutral-50"
-                            }`}
+                            className={`flex-1 px-3 py-[6.4px] font-medium disabled:cursor-not-allowed disabled:opacity-40 bg-white text-neutral-600 hover:bg-neutral-50`}
                           >
-                            SOLD
+                            {soldRoutingPending ? "…" : "SOLD"}
                           </button>
                         </div>
                         <input type="hidden" name="availability" value={artwork.availability} />
