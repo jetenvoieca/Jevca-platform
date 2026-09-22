@@ -177,3 +177,34 @@ export async function deleteLocation(locationId: string, siteId: string): Promis
   if (!loc) return;
   await deleteLocationByCustomer(loc.customerId, siteId);
 }
+
+// Changes a Location's Type after creation (2026-09-22) — Type used to
+// be fixed for good the moment a Location was created (asked once, via
+// the "Sold" button's prompt or the Settings "+ Add" row, then never
+// editable again), which meant fixing a wrong answer — e.g. a Location
+// named "Studio" that's obviously the artist's own, created as GALLERY
+// by mistake — had no path except deleting and recreating the whole
+// Location, losing whatever Artwork.location cascade/rename history it
+// had. This is the fix: updates Location.type and the linked Customer's
+// kind together, in one transaction, so the two can never drift apart.
+// Every consigned/held Work stays exactly where it is either way — the
+// match is by name (Artwork.location), never by Type.
+export async function updateLocationType(
+  locationId: string,
+  siteId: string,
+  type: LocationType
+): Promise<{ ok: true } | { error: string }> {
+  const loc = await db.location.findUnique({ where: { id: locationId } });
+  if (!loc) return { error: "Location not found." };
+  if (loc.type === type) return { ok: true };
+
+  await db.$transaction([
+    db.location.update({ where: { id: locationId }, data: { type } }),
+    db.customer.update({ where: { id: loc.customerId }, data: { kind: type } }),
+  ]);
+
+  revalidatePath(`/sites/${siteId}/artworks/settings`);
+  revalidatePath(`/sites/${siteId}/artworks`);
+  revalidatePath(`/sites/${siteId}/galleries`);
+  return { ok: true };
+}
