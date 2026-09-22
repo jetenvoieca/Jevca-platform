@@ -27,7 +27,7 @@ export type PaymentReceivedRow = {
 // unset for a Stripe-collected payment (a live card charge or an
 // instalment plan charge via the webhook handlers in payments.ts);
 // every gallery payment marked paid by hand always has a real method
-// chosen from Artist.paymentMethods (see markGallerySalePaid).
+// chosen from Artist.paymentMethods (see recordGalleryPayment).
 export async function getPaymentsReceivedForArtist(artistId: string): Promise<PaymentReceivedRow[]> {
   const payments = await db.payment.findMany({
     where: { status: "PAID", purchase: { artwork: { artistId } } },

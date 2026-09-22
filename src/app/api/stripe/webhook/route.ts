@@ -88,13 +88,11 @@ export async function POST(req: NextRequest) {
       // Fires for every collection route — a hosted Checkout Session, an
       // in-app Stripe Elements card entry, and (2026-09-13) a gallery's
       // persistent Payment Link all end in a PaymentIntent succeeding.
-      // Which of the two purchase-completing handlers applies depends
-      // on the sale's own channel: a GALLERY-channel purchase is only
-      // ever charged its net amount owed via the Payment Link
-      // (handleGalleryPaymentLinkPaid), never the direct/instalment
-      // Stripe flow (handleFirstPaymentSucceeded) — see the comment on
-      // handleGalleryPaymentLinkPaid in payments.ts for why these stay
-      // separate rather than one shared function.
+      // Which handler applies depends on the sale's own channel: a
+      // GALLERY-channel purchase is paid through its own payment links
+      // — the full balance, or the first instalment of a plan
+      // (handleGalleryPaymentLinkPaid) — never the direct Stripe flow
+      // (handleFirstPaymentSucceeded).
       case "payment_intent.succeeded": {
         const intent = event.data.object as Stripe.PaymentIntent;
         const purchaseId = intent.metadata?.purchaseId;
@@ -104,12 +102,19 @@ export async function POST(req: NextRequest) {
             select: { channel: true },
           });
           if (purchase?.channel === "GALLERY") {
-            await handleGalleryPaymentLinkPaid(
+            const instalments = parseInt(intent.metadata?.instalments || "", 10);
+            await handleGalleryPaymentLinkPaid({
               purchaseId,
-              intent.id,
-              intent.amount_received,
-              intent.currency
-            );
+              paymentIntentId: intent.id,
+              amountReceivedMinor: intent.amount_received,
+              currency: intent.currency,
+              customerId: typeof intent.customer === "string" ? intent.customer : intent.customer?.id ?? null,
+              paymentMethodId:
+                typeof intent.payment_method === "string"
+                  ? intent.payment_method
+                  : intent.payment_method?.id ?? null,
+              instalments: Number.isFinite(instalments) ? instalments : null,
+            });
           } else {
             await handleFirstPaymentSucceeded(purchaseId, intent.id);
           }

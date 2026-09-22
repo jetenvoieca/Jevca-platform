@@ -67,15 +67,3 @@ export function toMinorUnits(amount: number): number {
 export function fromMinorUnits(amount: number): number {
   return amount / 100;
 }
-
-// Splits a total into `count` instalments of equal size, with any
-// rounding remainder absorbed into the final instalment so the parts
-// always sum exactly back to the total.
-export function splitIntoInstalments(total: number, count: number): number[] {
-  const base = Math.round((total / count) * 100) / 100;
-  const amounts = Array(count - 1).fill(base);
-  const runningTotal = Math.round(base * (count - 1) * 100) / 100;
-  const last = Math.round((total - runningTotal) * 100) / 100;
-  amounts.push(last);
-  return amounts;
-}

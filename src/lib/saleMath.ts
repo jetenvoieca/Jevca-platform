@@ -12,6 +12,10 @@
 //           + framing cost   (paid by the buyer/gallery)
 //           + delivery cost  (paid by the buyer/gallery)
 //
+// Balance = Net Due − every PAID payment recorded so far (partial
+// payments, instalments, payment-link payments alike). Pass `payments`
+// to get it; without them paid is 0 and balance equals net.
+//
 // Accepts either client-side strings (PurchaseDetail) or Prisma Decimal
 // values, so a Purchase row or a PurchaseDetail can be passed as-is.
 
@@ -23,6 +27,7 @@ export type SaleAmounts = {
   depositPaid?: Amount;
   framingCost?: Amount;
   deliveryCost?: Amount;
+  payments?: { amount: Amount; status: string }[];
 };
 
 function num(value: Amount): number {
@@ -38,9 +43,28 @@ export function saleBreakdown(a: SaleAmounts) {
   const framing = num(a.framingCost);
   const delivery = num(a.deliveryCost);
   const net = salePrice - commission - deposit + framing + delivery;
-  return { salePrice, commissionPercent, commission, deposit, framing, delivery, net };
+  const paid = (a.payments ?? [])
+    .filter((p) => p.status === "PAID")
+    .reduce((sum, p) => sum + num(p.amount), 0);
+  // Rounded to pennies so floating-point dust never leaves a sale
+  // "£0.00 still due" and uncompletable.
+  const balance = Math.max(Math.round((net - paid) * 100) / 100, 0);
+  return { salePrice, commissionPercent, commission, deposit, framing, delivery, net, paid, balance };
 }
 
 export function netOwed(a: SaleAmounts): number {
   return saleBreakdown(a).net;
+}
+
+// Splits a total into `count` instalments of equal size, with any
+// rounding remainder absorbed into the final instalment so the parts
+// always sum exactly back to the total. Here (not lib/stripe.ts) so the
+// sale card can show the same per-instalment figure Stripe will charge.
+export function splitIntoInstalments(total: number, count: number): number[] {
+  const base = Math.round((total / count) * 100) / 100;
+  const amounts = Array(count - 1).fill(base);
+  const runningTotal = Math.round(base * (count - 1) * 100) / 100;
+  const last = Math.round((total - runningTotal) * 100) / 100;
+  amounts.push(last);
+  return amounts;
 }
