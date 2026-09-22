@@ -1045,6 +1045,17 @@ model Purchase {
 
   commissionPercent Decimal? @db.Decimal(5, 2)
 
+  // Money already collected at the moment the sale was recorded
+  // (2026-09-22, Phase 1 sale-recording rework) — only ever set for an
+  // OWN-location sale (a deposit collected on the spot from the actual
+  // buyer; a Gallery sale uses commissionPercent instead, since that's a
+  // cut owed by the gallery, not money already in hand). Reduces what's
+  // still owed (Net Due) the moment the sale is recorded, alongside
+  // commissionPercent — both are subtracted unconditionally by the one
+  // shared netOwed() formula (lib/saleMath.ts) rather than the caller
+  // needing to know which of the two actually applies.
+  depositPaid Decimal? @db.Decimal(10, 2)
+
   invoiceNumber Int?
 
   // Persistent Payment Link (not a one-off Checkout Session — see the
