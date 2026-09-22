@@ -779,3 +779,19 @@ export async function getArtworksByIds(ids: string[]) {
       };
     });
 }
+
+// Sets just the Location field directly (2026-09-22) — used by the
+// "Sold" button's routing: when Location was blank (or didn't match any
+// saved Location) and a new one is created/confirmed on the fly, this
+// writes it onto the artwork without needing the whole Catalogue form's
+// FormData (autosaveCatalogue needs a mounted form; this is called
+// straight from the routing click handler, before any navigation). Never
+// clears needsReview — a Location fix on its own isn't "reviewed and
+// edited" the way saving the Catalogue tab is.
+export async function setArtworkLocation(
+  id: string,
+  siteId: string,
+  location: string
+): Promise<void> {
+  await db.artwork.update({ where: { id }, data: { location } });
+}
