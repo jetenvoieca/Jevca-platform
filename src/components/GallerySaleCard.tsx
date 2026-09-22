@@ -7,9 +7,10 @@ import {
   abandonPurchase,
   deleteGallerySale,
   createGalleryPaymentLink,
+  saveSaleExtra,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
-import { netOwed } from "@/lib/saleMath";
+import { saleBreakdown } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import InvoiceEmailModal from "@/components/InvoiceEmailModal";
@@ -23,9 +24,37 @@ const labelCls = "mb-1 block text-xs text-neutral-500";
 const actionButtonCls =
   "rounded-md bg-[#5E5E5E] px-3 py-2 text-sm text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50";
 
-// Arrange Framing / Arrange Delivery / Take Card — built in later parts.
-// Styled like a real action button so the grid reads as one set.
+// Take Card — built in a later part. Styled like a real action button
+// so the grid reads as one set.
 const placeholderButtonCls = `${actionButtonCls} opacity-60`;
+
+// Inputs inside the sliding panel — centred placeholder text, per mockup.
+const drawerInputCls =
+  "min-w-0 rounded-md border border-neutral-300 px-3 py-2 text-center text-sm placeholder:text-neutral-400 disabled:opacity-50";
+
+// Which input panel the action panel slides down to reveal.
+type DrawerKind = "framing" | "delivery";
+
+const DRAWER_COPY: Record<DrawerKind, { title: string; namePlaceholder: string }> = {
+  framing: { title: "Arrange Framing", namePlaceholder: "Framer" },
+  delivery: { title: "Arrange Delivery", namePlaceholder: "Courier firm" },
+};
+
+function TickIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path d="M4 10.5l4 4 8-9" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function CrossIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2">
+      <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
@@ -90,6 +119,14 @@ export default function GallerySaleCard({
 
   // ---- Certificate of Authenticity ----
   const [showCertificateModal, setShowCertificateModal] = useState(false);
+
+  // ---- Sliding input panel (Arrange Framing / Arrange Delivery) ----
+  // drawerKind keeps the last-opened panel's content in place while it
+  // animates closed; drawerOpen drives the slide itself.
+  const [drawerKind, setDrawerKind] = useState<DrawerKind>("framing");
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [extraName, setExtraName] = useState("");
+  const [extraCost, setExtraCost] = useState("");
 
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
@@ -210,18 +247,54 @@ export default function GallerySaleCard({
     });
   };
 
-  const handleArrangeFraming = () => alert("Arrange Framing — coming in a later phase.");
-  const handleArrangeDelivery = () => alert("Arrange Delivery — coming in a later phase.");
+  // Pressing the same button again closes the panel; pressing the other
+  // one swaps its content in place. Prefilled from the saved entry, since
+  // a sale has at most one of each and clicking again edits it.
+  const openDrawer = (kind: DrawerKind) => {
+    if (drawerOpen && drawerKind === kind) {
+      setDrawerOpen(false);
+      return;
+    }
+    setError(null);
+    setDrawerKind(kind);
+    setExtraName((kind === "framing" ? purchase.framer : purchase.courier) ?? "");
+    setExtraCost((kind === "framing" ? purchase.framingCost : purchase.deliveryCost) ?? "");
+    setDrawerOpen(true);
+  };
+
+  const handleSaveExtra = () => {
+    setError(null);
+    const fd = new FormData();
+    fd.set("name", extraName.trim());
+    fd.set("cost", extraCost.trim());
+    startTransition(async () => {
+      const res = await saveSaleExtra(purchase.id, siteId, drawerKind, fd);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setDrawerOpen(false);
+      onChanged();
+    });
+  };
+
+  // Framing/delivery after payment is covered in a later part.
+  const handlePaidExtraPlaceholder = () => alert("Coming in a later phase.");
   const handleTakeCard = () => alert("Take Card — coming in a later phase.");
 
-  const netDue = netOwed(purchase.totalAmount, purchase.commissionPercent, purchase.depositPaid);
+  const amounts = saleBreakdown(purchase);
+  const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
 
   return (
     <div>
       {/* ---- Sales details ---- */}
       <div className="flex items-end justify-between gap-4 text-sm font-medium text-neutral-900">
-        <p>Sale price {formatMoney(purchase.totalAmount, purchase.currency)}</p>
-        <p>Net Due {formatMoney((isPaid ? 0 : netDue).toFixed(2), purchase.currency)}</p>
+        <div className="space-y-0.5">
+          <p>Sale price {money(amounts.salePrice)}</p>
+          {amounts.framing > 0 && <p>Framing {money(amounts.framing)}</p>}
+          {amounts.delivery > 0 && <p>Delivery {money(amounts.delivery)}</p>}
+        </div>
+        <p>Net Due {money(isPaid ? 0 : amounts.net)}</p>
       </div>
 
       {/* ---- Sales status ---- */}
@@ -311,12 +384,84 @@ export default function GallerySaleCard({
       )}
       {paymentLinkError && <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>}
 
+      {/* ---- Sliding input panel ---- */}
+      {/* Animates its height between 0 and its content (grid-rows
+          0fr <-> 1fr), which pushes the action panel below down and back
+          up smoothly. Content stays rendered while closing. */}
+      <div
+        className={`grid transition-[grid-template-rows] duration-300 ease-out ${
+          drawerOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
+        }`}
+        aria-hidden={!drawerOpen}
+      >
+        <div className="overflow-hidden">
+          <div className="pt-4">
+            <p className="rounded-md bg-neutral-100 py-1.5 text-center text-sm text-neutral-500">
+              {DRAWER_COPY[drawerKind].title}
+            </p>
+            <div className="mt-3 flex items-center gap-2">
+              <input
+                type="text"
+                value={extraName}
+                onChange={(e) => setExtraName(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveExtra()}
+                placeholder={DRAWER_COPY[drawerKind].namePlaceholder}
+                disabled={isPending}
+                tabIndex={drawerOpen ? 0 : -1}
+                className={`flex-[3] ${drawerInputCls}`}
+              />
+              <input
+                type="text"
+                inputMode="decimal"
+                value={extraCost}
+                onChange={(e) => setExtraCost(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleSaveExtra()}
+                placeholder="Cost"
+                disabled={isPending}
+                tabIndex={drawerOpen ? 0 : -1}
+                className={`flex-[2] ${drawerInputCls}`}
+              />
+              <button
+                type="button"
+                onClick={handleSaveExtra}
+                disabled={isPending}
+                tabIndex={drawerOpen ? 0 : -1}
+                aria-label="Save"
+                className="shrink-0 rounded-md p-1 text-neutral-800 hover:bg-neutral-100 disabled:opacity-50"
+              >
+                <TickIcon />
+              </button>
+              <button
+                type="button"
+                onClick={() => setDrawerOpen(false)}
+                disabled={isPending}
+                tabIndex={drawerOpen ? 0 : -1}
+                aria-label="Cancel"
+                className="shrink-0 rounded-md p-1 text-neutral-800 hover:bg-neutral-100 disabled:opacity-50"
+              >
+                <CrossIcon />
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* ---- Action panel ---- */}
       <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
-        <button type="button" onClick={handleArrangeFraming} className={placeholderButtonCls}>
+        <button
+          type="button"
+          onClick={isPaid ? handlePaidExtraPlaceholder : () => openDrawer("framing")}
+          disabled={isPending}
+          className={isPaid ? placeholderButtonCls : actionButtonCls}
+        >
           Arrange Framing
         </button>
-        <button type="button" onClick={handleArrangeDelivery} className={placeholderButtonCls}>
+        <button
+          type="button"
+          onClick={isPaid ? handlePaidExtraPlaceholder : () => openDrawer("delivery")}
+          disabled={isPending}
+          className={isPaid ? placeholderButtonCls : actionButtonCls}
+        >
           Arrange Delivery
         </button>
         {isPaid ? (
