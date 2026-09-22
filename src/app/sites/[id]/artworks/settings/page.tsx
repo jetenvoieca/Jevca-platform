@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SettingsListCard from "@/components/SettingsListCard";
 import ArtworkTypesCard from "@/components/ArtworkTypesCard";
+import LocationsCard from "@/components/LocationsCard";
 
 export default async function ArtworkSettingsPage({
   params,
@@ -41,15 +42,11 @@ export default async function ArtworkSettingsPage({
           options={settings.artworkTiers}
           placeholder="New tier…"
         />
-        <SettingsListCard
-          artistId={artistId}
-          siteId={id}
-          field="artworkLocations"
-          title="Locations"
-          description="Offered in the Location dropdown — sorts the Catalogue by where a piece physically is."
-          options={settings.artworkLocations}
-          placeholder="New location…"
-        />
+        {/* Locations moved off SettingsListCard (2026-09-22) — a real
+            Location model now (Gallery/Own, see schema.prisma), not a
+            plain string list, so it has its own card. Same grid slot
+            this used to sit in. */}
+        <LocationsCard artistId={artistId} siteId={id} locations={settings.locations} />
         <SettingsListCard
           artistId={artistId}
           siteId={id}
