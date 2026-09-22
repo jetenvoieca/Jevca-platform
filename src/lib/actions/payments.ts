@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { findOrCreateCustomer } from "./customers";
+import { netOwed } from "@/lib/saleMath";
 import {
   getStripeClient,
   getPublishableKey,
@@ -60,6 +61,10 @@ export type PurchaseDetail = {
   framed: boolean;
   source: string | null;
   commissionPercent: string | null;
+  // Money already collected at the moment the sale was recorded
+  // (2026-09-22) — only ever set for an Own-location sale. See the
+  // matching note on Purchase.depositPaid in schema.prisma.
+  depositPaid: string | null;
   invoiceNumber: number | null;
   // Part Three (2026-09-01) — see the matching schema.prisma comments.
   stripePaymentLinkUrl: string | null;
@@ -89,14 +94,14 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
   return artwork.artist.stripeMode;
 }
 
-// ---------- The Availability model (2026-09-20 rebuild) ----------
+// ---------- The Availability model (2026-09-20 rebuild; extended 2026-09-22) ----------
 //
 // Rebuilt from scratch at Craig's explicit request, replacing several
 // earlier, increasingly-tangled attempts that kept producing confusing
 // edge cases (a payment panel reopening after a sale had already
 // completed; closing that panel looking exactly like abandoning a real,
-// paid sale). Exactly three states now, and exactly three rules for
-// moving between them — nothing else touches Availability:
+// paid sale). Exactly three states, and (as of the original rebuild)
+// three rules for moving between them:
 //
 //   AVAILABLE  — nothing started.
 //   RESERVED   — "Sold - Not Paid" in the UI. A real, named Purchase now
@@ -107,26 +112,26 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 //                payment confirmed, a Record sale form submitted, or a
 //                gallery invoice marked paid.
 //
-// The three commit points, matching Craig's own numbering:
+// The three original commit points, matching Craig's own numbering:
 //   1. Enter card clicked                       → RESERVED immediately;
 //      → payment succeeds                       → SOLD
 //   2. Record sale submitted                     → SOLD (already a
 //                                                   single atomic step)
 //   3. Get payment link generated                → RESERVED
-// Marking RESERVED at the same moment for both 1 and 3 (rather than only
-// once a card payment succeeds) is deliberate, not just consistency for
-// its own sake: it means a genuine Purchase existing for an artwork
-// always matches what Availability says, with no window where a real,
-// named sale is quietly in progress behind an artwork that still claims
-// to be AVAILABLE. That gap was a real edge case — closing the app
-// mid-card-entry used to leave exactly that kind of invisible,
-// unmanageable reservation.
 //
-// A gallery consignment sale (startGallerySale) follows the same idea —
-// raising the invoice reserves the piece; markGallerySalePaid promotes
-// it to SOLD once the gallery actually pays. An ordinary sale paid
-// outside Stripe (cash, bank transfer) is promoted the same way by
-// markSalePaid.
+// A FOURTH commit point, added 2026-09-22 for Consigned Works (a
+// Gallery or Own Location's "Record Sale" form — startGallerySale
+// below): the artist explicitly said the sale is done — who bought it,
+// for how much, any commission/deposit — the moment that form is
+// submitted, even though the money itself (the Net Due balance) is
+// usually collected afterwards, as a separate step (Send invoice/
+// Record Payment/Payment link — see GallerySaleCard's "consigned"
+// layout). So this now goes straight to SOLD too, the same single
+// atomic step as rule 2, NOT to RESERVED — recording a sale is itself
+// the commit, regardless of whether it's been paid yet. Net Due (via
+// netOwed(), lib/saleMath.ts) is what actually tracks the outstanding
+// balance from here on; Purchase.status stays ACTIVE ("UNPAID" in the
+// UI) until markGallerySalePaid confirms it, same as before.
 //
 // Once RESERVED or SOLD, the Catalogue tab's own Available/SOLD toggle
 // disappears entirely — no delete-this-sale link, no reopenable panel.
@@ -240,6 +245,10 @@ export async function saveSaleTerms(artworkId: string, siteId: string, formData:
 // Deposit paid isn't recorded as its own Payment row (direct instruction,
 // 2026-09-10 — "no deposit handling needed yet, just wire the remaining
 // flow") — it only reduces the amount Stripe is asked to collect here.
+// Unrelated to Purchase.depositPaid (2026-09-22) — that field is
+// specific to a Consigned Works "Record Sale" (a Gallery/Own Location's
+// startGallerySale below), a different flow from this one (a direct
+// Stripe sale via the Catalogue tab's own Sold panel).
 async function seedSaleTerms(
   artworkId: string,
   formData: FormData
@@ -441,23 +450,37 @@ export async function startArtworkSaleAndEnterCard(
 
 // ---------- Gallery sales — no Stripe involved at all ----------
 
-// Reworked 2026-08-31 to be started only from the Gallery's own
+// Reworked 2026-08-31 to be started only from the Location's own
 // Consigned Works panel (GalleriesView), never typed from the Artwork
 // Catalogue's Payment tab any more — see the matching removal in
-// PurchasePanel. The buyer is always the gallery being viewed, so there
-// are no separate buyer name/email/address fields here at all: they're
-// snapshotted straight from that gallery's own Customer record. This is
-// deliberate, not just a shortcut — galleries are often reluctant to
-// disclose who the actual end buyer was, and the money is owed by the
-// gallery either way, so the "buyer" for this app's purposes always is
-// the gallery.
+// PurchasePanel. Used for both Gallery- and Own-type Locations (see
+// Location.type in schema.prisma) — `channel` stays "GALLERY" for
+// either (it's always distinguishing "not taken through Stripe", not
+// literally "at a real gallery"); which kind of Location this actually
+// is is read from the linked Customer's own `kind` wherever it matters
+// (e.g. invoiceEmail.ts's recipient routing).
 //
-// Raises an unpaid invoice for the net amount owed (sale price less
-// commission) — the sale stays ACTIVE ("UNPAID" in the UI) until
-// markGallerySalePaid is called once the gallery actually pays. `saleDate`
-// is when the gallery says it actually sold (can be backdated — galleries
-// don't always report a sale immediately), not today's date, so it's
-// used as the Purchase's own createdAt rather than defaulting to now.
+// Buyer captured 2026-09-22 (Phase 1 sale-recording rework, direct
+// decision): for a Gallery-type Location the buyer defaults to the
+// gallery's own contact if the form leaves it blank (unchanged from
+// before — the money is owed by the gallery either way, and it's often
+// reluctant to name the actual end buyer); for an Own-type Location the
+// artist types the real buyer's own name/email, since there's no
+// gallery standing in for them. Either way, whatever the form actually
+// sends wins — the gallery-contact fallback only fires when the field
+// was left empty.
+//
+// Raises an invoice for the net amount owed (sale price less commission
+// for a Gallery, less any deposit already collected for an Own
+// location — see netOwed(), lib/saleMath.ts) and marks the artwork SOLD
+// immediately (2026-09-22 — see the file-level Availability note above):
+// recording the sale here IS the commit, regardless of whether the
+// balance has actually been collected yet. The sale itself
+// (Purchase.status) stays ACTIVE ("UNPAID" in the UI) until
+// markGallerySalePaid confirms the balance has come in. `saleDate` is
+// when the sale actually happened (can be backdated), not today's date,
+// so it's used as the Purchase's own createdAt rather than defaulting
+// to now.
 export async function startGallerySale(
   artworkId: string,
   customerId: string,
@@ -475,12 +498,15 @@ export async function startGallerySale(
   }
 
   const customer = await db.customer.findUnique({ where: { id: customerId } });
-  if (!customer) return { ok: false, error: "Gallery not found." };
+  if (!customer) return { ok: false, error: "Location not found." };
 
   const totalAmount = (formData.get("totalAmount") as string)?.trim();
   const currencyRaw = (formData.get("currency") as string)?.trim().toUpperCase();
   const currency = currencyRaw || "GBP";
   const commissionPercent = (formData.get("commissionPercent") as string)?.trim() || null;
+  const depositPaid = (formData.get("depositPaid") as string)?.trim() || null;
+  const buyerName = (formData.get("buyerName") as string)?.trim() || customer.name;
+  const buyerEmail = (formData.get("buyerEmail") as string)?.trim() || customer.email;
   const saleDateRaw = (formData.get("saleDate") as string)?.trim();
 
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
@@ -497,48 +523,51 @@ export async function startGallerySale(
       artworkId,
       channel: "GALLERY",
       customerId: customer.id,
-      buyerName: customer.name,
-      buyerEmail: customer.email,
+      buyerName,
+      buyerEmail,
       buyerAddress: customer.address,
       type: "FULL",
       totalAmount,
       currency,
       commissionPercent,
+      depositPaid,
       ...(createdAt ? { createdAt } : {}),
     },
   });
 
-  // Raising the gallery invoice reserves the piece — matches "Get
-  // payment link" (rule 3): RESERVED ("Sold - Not Paid"), promoted to
-  // SOLD once markGallerySalePaid confirms the gallery has actually
-  // paid.
-  await db.artwork.update({ where: { id: artworkId }, data: { availability: "RESERVED" } });
+  // Recording the sale is itself the commit (2026-09-22 — see the
+  // file-level Availability note above) — straight to SOLD, not
+  // RESERVED. Whether the Net Due balance has actually been paid is
+  // tracked separately (Purchase.status, still ACTIVE here).
+  await db.artwork.update({ where: { id: artworkId }, data: { availability: "SOLD" } });
 
   return { ok: true, purchaseId: purchase.id };
 }
 
 // A persistent, non-expiring Stripe Payment Link (2026-09-01, Part
-// Three) for the NET amount a gallery owes on this sale (sale price
-// less commission) — deliberately the Payment Links API, not Checkout
-// Sessions (used by createPaymentLink below, for a live Stripe-channel
-// sale): a gallery invoice can sit unpaid for weeks, and a Checkout
-// Session's URL expires within a day or so, whereas a Payment Link is
-// meant to be reusable and doesn't expire. Doesn't require the gallery
-// to have an email on file — Stripe collects one at checkout if needed.
-// Re-uses the same link on every later call rather than creating a new
-// one each time "Payment link" is pressed again, so it's stable to
-// paste into an already-sent email or invoice.
+// Three) for the NET amount owed on this sale (sale price less
+// commission for a Gallery-type Location, less any deposit already
+// collected for an Own-type one — see netOwed(), lib/saleMath.ts) —
+// deliberately the Payment Links API, not Checkout Sessions (used by
+// createPaymentLink below, for a live Stripe-channel sale): this kind
+// of invoice can sit unpaid for weeks, and a Checkout Session's URL
+// expires within a day or so, whereas a Payment Link is meant to be
+// reusable and doesn't expire. Doesn't require a buyer email on file —
+// Stripe collects one at checkout if needed. Re-uses the same link on
+// every later call rather than creating a new one each time "Payment
+// link" is pressed again, so it's stable to paste into an already-sent
+// email or invoice.
 //
 // payment_intent_data.metadata (2026-09-13) — carries purchaseId onto
 // the PaymentIntent this link eventually produces, not just the Payment
 // Link record itself (Payment Link metadata does NOT automatically
 // propagate to its PaymentIntent). This is what lets the webhook
-// (handleGalleryPaymentLinkPaid below) recognise a paid gallery invoice
-// and complete the sale automatically, the same way a direct Stripe
-// sale already does. Only links created from this point forward carry
-// it — a link generated before this change has no metadata on its
-// PaymentIntent, so a payment against it still needs "Mark as paid"
-// clicked by hand.
+// (handleGalleryPaymentLinkPaid below) recognise a paid invoice and
+// complete the sale automatically, the same way a direct Stripe sale
+// already does. Only links created from this point forward carry it —
+// a link generated before this change has no metadata on its
+// PaymentIntent, so a payment against it still needs "Mark as paid"/
+// "Record Payment" clicked by hand.
 export async function createGalleryPaymentLink(
   purchaseId: string,
   siteId: string
@@ -550,17 +579,17 @@ export async function createGalleryPaymentLink(
       relationLoadStrategy: "query",
     });
     if (!purchase) return { ok: false, error: "Sale not found." };
-    if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a gallery sale." };
+    if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
 
     if (purchase.stripePaymentLinkUrl) {
       return { ok: true, url: purchase.stripePaymentLinkUrl };
     }
 
-    const total = parseFloat(purchase.totalAmount.toString());
-    const commissionPercent = purchase.commissionPercent
-      ? parseFloat(purchase.commissionPercent.toString())
-      : 0;
-    const net = total - total * (commissionPercent / 100);
+    const net = netOwed(
+      purchase.totalAmount.toString(),
+      purchase.commissionPercent?.toString(),
+      purchase.depositPaid?.toString()
+    );
 
     const mode = await getStripeModeForArtwork(purchase.artworkId);
     const stripe = getStripeClient(mode);
@@ -568,7 +597,7 @@ export async function createGalleryPaymentLink(
     const price = await stripe.prices.create({
       unit_amount: toMinorUnits(net),
       currency: purchase.currency.toLowerCase(),
-      product_data: { name: `${purchase.artwork.presentationTitle} — commission owed` },
+      product_data: { name: `${purchase.artwork.presentationTitle} — balance owed` },
     });
 
     const link = await stripe.paymentLinks.create({
@@ -615,7 +644,7 @@ export async function updateGallerySaleAmount(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Sale not found." };
-  if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a gallery sale." };
+  if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
   if (purchase.status !== "ACTIVE") {
     return { ok: false, error: "This sale is no longer editable — it's already been paid." };
   }
@@ -737,9 +766,7 @@ export async function recordPastSale(
     customerId,
   });
 
-  const total = parseFloat(totalAmount);
-  const commissionNum = commissionPercent ? parseFloat(commissionPercent) : 0;
-  const net = total - total * (commissionNum / 100);
+  const net = netOwed(totalAmount, commissionPercent);
 
   const purchase = await db.purchase.create({
     data: {
@@ -856,25 +883,29 @@ function readPaidDetails(
 
 // The common ending of every "the money has arrived outside Stripe"
 // action: one PAID Payment for what's owed (the sale price less any
-// commission — a gallery's cut; an ordinary sale has none), the sale
+// commission — a gallery's cut — and less any deposit already
+// collected for an Own-location sale, via netOwed() — see
+// lib/saleMath.ts; an ordinary direct sale has neither), the sale
 // COMPLETED, and the artwork promoted from RESERVED ("Sold - Not Paid")
-// to SOLD.
+// — or, as of 2026-09-22, already SOLD for a Consigned Works sale — to
+// (still) SOLD.
 async function completeSaleAsPaid(
   purchase: {
     id: string;
     artworkId: string;
     totalAmount: { toString(): string };
     commissionPercent: { toString(): string } | null;
+    depositPaid: { toString(): string } | null;
     currency: string;
   },
   paidDate: Date,
   method: string | null
 ) {
-  const total = parseFloat(purchase.totalAmount.toString());
-  const commissionPercent = purchase.commissionPercent
-    ? parseFloat(purchase.commissionPercent.toString())
-    : 0;
-  const net = total - total * (commissionPercent / 100);
+  const net = netOwed(
+    purchase.totalAmount.toString(),
+    purchase.commissionPercent?.toString(),
+    purchase.depositPaid?.toString()
+  );
 
   await db.payment.create({
     data: {
@@ -896,28 +927,29 @@ async function completeSaleAsPaid(
   await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
 }
 
-// The manual equivalent of a Stripe webhook confirming payment — you
-// click this once the gallery has actually paid (e.g. by bank transfer),
-// since nothing in this flow can confirm that automatically.
+// The manual equivalent of a Stripe webhook confirming payment — "Record
+// Payment"/"Mark as Paid" (GallerySaleCard), pressed once the Net Due
+// balance has actually come in (e.g. by bank transfer), since nothing in
+// this flow can confirm that automatically.
 //
 // Takes an optional Date paid and Method (2026-09-03, matching the
-// inline "Mark as paid" form in GalleriesView) rather than always
-// stamping the exact moment the button is pressed — a gallery often
-// reports payment a few days after it actually landed, and knowing how
-// they paid (bank transfer, cash, etc.) is worth keeping alongside the
+// inline "Mark as paid" form in GallerySaleCard) rather than always
+// stamping the exact moment the button is pressed — payment is often
+// reported a few days after it actually landed, and knowing how it was
+// paid (bank transfer, cash, etc.) is worth keeping alongside the
 // amount. `formData` is optional because PurchasePanel (the Artwork
 // Catalogue's own Payment tab) still has its own simpler one-click "Mark
 // as paid" for a gallery-channel sale, with no date/method form of its
 // own — that caller passes nothing and just gets today's date, no
 // method, exactly as before this existed. Method is free-form text from
-// the caller's point of view (validated only by GalleriesView's
+// the caller's point of view (validated only by GallerySaleCard's
 // <select>, sourced from Artist.paymentMethods) rather than a hard enum
 // here, same convention as Customer.kind elsewhere.
 //
-// Still needed even now that a gallery's Stripe Payment Link can
-// complete a sale automatically (see handleGalleryPaymentLinkPaid below)
-// — this remains the only path for a gallery that pays by bank
-// transfer, cash, cheque, etc. rather than the link.
+// Still needed even now that a Payment Link can complete a sale
+// automatically (see handleGalleryPaymentLinkPaid below) — this remains
+// the only path for a balance paid by bank transfer, cash, cheque, etc.
+// rather than the link.
 export async function markGallerySalePaid(
   purchaseId: string,
   siteId: string,
@@ -926,7 +958,7 @@ export async function markGallerySalePaid(
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Purchase not found." };
   if (purchase.channel !== "GALLERY") {
-    return { ok: false, error: "This isn't a gallery sale." };
+    return { ok: false, error: "This isn't a consigned sale." };
   }
 
   const paid = readPaidDetails(formData);
@@ -954,7 +986,7 @@ export async function markSalePaid(
   });
   if (!purchase) return { ok: false, error: "Purchase not found." };
   if (purchase.channel === "GALLERY") {
-    return { ok: false, error: "This is a gallery sale — mark it as paid from its own card." };
+    return { ok: false, error: "This is a consigned sale — mark it as paid from its own card." };
   }
   if (purchase.status !== "ACTIVE") {
     return { ok: false, error: "This sale is no longer open." };
@@ -1307,24 +1339,23 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
   }
 }
 
-// A GALLERY-channel sale's persistent Payment Link being paid (2026-09-13)
-// — the automatic counterpart to markGallerySalePaid above, fired from
-// the same payment_intent.succeeded webhook event as a direct Stripe
-// sale, but kept as its own function rather than folded into
+// A consigned sale's persistent Payment Link being paid (2026-09-13) —
+// the automatic counterpart to markGallerySalePaid above, fired from the
+// same payment_intent.succeeded webhook event as a direct Stripe sale,
+// but kept as its own function rather than folded into
 // handleFirstPaymentSucceeded: that one assumes it's dealing with the
 // sale's full gross totalAmount (optionally split into instalments),
-// whereas a gallery invoice is only ever charged for the NET amount
-// (sale price less commission) and is never an instalment sale. Using
-// the actual amount Stripe confirms it received, rather than
-// recomputing net from totalAmount/commissionPercent again here, keeps
-// this in step with whatever the link was actually generated for even
-// if either figure was edited afterwards.
+// whereas this kind of invoice is only ever charged for the NET amount
+// owed (see netOwed(), lib/saleMath.ts) and is never an instalment sale.
+// Using the actual amount Stripe confirms it received, rather than
+// recomputing net again here, keeps this in step with whatever the link
+// was actually generated for even if a figure was edited afterwards.
 //
 // Idempotent two ways: skipped entirely if the sale is already
 // COMPLETED (covers a redelivered webhook), and the Payment Link itself
 // is deactivated in Stripe the moment it's paid, so it can't be paid a
-// second time by mistake — it's meant for one gallery invoice, not a
-// reusable storefront link.
+// second time by mistake — it's meant for one invoice, not a reusable
+// storefront link.
 export async function handleGalleryPaymentLinkPaid(
   purchaseId: string,
   stripePaymentIntentId: string,
@@ -1365,8 +1396,8 @@ export async function handleGalleryPaymentLinkPaid(
     } catch {
       // Same reasoning as updateGallerySaleAmount above — failing to
       // deactivate the link in Stripe shouldn't block recording that
-      // the gallery has genuinely paid; worst case it stays technically
-      // payable in Stripe a little longer.
+      // the balance has genuinely been paid; worst case it stays
+      // technically payable in Stripe a little longer.
     }
   }
 }
