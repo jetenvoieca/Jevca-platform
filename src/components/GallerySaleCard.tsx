@@ -3,22 +3,19 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  markGallerySalePaid,
+  recordGalleryPayment,
   abandonPurchase,
   deleteGallerySale,
   createGalleryPaymentLink,
+  getGalleryInstalmentDefault,
   saveSaleExtra,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
-import { saleBreakdown } from "@/lib/saleMath";
+import { saleBreakdown, splitIntoInstalments } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import InvoiceEmailModal from "@/components/InvoiceEmailModal";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
-
-const inputCls =
-  "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
-const labelCls = "mb-1 block text-xs text-neutral-500";
 
 // Every action-panel button: #5E5E5E with #F9F6EE text.
 const actionButtonCls =
@@ -28,17 +25,24 @@ const actionButtonCls =
 // so the grid reads as one set.
 const placeholderButtonCls = `${actionButtonCls} opacity-60`;
 
-// Inputs inside the sliding panel — centred placeholder text, per mockup.
+// Inputs inside the sliding panel — centred text, per mockup.
 const drawerInputCls =
   "min-w-0 rounded-md border border-neutral-300 px-3 py-2 text-center text-sm placeholder:text-neutral-400 disabled:opacity-50";
 
-// Which input panel the action panel slides down to reveal.
-type DrawerKind = "framing" | "delivery";
+const iconButtonCls =
+  "shrink-0 rounded-md p-1 text-neutral-800 hover:bg-neutral-100 disabled:opacity-50";
 
-const DRAWER_COPY: Record<DrawerKind, { title: string; namePlaceholder: string }> = {
-  framing: { title: "Arrange Framing", namePlaceholder: "Framer" },
-  delivery: { title: "Arrange Delivery", namePlaceholder: "Courier firm" },
+// Which input panel the action panel slides down to reveal.
+type DrawerKind = "framing" | "delivery" | "payment" | "link";
+
+const DRAWER_TITLE: Record<DrawerKind, string> = {
+  framing: "Arrange Framing",
+  delivery: "Arrange Delivery",
+  payment: "Record Payment",
+  link: "Stripe payment link",
 };
+
+type LinkOption = "full" | "instalments";
 
 function TickIcon() {
   return (
@@ -52,6 +56,15 @@ function CrossIcon() {
   return (
     <svg viewBox="0 0 20 20" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2.2">
       <path d="M5 5l10 10M15 5L5 15" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function LinkIcon() {
+  return (
+    <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" strokeLinecap="round" />
+      <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" strokeLinecap="round" />
     </svg>
   );
 }
@@ -85,10 +98,10 @@ export function SaleStatusBadge({
 }
 
 // The single shared view of one GALLERY-channel sale (ACTIVE or
-// COMPLETED), used everywhere such a sale can be opened. Three parts,
-// top to bottom: Sales details (price / Net Due), Sales status (what's
-// been paid and sent), and the Action panel. ABANDONED sales never come
-// here — callers show SaleDetailCard for those.
+// COMPLETED), used everywhere such a sale can be opened. Top to bottom:
+// Sales details (price, extras, paid / Net Due), Sales status (payments
+// and sends), a sliding input panel, and the Action panel. ABANDONED
+// sales never come here — callers show SaleDetailCard for those.
 export default function GallerySaleCard({
   purchase,
   siteId,
@@ -106,27 +119,33 @@ export default function GallerySaleCard({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // ---- Record Payment — inline Date paid / Method form ----
-  const [showMarkPaidForm, setShowMarkPaidForm] = useState(false);
-  const [paidDate, setPaidDate] = useState(() => new Date().toISOString().slice(0, 10));
-  const [paidMethod, setPaidMethod] = useState("");
-
-  // ---- Invoice/receipt email + Stripe payment link ----
+  // ---- Invoice/receipt email ----
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [preparingInvoice, setPreparingInvoice] = useState(false);
-  const [paymentLinkError, setPaymentLinkError] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
 
   // ---- Certificate of Authenticity ----
   const [showCertificateModal, setShowCertificateModal] = useState(false);
 
-  // ---- Sliding input panel (Arrange Framing / Arrange Delivery) ----
+  // ---- Sliding input panel ----
   // drawerKind keeps the last-opened panel's content in place while it
   // animates closed; drawerOpen drives the slide itself.
   const [drawerKind, setDrawerKind] = useState<DrawerKind>("framing");
   const [drawerOpen, setDrawerOpen] = useState(false);
+
+  // Arrange Framing / Arrange Delivery
   const [extraName, setExtraName] = useState("");
   const [extraCost, setExtraCost] = useState("");
+
+  // Record Payment
+  const [payDate, setPayDate] = useState("");
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("");
+
+  // Stripe payment link
+  const [linkOption, setLinkOption] = useState<LinkOption | null>(null);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  const [instalmentCount, setInstalmentCount] = useState("");
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
@@ -137,29 +156,117 @@ export default function GallerySaleCard({
   } | null>(null);
 
   const isPaid = purchase.status === "COMPLETED";
-  const completedPayment = isPaid ? (purchase.payments[0] ?? null) : null;
+  const onInstalmentPlan = purchase.type === "INSTALMENTS";
+  const amounts = saleBreakdown(purchase);
+  const balance = isPaid ? 0 : amounts.balance;
+  const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
 
-  const handleMarkPaidClick = () => {
+  const paidPayments = purchase.payments.filter((p) => p.status === "PAID");
+  const nextDueInstalment = purchase.payments.find((p) => p.status === "DUE") ?? null;
+
+  const count = parseInt(instalmentCount, 10);
+  const countValid = Number.isInteger(count) && count >= 2 && count <= 36;
+  const perInstalment = countValid && balance > 0 ? splitIntoInstalments(balance, count)[0] : null;
+
+  // Pressing the same button again closes the panel; pressing another
+  // swaps its content in place.
+  const openDrawer = (kind: DrawerKind) => {
+    if (drawerOpen && drawerKind === kind) {
+      setDrawerOpen(false);
+      return;
+    }
     setError(null);
-    setPaidDate(new Date().toISOString().slice(0, 10));
-    setPaidMethod(paymentMethods[0] || "");
-    setShowMarkPaidForm(true);
+    setDrawerKind(kind);
+    if (kind === "framing" || kind === "delivery") {
+      // A sale has at most one of each — clicking again edits it.
+      setExtraName((kind === "framing" ? purchase.framer : purchase.courier) ?? "");
+      setExtraCost((kind === "framing" ? purchase.framingCost : purchase.deliveryCost) ?? "");
+    } else if (kind === "payment") {
+      setPayDate(new Date().toISOString().slice(0, 10));
+      setPayAmount(balance.toFixed(2));
+      setPayMethod(paymentMethods[0] || "");
+    } else {
+      setLinkOption(null);
+      setLinkUrl(null);
+      setLinkCopied(false);
+      if (!instalmentCount) {
+        getGalleryInstalmentDefault(purchase.id).then((n) => setInstalmentCount(String(n)));
+      }
+    }
+    setDrawerOpen(true);
   };
 
-  const handleConfirmMarkPaid = () => {
+  const runAndClose = (action: () => Promise<{ ok: true } | { ok: false; error: string }>) => {
     setError(null);
-    const fd = new FormData();
-    fd.set("paidDate", paidDate);
-    fd.set("method", paidMethod);
     startTransition(async () => {
-      const res = await markGallerySalePaid(purchase.id, siteId, fd);
+      const res = await action();
       if (!res.ok) {
         setError(res.error);
         return;
       }
-      setShowMarkPaidForm(false);
+      setDrawerOpen(false);
       onChanged();
       router.refresh();
+    });
+  };
+
+  const handleSaveExtra = () => {
+    const fd = new FormData();
+    fd.set("name", extraName.trim());
+    fd.set("cost", extraCost.trim());
+    runAndClose(() => saveSaleExtra(purchase.id, siteId, drawerKind as "framing" | "delivery", fd));
+  };
+
+  const handleRecordPayment = () => {
+    const fd = new FormData();
+    fd.set("paidDate", payDate);
+    fd.set("amount", payAmount.trim());
+    fd.set("method", payMethod);
+    runAndClose(() => recordGalleryPayment(purchase.id, siteId, fd));
+  };
+
+  // Clicking an option box selects it and shows its link (generated on
+  // first use, reused after — see createGalleryPaymentLink).
+  const handleChooseLink = (option: LinkOption) => {
+    if (option === "instalments" && !countValid) {
+      setError("Enter a number of instalments between 2 and 36.");
+      return;
+    }
+    setError(null);
+    setLinkOption(option);
+    setLinkUrl(null);
+    setLinkCopied(false);
+    startTransition(async () => {
+      const res = await createGalleryPaymentLink(
+        purchase.id,
+        siteId,
+        option === "instalments" ? count : undefined
+      );
+      if (!res.ok) {
+        setError(res.error);
+        setLinkOption(null);
+        return;
+      }
+      setLinkUrl(res.url);
+      onChanged();
+    });
+  };
+
+  // A new count means a different instalment amount, so any instalment
+  // link on screen no longer applies until the box is clicked again.
+  const handleCountChange = (value: string) => {
+    setInstalmentCount(value.replace(/\D/g, "").slice(0, 2));
+    if (linkOption === "instalments") {
+      setLinkOption(null);
+      setLinkUrl(null);
+    }
+  };
+
+  const handleCopyLink = () => {
+    if (!linkUrl) return;
+    navigator.clipboard.writeText(linkUrl).then(() => {
+      setLinkCopied(true);
+      setTimeout(() => setLinkCopied(false), 1500);
     });
   };
 
@@ -207,74 +314,23 @@ export default function GallerySaleCard({
     });
   };
 
-  // Send invoice generates the payment link first (if the sale is still
-  // unpaid and has none), so the emailed invoice always includes a way to
-  // pay. If link generation fails the modal still opens — the email falls
-  // back to its non-link wording.
+  // Send invoice generates the full-amount payment link first (if the
+  // sale is still owed and has none), so the emailed invoice always
+  // includes a way to pay. If that fails the modal still opens — the
+  // email falls back to its non-link wording.
   const handleOpenInvoiceModal = () => {
-    if (isPaid || purchase.stripePaymentLinkUrl) {
+    if (isPaid || onInstalmentPlan || purchase.stripePaymentLinkUrl) {
       setShowInvoiceModal(true);
       return;
     }
-    setPaymentLinkError(null);
+    setError(null);
     setPreparingInvoice(true);
     startTransition(async () => {
       const res = await createGalleryPaymentLink(purchase.id, siteId);
-      if (!res.ok) setPaymentLinkError(res.error);
+      if (!res.ok) setError(res.error);
       onChanged();
       setPreparingInvoice(false);
       setShowInvoiceModal(true);
-    });
-  };
-
-  // Idempotent — returns the existing link if there is one.
-  const handleGetPaymentLink = () => {
-    setPaymentLinkError(null);
-    startTransition(async () => {
-      const res = await createGalleryPaymentLink(purchase.id, siteId);
-      if (!res.ok) {
-        setPaymentLinkError(res.error);
-        return;
-      }
-      onChanged();
-    });
-  };
-
-  const handleCopyPaymentLink = (url: string) => {
-    navigator.clipboard.writeText(url).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 1500);
-    });
-  };
-
-  // Pressing the same button again closes the panel; pressing the other
-  // one swaps its content in place. Prefilled from the saved entry, since
-  // a sale has at most one of each and clicking again edits it.
-  const openDrawer = (kind: DrawerKind) => {
-    if (drawerOpen && drawerKind === kind) {
-      setDrawerOpen(false);
-      return;
-    }
-    setError(null);
-    setDrawerKind(kind);
-    setExtraName((kind === "framing" ? purchase.framer : purchase.courier) ?? "");
-    setExtraCost((kind === "framing" ? purchase.framingCost : purchase.deliveryCost) ?? "");
-    setDrawerOpen(true);
-  };
-
-  const handleSaveExtra = () => {
-    setError(null);
-    const fd = new FormData();
-    fd.set("name", extraName.trim());
-    fd.set("cost", extraCost.trim());
-    startTransition(async () => {
-      const res = await saveSaleExtra(purchase.id, siteId, drawerKind, fd);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setDrawerOpen(false);
-      onChanged();
     });
   };
 
@@ -282,8 +338,10 @@ export default function GallerySaleCard({
   const handlePaidExtraPlaceholder = () => alert("Coming in a later phase.");
   const handleTakeCard = () => alert("Take Card — coming in a later phase.");
 
-  const amounts = saleBreakdown(purchase);
-  const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
+  const optionBoxCls = (selected: boolean) =>
+    `flex flex-col items-center justify-center rounded-lg border px-2 py-2 text-center leading-tight ${
+      selected ? "border-neutral-900 text-neutral-900" : "border-neutral-300 text-neutral-500 hover:border-neutral-500"
+    }`;
 
   return (
     <div>
@@ -293,16 +351,24 @@ export default function GallerySaleCard({
           <p>Sale price {money(amounts.salePrice)}</p>
           {amounts.framing > 0 && <p>Framing {money(amounts.framing)}</p>}
           {amounts.delivery > 0 && <p>Delivery {money(amounts.delivery)}</p>}
+          {amounts.paid > 0 && <p>Paid {money(amounts.paid)}</p>}
         </div>
-        <p>Net Due {money(isPaid ? 0 : amounts.net)}</p>
+        <p>Net Due {money(balance)}</p>
       </div>
 
       {/* ---- Sales status ---- */}
       <div className="mt-3 min-h-[1.25rem] space-y-0.5 text-xs text-neutral-500">
-        {isPaid && completedPayment?.paidDate && (
+        {paidPayments.map((p) => (
+          <p key={p.id}>
+            Paid {formatMoney(p.amount, p.currency)}
+            {p.paidDate ? ` ${formatDate(p.paidDate)}` : ""}
+            {p.method ? ` · ${p.method}` : ""}
+          </p>
+        ))}
+        {onInstalmentPlan && !isPaid && purchase.instalmentCount && nextDueInstalment && (
           <p>
-            Paid {formatDate(completedPayment.paidDate)}
-            {completedPayment.method ? ` — ${completedPayment.method}` : ""}
+            Paying by {purchase.instalmentCount} instalments of{" "}
+            {formatMoney(nextDueInstalment.amount, nextDueInstalment.currency)}
           </p>
         )}
         {purchase.invoiceEmailedAt && (
@@ -317,73 +383,6 @@ export default function GallerySaleCard({
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
-      {showMarkPaidForm && !isPaid && (
-        <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-white p-3">
-          <div>
-            <label className={labelCls}>Date paid</label>
-            <input
-              type="date"
-              value={paidDate}
-              onChange={(e) => setPaidDate(e.target.value)}
-              className={inputCls}
-            />
-          </div>
-          <div>
-            <label className={labelCls}>Method</label>
-            <select
-              value={paidMethod}
-              onChange={(e) => setPaidMethod(e.target.value)}
-              className={inputCls}
-            >
-              <option value="">Choose…</option>
-              {paymentMethods.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleConfirmMarkPaid}
-              disabled={isPending || !paidMethod}
-              className={`flex-1 ${actionButtonCls}`}
-            >
-              Paid
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowMarkPaidForm(false)}
-              disabled={isPending}
-              className="rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-            >
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!isPaid && purchase.stripePaymentLinkUrl && (
-        <div className="mt-3 flex gap-2">
-          <input
-            type="text"
-            readOnly
-            value={purchase.stripePaymentLinkUrl}
-            onFocus={(e) => e.currentTarget.select()}
-            className="w-full rounded-md border border-neutral-200 bg-white px-2 py-1 text-xs text-neutral-600"
-          />
-          <button
-            type="button"
-            onClick={() => handleCopyPaymentLink(purchase.stripePaymentLinkUrl!)}
-            className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-          >
-            {linkCopied ? "Copied" : "Copy"}
-          </button>
-        </div>
-      )}
-      {paymentLinkError && <p className="mt-2 text-xs text-red-600">{paymentLinkError}</p>}
-
       {/* ---- Sliding input panel ---- */}
       {/* Animates its height between 0 and its content (grid-rows
           0fr <-> 1fr), which pushes the action panel below down and back
@@ -393,55 +392,156 @@ export default function GallerySaleCard({
           drawerOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
         }`}
         aria-hidden={!drawerOpen}
+        inert={!drawerOpen}
       >
         <div className="overflow-hidden">
           <div className="pt-4">
             <p className="rounded-md bg-neutral-100 py-1.5 text-center text-sm text-neutral-500">
-              {DRAWER_COPY[drawerKind].title}
+              {DRAWER_TITLE[drawerKind]}
             </p>
-            <div className="mt-3 flex items-center gap-2">
-              <input
-                type="text"
-                value={extraName}
-                onChange={(e) => setExtraName(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveExtra()}
-                placeholder={DRAWER_COPY[drawerKind].namePlaceholder}
-                disabled={isPending}
-                tabIndex={drawerOpen ? 0 : -1}
-                className={`flex-[3] ${drawerInputCls}`}
-              />
-              <input
-                type="text"
-                inputMode="decimal"
-                value={extraCost}
-                onChange={(e) => setExtraCost(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleSaveExtra()}
-                placeholder="Cost"
-                disabled={isPending}
-                tabIndex={drawerOpen ? 0 : -1}
-                className={`flex-[2] ${drawerInputCls}`}
-              />
-              <button
-                type="button"
-                onClick={handleSaveExtra}
-                disabled={isPending}
-                tabIndex={drawerOpen ? 0 : -1}
-                aria-label="Save"
-                className="shrink-0 rounded-md p-1 text-neutral-800 hover:bg-neutral-100 disabled:opacity-50"
-              >
-                <TickIcon />
-              </button>
-              <button
-                type="button"
-                onClick={() => setDrawerOpen(false)}
-                disabled={isPending}
-                tabIndex={drawerOpen ? 0 : -1}
-                aria-label="Cancel"
-                className="shrink-0 rounded-md p-1 text-neutral-800 hover:bg-neutral-100 disabled:opacity-50"
-              >
-                <CrossIcon />
-              </button>
-            </div>
+
+            {(drawerKind === "framing" || drawerKind === "delivery") && (
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="text"
+                  value={extraName}
+                  onChange={(e) => setExtraName(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveExtra()}
+                  placeholder={drawerKind === "framing" ? "Framer" : "Courier firm"}
+                  disabled={isPending}
+                  className={`flex-[3] ${drawerInputCls}`}
+                />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={extraCost}
+                  onChange={(e) => setExtraCost(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleSaveExtra()}
+                  placeholder="Cost"
+                  disabled={isPending}
+                  className={`flex-[2] ${drawerInputCls}`}
+                />
+                <button type="button" onClick={handleSaveExtra} disabled={isPending} aria-label="Save" className={iconButtonCls}>
+                  <TickIcon />
+                </button>
+                <button type="button" onClick={() => setDrawerOpen(false)} disabled={isPending} aria-label="Cancel" className={iconButtonCls}>
+                  <CrossIcon />
+                </button>
+              </div>
+            )}
+
+            {drawerKind === "payment" && (
+              <div className="mt-3 flex items-center gap-2">
+                <input
+                  type="date"
+                  value={payDate}
+                  onChange={(e) => setPayDate(e.target.value)}
+                  disabled={isPending}
+                  aria-label="Date"
+                  className={`flex-1 ${drawerInputCls}`}
+                />
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={payAmount}
+                  onChange={(e) => setPayAmount(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleRecordPayment()}
+                  placeholder="Amount"
+                  disabled={isPending}
+                  aria-label="Amount"
+                  className={`flex-1 ${drawerInputCls}`}
+                />
+                <select
+                  value={payMethod}
+                  onChange={(e) => setPayMethod(e.target.value)}
+                  disabled={isPending}
+                  aria-label="Method"
+                  className={`flex-1 ${drawerInputCls}`}
+                >
+                  <option value="">Method…</option>
+                  {paymentMethods.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={handleRecordPayment}
+                  disabled={isPending || !payMethod}
+                  aria-label="Save"
+                  className={iconButtonCls}
+                >
+                  <TickIcon />
+                </button>
+                <button type="button" onClick={() => setDrawerOpen(false)} disabled={isPending} aria-label="Cancel" className={iconButtonCls}>
+                  <CrossIcon />
+                </button>
+              </div>
+            )}
+
+            {drawerKind === "link" &&
+              (onInstalmentPlan ? (
+                <p className="mt-3 text-center text-sm text-neutral-500">
+                  This sale is already being paid by instalments through Stripe.
+                </p>
+              ) : (
+                <>
+                  <div className="mt-3 grid grid-cols-3 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => handleChooseLink("full")}
+                      disabled={isPending}
+                      className={optionBoxCls(linkOption === "full")}
+                    >
+                      <span className="text-sm">Full amount</span>
+                      <span className="text-base">{money(balance)}</span>
+                    </button>
+                    <label className={`cursor-text ${optionBoxCls(linkOption === "instalments")}`}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        value={instalmentCount}
+                        onChange={(e) => handleCountChange(e.target.value)}
+                        onKeyDown={(e) => e.key === "Enter" && handleChooseLink("instalments")}
+                        disabled={isPending}
+                        aria-label="Number of instalments"
+                        className="w-12 rounded border border-transparent bg-transparent text-center text-base text-neutral-900 hover:border-neutral-200 focus:border-neutral-400 focus:outline-none"
+                      />
+                      <span className="text-sm">Instalments</span>
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => handleChooseLink("instalments")}
+                      disabled={isPending}
+                      className={optionBoxCls(linkOption === "instalments")}
+                    >
+                      <span className="text-sm">Instalments</span>
+                      <span className="text-base">{perInstalment !== null ? money(perInstalment) : "—"}</span>
+                    </button>
+                  </div>
+                  {linkOption && (
+                    <div className="mt-3 flex items-center gap-2">
+                      <input
+                        type="text"
+                        readOnly
+                        value={linkUrl ?? "Generating…"}
+                        onFocus={(e) => e.currentTarget.select()}
+                        className="min-w-0 flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-600"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleCopyLink}
+                        disabled={!linkUrl}
+                        aria-label="Copy link"
+                        className={iconButtonCls}
+                      >
+                        {linkCopied ? <TickIcon /> : <LinkIcon />}
+                      </button>
+                    </div>
+                  )}
+                </>
+              ))}
           </div>
         </div>
       </div>
@@ -466,12 +566,7 @@ export default function GallerySaleCard({
         </button>
         {isPaid ? (
           <>
-            <button
-              type="button"
-              onClick={handleOpenInvoiceModal}
-              disabled={isPending}
-              className={actionButtonCls}
-            >
+            <button type="button" onClick={handleOpenInvoiceModal} disabled={isPending} className={actionButtonCls}>
               Send Receipt
             </button>
             <button
@@ -485,29 +580,14 @@ export default function GallerySaleCard({
           </>
         ) : (
           <>
-            <button
-              type="button"
-              onClick={handleOpenInvoiceModal}
-              disabled={isPending}
-              className={actionButtonCls}
-            >
+            <button type="button" onClick={handleOpenInvoiceModal} disabled={isPending} className={actionButtonCls}>
               {preparingInvoice ? "Preparing…" : "Send invoice"}
             </button>
-            <button
-              type="button"
-              onClick={handleMarkPaidClick}
-              disabled={isPending}
-              className={actionButtonCls}
-            >
+            <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
               Record Payment
             </button>
-            <button
-              type="button"
-              onClick={handleGetPaymentLink}
-              disabled={isPending}
-              className={actionButtonCls}
-            >
-              {isPending && !purchase.stripePaymentLinkUrl ? "Generating…" : "Payment link"}
+            <button type="button" onClick={() => openDrawer("link")} disabled={isPending} className={actionButtonCls}>
+              Payment link
             </button>
             <button type="button" onClick={handleTakeCard} className={placeholderButtonCls}>
               Take Card
@@ -519,20 +599,10 @@ export default function GallerySaleCard({
       {/* ---- Cancel / Delete ---- */}
       {!isPaid && (
         <div className="mt-6 grid grid-cols-2 text-center text-sm text-red-700">
-          <button
-            type="button"
-            onClick={handleCancelSale}
-            disabled={isPending}
-            className="hover:underline disabled:opacity-50"
-          >
+          <button type="button" onClick={handleCancelSale} disabled={isPending} className="hover:underline disabled:opacity-50">
             Cancel Sale
           </button>
-          <button
-            type="button"
-            onClick={handleDeleteSale}
-            disabled={isPending}
-            className="hover:underline disabled:opacity-50"
-          >
+          <button type="button" onClick={handleDeleteSale} disabled={isPending} className="hover:underline disabled:opacity-50">
             Delete Sale
           </button>
         </div>

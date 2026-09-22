@@ -241,6 +241,7 @@ export async function generateInvoicePdf(
     // Same breakdown the sale card and payment link use (lib/saleMath.ts);
     // only the lines that apply to this sale are printed.
     const b = saleBreakdown(purchase);
+    amountPaid = b.paid;
     invoiceTotal = b.net;
     drawRow(t.salePrice, fmt(b.salePrice));
     if (b.commission) drawRow(`${t.commission} (${b.commissionPercent}%)`, `-${fmt(b.commission)}`);
@@ -249,7 +250,6 @@ export async function generateInvoicePdf(
     if (b.delivery) drawRow(t.delivery, fmt(b.delivery));
     y -= 4;
     drawRow(t.invoiceTotal, fmt(b.net), true);
-    amountPaid = isPaid ? b.net : 0;
   } else {
     // STRIPE — a record of what was (or will be) paid via card, not a
     // request for payment. VAT breakdown only shown if the artist has a
