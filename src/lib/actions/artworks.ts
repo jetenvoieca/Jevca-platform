@@ -429,6 +429,10 @@ export async function getArtworkDetailForClient(id: string) {
     framed: p.framed,
     source: p.source,
     commissionPercent: p.commissionPercent != null ? p.commissionPercent.toString() : null,
+    // Money already collected at record-sale time (2026-09-22) — only
+    // ever set for an Own-location sale. See the matching note on
+    // Purchase.depositPaid in schema.prisma.
+    depositPaid: p.depositPaid != null ? p.depositPaid.toString() : null,
     invoiceNumber: p.invoiceNumber,
     // Part Three (2026-09-01) — see the matching schema.prisma comments.
     stripePaymentLinkUrl: p.stripePaymentLinkUrl,
