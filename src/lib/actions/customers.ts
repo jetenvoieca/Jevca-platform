@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
 
-export type CustomerKind = "INDIVIDUAL" | "GALLERY";
+export type CustomerKind = "INDIVIDUAL" | "GALLERY" | "OWN";
 
 export type CustomerSummary = {
   id: string;
