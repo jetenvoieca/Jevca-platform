@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { listGalleries } from "@/lib/actions/customers";
+import { listLocationCustomers } from "@/lib/actions/locations";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { resolvePreviewSiteId } from "@/lib/previewSites";
 import GalleriesView from "@/components/GalleriesView";
@@ -19,7 +19,10 @@ export default async function PreviewGalleriesPage({
   const site = await db.site.findUnique({ where: { id: siteId }, select: { artistId: true } });
   if (!site) notFound();
 
-  const galleries = await listGalleries(site.artistId);
+  // Every Location now (2026-09-22 rework) — Gallery and Own alike, via
+  // the new Location model (actions/locations.ts), same change as the
+  // real (non-preview) galleries/page.tsx.
+  const galleries = await listLocationCustomers(site.artistId);
   const { paymentMethods } = await getArtworkSettings(site.artistId);
 
   return (
