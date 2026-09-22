@@ -1,6 +1,7 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/formatDate";
+import { netOwed, saleTitle } from "@/lib/saleMath";
 import type { SaleModalTarget } from "@/components/SaleModal";
 
 // 2026-08-13 decision: manual (PayPal/DD) artists are expected roughly
@@ -249,6 +250,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
           purchase: {
             select: {
               buyerName: true,
+              chargeKind: true,
               artwork: {
                 select: {
                   presentationTitle: true,
@@ -280,10 +282,13 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
         select: {
           id: true,
           artworkId: true,
-          channel: true,
           buyerName: true,
           totalAmount: true,
           commissionPercent: true,
+          depositPaid: true,
+          framingCost: true,
+          deliveryCost: true,
+          chargeKind: true,
           currency: true,
           invoiceEmailedAt: true,
           artwork: {
@@ -381,7 +386,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       id: `unpaid-invoice-${p.id}`,
       type: "SALE_INVOICE_UNPAID",
       severity: daysOverdue > 30 ? "CRITICAL" : "WARNING",
-      message: `${artist.name}: invoice to ${buyer} for "${p.purchase.artwork.presentationTitle}" — ${p.currency} ${parseFloat(p.amount.toString()).toFixed(2)}, ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue${failedNote}.`,
+      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(p.purchase.artwork.presentationTitle, p.purchase.chargeKind)}" — ${p.currency} ${parseFloat(p.amount.toString()).toFixed(2)}, ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue${failedNote}.`,
       artistId: p.purchase.artwork.artistId,
       artistName: artist.name,
       siteId,
@@ -397,17 +402,16 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     const siteId = artist.sites[0]?.id || null;
     const sentAt = p.invoiceEmailedAt!; // Never null — the query above requires it.
     const days = daysSince(sentAt, now);
-    // A gallery is invoiced for the net amount (sale price less
-    // commission); a Stripe sale for the full price.
-    const total = parseFloat(p.totalAmount.toString());
-    const commission = p.commissionPercent ? parseFloat(p.commissionPercent.toString()) : 0;
-    const owed = p.channel === "GALLERY" ? total - total * (commission / 100) : total;
+    // What was invoiced — the shared Net Due formula (lib/saleMath.ts);
+    // a direct Stripe sale has no commission or extras, so it's just the
+    // price. Nothing has been paid yet (see the query above).
+    const owed = netOwed(p);
     const buyer = p.buyerName || "unnamed buyer";
     return {
       id: `invoice-overdue-${p.id}`,
       type: "SALE_INVOICE_OVERDUE",
       severity: days - INVOICE_OVERDUE_DAYS > 30 ? "CRITICAL" : "WARNING",
-      message: `${artist.name}: invoice to ${buyer} for "${p.artwork.presentationTitle}" — ${p.currency} ${owed.toFixed(2)}, sent ${formatDate(sentAt)} (${days} days ago) and still unpaid.`,
+      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(p.artwork.presentationTitle, p.chargeKind)}" — ${p.currency} ${owed.toFixed(2)}, sent ${formatDate(sentAt)} (${days} days ago) and still unpaid.`,
       artistId: p.artwork.artistId,
       artistName: artist.name,
       siteId,
