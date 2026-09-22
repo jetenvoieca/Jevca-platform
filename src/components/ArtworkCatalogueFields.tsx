@@ -89,7 +89,7 @@ export default function ArtworkCatalogueFields({
 }: {
   settings: Pick<
     ArtworkSettings,
-    "artworkTypes" | "artworkGroups" | "mediumPresets" | "sizePresets" | "artworkLocations"
+    "artworkTypes" | "artworkGroups" | "mediumPresets" | "sizePresets" | "locations"
   >;
   values: ArtworkFacetValues;
   // Fired (with the enclosing form) after a field changes, for callers
@@ -130,6 +130,12 @@ export default function ArtworkCatalogueFields({
   // artworkSettings.ts). Omit any of these to leave that particular
   // select as a plain, fixed-list picker — Hopper's quick-add form
   // doesn't pass any of them, so its selects are unaffected.
+  //
+  // onAddLocation (2026-09-22) — persists to the new Location model now
+  // (see actions/locations.ts), not the old plain-string
+  // artworkLocations settings list; the caller (ArtworkDetailPanel)
+  // decides the new Location's Type (Gallery/Own) before persisting, so
+  // this component itself stays agnostic to that.
   onAddType?: (name: string) => Promise<void>;
   onAddGroup?: (name: string) => Promise<void>;
   onAddMedium?: (name: string) => Promise<void>;
@@ -327,7 +333,10 @@ export default function ArtworkCatalogueFields({
           className={inputCls}
         >
           <option value="">Choose from list…</option>
-          {withCurrent(settings.artworkLocations, locationValue).map((l) => (
+          {withCurrent(
+            settings.locations.map((l) => l.name),
+            locationValue
+          ).map((l) => (
             <option key={l} value={l}>
               {l}
             </option>
