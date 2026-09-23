@@ -24,7 +24,6 @@ export type ArtworkDetail = {
   id: string;
   artistId: string;
   catalogueNumber: string;
-  presentationTitle: string;
   presentationPrice: string | null;
   description: string | null;
   medium: string | null;
