@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { findOrCreateCustomer } from "./customers";
-import { netOwed, saleBreakdown, splitIntoInstalments } from "@/lib/saleMath";
+import { netOwed, saleBreakdown, saleTitle, splitIntoInstalments } from "@/lib/saleMath";
 import {
   getStripeClient,
   getPublishableKey,
@@ -60,6 +60,13 @@ export type PurchaseDetail = {
   framed: boolean;
   source: string | null;
   commissionPercent: string | null;
+  // A framing/delivery charge sale arranged after this artwork's sale
+  // was paid (2026-09-23) — see Purchase.parentPurchaseId in
+  // schema.prisma. Both null for an ordinary sale. `charges` lists an
+  // ordinary sale's own charge sales (always empty on a charge itself).
+  parentPurchaseId: string | null;
+  chargeKind: "FRAMING" | "DELIVERY" | null;
+  charges: PurchaseDetail[];
   // Money already collected at the moment the sale was recorded
   // (2026-09-22) — only ever set for an Own-location sale. See the
   // matching note on Purchase.depositPaid in schema.prisma.
@@ -79,6 +86,9 @@ export type PurchaseDetail = {
   stripeInstalmentLinkCount: number | null;
   invoiceEmailedAt: string | null;
   invoiceEmailedTo: string | null;
+  // Receipt sent-log (2026-09-23) — see Purchase.receiptEmailedAt.
+  receiptEmailedAt: string | null;
+  receiptEmailedTo: string | null;
   // Certificate of Authenticity sent-log (2026-09-03) — same simple
   // current-status pattern as invoiceEmailedAt/invoiceEmailedTo above.
   certificateEmailedAt: string | null;
@@ -170,10 +180,11 @@ async function assertArtworkAvailableForSale(artworkId: string): Promise<string 
 // unpaid one deleted (deleteGallerySale), or a paid one force-deleted
 // (forceDeleteCompletedSale). Only resets when no ACTIVE or COMPLETED
 // Purchase remains for this artwork — the normal case is exactly one,
-// but this stays correct even if more than one somehow exists.
+// but this stays correct even if more than one somehow exists. A
+// framing/delivery charge sale never holds the artwork on its own.
 async function resetAvailabilityIfNothingSoldOrActive(artworkId: string) {
   const stillHeld = await db.purchase.findFirst({
-    where: { artworkId, status: { in: ["COMPLETED", "ACTIVE"] } },
+    where: { artworkId, status: { in: ["COMPLETED", "ACTIVE"] }, parentPurchaseId: null },
   });
   if (!stillHeld) {
     await db.artwork.update({ where: { id: artworkId }, data: { availability: "AVAILABLE" } });
@@ -338,7 +349,7 @@ export async function startPurchase(
   if (!terms) return { ok: false, error: "Set the sale terms first." };
 
   const existingActive = await db.purchase.findFirst({
-    where: { artworkId, status: "ACTIVE" },
+    where: { artworkId, status: "ACTIVE", parentPurchaseId: null },
   });
   if (existingActive) {
     return { ok: false, error: "There's already an active sale in progress for this artwork." };
@@ -500,7 +511,7 @@ export async function startGallerySale(
   if (soldError) return { ok: false, error: soldError };
 
   const existingActive = await db.purchase.findFirst({
-    where: { artworkId, status: "ACTIVE" },
+    where: { artworkId, status: "ACTIVE", parentPurchaseId: null },
   });
   if (existingActive) {
     return { ok: false, error: "There's already an active sale in progress for this artwork." };
@@ -563,7 +574,7 @@ export async function startGallerySale(
 //   - Full amount (no `instalments`): one link for the whole balance.
 //   - Instalments (`instalments` >= 2): a link for the FIRST of that
 //     many equal instalments. It saves the buyer's card, and once paid
-//     the rest are charged monthly (handleGalleryPaymentLinkPaid) — the
+//     the rest are charged monthly (recordGalleryStripePayment) — the
 //     same model as a direct Stripe instalment sale.
 // Each kind is stored and reused until the balance changes (a payment,
 // or a price/framing/delivery edit), at which point both are retired
@@ -586,19 +597,10 @@ export async function createGalleryPaymentLink(
       relationLoadStrategy: "query",
     });
     if (!purchase) return { ok: false, error: "Sale not found." };
-    if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
-    if (purchase.status !== "ACTIVE") return { ok: false, error: "This sale has already been paid." };
-    if (purchase.stripeSubscriptionScheduleId) {
-      return { ok: false, error: "This sale is already being paid by instalments." };
-    }
 
-    const { balance } = saleBreakdown(purchase);
-    if (balance <= 0) return { ok: false, error: "Nothing is left to pay on this sale." };
-
+    const due = amountToCollect(purchase, instalments);
+    if (!due.ok) return due;
     const isInstalments = instalments !== undefined;
-    if (isInstalments && (!Number.isInteger(instalments) || instalments < 2 || instalments > 36)) {
-      return { ok: false, error: "The number of instalments must be between 2 and 36." };
-    }
 
     if (!isInstalments && purchase.stripePaymentLinkUrl) {
       return { ok: true, url: purchase.stripePaymentLinkUrl };
@@ -612,8 +614,8 @@ export async function createGalleryPaymentLink(
 
     const mode = await getStripeModeForArtwork(purchase.artworkId);
     const stripe = getStripeClient(mode);
-    const title = purchase.artwork.presentationTitle;
-    const amount = isInstalments ? splitIntoInstalments(balance, instalments)[0] : balance;
+    const title = saleTitle(purchase.artwork.presentationTitle, purchase.chargeKind);
+    const amount = due.amount;
 
     const price = await stripe.prices.create({
       unit_amount: toMinorUnits(amount),
@@ -654,9 +656,92 @@ export async function createGalleryPaymentLink(
   }
 }
 
-// The starting instalment count for the "Stripe payment link" panel —
-// the artist's own Settings default, or the count of an instalment link
-// already generated for this sale.
+// "Take Card" on a consigned sale (2026-09-23) — the card is entered
+// in the app by the artist (e.g. over the phone) with Stripe's own card
+// form (StripeCardForm), for either the whole balance or the first of
+// `instalments` equal instalments. The instalment kind saves the card
+// (setup_future_usage), and once this first charge succeeds the rest
+// are scheduled monthly — exactly as for an instalment payment link;
+// both are recorded by the same recordPaymentIntent below.
+export async function createGalleryCardIntent(
+  purchaseId: string,
+  siteId: string,
+  instalments?: number
+): Promise<
+  { ok: true; clientSecret: string; publishableKey: string } | { ok: false; error: string }
+> {
+  try {
+    const purchase = await db.purchase.findUnique({
+      where: { id: purchaseId },
+      include: { payments: true },
+      relationLoadStrategy: "query",
+    });
+    if (!purchase) return { ok: false, error: "Sale not found." };
+
+    const due = amountToCollect(purchase, instalments);
+    if (!due.ok) return due;
+    const isInstalments = instalments !== undefined;
+
+    const mode = await getStripeModeForArtwork(purchase.artworkId);
+    const stripe = getStripeClient(mode);
+
+    let customerId = purchase.stripeCustomerId;
+    if (!customerId) {
+      const customer = await stripe.customers.create({
+        email: purchase.buyerEmail || undefined,
+        name: purchase.buyerName || undefined,
+      });
+      customerId = customer.id;
+      await db.purchase.update({ where: { id: purchase.id }, data: { stripeCustomerId: customerId } });
+    }
+
+    const intent = await stripe.paymentIntents.create({
+      amount: toMinorUnits(due.amount),
+      currency: purchase.currency.toLowerCase(),
+      customer: customerId,
+      ...(isInstalments ? { setup_future_usage: "off_session" as const } : {}),
+      metadata: {
+        purchaseId: purchase.id,
+        ...(isInstalments ? { instalments: String(instalments) } : {}),
+      },
+    });
+
+    if (!intent.client_secret) return { ok: false, error: "Stripe did not return a client secret." };
+    return { ok: true, clientSecret: intent.client_secret, publishableKey: getPublishableKey(mode) };
+  } catch (err) {
+    return { ok: false, error: stripeErrorMessage(err) };
+  }
+}
+
+// What a Stripe collection on a consigned sale should charge right now:
+// the whole balance, or the first of `instalments` equal instalments of
+// it. Shared by the payment link and Take Card, so both refuse the same
+// cases and always charge the same figure the card shows.
+function amountToCollect(
+  purchase: Parameters<typeof saleBreakdown>[0] & {
+    channel: string;
+    status: string;
+    stripeSubscriptionScheduleId: string | null;
+  },
+  instalments?: number
+): { ok: true; amount: number } | { ok: false; error: string } {
+  if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
+  if (purchase.status !== "ACTIVE") return { ok: false, error: "This sale has already been paid." };
+  if (purchase.stripeSubscriptionScheduleId) {
+    return { ok: false, error: "This sale is already being paid by instalments." };
+  }
+  const { balance } = saleBreakdown(purchase);
+  if (balance <= 0) return { ok: false, error: "Nothing is left to pay on this sale." };
+  if (instalments === undefined) return { ok: true, amount: balance };
+  if (!Number.isInteger(instalments) || instalments < 2 || instalments > 36) {
+    return { ok: false, error: "The number of instalments must be between 2 and 36." };
+  }
+  return { ok: true, amount: splitIntoInstalments(balance, instalments)[0] };
+}
+
+// The starting instalment count for the payment link and Take Card
+// panels — the count of an instalment link already generated for this
+// sale, or else the artist's own Settings default.
 export async function getGalleryInstalmentDefault(purchaseId: string): Promise<number> {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -753,10 +838,16 @@ async function deactivatePaymentLink(artworkId: string, linkId: string | null) {
 // ---------- Framing / delivery on a consigned sale ----------
 
 // Saves (or, with both fields blank, removes) the one framing or one
-// delivery entry on an ACTIVE consigned sale (2026-09-23). The cost is
-// paid by the buyer/gallery, so it adds to Net Due; commission is never
-// charged on it. Any existing payment link is retired, since it encodes
-// the old balance.
+// delivery entry on a consigned sale (2026-09-23).
+//
+// While the sale is still being paid (ACTIVE) the cost is added to this
+// sale itself: it's paid by the buyer/gallery, so it adds to Net Due
+// (commission is never charged on it), and any payment link is retired
+// since it encodes the old balance.
+//
+// Once the sale has been paid (COMPLETED), the cost instead becomes its
+// own separate charge sale (saveChargeSale below) with its own invoice,
+// payments and receipt, rather than reopening a paid sale.
 export async function saveSaleExtra(
   purchaseId: string,
   siteId: string,
@@ -766,9 +857,10 @@ export async function saveSaleExtra(
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Sale not found." };
   if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
-  if (purchase.status !== "ACTIVE") {
-    return { ok: false, error: "This sale has already been paid." };
+  if (purchase.parentPurchaseId) {
+    return { ok: false, error: "Framing and delivery are arranged on the artwork's own sale." };
   }
+  if (purchase.status === "ABANDONED") return { ok: false, error: "This sale was cancelled." };
 
   const name = (formData.get("name") as string)?.trim() || null;
   const costRaw = (formData.get("cost") as string)?.trim() || "";
@@ -780,6 +872,8 @@ export async function saveSaleExtra(
   }
   if (name && !cost) return { ok: false, error: "Please enter the cost." };
 
+  if (purchase.status === "COMPLETED") return saveChargeSale(purchase, kind, name, cost);
+
   const current = kind === "framing" ? purchase.framingCost : purchase.deliveryCost;
   const currentCost = current != null ? parseFloat(current.toString()).toFixed(2) : null;
   if (currentCost !== cost) await retireGalleryPaymentLinks(purchase);
@@ -789,6 +883,76 @@ export async function saveSaleExtra(
     data: kind === "framing" ? { framer: name, framingCost: cost } : { courier: name, deliveryCost: cost },
   });
 
+  return { ok: true };
+}
+
+// Creates, edits or removes the framing/delivery charge sale for an
+// already-paid sale — at most one live (not cancelled) charge of each
+// kind, so pressing the button again edits it, same as before payment.
+// The charge copies the sale's buyer and currency; its price is the
+// cost, with no commission. The framer/courier name is kept on it in
+// the same framer/courier field an ordinary sale uses.
+async function saveChargeSale(
+  parent: {
+    id: string;
+    artworkId: string;
+    customerId: string | null;
+    buyerName: string | null;
+    buyerEmail: string | null;
+    buyerAddress: string | null;
+    currency: string;
+  },
+  kind: "framing" | "delivery",
+  name: string | null,
+  cost: string | null
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const chargeKind = kind === "framing" ? "FRAMING" : "DELIVERY";
+  const nameData = kind === "framing" ? { framer: name } : { courier: name };
+  const existing = await db.purchase.findFirst({
+    where: { parentPurchaseId: parent.id, chargeKind, status: { not: "ABANDONED" } },
+    include: { payments: true },
+    relationLoadStrategy: "query",
+  });
+
+  if (!existing) {
+    if (!cost) return { ok: true };
+    await db.purchase.create({
+      data: {
+        artworkId: parent.artworkId,
+        channel: "GALLERY",
+        parentPurchaseId: parent.id,
+        chargeKind,
+        customerId: parent.customerId,
+        buyerName: parent.buyerName,
+        buyerEmail: parent.buyerEmail,
+        buyerAddress: parent.buyerAddress,
+        type: "FULL",
+        totalAmount: cost,
+        currency: parent.currency,
+        ...nameData,
+      },
+    });
+    return { ok: true };
+  }
+
+  if (existing.status !== "ACTIVE") {
+    return { ok: false, error: `The ${kind} charge has already been paid.` };
+  }
+
+  if (!cost) {
+    if (existing.payments.some((p) => p.status === "PAID")) {
+      return { ok: false, error: `Payments have been recorded on the ${kind} charge — cancel it instead.` };
+    }
+    await retireGalleryPaymentLinks(existing);
+    await db.purchase.delete({ where: { id: existing.id } });
+    return { ok: true };
+  }
+
+  if (parseFloat(existing.totalAmount.toString()).toFixed(2) !== cost) {
+    await retireGalleryPaymentLinks(existing);
+  }
+  await db.purchase.update({ where: { id: existing.id }, data: { totalAmount: cost, ...nameData } });
+  await completeIfSettled(existing.id);
   return { ok: true };
 }
 
@@ -828,7 +992,7 @@ export async function recordPastSale(
   if (soldError) return { ok: false, error: soldError };
 
   const existingActive = await db.purchase.findFirst({
-    where: { artworkId, status: "ACTIVE" },
+    where: { artworkId, status: "ACTIVE", parentPurchaseId: null },
   });
   if (existingActive) {
     return {
@@ -1106,8 +1270,10 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
 
 }
 
-// The sale didn't go ahead. Kept as history (status ABANDONED), not
-// deleted — SaleTerms is completely untouched, ready for the next buyer.
+// The sale didn't go ahead — or, for a paid sale (2026-09-23), is being
+// cancelled after the fact, with any refund handled outside the app.
+// Kept as history (status ABANDONED), not deleted — SaleTerms is
+// completely untouched, ready for the next buyer.
 // If instalments had already started, also cancels the Stripe schedule so
 // nothing keeps auto-charging a sale that isn't happening.
 //
@@ -1122,6 +1288,16 @@ export async function abandonPurchase(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Purchase not found." };
+
+  // A cancelled sale takes its still-open framing/delivery charges with
+  // it (paid ones stay, as the real records they are), and nothing about
+  // it should stay payable through an old link.
+  const openCharges = await db.purchase.findMany({
+    where: { parentPurchaseId: purchase.id, status: "ACTIVE" },
+    select: { id: true },
+  });
+  for (const charge of openCharges) await abandonPurchase(charge.id, siteId);
+  await retireGalleryPaymentLinks(purchase);
 
   try {
     const mode = await getStripeModeForArtwork(purchase.artworkId);
@@ -1321,7 +1497,9 @@ async function completeIfSettled(purchaseId: string, closedAt: Date = new Date()
   if (!settled) return;
 
   await db.purchase.update({ where: { id: purchaseId }, data: { status: "COMPLETED", closedAt } });
-  await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
+  if (!purchase.parentPurchaseId) {
+    await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
+  }
 }
 
 // Sets up the monthly auto-charges for the rest of an instalment plan
@@ -1331,7 +1509,7 @@ async function completeIfSettled(purchaseId: string, closedAt: Date = new Date()
 // handleInstalmentInvoicePaid/Failed then mark as each charge happens.
 // Shared by a direct Stripe instalment sale (handleFirstPaymentSucceeded)
 // and a consigned sale's instalment payment link
-// (handleGalleryPaymentLinkPaid).
+// (recordGalleryStripePayment).
 async function scheduleRemainingInstalments(opts: {
   purchase: { id: string; artworkId: string; currency: string; title: string };
   customerId: string;
@@ -1390,14 +1568,12 @@ async function scheduleRemainingInstalments(opts: {
 }
 
 // Marks the first Payment on a direct Stripe Purchase PAID and completes
-// it if that was the only one due. Normally reached via the Stripe
-// webhook (payment_intent.succeeded), but also called directly,
-// client-side, the moment stripe.confirmPayment() itself reports success
-// (2026-09-20 — see StripeCardForm's own note) — the webhook can be
-// slow, misconfigured, or simply not reach this environment at all, and
-// a confirmed charge sitting unrecorded as "UNPAID" is a real gap, not
-// a cosmetic one. Idempotent (the sequence-1 check below), so calling
-// this from both places is safe: whichever arrives first does the work.
+// it if that was the only one due. Reached through recordPaymentIntent
+// below (both the Stripe webhook and the in-app card form, which records
+// the moment Stripe confirms rather than waiting on the webhook), and by
+// the Studio app's confirmStudioCardPayment (lib/studioSales.ts), which
+// verifies the payment with Stripe itself first. Idempotent (the
+// sequence-1 check below), so whichever arrives first does the work.
 //
 // RESERVED was already set the moment this sale started (see the
 // file-level note above); completeIfSettled promotes it to SOLD once the
@@ -1447,22 +1623,62 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
   await completeIfSettled(purchase.id);
 }
 
-// A consigned sale's payment link being paid — the automatic
-// counterpart to recordGalleryPayment, fired from the same
-// payment_intent.succeeded webhook event as a direct Stripe sale.
+// Records a succeeded Stripe PaymentIntent against its sale — the one
+// entry point for both the Stripe webhook and the in-app card form
+// (StripeCardForm), which calls it the moment Stripe confirms, rather
+// than waiting on the webhook alone. It re-reads the PaymentIntent from
+// Stripe itself rather than trusting what the caller passes, so it's
+// safe to call from the browser, and both handlers it routes to are
+// idempotent, so the webhook and the form can both call it.
+//
+// A consigned (GALLERY) sale is paid through its own payment links or
+// Take Card — the full balance or an instalment plan's first instalment
+// (recordGalleryStripePayment); a direct Stripe sale goes through
+// handleFirstPaymentSucceeded.
+export async function recordPaymentIntent(purchaseId: string, paymentIntentId: string) {
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    select: { channel: true, artworkId: true },
+  });
+  if (!purchase) return;
+
+  const mode = await getStripeModeForArtwork(purchase.artworkId);
+  const intent = await getStripeClient(mode).paymentIntents.retrieve(paymentIntentId);
+  if (intent.status !== "succeeded" || intent.metadata?.purchaseId !== purchaseId) return;
+
+  if (purchase.channel !== "GALLERY") {
+    await handleFirstPaymentSucceeded(purchaseId, intent.id);
+    return;
+  }
+
+  const instalments = parseInt(intent.metadata?.instalments || "", 10);
+  await recordGalleryStripePayment({
+    purchaseId,
+    paymentIntentId: intent.id,
+    amountReceivedMinor: intent.amount_received,
+    currency: intent.currency,
+    customerId: typeof intent.customer === "string" ? intent.customer : intent.customer?.id ?? null,
+    paymentMethodId:
+      typeof intent.payment_method === "string" ? intent.payment_method : intent.payment_method?.id ?? null,
+    instalments: Number.isFinite(instalments) ? instalments : null,
+  });
+}
+
+// A consigned sale paid through Stripe — a payment link or Take Card —
+// the automatic counterpart to recordGalleryPayment.
 //
 // Records the amount Stripe actually received as its own PAID Payment
 // (so it can sit alongside any partial payments already recorded). If
-// the link was the instalment kind (`instalments` in the PaymentIntent's
-// metadata — see createGalleryPaymentLink), this was instalment 1: the
-// buyer's saved card is then scheduled for the remaining instalments of
-// the balance as it stood when the link was made (links are retired
-// whenever the balance changes, so that is the balance just before this
-// payment). Both links are retired either way, so neither can be paid
-// again, and the sale completes if nothing is left owing.
+// it was the instalment kind (`instalments` in the PaymentIntent's
+// metadata), this was instalment 1: the buyer's saved card is then
+// scheduled for the remaining instalments of the balance as it stood
+// when the link/card payment was set up (links are retired whenever the
+// balance changes, so that is the balance just before this payment).
+// Both links are retired either way, so neither can be paid again, and
+// the sale completes if nothing is left owing.
 //
-// Idempotent: a redelivered webhook for the same PaymentIntent is ignored.
-export async function handleGalleryPaymentLinkPaid(payment: {
+// Idempotent: a repeat for the same PaymentIntent is ignored.
+async function recordGalleryStripePayment(payment: {
   purchaseId: string;
   paymentIntentId: string;
   amountReceivedMinor: number;
