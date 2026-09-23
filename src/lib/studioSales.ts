@@ -14,10 +14,11 @@ import { getStripeClient } from "@/lib/stripe";
 import { getPrimarySite } from "@/lib/studioSettings";
 import type { StudioPaymentDetails } from "@/lib/studioShared";
 
-// The Studio app's sales. Each one runs the same routine as the admin
-// Catalogue's Sold panel, so a sale behaves identically however it was
-// started — and raises an alert so it shows on the Alerts list. Each
-// alert remembers its sale, so the Inbox opens it like the Sales page.
+// The Studio app's sales — the only place a direct sale (payment link,
+// card, or record sale) is started (the Artwork Catalogue's own sale
+// panel was removed 2026-09-23). Each raises an alert so it shows on the
+// Alerts list, and each alert remembers its sale, so the Inbox opens it
+// like the Sales page.
 //
 // Only that artist's own artworks can be sold; the routines themselves
 // refuse an artwork that already has a sale.

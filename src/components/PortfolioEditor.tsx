@@ -55,7 +55,6 @@ export default function PortfolioEditor({
   pageTitle,
   initialGroups,
   settings,
-  siteDefaultCurrency = "GBP",
 }: {
   siteId: string;
   artistId: string;
@@ -67,7 +66,6 @@ export default function PortfolioEditor({
   pageTitle: string;
   initialGroups: EditorGroup[];
   settings: ArtworkSettings;
-  siteDefaultCurrency?: string;
 }) {
   const [groups, setGroups] = useState<EditorGroup[]>(initialGroups);
   const [activeGroupId, setActiveGroupId] = useState<string | null>(initialGroups[0]?.id ?? null);
@@ -83,7 +81,7 @@ export default function PortfolioEditor({
   const [isDeleting, setIsDeleting] = useState(false);
   const [titleSaved, setTitleSaved] = useState(false);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  // Full edit mode — the heavy Catalogue/Presentation/Payment panel,
+  // Full edit mode — the heavy Catalogue/Presentation panel,
   // opened explicitly via "Edit artwork details" rather than shown by
   // default. The default view is the plain read-only preview (matching
   // what the reference sites' visitors actually see), reusing the tile
@@ -407,7 +405,6 @@ export default function PortfolioEditor({
                   artistId={artistId}
                   artwork={editingArtwork}
                   settings={settings}
-                  siteDefaultCurrency={siteDefaultCurrency}
                   onClose={closeFullEdit}
                 />
               )}
