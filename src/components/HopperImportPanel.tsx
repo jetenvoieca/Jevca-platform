@@ -8,6 +8,7 @@ import {
   type NormalizedHopperImportRow,
 } from "@/lib/actions/hopperImport";
 import { withTimeout } from "@/lib/importHelpers";
+import { useBackdropClose } from "@/lib/useBackdropClose";
 
 type Failure = { row: NormalizedHopperImportRow; error: string };
 
@@ -30,6 +31,11 @@ export default function HopperImportPanel({
   const [runTotal, setRunTotal] = useState(0);
   const [failures, setFailures] = useState<Failure[]>([]);
   const [finished, setFinished] = useState(false);
+  // A backdrop click closes it, except while an import is running —
+  // the same rule as the Close button, which is hidden then.
+  const backdrop = useBackdropClose(() => {
+    if (!importing) onClose();
+  });
   const router = useRouter();
 
   const handleFile = async (file: File) => {
@@ -116,7 +122,7 @@ export default function HopperImportPanel({
   const untitled = rows?.filter((r) => !r.title).length ?? 0;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...backdrop}>
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-start justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">Import into Hopper from CSV</h2>

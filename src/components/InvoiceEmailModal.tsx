@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { getInvoiceEmailDraft, sendInvoiceEmail } from "@/lib/actions/invoiceEmail";
+import { useBackdropClose } from "@/lib/useBackdropClose";
 
 type Tab = "invoice" | "email";
 
@@ -47,6 +48,7 @@ export default function InvoiceEmailModal({
   onClose: () => void;
   onSent?: () => void;
 }) {
+  const backdrop = useBackdropClose(onClose);
   const [tab, setTab] = useState<Tab>("invoice");
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [draftError, setDraftError] = useState<string | null>(null);
@@ -91,7 +93,7 @@ export default function InvoiceEmailModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...backdrop}>
       <div className="flex max-h-[85vh] w-full max-w-2xl flex-col overflow-hidden rounded-lg bg-white shadow-xl">
         <div className="flex items-center justify-between border-b border-neutral-200 px-5 py-3">
           <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">

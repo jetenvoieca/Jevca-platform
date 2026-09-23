@@ -6,6 +6,7 @@ import {
   importCustomerRow,
   type NormalizedCustomerRow,
 } from "@/lib/actions/customerImport";
+import { useBackdropClose } from "@/lib/useBackdropClose";
 
 export default function CustomerImportPanel({
   artistId,
@@ -27,6 +28,11 @@ export default function CustomerImportPanel({
   const [merged, setMerged] = useState(0);
   const [skipped, setSkipped] = useState(0);
   const [finished, setFinished] = useState(false);
+  // A backdrop click closes it, except while an import is running —
+  // the same rule as the Close button, which is hidden then.
+  const backdrop = useBackdropClose(() => {
+    if (!importing) onClose();
+  });
 
   const handleFile = async (file: File) => {
     setFileName(file.name);
@@ -70,7 +76,7 @@ export default function CustomerImportPanel({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...backdrop}>
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-start justify-between">
           <h2 className="text-lg font-semibold text-neutral-900">Import Customers from CSV</h2>
