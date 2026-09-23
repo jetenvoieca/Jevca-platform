@@ -124,6 +124,9 @@ export default function GalleriesView({
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [selectedWorkDetail, setSelectedWorkDetail] = useState<ArtworkDetail | null>(null);
   const [workLoading, setWorkLoading] = useState(false);
+  // Which of the work's sale and its framing/delivery charges has its
+  // panel open (null = the summary) — see GallerySaleCard.
+  const [focusedSaleId, setFocusedSaleId] = useState<string | null>(null);
   const [workPending, startWorkTransition] = useTransition();
   const [saleError, setSaleError] = useState<string | null>(null);
   const [saleTotalAmount, setSaleTotalAmount] = useState("");
@@ -189,9 +192,13 @@ export default function GalleriesView({
     getGalleryDetail(customerId).then((detail) => setSelectedDetail(detail));
   };
 
-  const openWork = (workId: string) => {
+  // `purchaseId` (optional) — the sale a Sales-tab row was clicked for;
+  // if it's a framing/delivery charge, its own panel opens straight away
+  // rather than the summary (see GallerySaleCard).
+  const openWork = (workId: string, purchaseId?: string) => {
     setSelectedWorkId(workId);
     setSelectedWorkDetail(null);
+    setFocusedSaleId(null);
     setWorkLoading(true);
     setSaleError(null);
     setSaleTotalAmount("");
@@ -211,6 +218,10 @@ export default function GalleriesView({
     setSaleDate(new Date().toISOString().slice(0, 10));
     getArtworkDetailForClient(workId).then((detail) => {
       setSelectedWorkDetail(detail);
+      const openedCharge = [detail?.activePurchase, ...(detail?.purchaseHistory ?? [])].some((p) =>
+        p?.charges.some((c) => c.id === purchaseId)
+      );
+      if (openedCharge) setFocusedSaleId(purchaseId!);
       // Sale price defaults to the artwork's own listed price
       // (2026-09-03) — still fully editable before "Record Sale" is
       // pressed, this just saves retyping a figure that's almost always
@@ -674,10 +685,11 @@ export default function GalleriesView({
                           // Clicking a row opens that artwork's detail
                           // modal — same as clicking its thumbnail in
                           // the Consigned Works grid, just reachable
-                          // from this table too.
+                          // from this table too (a charge's row opens
+                          // on that charge).
                           <tr
                             key={p.id}
-                            onClick={() => openWork(p.artworkId)}
+                            onClick={() => openWork(p.artworkId, p.id)}
                             className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50"
                           >
                             <td className="px-3 py-2">
@@ -981,6 +993,7 @@ export default function GalleriesView({
                     siteId={siteId}
                     onChanged={refreshAfterSaleChange}
                     onClose={closeWork}
+                    onTitleClick={() => setFocusedSaleId(null)}
                   />
                 </div>
 
@@ -992,6 +1005,8 @@ export default function GalleriesView({
                         siteId={siteId}
                         paymentMethods={paymentMethods}
                         onChanged={refreshAfterSaleChange}
+                        focusedId={focusedSaleId}
+                        onFocusChange={setFocusedSaleId}
                       />
                     ) : (
                       <p className="text-sm text-neutral-500">
@@ -1005,6 +1020,8 @@ export default function GalleriesView({
                       siteId={siteId}
                       paymentMethods={paymentMethods}
                       onChanged={refreshAfterSaleChange}
+                      focusedId={focusedSaleId}
+                      onFocusChange={setFocusedSaleId}
                     />
                   ) : (
                     <div className="space-y-3">

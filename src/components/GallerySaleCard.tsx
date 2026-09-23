@@ -160,27 +160,144 @@ export function SaleStatusBadge({
   );
 }
 
-// The single shared view of one GALLERY-channel sale (ACTIVE or
-// COMPLETED), used everywhere such a sale can be opened. Top to bottom:
-// Sales details (price, extras, paid / Net Due), Sales status (payments
-// and sends), a sliding input panel, the Action panel, Cancel/Delete,
-// and then any framing/delivery charge sales arranged after payment —
-// each shown with this same card (a charge has no Arrange buttons and
-// no certificate). ABANDONED sales never come here — callers show
-// SaleDetailCard for those.
-export default function GallerySaleCard({
-  purchase,
-  siteId,
-  paymentMethods,
-  onChanged,
-}: {
+// "Delivery charge · Bils Boat" — names a charge sale in the summary
+// list and above its own panel.
+function ChargeHeading({ charge }: { charge: PurchaseDetail }) {
+  return (
+    <p className="mb-3 text-sm font-medium text-neutral-900">
+      {CHARGE_LABEL[charge.chargeKind!]}
+      {(charge.framer || charge.courier) && (
+        <span className="font-normal text-neutral-500"> · {charge.framer || charge.courier}</span>
+      )}
+    </p>
+  );
+}
+
+// A sale's figures and history: price, framing/delivery, paid and Net
+// Due, then each payment and what has been sent. The top of every sale
+// panel, and each line of the summary list.
+function SaleFigures({ purchase }: { purchase: PurchaseDetail }) {
+  const isPaid = purchase.status === "COMPLETED";
+  const amounts = saleBreakdown(purchase);
+  const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
+  const nextDueInstalment = purchase.payments.find((p) => p.status === "DUE") ?? null;
+
+  return (
+    <>
+      <div className="flex items-end justify-between gap-4 text-sm font-medium text-neutral-900">
+        <div className="space-y-0.5">
+          <p>Sale price {money(amounts.salePrice)}</p>
+          {amounts.framing > 0 && <p>Framing {money(amounts.framing)}</p>}
+          {amounts.delivery > 0 && <p>Delivery {money(amounts.delivery)}</p>}
+          {amounts.paid > 0 && <p>Paid {money(amounts.paid)}</p>}
+        </div>
+        <p>Net Due {money(isPaid ? 0 : amounts.balance)}</p>
+      </div>
+
+      <div className="mt-3 min-h-[1.25rem] space-y-0.5 text-xs text-neutral-500">
+        {purchase.payments
+          .filter((p) => p.status === "PAID")
+          .map((p) => (
+            <p key={p.id}>
+              Paid {formatMoney(p.amount, p.currency)}
+              {p.paidDate ? ` ${formatDate(p.paidDate)}` : ""}
+              {p.method ? ` · ${p.method}` : ""}
+            </p>
+          ))}
+        {purchase.type === "INSTALMENTS" && !isPaid && purchase.instalmentCount && nextDueInstalment && (
+          <p>
+            Paying by {purchase.instalmentCount} instalments of{" "}
+            {formatMoney(nextDueInstalment.amount, nextDueInstalment.currency)}
+          </p>
+        )}
+        {purchase.invoiceEmailedAt && <p>Invoice sent {formatDate(purchase.invoiceEmailedAt)}</p>}
+        {purchase.receiptEmailedAt && <p>Receipt sent {formatDate(purchase.receiptEmailedAt)}</p>}
+        {purchase.certificateEmailedAt && (
+          <p>Certificate of authenticity sent {formatDate(purchase.certificateEmailedAt)}</p>
+        )}
+      </div>
+    </>
+  );
+}
+
+type CardProps = {
   purchase: PurchaseDetail;
   siteId: string;
   // Offered in the Record Payment Method dropdown (Settings-editable).
   paymentMethods: string[];
   // Called after any action that changes this sale; the caller re-fetches.
   onChanged: () => void;
+};
+
+// The single shared view of one GALLERY-channel sale (ACTIVE or
+// COMPLETED), used everywhere such a sale can be opened. ABANDONED
+// sales never come here — callers show SaleDetailCard for those.
+//
+// A sale with no framing/delivery charge sales shows its panel
+// straight away. Once it has any (2026-09-23 mockup), it first shows a
+// summary list — the sale, then each charge — and clicking a line opens
+// just that one's panel. Which one is open (`focusedId`, null for the
+// summary) is held by the caller, so clicking the sale modal's header
+// can return to the summary (see SaleHeader's onTitleClick). A focus
+// that no longer exists (e.g. a charge just deleted) shows the summary.
+// A caller with no header to click back from can leave both out; the
+// card then keeps the focus itself.
+export default function GallerySaleCard({
+  focusedId,
+  onFocusChange,
+  ...props
+}: CardProps & {
+  focusedId?: string | null;
+  onFocusChange?: (id: string | null) => void;
 }) {
+  const { purchase } = props;
+  const [ownFocus, setOwnFocus] = useState<string | null>(null);
+  const focus = onFocusChange ? (focusedId ?? null) : ownFocus;
+  const setFocus = onFocusChange ?? setOwnFocus;
+  const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
+
+  if (liveCharges.length === 0) return <SalePanel {...props} />;
+
+  if (focus === purchase.id) return <SalePanel key={purchase.id} {...props} />;
+
+  const focusedCharge = liveCharges.find((c) => c.id === focus);
+  if (focusedCharge) {
+    return (
+      <div>
+        <ChargeHeading charge={focusedCharge} />
+        <SalePanel key={focusedCharge.id} {...props} purchase={focusedCharge} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="-mx-2 divide-y divide-neutral-200">
+      {[purchase, ...liveCharges].map((p) => (
+        <div
+          key={p.id}
+          role="button"
+          tabIndex={0}
+          onClick={() => setFocus(p.id)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              setFocus(p.id);
+            }
+          }}
+          className="cursor-pointer rounded-md px-2 py-4 first:pt-1 hover:bg-neutral-50"
+        >
+          {p.chargeKind && <ChargeHeading charge={p} />}
+          <SaleFigures purchase={p} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// One sale's full panel: its figures, a sliding input panel, the Action
+// panel, and Cancel/Delete. A framing/delivery charge sale has no
+// Arrange buttons and no certificate.
+function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -229,12 +346,8 @@ export default function GallerySaleCard({
   const isCharge = purchase.chargeKind !== null;
   const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
   const onInstalmentPlan = purchase.type === "INSTALMENTS";
-  const amounts = saleBreakdown(purchase);
-  const balance = isPaid ? 0 : amounts.balance;
+  const balance = isPaid ? 0 : saleBreakdown(purchase).balance;
   const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
-
-  const paidPayments = purchase.payments.filter((p) => p.status === "PAID");
-  const nextDueInstalment = purchase.payments.find((p) => p.status === "DUE") ?? null;
 
   const count = parseInt(instalmentCount, 10);
   const countValid = Number.isInteger(count) && count >= 2 && count <= 36;
@@ -465,38 +578,7 @@ export default function GallerySaleCard({
 
   return (
     <div>
-      {/* ---- Sales details ---- */}
-      <div className="flex items-end justify-between gap-4 text-sm font-medium text-neutral-900">
-        <div className="space-y-0.5">
-          <p>Sale price {money(amounts.salePrice)}</p>
-          {amounts.framing > 0 && <p>Framing {money(amounts.framing)}</p>}
-          {amounts.delivery > 0 && <p>Delivery {money(amounts.delivery)}</p>}
-          {amounts.paid > 0 && <p>Paid {money(amounts.paid)}</p>}
-        </div>
-        <p>Net Due {money(balance)}</p>
-      </div>
-
-      {/* ---- Sales status ---- */}
-      <div className="mt-3 min-h-[1.25rem] space-y-0.5 text-xs text-neutral-500">
-        {paidPayments.map((p) => (
-          <p key={p.id}>
-            Paid {formatMoney(p.amount, p.currency)}
-            {p.paidDate ? ` ${formatDate(p.paidDate)}` : ""}
-            {p.method ? ` · ${p.method}` : ""}
-          </p>
-        ))}
-        {onInstalmentPlan && !isPaid && purchase.instalmentCount && nextDueInstalment && (
-          <p>
-            Paying by {purchase.instalmentCount} instalments of{" "}
-            {formatMoney(nextDueInstalment.amount, nextDueInstalment.currency)}
-          </p>
-        )}
-        {purchase.invoiceEmailedAt && <p>Invoice sent {formatDate(purchase.invoiceEmailedAt)}</p>}
-        {purchase.receiptEmailedAt && <p>Receipt sent {formatDate(purchase.receiptEmailedAt)}</p>}
-        {purchase.certificateEmailedAt && (
-          <p>Certificate of authenticity sent {formatDate(purchase.certificateEmailedAt)}</p>
-        )}
-      </div>
+      <SaleFigures purchase={purchase} />
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
@@ -730,24 +812,6 @@ export default function GallerySaleCard({
           {isCharge ? "Delete Charge" : "Delete Sale"}
         </button>
       </div>
-
-      {/* ---- Framing / delivery charges arranged after payment ---- */}
-      {liveCharges.map((charge) => (
-        <div key={charge.id} className="mt-8 border-t border-neutral-200 pt-5">
-          <p className="mb-3 text-sm font-medium text-neutral-900">
-            {CHARGE_LABEL[charge.chargeKind!]}
-            {(charge.framer || charge.courier) && (
-              <span className="font-normal text-neutral-500"> · {charge.framer || charge.courier}</span>
-            )}
-          </p>
-          <GallerySaleCard
-            purchase={charge}
-            siteId={siteId}
-            paymentMethods={paymentMethods}
-            onChanged={onChanged}
-          />
-        </div>
-      ))}
 
       <ConfirmDialog
         open={pendingConfirm !== null}

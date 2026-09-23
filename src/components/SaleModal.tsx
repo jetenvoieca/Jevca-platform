@@ -49,6 +49,9 @@ export default function SaleModal({
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
   const [saleSources, setSaleSources] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
+  // Which of the sale and its framing/delivery charges has its panel
+  // open (null = the summary) — see GallerySaleCard.
+  const [focusedSaleId, setFocusedSaleId] = useState<string | null>(null);
 
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
@@ -67,6 +70,11 @@ export default function SaleModal({
     ]).then(([detail, settings]) => {
       if (cancelled) return;
       setSelectedDetail(detail);
+      // A charge opened from a list goes straight to its own panel.
+      const openedCharge = [detail?.activePurchase, ...(detail?.purchaseHistory ?? [])].some((p) =>
+        p?.charges.some((c) => c.id === target.purchaseId)
+      );
+      setFocusedSaleId(openedCharge ? target.purchaseId : null);
       setPaymentMethods(settings.paymentMethods);
       setSaleSources(settings.saleSources);
       setLoading(false);
@@ -74,7 +82,7 @@ export default function SaleModal({
     return () => {
       cancelled = true;
     };
-  }, [target.artworkId, target.artistId]);
+  }, [target.artworkId, target.artistId, target.purchaseId]);
 
   // Only re-fetches the artwork detail (what actually changes after an
   // action) — Settings-editable lists like paymentMethods don't need
@@ -169,6 +177,7 @@ export default function SaleModal({
                   siteId={target.siteId ?? ""}
                   onChanged={refreshSelected}
                   onClose={onClose}
+                  onTitleClick={() => setFocusedSaleId(null)}
                 />
               </div>
 
@@ -185,6 +194,8 @@ export default function SaleModal({
                     siteId={target.siteId}
                     paymentMethods={paymentMethods}
                     onChanged={refreshSelected}
+                    focusedId={focusedSaleId}
+                    onFocusChange={setFocusedSaleId}
                   />
                 ) : selectedPurchase.status === "ACTIVE" ? (
                   <PurchasePanel
