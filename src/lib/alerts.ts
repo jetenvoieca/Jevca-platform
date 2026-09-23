@@ -253,7 +253,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
               chargeKind: true,
               artwork: {
                 select: {
-                  presentationTitle: true,
+                  catalogueName: true,
                   artistId: true,
                   artist: {
                     select: {
@@ -293,7 +293,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
           invoiceEmailedAt: true,
           artwork: {
             select: {
-              presentationTitle: true,
+              catalogueName: true,
               artistId: true,
               artist: {
                 select: {
@@ -386,7 +386,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       id: `unpaid-invoice-${p.id}`,
       type: "SALE_INVOICE_UNPAID",
       severity: daysOverdue > 30 ? "CRITICAL" : "WARNING",
-      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(p.purchase.artwork.presentationTitle, p.purchase.chargeKind)}" — ${p.currency} ${parseFloat(p.amount.toString()).toFixed(2)}, ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue${failedNote}.`,
+      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(p.purchase.artwork.catalogueName, p.purchase.chargeKind)}" — ${p.currency} ${parseFloat(p.amount.toString()).toFixed(2)}, ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue${failedNote}.`,
       artistId: p.purchase.artwork.artistId,
       artistName: artist.name,
       siteId,
@@ -411,7 +411,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       id: `invoice-overdue-${p.id}`,
       type: "SALE_INVOICE_OVERDUE",
       severity: days - INVOICE_OVERDUE_DAYS > 30 ? "CRITICAL" : "WARNING",
-      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(p.artwork.presentationTitle, p.chargeKind)}" — ${p.currency} ${owed.toFixed(2)}, sent ${formatDate(sentAt)} (${days} days ago) and still unpaid.`,
+      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(p.artwork.catalogueName, p.chargeKind)}" — ${p.currency} ${owed.toFixed(2)}, sent ${formatDate(sentAt)} (${days} days ago) and still unpaid.`,
       artistId: p.artwork.artistId,
       artistName: artist.name,
       siteId,
