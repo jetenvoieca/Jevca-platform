@@ -30,7 +30,7 @@ export type SaleModalTarget = {
 // and behaves the same wherever it's opened.
 //
 // Loads its own data (the artwork's detail plus the artist's Settings-
-// editable payment methods/sale sources) when it opens, and renders its
+// editable payment methods) when it opens, and renders its
 // own full-screen overlay, so the caller only decides when to show it.
 // `onChanged` (optional) fires after anything that changes the sale, so
 // the caller can refresh whatever else depends on it.
@@ -49,7 +49,6 @@ export default function SaleModal({
 
   const [selectedDetail, setSelectedDetail] = useState<ArtworkDetail | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
-  const [saleSources, setSaleSources] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   // Which of the sale and its framing/delivery charges has its panel
   // open (null = the summary) — see GallerySaleCard.
@@ -78,7 +77,6 @@ export default function SaleModal({
       );
       setFocusedSaleId(openedCharge ? target.purchaseId : null);
       setPaymentMethods(settings.paymentMethods);
-      setSaleSources(settings.saleSources);
       setLoading(false);
     });
     return () => {
@@ -194,14 +192,11 @@ export default function SaleModal({
                     onFocusChange={setFocusedSaleId}
                   />
                 ) : selectedPurchase.status === "ACTIVE" ? (
+                  // An unpaid direct sale from the Studio app.
                   <PurchasePanel
-                    artworkId={target.artworkId}
-                    artistId={target.artistId}
                     siteId={target.siteId}
-                    terms={selectedDetail.saleTerms}
-                    activePurchase={selectedDetail.activePurchase}
+                    activePurchase={selectedPurchase}
                     history={selectedDetail.purchaseHistory}
-                    saleSources={saleSources}
                     paymentMethods={paymentMethods}
                     onChanged={refreshSelected}
                   />

@@ -79,9 +79,7 @@ export default function ArtworkCatalogueFields({
   onAutosave,
   onTypeOrSizeChange,
   children,
-  afterLocation,
   availabilityOverride,
-  hideTail,
   onAddType,
   onAddGroup,
   onAddMedium,
@@ -102,26 +100,11 @@ export default function ArtworkCatalogueFields({
   // live Reference price preview (Catalogue tab only) can recompute it.
   onTypeOrSizeChange?: (type: string, size: string) => void;
   children?: React.ReactNode;
-  // Full-width (col-span-2) slot rendered right after Location, before
-  // Date (2026-09-10, direct request) — the Catalogue tab's own sale
-  // panel opens exactly here, regardless of where its trigger
-  // (availabilityOverride, below) actually sits further down the form.
-  // Omitted entirely by any caller that doesn't pass it (Hopper).
-  afterLocation?: React.ReactNode;
   // Replaces the default Availability <select> (2026-09-10) — the
-  // Catalogue tab uses this to swap in its own Available/SOLD toggle.
-  // Shown for every Type, editions included. Hopper leaves this unset
-  // and keeps the old per-Type default behaviour, below.
+  // Catalogue tab swaps in its own Available/SOLD control, shown for
+  // every Type, editions included; the Hopper's quick-add passes a
+  // hidden AVAILABLE, since a new artwork always starts available.
   availabilityOverride?: React.ReactNode;
-  // When true (2026-09-10, direct request — match the sale-panel
-  // mockup, which shows nothing below its Get payment link/Enter card
-  // now/Record sale row), Date/children (Reference+Offered price)/
-  // Availability/Studio notes stop rendering visibly at all — their
-  // current values are preserved via hidden inputs instead, so nothing
-  // is silently lost the next time any other field on the form
-  // autosaves. Only ever passed true by the Catalogue tab while its
-  // sale panel is open; Hopper never sets this.
-  hideTail?: boolean;
   // Inline "add new preset" support (2026-09-11, direct request — "all
   // drop-downs add ability to add to lists"). Each is a small async
   // action that actually persists the new value to the artist's own
@@ -344,66 +327,52 @@ export default function ArtworkCatalogueFields({
           {onAddLocation && <option value={ADD_NEW}>+ Add new…</option>}
         </select>
       </div>
-      {afterLocation && <div className="col-span-2">{afterLocation}</div>}
-      {hideTail ? (
-        <input type="hidden" name="date" value={values.date} />
-      ) : (
-        // Reverted to a plain single-column cell (2026-09-12, direct
-        // request — "date field too long, shorten and reposition") —
-        // sits right next to Location in the same row now, at the same
-        // width as every other field, rather than spanning the full row
-        // width on its own.
-        <div>
-          <label className={labelCls}>Date</label>
-          <input
-            type="text"
-            name="date"
-            defaultValue={values.date}
-            placeholder="e.g. June 2025"
-            onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-            className={inputCls}
-          />
-        </div>
-      )}
-      {!hideTail && children}
-      {hideTail ? (
-        <input type="hidden" name="availability" value={values.availability} />
-      ) : (
-        (availabilityOverride ??
-          (!isEditionType ? (
-            <div>
-              <label className={labelCls}>Availability</label>
-              <select
-                name="availability"
-                defaultValue={values.availability}
-                onChange={(e) => onAutosave?.(e.currentTarget.form!)}
-                className={inputCls}
-              >
-                <option value="AVAILABLE">Available</option>
-                <option value="RESERVED">Reserved</option>
-                <option value="SOLD">Sold</option>
-              </select>
-            </div>
-          ) : (
-            <input type="hidden" name="availability" value={values.availability} />
-          )))
-      )}
-      {hideTail ? (
-        <input type="hidden" name="studioNotes" value={values.studioNotes} />
-      ) : (
-        <div className="col-span-2">
-          <label className={labelCls}>
-            Studio notes <span className="font-normal text-neutral-400">(private)</span>
-          </label>
-          <textarea
-            name="studioNotes"
-            defaultValue={values.studioNotes}
-            onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-            rows={3}
-            className={inputCls}
-          />
-        </div>
-      )}
+      {/* A plain single-column cell (2026-09-12, direct request — "date
+          field too long, shorten and reposition") — sits right next to
+          Location in the same row, at the same width as every other
+          field. */}
+      <div>
+        <label className={labelCls}>Date</label>
+        <input
+          type="text"
+          name="date"
+          defaultValue={values.date}
+          placeholder="e.g. June 2025"
+          onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
+          className={inputCls}
+        />
+      </div>
+      {children}
+      {availabilityOverride ??
+        (!isEditionType ? (
+          <div>
+            <label className={labelCls}>Availability</label>
+            <select
+              name="availability"
+              defaultValue={values.availability}
+              onChange={(e) => onAutosave?.(e.currentTarget.form!)}
+              className={inputCls}
+            >
+              <option value="AVAILABLE">Available</option>
+              <option value="RESERVED">Reserved</option>
+              <option value="SOLD">Sold</option>
+            </select>
+          </div>
+        ) : (
+          <input type="hidden" name="availability" value={values.availability} />
+        ))}
+      <div className="col-span-2">
+        <label className={labelCls}>
+          Studio notes <span className="font-normal text-neutral-400">(private)</span>
+        </label>
+        <textarea
+          name="studioNotes"
+          defaultValue={values.studioNotes}
+          onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
+          rows={3}
+          className={inputCls}
+        />
+      </div>
     </>
   );
 }

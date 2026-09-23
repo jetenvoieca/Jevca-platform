@@ -3,25 +3,19 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
-  startPurchase,
   deleteGallerySale,
   forceDeleteCompletedSale,
   updatePurchaseRelease,
   abandonPurchase,
-  createPaymentLink,
   createCardEntryIntent,
   markSalePaid,
-  type SaleTermsDetail,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
 import { formatDate } from "@/lib/formatDate";
 import StripeCardForm from "@/components/StripeCardForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import CustomerPicker from "@/components/CustomerPicker";
-import GallerySaleCard from "@/components/GallerySaleCard";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 import InvoiceEmailModal from "@/components/InvoiceEmailModal";
-import type { CustomerSummary } from "@/lib/actions/customers";
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
@@ -35,30 +29,27 @@ function downloadInvoice(purchaseId: string) {
   window.open(`/api/invoice/${purchaseId}`, "_blank");
 }
 
+// The panel for an unpaid direct Stripe sale — one started from the
+// Studio app by payment link or card (studioSales.ts) — opened from the
+// Sales page's sale modal (SaleModal). Every other sale opens in
+// GallerySaleCard instead. Shows the sale and its payments, lets the
+// artist send the invoice, take the card, or record it as paid outside
+// Stripe, edit an instalment sale's release message, and cancel or
+// delete it; below, the artwork's past sale attempts.
+//
+// Due to be replaced by GallerySaleCard once Studio sales move onto it
+// (see the handover notes, 2026-09-23).
 export default function PurchasePanel({
-  artworkId,
-  artistId,
   siteId,
-  terms,
   activePurchase,
   history,
-  saleSources = [],
-  // Offered in the Method dropdown when a sale is marked as paid — both
-  // GallerySaleCard's "Mark as paid" for a GALLERY-channel activePurchase
-  // below (2026-09-03) and this panel's own "Record sale" form for an
-  // unpaid ordinary sale (2026-09-21). Same Settings-editable list as
-  // everywhere else it's used. Defaults to an empty array so this stays
-  // optional for any caller that never needs it.
+  // Offered in the Method dropdown of the "Record sale" form below.
   paymentMethods = [],
   onChanged,
 }: {
-  artworkId: string;
-  artistId: string;
   siteId: string;
-  terms: SaleTermsDetail | null;
-  activePurchase: PurchaseDetail | null;
+  activePurchase: PurchaseDetail;
   history: PurchaseDetail[];
-  saleSources?: string[];
   paymentMethods?: string[];
   onChanged?: () => void;
 }) {
@@ -66,7 +57,6 @@ export default function PurchasePanel({
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [linkUrl, setLinkUrl] = useState<string | null>(null);
   // Certificate of Authenticity (2026-09-10, direct request — "add to
   // all sales, completed or not") — a single modal shared between the
   // active purchase's own button and any completed history row's,
@@ -82,61 +72,6 @@ export default function PurchasePanel({
   const [paidMethod, setPaidMethod] = useState("");
   const [cardSecret, setCardSecret] = useState<string | null>(null);
   const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
-  const [selectedOption, setSelectedOption] = useState<"full" | "instalments">("full");
-  // Controlled rather than plain defaultValue inputs, so picking an
-  // existing customer from the search box can actually fill them in
-  // (2026-08-13).
-  const [stripeBuyerName, setStripeBuyerName] = useState("");
-  const [stripeBuyerEmail, setStripeBuyerEmail] = useState("");
-  // Set only when a CustomerPicker result is actually clicked, submitted
-  // as a hidden field so the server can attach the sale to that exact
-  // record instead of re-matching by email (2026-08-16 fix — a picked
-  // customer with no email on file was silently getting a second, blank
-  // duplicate created, since email-matching had nothing to match
-  // against). Cleared the moment the name or email is hand-edited
-  // afterward, so a stale id can never get attached to text that no
-  // longer describes the customer it came from — falls back to the
-  // existing email-match-or-create behaviour in that case, unchanged.
-  const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
-  // The Purchase started this session, if any (2026-09-20) — needed so
-  // the "Start a sale" form's own StripeCardForm (below) has a
-  // purchaseId to record its payment confirmation against directly,
-  // same as the already-active branch further down already can via
-  // activePurchase.id.
-  const [startedPurchaseId, setStartedPurchaseId] = useState<string | null>(null);
-
-  // The two possible sale options — Full or Instalments (2026-08-28,
-  // simplified from a four-way Framed/Unframed × Full/Instalments
-  // selector once Framed pricing was removed: each Catalogue entry is a
-  // single listing with a single price now).
-  type SaleOption = {
-    key: "full" | "instalments";
-    type: "FULL" | "INSTALMENTS";
-    label: string;
-    amount: string;
-    perInstalment?: string;
-  };
-  const instalmentCount = terms?.instalmentCount ?? 0;
-  const saleOptions: SaleOption[] = [];
-  if (terms) {
-    saleOptions.push({
-      key: "full",
-      type: "FULL",
-      label: "Full payment",
-      amount: terms.totalAmount,
-    });
-    if (instalmentCount > 1) {
-      saleOptions.push({
-        key: "instalments",
-        type: "INSTALMENTS",
-        label: `${instalmentCount} instalments`,
-        amount: terms.totalAmount,
-        perInstalment: (parseFloat(terms.totalAmount) / instalmentCount).toFixed(2),
-      });
-    }
-  }
-  const activeOption =
-    saleOptions.find((o) => o.key === selectedOption) ?? saleOptions[0] ?? null;
   // Drives ConfirmDialog for every sale-related confirmation on this
   // panel (2026-08-13, replacing native confirm() — see ConfirmDialog
   // for why).
@@ -149,7 +84,6 @@ export default function PurchasePanel({
   } | null>(null);
 
   const handleSaveRelease = (formData: FormData) => {
-    if (!activePurchase) return;
     startTransition(async () => {
       await updatePurchaseRelease(activePurchase.id, siteId, formData);
       setSaved(true);
@@ -159,55 +93,7 @@ export default function PurchasePanel({
     });
   };
 
-  // Combines starting the sale with immediately getting a payment
-  // link/opening card entry, in one click (2026-08-15) — replaces the
-  // generic "Start sale" button, per direct feedback that a separate
-  // start step followed by a second card for these two actions was an
-  // unnecessary extra step. This is now the only way the Stripe tab
-  // starts a sale.
-  const handleStartAndGetLink = (formData: FormData) => {
-    setError(null);
-    setLinkUrl(null);
-    startTransition(async () => {
-      const res = await startPurchase(artworkId, siteId, formData);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setStartedPurchaseId(res.purchaseId);
-      const linkResult = await createPaymentLink(res.purchaseId, siteId, artworkId);
-      if (linkResult.ok) setLinkUrl(linkResult.url);
-      else setError(linkResult.error);
-      if (onChanged) onChanged();
-      else router.refresh();
-    });
-  };
-
-  const handleStartAndEnterCard = (formData: FormData) => {
-    setError(null);
-    setCardSecret(null);
-    setCardPublishableKey(null);
-    startTransition(async () => {
-      const res = await startPurchase(artworkId, siteId, formData);
-      if (!res.ok) {
-        setError(res.error);
-        return;
-      }
-      setStartedPurchaseId(res.purchaseId);
-      const cardResult = await createCardEntryIntent(res.purchaseId, siteId);
-      if (cardResult.ok) {
-        setCardSecret(cardResult.clientSecret);
-        setCardPublishableKey(cardResult.publishableKey);
-      } else {
-        setError(cardResult.error);
-      }
-      if (onChanged) onChanged();
-      else router.refresh();
-    });
-  };
-
   const handleAbandon = () => {
-    if (!activePurchase) return;
     setPendingConfirm({
       title: "Cancel this sale?",
       message: "It'll be kept in the history below, marked as abandoned.",
@@ -226,7 +112,7 @@ export default function PurchasePanel({
     });
   };
 
-  // For a genuinely wrong gallery sale (not just one that fell through) —
+  // For a genuinely wrong sale (not just one that fell through) —
   // deliberately a separate, harder confirmation from "Cancel" above,
   // since this can't be undone. Warns specifically about invoice number
   // gaps, since that's the one consequence that isn't obvious from the
@@ -278,14 +164,10 @@ export default function PurchasePanel({
     });
   };
 
-  // Direct delete for a currently-active, unpaid sale — added 2026-08-13
-  // so a genuinely wrong transaction (mistyped commission, wrong buyer)
-  // doesn't need the extra "cancel first, then delete from history"
-  // round trip. Only reached from the STRIPE-channel branch below —
-  // GALLERY-channel active sales get the same capability from
-  // GallerySaleCard's own Delete Sale button instead.
+  // Direct delete for the unpaid sale — added 2026-08-13 so a genuinely
+  // wrong transaction (wrong buyer, wrong price) doesn't need the extra
+  // "cancel first, then delete from history" round trip.
   const handleDeleteActiveSale = () => {
-    if (!activePurchase) return;
     const message = activePurchase.invoiceNumber
       ? `An invoice (#${activePurchase.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely.`
       : "This removes the sale entirely — it cannot be undone.";
@@ -308,7 +190,6 @@ export default function PurchasePanel({
   };
 
   const handleEnterCard = () => {
-    if (!activePurchase) return;
     setError(null);
     setCardSecret(null);
     setCardPublishableKey(null);
@@ -333,7 +214,6 @@ export default function PurchasePanel({
   };
 
   const handleConfirmRecordSale = () => {
-    if (!activePurchase) return;
     setError(null);
     const fd = new FormData();
     fd.set("paidDate", paidDate);
@@ -350,458 +230,265 @@ export default function PurchasePanel({
     });
   };
 
-  const paidCount = activePurchase?.payments.filter((p) => p.status === "PAID").length ?? 0;
+  const paidCount = activePurchase.payments.filter((p) => p.status === "PAID").length;
   const releaseReached =
-    !!activePurchase?.releaseTriggerCount && paidCount >= activePurchase.releaseTriggerCount;
+    !!activePurchase.releaseTriggerCount && paidCount >= activePurchase.releaseTriggerCount;
 
   return (
     <div className="space-y-6">
-      {!terms && (
-        <p className="text-sm text-neutral-400">
-          Set a price on the Presentation tab before starting a sale.
+      <div className="rounded-md border border-neutral-200 p-4">
+        <div className="mb-3 flex items-baseline justify-between">
+          <h4 className="text-sm font-medium text-neutral-700">
+            {activePurchase.type === "FULL"
+              ? "Full payment"
+              : `${activePurchase.instalmentCount} instalments`}
+            {activePurchase.framed && (
+              <span className="ml-1.5 text-xs font-normal text-neutral-400">(Framed)</span>
+            )}
+            {/* Nothing paid yet (2026-09-21). */}
+            {activePurchase.payments.length === 0 && (
+              <span className="ml-2 text-sm font-medium uppercase tracking-wide text-teal-800">
+                Due
+              </span>
+            )}
+          </h4>
+          <span className="text-sm text-neutral-900">
+            {formatMoney(activePurchase.totalAmount, activePurchase.currency)}
+          </span>
+        </div>
+        <p className="mb-3 text-xs text-neutral-500">
+          {activePurchase.buyerName}
+          {activePurchase.buyerName && activePurchase.buyerEmail ? " · " : ""}
+          {activePurchase.buyerEmail}
+          {activePurchase.source ? ` · ${activePurchase.source}` : ""}
         </p>
-      )}
 
-      {terms && (
-        <div className="rounded-md border border-neutral-200 p-4">
-          {!activePurchase ? (
-            <>
-              {/* "Sold via Gallery" removed 2026-08-31 — gallery sales
-                  are now only ever started from the Gallery's own
-                  Consigned Works panel (GalleriesView/PurchasePanel's
-                  gallery-sale counterpart, startGallerySale), so all the
-                  context for a gallery sale (which gallery, its default
-                  commission, its consigned works) lives in one place.
-                  This tab now has only one option, so the earlier
-                  Stripe/Gallery tab switcher is gone too — nothing left
-                  to switch between. */}
-              <h4 className="mb-1 text-sm font-medium text-neutral-700">Start a sale</h4>
-              <p className="mb-3 text-xs text-neutral-400">
-                Buyer details belong to the sale, not the artwork — nothing here is saved until you
-                start the sale below.
-              </p>
+        {activePurchase.payments.length === 0 ? (
+          <>
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setShowInvoiceModal(true)}
+                disabled={isPending}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Send invoice
+              </button>
+              <button
+                type="button"
+                onClick={handleEnterCard}
+                disabled={isPending}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Enter card now
+              </button>
+              <button
+                type="button"
+                onClick={handleRecordSaleClick}
+                disabled={isPending}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Record sale
+              </button>
+            </div>
 
-              <form onSubmit={(e) => e.preventDefault()} className="space-y-3">
-                <CustomerPicker
-                  artistId={artistId}
-                  onSelect={(c: CustomerSummary) => {
-                    setStripeBuyerName(c.name);
-                    setStripeBuyerEmail(c.email || "");
-                    setStripeCustomerId(c.id);
-                  }}
-                />
-                <input type="hidden" name="customerId" value={stripeCustomerId ?? ""} />
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Buyer name
-                    </label>
-                    <input
-                      type="text"
-                      name="buyerName"
-                      value={stripeBuyerName}
-                      onChange={(e) => {
-                        setStripeBuyerName(e.target.value);
-                        setStripeCustomerId(null);
-                      }}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Buyer email
-                    </label>
-                    <input
-                      type="email"
-                      name="buyerEmail"
-                      required
-                      value={stripeBuyerEmail}
-                      onChange={(e) => {
-                        setStripeBuyerEmail(e.target.value);
-                        setStripeCustomerId(null);
-                      }}
-                      className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                    />
-                  </div>
+            {showRecordForm && (
+              <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-white p-3">
+                <div>
+                  <label className="mb-1 block text-xs text-neutral-500">Date paid</label>
+                  <input
+                    type="date"
+                    value={paidDate}
+                    onChange={(e) => setPaidDate(e.target.value)}
+                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
+                  />
                 </div>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-neutral-700">
-                    Purchase option
-                  </label>
-                  <div className="grid grid-cols-2 gap-3">
-                    {saleOptions.map((o) => (
-                      <button
-                        key={o.key}
-                        type="button"
-                        onClick={() => setSelectedOption(o.key)}
-                        className={`rounded-md border-2 p-3 text-left ${
-                          selectedOption === o.key
-                            ? "border-neutral-900 bg-neutral-50"
-                            : "border-neutral-200 hover:border-neutral-300"
-                        }`}
-                      >
-                        <p className="text-sm font-medium text-neutral-900">{o.label}</p>
-                        <p className="text-sm text-neutral-600">
-                          {formatMoney(o.amount, terms.currency)}
-                          {o.perInstalment && (
-                            <span className="text-neutral-400">
-                              {" "}
-                              ({formatMoney(o.perInstalment, terms.currency)} each)
-                            </span>
-                          )}
-                        </p>
-                      </button>
-                    ))}
-                  </div>
-                  <input type="hidden" name="type" value={activeOption?.type ?? "FULL"} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Sale source
-                  </label>
+                  <label className="mb-1 block text-xs text-neutral-500">Payment type</label>
                   <select
-                    name="source"
-                    defaultValue=""
-                    className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                    value={paidMethod}
+                    onChange={(e) => setPaidMethod(e.target.value)}
+                    className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
                   >
-                    <option value="">— Not set —</option>
-                    {saleSources.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                    <option value="">Choose…</option>
+                    {paymentMethods.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
                       </option>
                     ))}
                   </select>
                 </div>
-                <div className="flex flex-wrap gap-2">
+                <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={(e) =>
-                      handleStartAndGetLink(new FormData(e.currentTarget.form!))
+                    onClick={handleConfirmRecordSale}
+                    disabled={
+                      isPending || !paidDate || (paymentMethods.length > 0 && !paidMethod)
                     }
-                    disabled={isPending}
-                    className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                    className="flex-1 rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-semibold uppercase tracking-wide text-white hover:bg-neutral-700 disabled:opacity-50"
                   >
-                    Get payment link
+                    Paid
                   </button>
                   <button
                     type="button"
-                    onClick={(e) =>
-                      handleStartAndEnterCard(new FormData(e.currentTarget.form!))
-                    }
+                    onClick={() => setShowRecordForm(false)}
                     disabled={isPending}
-                    className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+                    className="rounded-md border border-neutral-300 px-3 py-[5px] text-sm hover:bg-white disabled:opacity-50"
                   >
-                    Enter card now
+                    Cancel
                   </button>
                 </div>
-              </form>
-              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-              {cardSecret && cardPublishableKey && startedPurchaseId && (
-                <div className="mt-3">
-                  <StripeCardForm
-                    clientSecret={cardSecret}
-                    publishableKey={cardPublishableKey}
-                    purchaseId={startedPurchaseId}
-                    onDone={() => {
-                      setCardSecret(null);
-                      setCardPublishableKey(null);
-                      if (onChanged) onChanged();
-                      else router.refresh();
-                    }}
-                  />
-                  <p className="mt-2 text-xs text-neutral-400">
-                    Status below updates within a few seconds of Stripe confirming the charge.
-                  </p>
-                </div>
-              )}
-            </>
-          ) : activePurchase.channel === "GALLERY" ? (
-            // One shared component for the whole GALLERY-channel sale
-            // experience (2026-09-03) — Sale Price/Net Sale row, 2x2
-            // action grid, inline Mark as paid form, invoice/receipt
-            // sending. Previously this tab had its own separate, older
-            // version of this UI (plain "Mark as paid" confirm dialog,
-            // "Download invoice" only) that had drifted behind the
-            // Galleries page's — see GallerySaleCard's own comment.
-            <GallerySaleCard
-              purchase={activePurchase}
-              siteId={siteId}
-              paymentMethods={paymentMethods}
-              onChanged={onChanged ?? (() => router.refresh())}
-            />
-          ) : (
-            <>
-              <div className="mb-3 flex items-baseline justify-between">
-                <h4 className="text-sm font-medium text-neutral-700">
-                  {activePurchase.type === "FULL"
-                    ? "Full payment"
-                    : `${activePurchase.instalmentCount} instalments`}
-                  {activePurchase.framed && (
-                    <span className="ml-1.5 text-xs font-normal text-neutral-400">(Framed)</span>
-                  )}
-                  {/* Nothing paid yet (2026-09-21). */}
-                  {activePurchase.payments.length === 0 && (
-                    <span className="ml-2 text-sm font-medium uppercase tracking-wide text-teal-800">
-                      Due
-                    </span>
-                  )}
-                </h4>
-                <span className="text-sm text-neutral-900">
-                  {formatMoney(activePurchase.totalAmount, activePurchase.currency)}
-                </span>
               </div>
-              <p className="mb-3 text-xs text-neutral-500">
-                {activePurchase.buyerName}
-                {activePurchase.buyerName && activePurchase.buyerEmail ? " · " : ""}
-                {activePurchase.buyerEmail}
-                {activePurchase.source ? ` · ${activePurchase.source}` : ""}
-              </p>
+            )}
 
-              {activePurchase.payments.length === 0 ? (
-                <>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowInvoiceModal(true)}
-                      disabled={isPending}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-                    >
-                      Send invoice
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleEnterCard}
-                      disabled={isPending}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-                    >
-                      Enter card now
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleRecordSaleClick}
-                      disabled={isPending}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-                    >
-                      Record sale
-                    </button>
-                  </div>
-
-                  {showRecordForm && (
-                    <div className="mt-3 space-y-2 rounded-md border border-neutral-200 bg-white p-3">
-                      <div>
-                        <label className="mb-1 block text-xs text-neutral-500">Date paid</label>
-                        <input
-                          type="date"
-                          value={paidDate}
-                          onChange={(e) => setPaidDate(e.target.value)}
-                          className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs text-neutral-500">Payment type</label>
-                        <select
-                          value={paidMethod}
-                          onChange={(e) => setPaidMethod(e.target.value)}
-                          className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50"
-                        >
-                          <option value="">Choose…</option>
-                          {paymentMethods.map((m) => (
-                            <option key={m} value={m}>
-                              {m}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          type="button"
-                          onClick={handleConfirmRecordSale}
-                          disabled={
-                            isPending || !paidDate || (paymentMethods.length > 0 && !paidMethod)
-                          }
-                          className="flex-1 rounded-md bg-neutral-900 px-3 py-[5px] text-sm font-semibold uppercase tracking-wide text-white hover:bg-neutral-700 disabled:opacity-50"
-                        >
-                          Paid
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setShowRecordForm(false)}
-                          disabled={isPending}
-                          className="rounded-md border border-neutral-300 px-3 py-[5px] text-sm hover:bg-white disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {linkUrl && (
-                    <div className="mt-3 rounded-md bg-neutral-50 p-3">
-                      <p className="mb-1 text-xs text-neutral-500">
-                        Send this link to the buyer (copy and paste — nothing is emailed
-                        automatically):
-                      </p>
-                      <input
-                        readOnly
-                        value={linkUrl}
-                        onFocus={(e) => e.target.select()}
-                        className="w-full rounded border border-neutral-300 bg-white px-2 py-1 text-xs"
-                      />
-                    </div>
-                  )}
-
-                  {cardSecret && cardPublishableKey && (
-                    <div className="mt-3">
-                      <StripeCardForm
-                        clientSecret={cardSecret}
-                        publishableKey={cardPublishableKey}
-                        purchaseId={activePurchase.id}
-                        onDone={() => {
-                          setCardSecret(null);
-                          setCardPublishableKey(null);
-                          if (onChanged) onChanged();
-                          else router.refresh();
-                        }}
-                      />
-                      <p className="mt-2 text-xs text-neutral-400">
-                        Status below updates within a few seconds of Stripe confirming the charge.
-                      </p>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="text-left text-xs text-neutral-400">
-                        <th className="pb-1 font-normal">#</th>
-                        <th className="pb-1 font-normal">Amount</th>
-                        <th className="pb-1 font-normal">Status</th>
-                        <th className="pb-1 font-normal">Date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {activePurchase.payments.map((p) => (
-                        <tr key={p.id} className="border-t border-neutral-100">
-                          <td className="py-1.5 text-neutral-500">{p.sequence}</td>
-                          <td className="py-1.5">{formatMoney(p.amount, p.currency)}</td>
-                          <td className="py-1.5">
-                            <span
-                              className={
-                                p.status === "PAID"
-                                  ? "text-green-600"
-                                  : p.status === "FAILED"
-                                    ? "text-red-600"
-                                    : "text-neutral-500"
-                              }
-                            >
-                              {p.status === "PAID" ? "Paid" : p.status === "FAILED" ? "Failed" : "Due"}
-                            </span>
-                          </td>
-                          <td className="py-1.5 text-neutral-500">
-                            {p.paidDate
-                              ? formatDate(p.paidDate)
-                              : p.dueDate
-                                ? formatDate(p.dueDate)
-                                : "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  <div className="mt-3 flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => downloadInvoice(activePurchase.id)}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-                    >
-                      Download invoice
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCertificateModalId(activePurchase.id)}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-                    >
-                      {activePurchase.certificateEmailedAt
-                        ? "Send certificate again"
-                        : "Certificate of Authenticity"}
-                    </button>
-                  </div>
-                </>
-              )}
-
-              {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
-
-              {activePurchase.type === "INSTALMENTS" && (
-                <form
-                  action={handleSaveRelease}
-                  className="mt-4 space-y-3 border-t border-neutral-100 pt-4"
-                >
-                  <h5 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-                    Release message for this sale
-                  </h5>
-                  {releaseReached && (
-                    <p className="rounded bg-green-50 px-2 py-1 text-xs text-green-700">
-                      Trigger reached — this message now applies.
-                    </p>
-                  )}
-                  <textarea
-                    name="releaseMessage"
-                    defaultValue={activePurchase.releaseMessage ?? ""}
-                    rows={2}
-                    className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                  <input
-                    type="number"
-                    name="releaseTriggerCount"
-                    min={1}
-                    defaultValue={activePurchase.releaseTriggerCount ?? ""}
-                    placeholder="Release after this many payments"
-                    className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                  />
-                  <div className="flex items-center gap-3">
-                    <button
-                      type="submit"
-                      disabled={isPending}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
-                    >
-                      Save
-                    </button>
-                    {saved && <span className="text-sm text-green-600">Saved</span>}
-                  </div>
-                </form>
-              )}
-
-              <div
-                className={
-                  activePurchase.type === "INSTALMENTS"
-                    ? "mt-3"
-                    : "mt-4 border-t border-neutral-100 pt-4"
-                }
+            {cardSecret && cardPublishableKey && (
+              <div className="mt-3">
+                <StripeCardForm
+                  clientSecret={cardSecret}
+                  publishableKey={cardPublishableKey}
+                  purchaseId={activePurchase.id}
+                  onDone={() => {
+                    setCardSecret(null);
+                    setCardPublishableKey(null);
+                    if (onChanged) onChanged();
+                    else router.refresh();
+                  }}
+                />
+                <p className="mt-2 text-xs text-neutral-400">
+                  Status below updates within a few seconds of Stripe confirming the charge.
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-left text-xs text-neutral-400">
+                  <th className="pb-1 font-normal">#</th>
+                  <th className="pb-1 font-normal">Amount</th>
+                  <th className="pb-1 font-normal">Status</th>
+                  <th className="pb-1 font-normal">Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {activePurchase.payments.map((p) => (
+                  <tr key={p.id} className="border-t border-neutral-100">
+                    <td className="py-1.5 text-neutral-500">{p.sequence}</td>
+                    <td className="py-1.5">{formatMoney(p.amount, p.currency)}</td>
+                    <td className="py-1.5">
+                      <span
+                        className={
+                          p.status === "PAID"
+                            ? "text-green-600"
+                            : p.status === "FAILED"
+                              ? "text-red-600"
+                              : "text-neutral-500"
+                        }
+                      >
+                        {p.status === "PAID" ? "Paid" : p.status === "FAILED" ? "Failed" : "Due"}
+                      </span>
+                    </td>
+                    <td className="py-1.5 text-neutral-500">
+                      {p.paidDate
+                        ? formatDate(p.paidDate)
+                        : p.dueDate
+                          ? formatDate(p.dueDate)
+                          : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => downloadInvoice(activePurchase.id)}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
               >
-                <button
-                  type="button"
-                  onClick={handleAbandon}
-                  disabled={isPending}
-                  className="text-sm text-red-600 hover:underline disabled:opacity-50"
-                >
-                  Cancel sale
-                </button>
-                <span className="mx-2 text-neutral-300">·</span>
-                <button
-                  type="button"
-                  onClick={handleDeleteActiveSale}
-                  disabled={isPending}
-                  className="text-sm text-red-600 hover:underline disabled:opacity-50"
-                >
-                  Delete
-                </button>
-              </div>
-            </>
-          )}
+                Download invoice
+              </button>
+              <button
+                type="button"
+                onClick={() => setCertificateModalId(activePurchase.id)}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                {activePurchase.certificateEmailedAt
+                  ? "Send certificate again"
+                  : "Certificate of Authenticity"}
+              </button>
+            </div>
+          </>
+        )}
+
+        {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+
+        {activePurchase.type === "INSTALMENTS" && (
+          <form
+            action={handleSaveRelease}
+            className="mt-4 space-y-3 border-t border-neutral-100 pt-4"
+          >
+            <h5 className="text-xs font-medium uppercase tracking-wide text-neutral-400">
+              Release message for this sale
+            </h5>
+            {releaseReached && (
+              <p className="rounded bg-green-50 px-2 py-1 text-xs text-green-700">
+                Trigger reached — this message now applies.
+              </p>
+            )}
+            <textarea
+              name="releaseMessage"
+              defaultValue={activePurchase.releaseMessage ?? ""}
+              rows={2}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <input
+              type="number"
+              name="releaseTriggerCount"
+              min={1}
+              defaultValue={activePurchase.releaseTriggerCount ?? ""}
+              placeholder="Release after this many payments"
+              className="w-full max-w-[calc(50%-0.5rem)] rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={isPending}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Save
+              </button>
+              {saved && <span className="text-sm text-green-600">Saved</span>}
+            </div>
+          </form>
+        )}
+
+        <div
+          className={
+            activePurchase.type === "INSTALMENTS"
+              ? "mt-3"
+              : "mt-4 border-t border-neutral-100 pt-4"
+          }
+        >
+          <button
+            type="button"
+            onClick={handleAbandon}
+            disabled={isPending}
+            className="text-sm text-red-600 hover:underline disabled:opacity-50"
+          >
+            Cancel sale
+          </button>
+          <span className="mx-2 text-neutral-300">·</span>
+          <button
+            type="button"
+            onClick={handleDeleteActiveSale}
+            disabled={isPending}
+            className="text-sm text-red-600 hover:underline disabled:opacity-50"
+          >
+            Delete
+          </button>
         </div>
-      )}
+      </div>
 
       {history.length > 0 && (
         <div>
@@ -879,7 +566,7 @@ export default function PurchasePanel({
         onCancel={() => setPendingConfirm(null)}
       />
 
-      {showInvoiceModal && activePurchase && (
+      {showInvoiceModal && (
         <InvoiceEmailModal
           purchaseId={activePurchase.id}
           siteId={siteId}
