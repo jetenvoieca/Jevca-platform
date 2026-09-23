@@ -16,18 +16,11 @@ import {
   createLocation,
   type LocationSummary,
 } from "@/lib/actions/locations";
-import {
-  startArtworkSaleAndGetLink,
-  startArtworkSaleAndEnterCard,
-  createPaymentLink,
-  createCardEntryIntent,
-} from "@/lib/actions/payments";
 import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
-import ArtworkSalePanel from "@/components/ArtworkSalePanel";
 import ArtworkCatalogueFields, { withCurrent } from "@/components/ArtworkCatalogueFields";
 import MediaPicker from "@/components/MediaPicker";
-import type { SaleTermsDetail, PurchaseDetail } from "@/lib/actions/payments";
+import type { PurchaseDetail } from "@/lib/actions/payments";
 
 export type ArtworkDetail = {
   id: string;
@@ -76,7 +69,6 @@ export type ArtworkDetail = {
     kind: string;
     posterUrl: string | null;
   }[];
-  saleTerms: SaleTermsDetail | null;
   activePurchase: PurchaseDetail | null;
   purchaseHistory: PurchaseDetail[];
 };
@@ -99,14 +91,12 @@ export type ArtworkSettings = {
   // Offered in the Catalogue tab's Tier dropdown (2026-09-07) — see
   // Artist.artworkTiers in schema.prisma.
   artworkTiers: string[];
+  // The sale-related lists below come with the same settings fetch
+  // (getArtworkSettings) and are read by the sale modals and the Studio
+  // app, not by this panel.
   saleSources: string[];
-  // Offered in GallerySaleCard's "Mark as paid" Method dropdown, via
-  // PurchasePanel's Payment tab (2026-09-03) — same Settings-editable
-  // list as everywhere else it's used.
   paymentMethods: string[];
   defaultInstalmentCount: number;
-  defaultReleaseMessage: string;
-  defaultReleaseTriggerCount: number;
 };
 
 export default function ArtworkDetailPanel({
@@ -114,7 +104,6 @@ export default function ArtworkDetailPanel({
   artistId,
   artwork,
   settings,
-  siteDefaultCurrency = "GBP",
   onClose,
   onDeleted,
   onDuplicated,
@@ -125,10 +114,6 @@ export default function ArtworkDetailPanel({
   artistId: string;
   artwork: ArtworkDetail;
   settings: ArtworkSettings;
-  // Used to default the currency when a new Payment plan is first set up.
-  // Optional (falls back to GBP) since not every caller has easy access
-  // to the site record — see decisions-log.md.
-  siteDefaultCurrency?: string;
   // When provided, Close calls this instead of navigating to the Artworks
   // Catalogue — used when this panel is embedded somewhere else (e.g. the
   // Section editor), where "close" means "go back to what I was doing",
@@ -183,12 +168,10 @@ export default function ArtworkDetailPanel({
   );
 
   // Whether this artwork has a sale committed at all — RESERVED ("Sold -
-  // Not Paid") or genuinely SOLD (2026-09-20 rebuild — see the
-  // "Availability model" note in lib/actions/payments.ts for the full
-  // picture). Once true, the Available/SOLD toggle below is replaced
-  // entirely by plain static text: there's nothing left to start, and
-  // managing or cancelling that sale happens from the Sales page, not
-  // here.
+  // Not Paid") or genuinely SOLD (see the "Availability model" note in
+  // lib/actions/payments.ts). Once true, the Available/SOLD control
+  // below is replaced by plain static text: the sale itself is managed
+  // from its Location or the Sales page, never from here.
   const committed = artwork.availability === "SOLD" || artwork.availability === "RESERVED";
 
   // ---- Catalogue / Presentation (2026-09-10, direct request) ----
@@ -198,76 +181,14 @@ export default function ArtworkDetailPanel({
   // renders once, above this toggle's content, regardless of view).
   const [view, setView] = useState<"catalogue" | "presentation">("catalogue");
 
-  // ---- The Sold sale panel ----
-  // The old inline sale panel below (ArtworkSalePanel — Get payment
-  // link/Enter card now/Record sale) is left exactly as it was and
-  // still fully wired up (2026-09-22 instruction — keep it in place in
-  // case of a revert), but the SOLD button no longer opens it directly.
-  // Pressing SOLD now routes to the artwork's Location instead (see
-  // handleSoldClick below) — saleOpen only still exists to control
-  // hideTail/afterLocation on ArtworkCatalogueFields for that unreachable
-  // panel, and never becomes true from the button any more.
-  const [saleOpen, setSaleOpen] = useState(false);
-
-  // Enter card now — moves the sale panel up further still, to sit
-  // right under Name/Tier, matching the mockup's "slides up further to
-  // just under the name/tier row". That means Type/Group/Medium/Size/
-  // Location/Edition disappear too, not just the tail fields hideTail
-  // already covers — so when cardMode is on, ArtworkCatalogueFields
-  // doesn't render at all, and every field it would have submitted is
-  // preserved via the hidden inputs just below it instead.
-  const [cardMode, setCardMode] = useState(false);
-
-  // Record sale (2026-09-10 follow-up) — unlike card mode, this stays
-  // in the panel's normal position (afterLocation, same as plain sale
-  // mode); only the panel's own content swaps for a simple record-a-sale
-  // form. See panelMode below for how sale/card/record combine.
-  const [recordMode, setRecordMode] = useState(false);
-  const panelMode: "sale" | "card" | "record" = cardMode ? "card" : recordMode ? "record" : "sale";
-
-  // ---- Sale panel field state, owned here (2026-09-10 fix) ----
-  // ArtworkSalePanel renders from two structurally different places
-  // depending on mode (ArtworkCatalogueFields' afterLocation slot in
-  // "sale"/"record" mode vs. the cardMode branch that skips
-  // ArtworkCatalogueFields entirely in "card" mode) — switching between
-  // them mounts a genuinely new component instance, which was silently
-  // wiping Deposit paid/Purchase option/Name/Email the moment Enter
-  // card now was pressed. Owning the values here and passing them down
-  // as controlled props means the same state simply carries over
-  // regardless of which branch is currently rendering the panel.
-  const [depositPaid, setDepositPaid] = useState("");
-  const [datePaid, setDatePaid] = useState("");
-  const [purchaseOption, setPurchaseOption] = useState<"full" | "instalments">("full");
-  const [buyerName, setBuyerName] = useState("");
-  const [buyerEmail, setBuyerEmail] = useState("");
-
-  // ---- Get payment link/Enter card now, owned here ----
-  // Same remount problem as the fields above, but for the fetch itself:
-  // clicking Enter card now sets cardMode true, which switches which
-  // branch renders ArtworkSalePanel — a genuinely new instance. Moving
-  // the fetch itself up here (this component never unmounts across the
-  // mode switch) means whichever instance is currently rendered just
-  // displays whatever the parent currently holds — see the matching
-  // note in ArtworkSalePanel.
-  //
-  // Always starts null (2026-09-20 rebuild, matching saleOpen above) —
-  // there's no longer a scenario where an ACTIVE Purchase exists for an
-  // artwork that's still showing as not-committed on a fresh mount, so
-  // there's nothing to seed this from at mount time any more.
-  const [startedPurchaseId, setStartedPurchaseId] = useState<string | null>(null);
-  const [linkUrl, setLinkUrl] = useState<string | null>(null);
-  const [cardSecret, setCardSecret] = useState<string | null>(null);
-  const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
-  const [saleActionPending, startSaleActionTransition] = useTransition();
-  const [saleActionError, setSaleActionError] = useState<string | null>(null);
-
   // ---- "Sold" button routing (2026-09-22) ----
-  // Pressing SOLD no longer opens the inline sale panel above — it
-  // takes you to the artwork's Location (a Gallery you consign to, or
-  // one of your own — studio, storage — see Location in schema.prisma)
-  // and opens the consignment sale panel there, matching the mockup. If
-  // Location is blank, or doesn't match a saved one, this asks for one
-  // first (creating it on the fly) rather than guessing.
+  // Every sale is recorded and managed at the artwork's Location (a
+  // Gallery you consign to, or one of your own — studio, storage — see
+  // Location in schema.prisma), so pressing SOLD takes you there with
+  // this work's sale panel open. If Location is blank, or doesn't match
+  // a saved one, this asks for one first (creating it on the fly)
+  // rather than guessing. (The Catalogue's own inline sale panel was
+  // removed 2026-09-23.)
   const [soldRoutingPending, setSoldRoutingPending] = useState(false);
   const handleSoldClick = async () => {
     if (soldRoutingPending) return;
@@ -318,9 +239,8 @@ export default function ArtworkDetailPanel({
   // Three extra image slots (2026-09-10, direct request — "like Related
   // images") — local only for now, not yet persisted anywhere; there's
   // no backend field for this yet, so picking one here doesn't survive
-  // a refresh. Flagged as a placeholder the same way the sale panel's
-  // unwired buttons are, pending a real design for where these actually
-  // get stored.
+  // a refresh. A placeholder, pending a real design for where these
+  // actually get stored.
   const [relatedSlots, setRelatedSlots] = useState<
     (null | { id: string; url: string; kind: string })[]
   >([null, null, null]);
@@ -447,165 +367,6 @@ export default function ArtworkDetailPanel({
     );
     const result = await createLocation(artistId, siteId, name, isGallery ? "GALLERY" : "OWN");
     if ("error" in result) alert(result.error);
-  };
-
-  // ---- Get payment link/Enter card now handlers — see the note on the
-  // state above for why these live here rather than in ArtworkSalePanel.
-  const buildSaleFormData = () => {
-    const fd = new FormData();
-    fd.set("buyerName", buyerName.trim());
-    fd.set("buyerEmail", buyerEmail.trim());
-    fd.set("type", purchaseOption === "instalments" ? "INSTALMENTS" : "FULL");
-    fd.set("depositPaid", depositPaid.trim());
-    fd.set("currency", artwork.saleTerms?.currency ?? siteDefaultCurrency);
-    return fd;
-  };
-
-  // Both handlers below always call onDataChanged the moment the
-  // Purchase itself is successfully started, regardless of whether the
-  // secondary step (generating the link, creating the card intent) then
-  // succeeds — that's the actual commit point (RESERVED), so the grid
-  // tile and this panel's own Availability display need to catch up
-  // immediately, not only once the secondary step also finishes.
-  const handleGetPaymentLink = () => {
-    if (!buyerEmail.trim()) {
-      setSaleActionError("Buyer email is required to get a payment link.");
-      return;
-    }
-    setSaleActionError(null);
-    setLinkUrl(null);
-    startSaleActionTransition(async () => {
-      if (startedPurchaseId) {
-        const result = await createPaymentLink(startedPurchaseId, siteId, artwork.id);
-        if (result.ok) setLinkUrl(result.url);
-        else setSaleActionError(result.error);
-        return;
-      }
-      const result = await startArtworkSaleAndGetLink(artwork.id, siteId, buildSaleFormData());
-      if (result.ok) {
-        setStartedPurchaseId(result.purchaseId);
-        setLinkUrl(result.url);
-      } else {
-        setSaleActionError(result.error);
-      }
-      // Runs regardless of ok/fail — startPurchase may well have
-      // succeeded (and marked RESERVED) even if generating the link
-      // itself then failed.
-      if (onDataChanged) onDataChanged();
-    });
-  };
-
-  const handleEnterCardClick = () => {
-    if (!buyerEmail.trim()) {
-      setSaleActionError("Buyer email is required to take a card payment.");
-      return;
-    }
-    setSaleActionError(null);
-    setCardSecret(null);
-    setCardPublishableKey(null);
-    setCardMode(true);
-    startSaleActionTransition(async () => {
-      if (startedPurchaseId) {
-        const result = await createCardEntryIntent(startedPurchaseId, siteId);
-        if (result.ok) {
-          setCardSecret(result.clientSecret);
-          setCardPublishableKey(result.publishableKey);
-        } else {
-          setSaleActionError(result.error);
-        }
-        return;
-      }
-      const result = await startArtworkSaleAndEnterCard(artwork.id, siteId, buildSaleFormData());
-      if (result.ok) {
-        setStartedPurchaseId(result.purchaseId);
-        setCardSecret(result.clientSecret);
-        setCardPublishableKey(result.publishableKey);
-      } else {
-        setSaleActionError(result.error);
-      }
-      if (onDataChanged) onDataChanged();
-    });
-  };
-
-  // Sale/record modes' Back and X — a plain local reset (2026-09-20
-  // rebuild). Nothing has been committed yet in either mode until one of
-  // the action buttons actually succeeds (Get payment link/Enter card
-  // now/Record sale), so there's no server call to make here: if
-  // something WAS already committed (e.g. Get payment link succeeded,
-  // then the artist closes the panel), Availability is already RESERVED
-  // and will correctly show as such once this collapses.
-  const handleClose = () => {
-    setSaleOpen(false);
-    setCardMode(false);
-    setRecordMode(false);
-    setLinkUrl(null);
-    setCardSecret(null);
-    setCardPublishableKey(null);
-    setSaleActionError(null);
-  };
-
-  // Card mode's own Back — only ever reachable before a Purchase has
-  // actually started (still preparing, or the start failed); a plain
-  // local reset back to the sale form, same reasoning as handleClose
-  // above.
-  const handleBackToSale = () => {
-    setCardMode(false);
-    setCardSecret(null);
-    setCardPublishableKey(null);
-    setSaleActionError(null);
-  };
-
-  // Shared props every ArtworkSalePanel instance needs, regardless of
-  // which mode/branch is rendering it — keeps the two call sites below
-  // from drifting out of sync with each other.
-  const salePanelSharedProps = {
-    artworkId: artwork.id,
-    siteId,
-    offeredPrice: artwork.offeredPrice,
-    currency: artwork.saleTerms?.currency ?? siteDefaultCurrency,
-    defaultInstalmentCount: settings.defaultInstalmentCount,
-    saleSources: settings.saleSources,
-    // The Purchase currently in play, so card mode can pass it to
-    // StripeCardForm — see the note on startedPurchaseId above and on
-    // StripeCardForm itself.
-    purchaseId: startedPurchaseId,
-    depositPaid,
-    onDepositPaidChange: setDepositPaid,
-    datePaid,
-    onDatePaidChange: setDatePaid,
-    option: purchaseOption,
-    onOptionChange: setPurchaseOption,
-    buyerName,
-    onBuyerNameChange: setBuyerName,
-    buyerEmail,
-    onBuyerEmailChange: setBuyerEmail,
-    linkUrl,
-    cardSecret,
-    cardPublishableKey,
-    actionPending: saleActionPending,
-    actionError: saleActionError,
-    onGetPaymentLink: handleGetPaymentLink,
-    onEnterCardClick: handleEnterCardClick,
-    onClose: handleClose,
-    onBackToSale: handleBackToSale,
-    onRecordSale: () => setRecordMode(true),
-    onBackFromRecord: () => setRecordMode(false),
-    // A sale actually finished — a card payment confirmed, or Record
-    // sale submitted. Closes the whole Sold flow back down (the artwork
-    // is now SOLD, so there's nothing left to do here), clears the
-    // now-stale card/link state, and refreshes so the rest of the panel
-    // picks up the new state.
-    onSaleCompleted: () => {
-      setSaleOpen(false);
-      setCardMode(false);
-      setRecordMode(false);
-      setStartedPurchaseId(null);
-      setLinkUrl(null);
-      setCardSecret(null);
-      setCardPublishableKey(null);
-      if (onDataChanged) onDataChanged();
-      else router.refresh();
-    },
   };
 
   return (
@@ -795,13 +556,6 @@ export default function ArtworkDetailPanel({
         </form>
       ) : (
         <>
-          {/* Tab bar removed (2026-09-10, direct request) — Payment and
-              Record Past Sale are no longer reachable from this panel;
-              Presentation moved to its own view above. Their
-              functionality isn't deleted from the app —
-              PurchasePanel/RecordPastSaleForm are still used exactly as
-              before from the Galleries and Sales pages — just not from
-              here any more. */}
           <form key="catalogue-form" onBlur={(e) => autosaveCatalogue(e.currentTarget)} className="space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <div>
@@ -831,182 +585,115 @@ export default function ArtworkDetailPanel({
                 </select>
               </div>
 
-              {cardMode ? (
-                // Card entry mode (2026-09-10) — Type through Studio notes
-                // don't render at all here; every field ArtworkCatalogueFields
-                // would otherwise submit is preserved via hidden inputs below
-                // so nothing is lost when Name/Tier next autosaves.
-                <>
-                  <div className="col-span-2">
-                    <ArtworkSalePanel {...salePanelSharedProps} mode="card" />
-                  </div>
-                  <input type="hidden" name="type" value={artwork.type || ""} />
-                  <input type="hidden" name="catalogueGroup" value={artwork.catalogueGroup || ""} />
-                  <input type="hidden" name="medium" value={artwork.medium || ""} />
-                  <input type="hidden" name="size" value={artwork.size || ""} />
-                  <input type="hidden" name="edition" value={artwork.edition || ""} />
-                  <input
-                    type="hidden"
-                    name="availableQty"
-                    value={artwork.availableQty?.toString() ?? ""}
-                  />
-                  <input type="hidden" name="location" value={artwork.location || ""} />
-                  <input type="hidden" name="date" value={artwork.date || ""} />
-                  <input type="hidden" name="studioNotes" value={artwork.studioNotes || ""} />
-                  <input type="hidden" name="availability" value={artwork.availability} />
-                  <input type="hidden" name="offeredPrice" value={artwork.offeredPrice || ""} />
-                </>
-              ) : (
-                /* The Type/Group/Medium/Size/Edition/Location/Date/
-                   Availability/Studio notes block below is the exact same
-                   shared component the Hopper's quick-add form uses
-                   (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
-                   and Reference/Offered price (passed as children, rendered
-                   between Date and Availability) stay Catalogue-tab-only.
-                   afterLocation/availabilityOverride/hideTail slot in the
-                   sale panel, the Available/SOLD toggle, and hide everything
-                   below the panel while it's open. onAddType/onAddGroup/
-                   onAddMedium/onAddLocation give Type/Group/Medium/Location
-                   their own inline "+ Add new…" option — Hopper's own use of
-                   this component doesn't pass these, so its selects are
-                   unaffected. */
-                <ArtworkCatalogueFields
-                  settings={settings}
-                  values={{
-                    type: artwork.type || "",
-                    catalogueGroup: artwork.catalogueGroup || "",
-                    medium: artwork.medium || "",
-                    size: artwork.size || "",
-                    edition: artwork.edition || "",
-                    location: artwork.location || "",
-                    availableQty: artwork.availableQty?.toString() ?? "",
-                    date: artwork.date || "",
-                    studioNotes: artwork.studioNotes || "",
-                    availability: artwork.availability,
-                  }}
-                  onAutosave={autosaveCatalogue}
-                  onTypeOrSizeChange={(type, size) => {
-                    setTypeValue(type);
-                    setSizeValue(size);
-                  }}
-                  onAddType={handleAddType}
-                  onAddGroup={handleAddGroup}
-                  onAddMedium={handleAddMedium}
-                  onAddLocation={handleAddLocation}
-                  hideTail={saleOpen}
-                  afterLocation={
-                    saleOpen ? (
-                      <>
-                        <ArtworkSalePanel
-                          {...salePanelSharedProps}
-                          mode={panelMode === "record" ? "record" : "sale"}
-                        />
-                        {/* Offered price's own input is hidden while the panel
-                            is open (hideTail hides the Reference/Offered price
-                            pair passed as children below) — this preserves its
-                            current value so it isn't lost on the next
-                            autosave. */}
-                        <input type="hidden" name="offeredPrice" value={artwork.offeredPrice || ""} />
-                      </>
-                    ) : null
-                  }
-                  availabilityOverride={
-                    // Available/SOLD toggle (2026-09-22 update) — only
-                    // ever shown at all when the artwork isn't `committed`
-                    // (see the note on that above); once RESERVED or SOLD,
-                    // this whole control is replaced by plain static text
-                    // with no buttons at all — starting a second sale isn't
-                    // possible from here, and neither is undoing the one
-                    // that exists. Both happen from the Sales page. SOLD
-                    // itself no longer toggles the inline panel open — it
-                    // routes to the artwork's Location instead (see
-                    // handleSoldClick above), so this is a plain button,
-                    // not a two-way toggle.
-                    committed ? (
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-neutral-700">
-                          Availability
-                        </label>
-                        <p className="rounded-md border border-neutral-300 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-700">
-                          {artwork.availability === "SOLD" ? "SOLD" : "Sold - Not Paid"}
-                        </p>
-                        <input type="hidden" name="availability" value={artwork.availability} />
-                      </div>
-                    ) : (
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-neutral-700">
-                          Availability
-                        </label>
-                        <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                          <button
-                            type="button"
-                            onClick={() => setSaleOpen(false)}
-                            className={`flex-1 px-3 py-[6.4px] font-medium ${
-                              !saleOpen
-                                ? "bg-neutral-900 text-white"
-                                : "bg-white text-neutral-600 hover:bg-neutral-50"
-                            }`}
-                          >
-                            Available
-                          </button>
-                          <button
-                            type="button"
-                            onClick={handleSoldClick}
-                            disabled={!artwork.offeredPrice || soldRoutingPending}
-                            title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
-                            className={`flex-1 px-3 py-[6.4px] font-medium disabled:cursor-not-allowed disabled:opacity-40 bg-white text-neutral-600 hover:bg-neutral-50`}
-                          >
-                            {soldRoutingPending ? "…" : "SOLD"}
-                          </button>
-                        </div>
-                        <input type="hidden" name="availability" value={artwork.availability} />
-                      </div>
-                    )
-                  }
-                >
-                  {!saleOpen && (
-                    // Wrapped together as one compact pair (2026-09-11,
-                    // direct request — "put reference price and offered
-                    // price in same column for direct comparison") —
-                    // previously each was its own full grid cell (same
-                    // width as Type/Group etc.), which put visual
-                    // distance between two numbers meant to be compared
-                    // side by side. This wraps both as a single child of
-                    // ArtworkCatalogueFields (so together they occupy
-                    // just one outer grid cell, not two) with its own
-                    // tight 2-column sub-grid inside.
-                    <div className="grid grid-cols-2 gap-2">
-                      {/* Reference price is a suggestion, not typed —
-                          (Size preset's width × height) × the selected
-                          Type's Ref value, recalculated live as either
-                          changes (2026-08-28). See src/lib/pricing.ts. */}
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-neutral-700">
-                          Reference price
-                        </label>
-                        <input
-                          type="text"
-                          readOnly
-                          value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
-                          className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-sm font-medium text-neutral-700">
-                          Offered price
-                        </label>
-                        <input
-                          type="text"
-                          name="offeredPrice"
-                          defaultValue={artwork.offeredPrice || ""}
-                          placeholder="e.g. 450.00"
-                          className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-                        />
-                      </div>
+              {/* The Type/Group/Medium/Size/Edition/Location/Date/
+                  Availability/Studio notes block below is the exact same
+                  shared component the Hopper's quick-add form uses
+                  (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
+                  and Reference/Offered price (passed as children, rendered
+                  between Date and Availability) stay Catalogue-only.
+                  availabilityOverride swaps in the Available/SOLD control.
+                  onAddType/onAddGroup/onAddMedium/onAddLocation give those
+                  selects their own inline "+ Add new…" option — the Hopper
+                  doesn't pass these, so its selects are unaffected. */}
+              <ArtworkCatalogueFields
+                settings={settings}
+                values={{
+                  type: artwork.type || "",
+                  catalogueGroup: artwork.catalogueGroup || "",
+                  medium: artwork.medium || "",
+                  size: artwork.size || "",
+                  edition: artwork.edition || "",
+                  location: artwork.location || "",
+                  availableQty: artwork.availableQty?.toString() ?? "",
+                  date: artwork.date || "",
+                  studioNotes: artwork.studioNotes || "",
+                  availability: artwork.availability,
+                }}
+                onAutosave={autosaveCatalogue}
+                onTypeOrSizeChange={(type, size) => {
+                  setTypeValue(type);
+                  setSizeValue(size);
+                }}
+                onAddType={handleAddType}
+                onAddGroup={handleAddGroup}
+                onAddMedium={handleAddMedium}
+                onAddLocation={handleAddLocation}
+                availabilityOverride={
+                  // Available/SOLD — only while the artwork isn't
+                  // `committed` (see above); once RESERVED or SOLD it's
+                  // plain static text. Available is simply the current
+                  // state; SOLD routes to the artwork's Location (see
+                  // handleSoldClick above).
+                  committed ? (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Availability
+                      </label>
+                      <p className="rounded-md border border-neutral-300 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-700">
+                        {artwork.availability === "SOLD" ? "SOLD" : "Sold - Not Paid"}
+                      </p>
+                      <input type="hidden" name="availability" value={artwork.availability} />
                     </div>
-                  )}
-                </ArtworkCatalogueFields>
-              )}
+                  ) : (
+                    <div>
+                      <label className="mb-1 block text-sm font-medium text-neutral-700">
+                        Availability
+                      </label>
+                      <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+                        <span className="flex-1 bg-neutral-900 px-3 py-[6.4px] text-center font-medium text-white">
+                          Available
+                        </span>
+                        <button
+                          type="button"
+                          onClick={handleSoldClick}
+                          disabled={!artwork.offeredPrice || soldRoutingPending}
+                          title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
+                          className="flex-1 bg-white px-3 py-[6.4px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+                        >
+                          {soldRoutingPending ? "…" : "SOLD"}
+                        </button>
+                      </div>
+                      <input type="hidden" name="availability" value={artwork.availability} />
+                    </div>
+                  )
+                }
+              >
+                {/* Reference and Offered price as one compact pair
+                    (2026-09-11, direct request — "put reference price
+                    and offered price in same column for direct
+                    comparison"): a single child of ArtworkCatalogueFields,
+                    so together they take one outer grid cell, with their
+                    own tight 2-column sub-grid inside. */}
+                <div className="grid grid-cols-2 gap-2">
+                  {/* Reference price is a suggestion, not typed —
+                      (Size preset's width × height) × the selected
+                      Type's Ref value, recalculated live as either
+                      changes (2026-08-28). See src/lib/pricing.ts. */}
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Reference price
+                    </label>
+                    <input
+                      type="text"
+                      readOnly
+                      value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
+                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-sm font-medium text-neutral-700">
+                      Offered price
+                    </label>
+                    <input
+                      type="text"
+                      name="offeredPrice"
+                      defaultValue={artwork.offeredPrice || ""}
+                      placeholder="e.g. 450.00"
+                      className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                    />
+                  </div>
+                </div>
+              </ArtworkCatalogueFields>
             </div>
             <div className="flex items-center gap-3">
               {saved && <span className="text-sm text-green-600">Saved</span>}
