@@ -14,6 +14,7 @@ import ArtworkDetailPanel, {
 } from "@/components/ArtworkDetailPanel";
 import { artworkMatchesFilters } from "@/lib/artworkFilters";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
+import { useBackdropClose } from "@/lib/useBackdropClose";
 
 type ArtworkRow = {
   id: string;
@@ -59,7 +60,6 @@ export default function ArtworksCatalogueView({
   tier: initialTier,
   initialSelected,
   settings,
-  siteDefaultCurrency = "GBP",
 }: {
   siteId: string;
   // Where this view's own in-page links (currently just "+ Add New" ->
@@ -83,7 +83,6 @@ export default function ArtworksCatalogueView({
   tier: string;
   initialSelected: ArtworkDetail | null;
   settings: ArtworkSettings;
-  siteDefaultCurrency?: string;
 }) {
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const [view, setView] = useState<"tile" | "list">("tile");
@@ -357,6 +356,7 @@ export default function ArtworksCatalogueView({
     setSelected(null);
     updateUrlSelected(null);
   };
+  const panelBackdrop = useBackdropClose(handleClosePanel);
 
   const handleDeletedPanel = () => {
     if (selected) setArtworks((prev) => prev.filter((a) => a.id !== selected.id));
@@ -944,24 +944,16 @@ export default function ArtworksCatalogueView({
           exactly as before, just showCloseButton is now on (true)
           since Close is this modal's only way to dismiss it.
           Clicking the backdrop closes it too (2026-09-11, direct
-          request) — the inner content stops that click from bubbling
-          up, so clicking inside the modal itself never closes it. */}
+          request; shared useBackdropClose since 2026-09-23). */}
       {selected && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6"
-          onClick={handleClosePanel}
-        >
-          <div
-            className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...panelBackdrop}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
             <ArtworkDetailPanel
               key={selected.id}
               siteId={siteId}
               artistId={artistId}
               artwork={selected}
               settings={settings}
-              siteDefaultCurrency={siteDefaultCurrency}
               onClose={handleClosePanel}
               onDeleted={handleDeletedPanel}
               onDuplicated={handleDuplicated}
