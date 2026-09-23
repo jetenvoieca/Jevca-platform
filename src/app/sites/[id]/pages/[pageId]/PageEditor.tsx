@@ -174,7 +174,7 @@ function BlockFields({
               const a = arr[0];
               updateBlock(block.id, {
                 artworkId: a.id,
-                previewTitle: a.presentationTitle,
+                previewTitle: a.catalogueName,
                 previewImageUrl: a.imageUrl || undefined,
                 previewPrice: a.presentationPrice,
                 previewAvailability: a.availability,
