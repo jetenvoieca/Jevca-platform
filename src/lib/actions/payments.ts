@@ -26,14 +26,6 @@ import {
 
 // ---------- Types ----------
 
-export type SaleTermsDetail = {
-  totalAmount: string;
-  currency: string;
-  instalmentCount: number;
-  releaseMessage: string | null;
-  releaseTriggerCount: number | null;
-};
-
 export type PaymentDetail = {
   id: string;
   sequence: number;
@@ -131,12 +123,13 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 //                payment confirmed, a Record sale form submitted, or a
 //                gallery invoice marked paid.
 //
-// The three original commit points, matching Craig's own numbering:
-//   1. Enter card clicked                       → RESERVED immediately;
+// The three original commit points, for a direct sale (since
+// 2026-09-23 started only from the Studio app — see studioSales.ts):
+//   1. Card entry started                        → RESERVED immediately;
 //      → payment succeeds                       → SOLD
 //   2. Record sale submitted                     → SOLD (already a
 //                                                   single atomic step)
-//   3. Get payment link generated                → RESERVED
+//   3. Payment link generated                    → RESERVED
 //
 // A FOURTH commit point, added 2026-09-22 for Consigned Works (a
 // Gallery or Own Location's "Record Sale" form — startGallerySale
@@ -152,14 +145,9 @@ async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
 // balance from here on; Purchase.status stays ACTIVE ("UNPAID" in the
 // UI) until the balance is fully paid (completeIfSettled).
 //
-// Once RESERVED or SOLD, the Catalogue tab's own Available/SOLD toggle
-// disappears entirely — no delete-this-sale link, no reopenable panel.
-// Managing or cancelling that sale happens from the Sales page
-// (PurchasePanel), which already has the tools for it. This also means
-// every Back/Close action inside the Catalogue tab's own sale panel can
-// safely be a plain local UI step with no server call at all: by the
-// time there's anything worth backing out of, it's already committed,
-// and un-committing only ever happens from the Sales page.
+// Once RESERVED or SOLD, the Artwork Catalogue shows the status as
+// plain text only; the sale itself is managed or cancelled from its
+// Location or the Sales page, never from the Catalogue.
 
 // Refuses to start a second sale once the artwork is RESERVED or SOLD —
 // used by every way a sale can begin (startPurchase, startGallerySale,
@@ -191,76 +179,17 @@ async function resetAvailabilityIfNothingSoldOrActive(artworkId: string) {
   }
 }
 
-// ---------- Sale Terms — autosave, no buyer info, ever ----------
-
-// Sale Terms merged into the Presentation tab (2026-08-15) — there's no
-// longer a separate "Total price" the person types; the Artwork's own
-// price (Artwork.presentationPrice, itself a mirror of Catalogue's
-// Offered price as of 2026-08-28) IS the sale total now. totalAmount
-// stays in this table only because startPurchase/Purchase still
-// snapshot it — kept in sync here rather than making every future
-// caller re-derive it.
-//
-// Release message/trigger count are no longer typed per-artwork
-// (2026-08-28 simplification, at the person's request — repeating a
-// value that's already set once in Settings → Payment Defaults was
-// unnecessary duplication). Every save of this row now takes the artist's
-// *current* Settings default fresh, so changing that default later
-// reaches every artwork's Sale Terms automatically rather than each one
-// being frozen at whatever it was when last saved. A specific
-// already-started sale can still have its own message edited afterwards
-// (PurchasePanel's "Release message for this sale" / updatePurchaseRelease
-// below) — that's a different, deliberately-kept feature for
-// personalising wording to one particular buyer, not a per-artwork
-// default.
-export async function saveSaleTerms(artworkId: string, siteId: string, formData: FormData) {
-  const currency = (formData.get("currency") as string)?.trim().toUpperCase() || "GBP";
-  const instalmentCount = parseInt((formData.get("instalmentCount") as string) || "5", 10);
-
-  const artwork = await db.artwork.findUniqueOrThrow({
-    where: { id: artworkId },
-    select: { presentationPrice: true, artistId: true },
-  });
-  const totalAmount = artwork.presentationPrice;
-  if (!totalAmount) return;
-
-  const artist = await db.artist.findUnique({
-    where: { id: artwork.artistId },
-    select: { defaultReleaseMessage: true, defaultReleaseTriggerCount: true },
-  });
-  const releaseMessage = artist?.defaultReleaseMessage ?? null;
-  const releaseTriggerCount = artist?.defaultReleaseTriggerCount ?? null;
-
-  await db.saleTerms.upsert({
-    where: { artworkId },
-    create: {
-      artworkId,
-      totalAmount,
-      currency,
-      instalmentCount,
-      releaseMessage,
-      releaseTriggerCount,
-    },
-    update: { totalAmount, currency, instalmentCount, releaseMessage, releaseTriggerCount },
-  });
-
-}
+// ---------- Sale Terms ----------
 
 // Seeds/refreshes SaleTerms straight from the price being charged
-// (2026-09-10) — the Sold panel's "Full payment"/instalment figures are
-// computed live from that price minus any Deposit paid noted in the
-// panel, not from a separately-saved SaleTerms row the way the old
-// Presentation tab's price used to work. Rather than inventing a second,
-// parallel start-a-sale pathway, this upserts SaleTerms to match exactly
-// what the panel is showing right before handing off to the existing
-// startPurchase — so instalment splitting, webhooks, invoices and
-// everything else downstream keep working completely unchanged, on a
-// totalAmount that's actually correct for what was agreed in the panel.
+// (2026-09-10), right before startPurchase snapshots it — so instalment
+// splitting, webhooks, invoices and everything else downstream work on
+// a totalAmount that's correct for what was agreed, less any Deposit
+// paid noted.
 //
 // The price is the artwork's own Offered price, unless the caller passes
 // a `price` of its own (2026-09-21) — the Studio app lets the artist
-// adjust the price on the spot. The admin never sends one, so it always
-// charges the Offered price exactly as before.
+// adjust the price on the spot.
 //
 // Deposit paid isn't recorded as its own Payment row (direct instruction,
 // 2026-09-10 — "no deposit handling needed yet, just wire the remaining
@@ -268,7 +197,7 @@ export async function saveSaleTerms(artworkId: string, siteId: string, formData:
 // Unrelated to Purchase.depositPaid (2026-09-22) — that field is
 // specific to a Consigned Works "Record Sale" (a Gallery/Own Location's
 // startGallerySale below), a different flow from this one (a direct
-// Stripe sale via the Catalogue tab's own Sold panel).
+// Stripe sale from the Studio app).
 async function seedSaleTerms(
   artworkId: string,
   formData: FormData
@@ -337,7 +266,7 @@ async function seedSaleTerms(
 // itself (2026-09-20 rebuild) — that's the caller's job, so each of
 // startArtworkSaleAndGetLink and startArtworkSaleAndEnterCard marks
 // RESERVED right after this succeeds. See the file-level note above.
-export async function startPurchase(
+async function startPurchase(
   artworkId: string,
   siteId: string,
   formData: FormData
@@ -405,9 +334,9 @@ export async function startPurchase(
   return { ok: true, purchaseId: purchase.id };
 }
 
-// ---------- Starting a sale from the Catalogue tab's Sold panel ----------
+// ---------- Direct Stripe sales, started from the Studio app ----------
 
-// Get payment link (Craig's rule 3): once the Purchase itself is
+// Payment link (rule 3 above): once the Purchase itself is
 // successfully started, this marks the artwork RESERVED ("Sold - Not
 // Paid") immediately — before attempting to actually generate the
 // Stripe link — so the reservation holds even if link-creation itself
@@ -432,8 +361,8 @@ export async function startArtworkSaleAndGetLink(
   return { ok: true, purchaseId: started.purchaseId, url: link.url };
 }
 
-// Enter card now (Craig's rule 1): marks RESERVED the moment the
-// Purchase itself is started — the same instant as Get payment link
+// Card payment (rule 1 above): marks RESERVED the moment the
+// Purchase itself is started — the same instant as the payment link
 // above, before the card form has even loaded — rather than waiting
 // for the payment to actually succeed. SOLD only happens later, once
 // the card payment genuinely confirms (handleFirstPaymentSucceeded/
@@ -967,16 +896,13 @@ async function saveChargeSale(
 // month on the Accounts/Consolidated Sales pages and never shows up as
 // overdue on the Alerts dashboard.
 //
-// Also reused as-is (2026-09-10) by the Catalogue tab's Sold panel's own
-// "Record sale" form (Craig's rule 2) — a direct/studio sale recorded
-// after the fact, same shape as a historical gallery backfill
-// (Purchase.channel only distinguishes STRIPE from "not taken through
-// Stripe", not literally "gallery"). Submitting this form is itself the
-// single commit step — SOLD the moment it succeeds, same as it's always
-// worked. commissionPercent is simply left out of that form's FormData
-// (direct instruction — a direct sale is always 0% commission here), so
-// it falls through to null/0 exactly like any other caller that doesn't
-// set it.
+// Used by the Studio app's "Record sale" (rule 2 above) — a direct
+// sale recorded after the fact, same shape as a historical gallery
+// backfill (Purchase.channel only distinguishes STRIPE from "not taken
+// through Stripe", not literally "gallery"). Submitting it is itself the
+// single commit step — SOLD the moment it succeeds. commissionPercent is
+// left out (a direct sale is always 0% commission), so it falls through
+// to null/0.
 //
 // `method` (2026-09-21) — how the sale was paid (bank transfer, cash,
 // ...), optional and stored on the Payment, same free-text convention as
@@ -1120,10 +1046,8 @@ export async function deleteGallerySale(
 // clearly-labelled option shown specifically for completed sales, with
 // its own stronger confirmation wording.
 //
-// Resets Availability back to AVAILABLE — this is the "manage/cancel it
-// from the Sales page" escape hatch the Catalogue tab's own toggle no
-// longer offers directly (2026-09-20 rebuild). Uses the same shared
-// reset as deleteGallerySale/abandonPurchase.
+// Resets Availability back to AVAILABLE, using the same shared reset
+// as deleteGallerySale/abandonPurchase.
 export async function forceDeleteCompletedSale(
   purchaseId: string,
   siteId: string
@@ -1369,7 +1293,7 @@ function firstChargeAmount(purchase: {
 
 // ---------- Take payment: hosted Stripe payment link ----------
 
-export async function createPaymentLink(
+async function createPaymentLink(
   purchaseId: string,
   siteId: string,
   artworkId: string
