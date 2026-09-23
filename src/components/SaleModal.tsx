@@ -11,6 +11,7 @@ import SaleDetailCard from "@/components/SaleDetailCard";
 import GallerySaleCard from "@/components/GallerySaleCard";
 import SaleHeader from "@/components/SaleHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { useBackdropClose } from "@/lib/useBackdropClose";
 
 // Which sale to show — just enough to look it up.
 export type SaleModalTarget = {
@@ -44,6 +45,7 @@ export default function SaleModal({
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
+  const backdrop = useBackdropClose(onClose);
 
   const [selectedDetail, setSelectedDetail] = useState<ArtworkDetail | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
@@ -158,14 +160,8 @@ export default function SaleModal({
 
   return (
     <>
-      <div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-        onClick={onClose}
-      >
-        <div
-          className="flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl"
-          onClick={(e) => e.stopPropagation()}
-        >
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" {...backdrop}>
+        <div className="flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
           {loading || !selectedDetail ? (
             <p className="py-8 text-center text-sm text-neutral-400">Loading…</p>
           ) : (

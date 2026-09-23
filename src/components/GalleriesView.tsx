@@ -22,6 +22,7 @@ import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
 import SaleHeader from "@/components/SaleHeader";
+import { useBackdropClose } from "@/lib/useBackdropClose";
 
 type DetailTab = "details" | "sales";
 
@@ -238,6 +239,7 @@ export default function GalleriesView({
     setSelectedWorkId(null);
     setSelectedWorkDetail(null);
   };
+  const workBackdrop = useBackdropClose(closeWork);
 
   // Auto-opens a Location (and, if given, one of its works) from the
   // URL's own ?location=&work= query params (2026-09-22) — this is what
@@ -980,7 +982,7 @@ export default function GalleriesView({
           SaleHeader on top; below it either the sale card (sale already
           recorded) or the blank Record Sale form. */}
       {selectedWorkId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" {...workBackdrop}>
           <div className="flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
             {workLoading || !selectedWorkDetail ? (
               <p className="p-6 text-sm text-neutral-400">Loading…</p>
