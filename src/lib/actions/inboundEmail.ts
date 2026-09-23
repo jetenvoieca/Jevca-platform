@@ -221,7 +221,7 @@ export async function getSentList(artistId?: string): Promise<SentSummaryItem[]>
     include: {
       artist: { select: { name: true } },
       customer: { select: { name: true } },
-      purchase: { select: { chargeKind: true, artwork: { select: { presentationTitle: true } } } },
+      purchase: { select: { chargeKind: true, artwork: { select: { catalogueName: true } } } },
     },
   });
   return rows.map((r) => ({
@@ -235,7 +235,7 @@ export async function getSentList(artistId?: string): Promise<SentSummaryItem[]>
     artistName: r.artist?.name || null,
     customerId: r.customerId,
     customerName: r.customer?.name || null,
-    artworkTitle: r.purchase ? saleTitle(r.purchase.artwork.presentationTitle, r.purchase.chargeKind) : null,
+    artworkTitle: r.purchase ? saleTitle(r.purchase.artwork.catalogueName, r.purchase.chargeKind) : null,
     sentAt: r.sentAt.toISOString(),
   }));
 }

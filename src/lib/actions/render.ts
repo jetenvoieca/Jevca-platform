@@ -290,16 +290,7 @@ export async function getRenderStatus(artistId: string) {
           altText: true,
           tags: true,
           artworkId: true,
-          // catalogueName, not presentationTitle (2026-09-13 build fix)
-          // — MediaDetail (MediaDetailPanel.tsx) was changed to expect
-          // catalogueName on 2026-09-12 (direct report: renaming an
-          // artwork's Name didn't reach the Related-to name shown for
-          // its images, since Title only mirrors Name once, the first
-          // time it's set). This was the one remaining query still
-          // selecting the old field, which the build's type check
-          // caught since this result also flows into that same
-          // MediaDetail type via the Bucket/Video Editor's render
-          // result panel.
+          // The artwork's Name — its one and only name (2026-09-23).
           artwork: { select: { id: true, catalogueName: true } },
         },
       },

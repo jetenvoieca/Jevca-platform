@@ -195,7 +195,6 @@ export async function importArtworkRow(
     if ("error" in imageResult) return { ok: false, error: imageResult.error };
 
     const artwork = await createArtworkWithRetry(artistId, {
-      presentationTitle: row.title,
       catalogueName: row.title,
       presentationPrice: row.price,
       description: row.description || null,
