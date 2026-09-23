@@ -15,10 +15,7 @@ export type MediaDetail = {
   altText: string | null;
   tags: string[];
   artworkId: string | null;
-  // catalogueName, not presentationTitle (2026-09-12 fix, direct
-  // report — "rename an artwork's Name and its related image still
-  // shows the old name"). See the matching note in
-  // lib/actions/mediaCatalogue.ts for the full reasoning.
+  // The artwork's Name — its one and only name (2026-09-23).
   artwork: { id: string; catalogueName: string } | null;
 };
 

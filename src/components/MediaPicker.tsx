@@ -12,9 +12,7 @@ type PickedImage = {
   posterUrl: string | null;
   caption: string | null;
   kind: string;
-  // catalogueName, not presentationTitle (2026-09-13 fix — must stay
-  // consistent with listMedia/listImages, which both now select
-  // catalogueName; see the fuller reasoning in mediaCatalogue.ts).
+  // The artwork's Name — its one and only name (2026-09-23).
   artwork: { id: string; catalogueName: string } | null;
 };
 
