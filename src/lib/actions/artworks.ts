@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
 import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
 import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
+import type { PurchaseDetail } from "./payments";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
@@ -418,7 +419,7 @@ export async function getArtworkDetailForClient(id: string) {
   const artwork = await getArtworkDetail(id);
   if (!artwork) return null;
 
-  const purchases = artwork.purchases.map((p) => ({
+  const allPurchases: PurchaseDetail[] = artwork.purchases.map((p) => ({
     id: p.id,
     status: p.status,
     channel: p.channel,
@@ -429,6 +430,10 @@ export async function getArtworkDetailForClient(id: string) {
     framed: p.framed,
     source: p.source,
     commissionPercent: p.commissionPercent != null ? p.commissionPercent.toString() : null,
+    // Framing/delivery charge sales (2026-09-23) — filled in below.
+    parentPurchaseId: p.parentPurchaseId,
+    chargeKind: p.chargeKind,
+    charges: [],
     // Money already collected at record-sale time (2026-09-22) — only
     // ever set for an Own-location sale. See the matching note on
     // Purchase.depositPaid in schema.prisma.
@@ -444,6 +449,8 @@ export async function getArtworkDetailForClient(id: string) {
     stripeInstalmentLinkCount: p.stripeInstalmentLinkCount,
     invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
     invoiceEmailedTo: p.invoiceEmailedTo,
+    receiptEmailedAt: p.receiptEmailedAt ? p.receiptEmailedAt.toISOString() : null,
+    receiptEmailedTo: p.receiptEmailedTo,
     // Certificate of Authenticity sent-log (2026-09-03) — see the
     // matching schema.prisma/payments.ts comments.
     certificateEmailedAt: p.certificateEmailedAt ? p.certificateEmailedAt.toISOString() : null,
@@ -467,6 +474,13 @@ export async function getArtworkDetailForClient(id: string) {
       method: pay.method,
     })),
   }));
+
+  // A framing/delivery charge sale (2026-09-23) is shown under the sale
+  // it belongs to, never as the artwork's own sale — so it can't be
+  // mistaken for the active sale or appear in the sale history itself.
+  const purchases = allPurchases
+    .filter((p) => !p.parentPurchaseId)
+    .map((p) => ({ ...p, charges: allPurchases.filter((c) => c.parentPurchaseId === p.id) }));
 
   return {
     id: artwork.id,
