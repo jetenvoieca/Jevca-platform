@@ -25,7 +25,7 @@ type EditorGroup = {
 // via ArtworkPicker, refreshing after a full-edit save).
 function toTile(a: {
   id: string;
-  presentationTitle: string;
+  catalogueName: string;
   images: { url: string }[];
   presentationPrice: string | null;
   description: string | null;
@@ -36,7 +36,7 @@ function toTile(a: {
 }): PortfolioGridArtwork {
   return {
     id: a.id,
-    presentationTitle: a.presentationTitle,
+    catalogueName: a.catalogueName,
     imageUrl: a.images[0]?.url ?? null,
     presentationPrice: a.presentationPrice,
     description: a.description,
@@ -187,7 +187,7 @@ export default function PortfolioEditor({
   };
 
   const addArtworksToActiveGroup = (
-    picked: { id: string; presentationTitle: string; imageUrl: string | null; presentationPrice: string | null }[]
+    picked: { id: string; catalogueName: string; imageUrl: string | null; presentationPrice: string | null }[]
   ) => {
     if (!activeGroupId) return;
     const groupId = activeGroupId;
@@ -419,7 +419,7 @@ export default function PortfolioEditor({
                 />
               )}
               <h2 className="font-serif text-lg font-semibold text-neutral-900">
-                {selectedArtwork.presentationTitle}
+                {selectedArtwork.catalogueName}
               </h2>
               {selectedArtwork.description && (
                 <p className="mt-2 whitespace-pre-line text-sm text-neutral-600">

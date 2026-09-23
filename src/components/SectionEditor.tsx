@@ -91,7 +91,7 @@ export default function SectionEditor({
   const addArtworks = (
     picked: {
       id: string;
-      presentationTitle: string;
+      catalogueName: string;
       imageUrl: string | null;
       presentationPrice: string | null;
     }[]
@@ -127,7 +127,7 @@ export default function SectionEditor({
   };
 
   const closeArtwork = async () => {
-    // Refresh just this tile's data — presentationTitle/price/image may
+    // Refresh just this tile's data — catalogueName/price/image may
     // have changed while the panel was open, and the grid should show
     // that without needing a full page reload.
     if (editingId) {
@@ -138,7 +138,7 @@ export default function SectionEditor({
             a.id === editingId
               ? {
                   id: fresh.id,
-                  presentationTitle: fresh.presentationTitle,
+                  catalogueName: fresh.catalogueName,
                   imageUrl: fresh.images[0]?.url ?? null,
                   presentationPrice:
                     fresh.presentationPrice != null ? fresh.presentationPrice.toString() : null,
@@ -231,7 +231,7 @@ export default function SectionEditor({
                       </div>
                     )}
                     <p className="mt-1 truncate text-xs font-medium text-neutral-900">
-                      {a.presentationTitle}
+                      {a.catalogueName}
                     </p>
                     <button
                       type="button"

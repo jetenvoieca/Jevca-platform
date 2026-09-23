@@ -216,7 +216,6 @@ export async function createArtworkFromHopperQuick(
   let artwork: { id: string };
   try {
     artwork = await createArtworkWithRetry(artistId, {
-      presentationTitle: title,
       catalogueName: title,
       tier,
       offeredPrice: offeredPriceRaw || null,

@@ -9,7 +9,7 @@ import { useState } from "react";
 // Portfolio artwork looks like.
 export type PortfolioGridArtwork = {
   id: string;
-  presentationTitle: string;
+  catalogueName: string;
   imageUrl: string | null;
   presentationPrice: string | null;
   description: string | null;
@@ -180,7 +180,7 @@ export default function PortfolioGrid({
                         />
                       )}
                       <h2 className="font-serif text-lg font-semibold text-neutral-900">
-                        {selectedArtwork.presentationTitle}
+                        {selectedArtwork.catalogueName}
                       </h2>
                       {selectedArtwork.description && (
                         <p className="mt-2 whitespace-pre-line text-sm text-neutral-600">
