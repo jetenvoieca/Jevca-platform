@@ -394,7 +394,6 @@ export async function getArtworkDetail(id: string) {
     relationLoadStrategy: "join",
     include: {
       images: true,
-      saleTerms: true,
       purchases: {
         include: { payments: { orderBy: { sequence: "asc" } } },
         orderBy: { createdAt: "desc" },
@@ -542,15 +541,6 @@ export async function getArtworkDetailForClient(id: string) {
         kind: img.kind,
         posterUrl: img.posterUrl,
       })),
-    saleTerms: artwork.saleTerms
-      ? {
-          totalAmount: artwork.saleTerms.totalAmount.toString(),
-          currency: artwork.saleTerms.currency,
-          instalmentCount: artwork.saleTerms.instalmentCount,
-          releaseMessage: artwork.saleTerms.releaseMessage,
-          releaseTriggerCount: artwork.saleTerms.releaseTriggerCount,
-        }
-      : null,
     activePurchase: purchases.find((p) => p.status === "ACTIVE") || null,
     purchaseHistory: purchases.filter((p) => p.status !== "ACTIVE"),
   };
