@@ -4,7 +4,6 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   updateCatalogue,
-  updatePresentation,
   deleteArtwork,
   deleteArtworkIfBlank,
   duplicateArtwork,
@@ -19,7 +18,6 @@ import {
 import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
 import ArtworkCatalogueFields, { withCurrent } from "@/components/ArtworkCatalogueFields";
-import MediaPicker from "@/components/MediaPicker";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 
 export type ArtworkDetail = {
@@ -174,13 +172,6 @@ export default function ArtworkDetailPanel({
   // from its Location or the Sales page, never from here.
   const committed = artwork.availability === "SOLD" || artwork.availability === "RESERVED";
 
-  // ---- Catalogue / Presentation (2026-09-10, direct request) ----
-  // A completely separate panel now, switched via the header toggle
-  // rather than the old tab bar — same idea (two views of one artwork),
-  // simpler switch. Images & Videos stays shared between both (it
-  // renders once, above this toggle's content, regardless of view).
-  const [view, setView] = useState<"catalogue" | "presentation">("catalogue");
-
   // ---- "Sold" button routing (2026-09-22) ----
   // Every sale is recorded and managed at the artwork's Location (a
   // Gallery you consign to, or one of your own — studio, storage — see
@@ -223,28 +214,6 @@ export default function ArtworkDetailPanel({
     }
   };
 
-  // ---- Presentation panel state (2026-09-10) ----
-  // Description defaults to Type/Size/Medium strung together — a
-  // starting point only, filled in once from whatever Catalogue already
-  // has, then a completely ordinary editable field from then on (direct
-  // instruction: "whole description editable"). Only used as the
-  // initial value (useState's lazy initializer), never re-applied later
-  // — typing over it, including clearing it, is never overwritten back.
-  const defaultDescription = [artwork.type, artwork.size, artwork.medium]
-    .filter(Boolean)
-    .join(" - ");
-  const [descriptionValue, setDescriptionValue] = useState(
-    artwork.description || defaultDescription
-  );
-  // Three extra image slots (2026-09-10, direct request — "like Related
-  // images") — local only for now, not yet persisted anywhere; there's
-  // no backend field for this yet, so picking one here doesn't survive
-  // a refresh. A placeholder, pending a real design for where these
-  // actually get stored.
-  const [relatedSlots, setRelatedSlots] = useState<
-    (null | { id: string; url: string; kind: string })[]
-  >([null, null, null]);
-
   // ---- Autosave (2026-08-15) — reads straight from the DOM via
   // FormData rather than controlling every field in React state - much
   // less code, and safe here because nothing in this form needs to
@@ -262,25 +231,8 @@ export default function ArtworkDetailPanel({
     });
   };
 
-  // Presentation's own autosave (2026-09-10) — presentationMedium/
-  // viewingLocation still travel with this form via hidden inputs
-  // (preserving their current values) even though neither is editable
-  // here any more, so updatePresentation never silently wipes them to
-  // blank just because this simplified form doesn't show them.
-  const autosavePresentation = (form: HTMLFormElement) => {
-    const formData = new FormData(form);
-    if (!(formData.get("presentationTitle") as string)?.trim()) return;
-    startTransition(async () => {
-      await updatePresentation(artwork.id, siteId, formData);
-      setSaved(true);
-      if (onDataChanged) onDataChanged();
-      else router.refresh();
-      setTimeout(() => setSaved(false), 1500);
-    });
-  };
-
   const handleDelete = () => {
-    if (!confirm(`Delete "${artwork.presentationTitle}"? This can't be undone.`)) return;
+    if (!confirm(`Delete "${artwork.catalogueName}"? This can't be undone.`)) return;
     startTransition(async () => {
       await deleteArtwork(siteId, artwork.id);
       if (onDeleted) {
@@ -381,13 +333,6 @@ export default function ArtworkDetailPanel({
       <div className="sticky top-0 z-10 -mx-6 -mt-6 mb-4 flex items-start justify-between border-b border-neutral-200 bg-white px-6 pb-4 pt-6">
         <div>
           <h2 className="text-xl font-semibold text-neutral-900">{artwork.catalogueName}</h2>
-          {/* "· Public title: …" removed (2026-09-11, direct request —
-              "remove erroneous duplicate title"): with the Catalogue
-              name already shown as the heading above, echoing the
-              Presentation title here as well just duplicated it in
-              practice (they're very often the same, or the Presentation
-              title is a raw, not-yet-cleaned-up value like a Hopper
-              caption) rather than adding real information. */}
           <p className="text-sm text-neutral-500">Catalogue #{artwork.catalogueNumber}</p>
           {/* "Derived from #..." (2026-09-11, direct request — "show
               which artwork the current work is derived from") — replaces
@@ -402,36 +347,6 @@ export default function ArtworkDetailPanel({
           )}
         </div>
         <div className="flex items-center gap-2">
-          {/* Catalogue/Presentation toggle (2026-09-10, direct request)
-              — replaces the old tab bar; same two views, switched from
-              the header now instead. Button heights cut ~20% throughout
-              this header/form (2026-09-11, direct request — "catalogue
-              will be a high usage area") via arbitrary py values, same
-              reasoning as ArtworkCatalogueFields' shared inputCls. */}
-          <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
-            <button
-              type="button"
-              onClick={() => setView("catalogue")}
-              className={`px-3 py-[4.8px] font-medium ${
-                view === "catalogue"
-                  ? "bg-neutral-900 text-white"
-                  : "bg-white text-neutral-600 hover:bg-neutral-50"
-              }`}
-            >
-              Catalogue
-            </button>
-            <button
-              type="button"
-              onClick={() => setView("presentation")}
-              className={`px-3 py-[4.8px] font-medium ${
-                view === "presentation"
-                  ? "bg-neutral-900 text-white"
-                  : "bg-white text-neutral-600 hover:bg-neutral-50"
-              }`}
-            >
-              Presentation
-            </button>
-          </div>
           <button
             type="button"
             onClick={handleDuplicate}
@@ -439,8 +354,10 @@ export default function ArtworkDetailPanel({
             className="rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm hover:bg-neutral-50 disabled:opacity-50"
           >
             {/* Shortened from "Create Derivative" (2026-09-10, direct
-                request) — same action, just less space taken up now
-                that the header also carries the view toggle. */}
+                request). Button heights cut ~20% throughout this
+                header/form (2026-09-11, direct request — "catalogue
+                will be a high usage area") via arbitrary py values, same
+                reasoning as ArtworkCatalogueFields' shared inputCls. */}
             Derivative
           </button>
           <button
@@ -479,228 +396,149 @@ export default function ArtworkDetailPanel({
         onDataChanged={onDataChanged}
       />
 
-      {view === "presentation" ? (
-        // ---- Presentation panel (2026-09-10, direct request) — a
-        // completely separate view from Catalogue, reached via the
-        // header toggle above. Title/Description only; everything else
-        // Catalogue tracks (Type/Group/Medium/Size/Location/Availability/
-        // Studio notes) stays there, untouched, preserved here via
-        // hidden inputs so this simpler form never wipes it.
-        <form
-          key="presentation-form"
-          onBlur={(e) => autosavePresentation(e.currentTarget)}
-          className="space-y-4"
-        >
+      <form onBlur={(e) => autosaveCatalogue(e.currentTarget)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
           <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
             <input
               type="text"
-              name="presentationTitle"
-              defaultValue={artwork.presentationTitle}
-              placeholder="Title"
+              name="catalogueName"
+              defaultValue={artwork.catalogueName}
               required
-              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-center text-sm"
-            />
-          </div>
-
-          {/* Extra image slots (2026-09-10, direct request — "like
-              Related images") — placeholder only for now, see the note
-              on relatedSlots above. */}
-          <div className="grid grid-cols-3 gap-3">
-            {relatedSlots.map((slot, i) => (
-              <MediaPicker
-                key={i}
-                artistId={artistId}
-                siteId={siteId}
-                mode="single"
-                label="Add"
-                linkedArtworkId={artwork.id}
-                mediaKinds={["PHOTO", "VIDEO"]}
-                previewUrl={slot?.url}
-                previewClassName="aspect-square h-full w-full"
-                onSelect={([img]) => {
-                  if (!img) return;
-                  setRelatedSlots((prev) =>
-                    prev.map((s, idx) => (idx === i ? { id: img.id, url: img.url, kind: img.kind } : s))
-                  );
-                }}
-              />
-            ))}
-          </div>
-
-          <div>
-            <textarea
-              name="description"
-              value={descriptionValue}
-              onChange={(e) => setDescriptionValue(e.target.value)}
-              placeholder="Description"
-              rows={6}
               className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
             />
           </div>
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Tier</label>
+            <select
+              name="tier"
+              defaultValue={artwork.tier || ""}
+              onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
+              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+            >
+              <option value="">Choose from list…</option>
+              {withCurrent(settings.artworkTiers, artwork.tier).map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
+          </div>
 
-          {/* presentationMedium/viewingLocation preserved (see the note
-              on autosavePresentation above) — not editable from this
-              simplified form. */}
-          <input type="hidden" name="presentationMedium" value={artwork.presentationMedium || ""} />
-          <input type="hidden" name="viewingLocation" value={artwork.viewingLocation || ""} />
-
-          <button
-            type="button"
-            onClick={() => setView("catalogue")}
-            className="w-full rounded-md border border-neutral-300 px-4 py-[6.4px] text-sm font-medium hover:bg-neutral-50"
+          {/* The Type/Group/Medium/Size/Edition/Location/Date/
+              Availability/Studio notes block below is the exact same
+              shared component the Hopper's quick-add form uses
+              (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
+              and Reference/Offered price (passed as children, rendered
+              between Date and Availability) stay Catalogue-only.
+              availabilityOverride swaps in the Available/SOLD control.
+              onAddType/onAddGroup/onAddMedium/onAddLocation give those
+              selects their own inline "+ Add new…" option — the Hopper
+              doesn't pass these, so its selects are unaffected. */}
+          <ArtworkCatalogueFields
+            settings={settings}
+            values={{
+              type: artwork.type || "",
+              catalogueGroup: artwork.catalogueGroup || "",
+              medium: artwork.medium || "",
+              size: artwork.size || "",
+              edition: artwork.edition || "",
+              location: artwork.location || "",
+              availableQty: artwork.availableQty?.toString() ?? "",
+              date: artwork.date || "",
+              studioNotes: artwork.studioNotes || "",
+              availability: artwork.availability,
+            }}
+            onAutosave={autosaveCatalogue}
+            onTypeOrSizeChange={(type, size) => {
+              setTypeValue(type);
+              setSizeValue(size);
+            }}
+            onAddType={handleAddType}
+            onAddGroup={handleAddGroup}
+            onAddMedium={handleAddMedium}
+            onAddLocation={handleAddLocation}
+            availabilityOverride={
+              // Available/SOLD — only while the artwork isn't
+              // `committed` (see above); once RESERVED or SOLD it's
+              // plain static text. Available is simply the current
+              // state; SOLD routes to the artwork's Location (see
+              // handleSoldClick above).
+              committed ? (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Availability
+                  </label>
+                  <p className="rounded-md border border-neutral-300 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-700">
+                    {artwork.availability === "SOLD" ? "SOLD" : "Sold - Not Paid"}
+                  </p>
+                  <input type="hidden" name="availability" value={artwork.availability} />
+                </div>
+              ) : (
+                <div>
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">
+                    Availability
+                  </label>
+                  <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+                    <span className="flex-1 bg-neutral-900 px-3 py-[6.4px] text-center font-medium text-white">
+                      Available
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleSoldClick}
+                      disabled={!artwork.offeredPrice || soldRoutingPending}
+                      title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
+                      className="flex-1 bg-white px-3 py-[6.4px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      {soldRoutingPending ? "…" : "SOLD"}
+                    </button>
+                  </div>
+                  <input type="hidden" name="availability" value={artwork.availability} />
+                </div>
+              )
+            }
           >
-            See Purchase options
-          </button>
-
-          {saved && <p className="text-sm text-green-600">Saved</p>}
-        </form>
-      ) : (
-        <>
-          <form key="catalogue-form" onBlur={(e) => autosaveCatalogue(e.currentTarget)} className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
+            {/* Reference and Offered price as one compact pair
+                (2026-09-11, direct request — "put reference price
+                and offered price in same column for direct
+                comparison"): a single child of ArtworkCatalogueFields,
+                so together they take one outer grid cell, with their
+                own tight 2-column sub-grid inside. */}
+            <div className="grid grid-cols-2 gap-2">
+              {/* Reference price is a suggestion, not typed —
+                  (Size preset's width × height) × the selected
+                  Type's Ref value, recalculated live as either
+                  changes (2026-08-28). See src/lib/pricing.ts. */}
               <div>
-                <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Reference price
+                </label>
                 <input
                   type="text"
-                  name="catalogueName"
-                  defaultValue={artwork.catalogueName}
-                  required
-                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                  readOnly
+                  value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
+                  className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
                 />
               </div>
               <div>
-                <label className="mb-1 block text-sm font-medium text-neutral-700">Tier</label>
-                <select
-                  name="tier"
-                  defaultValue={artwork.tier || ""}
-                  onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
+                <label className="mb-1 block text-sm font-medium text-neutral-700">
+                  Offered price
+                </label>
+                <input
+                  type="text"
+                  name="offeredPrice"
+                  defaultValue={artwork.offeredPrice || ""}
+                  placeholder="e.g. 450.00"
                   className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-                >
-                  <option value="">Choose from list…</option>
-                  {withCurrent(settings.artworkTiers, artwork.tier).map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
-
-              {/* The Type/Group/Medium/Size/Edition/Location/Date/
-                  Availability/Studio notes block below is the exact same
-                  shared component the Hopper's quick-add form uses
-                  (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
-                  and Reference/Offered price (passed as children, rendered
-                  between Date and Availability) stay Catalogue-only.
-                  availabilityOverride swaps in the Available/SOLD control.
-                  onAddType/onAddGroup/onAddMedium/onAddLocation give those
-                  selects their own inline "+ Add new…" option — the Hopper
-                  doesn't pass these, so its selects are unaffected. */}
-              <ArtworkCatalogueFields
-                settings={settings}
-                values={{
-                  type: artwork.type || "",
-                  catalogueGroup: artwork.catalogueGroup || "",
-                  medium: artwork.medium || "",
-                  size: artwork.size || "",
-                  edition: artwork.edition || "",
-                  location: artwork.location || "",
-                  availableQty: artwork.availableQty?.toString() ?? "",
-                  date: artwork.date || "",
-                  studioNotes: artwork.studioNotes || "",
-                  availability: artwork.availability,
-                }}
-                onAutosave={autosaveCatalogue}
-                onTypeOrSizeChange={(type, size) => {
-                  setTypeValue(type);
-                  setSizeValue(size);
-                }}
-                onAddType={handleAddType}
-                onAddGroup={handleAddGroup}
-                onAddMedium={handleAddMedium}
-                onAddLocation={handleAddLocation}
-                availabilityOverride={
-                  // Available/SOLD — only while the artwork isn't
-                  // `committed` (see above); once RESERVED or SOLD it's
-                  // plain static text. Available is simply the current
-                  // state; SOLD routes to the artwork's Location (see
-                  // handleSoldClick above).
-                  committed ? (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Availability
-                      </label>
-                      <p className="rounded-md border border-neutral-300 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-700">
-                        {artwork.availability === "SOLD" ? "SOLD" : "Sold - Not Paid"}
-                      </p>
-                      <input type="hidden" name="availability" value={artwork.availability} />
-                    </div>
-                  ) : (
-                    <div>
-                      <label className="mb-1 block text-sm font-medium text-neutral-700">
-                        Availability
-                      </label>
-                      <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                        <span className="flex-1 bg-neutral-900 px-3 py-[6.4px] text-center font-medium text-white">
-                          Available
-                        </span>
-                        <button
-                          type="button"
-                          onClick={handleSoldClick}
-                          disabled={!artwork.offeredPrice || soldRoutingPending}
-                          title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
-                          className="flex-1 bg-white px-3 py-[6.4px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-                        >
-                          {soldRoutingPending ? "…" : "SOLD"}
-                        </button>
-                      </div>
-                      <input type="hidden" name="availability" value={artwork.availability} />
-                    </div>
-                  )
-                }
-              >
-                {/* Reference and Offered price as one compact pair
-                    (2026-09-11, direct request — "put reference price
-                    and offered price in same column for direct
-                    comparison"): a single child of ArtworkCatalogueFields,
-                    so together they take one outer grid cell, with their
-                    own tight 2-column sub-grid inside. */}
-                <div className="grid grid-cols-2 gap-2">
-                  {/* Reference price is a suggestion, not typed —
-                      (Size preset's width × height) × the selected
-                      Type's Ref value, recalculated live as either
-                      changes (2026-08-28). See src/lib/pricing.ts. */}
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Reference price
-                    </label>
-                    <input
-                      type="text"
-                      readOnly
-                      value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
-                      className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-sm font-medium text-neutral-700">
-                      Offered price
-                    </label>
-                    <input
-                      type="text"
-                      name="offeredPrice"
-                      defaultValue={artwork.offeredPrice || ""}
-                      placeholder="e.g. 450.00"
-                      className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-                    />
-                  </div>
-                </div>
-              </ArtworkCatalogueFields>
             </div>
-            <div className="flex items-center gap-3">
-              {saved && <span className="text-sm text-green-600">Saved</span>}
-            </div>
-          </form>
-        </>
-      )}
+          </ArtworkCatalogueFields>
+        </div>
+        <div className="flex items-center gap-3">
+          {saved && <span className="text-sm text-green-600">Saved</span>}
+        </div>
+      </form>
     </div>
   );
 }

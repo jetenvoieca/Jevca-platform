@@ -187,17 +187,13 @@ export async function addHopperItemToArtwork(
 // AVAILABLE; see QuickCatalogueFields in HopperView.tsx). Name is no
 // longer collected earlier, on the plain sorting card, at all ("no name
 // or description at this stage") — it comes straight from this form's
-// own `catalogueName` field instead. Description is left blank — it's a
-// Presentation-tab field, out of scope for this Catalogue-only quick
-// form; Presentation's own default description (Type/Size/Medium strung
-// together) fills in for it until someone writes a real one.
+// own `catalogueName` field instead. Description is left blank.
 //
 // needsReview stays true here, same as the old quickCreateArtwork(...,
 // true) call did — filling in these fields is still optional, so a
 // Hopper-created artwork can genuinely still be incomplete even after
-// this. It clears automatically the first time Catalogue or Presentation
-// is properly saved from the full editor (see updateCatalogue /
-// updatePresentation in artworks.ts).
+// this. It clears automatically the first time Catalogue is properly
+// saved from the full editor (see updateCatalogue in artworks.ts).
 export async function createArtworkFromHopperQuick(
   hopperImageId: string,
   siteId: string,
