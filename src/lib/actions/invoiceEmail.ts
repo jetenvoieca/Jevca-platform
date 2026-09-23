@@ -128,10 +128,10 @@ export async function getInvoiceEmailDraft(
   const chargeLabel =
     purchase.chargeKind === "FRAMING" ? "framing" : purchase.chargeKind === "DELIVERY" ? "delivery" : null;
   const opening = chargeLabel
-    ? `This is for the ${chargeLabel} of ${purchase.artwork.presentationTitle}: ${sym}${total.toFixed(2)}.`
+    ? `This is for the ${chargeLabel} of ${purchase.artwork.catalogueName}: ${sym}${total.toFixed(2)}.`
     : isGallery
-      ? `It's great that you have sold ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`
-      : `Thank you for your purchase of ${purchase.artwork.presentationTitle} for ${sym}${total.toFixed(2)}.`;
+      ? `It's great that you have sold ${purchase.artwork.catalogueName} for ${sym}${total.toFixed(2)}.`
+      : `Thank you for your purchase of ${purchase.artwork.catalogueName} for ${sym}${total.toFixed(2)}.`;
 
   const middleParagraphs = isPaid
     ? ["Thank you for the payment — I enclose our receipt for your records."]
@@ -156,7 +156,7 @@ export async function getInvoiceEmailDraft(
 
   return {
     to: recipient,
-    subject: `Sale "${saleTitle(purchase.artwork.presentationTitle, purchase.chargeKind)}"`,
+    subject: `Sale "${saleTitle(purchase.artwork.catalogueName, purchase.chargeKind)}"`,
     body,
   };
 }

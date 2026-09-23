@@ -164,28 +164,21 @@ export async function listImages(artistId: string, q?: string) {
     // is already related to (previously only its caption showed, so a
     // photo already tied to a specific piece looked no different from an
     // unrelated one until you'd actually picked it and looked closer).
-    // catalogueName, not presentationTitle (2026-09-13 fix) — must stay
-    // consistent with mediaCatalogue.ts's listMedia, since
-    // MediaPicker.tsx uses both interchangeably through one shared
-    // local type. See the fuller reasoning there: Title only mirrors
-    // Name the first time Name is ever saved, so showing Title here
-    // could go stale the moment an artwork was renamed a second time.
+    // The artwork's Name — its one and only name (2026-09-23).
     include: { artwork: { select: { id: true, catalogueName: true } } },
     relationLoadStrategy: "query",
     take: 60,
   });
 }
 
-// Used by the Artwork Feature block picker — reads the Presentation facet,
-// since that's what a page visitor would see (matches the "block pulls in
-// Presentation data" decision in the Artworks Catalogue design). Scoped to
-// the artist, not the site, since a page on any of that artist's sites can
-// feature any of their artworks.
+// Used by ArtworkPicker (page editors, Hopper) — searches by Name. Scoped
+// to the artist, not the site, since a page on any of that artist's
+// sites can feature any of their artworks.
 export async function getArtworksForArtist(artistId: string, q?: string) {
   const rows = await db.artwork.findMany({
     where: {
       artistId,
-      ...(q ? { presentationTitle: { contains: q, mode: "insensitive" } } : {}),
+      ...(q ? { catalogueName: { contains: q, mode: "insensitive" } } : {}),
     },
     include: { images: { take: 1 }, mainImage: true },
     relationLoadStrategy: "query",
@@ -227,7 +220,7 @@ export async function quickCreateArtwork(
   markNeedsReview = false
 ) {
   const trimmed = title.trim();
-  if (!trimmed) return { error: "Title is required." };
+  if (!trimmed) return { error: "Name is required." };
 
   for (let attempt = 0; attempt < 3; attempt++) {
     const catalogueNumber = await nextCatalogueNumber(artistId);
@@ -236,7 +229,6 @@ export async function quickCreateArtwork(
         data: {
           artistId,
           catalogueNumber,
-          presentationTitle: trimmed,
           catalogueName: trimmed,
           needsReview: markNeedsReview,
         },

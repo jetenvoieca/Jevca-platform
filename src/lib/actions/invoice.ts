@@ -218,7 +218,7 @@ export async function generateInvoicePdf(
   y -= 22;
 
   const total = parseFloat(purchase.totalAmount.toString());
-  page.drawText(saleTitle(purchase.artwork.presentationTitle, purchase.chargeKind), { x: left, y, size: 11, font: bold });
+  page.drawText(saleTitle(purchase.artwork.catalogueName, purchase.chargeKind), { x: left, y, size: 11, font: bold });
   const totalLabel = fmt(total);
   page.drawText(totalLabel, { x: rightAlign(totalLabel, font, 11), y, size: 11, font });
   y -= 25;
