@@ -6,7 +6,9 @@ import {
   recordGalleryPayment,
   abandonPurchase,
   deleteGallerySale,
+  forceDeleteCompletedSale,
   createGalleryPaymentLink,
+  createGalleryCardIntent,
   getGalleryInstalmentDefault,
   saveSaleExtra,
   type PurchaseDetail,
@@ -16,14 +18,11 @@ import { formatDate } from "@/lib/formatDate";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import InvoiceEmailModal from "@/components/InvoiceEmailModal";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
+import StripeCardForm from "@/components/StripeCardForm";
 
 // Every action-panel button: #5E5E5E with #F9F6EE text.
 const actionButtonCls =
   "rounded-md bg-[#5E5E5E] px-3 py-2 text-sm text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50";
-
-// Take Card — built in a later part. Styled like a real action button
-// so the grid reads as one set.
-const placeholderButtonCls = `${actionButtonCls} opacity-60`;
 
 // Inputs inside the sliding panel — centred text, per mockup.
 const drawerInputCls =
@@ -33,16 +32,24 @@ const iconButtonCls =
   "shrink-0 rounded-md p-1 text-neutral-800 hover:bg-neutral-100 disabled:opacity-50";
 
 // Which input panel the action panel slides down to reveal.
-type DrawerKind = "framing" | "delivery" | "payment" | "link";
+type DrawerKind = "framing" | "delivery" | "payment" | "link" | "card";
 
 const DRAWER_TITLE: Record<DrawerKind, string> = {
   framing: "Arrange Framing",
   delivery: "Arrange Delivery",
   payment: "Record Payment",
   link: "Stripe payment link",
+  card: "Card payment",
 };
 
-type LinkOption = "full" | "instalments";
+// Full amount, or the first of N instalments — chosen the same way for
+// a payment link and for Take Card.
+type AmountOption = "full" | "instalments";
+
+const CHARGE_LABEL: Record<"FRAMING" | "DELIVERY", string> = {
+  FRAMING: "Framing charge",
+  DELIVERY: "Delivery charge",
+};
 
 function TickIcon() {
   return (
@@ -66,6 +73,62 @@ function LinkIcon() {
       <path d="M10 13a5 5 0 0 0 7.07 0l3-3a5 5 0 0 0-7.07-7.07l-1.5 1.5" strokeLinecap="round" />
       <path d="M14 11a5 5 0 0 0-7.07 0l-3 3a5 5 0 0 0 7.07 7.07l1.5-1.5" strokeLinecap="round" />
     </svg>
+  );
+}
+
+// The three boxes shared by the payment link and Take Card panels:
+// Full amount · [N] Instalments · per-instalment amount. Clicking a box
+// selects that option; the count is typed straight into the middle box.
+function AmountOptions({
+  balanceLabel,
+  perInstalmentLabel,
+  instalmentCount,
+  onCountChange,
+  selected,
+  onSelect,
+  disabled,
+}: {
+  balanceLabel: string;
+  perInstalmentLabel: string;
+  instalmentCount: string;
+  onCountChange: (value: string) => void;
+  selected: AmountOption | null;
+  onSelect: (option: AmountOption) => void;
+  disabled: boolean;
+}) {
+  const boxCls = (on: boolean) =>
+    `flex flex-col items-center justify-center rounded-lg border px-2 py-2 text-center leading-tight ${
+      on ? "border-neutral-900 text-neutral-900" : "border-neutral-300 text-neutral-500 hover:border-neutral-500"
+    }`;
+  return (
+    <div className="mt-3 grid grid-cols-3 gap-3">
+      <button type="button" onClick={() => onSelect("full")} disabled={disabled} className={boxCls(selected === "full")}>
+        <span className="text-sm">Full amount</span>
+        <span className="text-base">{balanceLabel}</span>
+      </button>
+      <label className={`cursor-text ${boxCls(selected === "instalments")}`}>
+        <input
+          type="text"
+          inputMode="numeric"
+          value={instalmentCount}
+          onChange={(e) => onCountChange(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && onSelect("instalments")}
+          disabled={disabled}
+          aria-label="Number of instalments"
+          className="w-12 rounded border border-transparent bg-transparent text-center text-base text-neutral-900 hover:border-neutral-200 focus:border-neutral-400 focus:outline-none"
+        />
+        <span className="text-sm">Instalments</span>
+      </label>
+      <button
+        type="button"
+        onClick={() => onSelect("instalments")}
+        disabled={disabled}
+        className={boxCls(selected === "instalments")}
+      >
+        <span className="text-sm">Instalments</span>
+        <span className="text-base">{perInstalmentLabel}</span>
+      </button>
+    </div>
   );
 }
 
@@ -100,8 +163,11 @@ export function SaleStatusBadge({
 // The single shared view of one GALLERY-channel sale (ACTIVE or
 // COMPLETED), used everywhere such a sale can be opened. Top to bottom:
 // Sales details (price, extras, paid / Net Due), Sales status (payments
-// and sends), a sliding input panel, and the Action panel. ABANDONED
-// sales never come here — callers show SaleDetailCard for those.
+// and sends), a sliding input panel, the Action panel, Cancel/Delete,
+// and then any framing/delivery charge sales arranged after payment —
+// each shown with this same card (a charge has no Arrange buttons and
+// no certificate). ABANDONED sales never come here — callers show
+// SaleDetailCard for those.
 export default function GallerySaleCard({
   purchase,
   siteId,
@@ -141,11 +207,15 @@ export default function GallerySaleCard({
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("");
 
-  // Stripe payment link
-  const [linkOption, setLinkOption] = useState<LinkOption | null>(null);
-  const [linkUrl, setLinkUrl] = useState<string | null>(null);
+  // Stripe payment link / Take Card — the instalment count is shared
   const [instalmentCount, setInstalmentCount] = useState("");
+  const [linkOption, setLinkOption] = useState<AmountOption | null>(null);
+  const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [cardOption, setCardOption] = useState<AmountOption | null>(null);
+  const [cardIntent, setCardIntent] = useState<{ clientSecret: string; publishableKey: string } | null>(
+    null
+  );
 
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
@@ -156,6 +226,8 @@ export default function GallerySaleCard({
   } | null>(null);
 
   const isPaid = purchase.status === "COMPLETED";
+  const isCharge = purchase.chargeKind !== null;
+  const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
   const onInstalmentPlan = purchase.type === "INSTALMENTS";
   const amounts = saleBreakdown(purchase);
   const balance = isPaid ? 0 : amounts.balance;
@@ -178,9 +250,16 @@ export default function GallerySaleCard({
     setError(null);
     setDrawerKind(kind);
     if (kind === "framing" || kind === "delivery") {
-      // A sale has at most one of each — clicking again edits it.
-      setExtraName((kind === "framing" ? purchase.framer : purchase.courier) ?? "");
-      setExtraCost((kind === "framing" ? purchase.framingCost : purchase.deliveryCost) ?? "");
+      // At most one of each — clicking again edits it. Before payment it
+      // lives on this sale; after payment it's its own charge sale.
+      if (isPaid) {
+        const charge = liveCharges.find((c) => c.chargeKind === (kind === "framing" ? "FRAMING" : "DELIVERY"));
+        setExtraName((kind === "framing" ? charge?.framer : charge?.courier) ?? "");
+        setExtraCost(charge?.totalAmount ?? "");
+      } else {
+        setExtraName((kind === "framing" ? purchase.framer : purchase.courier) ?? "");
+        setExtraCost((kind === "framing" ? purchase.framingCost : purchase.deliveryCost) ?? "");
+      }
     } else if (kind === "payment") {
       setPayDate(new Date().toISOString().slice(0, 10));
       setPayAmount(balance.toFixed(2));
@@ -189,6 +268,8 @@ export default function GallerySaleCard({
       setLinkOption(null);
       setLinkUrl(null);
       setLinkCopied(false);
+      setCardOption(null);
+      setCardIntent(null);
       if (!instalmentCount) {
         getGalleryInstalmentDefault(purchase.id).then((n) => setInstalmentCount(String(n)));
       }
@@ -227,7 +308,7 @@ export default function GallerySaleCard({
 
   // Clicking an option box selects it and shows its link (generated on
   // first use, reused after — see createGalleryPaymentLink).
-  const handleChooseLink = (option: LinkOption) => {
+  const handleChooseLink = (option: AmountOption) => {
     if (option === "instalments" && !countValid) {
       setError("Enter a number of instalments between 2 and 36.");
       return;
@@ -252,13 +333,49 @@ export default function GallerySaleCard({
     });
   };
 
+  // Clicking an option box sets up Stripe's card form for that amount.
+  const handleChooseCard = (option: AmountOption) => {
+    if (option === "instalments" && !countValid) {
+      setError("Enter a number of instalments between 2 and 36.");
+      return;
+    }
+    setError(null);
+    setCardOption(option);
+    setCardIntent(null);
+    startTransition(async () => {
+      const res = await createGalleryCardIntent(
+        purchase.id,
+        siteId,
+        option === "instalments" ? count : undefined
+      );
+      if (!res.ok) {
+        setError(res.error);
+        setCardOption(null);
+        return;
+      }
+      setCardIntent({ clientSecret: res.clientSecret, publishableKey: res.publishableKey });
+    });
+  };
+
+  const handleCardDone = () => {
+    setDrawerOpen(false);
+    setCardIntent(null);
+    onChanged();
+    router.refresh();
+  };
+
   // A new count means a different instalment amount, so any instalment
-  // link on screen no longer applies until the box is clicked again.
+  // link or card form on screen no longer applies until the box is
+  // clicked again.
   const handleCountChange = (value: string) => {
     setInstalmentCount(value.replace(/\D/g, "").slice(0, 2));
     if (linkOption === "instalments") {
       setLinkOption(null);
       setLinkUrl(null);
+    }
+    if (cardOption === "instalments") {
+      setCardOption(null);
+      setCardIntent(null);
     }
   };
 
@@ -270,11 +387,15 @@ export default function GallerySaleCard({
     });
   };
 
+  const saleNoun = isCharge ? "charge" : "sale";
+
   const handleCancelSale = () => {
     setPendingConfirm({
-      title: "Cancel this sale?",
-      message: "It'll be kept in the history, marked as abandoned.",
-      confirmLabel: "Cancel sale",
+      title: `Cancel this ${saleNoun}?`,
+      message: isPaid
+        ? `This ${saleNoun} has been paid. Cancelling keeps it on record, marked as cancelled — any refund has to be made outside the app.`
+        : `It'll be kept in the history, marked as cancelled.`,
+      confirmLabel: `Cancel ${saleNoun}`,
       danger: true,
       onConfirm: () => {
         setPendingConfirm(null);
@@ -290,11 +411,15 @@ export default function GallerySaleCard({
   };
 
   const handleDeleteSale = () => {
-    const message = purchase.invoiceNumber
-      ? `An invoice (#${purchase.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely.`
-      : "This removes the sale entirely — it cannot be undone.";
+    const chargesNote =
+      liveCharges.length > 0 ? " Its framing/delivery charges are deleted with it." : "";
+    const message = isPaid
+      ? `This ${saleNoun} has been paid. Deleting removes it and its payments from your records entirely, permanently — including from your accounts. Only do this for test or clearly wrong data, never for a real transaction.${chargesNote}`
+      : purchase.invoiceNumber
+        ? `An invoice (#${purchase.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the ${saleNoun} entirely.${chargesNote}`
+        : `This removes the ${saleNoun} entirely — it cannot be undone.${chargesNote}`;
     setPendingConfirm({
-      title: "Delete this sale permanently?",
+      title: `Delete this ${saleNoun} permanently?`,
       message,
       confirmLabel: "Delete permanently",
       danger: true,
@@ -302,7 +427,9 @@ export default function GallerySaleCard({
         setPendingConfirm(null);
         setError(null);
         startTransition(async () => {
-          const res = await deleteGallerySale(purchase.id, siteId);
+          const res = isPaid
+            ? await forceDeleteCompletedSale(purchase.id, siteId)
+            : await deleteGallerySale(purchase.id, siteId);
           if (!res.ok) {
             setError(res.error);
             return;
@@ -334,14 +461,7 @@ export default function GallerySaleCard({
     });
   };
 
-  // Framing/delivery after payment is covered in a later part.
-  const handlePaidExtraPlaceholder = () => alert("Coming in a later phase.");
-  const handleTakeCard = () => alert("Take Card — coming in a later phase.");
-
-  const optionBoxCls = (selected: boolean) =>
-    `flex flex-col items-center justify-center rounded-lg border px-2 py-2 text-center leading-tight ${
-      selected ? "border-neutral-900 text-neutral-900" : "border-neutral-300 text-neutral-500 hover:border-neutral-500"
-    }`;
+  const perInstalmentLabel = perInstalment !== null ? money(perInstalment) : "—";
 
   return (
     <div>
@@ -371,11 +491,8 @@ export default function GallerySaleCard({
             {formatMoney(nextDueInstalment.amount, nextDueInstalment.currency)}
           </p>
         )}
-        {purchase.invoiceEmailedAt && (
-          <p>
-            {isPaid ? "Receipt sent" : "Invoice sent"} {formatDate(purchase.invoiceEmailedAt)}
-          </p>
-        )}
+        {purchase.invoiceEmailedAt && <p>Invoice sent {formatDate(purchase.invoiceEmailedAt)}</p>}
+        {purchase.receiptEmailedAt && <p>Receipt sent {formatDate(purchase.receiptEmailedAt)}</p>}
         {purchase.certificateEmailedAt && (
           <p>Certificate of authenticity sent {formatDate(purchase.certificateEmailedAt)}</p>
         )}
@@ -487,39 +604,15 @@ export default function GallerySaleCard({
                 </p>
               ) : (
                 <>
-                  <div className="mt-3 grid grid-cols-3 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => handleChooseLink("full")}
-                      disabled={isPending}
-                      className={optionBoxCls(linkOption === "full")}
-                    >
-                      <span className="text-sm">Full amount</span>
-                      <span className="text-base">{money(balance)}</span>
-                    </button>
-                    <label className={`cursor-text ${optionBoxCls(linkOption === "instalments")}`}>
-                      <input
-                        type="text"
-                        inputMode="numeric"
-                        value={instalmentCount}
-                        onChange={(e) => handleCountChange(e.target.value)}
-                        onKeyDown={(e) => e.key === "Enter" && handleChooseLink("instalments")}
-                        disabled={isPending}
-                        aria-label="Number of instalments"
-                        className="w-12 rounded border border-transparent bg-transparent text-center text-base text-neutral-900 hover:border-neutral-200 focus:border-neutral-400 focus:outline-none"
-                      />
-                      <span className="text-sm">Instalments</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => handleChooseLink("instalments")}
-                      disabled={isPending}
-                      className={optionBoxCls(linkOption === "instalments")}
-                    >
-                      <span className="text-sm">Instalments</span>
-                      <span className="text-base">{perInstalment !== null ? money(perInstalment) : "—"}</span>
-                    </button>
-                  </div>
+                  <AmountOptions
+                    balanceLabel={money(balance)}
+                    perInstalmentLabel={perInstalmentLabel}
+                    instalmentCount={instalmentCount}
+                    onCountChange={handleCountChange}
+                    selected={linkOption}
+                    onSelect={handleChooseLink}
+                    disabled={isPending}
+                  />
                   {linkOption && (
                     <div className="mt-3 flex items-center gap-2">
                       <input
@@ -542,41 +635,73 @@ export default function GallerySaleCard({
                   )}
                 </>
               ))}
+
+            {drawerKind === "card" &&
+              (onInstalmentPlan ? (
+                <p className="mt-3 text-center text-sm text-neutral-500">
+                  This sale is already being paid by instalments through Stripe.
+                </p>
+              ) : (
+                <>
+                  <AmountOptions
+                    balanceLabel={money(balance)}
+                    perInstalmentLabel={perInstalmentLabel}
+                    instalmentCount={instalmentCount}
+                    onCountChange={handleCountChange}
+                    selected={cardOption}
+                    onSelect={handleChooseCard}
+                    disabled={isPending}
+                  />
+                  {cardOption && (
+                    <div className="mt-4">
+                      {cardIntent ? (
+                        <StripeCardForm
+                          key={cardIntent.clientSecret}
+                          clientSecret={cardIntent.clientSecret}
+                          publishableKey={cardIntent.publishableKey}
+                          purchaseId={purchase.id}
+                          onDone={handleCardDone}
+                        />
+                      ) : (
+                        <p className="text-center text-sm text-neutral-400">Preparing card form…</p>
+                      )}
+                    </div>
+                  )}
+                </>
+              ))}
           </div>
         </div>
       </div>
 
       {/* ---- Action panel ---- */}
+      {/* Framing and delivery stay available after payment (they may be
+          arranged later) — a charge sale itself has neither. */}
       <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
-        <button
-          type="button"
-          onClick={isPaid ? handlePaidExtraPlaceholder : () => openDrawer("framing")}
-          disabled={isPending}
-          className={isPaid ? placeholderButtonCls : actionButtonCls}
-        >
-          Arrange Framing
-        </button>
-        <button
-          type="button"
-          onClick={isPaid ? handlePaidExtraPlaceholder : () => openDrawer("delivery")}
-          disabled={isPending}
-          className={isPaid ? placeholderButtonCls : actionButtonCls}
-        >
-          Arrange Delivery
-        </button>
+        {!isCharge && (
+          <>
+            <button type="button" onClick={() => openDrawer("framing")} disabled={isPending} className={actionButtonCls}>
+              Arrange Framing
+            </button>
+            <button type="button" onClick={() => openDrawer("delivery")} disabled={isPending} className={actionButtonCls}>
+              Arrange Delivery
+            </button>
+          </>
+        )}
         {isPaid ? (
           <>
             <button type="button" onClick={handleOpenInvoiceModal} disabled={isPending} className={actionButtonCls}>
               Send Receipt
             </button>
-            <button
-              type="button"
-              onClick={() => setShowCertificateModal(true)}
-              disabled={isPending}
-              className={actionButtonCls}
-            >
-              Certificate of Authenticity
-            </button>
+            {!isCharge && (
+              <button
+                type="button"
+                onClick={() => setShowCertificateModal(true)}
+                disabled={isPending}
+                className={actionButtonCls}
+              >
+                Certificate of Authenticity
+              </button>
+            )}
           </>
         ) : (
           <>
@@ -589,7 +714,7 @@ export default function GallerySaleCard({
             <button type="button" onClick={() => openDrawer("link")} disabled={isPending} className={actionButtonCls}>
               Payment link
             </button>
-            <button type="button" onClick={handleTakeCard} className={placeholderButtonCls}>
+            <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
               Take Card
             </button>
           </>
@@ -597,16 +722,32 @@ export default function GallerySaleCard({
       </div>
 
       {/* ---- Cancel / Delete ---- */}
-      {!isPaid && (
-        <div className="mt-6 grid grid-cols-2 text-center text-sm text-red-700">
-          <button type="button" onClick={handleCancelSale} disabled={isPending} className="hover:underline disabled:opacity-50">
-            Cancel Sale
-          </button>
-          <button type="button" onClick={handleDeleteSale} disabled={isPending} className="hover:underline disabled:opacity-50">
-            Delete Sale
-          </button>
+      <div className="mt-6 grid grid-cols-2 text-center text-sm text-red-700">
+        <button type="button" onClick={handleCancelSale} disabled={isPending} className="hover:underline disabled:opacity-50">
+          {isCharge ? "Cancel Charge" : "Cancel Sale"}
+        </button>
+        <button type="button" onClick={handleDeleteSale} disabled={isPending} className="hover:underline disabled:opacity-50">
+          {isCharge ? "Delete Charge" : "Delete Sale"}
+        </button>
+      </div>
+
+      {/* ---- Framing / delivery charges arranged after payment ---- */}
+      {liveCharges.map((charge) => (
+        <div key={charge.id} className="mt-8 border-t border-neutral-200 pt-5">
+          <p className="mb-3 text-sm font-medium text-neutral-900">
+            {CHARGE_LABEL[charge.chargeKind!]}
+            {(charge.framer || charge.courier) && (
+              <span className="font-normal text-neutral-500"> · {charge.framer || charge.courier}</span>
+            )}
+          </p>
+          <GallerySaleCard
+            purchase={charge}
+            siteId={siteId}
+            paymentMethods={paymentMethods}
+            onChanged={onChanged}
+          />
         </div>
-      )}
+      ))}
 
       <ConfirmDialog
         open={pendingConfirm !== null}
