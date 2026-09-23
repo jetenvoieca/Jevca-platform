@@ -39,7 +39,7 @@ export default async function PreviewArtworksPage({
 
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { artistId: true, defaultCurrency: true, artist: { select: { name: true } } },
+    select: { artistId: true, artist: { select: { name: true } } },
   });
   if (!site) notFound();
   const artistId = site.artistId;
@@ -82,7 +82,6 @@ export default async function PreviewArtworksPage({
       tier={sp.tier || ""}
       initialSelected={selected}
       settings={settings}
-      siteDefaultCurrency={site.defaultCurrency}
     />
   );
 }

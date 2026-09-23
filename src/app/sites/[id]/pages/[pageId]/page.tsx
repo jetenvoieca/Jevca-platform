@@ -26,7 +26,7 @@ export default async function PageEditorPage({
     }),
     db.site.findUnique({
       where: { id },
-      select: { artistId: true, defaultCurrency: true, artist: { select: { name: true } } },
+      select: { artistId: true, artist: { select: { name: true } } },
     }),
   ]);
   if (!page || page.siteId !== id || !site) notFound();
@@ -56,7 +56,6 @@ export default async function PageEditorPage({
         initialByline={content.byline || ""}
         initialArtworks={artworks}
         settings={settings}
-        siteDefaultCurrency={site.defaultCurrency}
       />
     );
   }
@@ -134,7 +133,6 @@ export default async function PageEditorPage({
         pageTitle={page.title}
         initialGroups={initialGroups}
         settings={settings}
-        siteDefaultCurrency={site.defaultCurrency}
       />
     );
   }

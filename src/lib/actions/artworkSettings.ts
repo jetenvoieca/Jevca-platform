@@ -46,8 +46,6 @@ export async function getArtworkSettings(artistId: string) {
         saleSources: true,
         paymentMethods: true,
         defaultInstalmentCount: true,
-        defaultReleaseMessage: true,
-        defaultReleaseTriggerCount: true,
       },
     }),
     db.artworkType.findMany({ where: { artistId }, orderBy: { name: "asc" } }),
@@ -69,10 +67,6 @@ export async function getArtworkSettings(artistId: string) {
     saleSources: artist?.saleSources ?? [],
     paymentMethods: artist?.paymentMethods ?? [],
     defaultInstalmentCount: artist?.defaultInstalmentCount ?? 5,
-    defaultReleaseMessage:
-      artist?.defaultReleaseMessage ??
-      "Available for collection/delivery once 2 payments have been made.",
-    defaultReleaseTriggerCount: artist?.defaultReleaseTriggerCount ?? 2,
   };
 }
 

@@ -36,7 +36,7 @@ export default async function ArtworksCataloguePage({
 
   const site = await db.site.findUnique({
     where: { id },
-    select: { artistId: true, defaultCurrency: true, artist: { select: { name: true } } },
+    select: { artistId: true, artist: { select: { name: true } } },
   });
   const artistId = site!.artistId;
 
@@ -77,7 +77,6 @@ export default async function ArtworksCataloguePage({
       tier={sp.tier || ""}
       initialSelected={selected}
       settings={settings}
-      siteDefaultCurrency={site!.defaultCurrency}
     />
   );
 }
