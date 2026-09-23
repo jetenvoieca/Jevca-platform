@@ -55,7 +55,7 @@ export default function SaleHeader({
 
         <div className="min-w-0 flex-1 text-xs leading-5 text-neutral-400">
           <p className="truncate text-base font-medium leading-6 text-neutral-900">
-            {artwork.presentationTitle}
+            {artwork.catalogueName}
           </p>
           <p>Catalogue #{artwork.catalogueNumber}</p>
           {typeLine && <p>{typeLine}</p>}

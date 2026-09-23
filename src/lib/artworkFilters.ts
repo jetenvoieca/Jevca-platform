@@ -27,7 +27,6 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
     ...(q
       ? {
           OR: [
-            { presentationTitle: { contains: q, mode: "insensitive" as const } },
             { catalogueName: { contains: q, mode: "insensitive" as const } },
             { catalogueNumber: { contains: q, mode: "insensitive" as const } },
             { medium: { contains: q, mode: "insensitive" as const } },
@@ -59,7 +58,6 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
 // in both places together.
 export function artworkMatchesFilters(
   artwork: {
-    presentationTitle: string;
     catalogueName: string;
     catalogueNumber: string;
     medium: string | null;
@@ -76,7 +74,6 @@ export function artworkMatchesFilters(
   if (q) {
     const needle = q.toLowerCase();
     const haystacks = [
-      artwork.presentationTitle,
       artwork.catalogueName,
       artwork.catalogueNumber,
       artwork.medium,

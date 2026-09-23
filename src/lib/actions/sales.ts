@@ -38,7 +38,7 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
   return purchases.map((p) => ({
     purchaseId: p.id,
     artworkId: p.artworkId,
-    artworkTitle: saleTitle(p.artwork.presentationTitle, p.chargeKind),
+    artworkTitle: saleTitle(p.artwork.catalogueName, p.chargeKind),
     // Prefers the chosen main image over whatever Prisma returned first
     // (2026-08-16, same pattern as listArtworks).
     artworkThumbnail: p.artwork.mainImage?.url ?? p.artwork.images[0]?.url ?? null,

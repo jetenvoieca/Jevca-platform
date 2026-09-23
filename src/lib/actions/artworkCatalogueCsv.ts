@@ -26,7 +26,7 @@ export async function generateArtworkCatalogueCsv(
     where,
     orderBy,
     select: {
-      presentationTitle: true,
+      catalogueName: true,
       presentationPrice: true,
       size: true,
       medium: true,
@@ -53,7 +53,7 @@ export async function generateArtworkCatalogueCsv(
       publicMediaUrl(img?.thumbnailKey) ||
       "";
     return {
-      Title: a.presentationTitle,
+      Title: a.catalogueName,
       "Image URL": imageUrl,
       Price: a.presentationPrice != null ? a.presentationPrice.toString() : "",
       Dimensions: a.size || "",

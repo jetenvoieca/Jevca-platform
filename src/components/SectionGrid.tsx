@@ -1,6 +1,6 @@
 export type SectionArtworkTile = {
   id: string;
-  presentationTitle: string;
+  catalogueName: string;
   imageUrl: string | null;
   presentationPrice: string | null;
 };
@@ -37,7 +37,7 @@ export default function SectionGrid({
                 </div>
               )}
               <p className="mt-1 truncate text-sm font-medium text-neutral-900">
-                {a.presentationTitle}
+                {a.catalogueName}
               </p>
               {a.presentationPrice && (
                 <p className="text-xs text-neutral-500">£{a.presentationPrice}</p>

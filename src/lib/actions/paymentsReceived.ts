@@ -45,7 +45,7 @@ export async function getPaymentsReceivedForArtist(artistId: string): Promise<Pa
     id: p.id,
     purchaseId: p.purchaseId,
     artworkId: p.purchase.artworkId,
-    artworkTitle: saleTitle(p.purchase.artwork.presentationTitle, p.purchase.chargeKind),
+    artworkTitle: saleTitle(p.purchase.artwork.catalogueName, p.purchase.chargeKind),
     artworkThumbnail: p.purchase.artwork.mainImage?.url ?? p.purchase.artwork.images[0]?.url ?? null,
     buyerName: p.purchase.buyerName,
     type: p.purchase.type,
