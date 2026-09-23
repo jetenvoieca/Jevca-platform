@@ -46,7 +46,7 @@ export async function recordStudioSale(
   const [artwork, owner] = await Promise.all([
     db.artwork.findFirst({
       where: { id: sale.artworkId, artistId: artist.id },
-      select: { presentationTitle: true },
+      select: { catalogueName: true },
     }),
     db.artist.findUnique({ where: { id: artist.id }, select: { paymentMethods: true } }),
   ]);
@@ -79,7 +79,7 @@ export async function recordStudioSale(
     artistId: artist.id,
     purchaseId: result.purchaseId,
     type: SALE_RECORDED_ALERT_TYPE,
-    message: `${artist.name}: sold "${artwork.presentationTitle}" to ${sale.buyerName} — ${sale.currency} ${parseFloat(sale.totalAmount).toFixed(2)}${method ? `, ${method}` : ""} (recorded in Studio).`,
+    message: `${artist.name}: sold "${artwork.catalogueName}" to ${sale.buyerName} — ${sale.currency} ${parseFloat(sale.totalAmount).toFixed(2)}${method ? `, ${method}` : ""} (recorded in Studio).`,
   });
 
   return { purchaseId: result.purchaseId };
@@ -92,7 +92,7 @@ async function prepareSale(artistId: string, details: StudioPaymentDetails) {
   const [artwork, site] = await Promise.all([
     db.artwork.findFirst({
       where: { id: details.artworkId, artistId },
-      select: { presentationTitle: true },
+      select: { catalogueName: true },
     }),
     getPrimarySite(artistId),
   ]);
@@ -122,14 +122,14 @@ async function describePurchase(purchaseId: string) {
       currency: true,
       type: true,
       instalmentCount: true,
-      artwork: { select: { presentationTitle: true } },
+      artwork: { select: { catalogueName: true } },
     },
   });
 
   const amount = `${purchase.currency} ${parseFloat(purchase.totalAmount.toString()).toFixed(2)}`;
   const inInstalments = purchase.type === "INSTALMENTS" && !!purchase.instalmentCount;
   return {
-    title: purchase.artwork.presentationTitle,
+    title: purchase.artwork.catalogueName,
     buyer: purchase.buyerName ?? "unnamed buyer",
     amount: inInstalments ? `${amount} in ${purchase.instalmentCount} instalments` : amount,
     inInstalments,

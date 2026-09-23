@@ -5,7 +5,7 @@ import { getArtworksForArtist, quickCreateArtwork } from "@/lib/actions/media";
 
 type PickedArtwork = {
   id: string;
-  presentationTitle: string;
+  catalogueName: string;
   imageUrl: string | null;
   presentationPrice: string | null;
   availability: string;
@@ -45,7 +45,7 @@ export default function ArtworkPicker({
       setArtworks(
         results.map((a) => ({
           id: a.id,
-          presentationTitle: a.presentationTitle,
+          catalogueName: a.catalogueName,
           imageUrl: a.images[0]?.url ?? null,
           presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
           availability: a.availability,
@@ -104,7 +104,7 @@ export default function ArtworkPicker({
       if (result.artwork) {
         const a: PickedArtwork = {
           id: result.artwork.id,
-          presentationTitle: result.artwork.presentationTitle,
+          catalogueName: result.artwork.catalogueName,
           imageUrl: null,
           presentationPrice: null,
           availability: "AVAILABLE",
@@ -164,7 +164,7 @@ export default function ArtworkPicker({
             type="text"
             value={newTitle}
             onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Or type a new artwork title…"
+            placeholder="Or type a new artwork name…"
             className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
           <button
@@ -218,7 +218,7 @@ export default function ArtworkPicker({
                     </div>
                   )}
                   <p className="truncate px-1 py-1 text-xs text-neutral-700">
-                    {a.presentationTitle}
+                    {a.catalogueName}
                   </p>
                 </button>
               );
@@ -226,7 +226,7 @@ export default function ArtworkPicker({
           </div>
           {artworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
-              No artworks yet — type a title above to create one.
+              No artworks yet — type a name above to create one.
             </p>
           )}
         </div>

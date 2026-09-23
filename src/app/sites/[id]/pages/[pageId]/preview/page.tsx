@@ -39,7 +39,7 @@ export default async function PreviewPage({
     const artworkRows = await getArtworksByIds(content.artworkIds || []);
     const artworks = artworkRows.map((a) => ({
       id: a.id,
-      presentationTitle: a.presentationTitle,
+      catalogueName: a.catalogueName,
       imageUrl: a.images[0]?.url ?? null,
       presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
     }));
@@ -92,7 +92,7 @@ export default async function PreviewPage({
       name: g.name,
       artworks: groupArtworkRows[i].map((a) => ({
         id: a.id,
-        presentationTitle: a.presentationTitle,
+        catalogueName: a.catalogueName,
         imageUrl: a.images[0]?.url ?? null,
         presentationPrice: a.presentationPrice,
         description: a.description,

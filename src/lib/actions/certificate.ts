@@ -166,7 +166,7 @@ export async function generateCertificatePdf(
   // blank, since not every artwork is an edition at all.
   const fields: [string, string][] = [
     ["Artist :", artist.name],
-    ["Title:", artwork.presentationTitle],
+    ["Title:", artwork.catalogueName],
   ];
   if (artwork.edition) {
     fields.push(["Edition:", artwork.edition]);
@@ -229,6 +229,6 @@ export async function generateCertificatePdf(
   }
 
   const bytes = await doc.save();
-  const safeTitle = artwork.presentationTitle.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const safeTitle = artwork.catalogueName.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return { bytes, filename: `certificate-${safeTitle || purchase.id}.pdf` };
 }
