@@ -151,7 +151,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
         include: {
           artwork: {
             select: {
-              presentationTitle: true,
+              catalogueName: true,
               medium: true,
               size: true,
               description: true,
@@ -209,7 +209,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
       return {
         id: p.id,
         artworkId: p.artworkId,
-        artworkTitle: saleTitle(p.artwork.presentationTitle, p.chargeKind),
+        artworkTitle: saleTitle(p.artwork.catalogueName, p.chargeKind),
         artworkImageUrl: effectiveImage
           ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
           : null,
@@ -230,7 +230,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
 
 export type GalleryConsignedWork = {
   id: string;
-  presentationTitle: string;
+  catalogueName: string;
   presentationPrice: string | null;
   description: string | null;
   medium: string | null;
@@ -271,7 +271,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
     where: { artistId: customer.artistId, location: detail.name },
     select: {
       id: true,
-      presentationTitle: true,
+      catalogueName: true,
       presentationPrice: true,
       description: true,
       medium: true,
@@ -279,7 +279,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
       mainImage: { select: { url: true, thumbnailKey: true } },
       images: { take: 1, select: { url: true, thumbnailKey: true } },
     },
-    orderBy: { presentationTitle: "asc" },
+    orderBy: { catalogueName: "asc" },
   });
 
   return {
@@ -290,7 +290,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
       const effectiveImage = w.mainImage || w.images[0];
       return {
         id: w.id,
-        presentationTitle: w.presentationTitle,
+        catalogueName: w.catalogueName,
         presentationPrice: w.presentationPrice ? w.presentationPrice.toString() : null,
         description: w.description,
         medium: w.medium,
