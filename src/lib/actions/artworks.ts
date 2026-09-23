@@ -546,45 +546,6 @@ export async function getArtworkDetailForClient(id: string) {
   };
 }
 
-// `siteId` is only used to revalidate/redirect back to whichever site's
-// screen you were editing from — it no longer scopes the artwork itself.
-export async function updatePresentation(
-  id: string,
-  siteId: string,
-  formData: FormData
-): Promise<void> {
-  const presentationTitle = (formData.get("presentationTitle") as string)?.trim();
-  const description = (formData.get("description") as string)?.trim() || null;
-  // Presentation's own Medium wording and "Can be viewed at"
-  // (2026-08-28) — both are seeded once from Catalogue (Medium from
-  // Catalogue's `medium`, Can be viewed at from Catalogue's `location`)
-  // in updateCatalogue below, then independent from here on.
-  const presentationMedium = (formData.get("presentationMedium") as string)?.trim() || null;
-  const viewingLocation = (formData.get("viewingLocation") as string)?.trim() || null;
-  // Price is no longer typed on this tab at all (2026-08-28) — it's a
-  // read-only mirror of Catalogue's Offered price, written only from
-  // updateCatalogue. Framed price and the per-artwork Release message/
-  // Release-after fields are gone from this form the same way — see the
-  // matching schema.prisma comments.
-
-  await db.artwork.update({
-    where: { id },
-    data: {
-      presentationTitle,
-      description,
-      presentationMedium,
-      viewingLocation,
-      // Cleared on any real save here — this tab (or Catalogue) being
-      // saved at all is exactly "reviewed and edited" for the purposes
-      // of the raw-import count next to Artwork Catalogue in the nav
-      // (2026-08-17). Harmless to also clear it for an artwork that was
-      // never flagged in the first place — it's already false.
-      needsReview: false,
-    },
-  });
-
-}
-
 export async function updateCatalogue(
   id: string,
   siteId: string,
@@ -607,15 +568,11 @@ export async function updateCatalogue(
   // is typed at all.
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
 
-  // Presentation's Title still defaults from Catalogue's Name,
-  // Presentation's own Medium defaults from Catalogue's Medium, and (new,
-  // 2026-08-28 follow-up) Presentation's "Can be viewed at" defaults from
-  // Catalogue's Location — but only the first time each is actually
-  // filled in, and only while Presentation is still at its untouched
-  // default. The moment someone types something different directly into
-  // Presentation, it's considered overridden and this stops touching
-  // that field — "seed once, then independent," same pattern used for
-  // all three.
+  // The public website's Title, Medium and "Can be viewed at" are seeded
+  // once from Catalogue's Name, Medium and Location — only while each is
+  // still at its untouched default. The Presentation tab that used to
+  // edit them was removed (2026-09-23, direct request); these stay as-is
+  // until a new way of presenting artworks is designed.
   const current = await db.artwork.findUnique({
     where: { id },
     select: { presentationTitle: true, presentationMedium: true, viewingLocation: true },
@@ -657,7 +614,10 @@ export async function updateCatalogue(
       // real synced column rather than every consumer re-plumbed to read
       // offeredPrice directly.
       presentationPrice: offeredPriceRaw || null,
-      // See the matching note in updatePresentation above.
+      // Cleared on any real save here — this being saved at all is
+      // exactly "reviewed and edited" for the purposes of the raw-import
+      // count next to Artwork Catalogue in the nav (2026-08-17).
+      // Harmless for an artwork that was never flagged — already false.
       needsReview: false,
       ...presentationUpdate,
     },
