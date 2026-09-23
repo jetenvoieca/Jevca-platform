@@ -42,7 +42,7 @@ export default async function PageEditorPage({
     ]);
     const artworks = artworkRows.map((a) => ({
       id: a.id,
-      presentationTitle: a.presentationTitle,
+      catalogueName: a.catalogueName,
       imageUrl: a.images[0]?.url ?? null,
       presentationPrice: a.presentationPrice,
     }));
@@ -113,7 +113,7 @@ export default async function PageEditorPage({
       name: g.name,
       artworks: groupArtworkRows[i].map((a) => ({
         id: a.id,
-        presentationTitle: a.presentationTitle,
+        catalogueName: a.catalogueName,
         imageUrl: a.images[0]?.url ?? null,
         presentationPrice: a.presentationPrice,
         description: a.description,

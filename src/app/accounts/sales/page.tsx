@@ -34,7 +34,7 @@ export default async function ConsolidatedSalesPage() {
         artwork: {
           select: {
             id: true,
-            presentationTitle: true,
+            catalogueName: true,
             artist: {
               select: {
                 id: true,
@@ -78,7 +78,7 @@ export default async function ConsolidatedSalesPage() {
       artistId: p.artwork.artist.id,
       siteId: p.artwork.artist.sites[0]?.id || null,
       artistName: p.artwork.artist.name,
-      artworkTitle: saleTitle(p.artwork.presentationTitle, p.chargeKind),
+      artworkTitle: saleTitle(p.artwork.catalogueName, p.chargeKind),
       buyerName: p.buyerName,
       grossAmount,
       netAmount,

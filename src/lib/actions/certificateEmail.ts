@@ -73,7 +73,7 @@ export async function getCertificateEmailDraft(
   const body = [
     `Dear ${contactFirstName},`,
     "",
-    `Please find attached the Certificate of Authenticity for ${purchase.artwork.presentationTitle}.`,
+    `Please find attached the Certificate of Authenticity for ${purchase.artwork.catalogueName}.`,
     "",
     "Many thanks,",
     purchase.artwork.artist.name,
@@ -81,7 +81,7 @@ export async function getCertificateEmailDraft(
 
   return {
     to: recipient,
-    subject: `Certificate of Authenticity — "${purchase.artwork.presentationTitle}"`,
+    subject: `Certificate of Authenticity — "${purchase.artwork.catalogueName}"`,
     body,
   };
 }

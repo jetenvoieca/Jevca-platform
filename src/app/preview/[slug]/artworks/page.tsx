@@ -52,7 +52,6 @@ export default async function PreviewArtworksPage({
 
   const rows = artworks.map((a) => ({
     id: a.id,
-    presentationTitle: a.presentationTitle,
     catalogueName: a.catalogueName,
     presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
     catalogueNumber: a.catalogueNumber,

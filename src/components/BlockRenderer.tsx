@@ -4,7 +4,7 @@ import { getPlainMediaSizing, type MediaSizeMode } from "@/lib/blockMedia";
 
 type ArtworkData = {
   id: string;
-  presentationTitle: string;
+  catalogueName: string;
   presentationPrice: unknown;
   availability: string;
   images: { url: string }[];
@@ -83,7 +83,7 @@ function renderBlock(block: ContentBlock, artworks: ArtworkData[], mode: MediaSi
           <img src={artwork.images[0].url} alt="" className="h-32 w-32 rounded object-cover" />
         )}
         <div>
-          <h3 className="font-medium text-neutral-900">{artwork.presentationTitle}</h3>
+          <h3 className="font-medium text-neutral-900">{artwork.catalogueName}</h3>
           {artwork.presentationPrice != null && (
             <p className="text-sm text-neutral-600">£{String(artwork.presentationPrice)}</p>
           )}
