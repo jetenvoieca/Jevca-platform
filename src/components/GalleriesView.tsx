@@ -563,7 +563,7 @@ export default function GalleriesView({
                       )}
                     </div>
                     <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
-                      {w.presentationTitle}
+                      {w.catalogueName}
                     </p>
                     <p className="text-xs text-neutral-400">
                       {w.presentationPrice ? `£${w.presentationPrice}` : "—"}
@@ -1012,8 +1012,8 @@ export default function GalleriesView({
                       />
                     ) : (
                       <p className="text-sm text-neutral-500">
-                        This artwork already has an active Stripe sale in progress — manage
-                        it from the Artwork Catalogue&apos;s Payment tab.
+                        This artwork already has an unpaid Studio sale in progress — manage
+                        it from the Sales page.
                       </p>
                     )
                   ) : completedGallerySale ? (
