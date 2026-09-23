@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
 import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
 import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
+import { retireArtworkPaymentLinks } from "@/lib/paymentLinks";
 import type { PurchaseDetail } from "./payments";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
@@ -57,7 +58,6 @@ async function nextCatalogueNumber(artistId: string) {
 export async function createArtworkWithRetry(
   artistId: string,
   data: Partial<{
-    presentationTitle: string;
     catalogueName: string;
     presentationPrice: number | null;
     description: string | null;
@@ -97,7 +97,7 @@ export async function createArtworkWithRetry(
     // field here — this is always read straight off a form field, same
     // reasoning as presentationPrice above.
     offeredPrice: string | null;
-  }> & { presentationTitle: string; catalogueName: string }
+  }> & { catalogueName: string }
 ) {
   for (let attempt = 0; attempt < 3; attempt++) {
     const catalogueNumber = await nextCatalogueNumber(artistId);
@@ -114,11 +114,11 @@ export async function createArtworkWithRetry(
   throw new Error("Could not generate a unique catalogue number.");
 }
 
-// "+ New" — a Title is optional. If left blank the record is created as
+// "+ New" — a Name is optional. If left blank the record is created as
 // "Untitled" so you can jump straight in and upload an image first, name
-// it later. Whatever title it ends up with seeds both facets
-// (presentationTitle and catalogueName) as a starting point; from this
-// point on the two are independent.
+// it later. Name (catalogueName) is the artwork's one and only name,
+// used everywhere (the separate Presentation title was retired
+// 2026-09-23, direct request).
 // `siteId` here is only which site you're currently working in, so the
 // new artwork's editor opens back on that site's URL — it doesn't scope
 // ownership, `artistId` does.
@@ -126,7 +126,6 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
   const title = (formData.get("title") as string)?.trim() || "Untitled";
 
   const artwork = await createArtworkWithRetry(artistId, {
-    presentationTitle: title,
     catalogueName: title,
   });
 
@@ -148,7 +147,7 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
 // exactly one artwork), so two artworks can never literally share one
 // row, but they can cheaply share the same underlying file.
 //
-// Title/Name (2026-09-11, direct request — "don't add 'derivative' to
+// Name (2026-09-11, direct request — "don't add 'derivative' to
 // title") — copied across exactly as-is, no " Derivative" suffix. The
 // new artwork's link back to the one it was copied from is instead shown
 // explicitly in the Catalogue tab's header ("Derived from #...") via
@@ -157,7 +156,7 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
 // What else gets copied now depends on the original's Type (2026-09-11,
 // direct request):
 // - "Original"/"Unique" (isOriginalOrUnique below) — every field except
-//   the title is left blank on the new derivative. The whole point of
+//   the name is left blank on the new derivative. The whole point of
 //   deriving from a one-off piece is a genuinely fresh sellable listing
 //   (e.g. a print edition made from an original painting), not a copy of
 //   details that don't apply to it.
@@ -191,7 +190,6 @@ export async function duplicateArtwork(
   const isOriginalOrUnique = typeLower.includes("original") || typeLower.includes("unique");
 
   const created = await createArtworkWithRetry(original.artistId, {
-    presentationTitle: original.presentationTitle,
     catalogueName: original.catalogueName,
     presentationPrice: isOriginalOrUnique
       ? null
@@ -339,7 +337,6 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
       orderBy,
       select: {
         id: true,
-        presentationTitle: true,
         catalogueName: true,
         presentationPrice: true,
         catalogueNumber: true,
@@ -485,7 +482,6 @@ export async function getArtworkDetailForClient(id: string) {
     id: artwork.id,
     artistId: artwork.artistId,
     catalogueNumber: artwork.catalogueNumber,
-    presentationTitle: artwork.presentationTitle,
     presentationPrice: artwork.presentationPrice != null ? artwork.presentationPrice.toString() : null,
     description: artwork.description,
     medium: artwork.medium,
@@ -568,24 +564,20 @@ export async function updateCatalogue(
   // is typed at all.
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
 
-  // The public website's Title, Medium and "Can be viewed at" are seeded
-  // once from Catalogue's Name, Medium and Location — only while each is
-  // still at its untouched default. The Presentation tab that used to
-  // edit them was removed (2026-09-23, direct request); these stay as-is
-  // until a new way of presenting artworks is designed.
+  // The public website's Medium and "Can be viewed at" are seeded once
+  // from Catalogue's Medium and Location — only while each is still at
+  // its untouched default. The Presentation tab that used to edit them
+  // was removed (2026-09-23, direct request); these stay as-is until a
+  // new way of presenting artworks is designed.
   const current = await db.artwork.findUnique({
     where: { id },
-    select: { presentationTitle: true, presentationMedium: true, viewingLocation: true },
+    select: { catalogueName: true, presentationMedium: true, viewingLocation: true },
   });
 
   const presentationUpdate: {
-    presentationTitle?: string;
     presentationMedium?: string;
     viewingLocation?: string;
   } = {};
-  if (current?.presentationTitle === "Untitled" && catalogueName) {
-    presentationUpdate.presentationTitle = catalogueName;
-  }
   if (!current?.presentationMedium && medium) {
     presentationUpdate.presentationMedium = medium;
   }
@@ -623,6 +615,12 @@ export async function updateCatalogue(
     },
   });
 
+  // A payment link has the artwork's name fixed inside Stripe, so a
+  // rename retires the links on its unpaid sales; the next press of
+  // "Payment link" makes a fresh one with the new name.
+  if (catalogueName && current && catalogueName !== current.catalogueName) {
+    await retireArtworkPaymentLinks(id);
+  }
 }
 
 // Called when leaving the editor (Close) rather than on every keystroke —
@@ -643,7 +641,6 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
   if (!artwork) return;
 
   const isBlank =
-    artwork.presentationTitle === "Untitled" &&
     artwork.catalogueName === "Untitled" &&
     artwork.images.length === 0 &&
     !artwork.saleTerms &&
