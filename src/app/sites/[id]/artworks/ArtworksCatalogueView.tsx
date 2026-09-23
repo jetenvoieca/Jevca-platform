@@ -18,7 +18,6 @@ import { useBackdropClose } from "@/lib/useBackdropClose";
 
 type ArtworkRow = {
   id: string;
-  presentationTitle: string;
   catalogueName: string;
   presentationPrice: string | null;
   catalogueNumber: string;
@@ -192,7 +191,6 @@ export default function ArtworksCatalogueView({
       setArtworks(
         rows.map((a) => ({
           id: a.id,
-          presentationTitle: a.presentationTitle,
           catalogueName: a.catalogueName,
           presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
           catalogueNumber: a.catalogueNumber,
@@ -245,7 +243,6 @@ export default function ArtworksCatalogueView({
         ...prev,
         ...rows.map((a) => ({
           id: a.id,
-          presentationTitle: a.presentationTitle,
           catalogueName: a.catalogueName,
           presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
           catalogueNumber: a.catalogueNumber,
@@ -389,7 +386,6 @@ export default function ArtworksCatalogueView({
       setArtworks(
         rows.map((a) => ({
           id: a.id,
-          presentationTitle: a.presentationTitle,
           catalogueName: a.catalogueName,
           presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
           catalogueNumber: a.catalogueNumber,
@@ -450,7 +446,6 @@ export default function ArtworksCatalogueView({
               a.id === item.id
                 ? {
                     ...a,
-                    presentationTitle: item.presentationTitle,
                     catalogueName: item.catalogueName,
                     presentationPrice: item.presentationPrice,
                     availability: item.availability,
