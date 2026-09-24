@@ -182,7 +182,7 @@ export default function ArtworkImportPanel({
           <div>
             <p className="mb-3 text-sm text-neutral-500">
               Choose a CSV export. Expected columns: Title, Image URL, Price, Dimensions, Medium,
-              Location, Tier, Group, Type, Description, Sold, Notes.
+              Location, Type, Description, Sold, Notes.
             </p>
             <input
               type="file"

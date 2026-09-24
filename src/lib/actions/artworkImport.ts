@@ -17,6 +17,10 @@ import { repairDoubledUrl } from "@/lib/importHelpers";
 // below (r["Title"], r["Price"], etc.) need adjusting — nothing else in
 // this file is Louise-specific.
 //
+// Tier and Group columns are no longer read (2026-09-24) — both were
+// removed from the catalogue in favour of Curations. A file that still
+// has them imports fine; those two columns are simply ignored.
+//
 // Deliberately two separate steps rather than one bulk action:
 // 1. parseArtworkImportCsv — pure parsing/cleaning, no DB or network
 //    writes, safe to call repeatedly while the person reviews a preview.
@@ -36,8 +40,6 @@ export type NormalizedArtworkRow = {
   dimensions: string;
   medium: string;
   location: string;
-  tier: string | null;
-  group: string;
   type: string;
   description: string;
   sold: boolean;
@@ -93,8 +95,6 @@ export async function parseArtworkImportCsv(
       dimensions: (r["Dimensions"] || "").trim(),
       medium: (r["Medium"] || "").trim(),
       location: normalizeLocation(r["Location"] || ""),
-      tier: (r["Tier"] || "").trim() || null,
-      group: (r["Group"] || "").trim(),
       type: (r["Type"] || "").trim(),
       description: (r["Description"] || "").trim(),
       sold: (r["Sold"] || "").trim().toLowerCase() === "yes",
@@ -199,11 +199,8 @@ export async function importArtworkRow(
       presentationPrice: row.price,
       description: row.description || null,
       medium: row.medium || null,
-      presentationGroup: row.group || null,
-      tier: row.tier,
       availability: row.sold ? "SOLD" : "AVAILABLE",
       type: row.type || null,
-      catalogueGroup: row.group || null,
       // Size and Dimensions are the same field (2026-08-16) — Size
       // already holds real dimension-like values via the artist's own
       // preset list, so the CSV's "Dimensions" column maps to Size,

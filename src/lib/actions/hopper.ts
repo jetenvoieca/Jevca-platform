@@ -198,12 +198,11 @@ export async function addHopperItemToArtwork(
 //
 // Renamed "Add Artwork" → "Create new artwork" (2026-09-13, direct
 // request), and its form now matches the full Artwork Catalogue tab —
-// Name and Tier included, Reference/Offered price included — with only
-// the Available/SOLD toggle left out (a brand-new artwork always starts
-// AVAILABLE; see QuickCatalogueFields in HopperView.tsx). Name is no
-// longer collected earlier, on the plain sorting card, at all ("no name
-// or description at this stage") — it comes straight from this form's
-// own `catalogueName` field instead. Description is left blank.
+// Name and Reference/Offered price included — with only the
+// Available/SOLD toggle left out (a brand-new artwork always starts
+// AVAILABLE; see QuickCatalogueFields in HopperView.tsx). Name comes
+// straight from this form's own `catalogueName` field. Description is
+// left blank.
 //
 // needsReview stays true here, same as the old quickCreateArtwork(...,
 // true) call did — filling in these fields is still optional, so a
@@ -217,11 +216,9 @@ export async function createArtworkFromHopperQuick(
   formData: FormData
 ): Promise<{ ok: true; artwork: { id: string } } | { ok: false; error: string }> {
   const title = ((formData.get("catalogueName") as string) || "").trim() || "Untitled";
-  const tier = (formData.get("tier") as string)?.trim() || null;
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
   const dateRaw = (formData.get("date") as string)?.trim();
   const type = (formData.get("type") as string)?.trim() || null;
-  const catalogueGroup = (formData.get("catalogueGroup") as string)?.trim() || null;
   const size = (formData.get("size") as string)?.trim() || null;
   const edition = (formData.get("edition") as string)?.trim() || null;
   const availableQtyRaw = (formData.get("availableQty") as string)?.trim();
@@ -233,7 +230,6 @@ export async function createArtworkFromHopperQuick(
   try {
     artwork = await createArtworkWithRetry(artistId, {
       catalogueName: title,
-      tier,
       offeredPrice: offeredPriceRaw || null,
       // Mirrors updateCatalogue's own "Offered price also sets
       // Presentation's Price" behaviour (see the note on
@@ -244,7 +240,6 @@ export async function createArtworkFromHopperQuick(
       // duplicateArtwork already does.
       presentationPrice: offeredPriceRaw ? Number(offeredPriceRaw) : null,
       type,
-      catalogueGroup,
       size,
       edition,
       availableQty: availableQtyRaw ? parseInt(availableQtyRaw, 10) : null,
