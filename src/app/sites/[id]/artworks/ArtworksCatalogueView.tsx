@@ -6,6 +6,7 @@ import {
   getArtworkDetailForClient,
   listArtworks,
   deleteArtworkIfBlank,
+  type ArtworkListRow,
 } from "@/lib/actions/artworks";
 import type { CurationSummary } from "@/lib/actions/curations";
 import ArtworkImportPanel from "@/components/ArtworkImportPanel";
@@ -17,17 +18,6 @@ import { artworkMatchesFilters } from "@/lib/artworkFilters";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 
-type ArtworkRow = {
-  id: string;
-  catalogueName: string;
-  presentationPrice: string | null;
-  catalogueNumber: string;
-  availability: string;
-  type: string | null;
-  catalogueGroup: string | null;
-  imageUrl: string | null;
-};
-
 // Every filter the catalogue offers, in one shape — what the URL, the
 // grid fetches and the PDF/CSV exports all read from.
 type Filters = {
@@ -35,8 +25,6 @@ type Filters = {
   availability: string;
   location: string;
   type: string;
-  group: string;
-  tier: string;
   curation: string;
 };
 
@@ -72,8 +60,6 @@ function toListFilters(filters: Filters) {
     availability: filters.availability || undefined,
     location: filters.location || undefined,
     type: filters.type || undefined,
-    group: filters.group || undefined,
-    tier: filters.tier || undefined,
     curation: filters.curation || undefined,
   };
 }
@@ -91,8 +77,6 @@ export default function ArtworksCatalogueView({
   availability: initialAvailability,
   location: initialLocation,
   type: initialType,
-  group: initialGroup,
-  tier: initialTier,
   curation: initialCuration = "",
   curations = [],
   initialSelected,
@@ -108,7 +92,7 @@ export default function ArtworksCatalogueView({
   basePath?: string;
   artistId: string;
   artistName: string;
-  artworks: ArtworkRow[];
+  artworks: ArtworkListRow[];
   total: number;
   soldCount: number;
   pageSize: number;
@@ -116,8 +100,6 @@ export default function ArtworksCatalogueView({
   availability: string;
   location: string;
   type: string;
-  group: string;
-  tier: string;
   // Curation filter (2026-09-24) — a Curation's id, and the list the
   // dropdown offers. Optional so the evaluation-only preview pages
   // (which don't have Curations yet) need no change; with no curations
@@ -140,7 +122,7 @@ export default function ArtworksCatalogueView({
   // so the single "CSV" button opens a small choice popover instead of
   // going straight into the importer (2026-09-11, direct request).
   const [showCsvChoice, setShowCsvChoice] = useState(false);
-  const [artworks, setArtworks] = useState<ArtworkRow[]>(initialArtworks);
+  const [artworks, setArtworks] = useState<ArtworkListRow[]>(initialArtworks);
   const [total, setTotal] = useState(initialTotal);
   const [soldCount, setSoldCount] = useState(initialSoldCount);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -168,12 +150,10 @@ export default function ArtworksCatalogueView({
   const [availability, setAvailability] = useState(initialAvailability);
   const [location, setLocation] = useState(initialLocation);
   const [type, setType] = useState(initialType);
-  const [group, setGroup] = useState(initialGroup);
-  const [tier, setTier] = useState(initialTier);
   const [curation, setCuration] = useState(initialCuration);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const currentFilters: Filters = { q, availability, location, type, group, tier, curation };
+  const currentFilters: Filters = { q, availability, location, type, curation };
 
   // Declared up here, ahead of applyFilters below, specifically because
   // applyFilters' own dependency array reads `selected` directly
@@ -189,10 +169,8 @@ export default function ArtworksCatalogueView({
 
   // Sort dropdown removed (2026-09-12, direct request — "never used it
   // or even know why I would"), same as its counterpart on the Media
-  // Catalogue. updateUrlFilters/applyFilters/handleLoadMore/
-  // handleDuplicated below no longer take or forward a sort value;
-  // listArtworks (and the CSV/PDF exports, which share the same
-  // filters) always use the one shared order (buildArtworkOrderBy,
+  // Catalogue. listArtworks (and the CSV/PDF exports, which share the
+  // same filters) always use the one shared order (buildArtworkOrderBy,
   // lib/artworkFilters.ts).
   const updateUrlFilters = (next: Filters) => {
     const params = new URLSearchParams(window.location.search);
@@ -206,23 +184,12 @@ export default function ArtworksCatalogueView({
 
   const applyFilters = useCallback(
     async (overrides: Partial<Filters>) => {
-      const next: Filters = { q, availability, location, type, group, tier, curation, ...overrides };
+      const next: Filters = { q, availability, location, type, curation, ...overrides };
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
         ...toListFilters(next),
         limit: pageSize,
       });
-      setArtworks(
-        rows.map((a) => ({
-          id: a.id,
-          catalogueName: a.catalogueName,
-          presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-          catalogueNumber: a.catalogueNumber,
-          availability: a.availability,
-          type: a.type,
-          catalogueGroup: a.catalogueGroup,
-          imageUrl: a.images[0]?.url ?? null,
-        }))
-      );
+      setArtworks(rows);
       setTotal(newTotal);
       setSoldCount(newSoldCount);
       // Fresh list under the new filters — any previous "load more"
@@ -245,7 +212,7 @@ export default function ArtworksCatalogueView({
         updateUrlSelected(null);
       }
     },
-    [artistId, q, availability, location, type, group, tier, curation, pageSize, selected]
+    [artistId, q, availability, location, type, curation, pageSize, selected]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -253,23 +220,11 @@ export default function ArtworksCatalogueView({
     setLoadMoreError(false);
     try {
       const { rows } = await listArtworks(artistId, {
-        ...toListFilters({ q, availability, location, type, group, tier, curation }),
+        ...toListFilters({ q, availability, location, type, curation }),
         offset: artworks.length,
         limit: pageSize,
       });
-      setArtworks((prev) => [
-        ...prev,
-        ...rows.map((a) => ({
-          id: a.id,
-          catalogueName: a.catalogueName,
-          presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-          catalogueNumber: a.catalogueNumber,
-          availability: a.availability,
-          type: a.type,
-          catalogueGroup: a.catalogueGroup,
-          imageUrl: a.images[0]?.url ?? null,
-        })),
-      ]);
+      setArtworks((prev) => [...prev, ...rows]);
     } catch {
       // See the note on loadMoreError above — this is what actually
       // breaks the retry loop: without catching here, the error would
@@ -280,7 +235,7 @@ export default function ArtworksCatalogueView({
     } finally {
       setLoadingMore(false);
     }
-  }, [artistId, artworks.length, q, availability, location, type, group, tier, curation, pageSize]);
+  }, [artistId, artworks.length, q, availability, location, type, curation, pageSize]);
 
   // Infinite scroll: an invisible sentinel sits just past the last row.
   // When it enters the viewport we auto-fetch the next page — no "Load
@@ -396,18 +351,7 @@ export default function ArtworksCatalogueView({
         ...toListFilters(currentFilters),
         limit: pageSize,
       });
-      setArtworks(
-        rows.map((a) => ({
-          id: a.id,
-          catalogueName: a.catalogueName,
-          presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-          catalogueNumber: a.catalogueNumber,
-          availability: a.availability,
-          type: a.type,
-          catalogueGroup: a.catalogueGroup,
-          imageUrl: a.images[0]?.url ?? null,
-        }))
-      );
+      setArtworks(rows);
       setTotal(newTotal);
       setSoldCount(newSoldCount);
       setLoadMoreError(false);
@@ -456,7 +400,6 @@ export default function ArtworksCatalogueView({
                     presentationPrice: item.presentationPrice,
                     availability: item.availability,
                     type: item.type,
-                    catalogueGroup: item.catalogueGroup,
                     imageUrl: item.images[0]?.url ?? a.imageUrl,
                   }
                 : a
@@ -711,9 +654,7 @@ export default function ArtworksCatalogueView({
 
           {/* Row 2: filtering/search — a separate functional group from
               the view controls above. Curations (2026-09-24) sits
-              leftmost, then Tier (2026-09-07), then Search. Sort
-              dropdown removed (2026-09-12, direct request) from the end
-              of this row. */}
+              leftmost, then Search, Location and Type. */}
           <div className="mb-3 flex flex-wrap items-center gap-3">
             {curations.length > 0 && (
               <select
@@ -734,24 +675,6 @@ export default function ArtworksCatalogueView({
                 ))}
               </select>
             )}
-
-            <select
-              name="tier"
-              value={tier}
-              onChange={(e) => {
-                const v = e.target.value;
-                setTier(v);
-                applyFilters({ tier: v });
-              }}
-              className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
-            >
-              <option value="">All tiers</option>
-              {settings.artworkTiers.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
 
             <form
               onSubmit={(e) => {
@@ -810,23 +733,6 @@ export default function ArtworksCatalogueView({
                   </option>
                 ))}
               </select>
-              <select
-                name="group"
-                value={group}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setGroup(v);
-                  applyFilters({ group: v });
-                }}
-                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
-              >
-                <option value="">All groups</option>
-                {settings.artworkGroups.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
-                  </option>
-                ))}
-              </select>
             </form>
           </div>
 
@@ -880,9 +786,6 @@ export default function ArtworksCatalogueView({
                     {a.catalogueName}
                   </p>
                   <p className="text-xs text-neutral-500">{a.type || "—"}</p>
-                  {a.catalogueGroup && (
-                    <p className="truncate text-xs text-neutral-400">{a.catalogueGroup}</p>
-                  )}
                 </button>
               ))}
               {addNewTile}

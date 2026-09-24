@@ -67,11 +67,8 @@ export async function createArtworkWithRetry(
     presentationPrice: number | null;
     description: string | null;
     medium: string | null;
-    presentationGroup: string | null;
-    tier: string | null;
     availability: Availability;
     type: string | null;
-    catalogueGroup: string | null;
     size: string | null;
     // Added (2026-09-07) so the Hopper's one-shot "Add Artwork" flow can
     // set these too, now that its quick-add form shares the exact same
@@ -96,11 +93,10 @@ export async function createArtworkWithRetry(
     derivedFromId: string | null;
     // Added (2026-09-13) so the Hopper's "Create new artwork" form can
     // set this at creation time too, now that its quick-create form
-    // matches the full Artwork Catalogue tab (Name/Tier/Reference+
-    // Offered price included) rather than the previous, more limited
-    // field set. Kept as a string, same as every other price-shaped
-    // field here — this is always read straight off a form field, same
-    // reasoning as presentationPrice above.
+    // matches the full Artwork Catalogue tab (Name and Reference+Offered
+    // price included). Kept as a string, same as every other
+    // price-shaped field here — this is always read straight off a form
+    // field.
     offeredPrice: string | null;
   }> & { catalogueName: string }
 ) {
@@ -181,6 +177,8 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
 //   sold itself.
 // - A fresh catalogueNumber is generated the normal way (nextCatalogueNumber,
 //   via createArtworkWithRetry) — never reuses the original's number.
+// - Curations aren't copied — a derivative is added to a curation
+//   from the Curations page like any other artwork.
 export async function duplicateArtwork(
   artworkId: string,
   siteId: string,
@@ -203,11 +201,8 @@ export async function duplicateArtwork(
         : null,
     description: isOriginalOrUnique ? null : original.description,
     medium: isOriginalOrUnique ? null : original.medium,
-    presentationGroup: isOriginalOrUnique ? null : original.presentationGroup,
-    tier: isOriginalOrUnique ? null : original.tier,
     availability: "AVAILABLE",
     type: isOriginalOrUnique ? null : original.type,
-    catalogueGroup: isOriginalOrUnique ? null : original.catalogueGroup,
     size: isOriginalOrUnique ? null : original.size,
     // Always blank, in both branches — see the note above.
     location: null,
@@ -303,6 +298,21 @@ type ListFilters = ArtworkFilterInput & {
 
 const DEFAULT_PAGE_SIZE = 60;
 
+// One row of the Artwork Catalogue grid — only what a tile or list row
+// needs. Returned ready to use (price as a string, image resolved to its
+// thumbnail) so both catalogue pages and the grid's own client-side
+// fetches share this one shape, instead of each re-mapping it
+// (2026-09-24 — there had been four copies of that mapping).
+export type ArtworkListRow = {
+  id: string;
+  catalogueName: string;
+  presentationPrice: string | null;
+  catalogueNumber: string;
+  availability: string;
+  type: string | null;
+  imageUrl: string | null;
+};
+
 // Powers the "raw import" count shown next to Artwork Catalogue in the
 // nav (2026-08-17) — see the matching note on Artwork.needsReview in
 // schema.prisma for exactly what sets/clears this.
@@ -324,7 +334,10 @@ export async function countArtworksNeedingReview(artistId: string): Promise<numb
 
 // Lightweight rows for the grid — only what a tile needs to render.
 // Full detail is fetched separately (getArtworkDetail) when a tile is opened.
-export async function listArtworks(artistId: string, filters: ListFilters) {
+export async function listArtworks(
+  artistId: string,
+  filters: ListFilters
+): Promise<{ rows: ArtworkListRow[]; total: number; soldCount: number }> {
   const { offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
 
   const orderBy = buildArtworkOrderBy();
@@ -341,7 +354,6 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
         catalogueNumber: true,
         availability: true,
         type: true,
-        catalogueGroup: true,
         // mainImage is a direct single-row lookup (via mainImageId),
         // not a scan — cheap even across many rows. Preferred over
         // images[0] wherever both are available (2026-08-16); images
@@ -361,27 +373,25 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
     db.artwork.count({ where: { ...where, availability: { in: SOLD_AVAILABILITIES } } }),
   ]);
 
-  // Prefer the small thumbnail (fast, served straight from storage) —
+  // Prefers the small thumbnail (fast, served straight from storage) —
   // falls back to the original proxied url for any image uploaded before
   // 2026-08-13 that hasn't been backfilled yet, so nothing breaks or goes
-  // blank in the meantime.
-  //
-  // Folds mainImage into the same images[0] slot every existing caller
-  // already reads (2026-08-16), rather than changing what shape callers
-  // expect — an artwork with a chosen main image shows that one; anything
-  // without one falls back to whatever Prisma returned first, same as
-  // before this existed.
-  const rowsWithThumbnails = rows.map(({ mainImage, images, ...rest }) => {
-    const effectiveImage = mainImage || images[0] || null;
-    return {
-      ...rest,
-      images: effectiveImage
-        ? [{ url: publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url }]
-        : [],
-    };
-  });
+  // blank in the meantime. An artwork with a chosen main image shows
+  // that one; anything without one falls back to its first image.
+  const listRows: ArtworkListRow[] = rows.map(
+    ({ mainImage, images, presentationPrice, ...rest }) => {
+      const effectiveImage = mainImage || images[0] || null;
+      return {
+        ...rest,
+        presentationPrice: presentationPrice != null ? presentationPrice.toString() : null,
+        imageUrl: effectiveImage
+          ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
+          : null,
+      };
+    }
+  );
 
-  return { rows: rowsWithThumbnails, total, soldCount };
+  return { rows: listRows, total, soldCount };
 }
 
 // Full record for the slide-in detail panel — both facets, all images.
@@ -487,21 +497,15 @@ export async function getArtworkDetailForClient(id: string) {
     medium: artwork.medium,
     presentationMedium: artwork.presentationMedium,
     viewingLocation: artwork.viewingLocation,
-    presentationGroup: artwork.presentationGroup,
     availability: artwork.availability,
     visible: artwork.visible,
     catalogueName: artwork.catalogueName,
     date: artwork.date,
     type: artwork.type,
-    catalogueGroup: artwork.catalogueGroup,
     size: artwork.size,
     location: artwork.location,
     edition: artwork.edition,
     availableQty: artwork.availableQty,
-    // Settings-editable Tier dropdown (2026-09-07) — see
-    // Artist.artworkTiers in schema.prisma. Was already writable via
-    // CSV import but never surfaced in the Catalogue tab UI until now.
-    tier: artwork.tier,
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     studioNotes: artwork.studioNotes,
     // "Derived from #..." (2026-09-11) — null for any artwork that
@@ -549,9 +553,7 @@ export async function updateCatalogue(
 ): Promise<void> {
   const catalogueName = (formData.get("catalogueName") as string)?.trim();
   const dateRaw = (formData.get("date") as string)?.trim();
-  const tier = (formData.get("tier") as string)?.trim() || null;
   const type = (formData.get("type") as string)?.trim() || null;
-  const catalogueGroup = (formData.get("catalogueGroup") as string)?.trim() || null;
   const size = (formData.get("size") as string)?.trim() || null;
   const location = (formData.get("location") as string)?.trim() || null;
   const edition = (formData.get("edition") as string)?.trim() || null;
@@ -590,9 +592,7 @@ export async function updateCatalogue(
     data: {
       catalogueName,
       date: dateRaw || null,
-      tier,
       type,
-      catalogueGroup,
       size,
       location,
       edition,
@@ -651,11 +651,8 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
     !artwork.medium &&
     !artwork.presentationMedium &&
     !artwork.viewingLocation &&
-    !artwork.presentationGroup &&
     !artwork.date &&
-    !artwork.tier &&
     !artwork.type &&
-    !artwork.catalogueGroup &&
     !artwork.size &&
     !artwork.location &&
     !artwork.edition &&

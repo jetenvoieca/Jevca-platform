@@ -209,7 +209,6 @@ model Artist {
   // see Curation below.
   curations Curation[]
 
-  artworkGroups    String[] @default([])
   // Deprecated (2026-08-28) — superseded by the real ArtworkType table
   // below, which adds a per-type Ref value (used to compute Reference
   // price) that a plain string list has nowhere to hold. Column kept,
@@ -227,13 +226,6 @@ model Artist {
   artworkLocations String[] @default([])
   mediumPresets    String[] @default([])
   sizePresets      String[] @default([])
-
-  // Settings-editable list offered in the new Tier dropdown on the
-  // Catalogue tab (2026-09-07) — same free-text-preset pattern as
-  // Group/Location/Medium above. Prefilled with the three values seen
-  // in the original CSV import (see Artwork.tier) so every artist
-  // starts with sensible defaults rather than an empty list.
-  artworkTiers String[] @default(["Statement", "Signature", "Collectible"])
 
   mediaTags String[] @default([])
 
@@ -324,10 +316,9 @@ model Artist {
 // real Type now carries a Ref value (0.5–2.0) used to suggest a
 // Reference price on the Catalogue tab: (Size preset's width × height)
 // × this Ref value. `type` stays free text on Artwork itself, matched by
-// name against this list, same convention already used for Group/
-// Location/Medium — not a hard foreign key, so nothing breaks if a Type
-// is later renamed or removed while artworks still reference the old
-// name.
+// name against this list, same convention already used for Location/
+// Medium — not a hard foreign key, so nothing breaks if a Type is later
+// renamed or removed while artworks still reference the old name.
 model ArtworkType {
   id       String  @id @default(cuid())
   artistId String
@@ -537,8 +528,8 @@ model Customer {
 //
 // Artwork.location remains a plain free-text column for now (not a
 // foreign key here) — matched by exact name against Location.name, the
-// same convention already used for Group/Type/Medium presets. Renaming
-// a Location cascades that name across every Artwork.location that
+// same convention already used for Type/Medium presets. Renaming a
+// Location cascades that name across every Artwork.location that
 // currently matches it — see renameLocation in actions/locations.ts.
 model Location {
   id       String @id @default(cuid())
@@ -559,13 +550,13 @@ model Location {
 }
 
 // A named, ordered selection of an artist's artworks (2026-09-24) —
-// e.g. "Signature Pieces". Replaces Artwork.tier / catalogueGroup as
-// the way works are grouped for display and marketing: those are
-// presentation choices, not facts about the artwork itself, so they
-// don't belong in the catalogue. Belongs to the artist (not a Site),
-// same as Artwork, so any of the artist's sites can use the same
-// curation. An artwork can be in any number of curations — see
-// CurationItem below. Stage one is curating only; how a curation is
+// e.g. "Signature Pieces". Replaced the old Tier and Group fields
+// (removed the same day): how works are grouped for display and
+// marketing is a presentation choice, not a fact about the artwork
+// itself, so it doesn't belong in the catalogue. Belongs to the artist
+// (not a Site), same as Artwork, so any of the artist's sites can use
+// the same curation. An artwork can be in any number of curations —
+// see CurationItem below. Stage one is curating only; how a curation is
 // displayed on a website is a later stage.
 model Curation {
   id       String @id @default(cuid())
@@ -966,14 +957,6 @@ model Artwork {
   // "Can be viewed at" (2026-08-28) — e.g. a gallery or platform name,
   // shown on Presentation only.
   viewingLocation    String?
-  presentationGroup String?
-  // Flagged in the Artwork Catalogue design doc as "seen in the reference
-  // screenshot but not yet built" — added 2026-08-11 once the CSV import
-  // brought in real Tier data (Collectible/Signature/Statement) that
-  // needed somewhere to live. Free text rather than an enum since this
-  // is Louise Dear's own vocabulary, not necessarily universal to every
-  // future artist.
-  tier              String?
   availability      ArtworkAvailability @default(AVAILABLE)
   visible           Boolean             @default(true)
 
@@ -988,7 +971,6 @@ model Artwork {
   // artists write this loosely and a plain Int couldn't hold that.
   date           String?
   type           String?
-  catalogueGroup String?
   size           String?
   // Free text, matched by exact name against Location.name
   // (2026-09-22) — not a foreign key; see the note on Location above
