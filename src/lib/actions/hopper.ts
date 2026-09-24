@@ -2,6 +2,7 @@
 
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { publicMediaUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
@@ -50,13 +51,23 @@ export async function countHopper(artistId: string): Promise<number> {
   return countHopperCached(artistId);
 }
 
+// Returns rows already in the exact shape HopperView's HopperItem
+// expects (2026-09-24) — this mapping used to be copied by hand into
+// both Hopper pages (/sites/[id]/hopper and /preview/[slug]/hopper),
+// which had to be kept in step with this select separately and had
+// already broken the build once when they drifted. Now it lives here,
+// once.
 export async function listHopperQueue(artistId: string) {
-  return db.image.findMany({
+  const rows = await db.image.findMany({
     where: { artistId, status: "HOPPER" },
     orderBy: { createdAt: "asc" },
     select: {
       id: true,
       url: true,
+      // Added 2026-09-24 for the crop editor, which works on the smaller
+      // display copy rather than the full-size original (see
+      // HopperCropEditor.tsx).
+      displayKey: true,
       posterUrl: true,
       kind: true,
       caption: true,
@@ -72,6 +83,11 @@ export async function listHopperQueue(artistId: string) {
       createdAt: true,
     },
   });
+  return rows.map(({ displayKey, createdAt, ...rest }) => ({
+    ...rest,
+    displayUrl: publicMediaUrl(displayKey),
+    createdAt: createdAt.toISOString(),
+  }));
 }
 
 // 2026-08-19, direct request — was `status: "ARCHIVED"` (the same

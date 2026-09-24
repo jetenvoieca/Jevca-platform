@@ -6,8 +6,9 @@ import { deleteFromR2 } from "@/lib/r2";
 // Best-effort: a file that's already missing from R2, or a transient
 // storage error, shouldn't leave the DB row undeleted or surface as a
 // failure to the caller; the DB delete is what actually matters for the
-// person's immediate action.
-async function deleteImageFiles(image: {
+// person's immediate action. Also used by cropImage (imageCrop.ts) to
+// remove the pre-crop files once the cropped version has replaced them.
+export async function deleteImageFiles(image: {
   key: string;
   thumbnailKey: string | null;
   displayKey: string | null;
