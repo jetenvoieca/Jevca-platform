@@ -379,11 +379,11 @@ export default function HopperView({
   // filled in afterwards). Nothing is written to the database until this
   // runs, fired once from SortingCard's "Done, next item" — the artwork
   // (with every Catalogue field the quick-create form collected —
-  // Name/Tier/Type/Group/Medium/Size/Location/Date/Reference+Offered
-  // price/Studio notes, always AVAILABLE), the image link, and setting
-  // it as the main image all happen together in
-  // createArtworkFromHopperQuick. Only then does the queue auto-advance,
-  // same rhythm as every other action on this screen.
+  // Name/Type/Medium/Size/Location/Date/Reference+Offered price/Studio
+  // notes, always AVAILABLE), the image link, and setting it as the main
+  // image all happen together in createArtworkFromHopperQuick. Only then
+  // does the queue auto-advance, same rhythm as every other action on
+  // this screen.
   //
   // No longer takes a separate title/description (2026-09-13) — Name is
   // now one of the fields inside `fields` itself (see QuickCatalogueFields
@@ -1250,23 +1250,25 @@ function parseHopperItemForQuickCatalogue(
 
 // Matches the full Artwork Catalogue tab (2026-09-13, direct request —
 // "update form to match Artwork catalogue form, except the available/
-// sold toggle"): Name and Tier up top, then the same shared
-// Type/Group/Medium/Size/Edition/Location/Date fields as everywhere else
-// (ArtworkCatalogueFields, 2026-09-07), then Reference/Offered price in
-// the same position the Catalogue tab puts them, then Studio notes.
-// Availability is the one deliberate omission — every artwork created
-// here starts AVAILABLE (see createArtworkFromHopperQuick), so there's
-// nothing to toggle; availabilityOverride below swaps in a plain hidden
-// input rather than showing the Available/SOLD control at all.
+// sold toggle"): Name up top, then the same shared Type/Medium/Size/
+// Edition/Location/Date fields as everywhere else (ArtworkCatalogueFields,
+// 2026-09-07), then Reference/Offered price in the same position the
+// Catalogue tab puts them, then Studio notes. Tier and Group were removed
+// from this form (2026-09-24) along with the rest of the catalogue —
+// replaced by Curations, managed separately from the Curations page, not
+// at creation time. Availability is the one deliberate omission — every
+// artwork created here starts AVAILABLE (see createArtworkFromHopperQuick),
+// so there's nothing to toggle; availabilityOverride below swaps in a
+// plain hidden input rather than showing the Available/SOLD control at
+// all.
 //
-// This duplicates the Name/Tier/Reference+Offered-price JSX
-// ArtworkDetailPanel's Catalogue tab already has, rather than sharing
-// one component for it — a deliberate, temporary trade-off flagged here
-// rather than hidden: the two are about to be unified for real once this
-// same field set needs to render a third time, inside a modal, for
-// "Delete & Replace" (see the plan for that step). Consolidating now,
-// before that shape is known, risked guessing wrong and re-doing it
-// twice.
+// This duplicates the Name/Reference+Offered-price JSX ArtworkDetailPanel's
+// Catalogue tab already has, rather than sharing one component for it —
+// a deliberate, temporary trade-off flagged here rather than hidden: the
+// two are about to be unified for real once this same field set needs to
+// render a third time, inside a modal, for "Delete & Replace" (see the
+// plan for that step). Consolidating now, before that shape is known,
+// risked guessing wrong and re-doing it twice.
 //
 // 2026-09-13: no longer autosaves field-by-field, since there's no
 // artwork to save to until "Done, next item" is pressed — the artwork
@@ -1322,27 +1324,11 @@ function QuickCatalogueFields({
               className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Tier</label>
-            <select
-              name="tier"
-              defaultValue=""
-              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-            >
-              <option value="">Choose from list…</option>
-              {settings.artworkTiers.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
 
           <ArtworkCatalogueFields
             settings={settings}
             values={{
               type: "",
-              catalogueGroup: "",
               medium: "",
               size: parsed.size,
               edition: "",
