@@ -56,6 +56,16 @@ export function netOwed(a: SaleAmounts): number {
   return saleBreakdown(a).net;
 }
 
+// Sale price less the gallery's commission — nothing else (2026-09-24,
+// direct request: the "Net" column on the Sales list and a location's
+// Sales tab). Unlike Net Due, it ignores deposit, framing, delivery and
+// payments, so it doesn't drop to zero once a sale is paid. A sale with
+// no commission (e.g. a direct Stripe sale) simply equals its price.
+export function netOfCommission(a: SaleAmounts): number {
+  const { salePrice, commission } = saleBreakdown(a);
+  return Math.round((salePrice - commission) * 100) / 100;
+}
+
 // Splits a total into `count` instalments of equal size, with any
 // rounding remainder absorbed into the final instalment so the parts
 // always sum exactly back to the total. Here (not lib/stripe.ts) so the

@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
-import { saleTitle } from "@/lib/saleMath";
+import { saleTitle, netOfCommission } from "@/lib/saleMath";
 
 export type CustomerKind = "INDIVIDUAL" | "GALLERY" | "OWN";
 
@@ -47,6 +47,8 @@ export type CustomerDetail = {
     artworkSize: string | null;
     artworkDescription: string | null;
     totalAmount: string;
+    // Sale price less commission — see netOfCommission, lib/saleMath.ts.
+    netAmount: string;
     currency: string;
     status: "ACTIVE" | "COMPLETED" | "ABANDONED";
     channel: "STRIPE" | "GALLERY";
@@ -217,6 +219,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
         artworkSize: p.artwork.size,
         artworkDescription: p.artwork.description,
         totalAmount: p.totalAmount.toString(),
+        netAmount: netOfCommission(p).toFixed(2),
         currency: p.currency,
         status: p.status,
         channel: p.channel,

@@ -657,28 +657,30 @@ export default function GalleriesView({
                       table-auto let a long artwork title grow the
                       Artwork column and push Date off the visible edge
                       of this panel. Artwork now truncates within its own
-                      reserved width instead, so Status/Amount/Date
+                      reserved width instead, so Status/Amount/Net/Date
                       always stay on screen regardless of title length
                       or window size. */}
                   <table className="w-full table-fixed text-sm">
                     <colgroup>
-                      <col className="w-[42%]" />
-                      <col className="w-[20%]" />
-                      <col className="w-[19%]" />
-                      <col className="w-[19%]" />
+                      <col className="w-[34%]" />
+                      <col className="w-[18%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[16%]" />
+                      <col className="w-[16%]" />
                     </colgroup>
                     <thead>
                       <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
                         <th className="px-3 py-2 font-normal">Artwork</th>
                         <th className="px-3 py-2 font-normal">Status</th>
                         <th className="px-3 py-2 font-normal">Amount</th>
+                        <th className="px-3 py-2 font-normal">Net</th>
                         <th className="px-3 py-2 font-normal">Date</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedDetail.purchases.length === 0 ? (
                         <tr>
-                          <td colSpan={4} className="px-3 py-6 text-center text-sm text-neutral-400">
+                          <td colSpan={5} className="px-3 py-6 text-center text-sm text-neutral-400">
                             Nothing here yet.
                           </td>
                         </tr>
@@ -714,6 +716,9 @@ export default function GalleriesView({
                             </td>
                             <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
                               {formatMoney(p.totalAmount, p.currency)}
+                            </td>
+                            <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
+                              {formatMoney(p.netAmount, p.currency)}
                             </td>
                             <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
                               {formatDate(p.createdAt)}

@@ -85,6 +85,7 @@ export default function SalesView({
               <th className="px-3 py-2 font-normal">Buyer</th>
               <th className="px-3 py-2 font-normal">Type</th>
               <th className="px-3 py-2 font-normal">Amount</th>
+              <th className="px-3 py-2 font-normal">Net</th>
               <th className="px-3 py-2 font-normal">Status</th>
               <th className="px-3 py-2 font-normal">Date</th>
             </tr>
@@ -92,7 +93,7 @@ export default function SalesView({
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-3 py-6 text-center text-sm text-neutral-400">
+                <td colSpan={7} className="px-3 py-6 text-center text-sm text-neutral-400">
                   Nothing here yet.
                 </td>
               </tr>
@@ -121,6 +122,7 @@ export default function SalesView({
                   {s.type === "FULL" ? "Full" : "Instalments"}
                 </td>
                 <td className="px-3 py-2">{formatMoney(s.totalAmount, s.currency)}</td>
+                <td className="px-3 py-2">{formatMoney(s.netAmount, s.currency)}</td>
                 <td className="px-3 py-2">
                   <SaleStatusBadge status={s.status} invoiceEmailedAt={s.invoiceEmailedAt} />
                 </td>

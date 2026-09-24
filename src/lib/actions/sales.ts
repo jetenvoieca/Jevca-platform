@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { saleTitle } from "@/lib/saleMath";
+import { saleTitle, netOfCommission } from "@/lib/saleMath";
 
 export type SaleRow = {
   purchaseId: string;
@@ -12,6 +12,8 @@ export type SaleRow = {
   buyerEmail: string | null;
   type: "FULL" | "INSTALMENTS";
   totalAmount: string;
+  // Sale price less commission — see netOfCommission, lib/saleMath.ts.
+  netAmount: string;
   currency: string;
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
   createdAt: string;
@@ -46,6 +48,7 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
     buyerEmail: p.buyerEmail,
     type: p.type,
     totalAmount: p.totalAmount.toString(),
+    netAmount: netOfCommission(p).toFixed(2),
     currency: p.currency,
     status: p.status,
     createdAt: p.createdAt.toISOString(),
