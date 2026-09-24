@@ -1053,7 +1053,7 @@ function ManageArtworkPanel({
     relatedName: string
   ) => void;
 }) {
-  const [selected, setSelected] = useState<{ id: string; presentationTitle: string } | null>(
+  const [selected, setSelected] = useState<{ id: string; catalogueName: string } | null>(
     null
   );
   const [mode, setMode] = useState<"main" | "related">("main");
@@ -1069,7 +1069,7 @@ function ManageArtworkPanel({
             onClick={() => setSelected(null)}
             className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
           >
-            {selected.presentationTitle}{" "}
+            {selected.catalogueName}{" "}
             <span className="text-neutral-400">(change)</span>
           </button>
         ) : (
@@ -1080,7 +1080,7 @@ function ManageArtworkPanel({
             label="Choose artwork…"
             onSelect={(artworks) => {
               if (artworks[0]) {
-                setSelected({ id: artworks[0].id, presentationTitle: artworks[0].presentationTitle });
+                setSelected({ id: artworks[0].id, catalogueName: artworks[0].catalogueName });
               }
             }}
           />
@@ -1129,7 +1129,7 @@ function ManageArtworkPanel({
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={() => selected && onDone(selected.id, selected.presentationTitle, mode, relatedName)}
+          onClick={() => selected && onDone(selected.id, selected.catalogueName, mode, relatedName)}
           disabled={!selected || managing}
           className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
         >
