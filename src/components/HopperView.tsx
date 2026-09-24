@@ -18,11 +18,15 @@ import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
+import HopperCropEditor from "@/components/HopperCropEditor";
 import { computeReferencePrice } from "@/lib/pricing";
 
 export type HopperItem = {
   id: string;
   url: string;
+  // The smaller display-size copy (null if it was never generated) —
+  // used by the crop editor, which falls back to `url` without it.
+  displayUrl: string | null;
   posterUrl: string | null;
   kind: string;
   caption: string | null;
@@ -776,6 +780,7 @@ export default function HopperView({
                   handleManageArtwork(current, artworkId, artworkName, mode, relatedName)
                 }
                 onAddNewArtwork={(fields) => handleAddNewArtwork(current, fields)}
+                onImageChanged={() => router.refresh()}
               />
             )}
           </div>
@@ -894,6 +899,7 @@ function SortingCard({
   onAddToBucket,
   onManageArtwork,
   onAddNewArtwork,
+  onImageChanged,
 }: {
   siteId: string;
   artistId: string;
@@ -910,7 +916,11 @@ function SortingCard({
     relatedName: string
   ) => void;
   onAddNewArtwork: (fields: FormData) => Promise<boolean>;
+  // Called after the photo itself changes in place (a saved crop), so
+  // the page re-fetches the item's new image URLs.
+  onImageChanged: () => void;
 }) {
+  const [showCropEditor, setShowCropEditor] = useState(false);
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
   const [showManageForm, setShowManageForm] = useState(false);
@@ -918,7 +928,22 @@ function SortingCard({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      <HopperItemPreview item={item} />
+      {/* Crop + rotate (2026-09-24, direct request) — photos only. While
+          open it takes the preview's place and the routing buttons are
+          hidden, so the photo can't be sent anywhere mid-edit. */}
+      {showCropEditor ? (
+        <HopperCropEditor
+          imageId={item.id}
+          src={item.displayUrl ?? item.url}
+          onCancel={() => setShowCropEditor(false)}
+          onSaved={() => {
+            setShowCropEditor(false);
+            onImageChanged();
+          }}
+        />
+      ) : (
+        <HopperItemPreview item={item} />
+      )}
 
       {/* Title/Description preview (2026-09-19, direct request — "add
           back the title and description fields so when sent by
@@ -956,54 +981,70 @@ function SortingCard({
           always be added afterwards from the Media Catalogue's own edit
           form if wanted. */}
 
-      <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
-        <button
-          type="button"
-          onClick={onBin}
-          disabled={isPending}
-          className="rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
-        >
-          Bin
-        </button>
-        <button
-          type="button"
-          onClick={onAddToMedia}
-          disabled={isPending}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Add to Media
-        </button>
-        <button
-          type="button"
-          onClick={onAddToBucket}
-          disabled={isPending}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Add to Bucket
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setShowManageForm(true);
-            setShowQuickForm(false);
-          }}
-          disabled={isPending || showManageForm}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Manage Artwork
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setShowQuickForm(true);
-            setShowManageForm(false);
-          }}
-          disabled={isPending || showQuickForm}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-        >
-          Create new artwork
-        </button>
-      </div>
+      {!showCropEditor && (
+        <div className="flex flex-wrap items-center gap-3 border-t border-neutral-200 pt-4">
+          <button
+            type="button"
+            onClick={onBin}
+            disabled={isPending}
+            className="rounded-md border border-red-200 px-4 py-2 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+          >
+            Bin
+          </button>
+          <button
+            type="button"
+            onClick={onAddToMedia}
+            disabled={isPending}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Add to Media
+          </button>
+          <button
+            type="button"
+            onClick={onAddToBucket}
+            disabled={isPending}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Add to Bucket
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowManageForm(true);
+              setShowQuickForm(false);
+            }}
+            disabled={isPending || showManageForm}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Manage Artwork
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowQuickForm(true);
+              setShowManageForm(false);
+            }}
+            disabled={isPending || showQuickForm}
+            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Create new artwork
+          </button>
+          {item.kind === "PHOTO" && (
+            <button
+              type="button"
+              onClick={() => {
+                setShowCropEditor(true);
+                setShowManageForm(false);
+                setShowQuickForm(false);
+              }}
+              disabled={isPending}
+              className="ml-auto rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+            >
+              Crop
+            </button>
+          )}
+        </div>
+      )}
 
       {showManageForm && (
         <ManageArtworkPanel
