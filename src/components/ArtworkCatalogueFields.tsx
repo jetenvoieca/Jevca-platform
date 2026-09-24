@@ -7,14 +7,13 @@ import type { ArtworkSettings } from "@/components/ArtworkDetailPanel";
 // in the preset list — e.g. legacy data typed in before Settings existed,
 // or a value just added inline via the "+ Add new…" option below, before
 // a fresh settings list has come back from the server.
-export function withCurrent(presets: string[], current: string | null) {
+function withCurrent(presets: string[], current: string | null) {
   if (!current || presets.includes(current)) return presets;
   return [current, ...presets];
 }
 
 export type ArtworkFacetValues = {
   type: string;
-  catalogueGroup: string;
   medium: string;
   size: string;
   edition: string;
@@ -46,9 +45,9 @@ const labelCls = "mb-1 block text-sm font-medium text-neutral-700";
 // entry before anything autosaves.
 const ADD_NEW = "__add_new__";
 
-// The Type / Group / Medium / Size / Edition / Location / Date /
-// Availability / Studio notes block — one shared component (2026-09-07,
-// direct request) used by both the full Artwork editor's Catalogue tab
+// The Type / Medium / Size / Edition / Location / Date / Availability /
+// Studio notes block — one shared component (2026-09-07, direct request)
+// used by both the full Artwork editor's Catalogue tab
 // (ArtworkDetailPanel) and the Hopper's quick-add form
 // (HopperView/QuickCatalogueFields). These two had drifted into
 // separately-maintained copies — the Hopper version was missing Edition
@@ -56,18 +55,18 @@ const ADD_NEW = "__add_new__";
 // the kind of drift that causes costly mistakes. Unifying them here means
 // a future field change only has to happen once.
 //
+// Group removed (2026-09-24) — replaced by Curations.
+//
 // Available (qty) removed from the visible form entirely (2026-09-11,
 // direct request) — any existing value is preserved via a hidden input
 // (see below) rather than deleted, so nothing already on record is lost;
 // it's just no longer something this form edits.
 //
-// Name and Tier (Catalogue-tab-only — Tier is a curatorial/pricing
-// category set once cataloguing is done, not at Hopper quick-add time)
-// and Reference/Offered price (also Catalogue-only — a brand-new
-// Hopper-created artwork is never priced at creation) stay outside this
-// component. `children`, if given, renders between Date and
-// Availability so the Catalogue tab can still slot its price fields
-// into the middle of the grid, in the same position as before.
+// Name and Reference/Offered price stay outside this component — the
+// caller renders Name as the first grid cell, so Name and Type share a
+// row. `children`, if given, renders between Date and Availability so
+// the Catalogue tab can slot its price fields into the middle of the
+// grid.
 //
 // Expects to be rendered directly inside a caller's own
 // `<div className="grid grid-cols-2 gap-4">` (a bare fragment, not a
@@ -81,14 +80,10 @@ export default function ArtworkCatalogueFields({
   children,
   availabilityOverride,
   onAddType,
-  onAddGroup,
   onAddMedium,
   onAddLocation,
 }: {
-  settings: Pick<
-    ArtworkSettings,
-    "artworkTypes" | "artworkGroups" | "mediumPresets" | "sizePresets" | "locations"
-  >;
+  settings: Pick<ArtworkSettings, "artworkTypes" | "mediumPresets" | "sizePresets" | "locations">;
   values: ArtworkFacetValues;
   // Fired (with the enclosing form) after a field changes, for callers
   // that want to autosave immediately — the Catalogue tab's
@@ -97,7 +92,7 @@ export default function ArtworkCatalogueFields({
   // yet to save to.
   onAutosave?: (form: HTMLFormElement) => void;
   // Fired on Type or Size change specifically, so a caller with its own
-  // live Reference price preview (Catalogue tab only) can recompute it.
+  // live Reference price preview can recompute it.
   onTypeOrSizeChange?: (type: string, size: string) => void;
   children?: React.ReactNode;
   // Replaces the default Availability <select> (2026-09-10) — the
@@ -114,24 +109,21 @@ export default function ArtworkCatalogueFields({
   // select as a plain, fixed-list picker — Hopper's quick-add form
   // doesn't pass any of them, so its selects are unaffected.
   //
-  // onAddLocation (2026-09-22) — persists to the new Location model now
-  // (see actions/locations.ts), not the old plain-string
-  // artworkLocations settings list; the caller (ArtworkDetailPanel)
-  // decides the new Location's Type (Gallery/Own) before persisting, so
-  // this component itself stays agnostic to that.
+  // onAddLocation (2026-09-22) — persists to the Location model (see
+  // actions/locations.ts); the caller (ArtworkDetailPanel) decides the
+  // new Location's Type (Gallery/Own) before persisting, so this
+  // component itself stays agnostic to that.
   onAddType?: (name: string) => Promise<void>;
-  onAddGroup?: (name: string) => Promise<void>;
   onAddMedium?: (name: string) => Promise<void>;
   onAddLocation?: (name: string) => Promise<void>;
 }) {
   const [typeValue, setTypeValue] = useState(values.type);
   const [sizeValue, setSizeValue] = useState(values.size);
-  // Group/Medium/Location become controlled state too (2026-09-11) —
-  // needed so a value just added inline (not yet in `settings`, since
-  // that only refreshes from the server afterwards) can still be shown
-  // as selected via withCurrent below, the same way Type/Size already
-  // handle a value outside the preset list.
-  const [groupValue, setGroupValue] = useState(values.catalogueGroup);
+  // Medium/Location are controlled state too (2026-09-11) — needed so a
+  // value just added inline (not yet in `settings`, since that only
+  // refreshes from the server afterwards) can still be shown as
+  // selected via withCurrent, the same way Type/Size already handle a
+  // value outside the preset list.
   const [mediumValue, setMediumValue] = useState(values.medium);
   const [locationValue, setLocationValue] = useState(values.location);
   // Original/Unique pieces don't have editions the way prints do — both
@@ -199,32 +191,6 @@ export default function ArtworkCatalogueFields({
             </option>
           ))}
           {onAddType && <option value={ADD_NEW}>+ Add new…</option>}
-        </select>
-      </div>
-      <div>
-        <label className={labelCls}>Group</label>
-        <select
-          name="catalogueGroup"
-          value={groupValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            const form = e.currentTarget.form!;
-            if (v === ADD_NEW) {
-              addNew("Group", onAddGroup, setGroupValue, form);
-              return;
-            }
-            setGroupValue(v);
-            onAutosave?.(form);
-          }}
-          className={inputCls}
-        >
-          <option value="">Choose from list…</option>
-          {withCurrent(settings.artworkGroups, groupValue).map((g) => (
-            <option key={g} value={g}>
-              {g}
-            </option>
-          ))}
-          {onAddGroup && <option value={ADD_NEW}>+ Add new…</option>}
         </select>
       </div>
       <div className="col-span-2">

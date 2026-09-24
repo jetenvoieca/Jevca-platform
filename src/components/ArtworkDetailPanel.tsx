@@ -17,7 +17,7 @@ import {
 } from "@/lib/actions/locations";
 import { computeReferencePrice } from "@/lib/pricing";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
-import ArtworkCatalogueFields, { withCurrent } from "@/components/ArtworkCatalogueFields";
+import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 
 export type ArtworkDetail = {
@@ -29,7 +29,6 @@ export type ArtworkDetail = {
   medium: string | null;
   presentationMedium: string | null;
   viewingLocation: string | null;
-  presentationGroup: string | null;
   availability: string;
   visible: boolean;
   catalogueName: string;
@@ -38,14 +37,10 @@ export type ArtworkDetail = {
   // numeric `year`, 2026-09-07).
   date: string | null;
   type: string | null;
-  catalogueGroup: string | null;
   size: string | null;
   location: string | null;
   edition: string | null;
   availableQty: number | null;
-  // Settings-editable list, offered as a dropdown (2026-09-07) — see
-  // Artist.artworkTiers in schema.prisma.
-  tier: string | null;
   offeredPrice: string | null;
   studioNotes: string | null;
   // "Derived from #..." (2026-09-11) — null for any artwork that isn't
@@ -71,7 +66,6 @@ export type ArtworkDetail = {
 };
 
 export type ArtworkSettings = {
-  artworkGroups: string[];
   artworkTypes: string[];
   // Full {id, name, refValue} shape (2026-08-28) — used to look up the
   // selected Type's Ref value for the Catalogue tab's live Reference
@@ -85,9 +79,6 @@ export type ArtworkSettings = {
   locations: LocationSummary[];
   mediumPresets: string[];
   sizePresets: string[];
-  // Offered in the Catalogue tab's Tier dropdown (2026-09-07) — see
-  // Artist.artworkTiers in schema.prisma.
-  artworkTiers: string[];
   // The sale-related lists below come with the same settings fetch
   // (getArtworkSettings) and are read by the sale modals and the Studio
   // app, not by this panel.
@@ -131,9 +122,9 @@ export default function ArtworkDetailPanel({
   // on router.refresh() alone, which doesn't reach this artwork's data
   // once the parent Catalogue holds it as client state: a fresh server
   // render happens, but the already-mounted `artwork` prop here just
-  // keeps its old value, so a saved field (e.g. Catalogue → Group) could
-  // appear to silently revert next time this panel re-rendered, even
-  // though the save itself worked.
+  // keeps its old value, so a saved field could appear to silently
+  // revert next time this panel re-rendered, even though the save
+  // itself worked.
   onDataChanged?: () => void;
   // Off by default only where the panel sits permanently alongside its
   // own list (the Artwork Catalogue) — there, the grid is always visible
@@ -286,8 +277,8 @@ export default function ArtworkDetailPanel({
   // ---- Inline "add new preset" (2026-09-11, direct request — "all
   // drop-downs add ability to add to lists") — each just persists the
   // new value to the artist's own Settings list (Type has its own table
-  // with a Ref value, hence its own action; Group/Medium are plain
-  // string lists via addSettingOption) and fires-and-forgets;
+  // with a Ref value, hence its own action; Medium is a plain string
+  // list via addSettingOption) and fires-and-forgets;
   // ArtworkCatalogueFields already updates its own local state so the
   // new value shows as selected immediately, and autosaves it onto this
   // artwork right after. No router.refresh() needed here specifically
@@ -298,17 +289,12 @@ export default function ArtworkDetailPanel({
     fd.set("name", name);
     await addArtworkType(artistId, siteId, fd);
   };
-  const handleAddGroup = async (name: string) => {
-    const fd = new FormData();
-    fd.set("value", name);
-    await addSettingOption(artistId, siteId, "artworkGroups", fd);
-  };
   const handleAddMedium = async (name: string) => {
     const fd = new FormData();
     fd.set("value", name);
     await addSettingOption(artistId, siteId, "mediumPresets", fd);
   };
-  // Persists to the new Location model now (2026-09-22, see
+  // Persists to the Location model (2026-09-22, see
   // actions/locations.ts) — asks Gallery vs Own the same way
   // handleSoldClick above does, since a Location needs a Type to be
   // created at all.
@@ -407,38 +393,21 @@ export default function ArtworkDetailPanel({
               className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
             />
           </div>
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Tier</label>
-            <select
-              name="tier"
-              defaultValue={artwork.tier || ""}
-              onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
-              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-            >
-              <option value="">Choose from list…</option>
-              {withCurrent(settings.artworkTiers, artwork.tier).map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </select>
-          </div>
 
-          {/* The Type/Group/Medium/Size/Edition/Location/Date/
-              Availability/Studio notes block below is the exact same
-              shared component the Hopper's quick-add form uses
-              (ArtworkCatalogueFields, 2026-09-07) — Name and Tier above,
-              and Reference/Offered price (passed as children, rendered
-              between Date and Availability) stay Catalogue-only.
-              availabilityOverride swaps in the Available/SOLD control.
-              onAddType/onAddGroup/onAddMedium/onAddLocation give those
-              selects their own inline "+ Add new…" option — the Hopper
-              doesn't pass these, so its selects are unaffected. */}
+          {/* The Type/Medium/Size/Edition/Location/Date/Availability/
+              Studio notes block below is the exact same shared component
+              the Hopper's quick-add form uses (ArtworkCatalogueFields,
+              2026-09-07) — Name above, and Reference/Offered price
+              (passed as children, rendered between Date and
+              Availability) stay Catalogue-only. availabilityOverride
+              swaps in the Available/SOLD control. onAddType/onAddMedium/
+              onAddLocation give those selects their own inline "+ Add
+              new…" option — the Hopper doesn't pass these, so its
+              selects are unaffected. */}
           <ArtworkCatalogueFields
             settings={settings}
             values={{
               type: artwork.type || "",
-              catalogueGroup: artwork.catalogueGroup || "",
               medium: artwork.medium || "",
               size: artwork.size || "",
               edition: artwork.edition || "",
@@ -454,7 +423,6 @@ export default function ArtworkDetailPanel({
               setSizeValue(size);
             }}
             onAddType={handleAddType}
-            onAddGroup={handleAddGroup}
             onAddMedium={handleAddMedium}
             onAddLocation={handleAddLocation}
             availabilityOverride={
