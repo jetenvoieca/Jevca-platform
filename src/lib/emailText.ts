@@ -18,7 +18,6 @@ export function readableEmailText(textBody: string | null, htmlBody: string | nu
         selector,
         options: { uppercase: false },
       })),
-      { selector: "th", options: { uppercase: false } },
       { selector: "a", options: { hideLinkHrefIfSameAsText: true } },
     ],
   })

@@ -204,6 +204,7 @@ export default function AdminInboxPanel({
   const [openId, setOpenId] = useState<string | null>(null);
   const [thread, setThread] = useState<InboxThreadItem[] | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
+  const [threadError, setThreadError] = useState(false);
   const [replyBody, setReplyBody] = useState("");
   // Which open email is showing its original HTML instead of text
   // (2026-09-24) — see the "Show HTML" button in the thread view.
@@ -331,16 +332,21 @@ export default function AdminInboxPanel({
     setComposing(false);
     setThread(null);
     setThreadLoading(true);
+    setThreadError(false);
     setReplyError(null);
     setReplyBody("");
-    getThread(id).then((items) => {
-      setThread(items);
-      setThreadLoading(false);
-      // Marking a message read (inside getThread) can clear an open Alert
-      // for that artist — refresh so the Alerts badge in the nav catches
-      // up without needing a manual reload.
-      router.refresh();
-    });
+    // A failure here shows a message in the modal rather than leaving it
+    // on "Loading…" for good (2026-09-24).
+    getThread(id)
+      .then((items) => {
+        setThread(items);
+        // Marking a message read (inside getThread) can clear an open
+        // Alert for that artist — refresh so the Alerts badge in the nav
+        // catches up without needing a manual reload.
+        router.refresh();
+      })
+      .catch(() => setThreadError(true))
+      .finally(() => setThreadLoading(false));
   };
 
   const openSent = (id: string) => {
@@ -1022,6 +1028,8 @@ export default function AdminInboxPanel({
                     {selectedSent.body || "(empty)"}
                   </div>
                 </div>
+              ) : threadError ? (
+                <p className="text-sm text-red-600">This message couldn&apos;t be opened. Please try again.</p>
               ) : threadLoading || !thread ? (
                 <p className="text-sm text-neutral-400">Loading…</p>
               ) : (
