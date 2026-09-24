@@ -141,6 +141,12 @@ function isInformationalSaleAlert(alert: AlertItem): boolean {
   return alert.dismissable && alert.type.startsWith("SALE_");
 }
 
+// "1.2 MB" / "340 KB" — attachment sizes in an open email.
+function formatFileSize(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+}
+
 // The Inbox's address, with the left-hand artist filter and (optionally)
 // the selected alert carried in the query string.
 function inboxUrl(artistId: string | null, alertId?: string): string {
@@ -199,6 +205,9 @@ export default function AdminInboxPanel({
   const [thread, setThread] = useState<InboxThreadItem[] | null>(null);
   const [threadLoading, setThreadLoading] = useState(false);
   const [replyBody, setReplyBody] = useState("");
+  // Which open email is showing its original HTML instead of text
+  // (2026-09-24) — see the "Show HTML" button in the thread view.
+  const [htmlShownId, setHtmlShownId] = useState<string | null>(null);
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
@@ -1046,7 +1055,52 @@ export default function AdminInboxPanel({
                         </p>
                       )}
                       <p className="mb-1 text-sm font-medium text-neutral-800">{item.subject}</p>
-                      <p className="whitespace-pre-wrap text-sm text-neutral-700">{item.textBody}</p>
+                      {htmlShownId === item.id && item.htmlBody ? (
+                        // The sender's original formatting, only when asked
+                        // for (2026-09-24). sandbox with no allow-scripts
+                        // means nothing in the email can run; <base
+                        // target="_blank"> makes its links open in a new
+                        // tab rather than inside the frame.
+                        <iframe
+                          title="Original email"
+                          sandbox="allow-popups allow-popups-to-escape-sandbox"
+                          srcDoc={`<base target="_blank">${item.htmlBody}`}
+                          className="h-[60vh] w-full rounded-md border border-neutral-200 bg-white"
+                        />
+                      ) : (
+                        <p className="whitespace-pre-wrap text-sm text-neutral-700">{item.textBody}</p>
+                      )}
+                      {item.htmlBody && (
+                        <button
+                          type="button"
+                          onClick={() => setHtmlShownId(htmlShownId === item.id ? null : item.id)}
+                          className="mt-2 text-xs text-neutral-500 hover:text-neutral-900 hover:underline"
+                        >
+                          {htmlShownId === item.id ? "Show text" : "Show HTML"}
+                        </button>
+                      )}
+                      {item.attachments.length > 0 && (
+                        <ul className="mt-3 space-y-1 border-t border-neutral-200 pt-2">
+                          {item.attachments.map((a) => (
+                            <li key={a.id} className="text-sm">
+                              {a.saved ? (
+                                <a
+                                  href={`/api/inbound-attachment/${a.id}`}
+                                  className="text-neutral-800 underline hover:text-neutral-600"
+                                >
+                                  {a.filename}
+                                </a>
+                              ) : (
+                                <span className="text-neutral-500">{a.filename}</span>
+                              )}{" "}
+                              <span className="text-xs text-neutral-400">
+                                ({formatFileSize(a.size)}
+                                {!a.saved && (a.tooLarge ? " — too large to save" : " — couldn't be saved")})
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
                     </div>
                   ))}
 
