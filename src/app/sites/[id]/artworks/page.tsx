@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { listArtworks, getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
+import { listCurations } from "@/lib/actions/curations";
 import ArtworksCatalogueView from "./ArtworksCatalogueView";
 
 export const dynamic = "force-dynamic";
@@ -14,6 +15,9 @@ type SearchParams = {
   // Settings-editable Tier dropdown filter (2026-09-07) — see
   // Artist.artworkTiers in schema.prisma.
   tier?: string;
+  // Curation filter (2026-09-24) — a Curation's id. See
+  // ArtworkFilterInput in lib/artworkFilters.ts.
+  curation?: string;
   // Deep-link to a specific artwork's detail panel (e.g. right after
   // creating one, or a link from elsewhere) — read once on first load.
   // Selecting a *different* artwork afterwards happens client-side,
@@ -40,11 +44,13 @@ export default async function ArtworksCataloguePage({
   });
   const artistId = site!.artistId;
 
-  const [{ rows: artworks, total, soldCount }, settings, selectedRaw] = await Promise.all([
-    listArtworks(artistId, { ...sp, limit: PAGE_SIZE }),
-    getArtworkSettings(artistId),
-    sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
-  ]);
+  const [{ rows: artworks, total, soldCount }, settings, curations, selectedRaw] =
+    await Promise.all([
+      listArtworks(artistId, { ...sp, limit: PAGE_SIZE }),
+      getArtworkSettings(artistId),
+      listCurations(artistId),
+      sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
+    ]);
 
   const rows = artworks.map((a) => ({
     id: a.id,
@@ -74,6 +80,8 @@ export default async function ArtworksCataloguePage({
       type={sp.type || ""}
       group={sp.group || ""}
       tier={sp.tier || ""}
+      curation={sp.curation || ""}
+      curations={curations}
       initialSelected={selected}
       settings={settings}
     />

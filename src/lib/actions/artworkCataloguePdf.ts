@@ -3,17 +3,15 @@
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont } from "pdf-lib";
 import { publicMediaUrl } from "@/lib/r2";
-import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
+import {
+  buildArtworkWhere,
+  buildArtworkOrderBy,
+  type ArtworkFilterInput,
+} from "@/lib/artworkFilters";
 
-export type CatalogueExportFilters = {
-  q?: string;
-  availability?: string;
-  location?: string;
-  type?: string;
-  group?: string;
-  // Settings-editable Tier dropdown filter (2026-09-07) — see
-  // Artist.artworkTiers in schema.prisma.
-  tier?: string;
+// The shared catalogue filters (lib/artworkFilters.ts — the same ones
+// the on-screen grid uses), plus this export's own header wording.
+export type CatalogueExportFilters = ArtworkFilterInput & {
   // Editable per-export, via ExportPdfDialog.tsx (2026-08-17) — default
   // to the artist's real name / "Artwork Catalogue" when absent, so one
   // export flow covers whatever this particular PDF is for instead of
@@ -95,22 +93,32 @@ export async function generateArtworkCataloguePdf(
   const where = buildArtworkWhere(artistId, filters);
   const orderBy = buildArtworkOrderBy();
 
-  const artworks = await db.artwork.findMany({
-    where,
-    orderBy,
-    select: {
-      catalogueName: true,
-      catalogueNumber: true,
-      type: true,
-      medium: true,
-      size: true,
-      presentationPrice: true,
-      priceFramed: true,
-      availability: true,
-      mainImage: { select: { thumbnailKey: true, displayKey: true } },
-      images: { take: 1, select: { thumbnailKey: true, displayKey: true } },
-    },
-  });
+  const [artworks, curation] = await Promise.all([
+    db.artwork.findMany({
+      where,
+      orderBy,
+      select: {
+        catalogueName: true,
+        catalogueNumber: true,
+        type: true,
+        medium: true,
+        size: true,
+        presentationPrice: true,
+        priceFramed: true,
+        availability: true,
+        mainImage: { select: { thumbnailKey: true, displayKey: true } },
+        images: { take: 1, select: { thumbnailKey: true, displayKey: true } },
+      },
+    }),
+    // The Curation filter holds an id — its name is what's printed in
+    // the header's filter summary (2026-09-24).
+    filters.curation
+      ? db.curation.findFirst({
+          where: { id: filters.curation, artistId },
+          select: { name: true },
+        })
+      : Promise.resolve(null),
+  ]);
 
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
@@ -134,7 +142,7 @@ export async function generateArtworkCataloguePdf(
 
   const headerTitle = filters.headerTitle?.trim() || artistName;
   const headerSubtitle = filters.headerSubtitle ?? "Artwork Catalogue";
-  const filterSummary = describeFilters(filters);
+  const filterSummary = describeFilters(filters, curation?.name ?? null);
 
   const drawHeader = () => {
     page = doc.addPage([pageWidth, pageHeight]);
@@ -318,8 +326,9 @@ function buildTextLines(a: {
   return lines;
 }
 
-function describeFilters(filters: CatalogueExportFilters): string {
+function describeFilters(filters: CatalogueExportFilters, curationName: string | null): string {
   const parts: string[] = [];
+  if (curationName) parts.push(`Curation: ${curationName}`);
   if (filters.q) parts.push(`Search: "${filters.q}"`);
   if (filters.availability) parts.push(filters.availability === "SOLD" ? "Sold" : "Available");
   if (filters.type) parts.push(`Type: ${filters.type}`);

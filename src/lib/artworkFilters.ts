@@ -27,10 +27,14 @@ export type ArtworkFilterInput = {
   // convention as location/type below (Tier is now a Settings-editable
   // list, same pattern — see Artist.artworkTiers in schema.prisma).
   tier?: string;
+  // Curation filter (2026-09-24) — a Curation's id (not its name, so a
+  // rename never breaks a saved/bookmarked filter). Matches every
+  // artwork in that curation. See Curation in schema.prisma.
+  curation?: string;
 };
 
 export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput) {
-  const { q, availability, location, type, group, tier } = filters;
+  const { q, availability, location, type, group, tier, curation } = filters;
   return {
     artistId,
     ...(q
@@ -50,6 +54,7 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
     // list feeds both and it's not obvious to the user which one a given
     // artwork was tagged under.
     ...(group ? { OR: [{ catalogueGroup: group }, { presentationGroup: group }] } : {}),
+    ...(curation ? { curationItems: { some: { curationId: curation } } } : {}),
   };
 }
 
@@ -65,6 +70,11 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
 // share one implementation across a Prisma `where` clause and a plain
 // object check — but any change to what a filter *means* should be made
 // in both places together.
+//
+// The Curation filter is the one exception, and needs no check here:
+// editing an artwork never changes which curations it's in (that's only
+// done from the Curations page), so an edit can't take it out of the
+// curation being filtered on.
 export function artworkMatchesFilters(
   artwork: {
     catalogueName: string;
