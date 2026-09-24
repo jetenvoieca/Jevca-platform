@@ -8,6 +8,15 @@
 
 export type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
+// What "Sold" means for the Sold filter and the "X sold" count
+// (2026-09-24, direct request): RESERVED ("Sold - Not Paid") counts as
+// sold too, so every committed sale shows under Sold, paid or not.
+export const SOLD_AVAILABILITIES: Availability[] = ["RESERVED", "SOLD"];
+
+function availabilitiesFor(filter: string): Availability[] {
+  return filter === "SOLD" ? SOLD_AVAILABILITIES : [filter as Availability];
+}
+
 export type ArtworkFilterInput = {
   q?: string;
   availability?: string;
@@ -33,7 +42,7 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
           ],
         }
       : {}),
-    ...(availability ? { availability: availability as Availability } : {}),
+    ...(availability ? { availability: { in: availabilitiesFor(availability) } } : {}),
     ...(location ? { location } : {}),
     ...(type ? { type } : {}),
     ...(tier ? { tier } : {}),
@@ -80,7 +89,9 @@ export function artworkMatchesFilters(
     ];
     if (!haystacks.some((h) => h && h.toLowerCase().includes(needle))) return false;
   }
-  if (availability && artwork.availability !== availability) return false;
+  if (availability && !availabilitiesFor(availability).includes(artwork.availability as Availability)) {
+    return false;
+  }
   if (location && artwork.location !== location) return false;
   if (type && artwork.type !== type) return false;
   if (tier && artwork.tier !== tier) return false;

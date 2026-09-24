@@ -145,7 +145,8 @@ export default function ArtworksCatalogueView({
   // Catalogue. updateUrlFilters/applyFilters/handleLoadMore/
   // handleDuplicated below no longer take or forward a sort value;
   // listArtworks (and the CSV/PDF exports, which share the same
-  // filters) always return date-added order now.
+  // filters) always use the one shared order (buildArtworkOrderBy,
+  // lib/artworkFilters.ts).
   const updateUrlFilters = (next: {
     q: string;
     availability: string;
@@ -564,12 +565,9 @@ export default function ArtworksCatalogueView({
             heights cut ~20% throughout this row and the filter row
             below (2026-09-11, direct request — "catalogue will be a
             high usage area"), same treatment as the detail panel.
-            The "Sold" filter still matches only the literal SOLD value
-            — a RESERVED ("Sold - Not Paid") artwork currently falls
-            under neither Available nor Sold here; it still shows
-            correctly labelled under "All" (see formatAvailability
-            above), this is just a known gap in the two quick filters
-            themselves. */}
+            "Sold" includes RESERVED ("Sold - Not Paid") works too
+            (2026-09-24) — see SOLD_AVAILABILITIES in
+            lib/artworkFilters.ts. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
 

@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
-import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
+import { buildArtworkWhere, buildArtworkOrderBy, SOLD_AVAILABILITIES } from "@/lib/artworkFilters";
 import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
 import { retireArtworkPaymentLinks } from "@/lib/paymentLinks";
 import type { PurchaseDetail } from "./payments";
@@ -357,8 +357,9 @@ export async function listArtworks(artistId: string, filters: ListFilters) {
     db.artwork.count({ where }),
     // Over the whole filtered set, not just this page — otherwise the
     // "X sold" summary would silently only ever reflect whatever
-    // happened to be on the current page.
-    db.artwork.count({ where: { ...where, availability: "SOLD" } }),
+    // happened to be on the current page. Includes RESERVED ("Sold -
+    // Not Paid"), same as the Sold filter — see SOLD_AVAILABILITIES.
+    db.artwork.count({ where: { ...where, availability: { in: SOLD_AVAILABILITIES } } }),
   ]);
 
   // Prefer the small thumbnail (fast, served straight from storage) —
