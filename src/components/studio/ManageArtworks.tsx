@@ -226,7 +226,6 @@ export default function ManageArtworks({
               </div>
               <p className="mt-1 truncate text-[13px] text-[#333]">{a.title}</p>
               {a.typeEdition && <p className="text-xs text-[#8a8a8a]">{a.typeEdition}</p>}
-              {a.group && <p className="truncate text-xs text-[#b0b0b0]">{a.group}</p>}
             </button>
           ))}
         </div>

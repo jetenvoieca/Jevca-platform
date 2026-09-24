@@ -12,8 +12,6 @@ type SearchParams = {
   availability?: string;
   location?: string;
   type?: string;
-  group?: string;
-  tier?: string;
   selected?: string;
 };
 
@@ -24,7 +22,8 @@ const PAGE_SIZE = 60;
 // slug to a real site id first. The only difference passed down is
 // basePath, so every in-page link (currently just "+ Add New" ->
 // Hopper) stays inside this reduced shell instead of jumping out to
-// the full admin one.
+// the full admin one. No Curations filter here yet — the preview menu
+// doesn't have Curations (2026-09-24).
 export default async function PreviewArtworksPage({
   params,
   searchParams,
@@ -44,22 +43,17 @@ export default async function PreviewArtworksPage({
   if (!site) notFound();
   const artistId = site.artistId;
 
-  const [{ rows: artworks, total, soldCount }, settings, selectedRaw] = await Promise.all([
-    listArtworks(artistId, { ...sp, limit: PAGE_SIZE }),
+  const [{ rows, total, soldCount }, settings, selectedRaw] = await Promise.all([
+    listArtworks(artistId, {
+      q: sp.q,
+      availability: sp.availability,
+      location: sp.location,
+      type: sp.type,
+      limit: PAGE_SIZE,
+    }),
     getArtworkSettings(artistId),
     sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
   ]);
-
-  const rows = artworks.map((a) => ({
-    id: a.id,
-    catalogueName: a.catalogueName,
-    presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-    catalogueNumber: a.catalogueNumber,
-    availability: a.availability,
-    type: a.type,
-    catalogueGroup: a.catalogueGroup,
-    imageUrl: a.images[0]?.url ?? null,
-  }));
 
   const selected = selectedRaw && selectedRaw.artistId === artistId ? selectedRaw : null;
 
@@ -77,8 +71,6 @@ export default async function PreviewArtworksPage({
       availability={sp.availability || ""}
       location={sp.location || ""}
       type={sp.type || ""}
-      group={sp.group || ""}
-      tier={sp.tier || ""}
       initialSelected={selected}
       settings={settings}
     />

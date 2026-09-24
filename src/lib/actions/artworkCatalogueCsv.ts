@@ -8,10 +8,10 @@ import { buildArtworkWhere, buildArtworkOrderBy, type ArtworkFilterInput } from 
 // CSV export (2026-09-11, direct request) — the counterpart to the
 // existing CSV import (artworkImport.ts). Deliberately the exact same
 // column set and header names that importer expects (Title, Image URL,
-// Price, Dimensions, Medium, Location, Tier, Group, Type, Description,
-// Sold, Notes) — a file exported from here re-imports cleanly through
-// that same importer, so this doubles as a round-trip/backup path, not
-// just a one-way report. Respects the same filters as the PDF export
+// Price, Dimensions, Medium, Location, Type, Description, Sold, Notes)
+// — a file exported from here re-imports cleanly through that same
+// importer, so this doubles as a round-trip/backup path, not just a
+// one-way report. Respects the same filters as the PDF export
 // (buildArtworkWhere/buildArtworkOrderBy, shared with the on-screen grid
 // — see artworkFilters.ts), so "export what I'm currently looking at"
 // behaves the same way in both formats.
@@ -31,8 +31,6 @@ export async function generateArtworkCatalogueCsv(
       size: true,
       medium: true,
       location: true,
-      tier: true,
-      catalogueGroup: true,
       type: true,
       description: true,
       availability: true,
@@ -59,8 +57,6 @@ export async function generateArtworkCatalogueCsv(
       Dimensions: a.size || "",
       Medium: a.medium || "",
       Location: a.location || "",
-      Tier: a.tier || "",
-      Group: a.catalogueGroup || "",
       Type: a.type || "",
       Description: a.description || "",
       Sold: a.availability === "SOLD" ? "Yes" : "No",
@@ -76,8 +72,6 @@ export async function generateArtworkCatalogueCsv(
       "Dimensions",
       "Medium",
       "Location",
-      "Tier",
-      "Group",
       "Type",
       "Description",
       "Sold",

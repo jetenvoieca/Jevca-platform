@@ -22,11 +22,6 @@ export type ArtworkFilterInput = {
   availability?: string;
   location?: string;
   type?: string;
-  group?: string;
-  // Tier filter (2026-09-07) — matches Artwork.tier exactly, same
-  // convention as location/type below (Tier is now a Settings-editable
-  // list, same pattern — see Artist.artworkTiers in schema.prisma).
-  tier?: string;
   // Curation filter (2026-09-24) — a Curation's id (not its name, so a
   // rename never breaks a saved/bookmarked filter). Matches every
   // artwork in that curation. See Curation in schema.prisma.
@@ -34,7 +29,7 @@ export type ArtworkFilterInput = {
 };
 
 export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput) {
-  const { q, availability, location, type, group, tier, curation } = filters;
+  const { q, availability, location, type, curation } = filters;
   return {
     artistId,
     ...(q
@@ -49,11 +44,6 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
     ...(availability ? { availability: { in: availabilitiesFor(availability) } } : {}),
     ...(location ? { location } : {}),
     ...(type ? { type } : {}),
-    ...(tier ? { tier } : {}),
-    // A Group filter matches either facet's Group, since the same preset
-    // list feeds both and it's not obvious to the user which one a given
-    // artwork was tagged under.
-    ...(group ? { OR: [{ catalogueGroup: group }, { presentationGroup: group }] } : {}),
     ...(curation ? { curationItems: { some: { curationId: curation } } } : {}),
   };
 }
@@ -64,8 +54,8 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
 // active filters (e.g. its Location was just changed away from the
 // Location filter's current value) so it can drop the stale tile instead
 // of leaving it sitting there until a full page reload (2026-08-16 bug —
-// editing Location/Type/Group/Availability while filtered by that same
-// field left the old grid tile in place). Deliberately kept as simple,
+// editing Location/Type/Availability while filtered by that same field
+// left the old grid tile in place). Deliberately kept as simple,
 // obviously-equivalent JS next to buildArtworkWhere rather than trying to
 // share one implementation across a Prisma `where` clause and a plain
 // object check — but any change to what a filter *means* should be made
@@ -83,13 +73,10 @@ export function artworkMatchesFilters(
     availability: string;
     location: string | null;
     type: string | null;
-    catalogueGroup: string | null;
-    presentationGroup: string | null;
-    tier: string | null;
   },
   filters: ArtworkFilterInput
 ): boolean {
-  const { q, availability, location, type, group, tier } = filters;
+  const { q, availability, location, type } = filters;
   if (q) {
     const needle = q.toLowerCase();
     const haystacks = [
@@ -104,8 +91,6 @@ export function artworkMatchesFilters(
   }
   if (location && artwork.location !== location) return false;
   if (type && artwork.type !== type) return false;
-  if (tier && artwork.tier !== tier) return false;
-  if (group && artwork.catalogueGroup !== group && artwork.presentationGroup !== group) return false;
   return true;
 }
 

@@ -332,8 +332,6 @@ function describeFilters(filters: CatalogueExportFilters, curationName: string |
   if (filters.q) parts.push(`Search: "${filters.q}"`);
   if (filters.availability) parts.push(filters.availability === "SOLD" ? "Sold" : "Available");
   if (filters.type) parts.push(`Type: ${filters.type}`);
-  if (filters.tier) parts.push(`Tier: ${filters.tier}`);
-  if (filters.group) parts.push(`Group: ${filters.group}`);
   if (filters.location) parts.push(`Location: ${filters.location}`);
   return parts.join(" · ");
 }

@@ -5,10 +5,8 @@ import { revalidatePath } from "next/cache";
 import { listLocations, type LocationSummary } from "./locations";
 
 export type SettingsField =
-  | "artworkGroups"
   | "mediumPresets"
   | "sizePresets"
-  | "artworkTiers"
   | "saleSources"
   | "paymentMethods";
 
@@ -34,15 +32,15 @@ export type SettingsField =
 // used to read `artworkLocations` — the Artwork Catalogue's Location
 // dropdown, the Settings screen's Locations card, and the "Sold"
 // button's routing.
+//
+// Groups and Tiers removed (2026-09-24) — replaced by Curations.
 export async function getArtworkSettings(artistId: string) {
   const [artist, artworkTypeRows, locations] = await Promise.all([
     db.artist.findUnique({
       where: { id: artistId },
       select: {
-        artworkGroups: true,
         mediumPresets: true,
         sizePresets: true,
-        artworkTiers: true,
         saleSources: true,
         paymentMethods: true,
         defaultInstalmentCount: true,
@@ -53,7 +51,6 @@ export async function getArtworkSettings(artistId: string) {
   ]);
 
   return {
-    artworkGroups: artist?.artworkGroups ?? [],
     artworkTypes: artworkTypeRows.map((t) => t.name),
     artworkTypeRecords: artworkTypeRows.map((t) => ({
       id: t.id,
@@ -63,7 +60,6 @@ export async function getArtworkSettings(artistId: string) {
     locations: locations as LocationSummary[],
     mediumPresets: artist?.mediumPresets ?? [],
     sizePresets: artist?.sizePresets ?? [],
-    artworkTiers: artist?.artworkTiers ?? [],
     saleSources: artist?.saleSources ?? [],
     paymentMethods: artist?.paymentMethods ?? [],
     defaultInstalmentCount: artist?.defaultInstalmentCount ?? 5,
@@ -119,9 +115,9 @@ export async function removeArtworkType(artistId: string, siteId: string, typeId
 // don't fit updateList/addSettingOption/removeSettingOption above — a
 // small dedicated action instead. Card itself lives on the site's own
 // Financial settings tab (SiteSettingsPanel), not here — moved 2026-09-07,
-// these are financial terms rather than Catalogue/Type/Group data — but
-// stays in this file since it's still the same Artist-level settings
-// concept as everything else here.
+// these are financial terms rather than Catalogue/Type data — but stays
+// in this file since it's still the same Artist-level settings concept
+// as everything else here.
 export async function updatePaymentDefaults(artistId: string, siteId: string, formData: FormData) {
   const defaultInstalmentCount = parseInt((formData.get("defaultInstalmentCount") as string) || "5", 10);
   const defaultReleaseMessage = (formData.get("defaultReleaseMessage") as string)?.trim() || "";
@@ -154,17 +150,11 @@ async function updateList(
   next: string[]
 ) {
   switch (field) {
-    case "artworkGroups":
-      await db.artist.update({ where: { id: artistId }, data: { artworkGroups: next } });
-      break;
     case "mediumPresets":
       await db.artist.update({ where: { id: artistId }, data: { mediumPresets: next } });
       break;
     case "sizePresets":
       await db.artist.update({ where: { id: artistId }, data: { sizePresets: next } });
-      break;
-    case "artworkTiers":
-      await db.artist.update({ where: { id: artistId }, data: { artworkTiers: next } });
       break;
     case "saleSources":
       await db.artist.update({ where: { id: artistId }, data: { saleSources: next } });

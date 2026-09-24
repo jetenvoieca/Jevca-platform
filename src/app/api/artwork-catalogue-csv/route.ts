@@ -12,8 +12,6 @@ export async function GET(req: NextRequest) {
       availability: params.get("availability") || undefined,
       location: params.get("location") || undefined,
       type: params.get("type") || undefined,
-      group: params.get("group") || undefined,
-      tier: params.get("tier") || undefined,
       curation: params.get("curation") || undefined,
     });
     return new Response(csv, {

@@ -206,7 +206,6 @@ export default function SaleModal({
                     siteId={target.siteId}
                     artworkType={selectedDetail.type}
                     artworkSize={selectedDetail.size}
-                    artworkGroup={selectedDetail.catalogueGroup}
                     artworkMedium={selectedDetail.medium}
                     onDelete={
                       selectedPurchase.status !== "COMPLETED"

@@ -11,10 +11,6 @@ type SearchParams = {
   availability?: string;
   location?: string;
   type?: string;
-  group?: string;
-  // Settings-editable Tier dropdown filter (2026-09-07) — see
-  // Artist.artworkTiers in schema.prisma.
-  tier?: string;
   // Curation filter (2026-09-24) — a Curation's id. See
   // ArtworkFilterInput in lib/artworkFilters.ts.
   curation?: string;
@@ -44,24 +40,19 @@ export default async function ArtworksCataloguePage({
   });
   const artistId = site!.artistId;
 
-  const [{ rows: artworks, total, soldCount }, settings, curations, selectedRaw] =
-    await Promise.all([
-      listArtworks(artistId, { ...sp, limit: PAGE_SIZE }),
-      getArtworkSettings(artistId),
-      listCurations(artistId),
-      sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
-    ]);
-
-  const rows = artworks.map((a) => ({
-    id: a.id,
-    catalogueName: a.catalogueName,
-    presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-    catalogueNumber: a.catalogueNumber,
-    availability: a.availability,
-    type: a.type,
-    catalogueGroup: a.catalogueGroup,
-    imageUrl: a.images[0]?.url ?? null,
-  }));
+  const [{ rows, total, soldCount }, settings, curations, selectedRaw] = await Promise.all([
+    listArtworks(artistId, {
+      q: sp.q,
+      availability: sp.availability,
+      location: sp.location,
+      type: sp.type,
+      curation: sp.curation,
+      limit: PAGE_SIZE,
+    }),
+    getArtworkSettings(artistId),
+    listCurations(artistId),
+    sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
+  ]);
 
   const selected = selectedRaw && selectedRaw.artistId === artistId ? selectedRaw : null;
 
@@ -78,8 +69,6 @@ export default async function ArtworksCataloguePage({
       availability={sp.availability || ""}
       location={sp.location || ""}
       type={sp.type || ""}
-      group={sp.group || ""}
-      tier={sp.tier || ""}
       curation={sp.curation || ""}
       curations={curations}
       initialSelected={selected}

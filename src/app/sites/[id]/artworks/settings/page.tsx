@@ -18,34 +18,15 @@ export default async function ArtworkSettingsPage({
     <div className="p-6">
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Settings</h1>
       <p className="mb-6 text-sm text-neutral-500">
-        Manage the Group, Type, Location, Medium, Size and Tier options offered across the
-        Artwork Catalogue. Shared across all of this artist&apos;s sites.
+        Manage the Type, Location, Medium and Size options offered across the Artwork
+        Catalogue. Shared across all of this artist&apos;s sites.
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <SettingsListCard
-          artistId={artistId}
-          siteId={id}
-          field="artworkGroups"
-          title="Groups"
-          description="Offered in the Group dropdown, on both Presentation and Catalogue."
-          options={settings.artworkGroups}
-          placeholder="New group…"
-        />
         <ArtworkTypesCard artistId={artistId} siteId={id} types={settings.artworkTypeRecords} />
-        <SettingsListCard
-          artistId={artistId}
-          siteId={id}
-          field="artworkTiers"
-          title="Tiers"
-          description="Offered in the Tier dropdown, on the Catalogue tab."
-          options={settings.artworkTiers}
-          placeholder="New tier…"
-        />
         {/* Locations moved off SettingsListCard (2026-09-22) — a real
             Location model now (Gallery/Own, see schema.prisma), not a
-            plain string list, so it has its own card. Same grid slot
-            this used to sit in. */}
+            plain string list, so it has its own card. */}
         <LocationsCard artistId={artistId} siteId={id} locations={settings.locations} />
         <SettingsListCard
           artistId={artistId}
@@ -56,9 +37,6 @@ export default async function ArtworkSettingsPage({
           options={settings.mediumPresets}
           placeholder="e.g. Original work on aluminium: mixed media…"
         />
-      </div>
-
-      <div className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <SettingsListCard
           artistId={artistId}
           siteId={id}

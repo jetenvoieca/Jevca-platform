@@ -29,7 +29,6 @@ export default function SaleDetailCard({
   siteId,
   artworkType,
   artworkSize,
-  artworkGroup,
   artworkMedium,
   onDelete,
   onForceDelete,
@@ -42,7 +41,6 @@ export default function SaleDetailCard({
   siteId: string;
   artworkType: string | null;
   artworkSize: string | null;
-  artworkGroup: string | null;
   artworkMedium: string | null;
   // Only ever passed for an abandoned (never-paid) sale — the parent
   // decides eligibility, this component just renders the button when
@@ -113,7 +111,6 @@ export default function SaleDetailCard({
       <dl className="grid grid-cols-2 gap-3">
         <Field label="Type" value={artworkType} />
         <Field label="Size" value={artworkSize} />
-        <Field label="Group" value={artworkGroup} />
         <Field label="Medium" value={artworkMedium} />
 
         <div className="col-span-2 border-t border-neutral-100 pt-3">
