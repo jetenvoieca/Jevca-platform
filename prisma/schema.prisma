@@ -205,6 +205,9 @@ model Artist {
   artworks  Artwork[]
   customers Customer[]
   locations Location[]
+  // Named, ordered selections of this artist's artworks (2026-09-24) —
+  // see Curation below.
+  curations Curation[]
 
   artworkGroups    String[] @default([])
   // Deprecated (2026-08-28) — superseded by the real ArtworkType table
@@ -553,6 +556,52 @@ model Location {
 
   @@unique([artistId, name])
   @@index([artistId])
+}
+
+// A named, ordered selection of an artist's artworks (2026-09-24) —
+// e.g. "Signature Pieces". Replaces Artwork.tier / catalogueGroup as
+// the way works are grouped for display and marketing: those are
+// presentation choices, not facts about the artwork itself, so they
+// don't belong in the catalogue. Belongs to the artist (not a Site),
+// same as Artwork, so any of the artist's sites can use the same
+// curation. An artwork can be in any number of curations — see
+// CurationItem below. Stage one is curating only; how a curation is
+// displayed on a website is a later stage.
+model Curation {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  name String
+
+  items CurationItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([artistId, name])
+  @@index([artistId])
+}
+
+// One artwork's place in one Curation (2026-09-24). `position` sets the
+// order within the curation (0 first). An artwork appears at most once
+// per curation. Removed automatically if either the curation or the
+// artwork is deleted — removing a work from a curation never touches
+// the artwork itself.
+model CurationItem {
+  id         String   @id @default(cuid())
+  curationId String
+  curation   Curation @relation(fields: [curationId], references: [id], onDelete: Cascade)
+  artworkId  String
+  artwork    Artwork  @relation(fields: [artworkId], references: [id], onDelete: Cascade)
+
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+
+  @@unique([curationId, artworkId])
+  @@index([curationId, position])
+  @@index([artworkId])
 }
 
 // One unified messaging inbox for every address on the platform's
@@ -1008,6 +1057,8 @@ model Artwork {
 
   saleTerms SaleTerms?
   purchases Purchase[]
+  // Every Curation this artwork is in (2026-09-24) — see CurationItem.
+  curationItems CurationItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
