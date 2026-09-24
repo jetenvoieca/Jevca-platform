@@ -868,7 +868,6 @@ model Artwork {
 
   catalogueNumber String
 
-  presentationTitle String
   // Mirrors Catalogue's `offeredPrice` (2026-08-28) — Presentation no
   // longer has its own independently-typed price; "Price" there is a
   // read-only display of this same figure, kept in sync from
@@ -888,8 +887,7 @@ model Artwork {
   medium            String?
   // Presentation's own, independently-editable Medium wording
   // (2026-08-28) — seeded once from Catalogue's `medium` the first time
-  // Catalogue's Medium is set, then edited separately from here on,
-  // same "seed once, then independent" pattern already used for Title.
+  // Catalogue's Medium is set, then edited separately from here on.
   presentationMedium String?
   // "Can be viewed at" (2026-08-28) — e.g. a gallery or platform name,
   // shown on Presentation only.
@@ -905,6 +903,10 @@ model Artwork {
   availability      ArtworkAvailability @default(AVAILABLE)
   visible           Boolean             @default(true)
 
+  // The artwork's one and only name (2026-09-24) — used everywhere the
+  // artwork is named: catalogue, website, sales, invoices, receipts,
+  // certificates and Stripe. Replaces the old separate Presentation
+  // title, which was dropped.
   catalogueName  String
   // Free text (e.g. "June 2025"), not a real calendar date or a bare
   // year — renamed + retyped from the old numeric `year` (2026-09-07,
@@ -946,9 +948,9 @@ model Artwork {
   // Catalogue itself, and never for quick-creating an artwork from other
   // pickers elsewhere (e.g. Related Images), even though those also call
   // the same underlying quickCreateArtwork(). Cleared the first time
-  // either Catalogue or Presentation is actually saved — see
-  // updateCatalogue/updatePresentation. Powers the "raw import, not yet
-  // reviewed" count shown next to Artwork Catalogue in the nav.
+  // the Catalogue is actually saved — see updateCatalogue. Powers the
+  // "raw import, not yet reviewed" count shown next to Artwork
+  // Catalogue in the nav.
   needsReview Boolean @default(false)
 
   images Image[]
