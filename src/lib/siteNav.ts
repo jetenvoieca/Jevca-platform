@@ -29,6 +29,7 @@ export type SiteNavKey =
   | "artworks"
   | "artworkSettings"
   | "galleries"
+  | "curations"
   | "media"
   | "bucket"
   | "mediaSettings"
@@ -51,6 +52,7 @@ const CONTENT_KEYS: SiteNavKey[] = [
   "artworks",
   "artworkSettings",
   "galleries",
+  "curations",
   "media",
   "bucket",
   "mediaSettings",
@@ -109,6 +111,9 @@ export function buildSiteNavEntries({
     // changed for now) sits here, between Artwork Catalogue and its
     // Settings, per direct request 2026-08-31.
     { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },
+    // Curations (2026-09-24) — directly under Locations, per direct
+    // request. See the note on Curation in schema.prisma.
+    { label: "Curations", href: `${base}/curations`, active: active === "curations" },
     {
       label: "Settings",
       href: `${base}/artworks/settings`,

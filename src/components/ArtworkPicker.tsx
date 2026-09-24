@@ -16,6 +16,8 @@ export default function ArtworkPicker({
   mode = "single",
   label = "Add Artwork",
   variant = "tile",
+  allowCreate = true,
+  excludeIds = [],
   onSelect,
 }: {
   artistId: string;
@@ -28,6 +30,13 @@ export default function ArtworkPicker({
   // media, so the "+ Add" tile's implication (this creates something new)
   // would be misleading. See decisions-log, 2026-08-05.
   variant?: "tile" | "button";
+  // Whether the "type a new artwork name… Create" box is offered
+  // (2026-09-24). Off for Curations, which only ever gather works that
+  // already exist in the catalogue.
+  allowCreate?: boolean;
+  // Artworks to leave out of the list (2026-09-24) — e.g. works already
+  // in the curation being added to, so they can't be picked twice.
+  excludeIds?: string[];
   onSelect: (artworks: PickedArtwork[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -38,6 +47,10 @@ export default function ArtworkPicker({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const excluded = new Set(excludeIds);
+  const visibleArtworks =
+    excluded.size > 0 ? artworks.filter((a) => !excluded.has(a.id)) : artworks;
 
   const load = (q: string) => {
     startTransition(async () => {
@@ -160,21 +173,25 @@ export default function ArtworkPicker({
             autoFocus
             className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
-          <input
-            type="text"
-            value={newTitle}
-            onChange={(e) => setNewTitle(e.target.value)}
-            placeholder="Or type a new artwork name…"
-            className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-          <button
-            type="button"
-            onClick={handleCreate}
-            disabled={!newTitle.trim() || isPending}
-            className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-40"
-          >
-            Create
-          </button>
+          {allowCreate && (
+            <>
+              <input
+                type="text"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                placeholder="Or type a new artwork name…"
+                className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <button
+                type="button"
+                onClick={handleCreate}
+                disabled={!newTitle.trim() || isPending}
+                className="rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm hover:bg-neutral-50 disabled:opacity-40"
+              >
+                Create
+              </button>
+            </>
+          )}
           <button
             type="button"
             onClick={() => setOpen(false)}
@@ -199,7 +216,7 @@ export default function ArtworkPicker({
             <p className="pb-3 text-xs text-neutral-400">Searching…</p>
           )}
           <div className="grid grid-cols-8 gap-3">
-            {artworks.map((a) => {
+            {visibleArtworks.map((a) => {
               const isSelected = selected.some((s) => s.id === a.id);
               return (
                 <button
@@ -224,9 +241,11 @@ export default function ArtworkPicker({
               );
             })}
           </div>
-          {artworks.length === 0 && !isPending && (
+          {visibleArtworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
-              No artworks yet — type a name above to create one.
+              {allowCreate
+                ? "No artworks yet — type a name above to create one."
+                : "No artworks to add."}
             </p>
           )}
         </div>
