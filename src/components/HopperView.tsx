@@ -348,7 +348,7 @@ export default function HopperView({
   const handleManageArtwork = (
     item: HopperItem,
     artworkId: string,
-    artworkTitle: string,
+    artworkName: string,
     mode: "main" | "related",
     relatedName: string
   ) => {
@@ -362,7 +362,7 @@ export default function HopperView({
       );
       logProcessed(
         item,
-        mode === "main" ? `Set as main image for ${artworkTitle}` : `Linked to ${artworkTitle}`,
+        mode === "main" ? `Set as main image for ${artworkName}` : `Linked to ${artworkName}`,
         `${resolvedBasePath}/artworks?selected=${artworkId}`
       );
       advanceAfterAction();
@@ -772,8 +772,8 @@ export default function HopperView({
                 onBin={() => handleBin(current)}
                 onAddToMedia={() => handleAddToMedia(current)}
                 onAddToBucket={() => handleAddToBucket(current)}
-                onManageArtwork={(artworkId, artworkTitle, mode, relatedName) =>
-                  handleManageArtwork(current, artworkId, artworkTitle, mode, relatedName)
+                onManageArtwork={(artworkId, artworkName, mode, relatedName) =>
+                  handleManageArtwork(current, artworkId, artworkName, mode, relatedName)
                 }
                 onAddNewArtwork={(fields) => handleAddNewArtwork(current, fields)}
               />
@@ -905,7 +905,7 @@ function SortingCard({
   onAddToBucket: () => void;
   onManageArtwork: (
     artworkId: string,
-    artworkTitle: string,
+    artworkName: string,
     mode: "main" | "related",
     relatedName: string
   ) => void;
@@ -1010,9 +1010,9 @@ function SortingCard({
           artistId={artistId}
           managing={managingArtwork}
           onCancel={() => setShowManageForm(false)}
-          onDone={async (artworkId, artworkTitle, mode, relatedName) => {
+          onDone={async (artworkId, artworkName, mode, relatedName) => {
             setManagingArtwork(true);
-            onManageArtwork(artworkId, artworkTitle, mode, relatedName);
+            onManageArtwork(artworkId, artworkName, mode, relatedName);
             setManagingArtwork(false);
             setShowManageForm(false);
           }}
@@ -1048,7 +1048,7 @@ function ManageArtworkPanel({
   onCancel: () => void;
   onDone: (
     artworkId: string,
-    artworkTitle: string,
+    artworkName: string,
     mode: "main" | "related",
     relatedName: string
   ) => void;
