@@ -5,12 +5,16 @@ import { revalidatePath } from "next/cache";
 import { findOrCreateCustomer } from "./customers";
 import { netOwed, saleBreakdown, saleTitle, splitIntoInstalments } from "@/lib/saleMath";
 import {
+  getStripeModeForArtwork,
+  retireGalleryPaymentLinks,
+  deactivatePaymentLink,
+} from "@/lib/paymentLinks";
+import {
   getStripeClient,
   getPublishableKey,
   toMinorUnits,
   fromMinorUnits,
   APP_URL,
-  type StripeMode,
 } from "@/lib/stripe";
 
 // No revalidatePath(`/sites/${siteId}/artworks`) calls in this file
@@ -94,16 +98,6 @@ export type PurchaseDetail = {
   closedAt: string | null;
   payments: PaymentDetail[];
 };
-
-// ---------- Shared: resolve which Stripe mode (Test/Live) applies ----------
-
-async function getStripeModeForArtwork(artworkId: string): Promise<StripeMode> {
-  const artwork = await db.artwork.findUniqueOrThrow({
-    where: { id: artworkId },
-    select: { artist: { select: { stripeMode: true } } },
-  });
-  return artwork.artist.stripeMode;
-}
 
 // ---------- The Availability model (2026-09-20 rebuild; extended 2026-09-22) ----------
 //
@@ -543,7 +537,7 @@ export async function createGalleryPaymentLink(
 
     const mode = await getStripeModeForArtwork(purchase.artworkId);
     const stripe = getStripeClient(mode);
-    const title = saleTitle(purchase.artwork.presentationTitle, purchase.chargeKind);
+    const title = saleTitle(purchase.artwork.catalogueName, purchase.chargeKind);
     const amount = due.amount;
 
     const price = await stripe.prices.create({
@@ -724,44 +718,6 @@ export async function updateGallerySaleAmount(
   await db.purchase.update({ where: { id: purchaseId }, data: { totalAmount, currency } });
 
   return { ok: true };
-}
-
-// Retires both of a consigned sale's payment links (full amount and
-// instalments) once the balance they encode is out of date — a payment
-// received, or the price, currency, framing or delivery changed. Each is
-// deactivated in Stripe and cleared here, so the next press of a
-// payment-link option generates a fresh one for the current balance.
-async function retireGalleryPaymentLinks(purchase: {
-  id: string;
-  artworkId: string;
-  stripePaymentLinkId: string | null;
-  stripeInstalmentLinkId: string | null;
-}) {
-  if (!purchase.stripePaymentLinkId && !purchase.stripeInstalmentLinkId) return;
-  await deactivatePaymentLink(purchase.artworkId, purchase.stripePaymentLinkId);
-  await deactivatePaymentLink(purchase.artworkId, purchase.stripeInstalmentLinkId);
-  await db.purchase.update({
-    where: { id: purchase.id },
-    data: {
-      stripePaymentLinkId: null,
-      stripePaymentLinkUrl: null,
-      stripeInstalmentLinkId: null,
-      stripeInstalmentLinkUrl: null,
-      stripeInstalmentLinkCount: null,
-    },
-  });
-}
-
-// A Stripe-side failure never blocks the local change — worst case the
-// old link stays technically live in Stripe a little longer.
-async function deactivatePaymentLink(artworkId: string, linkId: string | null) {
-  if (!linkId) return;
-  try {
-    const mode = await getStripeModeForArtwork(artworkId);
-    await getStripeClient(mode).paymentLinks.update(linkId, { active: false });
-  } catch {
-    // See note above.
-  }
 }
 
 // ---------- Framing / delivery on a consigned sale ----------
@@ -1330,7 +1286,7 @@ async function createPaymentLink(
           price_data: {
             currency: purchase.currency.toLowerCase(),
             unit_amount: toMinorUnits(amount),
-            product_data: { name: purchase.artwork.presentationTitle },
+            product_data: { name: purchase.artwork.catalogueName },
           },
         },
       ],
@@ -1536,7 +1492,7 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
         id: purchase.id,
         artworkId: purchase.artworkId,
         currency: purchase.currency,
-        title: purchase.artwork.presentationTitle,
+        title: purchase.artwork.catalogueName,
       },
       customerId: purchase.stripeCustomerId!,
       remaining: amounts.slice(1),
@@ -1645,7 +1601,7 @@ async function recordGalleryStripePayment(payment: {
         id: purchase.id,
         artworkId: purchase.artworkId,
         currency: purchase.currency,
-        title: purchase.artwork.presentationTitle,
+        title: purchase.artwork.catalogueName,
       },
       customerId: payment.customerId,
       paymentMethodId: payment.paymentMethodId,
