@@ -5,7 +5,12 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
-import { buildArtworkWhere, buildArtworkOrderBy, SOLD_AVAILABILITIES } from "@/lib/artworkFilters";
+import {
+  buildArtworkWhere,
+  buildArtworkOrderBy,
+  SOLD_AVAILABILITIES,
+  type ArtworkFilterInput,
+} from "@/lib/artworkFilters";
 import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
 import { retireArtworkPaymentLinks } from "@/lib/paymentLinks";
 import type { PurchaseDetail } from "./payments";
@@ -285,19 +290,13 @@ export async function duplicateArtwork(
   return { id: created.id };
 }
 
-type ListFilters = {
-  q?: string;
-  availability?: string;
-  location?: string;
-  type?: string;
-  group?: string;
-  // Settings-editable Tier dropdown (2026-09-07) — see Artist.artworkTiers
-  // in schema.prisma and the matching field on ArtworkFilterInput.
-  tier?: string;
-  // Pagination — added 2026-08-11 once the catalogue reached real size
-  // (~150 artworks after the CSV import). Previously fetched every
-  // matching row unconditionally, every time, the same issue already
-  // fixed on Media Catalogue.
+// The shared catalogue filters (lib/artworkFilters.ts — the same ones
+// the PDF/CSV exports use, so there's one definition of what a filter
+// means), plus pagination — added 2026-08-11 once the catalogue reached
+// real size (~150 artworks after the CSV import). Previously fetched
+// every matching row unconditionally, every time, the same issue
+// already fixed on Media Catalogue.
+type ListFilters = ArtworkFilterInput & {
   offset?: number;
   limit?: number;
 };

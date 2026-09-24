@@ -7,6 +7,7 @@ import {
   listArtworks,
   deleteArtworkIfBlank,
 } from "@/lib/actions/artworks";
+import type { CurationSummary } from "@/lib/actions/curations";
 import ArtworkImportPanel from "@/components/ArtworkImportPanel";
 import ArtworkDetailPanel, {
   type ArtworkDetail,
@@ -27,6 +28,18 @@ type ArtworkRow = {
   imageUrl: string | null;
 };
 
+// Every filter the catalogue offers, in one shape — what the URL, the
+// grid fetches and the PDF/CSV exports all read from.
+type Filters = {
+  q: string;
+  availability: string;
+  location: string;
+  type: string;
+  group: string;
+  tier: string;
+  curation: string;
+};
+
 const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
 const DENSITY_STORAGE_KEY = "jevca:artworks-density";
 
@@ -40,6 +53,29 @@ function formatAvailability(value: string): string {
   if (value === "SOLD") return "SOLD";
   if (value === "RESERVED") return "Sold - Not Paid";
   return "Available";
+}
+
+// Only the filters actually set, as the query-string pairs the URL and
+// the export routes expect.
+function activeFilterParams(filters: Filters): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const [key, value] of Object.entries(filters)) {
+    if (value) out[key] = value;
+  }
+  return out;
+}
+
+// The same filters as listArtworks takes them — unset ones left out.
+function toListFilters(filters: Filters) {
+  return {
+    q: filters.q || undefined,
+    availability: filters.availability || undefined,
+    location: filters.location || undefined,
+    type: filters.type || undefined,
+    group: filters.group || undefined,
+    tier: filters.tier || undefined,
+    curation: filters.curation || undefined,
+  };
 }
 
 export default function ArtworksCatalogueView({
@@ -57,6 +93,8 @@ export default function ArtworksCatalogueView({
   type: initialType,
   group: initialGroup,
   tier: initialTier,
+  curation: initialCuration = "",
+  curations = [],
   initialSelected,
   settings,
 }: {
@@ -80,6 +118,12 @@ export default function ArtworksCatalogueView({
   type: string;
   group: string;
   tier: string;
+  // Curation filter (2026-09-24) — a Curation's id, and the list the
+  // dropdown offers. Optional so the evaluation-only preview pages
+  // (which don't have Curations yet) need no change; with no curations
+  // passed, the dropdown isn't shown.
+  curation?: string;
+  curations?: CurationSummary[];
   initialSelected: ArtworkDetail | null;
   settings: ArtworkSettings;
 }) {
@@ -126,7 +170,10 @@ export default function ArtworksCatalogueView({
   const [type, setType] = useState(initialType);
   const [group, setGroup] = useState(initialGroup);
   const [tier, setTier] = useState(initialTier);
+  const [curation, setCuration] = useState(initialCuration);
   const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const currentFilters: Filters = { q, availability, location, type, group, tier, curation };
 
   // Declared up here, ahead of applyFilters below, specifically because
   // applyFilters' own dependency array reads `selected` directly
@@ -147,46 +194,21 @@ export default function ArtworksCatalogueView({
   // listArtworks (and the CSV/PDF exports, which share the same
   // filters) always use the one shared order (buildArtworkOrderBy,
   // lib/artworkFilters.ts).
-  const updateUrlFilters = (next: {
-    q: string;
-    availability: string;
-    location: string;
-    type: string;
-    group: string;
-    tier: string;
-  }) => {
+  const updateUrlFilters = (next: Filters) => {
     const params = new URLSearchParams(window.location.search);
-    const setOrDelete = (key: string, value: string) => {
+    for (const [key, value] of Object.entries(next)) {
       if (value) params.set(key, value);
       else params.delete(key);
-    };
-    setOrDelete("q", next.q);
-    setOrDelete("availability", next.availability);
-    setOrDelete("location", next.location);
-    setOrDelete("type", next.type);
-    setOrDelete("group", next.group);
-    setOrDelete("tier", next.tier);
+    }
     const qs = params.toString();
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   };
 
   const applyFilters = useCallback(
-    async (overrides: Partial<{
-      q: string;
-      availability: string;
-      location: string;
-      type: string;
-      group: string;
-      tier: string;
-    }>) => {
-      const next = { q, availability, location, type, group, tier, ...overrides };
+    async (overrides: Partial<Filters>) => {
+      const next: Filters = { q, availability, location, type, group, tier, curation, ...overrides };
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
-        q: next.q || undefined,
-        availability: next.availability || undefined,
-        location: next.location || undefined,
-        type: next.type || undefined,
-        group: next.group || undefined,
-        tier: next.tier || undefined,
+        ...toListFilters(next),
         limit: pageSize,
       });
       setArtworks(
@@ -223,7 +245,7 @@ export default function ArtworksCatalogueView({
         updateUrlSelected(null);
       }
     },
-    [artistId, q, availability, location, type, group, tier, pageSize, selected]
+    [artistId, q, availability, location, type, group, tier, curation, pageSize, selected]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -231,12 +253,7 @@ export default function ArtworksCatalogueView({
     setLoadMoreError(false);
     try {
       const { rows } = await listArtworks(artistId, {
-        q: q || undefined,
-        availability: availability || undefined,
-        location: location || undefined,
-        type: type || undefined,
-        group: group || undefined,
-        tier: tier || undefined,
+        ...toListFilters({ q, availability, location, type, group, tier, curation }),
         offset: artworks.length,
         limit: pageSize,
       });
@@ -263,7 +280,7 @@ export default function ArtworksCatalogueView({
     } finally {
       setLoadingMore(false);
     }
-  }, [artistId, artworks.length, q, availability, location, type, group, tier, pageSize]);
+  }, [artistId, artworks.length, q, availability, location, type, group, tier, curation, pageSize]);
 
   // Infinite scroll: an invisible sentinel sits just past the last row.
   // When it enters the viewport we auto-fetch the next page — no "Load
@@ -376,12 +393,7 @@ export default function ArtworksCatalogueView({
   const handleDuplicated = (newArtworkId: string) => {
     (async () => {
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
-        q: q || undefined,
-        availability: availability || undefined,
-        location: location || undefined,
-        type: type || undefined,
-        group: group || undefined,
-        tier: tier || undefined,
+        ...toListFilters(currentFilters),
         limit: pageSize,
       });
       setArtworks(
@@ -432,14 +444,7 @@ export default function ArtworksCatalogueView({
       if (item && item.artistId === artistId && selectedIdRef.current === idAtCallTime) {
         setSelected(item);
 
-        const stillMatches = artworkMatchesFilters(item, {
-          q,
-          availability,
-          location,
-          type,
-          group,
-          tier,
-        });
+        const stillMatches = artworkMatchesFilters(item, currentFilters);
 
         if (stillMatches) {
           setArtworks((prev) =>
@@ -466,12 +471,7 @@ export default function ArtworksCatalogueView({
         // since an edit can change soldCount even when the tile stays
         // (e.g. toggling Availability while filtered by something else).
         const { total: freshTotal, soldCount: freshSoldCount } = await listArtworks(artistId, {
-          q: q || undefined,
-          availability: availability || undefined,
-          location: location || undefined,
-          type: type || undefined,
-          group: group || undefined,
-          tier: tier || undefined,
+          ...toListFilters(currentFilters),
           limit: 0,
         });
         setTotal(freshTotal);
@@ -500,12 +500,7 @@ export default function ArtworksCatalogueView({
   const buildCsvExportUrl = () => {
     const params = new URLSearchParams({
       artistId,
-      ...(q ? { q } : {}),
-      ...(availability ? { availability } : {}),
-      ...(location ? { location } : {}),
-      ...(type ? { type } : {}),
-      ...(group ? { group } : {}),
-      ...(tier ? { tier } : {}),
+      ...activeFilterParams(currentFilters),
     });
     return `/api/artwork-catalogue-csv?${params.toString()}`;
   };
@@ -715,11 +710,31 @@ export default function ArtworksCatalogueView({
           </div>
 
           {/* Row 2: filtering/search — a separate functional group from
-              the view controls above. Tier (2026-09-07) sits leftmost,
-              ahead of Search, matching the design mockup. Sort dropdown
-              removed (2026-09-12, direct request) from the end of this
-              row. */}
+              the view controls above. Curations (2026-09-24) sits
+              leftmost, then Tier (2026-09-07), then Search. Sort
+              dropdown removed (2026-09-12, direct request) from the end
+              of this row. */}
           <div className="mb-3 flex flex-wrap items-center gap-3">
+            {curations.length > 0 && (
+              <select
+                name="curation"
+                value={curation}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  setCuration(v);
+                  applyFilters({ curation: v });
+                }}
+                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
+              >
+                <option value="">All curations</option>
+                {curations.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            )}
+
             <select
               name="tier"
               value={tier}
@@ -976,12 +991,7 @@ export default function ArtworksCatalogueView({
             artistId,
             headerTitle,
             headerSubtitle,
-            ...(q ? { q } : {}),
-            ...(availability ? { availability } : {}),
-            ...(location ? { location } : {}),
-            ...(type ? { type } : {}),
-            ...(group ? { group } : {}),
-            ...(tier ? { tier } : {}),
+            ...activeFilterParams(currentFilters),
           }).toString()}`;
           // Same as the plain link this replaces — a real navigation to
           // the download route, not a fetch+blob dance. window.open
