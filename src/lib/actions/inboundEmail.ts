@@ -5,6 +5,8 @@ import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import { raiseAlertIfNotAlreadyOpen, resolveAlertsOfType } from "@/lib/alerts";
 import { saleTitle } from "@/lib/saleMath";
+import { uploadToR2, deleteFromR2 } from "@/lib/r2";
+import { readableEmailText } from "@/lib/emailText";
 
 // The unified admin inbox (2026-09-05, Email Integration) — processing
 // of inbound webhook events, plus reading/replying to what lands here.
@@ -12,6 +14,10 @@ import { saleTitle } from "@/lib/saleMath";
 // overall design ("one box with a filter", direct decision).
 
 const EMAIL_REPLY_ALERT = "EMAIL_REPLY_RECEIVED";
+
+// Attachments larger than this are listed on the email but not copied
+// into storage (2026-09-24, direct decision).
+const MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024;
 
 function parseAddress(raw: string): { name: string | null; address: string } {
   const match = raw.match(/^\s*"?([^"<]*)"?\s*<([^>]+)>\s*$/);
@@ -89,7 +95,7 @@ export async function processInboundEmail(eventData: {
       })
     : null;
 
-  await db.inboundEmail.create({
+  const inbound = await db.inboundEmail.create({
     data: {
       resendEmailId: eventData.email_id,
       messageId: eventData.message_id || (full.headers as Record<string, string> | undefined)?.["message-id"] || null,
@@ -102,7 +108,12 @@ export async function processInboundEmail(eventData: {
       textBody: full.text || null,
       htmlBody: full.html || null,
     },
+    select: { id: true },
   });
+
+  if (full.attachments.length > 0) {
+    await saveInboundAttachments(resend, eventData.email_id, inbound.id);
+  }
 
   if (artist) {
     await raiseAlertIfNotAlreadyOpen({
@@ -117,6 +128,65 @@ export async function processInboundEmail(eventData: {
   revalidatePath("/alerts");
 }
 
+// Copies each of an inbound email's attachments from Resend (whose
+// download links expire) into our own R2 storage, and records every one
+// — saved or not — against the email (2026-09-24). One file failing to
+// copy never stops the others: it's still recorded, with no r2Key, so
+// the inbox shows it as "couldn't be saved" rather than it silently
+// disappearing. Files over MAX_ATTACHMENT_BYTES are recorded the same
+// way without being downloaded at all.
+async function saveInboundAttachments(resend: Resend, resendEmailId: string, inboundEmailId: string) {
+  const { data, error } = await resend.emails.receiving.attachments.list({
+    emailId: resendEmailId,
+    limit: 100,
+  });
+  if (error || !data) {
+    console.warn(`Could not list attachments for inbound email ${resendEmailId}: ${error?.message}`);
+    return;
+  }
+
+  for (const attachment of data.data) {
+    const filename = attachment.filename || "attachment";
+    let r2Key: string | null = null;
+
+    if (attachment.size <= MAX_ATTACHMENT_BYTES) {
+      try {
+        const res = await fetch(attachment.download_url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const body = Buffer.from(await res.arrayBuffer());
+        const key = `inbound-email/${inboundEmailId}/${crypto.randomUUID()}`;
+        await uploadToR2(key, body, attachment.content_type || "application/octet-stream");
+        r2Key = key;
+      } catch (err) {
+        console.warn(
+          `Could not save attachment "${filename}" of inbound email ${resendEmailId}: ${
+            err instanceof Error ? err.message : err
+          }`
+        );
+      }
+    }
+
+    await db.inboundEmailAttachment.create({
+      data: {
+        inboundEmailId,
+        filename,
+        contentType: attachment.content_type || "application/octet-stream",
+        size: attachment.size,
+        r2Key,
+      },
+    });
+  }
+}
+
+export type InboxThreadAttachment = {
+  id: string;
+  filename: string;
+  size: number;
+  // false = listed only: over the size limit, or the copy failed.
+  saved: boolean;
+  tooLarge: boolean;
+};
+
 export type InboxThreadItem = {
   id: string;
   direction: "IN" | "OUT";
@@ -124,7 +194,12 @@ export type InboxThreadItem = {
   fromName: string | null;
   toAddress: string;
   subject: string | null;
-  textBody: string | null;
+  // Always readable text — for an HTML-only email, the HTML converted to
+  // text (see readableEmailText).
+  textBody: string;
+  // The original HTML, for the "Show HTML" view. Inbound only.
+  htmlBody: string | null;
+  attachments: InboxThreadAttachment[];
   isRead: boolean;
   at: string; // ISO
 };
@@ -135,7 +210,6 @@ export type InboxSummaryItem = {
   fromName: string | null;
   toAddress: string;
   subject: string | null;
-  preview: string;
   artistId: string | null;
   artistName: string | null;
   customerId: string | null;
@@ -166,7 +240,6 @@ export async function getInboxList(artistId?: string): Promise<InboxSummaryItem[
     fromName: r.fromName,
     toAddress: r.toAddress,
     subject: r.subject,
-    preview: (r.textBody || "").slice(0, 140),
     artistId: r.artistId,
     artistName: r.artist?.name || null,
     customerId: r.customerId,
@@ -247,7 +320,10 @@ export async function getSentList(artistId?: string): Promise<SentSummaryItem[]>
 // Marks the inbound email read and clears any open EMAIL_REPLY_RECEIVED
 // alert for its artist the first time it's opened.
 export async function getThread(inboundEmailId: string): Promise<InboxThreadItem[] | null> {
-  const inbound = await db.inboundEmail.findUnique({ where: { id: inboundEmailId } });
+  const inbound = await db.inboundEmail.findUnique({
+    where: { id: inboundEmailId },
+    include: { attachments: { orderBy: { createdAt: "asc" } } },
+  });
   if (!inbound) return null;
 
   if (!inbound.isRead) {
@@ -271,7 +347,15 @@ export async function getThread(inboundEmailId: string): Promise<InboxThreadItem
       fromName: inbound.fromName,
       toAddress: inbound.toAddress,
       subject: inbound.subject,
-      textBody: inbound.textBody,
+      textBody: readableEmailText(inbound.textBody, inbound.htmlBody),
+      htmlBody: inbound.htmlBody,
+      attachments: inbound.attachments.map((a) => ({
+        id: a.id,
+        filename: a.filename,
+        size: a.size,
+        saved: a.r2Key !== null,
+        tooLarge: a.size > MAX_ATTACHMENT_BYTES,
+      })),
       isRead: true,
       at: inbound.receivedAt.toISOString(),
     },
@@ -282,7 +366,9 @@ export async function getThread(inboundEmailId: string): Promise<InboxThreadItem
       fromName: null,
       toAddress: r.toAddress,
       subject: r.subject,
-      textBody: r.body,
+      textBody: r.body || "",
+      htmlBody: null,
+      attachments: [],
       isRead: true,
       at: r.sentAt.toISOString(),
     })),
@@ -357,10 +443,24 @@ export async function sendInboxReply(
 // becomes un-linked from a thread rather than disappearing too; it
 // still shows up in the Sent list on its own. Also clears any open
 // EMAIL_REPLY_RECEIVED alert this message might still have raised, so
-// deleting it can't leave a dangling alert with nothing to open.
+// deleting it can't leave a dangling alert with nothing to open. Its
+// attachments' stored files are removed from R2 too (their database rows
+// go with the email automatically — ON DELETE CASCADE); a file that
+// fails to delete never blocks deleting the email itself.
 export async function deleteInboundEmail(id: string): Promise<void> {
-  const existing = await db.inboundEmail.findUnique({ where: { id }, select: { artistId: true } });
+  const existing = await db.inboundEmail.findUnique({
+    where: { id },
+    select: { artistId: true, attachments: { select: { r2Key: true } } },
+  });
   if (!existing) return;
+  for (const { r2Key } of existing.attachments) {
+    if (!r2Key) continue;
+    try {
+      await deleteFromR2(r2Key);
+    } catch {
+      // See note above.
+    }
+  }
   await db.inboundEmail.delete({ where: { id } });
   if (existing.artistId) {
     await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);
