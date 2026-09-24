@@ -606,11 +606,36 @@ model InboundEmail {
 
   receivedAt DateTime @default(now())
 
-  replies OutboundEmail[]
+  replies     OutboundEmail[]
+  attachments InboundEmailAttachment[]
 
   @@index([artistId])
   @@index([customerId])
   @@index([toAddress])
+}
+
+// A file attached to an inbound email (2026-09-24). Resend only offers
+// attachments through short-lived download links, so each one is copied
+// into our own R2 storage the moment the email arrives (see
+// saveInboundAttachments in lib/actions/inboundEmail.ts) and served back
+// only through the login-protected /api/inbound-attachment/[id] route.
+// Files over 20 MB are listed but not copied (direct decision), and a
+// copy that fails is listed the same way — in both cases r2Key stays
+// null. Deleted along with its email.
+model InboundEmailAttachment {
+  id String @id @default(cuid())
+
+  inboundEmailId String
+  inboundEmail   InboundEmail @relation(fields: [inboundEmailId], references: [id], onDelete: Cascade)
+
+  filename    String
+  contentType String
+  size        Int
+  r2Key       String?
+
+  createdAt DateTime @default(now())
+
+  @@index([inboundEmailId])
 }
 
 // The other half of the same inbox (see InboundEmail above) — every ad
