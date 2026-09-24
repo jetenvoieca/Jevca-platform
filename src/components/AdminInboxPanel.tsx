@@ -147,6 +147,30 @@ function formatFileSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
+// Fits an email's original HTML (the "Show HTML" view) to the width of
+// its frame (2026-09-24). Most HTML email is laid out at a fixed width
+// (often 600px+), wider than the modal, which used to leave it
+// scrolling sideways. Once the frame has loaded, the content is scaled
+// down to fit if it's wider than the frame, and the frame is resized to
+// the content's full height so the modal has one scroll bar, not two.
+// This reads the frame's document, which is why the frame is sandboxed
+// with allow-same-origin — still with no allow-scripts, so nothing in
+// the email itself can ever run.
+function fitHtmlFrame(frame: HTMLIFrameElement) {
+  const doc = frame.contentDocument;
+  if (!doc?.body) return;
+  const root = doc.documentElement;
+  const contentWidth = root.scrollWidth;
+  const contentHeight = root.scrollHeight;
+  const scale = contentWidth > frame.clientWidth ? frame.clientWidth / contentWidth : 1;
+  root.style.overflow = "hidden";
+  if (scale < 1) {
+    doc.body.style.transformOrigin = "0 0";
+    doc.body.style.transform = `scale(${scale})`;
+  }
+  frame.style.height = `${Math.ceil(contentHeight * scale) + 2}px`;
+}
+
 // The Inbox's address, with the left-hand artist filter and (optionally)
 // the selected alert carried in the query string.
 function inboxUrl(artistId: string | null, alertId?: string): string {
@@ -277,6 +301,10 @@ export default function AdminInboxPanel({
             (composeTo.trim() !== "" || composeSubject.trim() !== "" || composeBody.trim() !== "")) ||
           (openId !== null && replyBody.trim() !== "")
         : false;
+
+  // An inbox message is open in the modal (rather than compose or a
+  // sent item) — see the sticky message header in the thread view.
+  const threadOpen = mode === "inbox" && !composing && !selectedSent && openId !== null;
 
   const refreshRight = () => setRightRefreshKey((k) => k + 1);
 
@@ -911,7 +939,7 @@ export default function AdminInboxPanel({
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-5">
+            <div className={`flex-1 overflow-y-auto px-5 pb-5 ${threadOpen ? "" : "pt-5"}`}>
               {mode === "alert" ? (
                 clientPanel ? (
                   <AlertClientPanel key={clientPanel.artist.id} data={clientPanel} onDone={handleUpToDateDone} />
@@ -1029,86 +1057,98 @@ export default function AdminInboxPanel({
                   </div>
                 </div>
               ) : threadError ? (
-                <p className="text-sm text-red-600">This message couldn&apos;t be opened. Please try again.</p>
+                <p className="pt-5 text-sm text-red-600">This message couldn&apos;t be opened. Please try again.</p>
               ) : threadLoading || !thread ? (
-                <p className="text-sm text-neutral-400">Loading…</p>
+                <p className="pt-5 text-sm text-neutral-400">Loading…</p>
               ) : (
-                <div className="mx-auto max-w-xl space-y-4">
+                <div className="mx-auto max-w-xl space-y-4 pt-5">
                   {thread.map((item) => (
-                    <div
-                      key={item.id}
-                      className={`rounded-md border p-3 ${
-                        item.direction === "OUT" ? "border-neutral-200 bg-neutral-50" : "border-neutral-200 bg-white"
-                      }`}
-                    >
-                      <div className="mb-1 flex items-center justify-between text-xs text-neutral-500">
-                        <span className="font-medium text-neutral-700">
-                          {item.direction === "OUT" ? "You" : item.fromName || item.fromAddress}
-                        </span>
-                        <div className="flex items-center gap-2">
-                          <span>{formatDateTime(item.at)}</span>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteThreadItem(item)}
-                            disabled={deletingId === item.id || isPending}
-                            className={deleteBtnCls}
-                          >
-                            {deletingId === item.id ? "Deleting…" : "Delete"}
-                          </button>
+                    // Each message's header (sender, date, Show HTML,
+                    // Delete, addresses, subject) stays pinned at the top
+                    // while its body scrolls, on a tinted background to set
+                    // it apart from the body (2026-09-24).
+                    <div key={item.id} className="rounded-md border border-neutral-200 bg-white">
+                      <div className="sticky top-0 z-10 rounded-t-md border-b border-neutral-200 bg-neutral-50 px-3 py-2">
+                        <div className="flex items-center justify-between gap-2 text-xs text-neutral-500">
+                          <span className="min-w-0 truncate font-medium text-neutral-700">
+                            {item.direction === "OUT" ? "You" : item.fromName || item.fromAddress}
+                          </span>
+                          <div className="flex shrink-0 items-center gap-3">
+                            <span>{formatDateTime(item.at)}</span>
+                            {item.htmlBody && (
+                              <button
+                                type="button"
+                                onClick={() => setHtmlShownId(htmlShownId === item.id ? null : item.id)}
+                                className="text-neutral-500 hover:text-neutral-900 hover:underline"
+                              >
+                                {htmlShownId === item.id ? "Show text" : "Show HTML"}
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteThreadItem(item)}
+                              disabled={deletingId === item.id || isPending}
+                              className={deleteBtnCls}
+                            >
+                              {deletingId === item.id ? "Deleting…" : "Delete"}
+                            </button>
+                          </div>
                         </div>
-                      </div>
-                      {item.direction === "IN" && (
-                        <p className="mb-1 text-xs text-neutral-400">
-                          {item.fromAddress} → {item.toAddress}
+                        {item.direction === "IN" && (
+                          <p className="mt-0.5 truncate text-xs text-neutral-400">
+                            {item.fromAddress} → {item.toAddress}
+                          </p>
+                        )}
+                        <p className="mt-0.5 text-sm font-medium text-neutral-800 [overflow-wrap:anywhere]">
+                          {item.subject}
                         </p>
-                      )}
-                      <p className="mb-1 text-sm font-medium text-neutral-800">{item.subject}</p>
-                      {htmlShownId === item.id && item.htmlBody ? (
-                        // The sender's original formatting, only when asked
-                        // for (2026-09-24). sandbox with no allow-scripts
-                        // means nothing in the email can run; <base
-                        // target="_blank"> makes its links open in a new
-                        // tab rather than inside the frame.
-                        <iframe
-                          title="Original email"
-                          sandbox="allow-popups allow-popups-to-escape-sandbox"
-                          srcDoc={`<base target="_blank">${item.htmlBody}`}
-                          className="h-[60vh] w-full rounded-md border border-neutral-200 bg-white"
-                        />
-                      ) : (
-                        <p className="whitespace-pre-wrap text-sm text-neutral-700">{item.textBody}</p>
-                      )}
-                      {item.htmlBody && (
-                        <button
-                          type="button"
-                          onClick={() => setHtmlShownId(htmlShownId === item.id ? null : item.id)}
-                          className="mt-2 text-xs text-neutral-500 hover:text-neutral-900 hover:underline"
-                        >
-                          {htmlShownId === item.id ? "Show text" : "Show HTML"}
-                        </button>
-                      )}
-                      {item.attachments.length > 0 && (
-                        <ul className="mt-3 space-y-1 border-t border-neutral-200 pt-2">
-                          {item.attachments.map((a) => (
-                            <li key={a.id} className="text-sm">
-                              {a.saved ? (
-                                <a
-                                  href={`/api/inbound-attachment/${a.id}`}
-                                  className="text-neutral-800 underline hover:text-neutral-600"
-                                >
-                                  {a.filename}
-                                </a>
-                              ) : (
-                                <span className="text-neutral-500">{a.filename}</span>
-                              )}{" "}
-                              <span className="text-xs text-neutral-400">
-                                ({formatFileSize(a.size)}
-                                {!a.saved && (a.tooLarge ? " — too large to save" : " — couldn't be saved")})
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
+                      </div>
+
+                      <div className="p-3">
+                        {htmlShownId === item.id && item.htmlBody ? (
+                          // The sender's original formatting, only when asked
+                          // for (2026-09-24). No allow-scripts, so nothing in
+                          // the email can run (allow-same-origin only lets
+                          // fitHtmlFrame measure and fit it); <base
+                          // target="_blank"> makes its links open in a new tab
+                          // rather than inside the frame.
+                          <iframe
+                            title="Original email"
+                            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                            srcDoc={`<base target="_blank">${item.htmlBody}`}
+                            onLoad={(e) => fitHtmlFrame(e.currentTarget)}
+                            className="h-[60vh] w-full bg-white"
+                          />
+                        ) : (
+                          // Long unbroken text (tracking links, mostly) wraps
+                          // instead of pushing the modal sideways.
+                          <p className="whitespace-pre-wrap text-sm text-neutral-700 [overflow-wrap:anywhere]">
+                            {item.textBody}
+                          </p>
+                        )}
+                        {item.attachments.length > 0 && (
+                          <ul className="mt-3 space-y-1 border-t border-neutral-200 pt-2">
+                            {item.attachments.map((a) => (
+                              <li key={a.id} className="text-sm [overflow-wrap:anywhere]">
+                                {a.saved ? (
+                                  <a
+                                    href={`/api/inbound-attachment/${a.id}`}
+                                    className="text-neutral-800 underline hover:text-neutral-600"
+                                  >
+                                    {a.filename}
+                                  </a>
+                                ) : (
+                                  <span className="text-neutral-500">{a.filename}</span>
+                                )}{" "}
+                                <span className="text-xs text-neutral-400">
+                                  ({formatFileSize(a.size)}
+                                  {!a.saved && (a.tooLarge ? " — too large to save" : " — couldn't be saved")})
+                                </span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </div>
                     </div>
                   ))}
 
