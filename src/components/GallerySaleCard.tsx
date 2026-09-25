@@ -11,6 +11,7 @@ import {
   createGalleryCardIntent,
   getGalleryInstalmentDefault,
   saveSaleExtra,
+  type CardEntry,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
 import { saleBreakdown, splitIntoInstalments } from "@/lib/saleMath";
@@ -330,9 +331,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   const [linkUrl, setLinkUrl] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
   const [cardOption, setCardOption] = useState<AmountOption | null>(null);
-  const [cardIntent, setCardIntent] = useState<{ clientSecret: string; publishableKey: string } | null>(
-    null
-  );
+  const [cardIntent, setCardIntent] = useState<CardEntry | null>(null);
 
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
@@ -466,7 +465,11 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
         setCardOption(null);
         return;
       }
-      setCardIntent({ clientSecret: res.clientSecret, publishableKey: res.publishableKey });
+      setCardIntent({
+        clientSecret: res.clientSecret,
+        publishableKey: res.publishableKey,
+        stripeAccount: res.stripeAccount,
+      });
     });
   };
 
@@ -741,6 +744,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
                           key={cardIntent.clientSecret}
                           clientSecret={cardIntent.clientSecret}
                           publishableKey={cardIntent.publishableKey}
+                          stripeAccount={cardIntent.stripeAccount}
                           purchaseId={purchase.id}
                           onDone={handleCardDone}
                         />
