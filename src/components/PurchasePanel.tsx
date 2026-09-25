@@ -9,6 +9,7 @@ import {
   abandonPurchase,
   createCardEntryIntent,
   markSalePaid,
+  type CardEntry,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
 import { formatDate } from "@/lib/formatDate";
@@ -70,8 +71,7 @@ export default function PurchasePanel({
   const [showRecordForm, setShowRecordForm] = useState(false);
   const [paidDate, setPaidDate] = useState("");
   const [paidMethod, setPaidMethod] = useState("");
-  const [cardSecret, setCardSecret] = useState<string | null>(null);
-  const [cardPublishableKey, setCardPublishableKey] = useState<string | null>(null);
+  const [cardEntry, setCardEntry] = useState<CardEntry | null>(null);
   // Drives ConfirmDialog for every sale-related confirmation on this
   // panel (2026-08-13, replacing native confirm() — see ConfirmDialog
   // for why).
@@ -191,13 +191,15 @@ export default function PurchasePanel({
 
   const handleEnterCard = () => {
     setError(null);
-    setCardSecret(null);
-    setCardPublishableKey(null);
+    setCardEntry(null);
     startTransition(async () => {
       const result = await createCardEntryIntent(activePurchase.id, siteId);
       if (result.ok) {
-        setCardSecret(result.clientSecret);
-        setCardPublishableKey(result.publishableKey);
+        setCardEntry({
+          clientSecret: result.clientSecret,
+          publishableKey: result.publishableKey,
+          stripeAccount: result.stripeAccount,
+        });
       } else {
         setError(result.error);
       }
@@ -341,15 +343,15 @@ export default function PurchasePanel({
               </div>
             )}
 
-            {cardSecret && cardPublishableKey && (
+            {cardEntry && (
               <div className="mt-3">
                 <StripeCardForm
-                  clientSecret={cardSecret}
-                  publishableKey={cardPublishableKey}
+                  clientSecret={cardEntry.clientSecret}
+                  publishableKey={cardEntry.publishableKey}
+                  stripeAccount={cardEntry.stripeAccount}
                   purchaseId={activePurchase.id}
                   onDone={() => {
-                    setCardSecret(null);
-                    setCardPublishableKey(null);
+                    setCardEntry(null);
                     if (onChanged) onChanged();
                     else router.refresh();
                   }}

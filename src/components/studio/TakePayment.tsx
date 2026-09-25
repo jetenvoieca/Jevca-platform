@@ -22,7 +22,12 @@ import type { Notice } from "@/components/studio/StudioUi";
 // "Enter Card" (the card panel, CardPayment). Either way the artwork
 // becomes Sold - Not Paid; it becomes SOLD once the buyer has paid.
 
-type Card = { purchaseId: string; clientSecret: string; publishableKey: string };
+type Card = {
+  purchaseId: string;
+  clientSecret: string;
+  publishableKey: string;
+  stripeAccount: string | null;
+};
 
 function optionCls(active: boolean) {
   return `flex min-h-20 flex-1 flex-col items-center justify-center rounded-md border-2 bg-white px-2 py-3 text-center text-base text-[#555] ${
@@ -196,6 +201,7 @@ export default function TakePayment({
         purchaseId={card.purchaseId}
         clientSecret={card.clientSecret}
         publishableKey={card.publishableKey}
+        stripeAccount={card.stripeAccount}
         onPaid={(recorded) =>
           onDone({
             text: recorded
