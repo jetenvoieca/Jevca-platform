@@ -1,31 +1,49 @@
 import Stripe from "stripe";
 
-// Per-artist Test/Live isolation (2026-08-09) — one shared Stripe account
-// for the whole platform, but each artist's own `stripeMode` decides
-// which pair of keys their sales actually use. Nothing here defaults to
-// Live; every call site must explicitly pass the artist's resolved mode.
+// Per-artist Test/Live isolation (2026-08-09) — each artist's own
+// `stripeMode` decides which pair of Jetenvoieca's keys their sales use.
+// Nothing here defaults to Live; every call site passes a mode explicitly.
 export type StripeMode = "TEST" | "LIVE";
 
-const clients: Partial<Record<StripeMode, Stripe>> = {};
+// Where a sale's Stripe calls go (2026-09-25, Stripe Connect): the mode,
+// and the artist's own linked Stripe account (acct_...) — or null for
+// Jetenvoieca's own account. Every Purchase stores both (see
+// Purchase.stripeAccountId in schema.prisma), so a sale's calls always
+// reach the account its Stripe objects actually live in.
+export type StripeTarget = { mode: StripeMode; accountId: string | null };
 
-// No apiVersion pinned deliberately — recent stripe-node defaults to the
-// account's own configured API version when omitted, which is fine for a
-// single-account setup like this one. Revisit and pin explicitly if this
-// ever needs to be reproducible across more than one Stripe account.
-export function getStripeClient(mode: StripeMode): Stripe {
-  const existing = clients[mode];
+// The same, as stored on a Purchase row.
+export type SaleStripeFields = { stripeMode: StripeMode; stripeAccountId: string | null };
+
+const clients = new Map<string, Stripe>();
+
+// A client for one mode and account. Calls on a linked account are made
+// with Jetenvoieca's own secret key plus the Stripe-Account header (set
+// once here via the client's stripeAccount option), which is how Stripe
+// Connect "direct charges" work — no artist's keys are ever stored.
+//
+// No apiVersion pinned deliberately — stripe-node defaults to the
+// platform account's own configured API version when omitted.
+export function getStripeClient(target: StripeTarget): Stripe {
+  const cacheKey = `${target.mode}:${target.accountId ?? "platform"}`;
+  const existing = clients.get(cacheKey);
   if (existing) return existing;
 
   const key =
-    mode === "LIVE" ? process.env.STRIPE_SECRET_KEY_LIVE : process.env.STRIPE_SECRET_KEY_TEST;
+    target.mode === "LIVE" ? process.env.STRIPE_SECRET_KEY_LIVE : process.env.STRIPE_SECRET_KEY_TEST;
   if (!key) {
     throw new Error(
-      `Missing STRIPE_SECRET_KEY_${mode} — set it in Netlify before taking a ${mode.toLowerCase()}-mode payment.`
+      `Missing STRIPE_SECRET_KEY_${target.mode} — set it in Netlify before taking a ${target.mode.toLowerCase()}-mode payment.`
     );
   }
-  const client = new Stripe(key);
-  clients[mode] = client;
+  const client = new Stripe(key, target.accountId ? { stripeAccount: target.accountId } : {});
+  clients.set(cacheKey, client);
   return client;
+}
+
+// The client for a sale — its own mode and account, as stored on it.
+export function getStripeClientForSale(sale: SaleStripeFields): Stripe {
+  return getStripeClient({ mode: sale.stripeMode, accountId: sale.stripeAccountId });
 }
 
 // The publishable key is not secret, but it still has to match the same
@@ -33,7 +51,10 @@ export function getStripeClient(mode: StripeMode): Stripe {
 // a Live publishable key with a Test payment intent (or vice versa) fails
 // outright in Stripe.js, so this is resolved alongside the client, never
 // read from a single static NEXT_PUBLIC_ constant (which can only ever
-// hold one build-time value, not one per artist).
+// hold one build-time value, not one per artist). It is always
+// Jetenvoieca's own key, even for a sale on an artist's linked account —
+// the browser is then told that account separately (see StripeCardForm's
+// stripeAccount).
 export function getPublishableKey(mode: StripeMode): string {
   const key =
     mode === "LIVE"

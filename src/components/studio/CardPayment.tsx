@@ -97,6 +97,7 @@ export default function CardPayment({
   purchaseId,
   clientSecret,
   publishableKey,
+  stripeAccount,
   onPaid,
   onBusyChange,
 }: {
@@ -104,13 +105,20 @@ export default function CardPayment({
   purchaseId: string;
   clientSecret: string;
   publishableKey: string;
+  // The artist's own linked Stripe account the payment is taken into, or
+  // null for Jetenvoieca's own account (see StripeCardForm).
+  stripeAccount: string | null;
   // Called once the payment has gone through; `recorded` is false if the
   // sale couldn't be recorded straight away (the Stripe webhook will).
   onPaid: (recorded: boolean) => void;
   onBusyChange: (busy: boolean) => void;
 }) {
-  // Per artist, since Test and Live artists use different Stripe keys.
-  const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
+  // Per artist, since Test and Live artists use different Stripe keys,
+  // and a linked artist's payments are taken in their own account.
+  const stripePromise = useMemo(
+    () => loadStripe(publishableKey, stripeAccount ? { stripeAccount } : undefined),
+    [publishableKey, stripeAccount]
+  );
 
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>

@@ -43,10 +43,12 @@ export function createPaymentLink(token: string, details: StudioPaymentDetails) 
 
 // Starts a sale and returns what Stripe's card form needs.
 export function startCardPayment(token: string, details: StudioPaymentDetails) {
-  return postJson<{ purchaseId: string; clientSecret: string; publishableKey: string }>(
-    "/api/studio/card-payment",
-    { token, ...details }
-  );
+  return postJson<{
+    purchaseId: string;
+    clientSecret: string;
+    publishableKey: string;
+    stripeAccount: string | null;
+  }>("/api/studio/card-payment", { token, ...details });
 }
 
 // Tells the server a card payment went through, so it can check with

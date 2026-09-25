@@ -85,11 +85,17 @@ function CardEntryForm({
 export default function StripeCardForm({
   clientSecret,
   publishableKey,
+  stripeAccount,
   purchaseId,
   onDone,
 }: {
   clientSecret: string;
   publishableKey: string;
+  // The artist's own linked Stripe account the payment is taken into
+  // (2026-09-25, Stripe Connect), or null for Jetenvoieca's own account.
+  // The PaymentIntent was created in that account, so Stripe.js must be
+  // told it too, or it can't find the payment.
+  stripeAccount: string | null;
   // 2026-09-20 — needed here now so a successful confirmPayment can
   // record itself directly (see CardEntryForm's own note above) instead
   // of relying solely on the Stripe webhook.
@@ -100,7 +106,10 @@ export default function StripeCardForm({
   // runs again on re-render — but useMemo avoids re-triggering it
   // unnecessarily anyway. Per-artist now (2026-08-09), not a single
   // module-level constant, since Test and Live artists use different keys.
-  const stripePromise = useMemo(() => loadStripe(publishableKey), [publishableKey]);
+  const stripePromise = useMemo(
+    () => loadStripe(publishableKey, stripeAccount ? { stripeAccount } : undefined),
+    [publishableKey, stripeAccount]
+  );
 
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>

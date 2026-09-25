@@ -10,7 +10,7 @@ import {
   SALE_LINK_ALERT_TYPE,
   SALE_RECORDED_ALERT_TYPE,
 } from "@/lib/alerts";
-import { getStripeClient } from "@/lib/stripe";
+import { getStripeClientForSale } from "@/lib/stripe";
 import { getPrimarySite } from "@/lib/studioSettings";
 import type { StudioPaymentDetails } from "@/lib/studioShared";
 
@@ -178,6 +178,7 @@ export async function startStudioCardPayment(artist: Artist, details: StudioPaym
     purchaseId: result.purchaseId,
     clientSecret: result.clientSecret,
     publishableKey: result.publishableKey,
+    stripeAccount: result.stripeAccount,
   };
 }
 
@@ -191,16 +192,13 @@ export async function confirmStudioCardPayment(
   purchaseId: string,
   paymentIntentId: string
 ) {
-  const [purchase, owner] = await Promise.all([
-    db.purchase.findFirst({
-      where: { id: purchaseId, artwork: { artistId: artist.id } },
-      select: { id: true },
-    }),
-    db.artist.findUnique({ where: { id: artist.id }, select: { stripeMode: true } }),
-  ]);
-  if (!purchase || !owner) return { error: "Sale not found.", status: 404 as const };
+  const purchase = await db.purchase.findFirst({
+    where: { id: purchaseId, artwork: { artistId: artist.id } },
+    select: { stripeMode: true, stripeAccountId: true },
+  });
+  if (!purchase) return { error: "Sale not found.", status: 404 as const };
 
-  const intent = await getStripeClient(owner.stripeMode).paymentIntents.retrieve(paymentIntentId);
+  const intent = await getStripeClientForSale(purchase).paymentIntents.retrieve(paymentIntentId);
   if (intent.metadata.purchaseId !== purchaseId) {
     return { error: "That payment doesn't belong to this sale.", status: 400 as const };
   }
