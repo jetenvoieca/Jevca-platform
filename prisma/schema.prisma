@@ -310,6 +310,34 @@ model Artist {
   // Tasks linked to this artist on the admin Inbox's Task view
   // (2026-09-19, CRM Phase 2) — see Task below.
   tasks Task[]
+  // The artist's own Stripe account, linked through Stripe Connect
+  // (2026-09-25) — at most one per mode. See StripeConnection below.
+  stripeConnections StripeConnection[]
+}
+
+// An artist's own Stripe account, linked to the platform (Jetenvoieca)
+// through Stripe Connect OAuth (2026-09-25). While one exists for the
+// artist's current stripeMode, every NEW sale is taken straight into that
+// account (a "direct charge"); with none, sales use Jetenvoieca's own
+// account as before. Test and Live are separate Stripe accounts on
+// Stripe's side, so each mode has its own row.
+//
+// A sale never follows later changes to this — see Purchase.stripeAccountId.
+model StripeConnection {
+  id       String     @id @default(cuid())
+  artistId String
+  artist   Artist     @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  mode     StripeMode
+  // The connected account's id (acct_...) — sent as the Stripe-Account
+  // header on every call made for this artist's sales.
+  accountId String
+  // The account's display name as Stripe reported it when linked (e.g.
+  // "La galerie") — shown in Settings, never used for payments.
+  accountName String?
+  connectedAt DateTime @default(now())
+
+  @@unique([artistId, mode])
+  @@index([accountId])
 }
 
 // Replaces the plain-string `Artist.artworkTypes` list (2026-08-28) — a
@@ -1188,6 +1216,17 @@ model Purchase {
   releaseMessage      String?
   releaseTriggerCount Int?
 
+  // Which Stripe account this sale's money goes to (2026-09-25, Stripe
+  // Connect) — fixed when the sale is created, from the artist's own
+  // mode and linked account at that moment (see StripeConnection), and
+  // never changed afterwards. Every Stripe object for the sale (customer,
+  // payment links, card payments, instalment schedule) lives in that one
+  // account, so an instalment plan keeps charging the account it started
+  // on even if the artist later links or unlinks a Stripe account.
+  // stripeAccountId null means Jetenvoieca's own account.
+  stripeMode      StripeMode
+  stripeAccountId String?
+
   stripeCustomerId              String?
   stripeCheckoutSessionId       String?
   stripeSubscriptionScheduleId  String?
@@ -1208,6 +1247,7 @@ model Purchase {
   @@index([artworkId])
   @@index([customerId])
   @@index([parentPurchaseId])
+  @@index([stripeAccountId])
 }
 
 model Payment {
