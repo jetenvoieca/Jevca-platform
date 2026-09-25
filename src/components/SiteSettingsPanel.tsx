@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import MediaPicker from "@/components/MediaPicker";
 import {
@@ -22,6 +22,7 @@ import {
 } from "@/lib/clientPanelTypes";
 import { requestUploadUrl } from "@/lib/actions/media";
 import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales";
+import { disconnectStripeAccount } from "@/lib/actions/stripeConnect";
 import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
 import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
 import type { CertificateTemplateRow } from "@/lib/actions/certificateSettings";
@@ -99,10 +100,14 @@ type FinancialField =
   | "invoiceFooterText"
   | "invoiceLanguage";
 
+type StripeConnectNotice = { tone: "ok" | "error"; text: string };
+
 export default function SiteSettingsPanel({
   site,
   artist,
   certificateTemplates,
+  stripeConnection,
+  stripeConnectNotice,
 }: {
   site: SiteData;
   artist: ArtistData;
@@ -110,6 +115,13 @@ export default function SiteSettingsPanel({
   // CertificateTemplatesCard, rendered full-width below the
   // Financial/Invoicing row.
   certificateTemplates: CertificateTemplateRow[];
+  // The artist's own linked Stripe account for their current Stripe mode
+  // (2026-09-25), or null when their sales go to Jetenvoieca's account.
+  // See StripeConnection in schema.prisma.
+  stripeConnection: { accountId: string; accountName: string | null } | null;
+  // The result of a Connect attempt, passed back by
+  // /api/stripe/connect/callback.
+  stripeConnectNotice: StripeConnectNotice | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
@@ -118,13 +130,27 @@ export default function SiteSettingsPanel({
   const [resettingSales, setResettingSales] = useState(false);
   const [resetError, setResetError] = useState<string | null>(null);
   const [switchingStripeMode, setSwitchingStripeMode] = useState(false);
+  // Kept in local state so it stays on screen after the one-off query
+  // string it arrived in is cleared from the address bar (below).
+  const [connectNotice, setConnectNotice] = useState<StripeConnectNotice | null>(stripeConnectNotice);
+  const [disconnectingStripe, setDisconnectingStripe] = useState(false);
   // 2026-08-31, direct request — this page toggles between "Financial"
   // and "Personal Profile". Financial defaults to hidden (Personal
   // Profile shown first) since it's the more sensitive of the two —
   // someone glancing at a shared screen sees the harmless tab, not
   // payment details, unless they deliberately switch.
-  const [activeTab, setActiveTab] = useState<"financial" | "personal">("personal");
+  // Opens on Financial when returning from connecting a Stripe account.
+  const [activeTab, setActiveTab] = useState<"financial" | "personal">(
+    stripeConnectNotice ? "financial" : "personal"
+  );
   const router = useRouter();
+
+  // Clears the Connect result from the address bar, so a later refresh
+  // doesn't show it again.
+  useEffect(() => {
+    if (stripeConnectNotice) router.replace(`/sites/${site.id}`, { scroll: false });
+    // Only once, on arrival.
+  }, []);
 
   const flash = (field: string) => {
     setSavedField(field);
@@ -183,6 +209,23 @@ export default function SiteSettingsPanel({
       await updateArtistStripeMode(artist.id, mode);
       router.refresh();
       setSwitchingStripeMode(false);
+    });
+  };
+
+  const handleDisconnectStripe = () => {
+    if (!stripeConnection) return;
+    const name = stripeConnection.accountName || stripeConnection.accountId;
+    const confirmed = confirm(
+      `Disconnect ${name}?\n\nNew sales for ${artist.name} will be paid into Jetenvoieca's Stripe account instead. Sales already paid are unaffected.`
+    );
+    if (!confirmed) return;
+    setConnectNotice(null);
+    setDisconnectingStripe(true);
+    startTransition(async () => {
+      const res = await disconnectStripeAccount(artist.id);
+      if (!res.ok) setConnectNotice({ tone: "error", text: res.error });
+      router.refresh();
+      setDisconnectingStripe(false);
     });
   };
 
@@ -411,6 +454,51 @@ export default function SiteSettingsPanel({
                           ⚠ This artist is live. Real cards will be charged.
                         </p>
                       )}
+
+                      {/* Stripe Connect (2026-09-25) — which Stripe account
+                          this artist's NEW sales are paid into, for the
+                          mode selected above. Test and Live are linked
+                          separately. */}
+                      <div className="mt-3 border-t border-amber-200 pt-3">
+                        <p className="mb-1 text-xs text-neutral-500">
+                          Payments go to ({artist.stripeMode === "LIVE" ? "Live" : "Test"})
+                        </p>
+                        {stripeConnection ? (
+                          <>
+                            <p className="text-sm font-medium text-neutral-900">
+                              {stripeConnection.accountName || stripeConnection.accountId}
+                            </p>
+                            <p className="text-xs text-neutral-500">{stripeConnection.accountId}</p>
+                            <button
+                              type="button"
+                              onClick={handleDisconnectStripe}
+                              disabled={disconnectingStripe || switchingStripeMode}
+                              className="mt-2 text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+                            >
+                              {disconnectingStripe ? "Disconnecting…" : "Disconnect"}
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-sm font-medium text-neutral-900">Jetenvoieca (default)</p>
+                            <a
+                              href={`/api/stripe/connect/start?artistId=${artist.id}&siteId=${site.id}`}
+                              className="mt-2 inline-block rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-50"
+                            >
+                              Connect Stripe account
+                            </a>
+                          </>
+                        )}
+                        {connectNotice && (
+                          <p
+                            className={`mt-2 text-xs ${
+                              connectNotice.tone === "error" ? "text-red-600" : "text-green-600"
+                            }`}
+                          >
+                            {connectNotice.text}
+                          </p>
+                        )}
+                      </div>
                     </div>
 
                     <button

@@ -10,10 +10,15 @@ export const dynamic = "force-dynamic";
 
 export default async function SiteSettingsPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  // Set by /api/stripe/connect/callback on its way back here
+  // (2026-09-25) — see stripeConnectNotice below.
+  searchParams: Promise<{ stripeConnect?: string; stripeConnectError?: string }>;
 }) {
   const { id } = await params;
+  const { stripeConnect, stripeConnectError } = await searchParams;
 
   const site = await db.site.findUnique({
     where: { id },
@@ -34,7 +39,7 @@ export default async function SiteSettingsPage({
   const cookieStore = await cookies();
   const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
 
-  const [allSites, certificateTemplates] = await Promise.all([
+  const [allSites, certificateTemplates, stripeConnection] = await Promise.all([
     // Kept deliberately simple (no search wiring) — this is the "jump to
     // another site without losing my place" list, not a replacement for
     // the full Sites list's filtering, which stays on "/" itself
@@ -57,6 +62,12 @@ export default async function SiteSettingsPage({
     // Certificate of Authenticity templates (2026-09-04) — see
     // CertificateTemplatesCard on the Financial tab below.
     getCertificateTemplates(site.artistId),
+    // The artist's own linked Stripe account for their current mode
+    // (2026-09-25), if any — see StripeConnection in schema.prisma.
+    db.stripeConnection.findUnique({
+      where: { artistId_mode: { artistId: site.artistId, mode: site.artist.stripeMode } },
+      select: { accountId: true, accountName: true },
+    }),
   ]);
 
   return (
@@ -121,6 +132,14 @@ export default async function SiteSettingsPage({
             defaultReleaseTriggerCount: site.artist.defaultReleaseTriggerCount,
           }}
           certificateTemplates={certificateTemplates}
+          stripeConnection={stripeConnection}
+          stripeConnectNotice={
+            stripeConnectError
+              ? { tone: "error", text: stripeConnectError }
+              : stripeConnect === "connected"
+                ? { tone: "ok", text: "Stripe account connected." }
+                : null
+          }
         />
       </div>
       <div className="h-full w-[300px] shrink-0 overflow-y-auto border-l border-neutral-200">
