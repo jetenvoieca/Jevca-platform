@@ -5,16 +5,17 @@ import { revalidatePath } from "next/cache";
 import { findOrCreateCustomer } from "./customers";
 import { netOwed, saleBreakdown, saleTitle, splitIntoInstalments } from "@/lib/saleMath";
 import {
-  getStripeModeForArtwork,
+  saleStripeFieldsForArtist,
   retireGalleryPaymentLinks,
   deactivatePaymentLink,
 } from "@/lib/paymentLinks";
 import {
-  getStripeClient,
+  getStripeClientForSale,
   getPublishableKey,
   toMinorUnits,
   fromMinorUnits,
   APP_URL,
+  type SaleStripeFields,
 } from "@/lib/stripe";
 
 // No revalidatePath(`/sites/${siteId}/artworks`) calls in this file
@@ -29,6 +30,24 @@ import {
 // note in lib/actions/artworks.ts.
 
 // ---------- Types ----------
+
+// What the browser's card form needs to take a payment: the PaymentIntent's
+// client secret, Jetenvoieca's publishable key for the sale's mode, and
+// the artist's own linked Stripe account the payment is being taken into
+// (null for Jetenvoieca's own account) — see StripeCardForm.
+export type CardEntry = {
+  clientSecret: string;
+  publishableKey: string;
+  stripeAccount: string | null;
+};
+
+function cardEntryFor(sale: SaleStripeFields, clientSecret: string): CardEntry {
+  return {
+    clientSecret,
+    publishableKey: getPublishableKey(sale.stripeMode),
+    stripeAccount: sale.stripeAccountId,
+  };
+}
 
 export type PaymentDetail = {
   id: string;
@@ -312,6 +331,7 @@ async function startPurchase(
   const purchase = await db.purchase.create({
     data: {
       artworkId,
+      ...(await saleStripeFieldsForArtist(artwork.artistId)),
       customerId: customer.id,
       buyerName,
       buyerEmail,
@@ -368,10 +388,7 @@ export async function startArtworkSaleAndEnterCard(
   artworkId: string,
   siteId: string,
   formData: FormData
-): Promise<
-  | { ok: true; purchaseId: string; clientSecret: string; publishableKey: string }
-  | { ok: false; error: string }
-> {
+): Promise<({ ok: true; purchaseId: string } & CardEntry) | { ok: false; error: string }> {
   const seeded = await seedSaleTerms(artworkId, formData);
   if (!seeded.ok) return seeded;
 
@@ -388,6 +405,7 @@ export async function startArtworkSaleAndEnterCard(
     purchaseId: started.purchaseId,
     clientSecret: card.clientSecret,
     publishableKey: card.publishableKey,
+    stripeAccount: card.stripeAccount,
   };
 }
 
@@ -442,6 +460,8 @@ export async function startGallerySale(
 
   const customer = await db.customer.findUnique({ where: { id: customerId } });
   if (!customer) return { ok: false, error: "Location not found." };
+  const artwork = await db.artwork.findUnique({ where: { id: artworkId }, select: { artistId: true } });
+  if (!artwork) return { ok: false, error: "Artwork not found." };
 
   const totalAmount = (formData.get("totalAmount") as string)?.trim();
   const currencyRaw = (formData.get("currency") as string)?.trim().toUpperCase();
@@ -464,6 +484,7 @@ export async function startGallerySale(
   const purchase = await db.purchase.create({
     data: {
       artworkId,
+      ...(await saleStripeFieldsForArtist(artwork.artistId)),
       channel: "GALLERY",
       customerId: customer.id,
       buyerName,
@@ -532,11 +553,10 @@ export async function createGalleryPaymentLink(
       if (purchase.stripeInstalmentLinkCount === instalments) {
         return { ok: true, url: purchase.stripeInstalmentLinkUrl };
       }
-      await deactivatePaymentLink(purchase.artworkId, purchase.stripeInstalmentLinkId);
+      await deactivatePaymentLink(purchase, purchase.stripeInstalmentLinkId);
     }
 
-    const mode = await getStripeModeForArtwork(purchase.artworkId);
-    const stripe = getStripeClient(mode);
+    const stripe = getStripeClientForSale(purchase);
     const title = saleTitle(purchase.artwork.catalogueName, purchase.chargeKind);
     const amount = due.amount;
 
@@ -590,9 +610,7 @@ export async function createGalleryCardIntent(
   purchaseId: string,
   siteId: string,
   instalments?: number
-): Promise<
-  { ok: true; clientSecret: string; publishableKey: string } | { ok: false; error: string }
-> {
+): Promise<({ ok: true } & CardEntry) | { ok: false; error: string }> {
   try {
     const purchase = await db.purchase.findUnique({
       where: { id: purchaseId },
@@ -605,8 +623,7 @@ export async function createGalleryCardIntent(
     if (!due.ok) return due;
     const isInstalments = instalments !== undefined;
 
-    const mode = await getStripeModeForArtwork(purchase.artworkId);
-    const stripe = getStripeClient(mode);
+    const stripe = getStripeClientForSale(purchase);
 
     let customerId = purchase.stripeCustomerId;
     if (!customerId) {
@@ -630,7 +647,7 @@ export async function createGalleryCardIntent(
     });
 
     if (!intent.client_secret) return { ok: false, error: "Stripe did not return a client secret." };
-    return { ok: true, clientSecret: intent.client_secret, publishableKey: getPublishableKey(mode) };
+    return { ok: true, ...cardEntryFor(purchase, intent.client_secret) };
   } catch (err) {
     return { ok: false, error: stripeErrorMessage(err) };
   }
@@ -786,7 +803,7 @@ async function saveChargeSale(
     buyerEmail: string | null;
     buyerAddress: string | null;
     currency: string;
-  },
+  } & SaleStripeFields,
   kind: "framing" | "delivery",
   name: string | null,
   cost: string | null
@@ -804,6 +821,9 @@ async function saveChargeSale(
     await db.purchase.create({
       data: {
         artworkId: parent.artworkId,
+        // A charge is paid into the same account as the sale it belongs to.
+        stripeMode: parent.stripeMode,
+        stripeAccountId: parent.stripeAccountId,
         channel: "GALLERY",
         parentPurchaseId: parent.id,
         chargeKind,
@@ -924,6 +944,7 @@ export async function recordPastSale(
   const purchase = await db.purchase.create({
     data: {
       artworkId,
+      ...(await saleStripeFieldsForArtist(artwork.artistId)),
       channel: "GALLERY",
       status: "COMPLETED",
       customerId: customer.id,
@@ -974,11 +995,19 @@ export async function recordPastSale(
 //
 // Also reverts Availability back to AVAILABLE if this was the sale
 // holding it RESERVED — see resetAvailabilityIfNothingSoldOrActive.
+//
+// Any payment link on the sale, or on its framing/delivery charges
+// (deleted with it), is switched off in Stripe first (2026-09-25) — a
+// deleted sale must not stay payable through a link already sent.
 export async function deleteGallerySale(
   purchaseId: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { charges: true },
+    relationLoadStrategy: "query",
+  });
   if (!purchase) return { ok: false, error: "Sale not found." };
   if (purchase.status === "COMPLETED") {
     return {
@@ -987,6 +1016,7 @@ export async function deleteGallerySale(
     };
   }
 
+  for (const sale of [purchase, ...purchase.charges]) await retireGalleryPaymentLinks(sale);
   await db.purchase.delete({ where: { id: purchaseId } });
   await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
 
@@ -1180,8 +1210,7 @@ export async function abandonPurchase(
   await retireGalleryPaymentLinks(purchase);
 
   try {
-    const mode = await getStripeModeForArtwork(purchase.artworkId);
-    const stripe = getStripeClient(mode);
+    const stripe = getStripeClientForSale(purchase);
     if (purchase.stripeSubscriptionId) {
       await stripe.subscriptions.cancel(purchase.stripeSubscriptionId);
     } else if (purchase.stripeSubscriptionScheduleId) {
@@ -1211,7 +1240,7 @@ export async function abandonPurchase(
 // ---------- Shared helpers ----------
 
 async function getOrCreateStripeCustomer(
-  stripe: ReturnType<typeof getStripeClient>,
+  stripe: ReturnType<typeof getStripeClientForSale>,
   purchase: {
     id: string;
     stripeCustomerId: string | null;
@@ -1265,8 +1294,7 @@ async function createPaymentLink(
       return { ok: false, error: "This purchase has no buyer email on file." };
     }
 
-    const mode = await getStripeModeForArtwork(artworkId);
-    const stripe = getStripeClient(mode);
+    const stripe = getStripeClientForSale(purchase);
     const customerId = await getOrCreateStripeCustomer(stripe, {
       ...purchase,
       buyerEmail: purchase.buyerEmail,
@@ -1311,9 +1339,7 @@ async function createPaymentLink(
 export async function createCardEntryIntent(
   purchaseId: string,
   siteId: string
-): Promise<
-  { ok: true; clientSecret: string; publishableKey: string } | { ok: false; error: string }
-> {
+): Promise<({ ok: true } & CardEntry) | { ok: false; error: string }> {
   try {
     const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
     if (!purchase) return { ok: false, error: "Purchase not found." };
@@ -1321,8 +1347,7 @@ export async function createCardEntryIntent(
       return { ok: false, error: "This purchase has no buyer email on file." };
     }
 
-    const mode = await getStripeModeForArtwork(purchase.artworkId);
-    const stripe = getStripeClient(mode);
+    const stripe = getStripeClientForSale(purchase);
     const customerId = await getOrCreateStripeCustomer(stripe, {
       ...purchase,
       buyerEmail: purchase.buyerEmail,
@@ -1340,7 +1365,7 @@ export async function createCardEntryIntent(
     if (!intent.client_secret) {
       return { ok: false, error: "Stripe did not return a client secret." };
     }
-    return { ok: true, clientSecret: intent.client_secret, publishableKey: getPublishableKey(mode) };
+    return { ok: true, ...cardEntryFor(purchase, intent.client_secret) };
   } catch (err) {
     return { ok: false, error: stripeErrorMessage(err) };
   }
@@ -1391,15 +1416,14 @@ async function completeIfSettled(purchaseId: string, closedAt: Date = new Date()
 // and a consigned sale's instalment payment link
 // (recordGalleryStripePayment).
 async function scheduleRemainingInstalments(opts: {
-  purchase: { id: string; artworkId: string; currency: string; title: string };
+  purchase: SaleStripeFields & { id: string; currency: string; title: string };
   customerId: string;
   paymentMethodId?: string | null;
   remaining: number[];
   firstSequence: number;
 }) {
   const { purchase, customerId, paymentMethodId, remaining, firstSequence } = opts;
-  const mode = await getStripeModeForArtwork(purchase.artworkId);
-  const stripe = getStripeClient(mode);
+  const stripe = getStripeClientForSale(purchase);
 
   const product = await stripe.products.create({ name: `${purchase.title} — instalment plan` });
 
@@ -1490,7 +1514,8 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
     await scheduleRemainingInstalments({
       purchase: {
         id: purchase.id,
-        artworkId: purchase.artworkId,
+        stripeMode: purchase.stripeMode,
+        stripeAccountId: purchase.stripeAccountId,
         currency: purchase.currency,
         title: purchase.artwork.catalogueName,
       },
@@ -1518,12 +1543,13 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
 export async function recordPaymentIntent(purchaseId: string, paymentIntentId: string) {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
-    select: { channel: true, artworkId: true },
+    select: { channel: true, stripeMode: true, stripeAccountId: true },
   });
   if (!purchase) return;
 
-  const mode = await getStripeModeForArtwork(purchase.artworkId);
-  const intent = await getStripeClient(mode).paymentIntents.retrieve(paymentIntentId);
+  // Retrieved from the sale's own Stripe account — a PaymentIntent id from
+  // any other account simply isn't found there.
+  const intent = await getStripeClientForSale(purchase).paymentIntents.retrieve(paymentIntentId);
   if (intent.status !== "succeeded" || intent.metadata?.purchaseId !== purchaseId) return;
 
   if (purchase.channel !== "GALLERY") {
@@ -1599,7 +1625,8 @@ async function recordGalleryStripePayment(payment: {
     await scheduleRemainingInstalments({
       purchase: {
         id: purchase.id,
-        artworkId: purchase.artworkId,
+        stripeMode: purchase.stripeMode,
+        stripeAccountId: purchase.stripeAccountId,
         currency: purchase.currency,
         title: purchase.artwork.catalogueName,
       },
