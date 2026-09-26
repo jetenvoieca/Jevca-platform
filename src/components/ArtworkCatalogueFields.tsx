@@ -77,6 +77,7 @@ export default function ArtworkCatalogueFields({
   values,
   onAutosave,
   onTypeOrSizeChange,
+  onLocationChange,
   children,
   availabilityOverride,
   onAddType,
@@ -94,6 +95,9 @@ export default function ArtworkCatalogueFields({
   // Fired on Type or Size change specifically, so a caller with its own
   // live Reference price preview can recompute it.
   onTypeOrSizeChange?: (type: string, size: string) => void;
+  // Fired on Location change, so the Catalogue tab can label its price
+  // "Consigned price" while the Location is a Gallery.
+  onLocationChange?: (location: string) => void;
   children?: React.ReactNode;
   // Replaces the default Availability <select> (2026-09-10) — the
   // Catalogue tab swaps in its own Available/SOLD control, shown for
@@ -152,13 +156,13 @@ export default function ArtworkCatalogueFields({
     persist: ((name: string) => Promise<void>) | undefined,
     setValue: (v: string) => void,
     form: HTMLFormElement,
-    andAlsoSetType?: (type: string) => void
+    onAdded?: (value: string) => void
   ) => {
     const entered = window.prompt(`Add a new ${label}:`)?.trim();
     if (!entered) return;
     persist?.(entered);
     setValue(entered);
-    andAlsoSetType?.(entered);
+    onAdded?.(entered);
     setTimeout(() => onAutosave?.(form), 0);
   };
 
@@ -273,10 +277,11 @@ export default function ArtworkCatalogueFields({
             const v = e.target.value;
             const form = e.currentTarget.form!;
             if (v === ADD_NEW) {
-              addNew("Location", onAddLocation, setLocationValue, form);
+              addNew("Location", onAddLocation, setLocationValue, form, onLocationChange);
               return;
             }
             setLocationValue(v);
+            onLocationChange?.(v);
             onAutosave?.(form);
           }}
           className={inputCls}
