@@ -11,7 +11,7 @@ import {
   SALE_RECORDED_ALERT_TYPE,
 } from "@/lib/alerts";
 import { getStripeClientForSale } from "@/lib/stripe";
-import { getPrimarySite } from "@/lib/studioSettings";
+import { getPrimarySite } from "@/lib/primarySite";
 import type { StudioPaymentDetails } from "@/lib/studioShared";
 
 // The Studio app's sales — the only place a direct sale (payment link,

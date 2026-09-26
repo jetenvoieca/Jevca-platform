@@ -3,7 +3,8 @@
 import { useState } from "react";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
 import type { StudioSettings } from "@/lib/studioSettings";
-import { parsePrice, priceToInput, SALE_CURRENCIES } from "@/lib/studioShared";
+import { CURRENCIES } from "@/lib/currencies";
+import { parsePrice, priceToInput } from "@/lib/studioShared";
 import RecordSale from "@/components/studio/RecordSale";
 import TakePayment from "@/components/studio/TakePayment";
 import {
@@ -122,7 +123,7 @@ export default function SellArtwork({
                   onChange={(e) => setCurrency(e.target.value)}
                   className={`${inputCls} appearance-none [text-align-last:center]`}
                 >
-                  {SALE_CURRENCIES.map((c) => (
+                  {CURRENCIES.map((c) => (
                     <option key={c} value={c}>
                       {c}
                     </option>
