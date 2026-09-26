@@ -2,10 +2,6 @@
 // Studio routes (on the server) — plain functions and constants with no
 // database or browser dependencies.
 
-// The currencies a sale can be recorded in — the same two the admin
-// "Record sale" form offers.
-export const SALE_CURRENCIES = ["GBP", "EUR"] as const;
-
 // What the app sends to start taking payment for an artwork, by card or by
 // payment link. All values are plain text; `deposit` is "" when there is
 // none.

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { findArtistByToken } from "@/lib/studioAuth";
-import { SALE_CURRENCIES, isValidEmail } from "@/lib/studioShared";
+import { isCurrency } from "@/lib/currencies";
+import { isValidEmail } from "@/lib/studioShared";
 import type { StudioPaymentDetails } from "@/lib/studioShared";
 
 // Shared plumbing for the /api/studio routes: who is calling, and
@@ -33,10 +34,6 @@ export function isValidAmount(value: string): boolean {
   return AMOUNT_PATTERN.test(value) && Number(value) > 0 && Number(value) <= MAX_AMOUNT;
 }
 
-export function isValidCurrency(value: string): boolean {
-  return (SALE_CURRENCIES as readonly string[]).includes(value);
-}
-
 // Checks the fields for taking payment (by card or by link) and returns
 // them in their proper shape, or the message to send back.
 export function readPaymentDetails(
@@ -51,7 +48,7 @@ export function readPaymentDetails(
 
   if (!artworkId) return { error: "artworkId is required." };
   if (!isValidAmount(price)) return { error: "Price must be a number above 0." };
-  if (!isValidCurrency(currency)) return { error: "Currency must be GBP or EUR." };
+  if (!isCurrency(currency)) return { error: "Currency must be GBP or EUR." };
   if (deposit && !AMOUNT_PATTERN.test(deposit)) return { error: "Deposit must be a number." };
   if (!buyerName) return { error: "Customer name is required." };
   if (!isValidEmail(buyerEmail)) return { error: "A valid email is required." };

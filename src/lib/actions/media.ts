@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getPresignedUploadUrl, getFromR2, uploadToR2, publicMediaUrl } from "@/lib/r2";
 import { generateImageSizes } from "@/lib/imageSizes";
 import { randomUUID } from "crypto";
+import { createArtworkWithRetry } from "./artworks";
 
 function sanitizeFilename(name: string) {
   return name
@@ -194,51 +195,12 @@ export async function getArtworksForArtist(artistId: string, q?: string) {
   }));
 }
 
-async function nextCatalogueNumber(artistId: string) {
-  // See src/lib/actions/artworks.ts for why this is based on the highest
-  // existing number rather than a row count.
-  const rows = await db.artwork.findMany({
-    where: { artistId },
-    select: { catalogueNumber: true },
-  });
-  const highest = rows.reduce((max, r) => {
-    const match = r.catalogueNumber.match(/(\d+)$/);
-    const n = match ? parseInt(match[1], 10) : 0;
-    return Math.max(max, n);
-  }, 0);
-  return `AW-${String(highest + 1).padStart(4, "0")}`;
-}
-
-// markNeedsReview (2026-08-17): only the Hopper's "Add New Artwork" call
-// passes true — this same function is also called from ArtworkPicker's
-// own inline "create new" (used from other pickers, e.g. Related
-// Images), which is a different, deliberate action and shouldn't be
-// counted as a raw Hopper import needing review.
-export async function quickCreateArtwork(
-  artistId: string,
-  title: string,
-  markNeedsReview = false
-) {
+// ArtworkPicker's own inline "create new" (used from other pickers, e.g.
+// Related Images) — a named artwork with nothing else set yet, numbered
+// and priced the same way as every other new artwork.
+export async function quickCreateArtwork(artistId: string, title: string) {
   const trimmed = title.trim();
   if (!trimmed) return { error: "Name is required." };
-
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const catalogueNumber = await nextCatalogueNumber(artistId);
-    try {
-      const artwork = await db.artwork.create({
-        data: {
-          artistId,
-          catalogueNumber,
-          catalogueName: trimmed,
-          needsReview: markNeedsReview,
-        },
-      });
-      return { artwork };
-    } catch (err: unknown) {
-      const isUniqueViolation =
-        typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
-      if (!isUniqueViolation || attempt === 2) throw err;
-    }
-  }
-  throw new Error("Could not generate a unique catalogue number.");
+  const artwork = await createArtworkWithRetry(artistId, { catalogueName: trimmed });
+  return { artwork };
 }
