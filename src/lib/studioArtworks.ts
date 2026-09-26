@@ -10,11 +10,15 @@ const PAGE_SIZE = 24;
 export type StudioArtworkTile = {
   id: string;
   title: string;
+  catalogueNumber: string;
   // "Type - Edition", the same line the Consigned Works tiles show —
   // empty when the artwork has neither.
   typeEdition: string;
   type: string | null;
+  edition: string | null;
   size: string | null;
+  // Where the work is now — one of the artist's Locations, by name.
+  location: string | null;
   // The artwork's price (Offered, or Consigned while at a gallery), e.g.
   // "450.00", and its currency — see Artwork.priceCurrency.
   price: string | null;
@@ -49,9 +53,11 @@ export async function listStudioArtworks(
       select: {
         id: true,
         catalogueName: true,
+        catalogueNumber: true,
         type: true,
         edition: true,
         size: true,
+        location: true,
         offeredPrice: true,
         priceCurrency: true,
         availability: true,
@@ -68,9 +74,12 @@ export async function listStudioArtworks(
     return {
       id: a.id,
       title: a.catalogueName,
+      catalogueNumber: a.catalogueNumber,
       typeEdition: [a.type, a.edition].filter(Boolean).join(" - "),
       type: a.type,
+      edition: a.edition,
       size: a.size,
+      location: a.location,
       price: a.offeredPrice != null ? a.offeredPrice.toString() : null,
       priceCurrency: a.priceCurrency,
       availability: a.availability,

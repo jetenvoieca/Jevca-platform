@@ -8,10 +8,20 @@ import { parsePrice, priceToInput } from "@/lib/studioShared";
 import { inputCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 
-// "Consign": choose which of the artist's Locations (a gallery, or one of
-// their own places) the chosen artwork goes to, and the price and currency
-// agreed there. The price starts as the artwork's current one, and saving
-// it replaces that price everywhere (see Artwork.priceCurrency).
+// "Consign": the chosen work (a small picture, its name, catalogue number
+// and Type — plus its edition number when the Type is an edition) above
+// the list of the artist's Locations (a gallery, or one of their own
+// places) to choose where it goes, and the price and currency agreed
+// there. The price starts as the artwork's current one, and saving it
+// replaces that price everywhere (see Artwork.priceCurrency). The list
+// takes whatever height the screen has left, and scrolls.
+
+// The Type line: the Type, followed by the edition number when the Type
+// is an edition (matched loosely, as in the admin Catalogue).
+function typeLine(artwork: StudioArtworkTile): string {
+  const isEdition = (artwork.type ?? "").toLowerCase().includes("edition");
+  return [artwork.type, isEdition ? artwork.edition : null].filter(Boolean).join(" · ");
+}
 
 export default function ConsignArtwork({
   token,
@@ -75,7 +85,23 @@ export default function ConsignArtwork({
 
   return (
     <>
-      <section className="aspect-square overflow-y-auto rounded-lg border border-[#cfcac0] bg-white">
+      <section className={`${panelCls} flex items-center gap-3 p-3`}>
+        {artwork.thumbnailUrl ? (
+          <img
+            src={artwork.thumbnailUrl}
+            alt=""
+            className="h-16 w-16 shrink-0 rounded-md object-cover"
+          />
+        ) : (
+          <div className="h-16 w-16 shrink-0 rounded-md bg-white" />
+        )}
+        <div className="min-w-0 flex-1 leading-snug">
+          <p className="truncate text-lg text-[#333]">{artwork.title}</p>
+          <p className="truncate text-sm text-[#8a8a8a]">#{artwork.catalogueNumber}</p>
+          <p className="truncate text-sm text-[#555]">{typeLine(artwork)}</p>
+        </div>
+      </section>
+      <section className="min-h-40 flex-1 overflow-y-auto rounded-lg border border-[#cfcac0] bg-white">
         {locations.length === 0 ? (
           <p className="p-6 text-center text-[#8a8a8a]">No locations set up yet.</p>
         ) : (

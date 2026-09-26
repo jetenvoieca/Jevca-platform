@@ -18,7 +18,8 @@ import type { Notice } from "@/components/studio/StudioUi";
 // "Sold": records a sale the artist has already been paid for — a form
 // to fill in and "Record SALE". A small picture of the work sits beside
 // its title as a check that it's the right one. Source is where it sold:
-// one of the artist's Locations. The artwork becomes SOLD.
+// one of the artist's Locations, starting as the one the work is at now.
+// The artwork becomes SOLD.
 
 export default function RecordSale({
   token,
@@ -48,7 +49,9 @@ export default function RecordSale({
   const [price, setPrice] = useState(initialPrice);
   const [currency, setCurrency] = useState(initialCurrency);
   const [date, setDate] = useState(todayIso());
-  const [source, setSource] = useState("");
+  const [source, setSource] = useState(
+    artwork.location && locations.includes(artwork.location) ? artwork.location : ""
+  );
   const [paymentType, setPaymentType] = useState("");
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
