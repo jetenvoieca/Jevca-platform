@@ -78,21 +78,9 @@ export function Dropdown({
 }
 
 // A box that looks like a field but only shows the artwork's own detail.
-export function ReadOnlyField({
-  label,
-  value,
-  tall,
-}: {
-  label: string;
-  value: string | null;
-  tall?: boolean;
-}) {
+export function ReadOnlyField({ label, value }: { label: string; value: string | null }) {
   return (
-    <div
-      className={`${fieldCls} ${tall ? "flex min-h-24 items-center justify-center" : ""} ${
-        value ? "text-[#555]" : "text-[#8a8a8a]"
-      }`}
-    >
+    <div className={`${fieldCls} ${value ? "text-[#555]" : "text-[#8a8a8a]"}`}>
       {value || label}
     </div>
   );

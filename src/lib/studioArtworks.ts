@@ -27,10 +27,18 @@ export type StudioArtworkTile = {
 
 // One page of an artist's artworks for the Studio app, newest first, using
 // the same filter and ordering as the admin Artwork Catalogue so a search
-// means the same thing in both. The main image is preferred over the
-// first related one, and the small thumbnail over the original file.
-export async function listStudioArtworks(artistId: string, q: string, offset: number) {
-  const where = buildArtworkWhere(artistId, { q: q || undefined });
+// means the same thing in both. `availableOnly` leaves out every sold work
+// (paid or not). The main image is preferred over the first related one,
+// and the small thumbnail over the original file.
+export async function listStudioArtworks(
+  artistId: string,
+  query: { q: string; offset: number; availableOnly: boolean }
+) {
+  const { q, offset, availableOnly } = query;
+  const where = buildArtworkWhere(artistId, {
+    q: q || undefined,
+    availability: availableOnly ? "AVAILABLE" : undefined,
+  });
 
   const [rows, total] = await Promise.all([
     db.artwork.findMany({

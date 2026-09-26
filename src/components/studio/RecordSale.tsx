@@ -16,14 +16,16 @@ import {
 import type { Notice } from "@/components/studio/StudioUi";
 
 // "Sold": records a sale the artist has already been paid for — a form
-// to fill in and "Record SALE". The artwork becomes SOLD.
+// to fill in and "Record SALE". A small picture of the work sits beside
+// its title as a check that it's the right one. Source is where it sold:
+// one of the artist's Locations. The artwork becomes SOLD.
 
 export default function RecordSale({
   token,
   artwork,
   initialPrice,
   initialCurrency,
-  saleSources,
+  locations,
   paymentMethods,
   onDone,
   onBusyChange,
@@ -33,7 +35,8 @@ export default function RecordSale({
   // The artwork's price and currency to start from; both editable here.
   initialPrice: string;
   initialCurrency: string;
-  saleSources: string[];
+  // The names of the artist's Locations, offered as the Source.
+  locations: string[];
   // The artist's own payment types. If they have any, one is required.
   paymentMethods: string[];
   // Called once the sale is recorded — the app returns to its first
@@ -138,8 +141,21 @@ export default function RecordSale({
             </select>
           </div>
         </div>
-        <ReadOnlyField label="Title / name" value={artwork.title} />
-        <Dropdown label="Source" value={source} options={saleSources} onChange={setSource} />
+        <div className="flex items-center gap-3">
+          {artwork.thumbnailUrl ? (
+            <img
+              src={artwork.thumbnailUrl}
+              alt=""
+              className="h-14 w-14 shrink-0 rounded-md object-cover"
+            />
+          ) : (
+            <div className="h-14 w-14 shrink-0 rounded-md bg-white" />
+          )}
+          <div className="min-w-0 flex-1">
+            <ReadOnlyField label="Title / name" value={artwork.title} />
+          </div>
+        </div>
+        <Dropdown label="Source" value={source} options={locations} onChange={setSource} />
         <Dropdown
           label="Payment type"
           value={paymentType}
