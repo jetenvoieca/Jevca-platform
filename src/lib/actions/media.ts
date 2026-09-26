@@ -46,10 +46,11 @@ export async function requestUploadUrl(
 // - caption/description: the Hopper's "Name"/"Description" (2026-09-02),
 //   carried across from whatever the sender asked for before sending.
 //   Both stay freely editable afterwards from the Hopper sorting card.
-// - artworkSize/artworkPrice/artworkType (2026-09-21): details the
-//   Studio capture app collects — see the matching note on Image in
-//   schema.prisma. artworkPrice is a plain numeric string, validated by
-//   the caller before it gets here.
+// - artworkSize/artworkPrice/artworkType (2026-09-21) and
+//   artworkLocation (2026-09-26): details the Studio capture app
+//   collects — see the matching note on Image in schema.prisma.
+//   artworkPrice is a plain numeric string, validated by the caller
+//   before it gets here.
 type FinalizeUploadOptions = {
   posterUrl?: string;
   status?: "SORTED" | "HOPPER";
@@ -59,6 +60,7 @@ type FinalizeUploadOptions = {
   artworkSize?: string;
   artworkPrice?: string;
   artworkType?: string;
+  artworkLocation?: string;
 };
 
 // Step 2 of 2: once the browser (or the iPhone Shortcut / Studio app, for
@@ -81,6 +83,7 @@ export async function finalizeUpload(
     artworkSize,
     artworkPrice,
     artworkType,
+    artworkLocation,
   } = options;
 
   // Generate the smaller display/thumbnail versions now, once, rather than
@@ -132,6 +135,7 @@ export async function finalizeUpload(
       artworkSize: artworkSize || null,
       artworkPrice: artworkPrice || null,
       artworkType: artworkType || null,
+      artworkLocation: artworkLocation || null,
     },
   });
   return {

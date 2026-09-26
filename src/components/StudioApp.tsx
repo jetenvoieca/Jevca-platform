@@ -98,6 +98,7 @@ export default function StudioApp({
           token={token}
           artworkTypes={settings.artworkTypes}
           sizePresets={settings.sizePresets}
+          locations={settings.locations}
           onDone={goHome}
           onBusyChange={setBusy}
         />
