@@ -3,7 +3,15 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { findOrCreateCustomer } from "./customers";
-import { netOwed, saleBreakdown, saleTitle, splitIntoInstalments } from "@/lib/saleMath";
+import {
+  isValidInstalmentCount,
+  MAX_INSTALMENTS,
+  MIN_INSTALMENTS,
+  netOwed,
+  saleBreakdown,
+  saleTitle,
+  splitIntoInstalments,
+} from "@/lib/saleMath";
 import {
   saleStripeFieldsForArtist,
   retireGalleryPaymentLinks,
@@ -202,7 +210,9 @@ async function resetAvailabilityIfNothingSoldOrActive(artworkId: string) {
 //
 // The price is the artwork's own Offered price, unless the caller passes
 // a `price` of its own (2026-09-21) — the Studio app lets the artist
-// adjust the price on the spot.
+// adjust the price on the spot. Likewise the number of instalments is the
+// artist's Settings default unless the caller passes a valid
+// `instalmentCount` (2026-09-26 — chosen per sale in the Studio app).
 //
 // Deposit paid isn't recorded as its own Payment row (direct instruction,
 // 2026-09-10 — "no deposit handling needed yet, just wire the remaining
@@ -245,7 +255,10 @@ async function seedSaleTerms(
       defaultReleaseTriggerCount: true,
     },
   });
-  const instalmentCount = artist?.defaultInstalmentCount || 1;
+  const chosenCount = parseInt((formData.get("instalmentCount") as string) ?? "", 10);
+  const instalmentCount = isValidInstalmentCount(chosenCount)
+    ? chosenCount
+    : artist?.defaultInstalmentCount || 1;
   const releaseMessage = artist?.defaultReleaseMessage ?? null;
   const releaseTriggerCount = artist?.defaultReleaseTriggerCount ?? null;
 
@@ -274,11 +287,15 @@ async function seedSaleTerms(
 // ---------- Starting a sale — explicit action, not autosaved ----------
 
 // Creates the actual Purchase, snapshotting SaleTerms at this moment.
-// Refuses if there's already an ACTIVE purchase for this artwork, or if
-// the artwork is already RESERVED/SOLD. Does NOT touch Availability
-// itself (2026-09-20 rebuild) — that's the caller's job, so each of
-// startArtworkSaleAndGetLink and startArtworkSaleAndEnterCard marks
-// RESERVED right after this succeeds. See the file-level note above.
+// `saleDate` (YYYY-MM-DD, optional — 2026-09-26) is when the sale was
+// agreed and becomes the Purchase's createdAt, the date shown as "Sold"
+// everywhere, the same way startGallerySale below uses it; without it
+// the sale is dated now. Refuses if there's already an ACTIVE purchase
+// for this artwork, or if the artwork is already RESERVED/SOLD. Does NOT
+// touch Availability itself (2026-09-20 rebuild) — that's the caller's
+// job, so each of startArtworkSaleAndGetLink and
+// startArtworkSaleAndEnterCard marks RESERVED right after this succeeds.
+// See the file-level note above.
 async function startPurchase(
   artworkId: string,
   siteId: string,
@@ -305,8 +322,16 @@ async function startPurchase(
   // (2026-08-16) — see the matching note on findOrCreateCustomer for why
   // this has to be authoritative rather than re-matched by email.
   const customerId = (formData.get("customerId") as string)?.trim() || null;
+  const saleDateRaw = (formData.get("saleDate") as string)?.trim();
 
   if (!buyerEmail) return { ok: false, error: "Buyer email is required to start a sale." };
+
+  let createdAt: Date | undefined;
+  if (saleDateRaw) {
+    const parsed = new Date(saleDateRaw);
+    if (Number.isNaN(parsed.getTime())) return { ok: false, error: "That date isn't valid." };
+    createdAt = parsed;
+  }
 
   // Framed/Unframed is no longer a choice at point of sale (2026-08-28)
   // — each Catalogue entry is a single listing with a single price now
@@ -342,6 +367,7 @@ async function startPurchase(
       instalmentCount: type === "INSTALMENTS" ? terms.instalmentCount : null,
       releaseMessage: terms.releaseMessage,
       releaseTriggerCount: terms.releaseTriggerCount,
+      ...(createdAt ? { createdAt } : {}),
     },
   });
 
@@ -673,8 +699,11 @@ function amountToCollect(
   const { balance } = saleBreakdown(purchase);
   if (balance <= 0) return { ok: false, error: "Nothing is left to pay on this sale." };
   if (instalments === undefined) return { ok: true, amount: balance };
-  if (!Number.isInteger(instalments) || instalments < 2 || instalments > 36) {
-    return { ok: false, error: "The number of instalments must be between 2 and 36." };
+  if (!isValidInstalmentCount(instalments)) {
+    return {
+      ok: false,
+      error: `The number of instalments must be between ${MIN_INSTALMENTS} and ${MAX_INSTALMENTS}.`,
+    };
   }
   return { ok: true, amount: splitIntoInstalments(balance, instalments)[0] };
 }
