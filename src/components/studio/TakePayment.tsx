@@ -12,6 +12,7 @@ import {
 } from "@/lib/saleMath";
 import {
   formatMoney,
+  isEditionType,
   isValidEmail,
   parsePrice,
   priceToInput,
@@ -28,14 +29,16 @@ import {
 } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 
-// "Payment": the sale panel for the chosen artwork — date of sale, source,
-// price and currency (starting as the artwork's own), deposit, then Net
-// Due (the price less the deposit, paid at once) or Instalments (the net
-// due split into the number of instalments shown between them), and the
-// buyer. Then either "Get link" (a payment link for the buyer, which
-// slides in above the buttons and can be shared) or "Enter Card" (the card
-// panel, CardPayment). Either way the artwork becomes Sold - Not Paid; it
-// becomes SOLD once the buyer has paid.
+// "Payment": the sale panel for the chosen artwork — its edition number
+// when the Type is an edition (starting as the artwork's own, and saved on
+// it once the sale starts), date of sale, source, price and currency
+// (starting as the artwork's own), deposit, then Net Due (the price less
+// the deposit, paid at once) or Instalments (the net due split into the
+// number of instalments shown between them), and the buyer. Then either
+// "Get link" (a payment link for the buyer, which slides in above the
+// buttons and can be shared) or "Enter Card" (the card panel,
+// CardPayment). Either way the artwork becomes Sold - Not Paid; it becomes
+// SOLD once the buyer has paid.
 
 type Card = {
   purchaseId: string;
@@ -101,6 +104,8 @@ export default function TakePayment({
   const [source, setSource] = useState("");
   const [price, setPrice] = useState(priceToInput(artwork.price));
   const [currency, setCurrency] = useState(artwork.priceCurrency);
+  const hasEdition = isEditionType(artwork.type);
+  const [edition, setEdition] = useState(artwork.edition ?? "");
   const [deposit, setDeposit] = useState("");
   const [option, setOption] = useState<StudioPaymentDetails["option"]>("FULL");
   const [countInput, setCountInput] = useState(String(defaultInstalmentCount));
@@ -122,8 +127,7 @@ export default function TakePayment({
   const netDue = Math.max(priceAmount - depositAmount, 0);
   const count = Number(countInput);
   const countValid = isValidInstalmentCount(count);
-  const perInstalment =
-    countValid && netDue > 0 ? splitIntoInstalments(netDue, count)[0] : null;
+  const perInstalment = countValid && netDue > 0 ? splitIntoInstalments(netDue, count)[0] : null;
 
   // Checks the form, returning what to send or null (with a message shown).
   const readDetails = (): StudioPaymentDetails | null => {
@@ -151,6 +155,7 @@ export default function TakePayment({
 
     return {
       artworkId: artwork.id,
+      edition: hasEdition ? edition.trim() : null,
       saleDate,
       price: priceValue,
       currency,
@@ -270,7 +275,23 @@ export default function TakePayment({
           </div>
           <div className="flex min-w-0 flex-1 flex-col justify-between gap-1">
             <Detail label="Title / name" value={artwork.title} />
-            <Detail label="Type" value={artwork.type} />
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <Detail label="Type" value={artwork.type} />
+              </div>
+              {hasEdition && (
+                <input
+                  type="text"
+                  placeholder="Edition"
+                  aria-label="Edition number"
+                  autoComplete="off"
+                  value={edition}
+                  onChange={(e) => setEdition(e.target.value)}
+                  disabled={locked}
+                  className="min-w-0 flex-1 rounded-md border border-[#c4c4c4] bg-white px-1 py-2 text-center text-base text-[#555] placeholder:text-[#8a8a8a]"
+                />
+              )}
+            </div>
             <div className="flex items-center gap-2">
               <div className="min-w-0 flex-1">
                 <Detail label="Size" value={artwork.size} />

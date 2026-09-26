@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isCurrency } from "@/lib/currencies";
-import { isValidAmount, readStudioRequest, text } from "@/lib/studioRequest";
+import { isValidAmount, optionalText, readStudioRequest, text } from "@/lib/studioRequest";
 import { consignStudioArtwork } from "@/lib/studioArtworks";
 
 // Consigns one of the artist's artworks to one of their Locations, at the
-// price and currency agreed there. Authenticated by the artist's personal
+// price and currency agreed there (and, for an edition, with the edition
+// number set on the Consign screen). Authenticated by the artist's personal
 // token.
 export async function POST(request: NextRequest) {
   const req = await readStudioRequest(request);
@@ -26,7 +27,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Currency must be GBP or EUR." }, { status: 400 });
   }
 
-  const result = await consignStudioArtwork(artist.id, { artworkId, location, price, currency });
+  const result = await consignStudioArtwork(artist.id, {
+    artworkId,
+    location,
+    price,
+    currency,
+    edition: optionalText(fields.edition),
+  });
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: result.status });
   }

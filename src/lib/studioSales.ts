@@ -113,6 +113,16 @@ async function prepareSale(artistId: string, details: StudioPaymentDetails) {
   return { siteId: site.id, formData };
 }
 
+// Once a sale has started, saves the edition number set on the Studio sale
+// panel onto the artwork (when one was sent — only for an edition).
+async function saveEdition(details: StudioPaymentDetails) {
+  if (details.edition === null) return;
+  await db.artwork.update({
+    where: { id: details.artworkId },
+    data: { edition: details.edition || null },
+  });
+}
+
 // What an alert says about a sale: who bought which work, and how much
 // (in how many instalments, if it is an instalment plan).
 async function describePurchase(purchaseId: string) {
@@ -150,6 +160,7 @@ export async function startStudioPaymentLink(artist: Artist, details: StudioPaym
     prepared.formData
   );
   if (!result.ok) return { error: result.error, status: 400 as const };
+  await saveEdition(details);
 
   const sale = await describePurchase(result.purchaseId);
   await raiseSaleAlert({
@@ -175,6 +186,7 @@ export async function startStudioCardPayment(artist: Artist, details: StudioPaym
     prepared.formData
   );
   if (!result.ok) return { error: result.error, status: 400 as const };
+  await saveEdition(details);
 
   return {
     purchaseId: result.purchaseId,

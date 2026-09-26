@@ -89,15 +89,22 @@ export async function listStudioArtworks(artistId: string, offset: number) {
 // one price (Artwork.priceCurrency explains why), mirrored into
 // presentationPrice exactly as updateCatalogue in actions/artworks.ts
 // does. Like the Catalogue, it also fills "Can be viewed at" with the
-// location's name, but only if that is still empty.
+// location's name, but only if that is still empty. `edition` is the
+// edition number to save ("" clears it), or null to leave it unchanged.
 //
 // Only that artist's own, still-available artworks can be consigned, and
 // only to one of their own Locations.
 export async function consignStudioArtwork(
   artistId: string,
-  consignment: { artworkId: string; location: string; price: string; currency: string }
+  consignment: {
+    artworkId: string;
+    location: string;
+    price: string;
+    currency: string;
+    edition: string | null;
+  }
 ) {
-  const { artworkId, location, price, currency } = consignment;
+  const { artworkId, location, price, currency, edition } = consignment;
   const [known, artwork] = await Promise.all([
     db.location.findUnique({
       where: { artistId_name: { artistId, name: location } },
@@ -122,6 +129,7 @@ export async function consignStudioArtwork(
       offeredPrice: price,
       presentationPrice: price,
       priceCurrency: currency,
+      ...(edition !== null ? { edition: edition || null } : {}),
       ...(artwork.viewingLocation ? {} : { viewingLocation: location }),
     },
   });

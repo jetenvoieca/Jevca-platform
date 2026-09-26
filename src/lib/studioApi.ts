@@ -18,6 +18,9 @@ export type ConsignInput = {
   // The agreed price, as a plain number string, and its currency.
   price: string;
   currency: string;
+  // The edition number to save ("" clears it), or null to leave it as it
+  // is — only an edition-type artwork sends one.
+  edition: string | null;
 };
 
 export function consignArtwork(token: string, consignment: ConsignInput) {

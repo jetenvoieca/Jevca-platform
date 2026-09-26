@@ -4,24 +4,17 @@ import { useState } from "react";
 import { consignArtwork } from "@/lib/studioApi";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
 import { CURRENCIES } from "@/lib/currencies";
-import { parsePrice, priceToInput } from "@/lib/studioShared";
+import { isEditionType, parsePrice, priceToInput } from "@/lib/studioShared";
 import { inputCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 
 // "Consign": the chosen work (a small picture, its name, catalogue number
-// and Type — plus its edition number when the Type is an edition), the
-// price and currency agreed, then the list of the artist's Locations (a
-// gallery, or one of their own places) to choose where it goes. The price
-// starts as the artwork's current one, and saving it replaces that price
-// everywhere (see Artwork.priceCurrency). The list takes whatever height
-// the screen has left, and scrolls.
-
-// The Type line: the Type, followed by the edition number when the Type
-// is an edition (matched loosely, as in the admin Catalogue).
-function typeLine(artwork: StudioArtworkTile): string {
-  const isEdition = (artwork.type ?? "").toLowerCase().includes("edition");
-  return [artwork.type, isEdition ? artwork.edition : null].filter(Boolean).join(" · ");
-}
+// and Type), the price and currency agreed — and, when the Type is an
+// edition, its edition number — then the list of the artist's Locations
+// (a gallery, or one of their own places) to choose where it goes. Price,
+// currency and edition start as the artwork's own, and saving replaces
+// them on the artwork itself (see Artwork.priceCurrency). The list takes
+// whatever height the screen has left, and scrolls.
 
 export default function ConsignArtwork({
   token,
@@ -43,6 +36,8 @@ export default function ConsignArtwork({
   const [chosen, setChosen] = useState<string | null>(null);
   const [price, setPrice] = useState(priceToInput(artwork.price));
   const [currency, setCurrency] = useState(artwork.priceCurrency);
+  const hasEdition = isEditionType(artwork.type);
+  const [edition, setEdition] = useState(artwork.edition ?? "");
   const [consigning, setConsigning] = useState(false);
   const [notice, setNotice] = useState<Notice | null>(null);
 
@@ -70,6 +65,7 @@ export default function ConsignArtwork({
         location: chosen,
         price: amount,
         currency,
+        edition: hasEdition ? edition.trim() : null,
       });
       onDone({ text: `Consigned ${artwork.title} to ${chosen}`, tone: "info" });
     } catch (err) {
@@ -98,7 +94,7 @@ export default function ConsignArtwork({
         <div className="min-w-0 flex-1 leading-snug">
           <p className="truncate text-lg text-[#333]">{artwork.title}</p>
           <p className="truncate text-sm text-[#8a8a8a]">#{artwork.catalogueNumber}</p>
-          <p className="truncate text-sm text-[#555]">{typeLine(artwork)}</p>
+          <p className="truncate text-sm text-[#555]">{artwork.type}</p>
         </div>
       </section>
       <div className="flex gap-3">
@@ -129,6 +125,20 @@ export default function ConsignArtwork({
             ))}
           </select>
         </div>
+        {hasEdition && (
+          <div className="min-w-0 flex-1">
+            <input
+              type="text"
+              placeholder="Edition"
+              aria-label="Edition number"
+              autoComplete="off"
+              value={edition}
+              onChange={(e) => setEdition(e.target.value)}
+              disabled={consigning}
+              className={inputCls}
+            />
+          </div>
+        )}
       </div>
       <section className="min-h-40 flex-1 overflow-y-auto rounded-lg border border-[#cfcac0] bg-white">
         {locations.length === 0 ? (

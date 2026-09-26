@@ -2,12 +2,23 @@
 // Studio routes (on the server) — plain functions and constants with no
 // database or browser dependencies.
 
+// Whether an artwork's Type is an edition, which gives it an edition
+// number (e.g. 5/25) the artist can set when consigning or selling it.
+// Matched loosely, as in the admin Catalogue: any Type containing
+// "edition" ("Edition", "Giclée Edition", "Limited Edition").
+export function isEditionType(type: string | null): boolean {
+  return (type ?? "").toLowerCase().includes("edition");
+}
+
 // What the app sends to start taking payment for an artwork, by card or by
 // payment link. `deposit` is "" when there is none; `saleDate` is
 // YYYY-MM-DD; `instalmentCount` is how many instalments the net due is
-// split into when `option` is INSTALMENTS.
+// split into when `option` is INSTALMENTS. `edition` is the edition number
+// to save on the artwork ("" clears it), or null to leave it unchanged —
+// only an edition-type artwork sends one.
 export type StudioPaymentDetails = {
   artworkId: string;
+  edition: string | null;
   saleDate: string;
   price: string;
   currency: string;

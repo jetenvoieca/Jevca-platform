@@ -40,6 +40,13 @@ export function isValidDate(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}$/.test(value);
 }
 
+// Text the app may leave out: trimmed, or null when none was sent (an
+// edition number is sent only for an edition, to be saved; null leaves it
+// as it is).
+export function optionalText(value: unknown): string | null {
+  return typeof value === "string" ? value.trim() : null;
+}
+
 // Checks the fields for taking payment (by card or by link) and returns
 // them in their proper shape, or the message to send back.
 export function readPaymentDetails(
@@ -71,6 +78,7 @@ export function readPaymentDetails(
   return {
     details: {
       artworkId,
+      edition: optionalText(fields.edition),
       saleDate,
       price,
       currency,
