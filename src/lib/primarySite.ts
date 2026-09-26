@@ -12,8 +12,8 @@ export async function getPrimarySite(artistId: string) {
   });
 }
 
-// The currency a new artwork is priced in and a new Studio sale starts
-// in: the primary website's currency, or GBP if it has none we support.
+// The currency a new artwork is priced in: the primary website's
+// currency, or GBP if it has none we support.
 export async function getArtistDefaultCurrency(artistId: string): Promise<Currency> {
   const site = await getPrimarySite(artistId);
   const currency = site?.defaultCurrency ?? "";

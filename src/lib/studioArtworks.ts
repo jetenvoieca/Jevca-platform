@@ -4,9 +4,9 @@ import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
 
 const PAGE_SIZE = 24;
 
-// Everything the Studio app's "Manage existing" screens need to know about
-// one artwork: its tile in the grid, and the details shown when it is
-// chosen.
+// Everything the Studio app's Consign / Sold / Payment screens need to
+// know about one artwork: its tile in the catalogue grid, and the details
+// shown once it is chosen.
 export type StudioArtworkTile = {
   id: string;
   title: string;
@@ -16,11 +16,12 @@ export type StudioArtworkTile = {
   // "Type - Medium", shown as the description on the sale panel.
   typeMedium: string;
   size: string | null;
-  // The artwork's asking price (Offered price), e.g. "450.00".
+  // The artwork's price (Offered, or Consigned while at a gallery), e.g.
+  // "450.00", and its currency — see Artwork.priceCurrency.
   price: string | null;
+  priceCurrency: string;
   availability: "AVAILABLE" | "RESERVED" | "SOLD";
   thumbnailUrl: string | null;
-  displayUrl: string | null;
 };
 
 // One page of an artist's artworks for the Studio app, newest first, using
@@ -44,9 +45,10 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
         medium: true,
         size: true,
         offeredPrice: true,
+        priceCurrency: true,
         availability: true,
-        mainImage: { select: { url: true, thumbnailKey: true, displayKey: true } },
-        images: { take: 1, select: { url: true, thumbnailKey: true, displayKey: true } },
+        mainImage: { select: { url: true, thumbnailKey: true } },
+        images: { take: 1, select: { url: true, thumbnailKey: true } },
       },
     }),
     db.artwork.count({ where }),
@@ -54,7 +56,6 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
 
   const artworks: StudioArtworkTile[] = rows.map((a) => {
     const image = a.mainImage ?? a.images[0] ?? null;
-    const thumbnailUrl = image ? publicMediaUrl(image.thumbnailKey) || image.url : null;
     return {
       id: a.id,
       title: a.catalogueName,
@@ -62,28 +63,37 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
       typeMedium: [a.type, a.medium].filter(Boolean).join(" - "),
       size: a.size,
       price: a.offeredPrice != null ? a.offeredPrice.toString() : null,
+      priceCurrency: a.priceCurrency,
       availability: a.availability,
-      thumbnailUrl,
-      displayUrl: image ? publicMediaUrl(image.displayKey) || thumbnailUrl : null,
+      thumbnailUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
     };
   });
 
   return { artworks, total };
 }
 
-// Consigning sets the artwork's Location to the chosen entry from the
-// artist's own Locations list — the same field the admin Catalogue
-// edits, and what puts a work on a gallery's Consigned Works list
-// (matched by name, see getGalleryDetail in actions/customers.ts). Like
-// the admin Catalogue (updateCatalogue in actions/artworks.ts), it also
-// fills "Can be viewed at" with the same name, but only if that is still
-// empty — never overwriting one already set.
+// Consigning moves the artwork to one of the artist's Locations (a gallery
+// or one of their own places) and saves the price and currency agreed for
+// it there. Location is the same field the admin Catalogue edits, and what
+// puts a work on a gallery's Consigned Works list (matched by name, see
+// getGalleryDetail in actions/customers.ts). The price is the artwork's
+// one price (Artwork.priceCurrency explains why), mirrored into
+// presentationPrice exactly as updateCatalogue in actions/artworks.ts
+// does. Like the Catalogue, it also fills "Can be viewed at" with the
+// location's name, but only if that is still empty.
 //
 // Only that artist's own, still-available artworks can be consigned, and
-// only to a location that really is on their list.
-export async function consignStudioArtwork(artistId: string, artworkId: string, location: string) {
-  const [artist, artwork] = await Promise.all([
-    db.artist.findUnique({ where: { id: artistId }, select: { artworkLocations: true } }),
+// only to one of their own Locations.
+export async function consignStudioArtwork(
+  artistId: string,
+  consignment: { artworkId: string; location: string; price: string; currency: string }
+) {
+  const { artworkId, location, price, currency } = consignment;
+  const [known, artwork] = await Promise.all([
+    db.location.findUnique({
+      where: { artistId_name: { artistId, name: location } },
+      select: { id: true },
+    }),
     db.artwork.findFirst({
       where: { id: artworkId, artistId },
       select: { availability: true, viewingLocation: true },
@@ -94,14 +104,15 @@ export async function consignStudioArtwork(artistId: string, artworkId: string, 
   if (artwork.availability !== "AVAILABLE") {
     return { error: "That work is already sold.", status: 409 as const };
   }
-  if (!artist?.artworkLocations.includes(location)) {
-    return { error: "That location isn't on your list.", status: 400 as const };
-  }
+  if (!known) return { error: "That location isn't on your list.", status: 400 as const };
 
   await db.artwork.update({
     where: { id: artworkId },
     data: {
       location,
+      offeredPrice: price,
+      presentationPrice: price,
+      priceCurrency: currency,
       ...(artwork.viewingLocation ? {} : { viewingLocation: location }),
     },
   });
