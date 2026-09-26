@@ -100,10 +100,12 @@ async function prepareSale(artistId: string, details: StudioPaymentDetails) {
   if (!site) return { error: "No website is set up for this artist.", status: 400 as const };
 
   const formData = new FormData();
+  formData.set("saleDate", details.saleDate);
   formData.set("price", details.price);
   formData.set("depositPaid", details.deposit);
   formData.set("currency", details.currency);
   formData.set("type", details.option);
+  formData.set("instalmentCount", String(details.instalmentCount));
   formData.set("source", details.source);
   formData.set("buyerName", details.buyerName);
   formData.set("buyerEmail", details.buyerEmail);

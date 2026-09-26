@@ -13,8 +13,7 @@ export type StudioArtworkTile = {
   // "Type - Edition", the same line the Consigned Works tiles show —
   // empty when the artwork has neither.
   typeEdition: string;
-  // "Type - Medium", shown as the description on the sale panel.
-  typeMedium: string;
+  type: string | null;
   size: string | null;
   // The artwork's price (Offered, or Consigned while at a gallery), e.g.
   // "450.00", and its currency — see Artwork.priceCurrency.
@@ -22,6 +21,8 @@ export type StudioArtworkTile = {
   priceCurrency: string;
   availability: "AVAILABLE" | "RESERVED" | "SOLD";
   thumbnailUrl: string | null;
+  // The larger version, for the Payment panel's enlarged view.
+  displayUrl: string | null;
 };
 
 // One page of an artist's artworks for the Studio app, newest first, using
@@ -42,13 +43,12 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
         catalogueName: true,
         type: true,
         edition: true,
-        medium: true,
         size: true,
         offeredPrice: true,
         priceCurrency: true,
         availability: true,
-        mainImage: { select: { url: true, thumbnailKey: true } },
-        images: { take: 1, select: { url: true, thumbnailKey: true } },
+        mainImage: { select: { url: true, thumbnailKey: true, displayKey: true } },
+        images: { take: 1, select: { url: true, thumbnailKey: true, displayKey: true } },
       },
     }),
     db.artwork.count({ where }),
@@ -56,16 +56,18 @@ export async function listStudioArtworks(artistId: string, q: string, offset: nu
 
   const artworks: StudioArtworkTile[] = rows.map((a) => {
     const image = a.mainImage ?? a.images[0] ?? null;
+    const thumbnailUrl = image ? publicMediaUrl(image.thumbnailKey) || image.url : null;
     return {
       id: a.id,
       title: a.catalogueName,
       typeEdition: [a.type, a.edition].filter(Boolean).join(" - "),
-      typeMedium: [a.type, a.medium].filter(Boolean).join(" - "),
+      type: a.type,
       size: a.size,
       price: a.offeredPrice != null ? a.offeredPrice.toString() : null,
       priceCurrency: a.priceCurrency,
       availability: a.availability,
-      thumbnailUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
+      thumbnailUrl,
+      displayUrl: image ? publicMediaUrl(image.displayKey) || thumbnailUrl : null,
     };
   });
 

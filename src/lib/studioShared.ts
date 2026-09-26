@@ -3,14 +3,17 @@
 // database or browser dependencies.
 
 // What the app sends to start taking payment for an artwork, by card or by
-// payment link. All values are plain text; `deposit` is "" when there is
-// none.
+// payment link. `deposit` is "" when there is none; `saleDate` is
+// YYYY-MM-DD; `instalmentCount` is how many instalments the net due is
+// split into when `option` is INSTALMENTS.
 export type StudioPaymentDetails = {
   artworkId: string;
+  saleDate: string;
   price: string;
   currency: string;
   deposit: string;
   option: "FULL" | "INSTALMENTS";
+  instalmentCount: number;
   source: string;
   buyerName: string;
   buyerEmail: string;

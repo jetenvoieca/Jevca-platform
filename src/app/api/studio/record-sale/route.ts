@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isCurrency } from "@/lib/currencies";
-import { isValidAmount, readStudioRequest, text } from "@/lib/studioRequest";
+import { isValidAmount, isValidDate, readStudioRequest, text } from "@/lib/studioRequest";
 import { recordStudioSale } from "@/lib/studioSales";
 
 // Records a sale the artist has already been paid for. Authenticated by
@@ -26,7 +26,7 @@ export async function POST(request: NextRequest) {
   if (!isCurrency(currency)) {
     return NextResponse.json({ error: "Currency must be GBP or EUR." }, { status: 400 });
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(saleDate)) {
+  if (!isValidDate(saleDate)) {
     return NextResponse.json({ error: "Date is required." }, { status: 400 });
   }
   if (!buyerName) {

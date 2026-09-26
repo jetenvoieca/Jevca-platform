@@ -3,7 +3,20 @@
 import { useState } from "react";
 import { createPaymentLink, startCardPayment } from "@/lib/studioApi";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
-import { formatMoney, isValidEmail, parsePrice, todayIso } from "@/lib/studioShared";
+import { CURRENCIES } from "@/lib/currencies";
+import {
+  isValidInstalmentCount,
+  MAX_INSTALMENTS,
+  MIN_INSTALMENTS,
+  splitIntoInstalments,
+} from "@/lib/saleMath";
+import {
+  formatMoney,
+  isValidEmail,
+  parsePrice,
+  priceToInput,
+  todayIso,
+} from "@/lib/studioShared";
 import type { StudioPaymentDetails } from "@/lib/studioShared";
 import CardPayment from "@/components/studio/CardPayment";
 import {
@@ -11,16 +24,18 @@ import {
   inputCls,
   NoticeLine,
   panelCls,
-  ReadOnlyField,
   StudioButton,
 } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 
-// "Take payment": the sale details card — deposit, full payment or
-// instalments, and the buyer — then either "Get link" (a payment link for
-// the buyer, which slides in above the buttons and can be shared) or
-// "Enter Card" (the card panel, CardPayment). Either way the artwork
-// becomes Sold - Not Paid; it becomes SOLD once the buyer has paid.
+// "Payment": the sale panel for the chosen artwork — date of sale, source,
+// price and currency (starting as the artwork's own), deposit, then Net
+// Due (the price less the deposit, paid at once) or Instalments (the net
+// due split into the number of instalments shown between them), and the
+// buyer. Then either "Get link" (a payment link for the buyer, which
+// slides in above the buttons and can be shared) or "Enter Card" (the card
+// panel, CardPayment). Either way the artwork becomes Sold - Not Paid; it
+// becomes SOLD once the buyer has paid.
 
 type Card = {
   purchaseId: string;
@@ -30,9 +45,18 @@ type Card = {
 };
 
 function optionCls(active: boolean) {
-  return `flex min-h-20 flex-1 flex-col items-center justify-center rounded-md border-2 bg-white px-2 py-3 text-center text-base text-[#555] ${
+  return `flex min-h-20 min-w-0 flex-1 flex-col items-center justify-center rounded-md border-2 bg-white px-1 py-2 text-center text-base text-[#555] ${
     active ? "border-[#5a5a5a]" : "border-[#c4c4c4]"
   }`;
+}
+
+// One of the artwork's own details, or its name in grey when it has none.
+function Detail({ label, value }: { label: string; value: string | null }) {
+  return (
+    <p className={`truncate text-base ${value ? "text-[#333]" : "text-[#8a8a8a]"}`}>
+      {value || label}
+    </p>
+  );
 }
 
 function LinkIcon() {
@@ -57,31 +81,29 @@ function LinkIcon() {
 export default function TakePayment({
   token,
   artwork,
-  price,
-  currency,
   saleSources,
-  instalmentCount,
+  defaultInstalmentCount,
   onDone,
   onBusyChange,
 }: {
   token: string;
   artwork: StudioArtworkTile;
-  // The price and currency chosen on the sale panel.
-  price: string;
-  currency: string;
   saleSources: string[];
-  instalmentCount: number;
+  // The artist's Settings default, which can be changed for each sale.
+  defaultInstalmentCount: number;
   // Called once the payment is taken — the app returns to its first
   // screen showing this message.
   onDone: (notice: Notice) => void;
   // Lets the app stop the artist leaving while something is being saved.
   onBusyChange: (busy: boolean) => void;
 }) {
-  const [deposit, setDeposit] = useState("");
-  // Shown for the artist's own reference, as in the admin — not saved.
-  const [depositDate, setDepositDate] = useState(todayIso());
-  const [option, setOption] = useState<StudioPaymentDetails["option"]>("FULL");
+  const [saleDate, setSaleDate] = useState(todayIso());
   const [source, setSource] = useState("");
+  const [price, setPrice] = useState(priceToInput(artwork.price));
+  const [currency, setCurrency] = useState(artwork.priceCurrency);
+  const [deposit, setDeposit] = useState("");
+  const [option, setOption] = useState<StudioPaymentDetails["option"]>("FULL");
+  const [countInput, setCountInput] = useState(String(defaultInstalmentCount));
   const [buyerName, setBuyerName] = useState("");
   const [buyerEmail, setBuyerEmail] = useState("");
   const [working, setWorking] = useState(false);
@@ -93,11 +115,15 @@ export default function TakePayment({
   const [notice, setNotice] = useState<Notice | null>(null);
 
   // What the two choices come to: the price less any deposit, paid at once
-  // or split into equal instalments.
+  // or split into equal instalments (the first one shown — the same figure
+  // Stripe charges first).
   const priceAmount = Number(parsePrice(price) || 0);
   const depositAmount = Number(parsePrice(deposit) || 0);
-  const remaining = Math.max(priceAmount - depositAmount, 0);
-  const perInstalment = remaining / instalmentCount;
+  const netDue = Math.max(priceAmount - depositAmount, 0);
+  const count = Number(countInput);
+  const countValid = isValidInstalmentCount(count);
+  const perInstalment =
+    countValid && netDue > 0 ? splitIntoInstalments(netDue, count)[0] : null;
 
   // Checks the form, returning what to send or null (with a message shown).
   const readDetails = (): StudioPaymentDetails | null => {
@@ -106,6 +132,7 @@ export default function TakePayment({
       return null;
     };
 
+    if (!saleDate) return fail("Date is required.");
     const priceValue = parsePrice(price);
     if (!priceValue || Number(priceValue) <= 0) return fail("Price is required.");
 
@@ -114,15 +141,22 @@ export default function TakePayment({
     if (depositValue && Number(depositValue) >= Number(priceValue)) {
       return fail("The deposit must be less than the price.");
     }
+    if (option === "INSTALMENTS" && !countValid) {
+      return fail(
+        `Enter a number of instalments between ${MIN_INSTALMENTS} and ${MAX_INSTALMENTS}.`
+      );
+    }
     if (!buyerName.trim()) return fail("Customer name is required.");
     if (!isValidEmail(buyerEmail.trim())) return fail("A valid email is required.");
 
     return {
       artworkId: artwork.id,
+      saleDate,
       price: priceValue,
       currency,
       deposit: depositValue,
       option,
+      instalmentCount: countValid ? count : defaultInstalmentCount,
       source,
       buyerName: buyerName.trim(),
       buyerEmail: buyerEmail.trim(),
@@ -215,10 +249,72 @@ export default function TakePayment({
     );
   }
 
+  // Nothing can be changed while a request is running, or once the link
+  // exists (the sale has started).
+  const locked = working || linkCreated;
+
   return (
     <>
       <section className={`${panelCls} flex flex-col gap-3 p-4`}>
         <div className="flex gap-3">
+          <div className="w-1/3 shrink-0">
+            {artwork.thumbnailUrl ? (
+              <img
+                src={artwork.thumbnailUrl}
+                alt={artwork.title}
+                className="aspect-square w-full rounded-md object-cover"
+              />
+            ) : (
+              <div className="aspect-square w-full rounded-md bg-white" />
+            )}
+          </div>
+          <div className="flex min-w-0 flex-1 flex-col justify-between gap-1">
+            <Detail label="Title / name" value={artwork.title} />
+            <Detail label="Type" value={artwork.type} />
+            <div className="flex items-center gap-2">
+              <div className="min-w-0 flex-1">
+                <Detail label="Size" value={artwork.size} />
+              </div>
+              <input
+                type="date"
+                aria-label="Date of sale"
+                value={saleDate}
+                onChange={(e) => setSaleDate(e.target.value)}
+                disabled={locked}
+                className="min-w-0 flex-1 rounded-md border border-[#c4c4c4] bg-white px-1 py-2 text-center text-base text-[#555]"
+              />
+            </div>
+          </div>
+        </div>
+        <Dropdown label="Source" value={source} options={saleSources} onChange={setSource} />
+        <div className="flex gap-3">
+          <div className="min-w-0 flex-1">
+            <input
+              type="text"
+              inputMode="decimal"
+              placeholder="Price"
+              aria-label="Price"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              disabled={locked}
+              className={inputCls}
+            />
+          </div>
+          <div className="min-w-0 flex-1">
+            <select
+              aria-label="Currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              disabled={locked}
+              className={`${inputCls} appearance-none [text-align-last:center]`}
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
           <div className="min-w-0 flex-1">
             <input
               type="text"
@@ -227,43 +323,42 @@ export default function TakePayment({
               aria-label="Deposit"
               value={deposit}
               onChange={(e) => setDeposit(e.target.value)}
-              disabled={linkCreated}
-              className={inputCls}
-            />
-          </div>
-          <div className="min-w-0 flex-1">
-            <input
-              type="date"
-              aria-label="Date"
-              value={depositDate}
-              onChange={(e) => setDepositDate(e.target.value)}
-              disabled={linkCreated}
+              disabled={locked}
               className={inputCls}
             />
           </div>
         </div>
-        <div className="flex gap-3">
+        <div className="flex items-center gap-3">
           <button
             type="button"
             onClick={() => setOption("FULL")}
-            disabled={linkCreated}
+            disabled={locked}
             className={optionCls(option === "FULL")}
           >
-            <span>Full payment</span>
-            <span>{formatMoney(remaining, currency)}</span>
+            <span>Net Due</span>
+            <span>{formatMoney(netDue, currency)}</span>
           </button>
+          <input
+            type="text"
+            inputMode="numeric"
+            aria-label="Number of instalments"
+            value={countInput}
+            onChange={(e) => setCountInput(e.target.value.replace(/\D/g, ""))}
+            disabled={locked}
+            className="w-14 shrink-0 rounded-md border border-[#c4c4c4] bg-white px-1 py-3 text-center text-lg text-[#555]"
+          />
           <button
             type="button"
             onClick={() => setOption("INSTALMENTS")}
-            disabled={linkCreated}
+            disabled={locked}
             className={optionCls(option === "INSTALMENTS")}
           >
-            <span>{instalmentCount} Instalments</span>
-            <span>{formatMoney(perInstalment, currency)} each</span>
+            <span>Instalments</span>
+            <span>
+              {perInstalment !== null ? `${formatMoney(perInstalment, currency)} each` : "—"}
+            </span>
           </button>
         </div>
-        <ReadOnlyField label="Title / name" value={artwork.title} />
-        <Dropdown label="Source" value={source} options={saleSources} onChange={setSource} />
         <input
           type="text"
           placeholder="Customer name"
@@ -271,7 +366,7 @@ export default function TakePayment({
           autoComplete="off"
           value={buyerName}
           onChange={(e) => setBuyerName(e.target.value)}
-          disabled={linkCreated}
+          disabled={locked}
           className={inputCls}
         />
         <input
@@ -283,7 +378,7 @@ export default function TakePayment({
           aria-label="Email"
           value={buyerEmail}
           onChange={(e) => setBuyerEmail(e.target.value)}
-          disabled={linkCreated}
+          disabled={locked}
           className={inputCls}
         />
       </section>
@@ -315,11 +410,11 @@ export default function TakePayment({
 
         <section className={`${panelCls} p-4`}>
           <div className="flex gap-4">
-            <StudioButton onClick={enterCard} disabled={working || linkCreated}>
-              Enter Card
-            </StudioButton>
-            <StudioButton onClick={getLink} disabled={working || linkCreated}>
+            <StudioButton onClick={getLink} disabled={locked}>
               Get link
+            </StudioButton>
+            <StudioButton onClick={enterCard} disabled={locked}>
+              Enter Card
             </StudioButton>
           </div>
         </section>
