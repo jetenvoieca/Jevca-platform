@@ -78,13 +78,20 @@ export async function listHopperQueue(artistId: string) {
       // HopperView.tsx), rather than for every source that happens to
       // carry a caption/description.
       source: true,
+      // What the Studio app sent with the photo — see the note on
+      // Image.artworkSize in schema.prisma.
+      artworkSize: true,
+      artworkPrice: true,
+      artworkType: true,
+      artworkLocation: true,
       altText: true,
       tags: true,
       createdAt: true,
     },
   });
-  return rows.map(({ displayKey, createdAt, ...rest }) => ({
+  return rows.map(({ displayKey, artworkPrice, createdAt, ...rest }) => ({
     ...rest,
+    artworkPrice: artworkPrice?.toString() ?? null,
     displayUrl: publicMediaUrl(displayKey),
     createdAt: createdAt.toISOString(),
   }));

@@ -39,6 +39,12 @@ export type HopperItem = {
   // to gate SortingCard's Title/Description preview below — see the
   // note there.
   source: string | null;
+  // Details the Studio app sent with the photo (null otherwise) — they
+  // fill in the "Create new artwork" form (QuickCatalogueFields).
+  artworkSize: string | null;
+  artworkPrice: string | null;
+  artworkType: string | null;
+  artworkLocation: string | null;
   altText: string | null;
   tags: string[];
   createdAt: string;
@@ -1285,6 +1291,10 @@ function parseHopperItemForQuickCatalogue(
 // going into Studio notes, instead of every field opening blank. Every
 // one of these stays a normal editable field — this only changes what's
 // pre-typed in it the moment the form opens.
+//
+// 2026-09-26 — Type, Size, Offered price and Location sent from the
+// Studio app (HopperItem.artwork*) fill their fields first; the parse
+// above only fills Size and Offered price when Studio didn't send them.
 function QuickCatalogueFields({
   item,
   settings,
@@ -1300,8 +1310,11 @@ function QuickCatalogueFields({
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const parsed = parseHopperItemForQuickCatalogue(item.caption, item.description);
-  const [typeValue, setTypeValue] = useState("");
-  const [sizeValue, setSizeValue] = useState(parsed.size);
+  const initialType = item.artworkType ?? "";
+  const initialSize = item.artworkSize ?? parsed.size;
+  const initialPrice = item.artworkPrice ?? parsed.offeredPrice;
+  const [typeValue, setTypeValue] = useState(initialType);
+  const [sizeValue, setSizeValue] = useState(initialSize);
   const selectedTypeRecord = settings.artworkTypeRecords.find(
     (t) => t.name.toLowerCase() === typeValue.trim().toLowerCase()
   );
@@ -1328,12 +1341,12 @@ function QuickCatalogueFields({
           <ArtworkCatalogueFields
             settings={settings}
             values={{
-              type: "",
+              type: initialType,
               medium: "",
-              size: parsed.size,
+              size: initialSize,
               edition: "",
               availableQty: "",
-              location: "",
+              location: item.artworkLocation ?? "",
               date: "",
               studioNotes: parsed.studioNotes,
               availability: "AVAILABLE",
@@ -1363,7 +1376,7 @@ function QuickCatalogueFields({
                 <input
                   type="text"
                   name="offeredPrice"
-                  defaultValue={parsed.offeredPrice}
+                  defaultValue={initialPrice}
                   placeholder="e.g. 450.00"
                   className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
                 />
