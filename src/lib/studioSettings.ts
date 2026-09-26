@@ -7,7 +7,6 @@ export type StudioSettings = {
   // The names of the artist's Locations — galleries and their own places.
   locations: string[];
   sizePresets: string[];
-  saleSources: string[];
   // How a sale was paid: bank transfer, cash, ...
   paymentMethods: string[];
   // How many payments an instalment plan is split into.
@@ -20,7 +19,6 @@ export async function getStudioSettings(artistId: string): Promise<StudioSetting
     artworkTypes: settings.artworkTypes,
     locations: settings.locations.map((l) => l.name),
     sizePresets: settings.sizePresets,
-    saleSources: settings.saleSources,
     paymentMethods: settings.paymentMethods,
     defaultInstalmentCount: settings.defaultInstalmentCount,
   };

@@ -31,14 +31,15 @@ import type { Notice } from "@/components/studio/StudioUi";
 
 // "Payment": the sale panel for the chosen artwork — its edition number
 // when the Type is an edition (starting as the artwork's own, and saved on
-// it once the sale starts), date of sale, source, price and currency
-// (starting as the artwork's own), deposit, then Net Due (the price less
-// the deposit, paid at once) or Instalments (the net due split into the
-// number of instalments shown between them), and the buyer. Then either
-// "Get link" (a payment link for the buyer, which slides in above the
-// buttons and can be shared) or "Enter Card" (the card panel,
-// CardPayment). Either way the artwork becomes Sold - Not Paid; it becomes
-// SOLD once the buyer has paid.
+// it once the sale starts), date of sale, source (where it sold — one of
+// the artist's Locations, starting as the one the work is at now), price
+// and currency (starting as the artwork's own), deposit, then Net Due
+// (the price less the deposit, paid at once) or Instalments (the net due
+// split into the number of instalments shown between them), and the
+// buyer. Then either "Get link" (a payment link for the buyer, which
+// slides in above the buttons and can be shared) or "Enter Card" (the
+// card panel, CardPayment). Either way the artwork becomes Sold - Not
+// Paid; it becomes SOLD once the buyer has paid.
 
 type Card = {
   purchaseId: string;
@@ -84,14 +85,15 @@ function LinkIcon() {
 export default function TakePayment({
   token,
   artwork,
-  saleSources,
+  locations,
   defaultInstalmentCount,
   onDone,
   onBusyChange,
 }: {
   token: string;
   artwork: StudioArtworkTile;
-  saleSources: string[];
+  // The names of the artist's Locations, offered as the Source.
+  locations: string[];
   // The artist's Settings default, which can be changed for each sale.
   defaultInstalmentCount: number;
   // Called once the payment is taken — the app returns to its first
@@ -101,7 +103,9 @@ export default function TakePayment({
   onBusyChange: (busy: boolean) => void;
 }) {
   const [saleDate, setSaleDate] = useState(todayIso());
-  const [source, setSource] = useState("");
+  const [source, setSource] = useState(
+    artwork.location && locations.includes(artwork.location) ? artwork.location : ""
+  );
   const [price, setPrice] = useState(priceToInput(artwork.price));
   const [currency, setCurrency] = useState(artwork.priceCurrency);
   const hasEdition = isEditionType(artwork.type);
@@ -307,7 +311,7 @@ export default function TakePayment({
             </div>
           </div>
         </div>
-        <Dropdown label="Source" value={source} options={saleSources} onChange={setSource} />
+        <Dropdown label="Source" value={source} options={locations} onChange={setSource} />
         <div className="flex gap-3">
           <div className="min-w-0 flex-1">
             <input

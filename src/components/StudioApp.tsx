@@ -134,7 +134,7 @@ export default function StudioApp({
       <TakePayment
         token={token}
         artwork={artwork}
-        saleSources={settings.saleSources}
+        locations={settings.locations}
         defaultInstalmentCount={settings.defaultInstalmentCount}
         onDone={goHome}
         onBusyChange={setBusy}
