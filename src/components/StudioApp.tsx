@@ -80,7 +80,7 @@ export default function StudioApp({
           token={token}
           artwork={artwork}
           initialPrice={priceToInput(artwork.price)}
-          currency={artwork.priceCurrency}
+          initialCurrency={artwork.priceCurrency}
           saleSources={settings.saleSources}
           paymentMethods={settings.paymentMethods}
           onDone={goHome}

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { recordSale } from "@/lib/studioApi";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
+import { CURRENCIES } from "@/lib/currencies";
 import { parsePrice, todayIso } from "@/lib/studioShared";
 import {
   Dropdown,
@@ -14,14 +15,14 @@ import {
 } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 
-// "Record": records a sale the artist has already been paid for — a form
-// to fill in and "Record Payment". The artwork becomes SOLD.
+// "Sold": records a sale the artist has already been paid for — a form
+// to fill in and "Record SALE". The artwork becomes SOLD.
 
 export default function RecordSale({
   token,
   artwork,
   initialPrice,
-  currency,
+  initialCurrency,
   saleSources,
   paymentMethods,
   onDone,
@@ -29,9 +30,9 @@ export default function RecordSale({
 }: {
   token: string;
   artwork: StudioArtworkTile;
-  // The price shown on the sale panel; still editable here.
+  // The artwork's price and currency to start from; both editable here.
   initialPrice: string;
-  currency: string;
+  initialCurrency: string;
   saleSources: string[];
   // The artist's own payment types. If they have any, one is required.
   paymentMethods: string[];
@@ -42,6 +43,7 @@ export default function RecordSale({
   onBusyChange: (busy: boolean) => void;
 }) {
   const [price, setPrice] = useState(initialPrice);
+  const [currency, setCurrency] = useState(initialCurrency);
   const [date, setDate] = useState(todayIso());
   const [source, setSource] = useState("");
   const [paymentType, setPaymentType] = useState("");
@@ -102,16 +104,14 @@ export default function RecordSale({
   return (
     <>
       <section className={`${panelCls} flex flex-col gap-3 p-4`}>
+        <input
+          type="date"
+          aria-label="Date"
+          value={date}
+          onChange={(e) => setDate(e.target.value)}
+          className={inputCls}
+        />
         <div className="flex gap-3">
-          <div className="min-w-0 flex-1">
-            <input
-              type="date"
-              aria-label="Date"
-              value={date}
-              onChange={(e) => setDate(e.target.value)}
-              className={inputCls}
-            />
-          </div>
           <div className="min-w-0 flex-1">
             <input
               type="text"
@@ -122,6 +122,20 @@ export default function RecordSale({
               onChange={(e) => setPrice(e.target.value)}
               className={inputCls}
             />
+          </div>
+          <div className="min-w-0 flex-1">
+            <select
+              aria-label="Currency"
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              className={`${inputCls} appearance-none [text-align-last:center]`}
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         <ReadOnlyField label="Title / name" value={artwork.title} />
@@ -157,7 +171,7 @@ export default function RecordSale({
       <section className={`${panelCls} p-4`}>
         <div className="flex gap-4">
           <StudioButton onClick={record} disabled={recording}>
-            Record Payment
+            Record SALE
           </StudioButton>
         </div>
       </section>
