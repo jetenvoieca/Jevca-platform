@@ -10,11 +10,11 @@ import type { Notice } from "@/components/studio/StudioUi";
 // the artist's artworks (with a search box that opens above the buttons).
 // Tap a tile, then Select. Only an available work can be chosen.
 //
-// With `tapToChoose` (Sold) it is simpler: only unsold works are listed,
-// there is no Search or Select, and tapping a work chooses it straight
-// away. The grid then takes the buttons' space, showing exactly four rows
-// (12 works) — its height is worked out from its own width, so this holds
-// on any phone.
+// With `tapToChoose` (Consign and Sold) it is simpler: only unsold works
+// are listed, there is no Search or Select, and tapping a work chooses it
+// straight away. The grid then takes the buttons' space, showing exactly
+// four rows (12 works) — its height is worked out from its own width, so
+// this holds on any phone.
 
 const SEARCH_DEBOUNCE_MS = 350;
 

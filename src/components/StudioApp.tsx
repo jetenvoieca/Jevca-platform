@@ -14,9 +14,9 @@ import { priceToInput } from "@/lib/studioShared";
 
 // The Studio app for one artist: the first screen (logo + four options)
 // and whichever flow the artist chose. Consign, Sold and Payment each
-// start from the artwork catalogue (for Sold, unsold works only, chosen
-// with a single tap); once a work is chosen, that flow's own screen takes
-// over. Tapping the "JEVCA Studio" title always returns to
+// start from the artwork catalogue (for Consign and Sold, unsold works
+// only, chosen with a single tap); once a work is chosen, that flow's own
+// screen takes over. Tapping the "JEVCA Studio" title always returns to
 // the first screen. On the Payment panel a magnifier beside the title
 // shows the chosen artwork large, over everything; tapping closes it.
 
@@ -86,7 +86,9 @@ export default function StudioApp({
       );
     }
     if (!artwork) {
-      return <ArtworkCatalogue token={token} onChosen={setArtwork} tapToChoose={mode === "sold"} />;
+      return (
+        <ArtworkCatalogue token={token} onChosen={setArtwork} tapToChoose={mode !== "payment"} />
+      );
     }
     if (mode === "consign") {
       return (
