@@ -14,7 +14,13 @@ import {
   type CardEntry,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
-import { saleBreakdown, splitIntoInstalments } from "@/lib/saleMath";
+import {
+  isValidInstalmentCount,
+  MAX_INSTALMENTS,
+  MIN_INSTALMENTS,
+  saleBreakdown,
+  splitIntoInstalments,
+} from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import InvoiceEmailModal from "@/components/InvoiceEmailModal";
@@ -349,7 +355,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
 
   const count = parseInt(instalmentCount, 10);
-  const countValid = Number.isInteger(count) && count >= 2 && count <= 36;
+  const countValid = isValidInstalmentCount(count);
   const perInstalment = countValid && balance > 0 ? splitIntoInstalments(balance, count)[0] : null;
 
   // Pressing the same button again closes the panel; pressing another
@@ -422,7 +428,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   // first use, reused after — see createGalleryPaymentLink).
   const handleChooseLink = (option: AmountOption) => {
     if (option === "instalments" && !countValid) {
-      setError("Enter a number of instalments between 2 and 36.");
+      setError(`Enter a number of instalments between ${MIN_INSTALMENTS} and ${MAX_INSTALMENTS}.`);
       return;
     }
     setError(null);
@@ -448,7 +454,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   // Clicking an option box sets up Stripe's card form for that amount.
   const handleChooseCard = (option: AmountOption) => {
     if (option === "instalments" && !countValid) {
-      setError("Enter a number of instalments between 2 and 36.");
+      setError(`Enter a number of instalments between ${MIN_INSTALMENTS} and ${MAX_INSTALMENTS}.`);
       return;
     }
     setError(null);

@@ -66,6 +66,15 @@ export function netOfCommission(a: SaleAmounts): number {
   return Math.round((salePrice - commission) * 100) / 100;
 }
 
+// How many instalments a sale can be split into — the same limits for a
+// consigned sale's payment link or card and a Studio sale.
+export const MIN_INSTALMENTS = 2;
+export const MAX_INSTALMENTS = 36;
+
+export function isValidInstalmentCount(count: number): boolean {
+  return Number.isInteger(count) && count >= MIN_INSTALMENTS && count <= MAX_INSTALMENTS;
+}
+
 // Splits a total into `count` instalments of equal size, with any
 // rounding remainder absorbed into the final instalment so the parts
 // always sum exactly back to the total. Here (not lib/stripe.ts) so the
