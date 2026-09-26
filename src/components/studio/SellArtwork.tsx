@@ -41,7 +41,7 @@ export default function SellArtwork({
 }) {
   const [screen, setScreen] = useState<Screen>("sale");
   const [price, setPrice] = useState(priceToInput(artwork.price));
-  const [currency, setCurrency] = useState(settings.defaultCurrency);
+  const [currency, setCurrency] = useState(artwork.priceCurrency);
   const [notice, setNotice] = useState<Notice | null>(null);
 
   const takePayment = () => {

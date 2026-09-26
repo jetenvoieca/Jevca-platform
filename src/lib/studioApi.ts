@@ -12,8 +12,16 @@ export function fetchStudioArtworks(token: string, q: string, offset: number) {
   });
 }
 
-export function consignArtwork(token: string, artworkId: string, location: string) {
-  return postJson<{ location: string }>("/api/studio/consign", { token, artworkId, location });
+export type ConsignInput = {
+  artworkId: string;
+  location: string;
+  // The agreed price, as a plain number string, and its currency.
+  price: string;
+  currency: string;
+};
+
+export function consignArtwork(token: string, consignment: ConsignInput) {
+  return postJson<{ location: string }>("/api/studio/consign", { token, ...consignment });
 }
 
 export type RecordSaleInput = {
