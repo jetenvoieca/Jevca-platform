@@ -1025,6 +1025,13 @@ model Artwork {
   // note there) so the rest of the app (Payment, invoices, Sale Terms)
   // keeps working unchanged.
   offeredPrice   Decimal? @db.Decimal(10, 2)
+  // The currency of offeredPrice (2026-09-26) — "GBP" or "EUR" (see
+  // lib/currencies.ts). A new artwork starts in its artist's default
+  // currency (getArtistDefaultCurrency, lib/primarySite.ts). While the
+  // artwork's Location is a GALLERY, offeredPrice is the price agreed
+  // with that gallery and the Catalogue labels it "Consigned price";
+  // it is still this one field, so a work never carries two prices.
+  priceCurrency  String   @default("GBP")
   studioNotes    String?
 
   // True only for artworks created via the Hopper's "Add New Artwork"

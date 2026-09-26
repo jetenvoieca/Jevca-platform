@@ -16,6 +16,7 @@ import {
   type LocationSummary,
 } from "@/lib/actions/locations";
 import { computeReferencePrice } from "@/lib/pricing";
+import { CURRENCIES } from "@/lib/currencies";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import type { PurchaseDetail } from "@/lib/actions/payments";
@@ -42,6 +43,8 @@ export type ArtworkDetail = {
   edition: string | null;
   availableQty: number | null;
   offeredPrice: string | null;
+  // The currency of offeredPrice — see Artwork.priceCurrency.
+  priceCurrency: string;
   studioNotes: string | null;
   // "Derived from #..." (2026-09-11) — null for any artwork that isn't
   // itself a "Create Derivative" copy. See the matching note on
@@ -154,6 +157,18 @@ export default function ArtworkDetailPanel({
     sizeValue,
     selectedTypeRecord ? parseFloat(selectedTypeRecord.refValue) : null
   );
+
+  // While the Location is a Gallery the price is the one agreed with that
+  // gallery, so it is labelled "Consigned price"; anywhere else it is the
+  // "Offered price". Same one field either way (see
+  // Artwork.priceCurrency). Tracked live so the label follows the
+  // Location dropdown, including a Location just added from it.
+  const [locationValue, setLocationValue] = useState(artwork.location || "");
+  const [locationTypes, setLocationTypes] = useState(
+    () => new Map(settings.locations.map((l) => [l.name, l.type]))
+  );
+  const atGallery = locationTypes.get(locationValue) === "GALLERY";
+  const priceLabel = atGallery ? "Consigned price" : "Offered price";
 
   // Whether this artwork has a sale committed at all — RESERVED ("Sold -
   // Not Paid") or genuinely SOLD (see the "Availability model" note in
@@ -302,7 +317,9 @@ export default function ArtworkDetailPanel({
     const isGallery = window.confirm(
       `Is "${name}" a Gallery you consign to?\n\nOK = Gallery\nCancel = Own (e.g. your studio)`
     );
-    const result = await createLocation(artistId, siteId, name, isGallery ? "GALLERY" : "OWN");
+    const type = isGallery ? "GALLERY" : "OWN";
+    setLocationTypes((prev) => new Map(prev).set(name, type));
+    const result = await createLocation(artistId, siteId, name, type);
     if ("error" in result) alert(result.error);
   };
 
@@ -422,6 +439,7 @@ export default function ArtworkDetailPanel({
               setTypeValue(type);
               setSizeValue(size);
             }}
+            onLocationChange={setLocationValue}
             onAddType={handleAddType}
             onAddMedium={handleAddMedium}
             onAddLocation={handleAddLocation}
@@ -454,7 +472,7 @@ export default function ArtworkDetailPanel({
                       type="button"
                       onClick={handleSoldClick}
                       disabled={!artwork.offeredPrice || soldRoutingPending}
-                      title={!artwork.offeredPrice ? "Set an Offered price first" : undefined}
+                      title={!artwork.offeredPrice ? `Set the ${priceLabel} first` : undefined}
                       className="flex-1 bg-white px-3 py-[6.4px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
                     >
                       {soldRoutingPending ? "…" : "SOLD"}
@@ -489,15 +507,30 @@ export default function ArtworkDetailPanel({
               </div>
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">
-                  Offered price
+                  {priceLabel}
                 </label>
-                <input
-                  type="text"
-                  name="offeredPrice"
-                  defaultValue={artwork.offeredPrice || ""}
-                  placeholder="e.g. 450.00"
-                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-                />
+                <div className="flex gap-1">
+                  <input
+                    type="text"
+                    name="offeredPrice"
+                    defaultValue={artwork.offeredPrice || ""}
+                    placeholder="e.g. 450.00"
+                    className="w-full min-w-0 rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                  />
+                  <select
+                    name="priceCurrency"
+                    aria-label="Currency"
+                    defaultValue={artwork.priceCurrency}
+                    onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
+                    className="shrink-0 rounded-md border border-neutral-300 px-1 py-[6.4px] text-sm"
+                  >
+                    {CURRENCIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
             </div>
           </ArtworkCatalogueFields>
