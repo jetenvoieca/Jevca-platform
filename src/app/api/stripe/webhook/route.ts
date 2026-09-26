@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
-import { getWebhookSecret, type StripeMode } from "@/lib/stripe";
+import { db } from "@/lib/db";
+import { getWebhookSecrets, type StripeMode } from "@/lib/stripe";
 import {
   recordPaymentIntent,
   linkSubscriptionToSchedule,
@@ -49,25 +50,24 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get("stripe-signature");
   const body = await req.text();
 
-  // Per-artist Test/Live isolation (2026-08-09): Test and Live webhooks
-  // are entirely separate destinations in Stripe, each with its own
-  // signing secret, and this single endpoint has to accept both — there's
-  // no way to know which mode an incoming request is until a secret
-  // actually verifies it. Tried in both directions rather than assuming;
-  // whichever one matches tells us the mode.
+  // Test and Live webhooks are entirely separate destinations in Stripe
+  // (2026-08-09), and so are Jetenvoieca's own events and its connected
+  // accounts' events (2026-09-25) — each with its own signing secret, all
+  // pointing here. There's no way to know which one sent a request until
+  // a secret actually verifies it, so each is tried in turn; whichever
+  // matches tells us the mode. A connected account's event carries that
+  // account's id in event.account.
   let event: Stripe.Event | null = null;
   let verifiedMode: StripeMode | null = null;
   try {
     const verifier = getVerifierClient();
-    for (const mode of ["LIVE", "TEST"] as const) {
-      const secret = getWebhookSecret(mode);
-      if (!secret) continue;
+    for (const { mode, secret } of getWebhookSecrets()) {
       try {
         event = verifier.webhooks.constructEvent(body, signature!, secret);
         verifiedMode = mode;
         break;
       } catch {
-        // Doesn't match this mode's secret — try the other one.
+        // Doesn't match this secret — try the next one.
         continue;
       }
     }
@@ -76,10 +76,13 @@ export async function POST(req: NextRequest) {
     return new Response("Invalid signature", { status: 400 });
   }
   if (!event) {
-    console.error("Stripe webhook signature did not match either configured secret");
+    console.error("Stripe webhook signature did not match any configured secret");
     return new Response("Invalid signature", { status: 400 });
   }
-  console.log(`Stripe webhook verified as ${verifiedMode} mode:`, event.type);
+  console.log(
+    `Stripe webhook verified as ${verifiedMode} mode${event.account ? ` (account ${event.account})` : ""}:`,
+    event.type
+  );
 
   try {
     switch (event.type) {
@@ -126,6 +129,20 @@ export async function POST(req: NextRequest) {
         const subscriptionId = extractInvoiceSubscriptionId(invoice);
         if (subscriptionId) {
           await handleInstalmentInvoiceFailed(subscriptionId, invoice.id!);
+        }
+        break;
+      }
+
+      // An artist's linked Stripe account revoked Jetenvoieca's access
+      // from their own Stripe dashboard (2026-09-25) — the link is
+      // removed here too, so the Settings page no longer shows it and new
+      // sales go back to Jetenvoieca's account. Sales already started on
+      // that account can no longer be charged or recorded through Stripe.
+      case "account.application.deauthorized": {
+        if (event.account && verifiedMode) {
+          await db.stripeConnection.deleteMany({
+            where: { accountId: event.account, mode: verifiedMode },
+          });
         }
         break;
       }

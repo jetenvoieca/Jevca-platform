@@ -68,8 +68,19 @@ export function getPublishableKey(mode: StripeMode): string {
   return key;
 }
 
-export function getWebhookSecret(mode: StripeMode): string | undefined {
-  return mode === "LIVE" ? process.env.STRIPE_WEBHOOK_SECRET_LIVE : process.env.STRIPE_WEBHOOK_SECRET_TEST;
+// Every signing secret /api/stripe/webhook accepts, each with its mode.
+// Jetenvoieca's own events and its connected accounts' events (artists'
+// linked Stripe accounts, 2026-09-25) arrive from separate webhook
+// destinations in Stripe, one per mode, each with its own secret — all
+// four point at the same endpoint. Unset ones are skipped.
+export function getWebhookSecrets(): { mode: StripeMode; secret: string }[] {
+  const all: { mode: StripeMode; secret: string | undefined }[] = [
+    { mode: "LIVE", secret: process.env.STRIPE_WEBHOOK_SECRET_LIVE },
+    { mode: "TEST", secret: process.env.STRIPE_WEBHOOK_SECRET_TEST },
+    { mode: "LIVE", secret: process.env.STRIPE_CONNECT_WEBHOOK_SECRET_LIVE },
+    { mode: "TEST", secret: process.env.STRIPE_CONNECT_WEBHOOK_SECRET_TEST },
+  ];
+  return all.filter((s): s is { mode: StripeMode; secret: string } => !!s.secret);
 }
 
 // The base URL Stripe redirects back to after a hosted Checkout payment.
