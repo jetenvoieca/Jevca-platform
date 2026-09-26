@@ -187,7 +187,13 @@ export default function StudioApp({
           <div className="flex flex-col gap-4">
             <div className="flex justify-center bg-white p-2">
               {logoUrl ? (
-                <img src={logoUrl} alt={artistName} className="w-full object-contain" />
+                // Capped at 30% of the screen height so the four buttons
+                // below always fit on screen, even with a tall logo.
+                <img
+                  src={logoUrl}
+                  alt={artistName}
+                  className="max-h-[30dvh] w-auto max-w-full object-contain"
+                />
               ) : (
                 <span className="py-8 text-2xl">{artistName}</span>
               )}
