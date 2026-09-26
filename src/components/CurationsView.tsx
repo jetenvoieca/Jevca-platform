@@ -32,12 +32,18 @@ function formatPrice(amount: string | null, currency: string): string | null {
   }
 }
 
-// Curations page (2026-09-24, stage one). Three columns, per the mockup:
+// Curations page (2026-09-24, stage one). Two columns:
 // - left: the open curation — its name (click to rename), Delete, and
 //   its works in order (drag to reorder, hover × to remove, "+ Add
 //   Works" tile to pick more).
-// - centre: placeholder for stage two (how a curation is displayed).
 // - right: every curation; click one to open it, or add a new one.
+//
+// A centre column ("Display this curation using ……") originally sat
+// between these for a planned stage-two display-mode chooser — removed
+// 2026-09-26, direct request, after rethinking that part of the
+// workflow. Nothing else about stage one changes; if a display-mode
+// step is designed later it doesn't have to look like that placeholder
+// did.
 export default function CurationsView({
   artistId,
   currency,
@@ -221,7 +227,7 @@ export default function CurationsView({
   const activeId = loadingId ?? selected?.id ?? null;
 
   return (
-    <div className="grid min-h-full grid-cols-[5fr_4fr_2fr]">
+    <div className="grid min-h-full grid-cols-[4fr_1fr]">
       {/* Left: the open curation */}
       <section className="border-r border-neutral-200 p-6">
         {error && (
@@ -326,14 +332,6 @@ export default function CurationsView({
             )}
           </div>
         )}
-      </section>
-
-      {/* Centre: stage two placeholder */}
-      <section className="p-6">
-        <div className="h-96 rounded-xl border border-neutral-300 p-4">
-          <p className="text-neutral-400">Display this curation using ……..</p>
-          <p className="mt-24 text-neutral-400">PLACEHOLDER</p>
-        </div>
       </section>
 
       {/* Right: every curation */}
