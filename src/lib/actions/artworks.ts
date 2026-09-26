@@ -13,6 +13,8 @@ import {
 } from "@/lib/artworkFilters";
 import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
 import { retireArtworkPaymentLinks } from "@/lib/paymentLinks";
+import { isCurrency } from "@/lib/currencies";
+import { getArtistDefaultCurrency } from "@/lib/primarySite";
 import type { PurchaseDetail } from "./payments";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
@@ -98,13 +100,17 @@ export async function createArtworkWithRetry(
     // price-shaped field here — this is always read straight off a form
     // field.
     offeredPrice: string | null;
+    // The currency of offeredPrice — omitted, it starts in the artist's
+    // default currency (getArtistDefaultCurrency, lib/primarySite.ts).
+    priceCurrency: string;
   }> & { catalogueName: string }
 ) {
+  const priceCurrency = data.priceCurrency ?? (await getArtistDefaultCurrency(artistId));
   for (let attempt = 0; attempt < 3; attempt++) {
     const catalogueNumber = await nextCatalogueNumber(artistId);
     try {
       return await db.artwork.create({
-        data: { artistId, catalogueNumber, ...data },
+        data: { artistId, catalogueNumber, ...data, priceCurrency },
       });
     } catch (err: unknown) {
       const isUniqueViolation =
@@ -221,6 +227,7 @@ export async function duplicateArtwork(
       edition: isOriginalOrUnique ? null : newEdition?.trim() || original.edition,
       availableQty: isOriginalOrUnique ? null : original.availableQty,
       offeredPrice: isOriginalOrUnique ? null : original.offeredPrice,
+      ...(isOriginalOrUnique ? {} : { priceCurrency: original.priceCurrency }),
       presentationMedium: isOriginalOrUnique ? null : original.presentationMedium,
       viewingLocation: isOriginalOrUnique ? null : original.viewingLocation,
     },
@@ -507,6 +514,7 @@ export async function getArtworkDetailForClient(id: string) {
     edition: artwork.edition,
     availableQty: artwork.availableQty,
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
+    priceCurrency: artwork.priceCurrency,
     studioNotes: artwork.studioNotes,
     // "Derived from #..." (2026-09-11) — null for any artwork that
     // isn't itself a derivative. See the matching note on
@@ -565,6 +573,7 @@ export async function updateCatalogue(
   // holds no price" rule now that Offered price is the one place price
   // is typed at all.
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
+  const priceCurrencyRaw = (formData.get("priceCurrency") as string)?.trim() ?? "";
 
   // The public website's Medium and "Can be viewed at" are seeded once
   // from Catalogue's Medium and Location — only while each is still at
@@ -606,6 +615,9 @@ export async function updateCatalogue(
       // real synced column rather than every consumer re-plumbed to read
       // offeredPrice directly.
       presentationPrice: offeredPriceRaw || null,
+      // Only a currency we support is saved; anything else leaves the
+      // stored one unchanged.
+      ...(isCurrency(priceCurrencyRaw) ? { priceCurrency: priceCurrencyRaw } : {}),
       // Cleared on any real save here — this being saved at all is
       // exactly "reviewed and edited" for the purposes of the raw-import
       // count next to Artwork Catalogue in the nav (2026-08-17).
