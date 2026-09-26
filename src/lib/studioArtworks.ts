@@ -5,8 +5,8 @@ import { buildArtworkWhere, buildArtworkOrderBy } from "@/lib/artworkFilters";
 const PAGE_SIZE = 24;
 
 // Everything the Studio app's Consign / Sold / Payment screens need to
-// know about one artwork: its tile in the catalogue grid, and the details
-// shown once it is chosen.
+// know about one unsold artwork: its tile in the catalogue grid, and the
+// details shown once it is chosen.
 export type StudioArtworkTile = {
   id: string;
   title: string;
@@ -23,26 +23,18 @@ export type StudioArtworkTile = {
   // "450.00", and its currency — see Artwork.priceCurrency.
   price: string | null;
   priceCurrency: string;
-  availability: "AVAILABLE" | "RESERVED" | "SOLD";
   thumbnailUrl: string | null;
   // The larger version, for the Payment panel's enlarged view.
   displayUrl: string | null;
 };
 
-// One page of an artist's artworks for the Studio app, newest first, using
-// the same filter and ordering as the admin Artwork Catalogue so a search
-// means the same thing in both. `availableOnly` leaves out every sold work
-// (paid or not). The main image is preferred over the first related one,
-// and the small thumbnail over the original file.
-export async function listStudioArtworks(
-  artistId: string,
-  query: { q: string; offset: number; availableOnly: boolean }
-) {
-  const { q, offset, availableOnly } = query;
-  const where = buildArtworkWhere(artistId, {
-    q: q || undefined,
-    availability: availableOnly ? "AVAILABLE" : undefined,
-  });
+// One page of an artist's unsold artworks for the Studio app (every sold
+// work, paid or not, is left out), newest first, using the same filter and
+// ordering as the admin Artwork Catalogue. The main image is preferred
+// over the first related one, and the small thumbnail over the original
+// file.
+export async function listStudioArtworks(artistId: string, offset: number) {
+  const where = buildArtworkWhere(artistId, { availability: "AVAILABLE" });
 
   const [rows, total] = await Promise.all([
     db.artwork.findMany({
@@ -60,7 +52,6 @@ export async function listStudioArtworks(
         location: true,
         offeredPrice: true,
         priceCurrency: true,
-        availability: true,
         mainImage: { select: { url: true, thumbnailKey: true, displayKey: true } },
         images: { take: 1, select: { url: true, thumbnailKey: true, displayKey: true } },
       },
@@ -82,7 +73,6 @@ export async function listStudioArtworks(
       location: a.location,
       price: a.offeredPrice != null ? a.offeredPrice.toString() : null,
       priceCurrency: a.priceCurrency,
-      availability: a.availability,
       thumbnailUrl,
       displayUrl: image ? publicMediaUrl(image.displayKey) || thumbnailUrl : null,
     };

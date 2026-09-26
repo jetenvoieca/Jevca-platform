@@ -9,12 +9,12 @@ import { inputCls, NoticeLine, panelCls, StudioButton } from "@/components/studi
 import type { Notice } from "@/components/studio/StudioUi";
 
 // "Consign": the chosen work (a small picture, its name, catalogue number
-// and Type — plus its edition number when the Type is an edition) above
-// the list of the artist's Locations (a gallery, or one of their own
-// places) to choose where it goes, and the price and currency agreed
-// there. The price starts as the artwork's current one, and saving it
-// replaces that price everywhere (see Artwork.priceCurrency). The list
-// takes whatever height the screen has left, and scrolls.
+// and Type — plus its edition number when the Type is an edition), the
+// price and currency agreed, then the list of the artist's Locations (a
+// gallery, or one of their own places) to choose where it goes. The price
+// starts as the artwork's current one, and saving it replaces that price
+// everywhere (see Artwork.priceCurrency). The list takes whatever height
+// the screen has left, and scrolls.
 
 // The Type line: the Type, followed by the edition number when the Type
 // is an edition (matched loosely, as in the admin Catalogue).
@@ -101,25 +101,6 @@ export default function ConsignArtwork({
           <p className="truncate text-sm text-[#555]">{typeLine(artwork)}</p>
         </div>
       </section>
-      <section className="min-h-40 flex-1 overflow-y-auto rounded-lg border border-[#cfcac0] bg-white">
-        {locations.length === 0 ? (
-          <p className="p-6 text-center text-[#8a8a8a]">No locations set up yet.</p>
-        ) : (
-          locations.map((name) => (
-            <button
-              key={name}
-              type="button"
-              onClick={() => setChosen(name)}
-              disabled={consigning}
-              className={`block w-full border-b border-[#e5e5e5] px-4 py-4 text-left text-lg text-[#333] ${
-                chosen === name ? "bg-[#e6e6e6]" : ""
-              }`}
-            >
-              {name}
-            </button>
-          ))
-        )}
-      </section>
       <div className="flex gap-3">
         <div className="min-w-0 flex-1">
           <input
@@ -149,6 +130,25 @@ export default function ConsignArtwork({
           </select>
         </div>
       </div>
+      <section className="min-h-40 flex-1 overflow-y-auto rounded-lg border border-[#cfcac0] bg-white">
+        {locations.length === 0 ? (
+          <p className="p-6 text-center text-[#8a8a8a]">No locations set up yet.</p>
+        ) : (
+          locations.map((name) => (
+            <button
+              key={name}
+              type="button"
+              onClick={() => setChosen(name)}
+              disabled={consigning}
+              className={`block w-full border-b border-[#e5e5e5] px-4 py-4 text-left text-lg text-[#333] ${
+                chosen === name ? "bg-[#e6e6e6]" : ""
+              }`}
+            >
+              {name}
+            </button>
+          ))
+        )}
+      </section>
       <NoticeLine notice={notice} />
       <section className={`${panelCls} p-4`}>
         <div className="flex gap-4">

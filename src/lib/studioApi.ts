@@ -4,14 +4,11 @@ import type { StudioPaymentDetails } from "@/lib/studioShared";
 
 // Browser-side calls to the token-authenticated /api/studio routes.
 
-// `availableOnly` leaves out every sold work.
-export function fetchStudioArtworks(
-  token: string,
-  query: { q: string; offset: number; availableOnly: boolean }
-) {
+// One page of the artist's unsold artworks, from `offset`.
+export function fetchStudioArtworks(token: string, offset: number) {
   return postJson<{ artworks: StudioArtworkTile[]; total: number }>("/api/studio/artworks", {
     token,
-    ...query,
+    offset,
   });
 }
 

@@ -14,13 +14,31 @@ import { priceToInput } from "@/lib/studioShared";
 
 // The Studio app for one artist: the first screen (logo + four options)
 // and whichever flow the artist chose. Consign, Sold and Payment each
-// start from the artwork catalogue (for Consign and Sold, unsold works
-// only, chosen with a single tap); once a work is chosen, that flow's own
-// screen takes over. Tapping the "JEVCA Studio" title always returns to
-// the first screen. On the Payment panel a magnifier beside the title
+// start from the catalogue of unsold works, where a single tap chooses
+// one; that flow's own screen then takes over. Every screen but the first
+// has a Back link at the top left to the first screen (as does tapping the
+// "JEVCA Studio" title). On the Payment panel a magnifier at the top right
 // shows the chosen artwork large, over everything; tapping closes it.
 
 type Mode = "home" | "add" | "consign" | "sold" | "payment";
+
+function BackIcon() {
+  return (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="m15 18-6-6 6-6" />
+    </svg>
+  );
+}
 
 function MagnifierIcon() {
   return (
@@ -85,11 +103,7 @@ export default function StudioApp({
         />
       );
     }
-    if (!artwork) {
-      return (
-        <ArtworkCatalogue token={token} onChosen={setArtwork} tapToChoose={mode !== "payment"} />
-      );
-    }
+    if (!artwork) return <ArtworkCatalogue token={token} onChosen={setArtwork} />;
     if (mode === "consign") {
       return (
         <ConsignArtwork
@@ -135,6 +149,17 @@ export default function StudioApp({
       style={{ fontFamily: '"Gill Sans", "Gill Sans MT", Calibri, sans-serif' }}
     >
       <div className="relative flex justify-center">
+        {mode !== "home" && (
+          <button
+            type="button"
+            onClick={() => goHome()}
+            disabled={busy}
+            className="absolute left-0 top-1/2 flex -translate-y-1/2 items-center py-2 pr-2 text-lg text-[#333] disabled:opacity-50"
+          >
+            <BackIcon />
+            Back
+          </button>
+        )}
         <button
           type="button"
           onClick={() => goHome()}
