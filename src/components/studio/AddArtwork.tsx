@@ -16,12 +16,27 @@ import type { Notice } from "@/components/studio/StudioUi";
 // "Add new Artwork": get a photo — from the phone's library or straight
 // from its camera — and send it to the artist's Hopper, with or without
 // details. Screens follow the design mock-ups: add (+) → [the phone's own
-// photo picker or camera] → review → details.
+// photo picker or camera] → review → details. The details (including where
+// the work is, if known) fill in the Hopper's "Create new artwork" form.
 
 type Screen = "add" | "review" | "details";
-type Details = { title: string; size: string; price: string; type: string; description: string };
+type Details = {
+  title: string;
+  size: string;
+  price: string;
+  type: string;
+  location: string;
+  description: string;
+};
 
-const EMPTY_DETAILS: Details = { title: "", size: "", price: "", type: "", description: "" };
+const EMPTY_DETAILS: Details = {
+  title: "",
+  size: "",
+  price: "",
+  type: "",
+  location: "",
+  description: "",
+};
 
 // Recorded on every Hopper item sent from here — see the note on
 // `source` in src/app/api/hopper/finalize/route.ts.
@@ -31,12 +46,15 @@ export default function AddArtwork({
   token,
   artworkTypes,
   sizePresets,
+  locations,
   onDone,
   onBusyChange,
 }: {
   token: string;
   artworkTypes: string[];
   sizePresets: string[];
+  // The names of the artist's Locations.
+  locations: string[];
   // Called once the photo is safely in the Hopper — the app returns to
   // its first screen showing this message.
   onDone: (notice: Notice) => void;
@@ -113,6 +131,7 @@ export default function AddArtwork({
               artworkSize: details.size,
               artworkPrice,
               artworkType: details.type,
+              artworkLocation: details.location,
             }
           : {}
       );
@@ -243,6 +262,12 @@ export default function AddArtwork({
               value={details.type}
               options={artworkTypes}
               onChange={setDetail("type")}
+            />
+            <Dropdown
+              label="Location"
+              value={details.location}
+              options={locations}
+              onChange={setDetail("location")}
             />
             <textarea
               placeholder="Description"

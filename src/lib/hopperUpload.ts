@@ -10,6 +10,7 @@ export type HopperDetails = {
   artworkSize?: string;
   artworkPrice?: string;
   artworkType?: string;
+  artworkLocation?: string;
 };
 
 // Sends one photo to an artist's Hopper using their own hopperToken —

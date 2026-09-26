@@ -32,11 +32,11 @@ function optionalText(value: unknown): string | undefined {
 // that gating actually correct rather than lumping every caller of this
 // route together.
 //
-// artworkSize/artworkPrice/artworkType (2026-09-21) — optional, sent by
-// the Studio capture app (source "Studio"). Blank or omitted is the same
-// as before this existed. artworkPrice must be a plain number (or a
-// numeric string) and is rejected otherwise, rather than silently stored
-// as something else.
+// artworkSize/artworkPrice/artworkType (2026-09-21) and artworkLocation
+// (2026-09-26) — optional, sent by the Studio capture app (source
+// "Studio"). Blank or omitted is the same as before this existed.
+// artworkPrice must be a plain number (or a numeric string) and is
+// rejected otherwise, rather than silently stored as something else.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   if (!body) {
@@ -54,6 +54,7 @@ export async function POST(request: NextRequest) {
     artworkSize,
     artworkPrice,
     artworkType,
+    artworkLocation,
   } = body as {
     token?: string;
     key?: string;
@@ -65,6 +66,7 @@ export async function POST(request: NextRequest) {
     artworkSize?: unknown;
     artworkPrice?: unknown;
     artworkType?: unknown;
+    artworkLocation?: unknown;
   };
 
   if (!token || !key || !contentType || !kind) {
@@ -106,6 +108,7 @@ export async function POST(request: NextRequest) {
     artworkSize: optionalText(artworkSize),
     artworkPrice: price,
     artworkType: optionalText(artworkType),
+    artworkLocation: optionalText(artworkLocation),
   });
 
   return NextResponse.json(result);
