@@ -62,7 +62,7 @@ import SwipeRow from "@/components/SwipeRow";
 //     New messages are sent from the mailbox's own address. Which
 //     mailbox's list the server loads is in the URL (?mailbox=business).
 //   - Task mode (CRM Phase 2): left = open tasks, modal = task form,
-//     right = Done list (completed tasks, each deletable from the list).
+//     right = Done list (completed tasks).
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
 //     old standalone Alerts page), modal = the selected alert, right =
 //     the same Done list. A payment-overdue alert opens the client's
@@ -94,10 +94,10 @@ import SwipeRow from "@/components/SwipeRow";
 // left on a touchscreen (a short swipe shows Archive and Delete, a full
 // swipe archives), or hover with a mouse (see SwipeRow). Archiving also
 // marks it read. In the Archived view the same swipe/hover offers Move
-// to Inbox and Delete. A sent message and an open task can be deleted
-// from their lists the same way (same day, direct requests) — there
-// Delete is the only action, so a full swipe deletes (after the usual
-// confirm).
+// to Inbox and Delete. Sent messages, open tasks and Done tasks can be
+// deleted from their lists the same way (same day, direct requests) —
+// there Delete is the only action, so a full swipe deletes (after the
+// usual confirm).
 //
 // Tapping outside the modal closes it. If a form has something typed in
 // it that hasn't been saved or sent (compose, task, or a reply), that
@@ -116,8 +116,7 @@ import SwipeRow from "@/components/SwipeRow";
 // original received message and any replies) and every Sent item gets
 // its own delete control, each with a confirm() first since this is
 // permanent, same pattern as every other destructive action in the app
-// (handleResetSalesData, handleDeletePayment, etc. elsewhere). Done
-// tasks got the same in the list itself (2026-09-20).
+// (handleResetSalesData, handleDeletePayment, etc. elsewhere).
 //
 // Auto-select-next added same day, second delete-related request —
 // deleting the message currently open (an inbox thread's original
@@ -591,16 +590,19 @@ export default function AdminInboxPanel({
     return true;
   };
 
-  // Deletes a completed task straight from the Done list, without
-  // opening it.
-  const handleDeleteDoneTask = (id: string) => {
-    if (!confirm("Delete this completed task? This can't be undone.")) return;
+  // Deletes a completed task straight from the Done list (swipe/hover).
+  // Returns false if the confirm was cancelled, so a full swipe puts the
+  // row back (see SwipeRow).
+  const handleDeleteDoneTask = (id: string): boolean => {
+    if (!confirm("Delete this completed task? This can't be undone.")) return false;
+    setSwipedId(null);
     setDeletingId(id);
     startTransition(async () => {
       await deleteTask(id);
       setDeletingId(null);
       setDoneList((list) => (list ? list.filter((t) => t.id !== id) : list));
     });
+    return true;
   };
 
   const handleRecipientPick = (value: string) => {
@@ -1039,25 +1041,24 @@ export default function AdminInboxPanel({
           ) : (
             <ul className="divide-y divide-neutral-100">
               {doneList.map((t) => (
-                <li key={t.id} className="px-3 py-2.5">
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="truncate text-sm font-semibold text-neutral-900">
-                      {capitaliseParagraphs(t.name)}
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteDoneTask(t.id)}
-                      disabled={deletingId === t.id || isPending}
-                      className={`shrink-0 ${deleteBtnCls}`}
-                    >
-                      {deletingId === t.id ? "Deleting…" : "Delete"}
-                    </button>
-                  </div>
-                  <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
-                  <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-neutral-400">
-                    <span>Date completed</span>
-                    <span className="text-[10px]">{t.completedAt ? formatDate(t.completedAt) : ""}</span>
-                  </div>
+                <li key={t.id}>
+                  <SwipeRow
+                    open={swipedId === t.id}
+                    onOpenChange={(open) => setSwipedId(open ? t.id : null)}
+                    busy={deletingId === t.id}
+                    actions={[{ label: "Delete", danger: true, onClick: () => handleDeleteDoneTask(t.id) }]}
+                  >
+                    <div className="px-3 py-2.5">
+                      <p className="truncate text-sm font-semibold text-neutral-900">
+                        {capitaliseParagraphs(t.name)}
+                      </p>
+                      <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
+                      <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-neutral-400">
+                        <span>Date completed</span>
+                        <span className="text-[10px]">{t.completedAt ? formatDate(t.completedAt) : ""}</span>
+                      </div>
+                    </div>
+                  </SwipeRow>
                 </li>
               ))}
             </ul>
