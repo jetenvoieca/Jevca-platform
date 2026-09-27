@@ -220,16 +220,16 @@ export type InboxSummaryItem = {
 
 // The inbox list — every InboundEmail across the whole platform, newest
 // first, optionally filtered to one artist ("one box with a filter",
-// 2026-09-05 decision). Either the Inbox itself (not archived) or the
-// Archived view (2026-09-27), never both mixed together. OutboundEmail
-// rows only ever show up inside an opened thread (getThread below), not
-// in this list — keeps the main list to "things you might need to act
-// on", not a mix of sent-and-received. See getSentList below for the
-// separate Sent view.
+// 2026-09-05 decision). OutboundEmail rows only ever show up inside an
+// opened thread (getThread below), not in this list — keeps the main
+// list to "things you might need to act on", not a mix of
+// sent-and-received. See getSentList below for the separate Sent view.
+// `archived` switches it to the Archived view instead (2026-09-27) —
+// the two never overlap.
 export async function getInboxList(artistId?: string, archived = false): Promise<InboxSummaryItem[]> {
   const rows = await db.inboundEmail.findMany({
     where: {
-      artistId: artistId || undefined,
+      ...(artistId ? { artistId } : {}),
       archivedAt: archived ? { not: null } : null,
     },
     orderBy: { receivedAt: "desc" },
@@ -441,29 +441,33 @@ export async function sendInboxReply(
   return { ok: true };
 }
 
-// Archives a received message (2026-09-27, direct request) — moves it
-// out of the Inbox into the Archived view. Archiving counts as dealing
-// with it, so an unread message is also marked read, and clears the
-// artist's open EMAIL_REPLY_RECEIVED alert the same way opening it
-// would (see getThread above).
+// Archives a received message (2026-09-27, direct request): it moves
+// from the Inbox list to the Archived view. Archiving also marks it read
+// and clears any open EMAIL_REPLY_RECEIVED alert for its artist (direct
+// decision) — the same as opening it does, see getThread.
 export async function archiveInboundEmail(id: string): Promise<void> {
   const existing = await db.inboundEmail.findUnique({
     where: { id },
-    select: { artistId: true, isRead: true },
+    select: { artistId: true },
   });
   if (!existing) return;
-  await db.inboundEmail.update({ where: { id }, data: { archivedAt: new Date(), isRead: true } });
-  if (!existing.isRead && existing.artistId) {
+  await db.inboundEmail.update({
+    where: { id },
+    data: { archivedAt: new Date(), isRead: true },
+  });
+  if (existing.artistId) {
     await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);
   }
   revalidatePath("/accounts/inbox");
   revalidatePath("/alerts");
 }
 
-// Moves an archived message back into the Inbox (2026-09-27). It stays
-// read — it has already been dealt with once.
+// Moves an archived message back to the Inbox list. It stays read.
 export async function unarchiveInboundEmail(id: string): Promise<void> {
-  await db.inboundEmail.updateMany({ where: { id }, data: { archivedAt: null } });
+  await db.inboundEmail.updateMany({
+    where: { id },
+    data: { archivedAt: null },
+  });
   revalidatePath("/accounts/inbox");
 }
 

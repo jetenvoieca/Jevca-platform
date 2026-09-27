@@ -8,6 +8,8 @@ import {
   getSentList,
   deleteInboundEmail,
   deleteOutboundEmail,
+  archiveInboundEmail,
+  unarchiveInboundEmail,
   type InboxSummaryItem,
   type InboxThreadItem,
   type SentSummaryItem,
@@ -31,6 +33,7 @@ import TaskForm from "@/components/TaskForm";
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
 import SaleModal from "@/components/SaleModal";
+import SwipeActionRow from "@/components/SwipeActionRow";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every reply received at any
@@ -67,9 +70,10 @@ import SaleModal from "@/components/SaleModal";
 //
 // The left column has two filters side by side: the artist filter (all
 // modes) and, in Task and Alert modes, a type filter — task category or
-// alert type (2026-09-20). Received messages have no type, so Inbox mode
-// has no type filter. The type filter is plain client state applied to
-// the lists already loaded; the artist filter lives in the URL (so links
+// alert type (2026-09-20). Received messages have no type, so in Inbox
+// mode that slot holds the Inbox/Archived choice instead (see below).
+// The type filter is plain client state applied to the lists already
+// loaded; the artist filter lives in the URL (so links
 // can land already filtered) and is applied on the server. The right
 // column has its own artist filter, independent of the left, also plain
 // client state. The selected alert also lives in the URL (?alert=...) —
@@ -108,6 +112,16 @@ import SaleModal from "@/components/SaleModal";
 // worked out from the list as it stood immediately before the delete,
 // falling back to the previous item if the deleted one was last, and to
 // nothing only once the list is genuinely empty.
+//
+// Archive added 2026-09-27, direct request. In Inbox mode the left
+// column's second filter switches between the Inbox and Archived lists
+// (in the URL as ?view=archived, like the artist filter). Each received
+// message can be archived (or, in Archived, moved back to the Inbox) or
+// deleted straight from the list, without opening it: swipe left on a
+// touch screen — a long swipe does the first action at once — or hover
+// with a mouse (see SwipeActionRow). A message dealt with this way is
+// hidden from the list straight away, before the server refresh lands.
+// Archiving also marks it read (see archiveInboundEmail).
 //
 // Plain, minimalist styling, consistent with InvoiceEmailModal/
 // SiteSettingsPanel elsewhere in the app — no separate visual language
@@ -171,11 +185,13 @@ function fitHtmlFrame(frame: HTMLIFrameElement) {
   frame.style.height = `${Math.ceil(contentHeight * scale) + 2}px`;
 }
 
-// The Inbox's address, with the left-hand artist filter and (optionally)
-// the selected alert carried in the query string.
-function inboxUrl(artistId: string | null, alertId?: string): string {
+// The Inbox's address, with the left-hand artist filter, the Inbox/
+// Archived choice and (optionally) the selected alert carried in the
+// query string.
+function inboxUrl(artistId: string | null, archived: boolean, alertId?: string): string {
   const params = new URLSearchParams();
   if (artistId) params.set("artistId", artistId);
+  if (archived) params.set("view", "archived");
   if (alertId) params.set("alert", alertId);
   const qs = params.toString();
   return qs ? `/accounts/inbox?${qs}` : "/accounts/inbox";
@@ -190,6 +206,7 @@ export default function AdminInboxPanel({
   taskCategories,
   artistOptions,
   selectedArtistId,
+  showArchived,
   composeRecipients,
   adminEmailAddress,
 }: {
@@ -201,6 +218,7 @@ export default function AdminInboxPanel({
   taskCategories: string[];
   artistOptions: { id: string; name: string }[];
   selectedArtistId: string | null;
+  showArchived: boolean;
   composeRecipients: ComposeRecipient[];
   adminEmailAddress: string;
 }) {
@@ -224,6 +242,16 @@ export default function AdminInboxPanel({
   const [rightRefreshKey, setRightRefreshKey] = useState(0);
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+
+  // The received message whose swipe buttons are showing, and the ones
+  // archived/moved/deleted from the list and waiting for the refresh to
+  // take them out (reset whenever a fresh list arrives).
+  const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setHiddenIds(new Set());
+    setSwipedId(null);
+  }, [initialList]);
 
   const [openId, setOpenId] = useState<string | null>(null);
   const [thread, setThread] = useState<InboxThreadItem[] | null>(null);
@@ -275,7 +303,9 @@ export default function AdminInboxPanel({
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
   const selectedAlert = initialAlerts.find((a) => a.id === selectedAlertId) || null;
 
-  // The left column's lists, after the type filter.
+  // The left column's lists, after the type filter (and, for received
+  // messages, less any just archived/moved/deleted from the list).
+  const visibleInbox = initialList.filter((m) => !hiddenIds.has(m.id));
   const visibleTasks = typeFilter ? initialTasks.filter((t) => t.category === typeFilter) : initialTasks;
   const visibleAlerts = typeFilter ? initialAlerts.filter((a) => a.type === typeFilter) : initialAlerts;
   const typeOptions =
@@ -337,7 +367,7 @@ export default function AdminInboxPanel({
     setComposing(false);
     setTaskForm(null);
     setSaleAlert(null);
-    if (selectedAlertId) router.replace(inboxUrl(selectedArtistId));
+    if (selectedAlertId) router.replace(inboxUrl(selectedArtistId, showArchived));
   };
 
   // Tapping outside the modal: closes it, after checking first if
@@ -385,7 +415,51 @@ export default function AdminInboxPanel({
   };
 
   const handleLeftFilterChange = (value: string) => {
-    router.push(inboxUrl(value || null));
+    router.push(inboxUrl(value || null, showArchived));
+  };
+
+  const handleArchivedChange = (value: string) => {
+    router.push(inboxUrl(selectedArtistId, value === "archived"));
+  };
+
+  // Archive / Move to Inbox / Delete, straight from the list (see
+  // SwipeActionRow). The row is hidden at once; the refresh then brings
+  // the list, the Alerts badge and any cleared alert up to date.
+  const hideFromList = (id: string) => {
+    setSwipedId(null);
+    setHiddenIds((ids) => new Set(ids).add(id));
+  };
+
+  const handleArchiveListItem = (id: string) => {
+    hideFromList(id);
+    startTransition(async () => {
+      await archiveInboundEmail(id);
+      router.refresh();
+    });
+  };
+
+  const handleUnarchiveListItem = (id: string) => {
+    hideFromList(id);
+    startTransition(async () => {
+      await unarchiveInboundEmail(id);
+      router.refresh();
+    });
+  };
+
+  const handleDeleteListItem = (id: string) => {
+    if (
+      !confirm(
+        "Delete this message? Any replies to it will stay in the Sent list, just no longer linked to it. This can't be undone."
+      )
+    ) {
+      setSwipedId(null);
+      return;
+    }
+    hideFromList(id);
+    startTransition(async () => {
+      await deleteInboundEmail(id);
+      router.refresh();
+    });
   };
 
   const handleRightFilterChange = (value: string) => {
@@ -429,8 +503,8 @@ export default function AdminInboxPanel({
       // Worked out from the list as it stands right now, before the
       // delete actually happens — the list itself only updates once
       // router.refresh() below completes.
-      const idx = initialList.findIndex((m) => m.id === item.id);
-      const remaining = initialList.filter((m) => m.id !== item.id);
+      const idx = visibleInbox.findIndex((m) => m.id === item.id);
+      const remaining = visibleInbox.filter((m) => m.id !== item.id);
       const nextId = remaining[idx]?.id ?? remaining[idx - 1]?.id ?? null;
 
       setDeletingId(item.id);
@@ -584,7 +658,7 @@ export default function AdminInboxPanel({
       setSaleAlert(a);
       return;
     }
-    router.push(inboxUrl(selectedArtistId, a.id));
+    router.push(inboxUrl(selectedArtistId, showArchived, a.id));
   };
 
   // An alert's link normally leaves this screen for the page where it
@@ -607,7 +681,7 @@ export default function AdminInboxPanel({
   const handleAlertDismiss = (a: AlertItem) => {
     startTransition(async () => {
       await dismissAlert(a.id);
-      router.push(inboxUrl(selectedArtistId));
+      router.push(inboxUrl(selectedArtistId, showArchived));
     });
   };
 
@@ -625,7 +699,7 @@ export default function AdminInboxPanel({
   // entry in Done.
   const handleUpToDateDone = () => {
     refreshRight();
-    router.push(inboxUrl(selectedArtistId));
+    router.push(inboxUrl(selectedArtistId, showArchived));
   };
 
   // Something changed the sale in the sale modal (paid, cancelled,
@@ -677,7 +751,16 @@ export default function AdminInboxPanel({
               </option>
             ))}
           </select>
-          {mode !== "inbox" && (
+          {mode === "inbox" ? (
+            <select
+              value={showArchived ? "archived" : "inbox"}
+              onChange={(e) => handleArchivedChange(e.target.value)}
+              className={`${inputCls} min-w-0 flex-1`}
+            >
+              <option value="inbox">Inbox</option>
+              <option value="archived">Archived</option>
+            </select>
+          ) : (
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
@@ -695,36 +778,53 @@ export default function AdminInboxPanel({
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           {mode === "inbox" ? (
-            initialList.length === 0 ? (
-              <p className="p-4 text-center text-sm text-neutral-400">Nothing here yet.</p>
+            visibleInbox.length === 0 ? (
+              <p className="p-4 text-center text-sm text-neutral-400">
+                {showArchived ? "Nothing archived." : "Nothing here yet."}
+              </p>
             ) : (
               <ul className="divide-y divide-neutral-100">
-                {initialList.map((m) => (
+                {visibleInbox.map((m) => (
                   <li key={m.id}>
-                    <button
-                      type="button"
-                      onClick={() => openThread(m.id)}
-                      className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                        openId === m.id ? "bg-neutral-100" : ""
-                      }`}
+                    <SwipeActionRow
+                      open={swipedId === m.id}
+                      onOpenChange={(isOpen) => setSwipedId(isOpen ? m.id : null)}
+                      onFullSwipe={() =>
+                        showArchived ? handleUnarchiveListItem(m.id) : handleArchiveListItem(m.id)
+                      }
+                      disabled={isPending}
+                      actions={[
+                        showArchived
+                          ? { label: "Move to Inbox", onClick: () => handleUnarchiveListItem(m.id) }
+                          : { label: "Archive", onClick: () => handleArchiveListItem(m.id) },
+                        { label: "Delete", tone: "danger", onClick: () => handleDeleteListItem(m.id) },
+                      ]}
                     >
-                      <div className={itemHeadCls}>
-                        <span
-                          className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
-                        >
-                          {m.fromName || m.fromAddress}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-neutral-400">
-                          {formatDate(m.receivedAt)}
-                        </span>
-                      </div>
-                      <p className="truncate text-xs text-neutral-500">
-                        {capitaliseParagraphs(m.subject) || "(no subject)"}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-neutral-400">
-                        {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
-                      </p>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => openThread(m.id)}
+                        className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                          openId === m.id ? "bg-neutral-100" : ""
+                        }`}
+                      >
+                        <div className={itemHeadCls}>
+                          <span
+                            className={`truncate text-sm ${m.isRead ? "text-neutral-600" : "font-semibold text-neutral-900"}`}
+                          >
+                            {m.fromName || m.fromAddress}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-neutral-400">
+                            {formatDate(m.receivedAt)}
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-neutral-500">
+                          {capitaliseParagraphs(m.subject) || "(no subject)"}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-neutral-400">
+                          {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
+                        </p>
+                      </button>
+                    </SwipeActionRow>
                   </li>
                 ))}
               </ul>
