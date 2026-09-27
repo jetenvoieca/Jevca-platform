@@ -658,7 +658,10 @@ model InboundEmail {
   // carry metadata — see processInboundEmail in
   // lib/actions/inboundEmail.ts).
   resendEmailId String  @unique
-  messageId     String? // RFC Message-Id header, for reply threading.
+  // RFC Message-ID header, always stored with its angle brackets (see
+  // canonicalMessageId, lib/emailThreading.ts) — used as In-Reply-To when
+  // replying, and to link a later reply back to a task.
+  messageId     String?
 
   fromAddress String
   fromName    String?
@@ -695,6 +698,14 @@ model InboundEmail {
   // lib/actions/inboundEmail.ts.
   archivedAt DateTime?
 
+  // The task this is a reply to (2026-09-27) — set when its In-Reply-To/
+  // References headers point at an email sent from a task, or at an
+  // earlier message already linked to one (see findTaskForReply,
+  // lib/emailThreading.ts). Cleared if the task is deleted; the message
+  // itself stays in the Inbox.
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
   receivedAt DateTime @default(now())
 
   replies     OutboundEmail[]
@@ -704,6 +715,8 @@ model InboundEmail {
   @@index([customerId])
   @@index([toAddress])
   @@index([mailbox, archivedAt, receivedAt])
+  @@index([taskId])
+  @@index([messageId])
 }
 
 // A file attached to an inbound email (2026-09-24). Resend only offers
@@ -745,17 +758,25 @@ model OutboundEmail {
 
   resendEmailId String? @unique
 
+  // The RFC Message-ID the email went out with (2026-09-27), with angle
+  // brackets — only recorded for task emails (and replies within a task's
+  // conversation), so a reply to one can be linked back to the task. Read
+  // from Resend just after sending; if it isn't ready yet it's fetched
+  // when a reply arrives (see lib/emailThreading.ts).
+  messageId String?
+
   fromAddress String
   toAddress   String
   subject     String?
   body        String?
 
   // What this send actually was, for the Sent list: "ADMIN" (ad hoc
-  // Compose), "REPLY" (from an open thread), "INVOICE", "RECEIPT", or
-  // "CERTIFICATE". INVOICE vs RECEIPT is decided by invoiceEmail.ts from
-  // the sale's paid status at the moment it's sent — same distinction
-  // already used for the email wording itself. Free string, not an
-  // enum, same convention as Customer.kind above — purely UI-facing.
+  // Compose), "REPLY" (from an open thread), "TASK" (sent from a task,
+  // 2026-09-27), "INVOICE", "RECEIPT", or "CERTIFICATE". INVOICE vs
+  // RECEIPT is decided by invoiceEmail.ts from the sale's paid status at
+  // the moment it's sent — same distinction already used for the email
+  // wording itself. Free string, not an enum, same convention as
+  // Customer.kind above — purely UI-facing.
   kind String @default("ADMIN")
 
   // Which mailbox's Sent list this shows in (2026-09-27) — the mailbox
@@ -785,6 +806,12 @@ model OutboundEmail {
   inReplyToId String?
   inReplyTo   InboundEmail? @relation(fields: [inReplyToId], references: [id])
 
+  // The task this was sent from, or whose conversation it continues
+  // (2026-09-27). Cleared if the task is deleted; the email itself stays
+  // in the Sent list.
+  taskId String?
+  task   Task?   @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
   sentAt DateTime @default(now())
 
   @@index([artistId])
@@ -792,6 +819,8 @@ model OutboundEmail {
   @@index([inReplyToId])
   @@index([purchaseId])
   @@index([mailbox, sentAt])
+  @@index([taskId])
+  @@index([messageId])
 }
 
 // A to-do item on the admin Inbox's Task view (2026-09-19, CRM Phase 2)
@@ -812,12 +841,22 @@ model Task {
 
   name        String
   description String?
+  // The person this task is about, if any (2026-09-27) — the address
+  // "Send email" on the task is pre-filled with. Free text, not a link to
+  // a Customer/Artist record, same as the compose form's To.
+  email       String?
   // A calendar date, not a moment — stored as a plain DATE so it can
   // never drift by a day across timezones.
   targetDate  DateTime? @db.Date
   category    String?
 
   completedAt DateTime?
+
+  // Emails sent from this task, and replies to them (2026-09-27) — see
+  // OutboundEmail.taskId / InboundEmail.taskId. Shown as the task's
+  // Activity.
+  outboundEmails OutboundEmail[]
+  inboundEmails  InboundEmail[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
