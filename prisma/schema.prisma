@@ -672,6 +672,11 @@ model InboundEmail {
 
   isRead Boolean @default(false)
 
+  // Set when the message is archived (2026-09-27) — it leaves the Inbox
+  // list for the Archived view, and can be moved back (cleared again).
+  // Archiving also marks it read (direct decision).
+  archivedAt DateTime?
+
   receivedAt DateTime @default(now())
 
   replies     OutboundEmail[]
@@ -680,6 +685,7 @@ model InboundEmail {
   @@index([artistId])
   @@index([customerId])
   @@index([toAddress])
+  @@index([archivedAt, receivedAt])
 }
 
 // A file attached to an inbound email (2026-09-24). Resend only offers
