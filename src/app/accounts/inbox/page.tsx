@@ -3,10 +3,11 @@ import AdminInboxPanel from "@/components/AdminInboxPanel";
 import { buildTopNavItems } from "@/lib/topNav";
 import { getOpenAlerts, overdueAlertArtistId } from "@/lib/alerts";
 import { getInboxList, getArtistFilterOptions } from "@/lib/actions/inboundEmail";
-import { getComposeRecipients, getAdminEmailAddress } from "@/lib/actions/adminEmail";
+import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
 import { getOpenTasks } from "@/lib/actions/tasks";
 import { getPlatformTaskCategories } from "@/lib/actions/platformTaskSettings";
 import { getClientPanelDataForArtist } from "@/lib/clientPanelData";
+import type { Mailbox } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,9 @@ export const dynamic = "force-dynamic";
 // The same filter applies to the open Tasks and Alerts lists
 // (2026-09-19, CRM Phase 2/3), which share the left-hand column.
 //
-// Whether the Inbox list shows archived messages instead (2026-09-27)
-// is in the URL too (?view=archived), alongside the artist filter it's
-// applied with.
+// Which mailbox is showing (?mailbox=business, else Art) and whether
+// it's the Inbox or the Archived messages (?archived=1) are in the URL
+// too (2026-09-27), for the same reason.
 //
 // The selected alert is in the URL too (?alert=...): a payment-overdue
 // alert opens the client's Owner/Domain/Subscription cards, whose data
@@ -29,18 +30,19 @@ export const dynamic = "force-dynamic";
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ artistId?: string; alert?: string; view?: string }>;
+  searchParams: Promise<{ artistId?: string; alert?: string; archived?: string; mailbox?: string }>;
 }) {
-  const { artistId, alert: alertId, view } = await searchParams;
-  const showArchived = view === "archived";
+  const { artistId, alert: alertId, archived, mailbox: mailboxParam } = await searchParams;
+  const showArchived = archived === "1";
+  const mailbox: Mailbox = mailboxParam === "business" ? "BUSINESS" : "ART";
 
-  const [alerts, list, artistOptions, composeRecipients, adminEmailAddress, tasks, taskCategories] =
+  const [alerts, list, artistOptions, composeRecipients, mailboxAddresses, tasks, taskCategories] =
     await Promise.all([
       getOpenAlerts(),
-      getInboxList(artistId || undefined, showArchived),
+      getInboxList(mailbox, artistId || undefined, showArchived),
       getArtistFilterOptions(),
       getComposeRecipients(),
-      getAdminEmailAddress(),
+      getMailboxAddresses(),
       getOpenTasks(artistId || undefined),
       getPlatformTaskCategories(),
     ]);
@@ -57,7 +59,9 @@ export default async function InboxPage({
       navItems={buildTopNavItems("inbox", alerts.length)}
       content={
         <AdminInboxPanel
+          mailbox={mailbox}
           initialList={list}
+          showArchived={showArchived}
           initialTasks={tasks}
           initialAlerts={alerts.filter((a) => !artistId || a.artistId === artistId)}
           selectedAlertId={alertId || null}
@@ -65,9 +69,8 @@ export default async function InboxPage({
           taskCategories={taskCategories}
           artistOptions={artistOptions}
           selectedArtistId={artistId || null}
-          showArchived={showArchived}
           composeRecipients={composeRecipients}
-          adminEmailAddress={adminEmailAddress}
+          mailboxAddresses={mailboxAddresses}
         />
       }
     />

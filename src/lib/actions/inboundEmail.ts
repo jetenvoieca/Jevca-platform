@@ -7,11 +7,13 @@ import { raiseAlertIfNotAlreadyOpen, resolveAlertsOfType } from "@/lib/alerts";
 import { saleTitle } from "@/lib/saleMath";
 import { uploadToR2, deleteFromR2 } from "@/lib/r2";
 import { readableEmailText } from "@/lib/emailText";
+import { mailboxForAddress, type Mailbox } from "@/lib/email";
 
 // The unified admin inbox (2026-09-05, Email Integration) — processing
 // of inbound webhook events, plus reading/replying to what lands here.
 // See schema.prisma's InboundEmail/OutboundEmail model comments for the
-// overall design ("one box with a filter", direct decision).
+// overall design ("one box with a filter", direct decision), and
+// lib/email.ts for the two mailboxes, Art and Business (2026-09-27).
 
 const EMAIL_REPLY_ALERT = "EMAIL_REPLY_RECEIVED";
 
@@ -70,30 +72,40 @@ export async function processInboundEmail(eventData: {
 
   const from = parseAddress(eventData.from);
   // Resend's `to` is one address per recipient — a message sent to more
-  // than one @jevca.art address at once is rare enough (and not a
+  // than one of our addresses at once is rare enough (and not a
   // supported flow anywhere else in the app) that this just takes the
   // first one, same as every other place here assumes one artist per
   // address.
   const toRaw = eventData.to[0] || "";
   const to = parseAddress(toRaw);
+  const mailbox = mailboxForAddress(to.address);
   const slug = localPart(to.address);
 
-  const artist = slug
-    ? await db.artist.findUnique({ where: { emailSlug: slug }, select: { id: true } })
-    : null;
+  // Art: matched to the artist whose own address it was sent to, and
+  // best-effort to one of that artist's Customers (see the model-level
+  // note on InboundEmail in schema.prisma). Business: sent to the
+  // business itself, so matched instead to the artist (a client of the
+  // business) whose own email address it came from, if any.
+  const artist =
+    mailbox === "BUSINESS"
+      ? await db.artist.findFirst({
+          where: { email: { equals: from.address, mode: "insensitive" } },
+          select: { id: true },
+        })
+      : slug
+        ? await db.artist.findUnique({ where: { emailSlug: slug }, select: { id: true } })
+        : null;
 
-  // Best-effort Customer match — only within this same artist, and only
-  // if we actually resolved one (see the model-level note on
-  // InboundEmail in schema.prisma).
-  const customer = artist
-    ? await db.customer.findFirst({
-        where: {
-          artistId: artist.id,
-          OR: [{ email: from.address }, { contactEmail: from.address }],
-        },
-        select: { id: true },
-      })
-    : null;
+  const customer =
+    mailbox === "ART" && artist
+      ? await db.customer.findFirst({
+          where: {
+            artistId: artist.id,
+            OR: [{ email: from.address }, { contactEmail: from.address }],
+          },
+          select: { id: true },
+        })
+      : null;
 
   const inbound = await db.inboundEmail.create({
     data: {
@@ -102,6 +114,7 @@ export async function processInboundEmail(eventData: {
       fromAddress: from.address,
       fromName: from.name,
       toAddress: to.address,
+      mailbox,
       artistId: artist?.id || null,
       customerId: customer?.id || null,
       subject: eventData.subject || full.subject || null,
@@ -115,7 +128,9 @@ export async function processInboundEmail(eventData: {
     await saveInboundAttachments(resend, eventData.email_id, inbound.id);
   }
 
-  if (artist) {
+  // Only a reply to an artist's own address raises an alert — a Business
+  // message isn't a reply on the artist's behalf.
+  if (mailbox === "ART" && artist) {
     await raiseAlertIfNotAlreadyOpen({
       artistId: artist.id,
       type: EMAIL_REPLY_ALERT,
@@ -218,18 +233,23 @@ export type InboxSummaryItem = {
   receivedAt: string;
 };
 
-// The inbox list — every InboundEmail across the whole platform, newest
+// The inbox list — one mailbox's InboundEmail (Art or Business), newest
 // first, optionally filtered to one artist ("one box with a filter",
-// 2026-09-05 decision). OutboundEmail rows only ever show up inside an
-// opened thread (getThread below), not in this list — keeps the main
-// list to "things you might need to act on", not a mix of
-// sent-and-received. See getSentList below for the separate Sent view.
-// `archived` switches it to the Archived view instead (2026-09-27) —
-// the two never overlap.
-export async function getInboxList(artistId?: string, archived = false): Promise<InboxSummaryItem[]> {
+// 2026-09-05 decision). Either the Inbox itself (not archived) or the
+// Archived view (2026-09-27), never both mixed together. OutboundEmail
+// rows only ever show up inside an opened thread (getThread below), not
+// in this list — keeps the main list to "things you might need to act
+// on", not a mix of sent-and-received. See getSentList below for the
+// separate Sent view.
+export async function getInboxList(
+  mailbox: Mailbox,
+  artistId?: string,
+  archived = false
+): Promise<InboxSummaryItem[]> {
   const rows = await db.inboundEmail.findMany({
     where: {
-      ...(artistId ? { artistId } : {}),
+      mailbox,
+      artistId: artistId || undefined,
       archivedAt: archived ? { not: null } : null,
     },
     orderBy: { receivedAt: "desc" },
@@ -287,13 +307,13 @@ export type SentSummaryItem = {
 };
 
 // The unified Sent view (2026-09-05, second Email Integration request) —
-// every OutboundEmail regardless of kind: ad hoc Compose sends, inbox
-// replies, and now invoice/receipt/certificate sends too (see the note
-// on OutboundEmail in schema.prisma). Optionally filtered to one artist,
-// same as getInboxList above.
-export async function getSentList(artistId?: string): Promise<SentSummaryItem[]> {
+// one mailbox's OutboundEmail regardless of kind: ad hoc Compose sends,
+// inbox replies, and (Art only) invoice/receipt/certificate sends too
+// (see the note on OutboundEmail in schema.prisma). Optionally filtered
+// to one artist, same as getInboxList above.
+export async function getSentList(mailbox: Mailbox, artistId?: string): Promise<SentSummaryItem[]> {
   const rows = await db.outboundEmail.findMany({
-    where: artistId ? { artistId } : undefined,
+    where: { mailbox, artistId: artistId || undefined },
     orderBy: { sentAt: "desc" },
     take: 200,
     include: {
@@ -383,9 +403,11 @@ export async function getThread(inboundEmailId: string): Promise<InboxThreadItem
 }
 
 // Replying from an open thread — always from the same address the
-// original was sent to (the artist's own address, or the general admin
-// one), so the recipient sees the reply come from the same place they
-// wrote to.
+// original was sent to (an artist's own address, craig@jevca.art, or a
+// business address), so the recipient sees the reply come from the same
+// place they wrote to. Only a reply from an artist's own address carries
+// the artist's name; a Business message tagged with an artist is FROM
+// that artist, so the reply must not.
 export async function sendInboxReply(
   inboundEmailId: string,
   formData: FormData
@@ -408,7 +430,10 @@ export async function sendInboxReply(
       ? inbound.subject
       : `Re: ${inbound.subject || "(no subject)"}`;
 
-  const fromDisplay = inbound.artist ? `${inbound.artist.name} <${inbound.toAddress}>` : inbound.toAddress;
+  const fromDisplay =
+    inbound.mailbox === "ART" && inbound.artist
+      ? `${inbound.artist.name} <${inbound.toAddress}>`
+      : inbound.toAddress;
 
   const resend = new Resend(apiKey);
   const { data, error } = await resend.emails.send({
@@ -431,6 +456,7 @@ export async function sendInboxReply(
       subject,
       body,
       kind: "REPLY",
+      mailbox: inbound.mailbox,
       artistId: inbound.artistId,
       customerId: inbound.customerId,
       inReplyToId: inbound.id,
@@ -441,33 +467,29 @@ export async function sendInboxReply(
   return { ok: true };
 }
 
-// Archives a received message (2026-09-27, direct request): it moves
-// from the Inbox list to the Archived view. Archiving also marks it read
-// and clears any open EMAIL_REPLY_RECEIVED alert for its artist (direct
-// decision) — the same as opening it does, see getThread.
+// Archives a received message (2026-09-27, direct request) — moves it
+// out of the Inbox into the Archived view. Archiving counts as dealing
+// with it, so an unread message is also marked read, and clears the
+// artist's open EMAIL_REPLY_RECEIVED alert the same way opening it
+// would (see getThread above).
 export async function archiveInboundEmail(id: string): Promise<void> {
   const existing = await db.inboundEmail.findUnique({
     where: { id },
-    select: { artistId: true },
+    select: { artistId: true, isRead: true },
   });
   if (!existing) return;
-  await db.inboundEmail.update({
-    where: { id },
-    data: { archivedAt: new Date(), isRead: true },
-  });
-  if (existing.artistId) {
+  await db.inboundEmail.update({ where: { id }, data: { archivedAt: new Date(), isRead: true } });
+  if (!existing.isRead && existing.artistId) {
     await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);
   }
   revalidatePath("/accounts/inbox");
   revalidatePath("/alerts");
 }
 
-// Moves an archived message back to the Inbox list. It stays read.
+// Moves an archived message back into the Inbox (2026-09-27). It stays
+// read — it has already been dealt with once.
 export async function unarchiveInboundEmail(id: string): Promise<void> {
-  await db.inboundEmail.updateMany({
-    where: { id },
-    data: { archivedAt: null },
-  });
+  await db.inboundEmail.updateMany({ where: { id }, data: { archivedAt: null } });
   revalidatePath("/accounts/inbox");
 }
 

@@ -3,14 +3,22 @@
 import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
+import type { Mailbox } from "@/lib/email";
 
 // Ad hoc admin emails (2026-09-05, Email Integration) — the Inbox's
-// "New message" compose flow. Always sent from one shared admin address
-// (PlatformSettings.adminEmailAddress, defaulting to craig@jevca.art),
-// never on an artist's behalf regardless of who the recipient is —
-// direct decision: "craig@jevca.art is more friendly".
+// "New message" compose flow. Never sent on an artist's behalf,
+// regardless of who the recipient is — direct decision: "craig@jevca.art
+// is more friendly". Which shared address it comes from depends on the
+// mailbox it's written in (2026-09-27): Art sends from
+// PlatformSettings.adminEmailAddress (craig@jevca.art), Business from
+// PlatformSettings.businessEmailAddress (craig@jetenvoieca.com).
 
 const SINGLETON_ID = "singleton";
+
+const SENDER_NAMES: Record<Mailbox, string> = {
+  ART: "Craig, Jevca",
+  BUSINESS: "Craig, Jetenvoieca",
+};
 
 export type ComposeRecipient = {
   label: string;
@@ -64,13 +72,14 @@ export async function getComposeRecipients(): Promise<ComposeRecipient[]> {
   return [...artistRecipients, ...customerRecipients];
 }
 
-export async function getAdminEmailAddress(): Promise<string> {
+// The address each mailbox's new messages are sent from.
+export async function getMailboxAddresses(): Promise<Record<Mailbox, string>> {
   const settings = await db.platformSettings.upsert({
     where: { id: SINGLETON_ID },
     update: {},
     create: { id: SINGLETON_ID },
   });
-  return settings.adminEmailAddress;
+  return { ART: settings.adminEmailAddress, BUSINESS: settings.businessEmailAddress };
 }
 
 export async function updateAdminEmailAddress(value: string): Promise<void> {
@@ -84,9 +93,8 @@ export async function updateAdminEmailAddress(value: string): Promise<void> {
   revalidatePath("/accounts/inbox");
 }
 
-// Sends an ad hoc email from the general admin address — always that
-// one address, never on behalf of a specific artist (see the file-level
-// note above), regardless of who the recipient is. Still tags
+// Sends an ad hoc email from the mailbox's own address (see the
+// file-level note above), regardless of who the recipient is. Still tags
 // artistId/customerId if the recipient was picked from the list (rather
 // than typed freehand), purely so it shows up filtered correctly in the
 // inbox.
@@ -98,6 +106,7 @@ export async function sendAdminEmail(
   const body = ((formData.get("body") as string) || "").trim();
   const artistId = (formData.get("artistId") as string) || null;
   const customerId = (formData.get("customerId") as string) || null;
+  const mailbox: Mailbox = formData.get("mailbox") === "BUSINESS" ? "BUSINESS" : "ART";
 
   if (!to || !subject || !body) {
     return { ok: false, error: "To, subject and message are all required." };
@@ -108,10 +117,10 @@ export async function sendAdminEmail(
     return { ok: false, error: "Email sending isn't configured — RESEND_API_KEY is missing in Netlify." };
   }
 
-  const fromAddress = await getAdminEmailAddress();
+  const fromAddress = (await getMailboxAddresses())[mailbox];
   const resend = new Resend(apiKey);
   const { data, error } = await resend.emails.send({
-    from: `Craig, Jevca <${fromAddress}>`,
+    from: `${SENDER_NAMES[mailbox]} <${fromAddress}>`,
     to,
     subject,
     text: body,
@@ -126,6 +135,7 @@ export async function sendAdminEmail(
       subject,
       body,
       kind: "ADMIN",
+      mailbox,
       artistId: artistId || null,
       customerId: customerId || null,
     },
