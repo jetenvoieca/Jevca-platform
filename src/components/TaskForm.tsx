@@ -1,6 +1,7 @@
 "use client";
 
 import type { TaskInput } from "@/lib/actions/tasks";
+import type { ComposeRecipient } from "@/lib/actions/adminEmail";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 
 // The task form shown in the Inbox's modal (2026-09-19, CRM Phase 2) —
@@ -10,24 +11,34 @@ import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 // available (it creates a new task, or saves changes to a loaded one);
 // Task Completed only appears once the task exists, i.e. was loaded from
 // the list.
+//
+// Email (2026-09-27) is the address the task's own "Send email" starts
+// with (see TaskEmailPanel) — typed, or picked from the same artists and
+// contacts list as the Inbox's New message. Send email sits with the other
+// action buttons, once the task exists; the compose form itself opens in
+// the task's Activity below the form.
 export default function TaskForm({
   form,
   categories,
   artistOptions,
+  composeRecipients,
   saving,
   error,
   onChange,
   onSave,
   onComplete,
+  onSendEmail,
 }: {
   form: TaskInput;
   categories: string[];
   artistOptions: { id: string; name: string }[];
+  composeRecipients: ComposeRecipient[];
   saving: boolean;
   error: string | null;
   onChange: (patch: Partial<TaskInput>) => void;
   onSave: () => void;
   onComplete: () => void;
+  onSendEmail: () => void;
 }) {
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
@@ -102,12 +113,36 @@ export default function TaskForm({
         </select>
       </div>
 
+      <div>
+        <label className={labelCls}>Email</label>
+        <input
+          list="task-email-recipients"
+          type="email"
+          value={form.email}
+          onChange={(e) => onChange({ email: e.target.value })}
+          placeholder="Type an address, or pick from the list"
+          className={inputCls}
+        />
+        <datalist id="task-email-recipients">
+          {composeRecipients.map((r) => (
+            <option key={`${r.artistId || "c"}-${r.email}`} value={r.email}>
+              {r.label}
+            </option>
+          ))}
+        </datalist>
+      </div>
+
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <ActionPanel>
         <ActionButton onClick={onSave} disabled={saving}>
           {saving ? "Saving…" : "Save Task"}
         </ActionButton>
+        {form.id && (
+          <ActionButton onClick={onSendEmail} disabled={saving}>
+            Send email
+          </ActionButton>
+        )}
         {form.id && (
           <ActionButton onClick={onComplete} disabled={saving}>
             Task Completed

@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import type { Mailbox } from "@/lib/email";
+import { recordSentMessageId } from "@/lib/emailThreading";
 
 // Ad hoc admin emails (2026-09-05, Email Integration) — the Inbox's
 // "New message" compose flow. Never sent on an artist's behalf,
@@ -12,6 +13,10 @@ import type { Mailbox } from "@/lib/email";
 // mailbox it's written in (2026-09-27): Art sends from
 // PlatformSettings.adminEmailAddress (craig@jevca.art), Business from
 // PlatformSettings.businessEmailAddress (craig@jetenvoieca.com).
+//
+// The same send is used from a task (2026-09-27): with a taskId, the email
+// is recorded against the task (kind "TASK") and its Message-ID is kept,
+// so a reply can be linked back to the task — see lib/emailThreading.ts.
 
 const SINGLETON_ID = "singleton";
 
@@ -97,7 +102,7 @@ export async function updateAdminEmailAddress(value: string): Promise<void> {
 // file-level note above), regardless of who the recipient is. Still tags
 // artistId/customerId if the recipient was picked from the list (rather
 // than typed freehand), purely so it shows up filtered correctly in the
-// inbox.
+// inbox. Sent from a task, it takes the task's artist if none was picked.
 export async function sendAdminEmail(
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
@@ -107,10 +112,16 @@ export async function sendAdminEmail(
   const artistId = (formData.get("artistId") as string) || null;
   const customerId = (formData.get("customerId") as string) || null;
   const mailbox: Mailbox = formData.get("mailbox") === "BUSINESS" ? "BUSINESS" : "ART";
+  const taskId = (formData.get("taskId") as string) || null;
 
   if (!to || !subject || !body) {
     return { ok: false, error: "To, subject and message are all required." };
   }
+
+  const task = taskId
+    ? await db.task.findUnique({ where: { id: taskId }, select: { id: true, artistId: true } })
+    : null;
+  if (taskId && !task) return { ok: false, error: "Task not found — it may have been deleted." };
 
   const apiKey = process.env.RESEND_API_KEY;
   if (!apiKey) {
@@ -127,19 +138,22 @@ export async function sendAdminEmail(
   });
   if (error) return { ok: false, error: error.message || "Resend could not send the email." };
 
-  await db.outboundEmail.create({
+  const sent = await db.outboundEmail.create({
     data: {
       resendEmailId: data?.id || null,
       fromAddress,
       toAddress: to,
       subject,
       body,
-      kind: "ADMIN",
+      kind: task ? "TASK" : "ADMIN",
       mailbox,
-      artistId: artistId || null,
+      artistId: artistId || task?.artistId || null,
       customerId: customerId || null,
+      taskId: task?.id ?? null,
     },
+    select: { id: true },
   });
+  if (task && data?.id) await recordSentMessageId(resend, sent.id, data.id);
 
   revalidatePath("/accounts/inbox");
   return { ok: true };
