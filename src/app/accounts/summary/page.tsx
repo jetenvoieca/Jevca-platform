@@ -2,16 +2,10 @@ import AppShell from "@/components/AppShell";
 import { db } from "@/lib/db";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import { buildAccountMonths } from "@/lib/accountMonths";
 import AccountSummaryView from "@/components/AccountSummaryView";
 
 export const dynamic = "force-dynamic";
-
-type MonthRow = {
-  key: string;
-  label: string;
-  salesByCurrency: Record<string, number>;
-  expensesByCurrency: Record<string, number>;
-};
 
 // The simple platform-level balance view (2026-08-28) — Sales here means
 // the platform's own subscription revenue (same source as the
@@ -20,9 +14,8 @@ type MonthRow = {
 // artist's sales to their own buyers — this page is specifically the
 // owner's own P&L, not artists' activity.
 //
-// Widened to max-w-5xl and moved to per-currency columns (2026-08-28) —
-// the original single-column-per-currency-pair layout wrapped badly
-// once GBP and EUR both had real numbers in them.
+// Month grouping is shared with each artist's own Account page
+// (/sites/[id]/account) via buildAccountMonths (2026-09-27).
 export default async function AccountSummaryPage() {
   const [payments, expenses, openAlerts] = await Promise.all([
     db.subscriptionPayment.findMany({ select: { amount: true, currency: true, paidAt: true } }),
@@ -30,41 +23,12 @@ export default async function AccountSummaryPage() {
     getOpenAlerts(),
   ]);
 
-  const months = new Map<string, MonthRow>();
-  function group(date: Date): MonthRow {
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
-    if (!months.has(key)) {
-      months.set(key, {
-        key,
-        label: date.toLocaleDateString("en-GB", { month: "long", year: "numeric" }),
-        salesByCurrency: {},
-        expensesByCurrency: {},
-      });
-    }
-    return months.get(key)!;
-  }
-
-  for (const p of payments) {
-    if (Number.isNaN(p.paidAt.getTime())) continue; // same guard as elsewhere on Accounts
-    const g = group(p.paidAt);
-    const amount = parseFloat(p.amount.toString());
-    g.salesByCurrency[p.currency] = (g.salesByCurrency[p.currency] || 0) + amount;
-  }
-  for (const e of expenses) {
-    const g = group(e.date);
-    const amount = parseFloat(e.amount.toString());
-    g.expensesByCurrency[e.currency] = (g.expensesByCurrency[e.currency] || 0) + amount;
-  }
-
-  // Every month of the current year up to now shows even with no data
-  // yet, so the table reads as a year-to-date view rather than only
-  // showing whichever months happen to have an entry.
   const now = new Date();
-  for (let m = 0; m <= now.getMonth(); m++) {
-    group(new Date(now.getFullYear(), m, 1));
-  }
-
-  const sortedMonths = Array.from(months.values()).sort((a, b) => (a.key > b.key ? 1 : -1));
+  const sortedMonths = buildAccountMonths(
+    payments.map((p) => ({ amount: p.amount, currency: p.currency, date: p.paidAt })),
+    expenses,
+    now
+  );
 
   return (
     <AppShell

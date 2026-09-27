@@ -1,13 +1,10 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import type { MonthRow } from "@/lib/accountMonths";
 
-type MonthRow = {
-  key: string;
-  label: string;
-  salesByCurrency: Record<string, number>;
-  expensesByCurrency: Record<string, number>;
-};
+// Shared by the platform's Account page and each artist's Account page
+// (2026-09-27) — rows are built by buildAccountMonths in lib/accountMonths.ts.
 
 type Period = "all" | "thisYear" | "Q1" | "Q2" | "Q3" | "Q4";
 

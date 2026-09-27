@@ -28,6 +28,7 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey {
   if (pathname === `${base}/bucket`) return "bucket";
   if (pathname.startsWith(`${base}/media`)) return "media";
   if (pathname === `${base}/hopper`) return "hopper";
+  if (pathname.startsWith(`${base}/account`)) return "account";
   if (pathname.startsWith(`${base}/purchases/settings`)) return "purchasesSettings";
   if (pathname.startsWith(`${base}/purchases`)) return "purchases";
   // Checked before the plain /sales prefix below, even though it

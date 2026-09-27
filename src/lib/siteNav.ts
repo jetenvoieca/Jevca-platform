@@ -33,6 +33,8 @@ export type SiteNavKey =
   | "media"
   | "bucket"
   | "mediaSettings"
+  // Artist's own Account (2026-09-27) — top of Financial.
+  | "account"
   | "sales"
   // Read-only payments report (2026-09-13) — sits directly under Sales
   // in the Financial section, sharing the same salesEnabled gate.
@@ -59,6 +61,7 @@ const CONTENT_KEYS: SiteNavKey[] = [
 ];
 
 const FINANCIAL_KEYS: SiteNavKey[] = [
+  "account",
   "sales",
   "paymentsReceived",
   "customers",
@@ -136,6 +139,9 @@ export function buildSiteNavEntries({
   ];
 
   const financialChildren: AppShellNavItem[] = [
+    // Account (2026-09-27) — top of Financial, per direct request. Not
+    // behind salesEnabled: it also shows Purchases, which aren't either.
+    { label: "Account", href: `${base}/account`, active: active === "account" },
     ...(salesEnabled
       ? [
           { label: "Sales", href: `${base}/sales`, active: active === "sales" },
