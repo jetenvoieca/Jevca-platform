@@ -18,6 +18,9 @@ export const dynamic = "force-dynamic";
 // The same filter applies to the open Tasks and Alerts lists
 // (2026-09-19, CRM Phase 2/3), which share the left-hand column.
 //
+// Whether the Inbox or the Archived messages are showing is in the URL
+// too (?archived=1, 2026-09-27), for the same reason.
+//
 // The selected alert is in the URL too (?alert=...): a payment-overdue
 // alert opens the client's Owner/Domain/Subscription cards, whose data
 // has to come from the server so their own router.refresh() after a save
@@ -25,14 +28,15 @@ export const dynamic = "force-dynamic";
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ artistId?: string; alert?: string }>;
+  searchParams: Promise<{ artistId?: string; alert?: string; archived?: string }>;
 }) {
-  const { artistId, alert: alertId } = await searchParams;
+  const { artistId, alert: alertId, archived } = await searchParams;
+  const showArchived = archived === "1";
 
   const [alerts, list, artistOptions, composeRecipients, adminEmailAddress, tasks, taskCategories] =
     await Promise.all([
       getOpenAlerts(),
-      getInboxList(artistId || undefined),
+      getInboxList(artistId || undefined, showArchived),
       getArtistFilterOptions(),
       getComposeRecipients(),
       getAdminEmailAddress(),
@@ -53,6 +57,7 @@ export default async function InboxPage({
       content={
         <AdminInboxPanel
           initialList={list}
+          showArchived={showArchived}
           initialTasks={tasks}
           initialAlerts={alerts.filter((a) => !artistId || a.artistId === artistId)}
           selectedAlertId={alertId || null}
