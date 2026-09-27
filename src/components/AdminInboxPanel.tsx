@@ -53,7 +53,8 @@ import SwipeRow from "@/components/SwipeRow";
 //
 // A pill toggle at the top of the left column (Art | Business | Task |
 // Alert) switches the whole screen between four modes, and the right
-// column follows it:
+// column follows it. The New message / New Task button sits on the same
+// line as the pills (2026-09-27), not in the heading row:
 //   - Art and Business (2026-09-27, replacing the single Inbox mode) are
 //     the two mailboxes (see lib/email.ts): left = received messages,
 //     right = Sent list (every OutboundEmail from that mailbox — in Art
@@ -318,7 +319,7 @@ export default function AdminInboxPanel({
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
   const deleteBtnCls = "text-xs text-neutral-400 hover:text-red-600 disabled:opacity-50";
-  const pillWrapCls = "mb-3 inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1";
+  const pillWrapCls = "inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1";
   const pillCls = (active: boolean) =>
     `rounded-full px-3 py-1 text-xs font-medium transition ${
       active ? "bg-neutral-200 text-neutral-900" : "text-neutral-500 hover:text-neutral-700"
@@ -735,30 +736,32 @@ export default function AdminInboxPanel({
     <div className="mx-auto flex h-full w-full max-w-5xl gap-6 px-6 py-6">
       {/* ---- LEFT: Art / Business / Task / Alert list + filters ---- */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mb-3 flex h-[30px] items-center justify-between">
+        <div className="mb-3 flex h-[30px] items-center">
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
+        </div>
+
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <div className={pillWrapCls}>
+            {MODES.map((m) => (
+              <button
+                key={m.mode}
+                type="button"
+                onClick={() => switchMode(m.mode)}
+                className={pillCls(mode === m.mode)}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
           {mode !== "alert" && (
             <button
               type="button"
               onClick={isMailMode ? startCompose : startTask}
-              className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
+              className="shrink-0 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
             >
               {isMailMode ? "New message" : "New Task"}
             </button>
           )}
-        </div>
-
-        <div className={pillWrapCls}>
-          {MODES.map((m) => (
-            <button
-              key={m.mode}
-              type="button"
-              onClick={() => switchMode(m.mode)}
-              className={pillCls(mode === m.mode)}
-            >
-              {m.label}
-            </button>
-          ))}
         </div>
 
         <div className="mb-3 flex gap-2">
@@ -942,7 +945,7 @@ export default function AdminInboxPanel({
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
         </div>
 
-        <div className={pillWrapCls}>
+        <div className={`mb-3 ${pillWrapCls}`}>
           <span className={pillCls(true)}>{isMailMode ? "Sent" : "Done"}</span>
         </div>
 
