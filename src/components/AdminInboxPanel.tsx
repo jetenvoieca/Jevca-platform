@@ -18,7 +18,7 @@ import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail"
 import {
   getCompletedTasks,
   saveTask,
-  deleteCompletedTask,
+  deleteTask,
   type TaskItem,
   type TaskInput,
 } from "@/lib/actions/tasks";
@@ -94,9 +94,10 @@ import SwipeRow from "@/components/SwipeRow";
 // left on a touchscreen (a short swipe shows Archive and Delete, a full
 // swipe archives), or hover with a mouse (see SwipeRow). Archiving also
 // marks it read. In the Archived view the same swipe/hover offers Move
-// to Inbox and Delete. A sent message can be deleted from the Sent list
-// the same way (same day, direct request) — there Delete is the only
-// action, so a full swipe deletes (after the usual confirm).
+// to Inbox and Delete. A sent message and an open task can be deleted
+// from their lists the same way (same day, direct requests) — there
+// Delete is the only action, so a full swipe deletes (after the usual
+// confirm).
 //
 // Tapping outside the modal closes it. If a form has something typed in
 // it that hasn't been saved or sent (compose, task, or a reply), that
@@ -279,9 +280,9 @@ export default function AdminInboxPanel({
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // The message row (received or sent) that's swiped open — at most one
-  // across both lists — and the received message being archived/moved/
-  // deleted from the list.
+  // The list row (message or task) that's swiped open — at most one
+  // across both columns — and the received message or open task being
+  // archived/moved/deleted from the left-hand list.
   const [swipedId, setSwipedId] = useState<string | null>(null);
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
 
@@ -479,8 +480,9 @@ export default function AdminInboxPanel({
     setSelectedSentId(null);
   };
 
-  // Archive, Move to Inbox, or Delete, straight from the list. The row
-  // stays dimmed until the refreshed list arrives without it.
+  // Archive, Move to Inbox, or Delete, straight from the left-hand list
+  // (a received message or an open task). The row stays dimmed until the
+  // refreshed list arrives without it.
   const runRowAction = (id: string, action: (id: string) => Promise<void>) => {
     setSwipedId(null);
     setRowBusyId(id);
@@ -493,6 +495,15 @@ export default function AdminInboxPanel({
   const handleDeleteRow = (id: string) => {
     if (!confirm(DELETE_MESSAGE_CONFIRM)) return;
     runRowAction(id, deleteInboundEmail);
+  };
+
+  // Deletes an open task straight from the list. Returns false if the
+  // confirm was cancelled, so a full swipe puts the row back (see
+  // SwipeRow).
+  const handleDeleteOpenTask = (id: string): boolean => {
+    if (!confirm("Delete this task? This can't be undone.")) return false;
+    runRowAction(id, deleteTask);
+    return true;
   };
 
   const handleSendReply = () => {
@@ -586,7 +597,7 @@ export default function AdminInboxPanel({
     if (!confirm("Delete this completed task? This can't be undone.")) return;
     setDeletingId(id);
     startTransition(async () => {
-      await deleteCompletedTask(id);
+      await deleteTask(id);
       setDeletingId(null);
       setDoneList((list) => (list ? list.filter((t) => t.id !== id) : list));
     });
@@ -871,24 +882,31 @@ export default function AdminInboxPanel({
               <ul className="divide-y divide-neutral-100">
                 {visibleTasks.map((t) => (
                   <li key={t.id}>
-                    <button
-                      type="button"
-                      onClick={() => openTask(t)}
-                      className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                        taskForm?.id === t.id ? "bg-neutral-100" : ""
-                      }`}
+                    <SwipeRow
+                      open={swipedId === t.id}
+                      onOpenChange={(open) => setSwipedId(open ? t.id : null)}
+                      busy={isPending && rowBusyId === t.id}
+                      actions={[{ label: "Delete", danger: true, onClick: () => handleDeleteOpenTask(t.id) }]}
                     >
-                      <div className={itemHeadCls}>
-                        <span className="truncate text-sm font-semibold text-neutral-900">
-                          {capitaliseParagraphs(t.name)}
-                        </span>
-                        <span className="shrink-0 text-[10px] text-neutral-400">
-                          {t.targetDate ? formatDate(t.targetDate) : ""}
-                        </span>
-                      </div>
-                      <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
-                      <p className="mt-0.5 truncate text-xs text-neutral-400">{t.artistName || "General"}</p>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => openTask(t)}
+                        className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                          taskForm?.id === t.id ? "bg-neutral-100" : ""
+                        }`}
+                      >
+                        <div className={itemHeadCls}>
+                          <span className="truncate text-sm font-semibold text-neutral-900">
+                            {capitaliseParagraphs(t.name)}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-neutral-400">
+                            {t.targetDate ? formatDate(t.targetDate) : ""}
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
+                        <p className="mt-0.5 truncate text-xs text-neutral-400">{t.artistName || "General"}</p>
+                      </button>
+                    </SwipeRow>
                   </li>
                 ))}
               </ul>

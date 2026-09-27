@@ -115,11 +115,11 @@ export async function saveTask(
   return { ok: true, id: created.id };
 }
 
-// Removes a processed (completed) task from the Done list. Only ever
-// touches completed tasks — an open task can't be deleted this way. That
-// includes the Done entries the app writes itself, e.g. "Subscription
-// payments updated" (see markSubscriptionUpToDate).
-export async function deleteCompletedTask(id: string): Promise<void> {
-  await db.task.deleteMany({ where: { id, completedAt: { not: null } } });
+// Deletes a task, open or completed — from the open Task list (2026-09-27,
+// direct request: "need to be able to delete, not just say done") or the
+// Done list. That includes the Done entries the app writes itself, e.g.
+// "Subscription payments updated" (see markSubscriptionUpToDate).
+export async function deleteTask(id: string): Promise<void> {
+  await db.task.deleteMany({ where: { id } });
   revalidatePath("/accounts/inbox");
 }
