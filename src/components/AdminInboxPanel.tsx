@@ -31,6 +31,7 @@ import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 import TaskForm from "@/components/TaskForm";
+import TaskEmailPanel from "@/components/TaskEmailPanel";
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
 import SaleModal from "@/components/SaleModal";
@@ -62,7 +63,10 @@ import SwipeRow from "@/components/SwipeRow";
 //     New messages are sent from the mailbox's own address. Which
 //     mailbox's list the server loads is in the URL (?mailbox=business).
 //   - Task mode (CRM Phase 2): left = open tasks, modal = task form,
-//     right = Done list (completed tasks).
+//     right = Done list (completed tasks). A saved task can also send
+//     email from itself and shows its Activity — what was sent and the
+//     replies linked back to it (2026-09-27, see TaskEmailPanel). Such
+//     replies land in the Inbox as usual too, marked Task.
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
 //     old standalone Alerts page), modal = the selected alert, right =
 //     the same Done list. A payment-overdue alert opens the client's
@@ -133,6 +137,7 @@ import SwipeRow from "@/components/SwipeRow";
 const KIND_LABELS: Record<string, string> = {
   ADMIN: "Message",
   REPLY: "Reply",
+  TASK: "Task",
   INVOICE: "Invoice",
   RECEIPT: "Receipt",
   CERTIFICATE: "Certificate",
@@ -154,6 +159,7 @@ const EMPTY_TASK_FORM: TaskInput = {
   id: null,
   name: "",
   description: "",
+  email: "",
   targetDate: "",
   category: "",
   artistId: "",
@@ -312,6 +318,10 @@ export default function AdminInboxPanel({
   const [taskDirty, setTaskDirty] = useState(false);
   const [taskSaving, setTaskSaving] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
+  // The task's own compose form (see TaskEmailPanel): whether it's open,
+  // and whether it holds typing that hasn't been sent.
+  const [taskComposing, setTaskComposing] = useState(false);
+  const [taskEmailDirty, setTaskEmailDirty] = useState(false);
 
   // The overdue-invoice alert whose sale modal is open, if any. Kept as
   // a copy of the alert (rather than looked up in the list) so the modal
@@ -354,7 +364,7 @@ export default function AdminInboxPanel({
         : composing || selectedSent !== null || openId !== null;
   const hasUnsavedInput =
     mode === "task"
-      ? taskDirty
+      ? taskDirty || taskEmailDirty
       : isMailMode
         ? (composing &&
             !composeSent &&
@@ -399,6 +409,7 @@ export default function AdminInboxPanel({
     setSelectedSentId(null);
     setComposing(false);
     setTaskForm(null);
+    setTaskComposing(false);
     setSaleAlert(null);
   };
 
@@ -655,18 +666,21 @@ export default function AdminInboxPanel({
       id: t.id,
       name: t.name,
       description: t.description ?? "",
+      email: t.email ?? "",
       targetDate: t.targetDate ?? "",
       category: t.category ?? "",
       artistId: t.artistId ?? "",
     });
     setTaskDirty(false);
     setTaskError(null);
+    setTaskComposing(false);
   };
 
   const startTask = () => {
     setTaskForm(EMPTY_TASK_FORM);
     setTaskDirty(false);
     setTaskError(null);
+    setTaskComposing(false);
   };
 
   const handleTaskChange = (patch: Partial<TaskInput>) => {
@@ -864,6 +878,11 @@ export default function AdminInboxPanel({
                           </span>
                         </div>
                         <p className="truncate text-xs text-neutral-500">
+                          {m.taskId && (
+                            <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                              Task
+                            </span>
+                          )}
                           {capitaliseParagraphs(m.subject) || "(no subject)"}
                         </p>
                         <p className="mt-0.5 truncate text-xs text-neutral-400">
@@ -1114,16 +1133,31 @@ export default function AdminInboxPanel({
                 )
               ) : mode === "task" ? (
                 taskForm && (
-                  <TaskForm
-                    form={taskForm}
-                    categories={taskCategories}
-                    artistOptions={artistOptions}
-                    saving={taskSaving || isPending}
-                    error={taskError}
-                    onChange={handleTaskChange}
-                    onSave={() => handleSaveTask(false)}
-                    onComplete={() => handleSaveTask(true)}
-                  />
+                  <>
+                    <TaskForm
+                      form={taskForm}
+                      categories={taskCategories}
+                      artistOptions={artistOptions}
+                      composeRecipients={composeRecipients}
+                      saving={taskSaving || isPending}
+                      error={taskError}
+                      onChange={handleTaskChange}
+                      onSave={() => handleSaveTask(false)}
+                      onComplete={() => handleSaveTask(true)}
+                      onSendEmail={() => setTaskComposing(true)}
+                    />
+                    {taskForm.id && (
+                      <TaskEmailPanel
+                        key={taskForm.id}
+                        taskId={taskForm.id}
+                        defaultTo={taskForm.email}
+                        mailboxAddresses={mailboxAddresses}
+                        composing={taskComposing}
+                        onComposeClose={() => setTaskComposing(false)}
+                        onDirtyChange={setTaskEmailDirty}
+                      />
+                    )}
+                  </>
                 )
               ) : composing ? (
                 <div className="mx-auto max-w-xl space-y-3">
