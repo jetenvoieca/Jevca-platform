@@ -94,7 +94,9 @@ import SwipeRow from "@/components/SwipeRow";
 // left on a touchscreen (a short swipe shows Archive and Delete, a full
 // swipe archives), or hover with a mouse (see SwipeRow). Archiving also
 // marks it read. In the Archived view the same swipe/hover offers Move
-// to Inbox and Delete.
+// to Inbox and Delete. A sent message can be deleted from the Sent list
+// the same way (same day, direct request) — there Delete is the only
+// action, so a full swipe deletes (after the usual confirm).
 //
 // Tapping outside the modal closes it. If a form has something typed in
 // it that hasn't been saved or sent (compose, task, or a reply), that
@@ -277,8 +279,9 @@ export default function AdminInboxPanel({
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
-  // The received message whose row is swiped open (at most one), and the
-  // one being archived/moved/deleted from the list.
+  // The message row (received or sent) that's swiped open — at most one
+  // across both lists — and the received message being archived/moved/
+  // deleted from the list.
   const [swipedId, setSwipedId] = useState<string | null>(null);
   const [rowBusyId, setRowBusyId] = useState<string | null>(null);
 
@@ -553,8 +556,11 @@ export default function AdminInboxPanel({
     }
   };
 
-  const handleDeleteSentItem = (id: string) => {
-    if (!confirm("Delete this message? This can't be undone.")) return;
+  // Deletes a sent message — from the open modal, or straight from the
+  // Sent list (swipe/hover). Returns false if the confirm was cancelled,
+  // so a full swipe puts the row back (see SwipeRow).
+  const handleDeleteSentItem = (id: string): boolean => {
+    if (!confirm("Delete this message? This can't be undone.")) return false;
     const currentList = sentList || [];
     const idx = currentList.findIndex((s) => s.id === id);
     const remaining = currentList.filter((s) => s.id !== id);
@@ -563,6 +569,7 @@ export default function AdminInboxPanel({
     const nextSelectedId =
       selectedSentId === id ? remaining[idx]?.id ?? remaining[idx - 1]?.id ?? null : selectedSentId;
 
+    setSwipedId(null);
     setDeletingId(id);
     startTransition(async () => {
       await deleteOutboundEmail(id);
@@ -570,6 +577,7 @@ export default function AdminInboxPanel({
       setSentList(remaining);
       setSelectedSentId(nextSelectedId);
     });
+    return true;
   };
 
   // Deletes a completed task straight from the Done list, without
@@ -972,29 +980,36 @@ export default function AdminInboxPanel({
               <ul className="divide-y divide-neutral-100">
                 {sentList.map((m) => (
                   <li key={m.id}>
-                    <button
-                      type="button"
-                      onClick={() => openSent(m.id)}
-                      className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                        selectedSentId === m.id ? "bg-neutral-100" : ""
-                      }`}
+                    <SwipeRow
+                      open={swipedId === m.id}
+                      onOpenChange={(open) => setSwipedId(open ? m.id : null)}
+                      busy={deletingId === m.id}
+                      actions={[{ label: "Delete", danger: true, onClick: () => handleDeleteSentItem(m.id) }]}
                     >
-                      <div className={itemHeadCls}>
-                        <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
-                        <span className="shrink-0 text-[10px] text-neutral-400">
-                          {formatDate(m.sentAt)}
-                        </span>
-                      </div>
-                      <p className="truncate text-xs text-neutral-500">
-                        <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                          {KIND_LABELS[m.kind] || m.kind}
-                        </span>
-                        {capitaliseParagraphs(m.subject) || "(no subject)"}
-                      </p>
-                      <p className="mt-0.5 truncate text-xs text-neutral-400">
-                        {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
-                      </p>
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => openSent(m.id)}
+                        className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                          selectedSentId === m.id ? "bg-neutral-100" : ""
+                        }`}
+                      >
+                        <div className={itemHeadCls}>
+                          <span className="truncate text-sm text-neutral-700">{m.toAddress}</span>
+                          <span className="shrink-0 text-[10px] text-neutral-400">
+                            {formatDate(m.sentAt)}
+                          </span>
+                        </div>
+                        <p className="truncate text-xs text-neutral-500">
+                          <span className="mr-1 rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                            {KIND_LABELS[m.kind] || m.kind}
+                          </span>
+                          {capitaliseParagraphs(m.subject) || "(no subject)"}
+                        </p>
+                        <p className="mt-0.5 truncate text-xs text-neutral-400">
+                          {[m.artistName, m.customerName || m.artworkTitle].filter(Boolean).join(" — ") || "—"}
+                        </p>
+                      </button>
+                    </SwipeRow>
                   </li>
                 ))}
               </ul>

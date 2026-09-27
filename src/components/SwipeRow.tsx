@@ -7,9 +7,11 @@ import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } 
 //
 // On touch: a short swipe opens the row to show the buttons; a full
 // swipe (past FULL_SWIPE_RATIO of the row's width) runs the first action
-// straight away. Only one row should be open at a time, so whether it's
-// open is held by the parent (`open` / `onOpenChange`). Tapping an open
-// row closes it rather than opening the item.
+// straight away. If that action doesn't go ahead (it returns false — e.g.
+// a Delete whose confirm was cancelled), the row slides back. Only one
+// row should be open at a time, so whether it's open is held by the
+// parent (`open` / `onOpenChange`). Tapping an open row closes it rather
+// than opening the item.
 //
 // Swiping is only tracked for touch and pen — a mouse never drags the
 // row; it gets the same buttons on hover instead, shown only on devices
@@ -19,7 +21,9 @@ import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } 
 
 export type SwipeAction = {
   label: string;
-  onClick: () => void;
+  // Return false if the action didn't go ahead, so a full swipe puts the
+  // row back.
+  onClick: () => void | boolean;
   danger?: boolean;
 };
 
@@ -98,7 +102,7 @@ export default function SwipeRow({
     if (-g.x > width * FULL_SWIPE_RATIO) {
       setCommitted(true);
       onOpenChange(false);
-      actions[0].onClick();
+      if (actions[0].onClick() === false) setCommitted(false);
     } else {
       onOpenChange(-g.x > openWidth / 2);
     }
