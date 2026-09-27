@@ -157,6 +157,15 @@ enum GuideCategory {
   TECHNICAL
 }
 
+// The Inbox's two mailboxes (2026-09-27) — ART is everything at
+// jevca.art (every artist's address and craig@jevca.art), BUSINESS is
+// everything at jetenvoieca.com. Decided by domain alone — see
+// mailboxForAddress in lib/email.ts.
+enum Mailbox {
+  ART
+  BUSINESS
+}
+
 model Artist {
   id        String       @id @default(cuid())
   name      String
@@ -632,6 +641,9 @@ model CurationItem {
 // direct decision (2026-09-05): easier to scan across 100+ artists from
 // one screen than to maintain a mailbox per artist.
 //
+// Since 2026-09-27 the business's own addresses (jetenvoieca.com) land
+// here too, as a second mailbox — see `mailbox` below.
+//
 // Deliberately not scoped to a Purchase/sale — an inbound reply is
 // matched to an Artist (by which address it was sent to) and,
 // best-effort, to a Customer (by matching the sender's address against
@@ -650,19 +662,24 @@ model InboundEmail {
 
   fromAddress String
   fromName    String?
-  toAddress   String // whichever @jevca.art address it was actually sent to.
+  toAddress   String // whichever of our addresses it was actually sent to.
 
-  // Resolved from toAddress's local part against Artist.emailSlug — null
-  // for anything sent to the general admin address, or to an address
-  // that doesn't match any artist (shown unfiltered in the inbox either
-  // way, never dropped).
+  // Which of the Inbox's two mailboxes this belongs to (2026-09-27) —
+  // set from toAddress's domain when it arrives.
+  mailbox Mailbox @default(ART)
+
+  // Art: resolved from toAddress's local part against Artist.emailSlug —
+  // null for anything sent to the general admin address, or to an
+  // address that doesn't match any artist (shown unfiltered in the inbox
+  // either way, never dropped). Business: the artist (a client of the
+  // business) whose own Artist.email the message came from, if any.
   artistId String?
   artist   Artist? @relation(fields: [artistId], references: [id])
 
   // Best-effort tag for the inbox filter (see the model-level note
   // above) — matched by fromAddress against this same artist's own
-  // Customer.email/contactEmail at receive time. Never re-matched after
-  // the fact if a Customer record changes later.
+  // Customer.email/contactEmail at receive time. Art only. Never
+  // re-matched after the fact if a Customer record changes later.
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id])
 
@@ -686,7 +703,7 @@ model InboundEmail {
   @@index([artistId])
   @@index([customerId])
   @@index([toAddress])
-  @@index([archivedAt])
+  @@index([mailbox, archivedAt, receivedAt])
 }
 
 // A file attached to an inbound email (2026-09-24). Resend only offers
@@ -741,6 +758,11 @@ model OutboundEmail {
   // enum, same convention as Customer.kind above — purely UI-facing.
   kind String @default("ADMIN")
 
+  // Which mailbox's Sent list this shows in (2026-09-27) — the mailbox
+  // it was composed in, or of the message it replies to. Invoice/
+  // receipt/certificate sends are always Art.
+  mailbox Mailbox @default(ART)
+
   // Set only for INVOICE/RECEIPT/CERTIFICATE sends, so the Sent list can
   // show which sale a send belongs to — never set for ADMIN/REPLY.
   purchaseId String?
@@ -769,6 +791,7 @@ model OutboundEmail {
   @@index([customerId])
   @@index([inReplyToId])
   @@index([purchaseId])
+  @@index([mailbox, sentAt])
 }
 
 // A to-do item on the admin Inbox's Task view (2026-09-19, CRM Phase 2)
@@ -1490,7 +1513,12 @@ model PlatformSettings {
   // behalf (direct decision — "craig@jevca.art is more friendly").
   // Editable here rather than an env var, so it doesn't need a redeploy
   // to change, consistent with everything else on this singleton row.
+  // Used by the Inbox's Art mailbox.
   adminEmailAddress String @default("craig@jevca.art")
+
+  // The same, for the Inbox's Business mailbox (2026-09-27) — the
+  // address new Business messages are sent from.
+  businessEmailAddress String @default("craig@jetenvoieca.com")
 
   updatedAt DateTime @updatedAt
 }

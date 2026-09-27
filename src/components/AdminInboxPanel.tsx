@@ -26,6 +26,7 @@ import { dismissAlert } from "@/lib/actions/subscriptions";
 import { refreshOpenAlerts } from "@/lib/actions/clientAlerts";
 import type { AlertItem } from "@/lib/alerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
+import type { Mailbox } from "@/lib/email";
 import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
@@ -36,12 +37,12 @@ import SaleModal from "@/components/SaleModal";
 import SwipeRow from "@/components/SwipeRow";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
-// with a filter" (direct decision): every reply received at any
-// @jevca.art address in one list, filterable by artist/gallery, with a
-// thread view (received + any replies sent from here) and a reply box.
-// "New message" opens the same compose form used for ad hoc admin
-// emails — kept inline here rather than a separate modal component,
-// since this is the only place either flow is used.
+// with a filter" (direct decision): every message received in one list,
+// filterable by artist/gallery, with a thread view (received + any
+// replies sent from here) and a reply box. "New message" opens the same
+// compose form used for ad hoc admin emails — kept inline here rather
+// than a separate modal component, since this is the only place either
+// flow is used.
 //
 // Two columns plus a modal (2026-09-19, CRM Phase 1–3 — see mock-ups):
 // the left column lists what needs attention, and the right "Processed"
@@ -50,12 +51,15 @@ import SwipeRow from "@/components/SwipeRow";
 // modal over both columns rather than a third column, so the two lists
 // always have room to breathe and the screen works on an iPad.
 //
-// A pill toggle at the top of the left column (Inbox | Task | Alert)
-// switches the whole screen between three modes, and the right column
-// follows it:
-//   - Inbox mode: left = received messages, right = Sent list
-//     (every OutboundEmail — admin sends, replies, and invoice/receipt/
-//     certificate sends too, see getSentList).
+// A pill toggle at the top of the left column (Art | Business | Task |
+// Alert) switches the whole screen between four modes, and the right
+// column follows it:
+//   - Art and Business (2026-09-27, replacing the single Inbox mode) are
+//     the two mailboxes (see lib/email.ts): left = received messages,
+//     right = Sent list (every OutboundEmail from that mailbox — in Art
+//     that includes invoice/receipt/certificate sends, see getSentList).
+//     New messages are sent from the mailbox's own address. Which
+//     mailbox's list the server loads is in the URL (?mailbox=business).
 //   - Task mode (CRM Phase 2): left = open tasks, modal = task form,
 //     right = Done list (completed tasks, each deletable from the list).
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
@@ -70,10 +74,10 @@ import SwipeRow from "@/components/SwipeRow";
 //
 // The left column has two filters side by side: the artist filter (all
 // modes) and a second one that depends on the mode — Inbox or Archived
-// in Inbox mode (2026-09-27), task category or alert type in the other
-// two (2026-09-20). The type filter is plain client state applied to
-// the lists already loaded; the artist filter and Inbox/Archived live in
-// the URL (so links can land already filtered) and are applied on the
+// in the mail modes (2026-09-27), task category or alert type in the
+// other two (2026-09-20). The type filter is plain client state applied
+// to the lists already loaded; the artist filter and Inbox/Archived live
+// in the URL (so links can land already filtered) and are applied on the
 // server. The right column has its own artist filter, independent of the
 // left, also plain client state. The selected alert also lives in the
 // URL (?alert=...) — see the note on InboxPage — so closing the modal on
@@ -134,7 +138,14 @@ const KIND_LABELS: Record<string, string> = {
 const DELETE_MESSAGE_CONFIRM =
   "Delete this message? Any replies to it will stay in the Sent list, just no longer linked to it. This can't be undone.";
 
-type Mode = "inbox" | "task" | "alert";
+type Mode = "art" | "business" | "task" | "alert";
+
+const MODES: { mode: Mode; label: string }[] = [
+  { mode: "art", label: "Art" },
+  { mode: "business", label: "Business" },
+  { mode: "task", label: "Task" },
+  { mode: "alert", label: "Alert" },
+];
 
 const EMPTY_TASK_FORM: TaskInput = {
   id: null,
@@ -144,6 +155,13 @@ const EMPTY_TASK_FORM: TaskInput = {
   category: "",
   artistId: "",
 };
+
+// The mailbox a mail mode shows; null for Task and Alert.
+function mailboxOf(mode: Mode): Mailbox | null {
+  if (mode === "art") return "ART";
+  if (mode === "business") return "BUSINESS";
+  return null;
+}
 
 // The sale alerts the Studio app raises (SALE_RECORDED, SALE_LINK_CREATED)
 // are only there for information, so they can be deleted straight from the
@@ -184,11 +202,19 @@ function fitHtmlFrame(frame: HTMLIFrameElement) {
   frame.style.height = `${Math.ceil(contentHeight * scale) + 2}px`;
 }
 
-// The Inbox's address, with the left-hand artist filter, Inbox/Archived
-// and (optionally) the selected alert carried in the query string.
-function inboxUrl(artistId: string | null, archived: boolean, alertId?: string): string {
+type InboxUrlParams = {
+  artistId: string | null;
+  mailbox: Mailbox;
+  archived: boolean;
+  alertId?: string;
+};
+
+// The Inbox's address, with the left-hand artist filter, the mailbox,
+// Inbox/Archived and (optionally) the selected alert in the query string.
+function inboxUrl({ artistId, mailbox, archived, alertId }: InboxUrlParams): string {
   const params = new URLSearchParams();
   if (artistId) params.set("artistId", artistId);
+  if (mailbox === "BUSINESS") params.set("mailbox", "business");
   if (archived) params.set("archived", "1");
   if (alertId) params.set("alert", alertId);
   const qs = params.toString();
@@ -196,6 +222,7 @@ function inboxUrl(artistId: string | null, archived: boolean, alertId?: string):
 }
 
 export default function AdminInboxPanel({
+  mailbox,
   initialList,
   showArchived,
   initialTasks,
@@ -206,8 +233,9 @@ export default function AdminInboxPanel({
   artistOptions,
   selectedArtistId,
   composeRecipients,
-  adminEmailAddress,
+  mailboxAddresses,
 }: {
+  mailbox: Mailbox;
   initialList: InboxSummaryItem[];
   showArchived: boolean;
   initialTasks: TaskItem[];
@@ -218,20 +246,27 @@ export default function AdminInboxPanel({
   artistOptions: { id: string; name: string }[];
   selectedArtistId: string | null;
   composeRecipients: ComposeRecipient[];
-  adminEmailAddress: string;
+  mailboxAddresses: Record<Mailbox, string>;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // Opens straight into Alert mode if the address already names an alert
-  // (e.g. after a page reload).
-  const [mode, setMode] = useState<Mode>(selectedAlertId ? "alert" : "inbox");
+  // (e.g. after a page reload), otherwise into the address's mailbox.
+  const [mode, setMode] = useState<Mode>(
+    selectedAlertId ? "alert" : mailbox === "BUSINESS" ? "business" : "art"
+  );
+  const modeMailbox = mailboxOf(mode);
+  const isMailMode = modeMailbox !== null;
+  // Just after switching between Art and Business, until the server has
+  // sent the other mailbox's list.
+  const listLoading = isMailMode && modeMailbox !== mailbox;
 
   // The left column's type filter: a task category in Task mode, an alert
   // type in Alert mode. "" = all. Cleared whenever the mode changes.
   const [typeFilter, setTypeFilter] = useState("");
 
-  // Right-hand column: Sent list (Inbox mode) or Done list (Task and
+  // Right-hand column: Sent list (mail modes) or Done list (Task and
   // Alert modes). `null` means "still loading". One artist filter serves
   // both.
   const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
@@ -316,16 +351,20 @@ export default function AdminInboxPanel({
   const hasUnsavedInput =
     mode === "task"
       ? taskDirty
-      : mode === "inbox"
+      : isMailMode
         ? (composing &&
             !composeSent &&
             (composeTo.trim() !== "" || composeSubject.trim() !== "" || composeBody.trim() !== "")) ||
           (openId !== null && replyBody.trim() !== "")
         : false;
 
-  // An inbox message is open in the modal (rather than compose or a
+  // A received message is open in the modal (rather than compose or a
   // sent item) — see the sticky message header in the thread view.
-  const threadOpen = mode === "inbox" && !composing && !selectedSent && openId !== null;
+  const threadOpen = isMailMode && !composing && !selectedSent && openId !== null;
+
+  // The Inbox's address with the current filters, changed as given.
+  const currentUrl = (changes: Partial<InboxUrlParams> = {}) =>
+    inboxUrl({ artistId: selectedArtistId, mailbox, archived: showArchived, ...changes });
 
   const refreshRight = () => setRightRefreshKey((k) => k + 1);
 
@@ -334,8 +373,9 @@ export default function AdminInboxPanel({
   // changes, and after something is sent/completed from this screen.
   useEffect(() => {
     let cancelled = false;
-    if (mode === "inbox") {
-      getSentList(rightArtistId || undefined).then((rows) => {
+    const sentMailbox = mailboxOf(mode);
+    if (sentMailbox) {
+      getSentList(sentMailbox, rightArtistId || undefined).then((rows) => {
         if (!cancelled) setSentList(rows);
       });
     } else {
@@ -348,17 +388,22 @@ export default function AdminInboxPanel({
     };
   }, [mode, rightArtistId, rightRefreshKey]);
 
-  // Closes the modal, whatever it is showing. An open alert is also
-  // dropped from the address, so the server stops loading its client
-  // panel.
-  const closeModal = () => {
+  // Clears whatever the modal is showing.
+  const resetModal = () => {
     setOpenId(null);
     setThread(null);
     setSelectedSentId(null);
     setComposing(false);
     setTaskForm(null);
     setSaleAlert(null);
-    if (selectedAlertId) router.replace(inboxUrl(selectedArtistId, showArchived));
+  };
+
+  // Closes the modal, whatever it is showing. An open alert is also
+  // dropped from the address, so the server stops loading its client
+  // panel.
+  const closeModal = () => {
+    resetModal();
+    if (selectedAlertId) router.replace(currentUrl());
   };
 
   // Tapping outside the modal: closes it, after checking first if
@@ -368,12 +413,22 @@ export default function AdminInboxPanel({
     closeModal();
   };
 
+  // Switching to the other mailbox loads its list (from its Inbox, not
+  // Archived) through the address; any other switch just closes the
+  // modal, and an open alert's address along with it.
   const switchMode = (next: Mode) => {
     if (next === mode) return;
     setMode(next);
     setTypeFilter("");
     setSwipedId(null);
-    closeModal();
+    setSentList(null);
+    resetModal();
+    const nextMailbox = mailboxOf(next);
+    if (nextMailbox && nextMailbox !== mailbox) {
+      router.push(currentUrl({ mailbox: nextMailbox, archived: false }));
+    } else if (selectedAlertId) {
+      router.replace(currentUrl());
+    }
   };
 
   const openThread = (id: string) => {
@@ -407,12 +462,12 @@ export default function AdminInboxPanel({
   };
 
   const handleLeftFilterChange = (value: string) => {
-    router.push(inboxUrl(value || null, showArchived));
+    router.push(currentUrl({ artistId: value || null }));
   };
 
   const handleArchivedViewChange = (value: string) => {
     setSwipedId(null);
-    router.push(inboxUrl(selectedArtistId, value === "archived"));
+    router.push(currentUrl({ archived: value === "archived" }));
   };
 
   const handleRightFilterChange = (value: string) => {
@@ -457,7 +512,7 @@ export default function AdminInboxPanel({
 
   // Deletes one item from an open thread. Deleting the original received
   // message (direction IN) deletes the whole thread, so this moves
-  // straight on to whichever message was next in the Inbox list (or the
+  // straight on to whichever message was next in the list (or the
   // previous one if this was the last, or closes the modal only once the
   // list is genuinely empty). Deleting a reply (direction OUT) just
   // removes that reply and reloads the same thread underneath it.
@@ -536,12 +591,14 @@ export default function AdminInboxPanel({
   };
 
   const handleSendCompose = () => {
+    if (!modeMailbox) return;
     setComposeError(null);
     setComposeSending(true);
     const fd = new FormData();
     fd.set("to", composeTo);
     fd.set("subject", composeSubject);
     fd.set("body", capitaliseParagraphs(composeBody));
+    fd.set("mailbox", modeMailbox);
     if (composeArtistId) fd.set("artistId", composeArtistId);
     if (composeCustomerId) fd.set("customerId", composeCustomerId);
     startTransition(async () => {
@@ -625,22 +682,20 @@ export default function AdminInboxPanel({
       setSaleAlert(a);
       return;
     }
-    router.push(inboxUrl(selectedArtistId, showArchived, a.id));
+    router.push(currentUrl({ alertId: a.id }));
   };
 
   // An alert's link normally leaves this screen for the page where it
   // can be dealt with; the exception is a link back to the Inbox itself
-  // (a new-email-reply alert), which switches this screen to Inbox mode.
+  // (a new-email-reply alert, always Art), which switches this screen to
+  // Art mode.
   const handleAlertLink = (a: AlertItem) => {
     if (!a.linkHref) return;
     if (a.linkHref.startsWith("/accounts/inbox")) {
-      setMode("inbox");
+      setMode("art");
       setTypeFilter("");
-      setOpenId(null);
-      setThread(null);
-      setSelectedSentId(null);
-      setComposing(false);
-      setTaskForm(null);
+      setSentList(null);
+      resetModal();
     }
     router.push(a.linkHref);
   };
@@ -648,7 +703,7 @@ export default function AdminInboxPanel({
   const handleAlertDismiss = (a: AlertItem) => {
     startTransition(async () => {
       await dismissAlert(a.id);
-      router.push(inboxUrl(selectedArtistId, showArchived));
+      router.push(currentUrl());
     });
   };
 
@@ -666,7 +721,7 @@ export default function AdminInboxPanel({
   // entry in Done.
   const handleUpToDateDone = () => {
     refreshRight();
-    router.push(inboxUrl(selectedArtistId, showArchived));
+    router.push(currentUrl());
   };
 
   // Something changed the sale in the sale modal (paid, cancelled,
@@ -678,31 +733,32 @@ export default function AdminInboxPanel({
 
   return (
     <div className="mx-auto flex h-full w-full max-w-5xl gap-6 px-6 py-6">
-      {/* ---- LEFT: Inbox / Task / Alert list + filters ---- */}
+      {/* ---- LEFT: Art / Business / Task / Alert list + filters ---- */}
       <div className="flex min-w-0 flex-1 flex-col">
         <div className="mb-3 flex h-[30px] items-center justify-between">
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
           {mode !== "alert" && (
             <button
               type="button"
-              onClick={mode === "inbox" ? startCompose : startTask}
+              onClick={isMailMode ? startCompose : startTask}
               className="rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
             >
-              {mode === "inbox" ? "New message" : "New Task"}
+              {isMailMode ? "New message" : "New Task"}
             </button>
           )}
         </div>
 
         <div className={pillWrapCls}>
-          <button type="button" onClick={() => switchMode("inbox")} className={pillCls(mode === "inbox")}>
-            Inbox
-          </button>
-          <button type="button" onClick={() => switchMode("task")} className={pillCls(mode === "task")}>
-            Task
-          </button>
-          <button type="button" onClick={() => switchMode("alert")} className={pillCls(mode === "alert")}>
-            Alert
-          </button>
+          {MODES.map((m) => (
+            <button
+              key={m.mode}
+              type="button"
+              onClick={() => switchMode(m.mode)}
+              className={pillCls(mode === m.mode)}
+            >
+              {m.label}
+            </button>
+          ))}
         </div>
 
         <div className="mb-3 flex gap-2">
@@ -718,7 +774,7 @@ export default function AdminInboxPanel({
               </option>
             ))}
           </select>
-          {mode === "inbox" ? (
+          {isMailMode ? (
             <select
               value={showArchived ? "archived" : "inbox"}
               onChange={(e) => handleArchivedViewChange(e.target.value)}
@@ -744,8 +800,10 @@ export default function AdminInboxPanel({
         </div>
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
-          {mode === "inbox" ? (
-            initialList.length === 0 ? (
+          {isMailMode ? (
+            listLoading ? (
+              <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
+            ) : initialList.length === 0 ? (
               <p className="p-4 text-center text-sm text-neutral-400">
                 {showArchived ? "Nothing archived." : "Nothing here yet."}
               </p>
@@ -885,7 +943,7 @@ export default function AdminInboxPanel({
         </div>
 
         <div className={pillWrapCls}>
-          <span className={pillCls(true)}>{mode === "inbox" ? "Sent" : "Done"}</span>
+          <span className={pillCls(true)}>{isMailMode ? "Sent" : "Done"}</span>
         </div>
 
         <select
@@ -902,7 +960,7 @@ export default function AdminInboxPanel({
         </select>
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
-          {mode === "inbox" ? (
+          {isMailMode ? (
             !sentList ? (
               <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
             ) : sentList.length === 0 ? (
@@ -1033,7 +1091,7 @@ export default function AdminInboxPanel({
               ) : composing ? (
                 <div className="mx-auto max-w-xl space-y-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-                    New message — from {adminEmailAddress}
+                    New message — from {modeMailbox ? mailboxAddresses[modeMailbox] : ""}
                   </p>
                   {composeSent ? (
                     <p className="text-sm text-green-600">Sent to {composeTo}.</p>
