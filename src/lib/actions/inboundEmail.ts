@@ -8,12 +8,14 @@ import { saleTitle } from "@/lib/saleMath";
 import { uploadToR2, deleteFromR2 } from "@/lib/r2";
 import { readableEmailText } from "@/lib/emailText";
 import { mailboxForAddress, type Mailbox } from "@/lib/email";
+import { canonicalMessageId, headerValue, findTaskForReply, recordSentMessageId } from "@/lib/emailThreading";
 
 // The unified admin inbox (2026-09-05, Email Integration) — processing
 // of inbound webhook events, plus reading/replying to what lands here.
 // See schema.prisma's InboundEmail/OutboundEmail model comments for the
 // overall design ("one box with a filter", direct decision), and
-// lib/email.ts for the two mailboxes, Art and Business (2026-09-27).
+// lib/email.ts for the two mailboxes, Art and Business (2026-09-27), and
+// lib/emailThreading.ts for how replies are linked back to a task.
 
 const EMAIL_REPLY_ALERT = "EMAIL_REPLY_RECEIVED";
 
@@ -107,16 +109,21 @@ export async function processInboundEmail(eventData: {
         })
       : null;
 
+  // A reply to an email sent from a task (or to a later message in that
+  // conversation) is linked to the task — see lib/emailThreading.ts.
+  const taskId = await findTaskForReply(resend, full.headers, from.address);
+
   const inbound = await db.inboundEmail.create({
     data: {
       resendEmailId: eventData.email_id,
-      messageId: eventData.message_id || (full.headers as Record<string, string> | undefined)?.["message-id"] || null,
+      messageId: canonicalMessageId(eventData.message_id) ?? canonicalMessageId(headerValue(full.headers, "message-id")),
       fromAddress: from.address,
       fromName: from.name,
       toAddress: to.address,
       mailbox,
       artistId: artist?.id || null,
       customerId: customer?.id || null,
+      taskId,
       subject: eventData.subject || full.subject || null,
       textBody: full.text || null,
       htmlBody: full.html || null,
@@ -229,6 +236,8 @@ export type InboxSummaryItem = {
   artistName: string | null;
   customerId: string | null;
   customerName: string | null;
+  // Set when this is a reply to an email sent from a task (2026-09-27).
+  taskId: string | null;
   isRead: boolean;
   receivedAt: string;
 };
@@ -269,6 +278,7 @@ export async function getInboxList(
     artistName: r.artist?.name || null,
     customerId: r.customerId,
     customerName: r.customer?.name || null,
+    taskId: r.taskId,
     isRead: r.isRead,
     receivedAt: r.receivedAt.toISOString(),
   }));
@@ -288,7 +298,7 @@ export async function getArtistFilterOptions(): Promise<{ id: string; name: stri
 
 export type SentSummaryItem = {
   id: string;
-  kind: string; // "ADMIN" | "REPLY" | "INVOICE" | "RECEIPT" | "CERTIFICATE"
+  kind: string; // "ADMIN" | "REPLY" | "TASK" | "INVOICE" | "RECEIPT" | "CERTIFICATE"
   fromAddress: string;
   toAddress: string;
   subject: string | null;
@@ -407,7 +417,9 @@ export async function getThread(inboundEmailId: string): Promise<InboxThreadItem
 // business address), so the recipient sees the reply come from the same
 // place they wrote to. Only a reply from an artist's own address carries
 // the artist's name; a Business message tagged with an artist is FROM
-// that artist, so the reply must not.
+// that artist, so the reply must not. A reply to a task-linked message
+// stays in that task's conversation (2026-09-27): it's linked to the task
+// too, and its Message-ID is recorded so the next reply is found.
 export async function sendInboxReply(
   inboundEmailId: string,
   formData: FormData
@@ -448,7 +460,7 @@ export async function sendInboxReply(
 
   if (error) return { ok: false, error: error.message || "Resend could not send the reply." };
 
-  await db.outboundEmail.create({
+  const reply = await db.outboundEmail.create({
     data: {
       resendEmailId: data?.id || null,
       fromAddress: inbound.toAddress,
@@ -460,8 +472,11 @@ export async function sendInboxReply(
       artistId: inbound.artistId,
       customerId: inbound.customerId,
       inReplyToId: inbound.id,
+      taskId: inbound.taskId,
     },
+    select: { id: true },
   });
+  if (inbound.taskId && data?.id) await recordSentMessageId(resend, reply.id, data.id);
 
   revalidatePath("/accounts/inbox");
   return { ok: true };
