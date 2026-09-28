@@ -37,6 +37,7 @@ import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
 import SaleModal from "@/components/SaleModal";
 import SwipeRow from "@/components/SwipeRow";
+import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon } from "@/components/ActionIcons";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every message received in one list,
@@ -99,13 +100,13 @@ import SwipeRow from "@/components/SwipeRow";
 //
 // Archive added 2026-09-27, direct request — a received message can be
 // archived or deleted straight from the list, without opening it: swipe
-// left on a touchscreen (a short swipe shows Archive and Delete, a full
-// swipe archives), or hover with a mouse (see SwipeRow). Archiving also
-// marks it read. In the Archived view the same swipe/hover offers Move
-// to Inbox and Delete. Sent messages, open tasks and Done tasks can be
-// deleted from their lists the same way (same day, direct requests) —
-// there Delete is the only action, so a full swipe deletes (after the
-// usual confirm).
+// left on a touchscreen (a short swipe shows the buttons, a full swipe
+// archives), or hover with a mouse for a small icon panel (see
+// SwipeRow). Archiving also marks it read. In the Archived view the same
+// swipe/hover offers Move to Inbox and Delete. Sent messages, open tasks
+// and Done tasks can be deleted from their lists the same way (same day,
+// direct requests) — there Delete is the only action, so a full swipe
+// deletes (after the usual confirm).
 //
 // Make task (2026-09-28, direct request) — on a received message, in the
 // list's swipe/hover actions and in the opened message: makes a task from
@@ -929,11 +930,25 @@ export default function AdminInboxPanel({
                       onOpenChange={(open) => setSwipedId(open ? m.id : null)}
                       busy={isPending && rowBusyId === m.id}
                       actions={[
+                        {
+                          label: m.taskId ? "Open task" : "Make task",
+                          icon: <TaskIcon />,
+                          onClick: () => handleMakeTask(m.id),
+                        },
                         showArchived
-                          ? { label: "Move to Inbox", onClick: () => runRowAction(m.id, unarchiveInboundEmail) }
-                          : { label: "Archive", onClick: () => runRowAction(m.id, archiveInboundEmail) },
-                        { label: m.taskId ? "Open task" : "Make task", onClick: () => handleMakeTask(m.id) },
-                        { label: "Delete", danger: true, onClick: () => handleDeleteRow(m.id) },
+                          ? {
+                              label: "Move to Inbox",
+                              icon: <UnarchiveIcon />,
+                              primary: true,
+                              onClick: () => runRowAction(m.id, unarchiveInboundEmail),
+                            }
+                          : {
+                              label: "Archive",
+                              icon: <ArchiveIcon />,
+                              primary: true,
+                              onClick: () => runRowAction(m.id, archiveInboundEmail),
+                            },
+                        { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteRow(m.id) },
                       ]}
                     >
                       <button
@@ -983,7 +998,9 @@ export default function AdminInboxPanel({
                       open={swipedId === t.id}
                       onOpenChange={(open) => setSwipedId(open ? t.id : null)}
                       busy={isPending && rowBusyId === t.id}
-                      actions={[{ label: "Delete", danger: true, onClick: () => handleDeleteOpenTask(t.id) }]}
+                      actions={[
+                        { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteOpenTask(t.id) },
+                      ]}
                     >
                       <button
                         type="button"
@@ -1099,7 +1116,9 @@ export default function AdminInboxPanel({
                       open={swipedId === m.id}
                       onOpenChange={(open) => setSwipedId(open ? m.id : null)}
                       busy={deletingId === m.id}
-                      actions={[{ label: "Delete", danger: true, onClick: () => handleDeleteSentItem(m.id) }]}
+                      actions={[
+                        { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteSentItem(m.id) },
+                      ]}
                     >
                       <button
                         type="button"
@@ -1141,7 +1160,9 @@ export default function AdminInboxPanel({
                     open={swipedId === t.id}
                     onOpenChange={(open) => setSwipedId(open ? t.id : null)}
                     busy={deletingId === t.id}
-                    actions={[{ label: "Delete", danger: true, onClick: () => handleDeleteDoneTask(t.id) }]}
+                    actions={[
+                      { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteDoneTask(t.id) },
+                    ]}
                   >
                     <div className="px-3 py-2.5">
                       <p className="truncate text-sm font-semibold text-neutral-900">
