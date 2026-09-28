@@ -853,16 +853,36 @@ model Task {
   completedAt DateTime?
 
   // Emails sent from this task, and replies to them (2026-09-27) — see
-  // OutboundEmail.taskId / InboundEmail.taskId. Shown as the task's
-  // Activity.
+  // OutboundEmail.taskId / InboundEmail.taskId — and notes of what was
+  // done (2026-09-28, see TaskNote). All shown as the task's Activity.
   outboundEmails OutboundEmail[]
   inboundEmails  InboundEmail[]
+  notes          TaskNote[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([artistId])
   @@index([completedAt])
+}
+
+// A note of something done for a task (2026-09-28, direct request — "take
+// note of what we have done"): a date and a line or two of text, added
+// from the task's Activity button and shown in its Activity alongside the
+// emails. Editable and deletable; deleted along with its task.
+model TaskNote {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  // A calendar date, not a moment — same as Task.targetDate.
+  date DateTime @db.Date
+  text String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([taskId])
 }
 
 model Site {
