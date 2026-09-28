@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { getTaskActivity, type TaskActivityItem } from "@/lib/actions/tasks";
 import { sendAdminEmail } from "@/lib/actions/adminEmail";
 import type { Mailbox } from "@/lib/email";
@@ -13,16 +14,18 @@ import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 // task exists: every email sent from the task and every reply linked back
 // to it, newest first, each opening in place to read.
 //
-// The task form's Send email button opens the compose form here
+// The task form's Send email button opens the compose form
 // (`composing`, owned by AdminInboxPanel alongside the rest of the task
-// modal). It starts with the task's own email address, and asks which
-// address to send from — Art or Business — each time. Sending goes
-// through the same sendAdminEmail as the Inbox's New message, with the
-// task's id, so it also appears in that mailbox's Sent list. The task
-// itself stays open; completing it is still a separate choice.
+// modal) in its own modal on top of the task (2026-09-28, direct request
+// — inline it made the task too long). It starts with the task's own
+// email address, and asks which address to send from — Art or Business —
+// each time. Sending goes through the same sendAdminEmail as the Inbox's
+// New message, with the task's id, so it also appears in that mailbox's
+// Sent list. The task itself stays open; completing it is still a
+// separate choice.
 //
-// Anything typed but not yet sent is reported through onDirtyChange, so
-// tapping outside the modal asks before throwing it away.
+// Anything typed but not yet sent is reported through onDirtyChange, and
+// tapping outside the compose modal asks before throwing it away.
 
 const MAILBOXES: { mailbox: Mailbox; label: string }[] = [
   { mailbox: "ART", label: "Art" },
@@ -122,8 +125,11 @@ export default function TaskEmailPanel({
   );
 }
 
-// The compose form — only mounted while open, so each time it opens it
-// starts afresh from the task's email address at that moment.
+// The compose form, in a modal over the task — only mounted while open,
+// so each time it opens it starts afresh from the task's email address at
+// that moment. Rendered into document.body so it sits above the task
+// modal; React still treats it as part of the task modal, so a click in it
+// never reaches (and closes) the task behind.
 function TaskEmailCompose({
   taskId,
   defaultTo,
@@ -160,6 +166,12 @@ function TaskEmailCompose({
   // Closing the form (sent or cancelled) leaves nothing unsaved.
   useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
 
+  const handleClose = () => {
+    if (isPending) return;
+    if (dirty && !confirm("Close without sending what you've typed?")) return;
+    onCancel();
+  };
+
   const handleSend = () => {
     if (!mailbox) {
       setError("Choose which address to send from — Art or Business.");
@@ -182,51 +194,67 @@ function TaskEmailCompose({
     });
   };
 
-  return (
-    <div className="space-y-3 rounded-md border border-neutral-200 p-3">
-      <div>
-        <label className={labelCls}>Send from</label>
-        <div className="inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1">
-          {MAILBOXES.map((m) => (
-            <button
-              key={m.mailbox}
-              type="button"
-              onClick={() => setMailbox(m.mailbox)}
-              className={pillCls(mailbox === m.mailbox)}
-            >
-              {m.label}
-            </button>
-          ))}
+  return createPortal(
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={handleClose}>
+      <div
+        className="flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-lg"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex shrink-0 items-center justify-between border-b border-neutral-100 px-4 py-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">New email</p>
+          <button
+            type="button"
+            onClick={handleClose}
+            disabled={isPending}
+            className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Close
+          </button>
         </div>
-        {mailbox && <p className="mt-1 text-xs text-neutral-400">{mailboxAddresses[mailbox]}</p>}
+        <div className="flex-1 space-y-3 overflow-y-auto p-5">
+          <div>
+            <label className={labelCls}>Send from</label>
+            <div className="inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1">
+              {MAILBOXES.map((m) => (
+                <button
+                  key={m.mailbox}
+                  type="button"
+                  onClick={() => setMailbox(m.mailbox)}
+                  className={pillCls(mailbox === m.mailbox)}
+                >
+                  {m.label}
+                </button>
+              ))}
+            </div>
+            {mailbox && <p className="mt-1 text-xs text-neutral-400">{mailboxAddresses[mailbox]}</p>}
+          </div>
+          <div>
+            <label className={labelCls}>To</label>
+            <input
+              list="task-email-recipients"
+              type="email"
+              value={to}
+              onChange={(e) => setTo(e.target.value)}
+              className={inputCls}
+            />
+          </div>
+          <div>
+            <label className={labelCls}>Subject</label>
+            <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Message</label>
+            <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} className={inputCls} />
+          </div>
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <ActionPanel>
+            <ActionButton onClick={handleSend} disabled={isPending}>
+              {isPending ? "Sending…" : "Send"}
+            </ActionButton>
+          </ActionPanel>
+        </div>
       </div>
-      <div>
-        <label className={labelCls}>To</label>
-        <input
-          list="task-email-recipients"
-          type="email"
-          value={to}
-          onChange={(e) => setTo(e.target.value)}
-          className={inputCls}
-        />
-      </div>
-      <div>
-        <label className={labelCls}>Subject</label>
-        <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)} className={inputCls} />
-      </div>
-      <div>
-        <label className={labelCls}>Message</label>
-        <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={8} className={inputCls} />
-      </div>
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <ActionPanel>
-        <ActionButton onClick={handleSend} disabled={isPending}>
-          {isPending ? "Sending…" : "Send"}
-        </ActionButton>
-        <ActionButton onClick={onCancel} disabled={isPending}>
-          Cancel
-        </ActionButton>
-      </ActionPanel>
-    </div>
+    </div>,
+    document.body,
   );
 }
