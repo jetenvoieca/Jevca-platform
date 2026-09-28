@@ -7,16 +7,14 @@ import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 // The task form shown in the Inbox's modal (2026-09-19, CRM Phase 2) —
 // purely presentational: the parent (AdminInboxPanel) owns the form state
 // and does the saving, since saving also has to refresh the lists behind
-// it, and closes the modal once a save succeeds. Save Task is always
-// available (it creates a new task, or saves changes to a loaded one);
-// Task Completed only appears once the task exists, i.e. was loaded from
-// the list.
+// it. There's no Save button (2026-09-28, direct request): the task saves
+// itself when it's closed, and the two action buttons save it first too —
+// Email (left) then opens the task's email window (see TaskEmailPanel),
+// Completed (right) completes it and closes it.
 //
-// Email (2026-09-27) is the address the task's own "Send email" starts
-// with (see TaskEmailPanel) — typed, or picked from the same artists and
-// contacts list as the Inbox's New message. Send email sits with the other
-// action buttons, once the task exists; the compose form itself opens in
-// the task's Activity below the form.
+// The Email field (2026-09-27) is the address that email window starts
+// with — typed, or picked from the same artists and contacts list as the
+// Inbox's New message.
 export default function TaskForm({
   form,
   categories,
@@ -25,9 +23,8 @@ export default function TaskForm({
   saving,
   error,
   onChange,
-  onSave,
+  onEmail,
   onComplete,
-  onSendEmail,
 }: {
   form: TaskInput;
   categories: string[];
@@ -36,9 +33,8 @@ export default function TaskForm({
   saving: boolean;
   error: string | null;
   onChange: (patch: Partial<TaskInput>) => void;
-  onSave: () => void;
+  onEmail: () => void;
   onComplete: () => void;
-  onSendEmail: () => void;
 }) {
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const labelCls = "mb-1 block text-xs text-neutral-500";
@@ -135,19 +131,14 @@ export default function TaskForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <ActionPanel>
-        <ActionButton onClick={onSave} disabled={saving}>
-          {saving ? "Saving…" : "Save Task"}
-        </ActionButton>
-        {form.id && (
-          <ActionButton onClick={onSendEmail} disabled={saving}>
-            Send email
+        <div className="flex w-full justify-between gap-3">
+          <ActionButton onClick={onEmail} disabled={saving}>
+            Email
           </ActionButton>
-        )}
-        {form.id && (
           <ActionButton onClick={onComplete} disabled={saving}>
-            Task Completed
+            Completed
           </ActionButton>
-        )}
+        </div>
       </ActionPanel>
     </div>
   );

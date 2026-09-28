@@ -66,7 +66,9 @@ import SwipeRow from "@/components/SwipeRow";
 //     right = Done list (completed tasks). A saved task can also send
 //     email from itself and shows its Activity — what was sent and the
 //     replies linked back to it (2026-09-27, see TaskEmailPanel). Such
-//     replies land in the Inbox as usual too, marked Task.
+//     replies land in the Inbox as usual too, marked Task. There's no
+//     Save button (2026-09-28, direct request): a task saves itself when
+//     it's closed, before Email opens the email window, and on Completed.
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
 //     old standalone Alerts page), modal = the selected alert, right =
 //     the same Done list. A payment-overdue alert opens the client's
@@ -103,9 +105,9 @@ import SwipeRow from "@/components/SwipeRow";
 // there Delete is the only action, so a full swipe deletes (after the
 // usual confirm).
 //
-// Tapping outside the modal closes it. If a form has something typed in
-// it that hasn't been saved or sent (compose, task, or a reply), that
-// asks first, so a stray tap can't throw the typing away.
+// Tapping outside the modal closes it. If a message has something typed
+// in it that hasn't been sent (compose or a reply), that asks first, so a
+// stray tap can't throw the typing away; a task saves itself instead.
 //
 // Text is capitalised paragraph by paragraph (2026-09-20, see
 // capitaliseParagraphs): what's typed as it's saved or sent (task
@@ -312,16 +314,13 @@ export default function AdminInboxPanel({
   const [composeError, setComposeError] = useState<string | null>(null);
   const [composeSent, setComposeSent] = useState(false);
 
-  // `null` = no task open. `taskDirty` = something has been typed since
-  // it was opened (drives the discard warning on tap-outside).
+  // `null` = no task open. `taskDirty` = something has changed since it
+  // was opened or last saved (so closing it needs to save).
   const [taskForm, setTaskForm] = useState<TaskInput | null>(null);
   const [taskDirty, setTaskDirty] = useState(false);
-  const [taskSaving, setTaskSaving] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
-  // The task's own compose form (see TaskEmailPanel): whether it's open,
-  // and whether it holds typing that hasn't been sent.
+  // Whether the task's own email window is open (see TaskEmailPanel).
   const [taskComposing, setTaskComposing] = useState(false);
-  const [taskEmailDirty, setTaskEmailDirty] = useState(false);
 
   // The overdue-invoice alert whose sale modal is open, if any. Kept as
   // a copy of the alert (rather than looked up in the list) so the modal
@@ -363,14 +362,11 @@ export default function AdminInboxPanel({
         ? taskForm !== null
         : composing || selectedSent !== null || openId !== null;
   const hasUnsavedInput =
-    mode === "task"
-      ? taskDirty || taskEmailDirty
-      : isMailMode
-        ? (composing &&
-            !composeSent &&
-            (composeTo.trim() !== "" || composeSubject.trim() !== "" || composeBody.trim() !== "")) ||
-          (openId !== null && replyBody.trim() !== "")
-        : false;
+    isMailMode &&
+    ((composing &&
+      !composeSent &&
+      (composeTo.trim() !== "" || composeSubject.trim() !== "" || composeBody.trim() !== "")) ||
+      (openId !== null && replyBody.trim() !== ""));
 
   // A received message is open in the modal (rather than compose or a
   // sent item) — see the sticky message header in the thread view.
@@ -421,9 +417,14 @@ export default function AdminInboxPanel({
     if (selectedAlertId) router.replace(currentUrl());
   };
 
-  // Tapping outside the modal: closes it, after checking first if
-  // there's unsaved typing that would be lost.
+  // Tapping outside the modal: closes it — an open task saves itself
+  // first (see closeTask); otherwise it checks first if there's unsent
+  // typing that would be lost.
   const handleBackdropClick = () => {
+    if (mode === "task") {
+      closeTask();
+      return;
+    }
     if (hasUnsavedInput && !confirm("Close without saving what you've typed?")) return;
     closeModal();
   };
@@ -688,26 +689,66 @@ export default function AdminInboxPanel({
     setTaskDirty(true);
   };
 
-  // Save Task saves (or creates) the task and closes the modal; Task
-  // Completed does the same and completes it too, so it moves from the
-  // open list on the left into Done on the right.
-  const handleSaveTask = (complete: boolean) => {
-    if (!taskForm) return;
+  // Saves (or creates) the open task, and with complete = true completes
+  // it too. On failure the reason shows under the form.
+  const persistTask = async (complete: boolean): Promise<string | null> => {
+    if (!taskForm) return null;
     setTaskError(null);
-    setTaskSaving(true);
+    const res = await saveTask(
+      { ...taskForm, description: capitaliseParagraphs(taskForm.description) },
+      complete
+    );
+    if (!res.ok) {
+      setTaskError(res.error);
+      return null;
+    }
+    setTaskDirty(false);
+    router.refresh();
+    return res.id;
+  };
+
+  // Closing a task saves it first if anything changed. If it can't be
+  // saved (e.g. no name yet), the reason is shown and closing without
+  // saving is offered, so a half-started task never traps the modal.
+  const closeTask = () => {
+    if (isPending) return;
+    if (!taskDirty) {
+      closeModal();
+      return;
+    }
     startTransition(async () => {
-      const res = await saveTask(
-        { ...taskForm, description: capitaliseParagraphs(taskForm.description) },
-        complete
-      );
-      setTaskSaving(false);
-      if (!res.ok) {
-        setTaskError(res.error);
+      if (await persistTask(false)) {
+        closeModal();
         return;
       }
-      router.refresh();
-      setTaskForm(null);
-      if (complete) refreshRight();
+      if (confirm("This task can't be saved yet (see the message under the form). Close without saving?")) {
+        closeModal();
+      }
+    });
+  };
+
+  // Email: a new or changed task is saved first, so the email is always
+  // linked to a saved task with its latest details.
+  const handleTaskEmail = () => {
+    if (taskForm?.id && !taskDirty) {
+      setTaskComposing(true);
+      return;
+    }
+    startTransition(async () => {
+      const id = await persistTask(false);
+      if (!id) return;
+      setTaskForm((f) => (f ? { ...f, id } : f));
+      setTaskComposing(true);
+    });
+  };
+
+  // Completed: saves and completes the task, so it moves from the open
+  // list on the left into Done on the right.
+  const handleTaskComplete = () => {
+    startTransition(async () => {
+      if (!(await persistTask(true))) return;
+      closeModal();
+      refreshRight();
     });
   };
 
@@ -1110,8 +1151,9 @@ export default function AdminInboxPanel({
             <div className="flex shrink-0 justify-end border-b border-neutral-100 px-4 py-2">
               <button
                 type="button"
-                onClick={closeModal}
-                className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                onClick={mode === "task" ? closeTask : closeModal}
+                disabled={mode === "task" && isPending}
+                className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
               >
                 Close
               </button>
@@ -1139,12 +1181,11 @@ export default function AdminInboxPanel({
                       categories={taskCategories}
                       artistOptions={artistOptions}
                       composeRecipients={composeRecipients}
-                      saving={taskSaving || isPending}
+                      saving={isPending}
                       error={taskError}
                       onChange={handleTaskChange}
-                      onSave={() => handleSaveTask(false)}
-                      onComplete={() => handleSaveTask(true)}
-                      onSendEmail={() => setTaskComposing(true)}
+                      onEmail={handleTaskEmail}
+                      onComplete={handleTaskComplete}
                     />
                     {taskForm.id && (
                       <TaskEmailPanel
@@ -1154,7 +1195,6 @@ export default function AdminInboxPanel({
                         mailboxAddresses={mailboxAddresses}
                         composing={taskComposing}
                         onComposeClose={() => setTaskComposing(false)}
-                        onDirtyChange={setTaskEmailDirty}
                       />
                     )}
                   </>

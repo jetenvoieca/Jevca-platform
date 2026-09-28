@@ -24,8 +24,8 @@ import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 // Sent list. The task itself stays open; completing it is still a
 // separate choice.
 //
-// Anything typed but not yet sent is reported through onDirtyChange, and
-// tapping outside the compose modal asks before throwing it away.
+// Tapping outside the email window (or Close) asks before throwing away
+// anything typed but not yet sent.
 
 const MAILBOXES: { mailbox: Mailbox; label: string }[] = [
   { mailbox: "ART", label: "Art" },
@@ -38,14 +38,12 @@ export default function TaskEmailPanel({
   mailboxAddresses,
   composing,
   onComposeClose,
-  onDirtyChange,
 }: {
   taskId: string;
   defaultTo: string;
   mailboxAddresses: Record<Mailbox, string>;
   composing: boolean;
   onComposeClose: () => void;
-  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [activity, setActivity] = useState<TaskActivityItem[] | null>(null);
   const [activityError, setActivityError] = useState(false);
@@ -82,7 +80,6 @@ export default function TaskEmailPanel({
           mailboxAddresses={mailboxAddresses}
           onSent={handleSent}
           onCancel={onComposeClose}
-          onDirtyChange={onDirtyChange}
         />
       )}
 
@@ -136,14 +133,12 @@ function TaskEmailCompose({
   mailboxAddresses,
   onSent,
   onCancel,
-  onDirtyChange,
 }: {
   taskId: string;
   defaultTo: string;
   mailboxAddresses: Record<Mailbox, string>;
   onSent: () => void;
   onCancel: () => void;
-  onDirtyChange: (dirty: boolean) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [mailbox, setMailbox] = useState<Mailbox | null>(null);
@@ -160,11 +155,6 @@ function TaskEmailCompose({
     }`;
 
   const dirty = subject.trim() !== "" || body.trim() !== "";
-  useEffect(() => {
-    onDirtyChange(dirty);
-  }, [dirty, onDirtyChange]);
-  // Closing the form (sent or cancelled) leaves nothing unsaved.
-  useEffect(() => () => onDirtyChange(false), [onDirtyChange]);
 
   const handleClose = () => {
     if (isPending) return;
