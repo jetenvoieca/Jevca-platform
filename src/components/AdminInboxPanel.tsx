@@ -19,6 +19,7 @@ import {
   getCompletedTasks,
   saveTask,
   deleteTask,
+  createTaskFromEmail,
   type TaskItem,
   type TaskInput,
 } from "@/lib/actions/tasks";
@@ -104,6 +105,12 @@ import SwipeRow from "@/components/SwipeRow";
 // deleted from their lists the same way (same day, direct requests) —
 // there Delete is the only action, so a full swipe deletes (after the
 // usual confirm).
+//
+// Make task (2026-09-28, direct request) — on a received message, in the
+// list's swipe/hover actions and in the opened message: makes a task from
+// it (see createTaskFromEmail) and switches straight to Task mode with the
+// new task open. A message already made into a task offers Open task
+// instead.
 //
 // Tapping outside the modal closes it. If a message has something typed
 // in it that hasn't been sent (compose or a reply), that asks first, so a
@@ -508,6 +515,30 @@ export default function AdminInboxPanel({
     runRowAction(id, deleteInboundEmail);
   };
 
+  // Makes a task from a received message (or finds the one already made)
+  // and switches to Task mode with it open.
+  const handleMakeTask = (id: string) => {
+    setSwipedId(null);
+    setRowBusyId(id);
+    startTransition(async () => {
+      const res = await createTaskFromEmail(id);
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      setMode("task");
+      setTypeFilter("");
+      setSentList(null);
+      resetModal();
+      openTask(res.task);
+      router.refresh();
+    });
+  };
+
+  // The received message open in the modal, as it appears in the list —
+  // for its Make task / Open task button.
+  const openListItem = initialList.find((m) => m.id === openId) || null;
+
   // Deletes an open task straight from the list. Returns false if the
   // confirm was cancelled, so a full swipe puts the row back (see
   // SwipeRow).
@@ -898,6 +929,7 @@ export default function AdminInboxPanel({
                         showArchived
                           ? { label: "Move to Inbox", onClick: () => runRowAction(m.id, unarchiveInboundEmail) }
                           : { label: "Archive", onClick: () => runRowAction(m.id, archiveInboundEmail) },
+                        { label: m.taskId ? "Open task" : "Make task", onClick: () => handleMakeTask(m.id) },
                         { label: "Delete", danger: true, onClick: () => handleDeleteRow(m.id) },
                       ]}
                     >
@@ -1315,6 +1347,16 @@ export default function AdminInboxPanel({
                                 className="text-neutral-500 hover:text-neutral-900 hover:underline"
                               >
                                 {htmlShownId === item.id ? "Show text" : "Show HTML"}
+                              </button>
+                            )}
+                            {item.direction === "IN" && (
+                              <button
+                                type="button"
+                                onClick={() => handleMakeTask(item.id)}
+                                disabled={isPending}
+                                className="text-neutral-500 hover:text-neutral-900 hover:underline disabled:opacity-50"
+                              >
+                                {openListItem?.taskId ? "Open task" : "Make task"}
                               </button>
                             )}
                             <button
