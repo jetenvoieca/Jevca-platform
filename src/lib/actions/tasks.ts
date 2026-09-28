@@ -196,3 +196,39 @@ export async function getTaskActivity(taskId: string): Promise<TaskActivityItem[
   ];
   return items.sort((a, b) => b.at.localeCompare(a.at));
 }
+
+// Makes a task from a received email (2026-09-28, direct request): named
+// after its subject, with the sender's address and artist, and the email
+// linked to it — so it shows in the task's Activity, and replies in that
+// conversation link to the task too (see lib/emailThreading.ts). The
+// email itself stays in the Inbox. An email already made into a task
+// returns that task instead of a second one.
+export async function createTaskFromEmail(
+  inboundEmailId: string
+): Promise<{ ok: true; task: TaskItem } | { ok: false; error: string }> {
+  const inbound = await db.inboundEmail.findUnique({
+    where: { id: inboundEmailId },
+    select: { subject: true, fromAddress: true, fromName: true, artistId: true, taskId: true },
+  });
+  if (!inbound) return { ok: false, error: "Email not found — it may have been deleted." };
+
+  if (inbound.taskId) {
+    const existing = await db.task.findUnique({
+      where: { id: inbound.taskId },
+      include: { artist: { select: { name: true } } },
+    });
+    if (existing) return { ok: true, task: toTaskItem(existing) };
+  }
+
+  const task = await db.task.create({
+    data: {
+      name: inbound.subject?.trim() || `Email from ${inbound.fromName || inbound.fromAddress}`,
+      email: inbound.fromAddress,
+      artistId: inbound.artistId,
+    },
+    include: { artist: { select: { name: true } } },
+  });
+  await db.inboundEmail.update({ where: { id: inboundEmailId }, data: { taskId: task.id } });
+  revalidatePath("/accounts/inbox");
+  return { ok: true, task: toTaskItem(task) };
+}
