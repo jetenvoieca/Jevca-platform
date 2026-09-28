@@ -66,7 +66,9 @@ export default function TaskForm({
         className={inputCls}
       />
 
-      <div className="grid grid-cols-2 gap-3">
+      {/* Target date, Category and Artist share one row (2026-09-28, direct
+          request — see mock-up), stacking on a phone. */}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[10rem_1fr_2fr]">
         <div>
           <label className={labelCls}>Target date</label>
           <input
@@ -91,22 +93,21 @@ export default function TaskForm({
             ))}
           </select>
         </div>
-      </div>
-
-      <div>
-        <label className={labelCls}>Artist</label>
-        <select
-          value={form.artistId}
-          onChange={(e) => onChange({ artistId: e.target.value })}
-          className={inputCls}
-        >
-          <option value="">General (no artist)</option>
-          {artistOptions.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
+        <div>
+          <label className={labelCls}>Artist</label>
+          <select
+            value={form.artistId}
+            onChange={(e) => onChange({ artistId: e.target.value })}
+            className={inputCls}
+          >
+            <option value="">General (no artist)</option>
+            {artistOptions.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.name}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
 
       <div>
