@@ -32,7 +32,7 @@ import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 import TaskForm from "@/components/TaskForm";
-import TaskEmailPanel from "@/components/TaskEmailPanel";
+import TaskActivityPanel, { type TaskPopup } from "@/components/TaskActivityPanel";
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
 import SaleModal from "@/components/SaleModal";
@@ -65,11 +65,12 @@ import SwipeRow from "@/components/SwipeRow";
 //     mailbox's list the server loads is in the URL (?mailbox=business).
 //   - Task mode (CRM Phase 2): left = open tasks, modal = task form,
 //     right = Done list (completed tasks). A saved task can also send
-//     email from itself and shows its Activity — what was sent and the
-//     replies linked back to it (2026-09-27, see TaskEmailPanel). Such
-//     replies land in the Inbox as usual too, marked Task. There's no
-//     Save button (2026-09-28, direct request): a task saves itself when
-//     it's closed, before Email opens the email window, and on Completed.
+//     email from itself and shows its Activity — what was sent, the
+//     replies linked back to it (2026-09-27), and notes of what was done
+//     (2026-09-28); see TaskActivityPanel. Such replies land in the Inbox
+//     as usual too, marked Task. There's no Save button (2026-09-28,
+//     direct request): a task saves itself when it's closed, before Email
+//     or Activity opens its window, and on Completed.
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
 //     old standalone Alerts page), modal = the selected alert, right =
 //     the same Done list. A payment-overdue alert opens the client's
@@ -326,8 +327,9 @@ export default function AdminInboxPanel({
   const [taskForm, setTaskForm] = useState<TaskInput | null>(null);
   const [taskDirty, setTaskDirty] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
-  // Whether the task's own email window is open (see TaskEmailPanel).
-  const [taskComposing, setTaskComposing] = useState(false);
+  // Which of the task's own windows is open, if any — email or note (see
+  // TaskActivityPanel).
+  const [taskPopup, setTaskPopup] = useState<TaskPopup | null>(null);
 
   // The overdue-invoice alert whose sale modal is open, if any. Kept as
   // a copy of the alert (rather than looked up in the list) so the modal
@@ -412,7 +414,7 @@ export default function AdminInboxPanel({
     setSelectedSentId(null);
     setComposing(false);
     setTaskForm(null);
-    setTaskComposing(false);
+    setTaskPopup(null);
     setSaleAlert(null);
   };
 
@@ -705,14 +707,14 @@ export default function AdminInboxPanel({
     });
     setTaskDirty(false);
     setTaskError(null);
-    setTaskComposing(false);
+    setTaskPopup(null);
   };
 
   const startTask = () => {
     setTaskForm(EMPTY_TASK_FORM);
     setTaskDirty(false);
     setTaskError(null);
-    setTaskComposing(false);
+    setTaskPopup(null);
   };
 
   const handleTaskChange = (patch: Partial<TaskInput>) => {
@@ -758,18 +760,18 @@ export default function AdminInboxPanel({
     });
   };
 
-  // Email: a new or changed task is saved first, so the email is always
-  // linked to a saved task with its latest details.
-  const handleTaskEmail = () => {
+  // Email / Activity: a new or changed task is saved first, so the email
+  // or note is always linked to a saved task with its latest details.
+  const openTaskPopup = (popup: TaskPopup) => {
     if (taskForm?.id && !taskDirty) {
-      setTaskComposing(true);
+      setTaskPopup(popup);
       return;
     }
     startTransition(async () => {
       const id = await persistTask(false);
       if (!id) return;
       setTaskForm((f) => (f ? { ...f, id } : f));
-      setTaskComposing(true);
+      setTaskPopup(popup);
     });
   };
 
@@ -1216,17 +1218,18 @@ export default function AdminInboxPanel({
                       saving={isPending}
                       error={taskError}
                       onChange={handleTaskChange}
-                      onEmail={handleTaskEmail}
+                      onEmail={() => openTaskPopup("email")}
+                      onActivity={() => openTaskPopup("note")}
                       onComplete={handleTaskComplete}
                     />
                     {taskForm.id && (
-                      <TaskEmailPanel
+                      <TaskActivityPanel
                         key={taskForm.id}
                         taskId={taskForm.id}
                         defaultTo={taskForm.email}
                         mailboxAddresses={mailboxAddresses}
-                        composing={taskComposing}
-                        onComposeClose={() => setTaskComposing(false)}
+                        popup={taskPopup}
+                        onPopupClose={() => setTaskPopup(null)}
                       />
                     )}
                   </>
