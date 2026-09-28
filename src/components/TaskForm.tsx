@@ -8,9 +8,10 @@ import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 // purely presentational: the parent (AdminInboxPanel) owns the form state
 // and does the saving, since saving also has to refresh the lists behind
 // it. There's no Save button (2026-09-28, direct request): the task saves
-// itself when it's closed, and the two action buttons save it first too —
-// Email (left) then opens the task's email window (see TaskEmailPanel),
-// Completed (right) completes it and closes it.
+// itself when it's closed, and the action buttons save it first too —
+// Email (left) and Activity (middle, 2026-09-28) then open the task's
+// email or note window (see TaskActivityPanel), Completed (right)
+// completes it and closes it.
 //
 // The Email field (2026-09-27) is the address that email window starts
 // with — typed, or picked from the same artists and contacts list as the
@@ -24,6 +25,7 @@ export default function TaskForm({
   error,
   onChange,
   onEmail,
+  onActivity,
   onComplete,
 }: {
   form: TaskInput;
@@ -34,6 +36,7 @@ export default function TaskForm({
   error: string | null;
   onChange: (patch: Partial<TaskInput>) => void;
   onEmail: () => void;
+  onActivity: () => void;
   onComplete: () => void;
 }) {
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
@@ -132,9 +135,12 @@ export default function TaskForm({
       {error && <p className="text-sm text-red-600">{error}</p>}
 
       <ActionPanel>
-        <div className="flex w-full justify-between gap-3">
+        <div className="flex w-full flex-wrap justify-between gap-3">
           <ActionButton onClick={onEmail} disabled={saving}>
             Email
+          </ActionButton>
+          <ActionButton onClick={onActivity} disabled={saving}>
+            Activity
           </ActionButton>
           <ActionButton onClick={onComplete} disabled={saving}>
             Completed

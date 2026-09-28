@@ -11,7 +11,8 @@ import { readableEmailText } from "@/lib/emailText";
 // A task can also hold an email address and send email from itself
 // (2026-09-27) — sending goes through sendAdminEmail (actions/
 // adminEmail.ts) with the task's id; getTaskActivity below lists what was
-// sent and the replies that came back (see lib/emailThreading.ts).
+// sent and the replies that came back (see lib/emailThreading.ts), along
+// with the task's notes of what was done (2026-09-28, see TaskNote).
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -139,24 +140,30 @@ export async function deleteTask(id: string): Promise<void> {
   revalidatePath("/accounts/inbox");
 }
 
-export type TaskActivityItem = {
-  id: string;
-  direction: "IN" | "OUT";
-  fromAddress: string;
-  fromName: string | null;
-  toAddress: string;
-  subject: string | null;
-  body: string;
-  at: string; // ISO
-};
+// One entry in a task's Activity: an email sent from it, a reply to one,
+// or a note. `at` orders the list, newest first.
+export type TaskActivityItem =
+  | { kind: "SENT"; id: string; toAddress: string; subject: string | null; body: string; at: string }
+  | {
+      kind: "REPLY";
+      id: string;
+      fromAddress: string;
+      fromName: string | null;
+      subject: string | null;
+      body: string;
+      at: string;
+    }
+  | { kind: "NOTE"; id: string; date: string; text: string; at: string };
 
-// A task's Activity (2026-09-27): every email sent from it and every reply
-// linked back to it, newest first.
+// A task's Activity (2026-09-27): every email sent from it, every reply
+// linked back to it, and its notes (2026-09-28), newest first. A note
+// dated the day it was written sorts by when it was written; a note dated
+// some other day sits at midday on that day.
 export async function getTaskActivity(taskId: string): Promise<TaskActivityItem[]> {
-  const [sent, received] = await Promise.all([
+  const [sent, received, notes] = await Promise.all([
     db.outboundEmail.findMany({
       where: { taskId },
-      select: { id: true, fromAddress: true, toAddress: true, subject: true, body: true, sentAt: true },
+      select: { id: true, toAddress: true, subject: true, body: true, sentAt: true },
     }),
     db.inboundEmail.findMany({
       where: { taskId },
@@ -164,37 +171,84 @@ export async function getTaskActivity(taskId: string): Promise<TaskActivityItem[
         id: true,
         fromAddress: true,
         fromName: true,
-        toAddress: true,
         subject: true,
         textBody: true,
         htmlBody: true,
         receivedAt: true,
       },
     }),
+    db.taskNote.findMany({
+      where: { taskId },
+      select: { id: true, date: true, text: true, createdAt: true },
+    }),
   ]);
   const items: TaskActivityItem[] = [
     ...sent.map((r) => ({
+      kind: "SENT" as const,
       id: r.id,
-      direction: "OUT" as const,
-      fromAddress: r.fromAddress,
-      fromName: null,
       toAddress: r.toAddress,
       subject: r.subject,
       body: r.body || "",
       at: r.sentAt.toISOString(),
     })),
     ...received.map((r) => ({
+      kind: "REPLY" as const,
       id: r.id,
-      direction: "IN" as const,
       fromAddress: r.fromAddress,
       fromName: r.fromName,
-      toAddress: r.toAddress,
       subject: r.subject,
       body: readableEmailText(r.textBody, r.htmlBody),
       at: r.receivedAt.toISOString(),
     })),
+    ...notes.map((r) => {
+      const date = r.date.toISOString().slice(0, 10);
+      const writtenThatDay = r.createdAt.toISOString().slice(0, 10) === date;
+      return {
+        kind: "NOTE" as const,
+        id: r.id,
+        date,
+        text: r.text,
+        at: writtenThatDay ? r.createdAt.toISOString() : `${date}T12:00:00.000Z`,
+      };
+    }),
   ];
   return items.sort((a, b) => b.at.localeCompare(a.at));
+}
+
+export type TaskNoteInput = {
+  id: string | null; // null = a new note
+  taskId: string;
+  date: string; // "YYYY-MM-DD"
+  text: string;
+};
+
+// Adds a note to a task, or saves changes to one (2026-09-28).
+export async function saveTaskNote(
+  input: TaskNoteInput
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const text = input.text.trim();
+  if (!text) return { ok: false, error: "Write what was done first." };
+  if (!input.date) return { ok: false, error: "Choose a date." };
+  const date = new Date(`${input.date}T00:00:00.000Z`);
+  if (Number.isNaN(date.getTime())) return { ok: false, error: "That date isn't valid." };
+
+  if (input.id) {
+    const updated = await db.taskNote.updateMany({
+      where: { id: input.id, taskId: input.taskId },
+      data: { date, text },
+    });
+    if (updated.count === 0) return { ok: false, error: "Note not found — it may have been deleted." };
+    return { ok: true };
+  }
+
+  const task = await db.task.findUnique({ where: { id: input.taskId }, select: { id: true } });
+  if (!task) return { ok: false, error: "Task not found — it may have been deleted." };
+  await db.taskNote.create({ data: { taskId: task.id, date, text } });
+  return { ok: true };
+}
+
+export async function deleteTaskNote(id: string): Promise<void> {
+  await db.taskNote.deleteMany({ where: { id } });
 }
 
 // Makes a task from a received email (2026-09-28, direct request): named
