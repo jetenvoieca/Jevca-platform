@@ -197,7 +197,7 @@ function formatFileSize(bytes: number): string {
   return `${Math.max(1, Math.round(bytes / 1024))} KB`;
 }
 
-// Fits an email's original HTML (the "Show HTML" view) to the width of
+// Fits an email's original HTML (shown by default) to the width of
 // its frame (2026-09-24). Most HTML email is laid out at a fixed width
 // (often 600px+), wider than the modal, which used to leave it
 // scrolling sideways. Once the frame has loaded, the content is scaled
@@ -306,9 +306,10 @@ export default function AdminInboxPanel({
   const [threadLoading, setThreadLoading] = useState(false);
   const [threadError, setThreadError] = useState(false);
   const [replyBody, setReplyBody] = useState("");
-  // Which open email is showing its original HTML instead of text
-  // (2026-09-24) — see the "Show HTML" button in the thread view.
-  const [htmlShownId, setHtmlShownId] = useState<string | null>(null);
+  // An email with HTML shows it by default (2026-09-28, direct request —
+  // long emails were unreadable as plain text); this is the one switched
+  // to plain text with its "Show text" button, if any.
+  const [textShownId, setTextShownId] = useState<string | null>(null);
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
@@ -1331,7 +1332,7 @@ export default function AdminInboxPanel({
               ) : (
                 <div className="mx-auto max-w-xl space-y-4 pt-5">
                   {thread.map((item) => (
-                    // Each message's header (sender, date, Show HTML,
+                    // Each message's header (sender, date, Show text/HTML,
                     // Delete, addresses, subject) stays pinned at the top
                     // while its body scrolls, on a tinted background to set
                     // it apart from the body (2026-09-24).
@@ -1346,10 +1347,10 @@ export default function AdminInboxPanel({
                             {item.htmlBody && (
                               <button
                                 type="button"
-                                onClick={() => setHtmlShownId(htmlShownId === item.id ? null : item.id)}
+                                onClick={() => setTextShownId(textShownId === item.id ? null : item.id)}
                                 className="text-neutral-500 hover:text-neutral-900 hover:underline"
                               >
-                                {htmlShownId === item.id ? "Show text" : "Show HTML"}
+                                {textShownId === item.id ? "Show HTML" : "Show text"}
                               </button>
                             )}
                             {item.direction === "IN" && (
@@ -1383,13 +1384,15 @@ export default function AdminInboxPanel({
                       </div>
 
                       <div className="p-3">
-                        {htmlShownId === item.id && item.htmlBody ? (
-                          // The sender's original formatting, only when asked
-                          // for (2026-09-24). No allow-scripts, so nothing in
-                          // the email can run (allow-same-origin only lets
-                          // fitHtmlFrame measure and fit it); <base
-                          // target="_blank"> makes its links open in a new tab
-                          // rather than inside the frame.
+                        {item.htmlBody && textShownId !== item.id ? (
+                          // The sender's original formatting (2026-09-24),
+                          // shown by default since 2026-09-28. No
+                          // allow-scripts, so nothing in the email can run
+                          // (allow-same-origin only lets fitHtmlFrame measure
+                          // and fit it); <base target="_blank"> makes its
+                          // links open in a new tab rather than inside the
+                          // frame. Its images do load from the sender's
+                          // server, as in any mail app.
                           <iframe
                             title="Original email"
                             sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
