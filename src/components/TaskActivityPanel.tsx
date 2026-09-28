@@ -9,6 +9,7 @@ import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 import SwipeRow from "@/components/SwipeRow";
+import { EditIcon, TrashIcon } from "@/components/ActionIcons";
 
 // A task's Activity (2026-09-27, direct request — "moving into managing
 // tasks, not just recording them"), shown under the task form once the
@@ -195,6 +196,7 @@ export default function TaskActivityPanel({
                   actions={[
                     {
                       label: "Edit",
+                      icon: <EditIcon />,
                       // Editing doesn't remove the row, so after a full
                       // swipe it always slides back (see SwipeRow).
                       onClick: () => {
@@ -202,7 +204,7 @@ export default function TaskActivityPanel({
                         return false;
                       },
                     },
-                    { label: "Delete", danger: true, onClick: () => handleDeleteNote(item.id) },
+                    { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteNote(item.id) },
                   ]}
                 >
                   {renderRow(item)}
