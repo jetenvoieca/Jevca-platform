@@ -9,6 +9,7 @@ export type TopNavKey =
   | "expenses"
   | "accountSummary"
   | "sales"
+  | "website"
   | "guides"
   | "accountSettings";
 
@@ -26,6 +27,10 @@ export type TopNavKey =
 // "Guides" added 2026-09-04, direct request — step-by-step
 // documentation the platform owner writes for themselves, placed just
 // above Settings as asked.
+//
+// "Website" added 2026-09-29, direct request — the editor for the
+// business's own website (jetenvoieca.com), placed just above Guides as
+// asked. Deliberately separate from the artist site builder (Sites).
 //
 // "Inbox" added 2026-09-05, Email Integration — the unified admin inbox
 // for every reply to an artist's own @jevca.art address plus ad hoc
@@ -60,6 +65,7 @@ export function buildAccountsSection(
       { label: "Expenses", href: "/accounts/expenses", active: active === "expenses" },
       { label: "Account", href: "/accounts/summary", active: active === "accountSummary" },
       { label: "Consolidated Sales", href: "/accounts/sales", active: active === "sales" },
+      { label: "Website", href: "/accounts/website", active: active === "website" },
       { label: "Guides", href: "/accounts/guides", active: active === "guides" },
       { label: "Settings", href: "/accounts/settings", active: active === "accountSettings" },
     ],

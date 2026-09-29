@@ -1609,3 +1609,71 @@ model Guide {
 
   @@index([category])
 }
+
+// ---------------------------------------------------------------------
+// The business's own website, jetenvoieca.com (2026-09-29, direct
+// request). Platform-level like Guide above — deliberately NOT built on
+// Site/Page (the artist site builder), which belong to an Artist: this
+// is the business's site, not a client's. Edited from Administration →
+// Website. Edits go live on save — no draft/publish (direct decision).
+// ---------------------------------------------------------------------
+
+// The one Home page — always id "singleton", same pattern as
+// PlatformSettings. imageUrl is a direct upload (like Artist.logoUrl),
+// not an Image row: Image belongs to an Artist's Media Catalogue.
+model WebsiteHome {
+  id String @id @default("singleton")
+
+  imageUrl String?
+  wordmark String  @default("JETENVOIECA")
+  email    String?
+
+  updatedAt DateTime @updatedAt
+}
+
+// A content page — e.g. "Artists". `name` is what the editor's page
+// dropdown shows; `slug` is its web address (jetenvoieca.com/<slug>),
+// set from the name and editable. title/caption/text are what the page
+// shows: small orange label, large serif heading, body text.
+model WebsitePage {
+  id   String @id @default(cuid())
+  name String
+  slug String @unique
+
+  title   String @default("")
+  caption String @default("")
+  text    String @default("")
+
+  position Int @default(0)
+
+  menuItems WebsiteMenuItem[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position])
+}
+
+// One item in the Home page's menu — e.g. label "ARTISTS", text
+// "Websites for Artists", hoverText shown beneath it on mouseover, and
+// the content page it links to. Its own text, not read from the linked
+// page (direct decision — menu wording is usually an abbreviated form).
+// pageId is cleared, not the item deleted, if that page is deleted.
+model WebsiteMenuItem {
+  id String @id @default(cuid())
+
+  label     String @default("")
+  text      String @default("")
+  hoverText String @default("")
+
+  pageId String?
+  page   WebsitePage? @relation(fields: [pageId], references: [id], onDelete: SetNull)
+
+  position Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([position])
+  @@index([pageId])
+}
