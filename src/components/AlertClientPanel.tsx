@@ -11,9 +11,10 @@ import type { ClientPanelData } from "@/lib/clientPanelData";
 // The centre panel for a payment-overdue alert (2026-09-19, CRM Phase 3):
 // the same Owner / Domain / Subscription cards as Administration →
 // Clients, so the missing payment can be recorded right here, followed by
-// the action panel. "Up to date" logs the client in the Done list once
-// the payment has been added (it refuses until then). Cancel
-// subscription / Cancel Domain / Email Client are placeholders for now.
+// the action panel. "Up to date" records the client in the Alert view's
+// processed list once the payment has been added (it refuses until then).
+// Cancel subscription / Cancel Domain / Email Client are placeholders for
+// now.
 export default function AlertClientPanel({
   data,
   onDone,
