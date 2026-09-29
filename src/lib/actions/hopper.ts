@@ -34,10 +34,10 @@ import { deleteImagePermanently } from "./imageDelete";
 // building that route's data is a genuine, different case worth
 // checking if this recurs there too.
 
-// countHopper/countBucket power sidebar badges in the shared site layout
+// countHopper powers the Hopper sidebar badge in the shared site layout
 // (src/app/sites/[id]/layout.tsx), which re-runs on every navigation
 // inside a site. A plain db.image.count() is cheap on its own, but paid
-// on every single click it adds up — and neither number needs to be
+// on every single click it adds up — and it doesn't need to be
 // exact to the second (2026-08-31, same reasoning as getOpenAlerts in
 // lib/alerts.ts). Cached for 60s per artist instead of queried fresh on
 // every navigation.
@@ -136,16 +136,6 @@ export async function binHopperItems(
 
 export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {
   await db.image.update({ where: { id }, data: { status: "SORTED", needsReview: true } });
-}
-
-const countBucketCached = unstable_cache(
-  async (artistId: string) => db.image.count({ where: { artistId, status: "BUCKET" } }),
-  ["count-bucket"],
-  { revalidate: 60 }
-);
-
-export async function countBucket(artistId: string): Promise<number> {
-  return countBucketCached(artistId);
 }
 
 export async function addHopperItemToBucket(

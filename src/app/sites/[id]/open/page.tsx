@@ -35,6 +35,6 @@ export default async function OpenSitePage({
   }
 
   // No active menu, or an active menu with nothing in it yet — fall back
-  // to the Web Site section rather than a dead end.
-  redirect(`/sites/${id}`);
+  // to the Website section's Menu page rather than a dead end.
+  redirect(`/sites/${id}/menus`);
 }

@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { countHopper, countBucket } from "@/lib/actions/hopper";
+import { countHopper } from "@/lib/actions/hopper";
 import { countArtworksNeedingReview } from "@/lib/actions/artworks";
 import { countMediaNeedingReview } from "@/lib/actions/mediaCatalogue";
 import { getOpenAlerts } from "@/lib/alerts";
@@ -36,7 +36,6 @@ export default async function SiteLayout({
   const [
     pages,
     hopperCount,
-    bucketCount,
     artworkNeedsReviewCount,
     mediaNeedsReviewCount,
     openAlerts,
@@ -71,7 +70,6 @@ export default async function SiteLayout({
       },
     }),
     countHopper(site.artistId),
-    countBucket(site.artistId),
     countArtworksNeedingReview(site.artistId),
     countMediaNeedingReview(site.artistId),
     getOpenAlerts(),
@@ -85,14 +83,9 @@ export default async function SiteLayout({
       <LastVisitedSiteTracker siteId={id} />
       <SiteShell
         siteId={id}
-        // Falls back to the artist's name for the rare site with no
-        // name of its own (2026-09-02, direct request) — the nav
-        // section needs a label either way.
-        siteLabel={site.name.trim() || site.artist.name}
         pages={pages.map((p) => ({ id: p.id, title: p.title, type: p.type, visible: p.visible }))}
         salesEnabled={site.salesEnabled}
         hopperCount={hopperCount}
-        bucketCount={bucketCount}
         artworkNeedsReviewCount={artworkNeedsReviewCount}
         mediaNeedsReviewCount={mediaNeedsReviewCount}
         alertCount={openAlerts.length}

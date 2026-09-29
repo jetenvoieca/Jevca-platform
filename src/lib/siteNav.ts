@@ -3,133 +3,104 @@ import type { ReactNode } from "react";
 import { buildAccountsSection } from "@/lib/topNav";
 
 // Colour for every section that's specific to the site you're currently
-// inside (the site's own name/pages section, Content, Financial) —
-// distinct from the default grey used for Administration/Sites, so it's
+// inside (Artworks, Media, Website, Financial) — distinct from the
+// default grey used for Administration/Templates/Sites, so it's
 // visually obvious which groups are "always there" versus "belong to
-// this particular site" (2026-09-02, direct request).
-// Exported (2026-09-12) so the separate, reduced evaluation-only nav
-// (see lib/previewNav.ts) can reuse the exact same colour rather than
-// redefining it a second time.
+// this particular site". Also reused by the evaluation-only nav
+// (lib/previewNav.ts).
 export const SITE_SECTION_COLOR = "#635572";
 
 // Which page (within a site) is currently active, for highlighting and
-// for deciding which of the four groups the accordion should open on.
-// "overview" is the site's own settings/summary page (/sites/[id] with
-// nothing more specific); "menu" is the Menu Builder page; "pages" is
-// any individual page's own editor (/sites/[id]/pages/[pageId]) — all
-// three belong to the site's own section, but only "menu" highlights
-// the Menu link itself (an open page editor highlights that page
-// within the page list instead, which SiteShell already handles
-// locally).
+// for deciding which section the accordion opens on.
+// "profile" is the site's bare /sites/[id] Owner/Financial/Personal
+// Profile page (in Financial); "menu" is the Menu Builder; "pages" is
+// any individual page's own editor (/sites/[id]/pages/[pageId]) — an
+// open page editor highlights that page within the Website section's
+// page list instead, which SiteShell handles locally.
 export type SiteNavKey =
-  | "overview"
-  | "menu"
-  | "pages"
-  | "hopper"
   | "artworks"
-  | "artworkSettings"
-  | "galleries"
   | "curations"
+  | "galleries"
+  | "artworkSettings"
+  | "hopper"
   | "media"
   | "bucket"
   | "mediaSettings"
-  // Artist's own Account (2026-09-27) — top of Financial.
+  | "menu"
+  | "pages"
   | "account"
   | "sales"
-  // Read-only payments report (2026-09-13) — sits directly under Sales
-  // in the Financial section, sharing the same salesEnabled gate.
-  | "paymentsReceived"
-  | "customers"
   | "purchases"
+  | "customers"
+  | "profile"
   | "purchasesSettings";
 
-const SITE_INFO_KEYS: SiteNavKey[] = ["overview", "menu", "pages"];
+const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "curations", "galleries", "artworkSettings"];
 
-// "galleries" (displayed as "Locations") moved from Financial into
-// Content, 2026-08-31 — it's cataloguing data about where artwork
-// lives, same family as the Artwork/Media catalogues either side of
-// it, not a financial record like Sales or Purchases.
-const CONTENT_KEYS: SiteNavKey[] = [
-  "hopper",
-  "artworks",
-  "artworkSettings",
-  "galleries",
-  "curations",
-  "media",
-  "bucket",
-  "mediaSettings",
-];
+const MEDIA_KEYS: SiteNavKey[] = ["hopper", "media", "bucket", "mediaSettings"];
+
+const WEBSITE_KEYS: SiteNavKey[] = ["menu", "pages"];
 
 const FINANCIAL_KEYS: SiteNavKey[] = [
   "account",
   "sales",
-  "paymentsReceived",
-  "customers",
   "purchases",
+  "customers",
+  "profile",
   "purchasesSettings",
 ];
 
 export function buildSiteNavEntries({
   siteId,
-  siteLabel,
   active,
   alertCount,
   hopperCount,
-  bucketCount,
   artworkNeedsReviewCount,
   mediaNeedsReviewCount,
   salesEnabled,
-  siteSectionBody,
+  websiteSectionBody,
 }: {
   siteId: string;
-  // What to label the site's own section with — the site's name, or
-  // (2026-09-02) the artist's name as a fallback for the rare site
-  // with no name of its own. Resolved by the caller (the layout has
-  // both site.name and site.artist.name to hand) rather than here.
-  siteLabel: string;
   active: SiteNavKey | null;
   alertCount: number;
   hopperCount: number;
-  bucketCount: number;
   artworkNeedsReviewCount: number;
   mediaNeedsReviewCount: number;
   salesEnabled: boolean;
-  // The site's own section needs more than plain links (per-page
-  // visibility toggles, an inline add-page form) — that part is built
-  // by the caller (SiteShell, which holds the client-side state for
-  // it) and passed straight through here.
-  siteSectionBody: ReactNode;
+  // The Website section needs more than plain links (per-page
+  // visibility toggles, an inline add-page form) — built by SiteShell,
+  // which holds the client-side state for it, and passed through here.
+  websiteSectionBody: ReactNode;
 }): AppShellNavEntry[] {
   const base = `/sites/${siteId}`;
 
-  const contentChildren: AppShellNavItem[] = [
-    { label: "Hopper", href: `${base}/hopper`, active: active === "hopper", badge: hopperCount },
+  const artworkChildren: AppShellNavItem[] = [
     {
-      label: "Artwork Catalogue",
+      label: "Catalogue",
       href: `${base}/artworks`,
       active: active === "artworks",
       badge: artworkNeedsReviewCount,
     },
-    // "Locations" (was "Galleries", same route — only the label has
-    // changed for now) sits here, between Artwork Catalogue and its
-    // Settings, per direct request 2026-08-31.
-    { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },
-    // Curations (2026-09-24) — directly under Locations, per direct
-    // request. See the note on Curation in schema.prisma.
     { label: "Curations", href: `${base}/curations`, active: active === "curations" },
+    // "Locations" — the /galleries route, relabelled.
+    { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },
     {
       label: "Settings",
       href: `${base}/artworks/settings`,
       active: active === "artworkSettings",
       subtle: true,
     },
+  ];
+
+  const mediaChildren: AppShellNavItem[] = [
+    { label: "Hopper", href: `${base}/hopper`, active: active === "hopper", badge: hopperCount },
     {
-      label: "Media Catalogue",
+      label: "Catalogue",
       href: `${base}/media`,
       active: active === "media",
       badge: mediaNeedsReviewCount,
     },
-    { label: "Bucket", href: `${base}/bucket`, active: active === "bucket", subtle: true },
+    { label: "Bucket", href: `${base}/bucket`, active: active === "bucket" },
     {
       label: "Settings",
       href: `${base}/media/settings`,
@@ -138,26 +109,18 @@ export function buildSiteNavEntries({
     },
   ];
 
+  // Sales and Customers sit behind salesEnabled; Account, Purchases and
+  // Profile don't.
   const financialChildren: AppShellNavItem[] = [
-    // Account (2026-09-27) — top of Financial, per direct request. Not
-    // behind salesEnabled: it also shows Purchases, which aren't either.
     { label: "Account", href: `${base}/account`, active: active === "account" },
     ...(salesEnabled
-      ? [
-          { label: "Sales", href: `${base}/sales`, active: active === "sales" },
-          // Payments received (2026-09-13) — a read-only report of every
-          // paid Payment, sits directly under Sales per the mockup, and
-          // shares its salesEnabled gate since it's the same sales data.
-          {
-            label: "Payments received",
-            href: `${base}/payments-received`,
-            active: active === "paymentsReceived",
-            subtle: true,
-          },
-          { label: "Customers", href: `${base}/customers`, active: active === "customers" },
-        ]
+      ? [{ label: "Sales", href: `${base}/sales`, active: active === "sales" }]
       : []),
     { label: "Purchases", href: `${base}/purchases`, active: active === "purchases" },
+    ...(salesEnabled
+      ? [{ label: "Customers", href: `${base}/customers`, active: active === "customers" }]
+      : []),
+    { label: "Profile", href: base, active: active === "profile" },
     {
       label: "Settings",
       href: `${base}/purchases/settings`,
@@ -166,49 +129,44 @@ export function buildSiteNavEntries({
     },
   ];
 
+  const sectionActive = (keys: SiteNavKey[]) => active !== null && keys.includes(active);
+
   return [
     // Same "Administration" group as the top-level Accounts pages —
-    // none of its own keys apply while inside a site, so it's never
-    // the one that auto-opens here.
+    // none of its own keys apply while inside a site.
     buildAccountsSection(null, alertCount),
-    // "Templates" (2026-09-11) — was missing entirely from inside a
-    // site, the one gap in an otherwise-shared nav structure (see
-    // topNav.ts's buildTopNavItems, which places it in this same
-    // Administration → Templates → Sites order). None of this site's
-    // own keys ever match "templates", so it's never shown active here
-    // — reaching Templates from inside a site always means leaving to
-    // the cross-site library, same as clicking it from anywhere else.
     { label: "Templates", href: "/templates", active: false },
-    // Plain link back to the full Sites list (2026-09-02 — this used to
-    // be a section containing the current site's own pages; that's now
-    // its own section below, labelled with the site itself, so this one
-    // only ever does the one job its label says).
     { label: "Sites", href: "/", active: false },
-    // "Content" moved above the site's own section (2026-09-12, direct
-    // request) — Hopper/Artwork/Media Catalogue are what's used day to
-    // day; the site's own page list is reached less often.
     {
-      label: "Content",
+      label: "Artworks",
       section: true,
-      key: "content",
+      key: "artworks",
       color: SITE_SECTION_COLOR,
-      active: active !== null && CONTENT_KEYS.includes(active),
-      children: contentChildren,
+      active: sectionActive(ARTWORK_KEYS),
+      children: artworkChildren,
     },
     {
-      label: siteLabel,
+      label: "Media",
       section: true,
-      key: "site",
+      key: "media",
       color: SITE_SECTION_COLOR,
-      active: active !== null && SITE_INFO_KEYS.includes(active),
-      customChildren: siteSectionBody,
+      active: sectionActive(MEDIA_KEYS),
+      children: mediaChildren,
+    },
+    {
+      label: "Website",
+      section: true,
+      key: "website",
+      color: SITE_SECTION_COLOR,
+      active: sectionActive(WEBSITE_KEYS),
+      customChildren: websiteSectionBody,
     },
     {
       label: "Financial",
       section: true,
       key: "financial",
       color: SITE_SECTION_COLOR,
-      active: active !== null && FINANCIAL_KEYS.includes(active),
+      active: sectionActive(FINANCIAL_KEYS),
       children: financialChildren,
     },
   ];

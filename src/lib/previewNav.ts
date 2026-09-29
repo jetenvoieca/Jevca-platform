@@ -5,14 +5,12 @@ export type PreviewNavKey = "artworks" | "hopper" | "galleries" | "sales" | "gui
 
 // The reduced, evaluation-only nav shown under /preview/<slug>/* — see
 // previewSites.ts. Deliberately a fixed, hand-picked list (not a
-// filtered version of buildSiteNavEntries) rather than the same menu
-// with items hidden: this is a genuinely different, much simpler menu
-// with no Administration, Templates, Sites, Media Catalogue, Bucket,
-// Customers, Purchases, or the site's own Pages/Menu/Profile section.
+// filtered version of buildSiteNavEntries): a genuinely different, much
+// simpler menu, laid out in the same Artworks / Media / Financial
+// grouping as the full per-site nav.
 //
 // "Guides" (2026-09-12) is a placeholder for now — it links to a page
-// that just says so; the real read-only guides view is a separate,
-// later piece of work.
+// that just says so; the real read-only guides view is later work.
 export function buildPreviewNavEntries({
   basePath,
   active,
@@ -24,11 +22,22 @@ export function buildPreviewNavEntries({
 }): AppShellNavEntry[] {
   return [
     {
-      label: "Content",
+      label: "Artworks",
       section: true,
-      key: "content",
+      key: "artworks",
       color: SITE_SECTION_COLOR,
-      active: active === "hopper" || active === "artworks" || active === "galleries",
+      active: active === "artworks" || active === "galleries",
+      children: [
+        { label: "Catalogue", href: `${basePath}/artworks`, active: active === "artworks" },
+        { label: "Locations", href: `${basePath}/galleries`, active: active === "galleries" },
+      ],
+    },
+    {
+      label: "Media",
+      section: true,
+      key: "media",
+      color: SITE_SECTION_COLOR,
+      active: active === "hopper",
       children: [
         {
           label: "Hopper",
@@ -36,12 +45,6 @@ export function buildPreviewNavEntries({
           active: active === "hopper",
           badge: hopperCount,
         },
-        {
-          label: "Artwork Catalogue",
-          href: `${basePath}/artworks`,
-          active: active === "artworks",
-        },
-        { label: "Locations", href: `${basePath}/galleries`, active: active === "galleries" },
       ],
     },
     { label: "Guides", href: `${basePath}/guides`, active: active === "guides" },
