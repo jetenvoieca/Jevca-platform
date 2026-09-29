@@ -15,21 +15,28 @@ import {
 const inputCls = "w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm";
 const labelCls = "mb-1 block text-xs font-medium text-neutral-500";
 
-// Content page editor for the business website (2026-09-29). The
-// preview updates as you type; text fields save on leaving the field
-// and go live on save — no draft/publish (direct decision).
+// Content page editor for the business website (2026-09-29) — also
+// used for the fixed Contact page, which shows the Home page's email as
+// a link and has no Delete. The preview updates as you type; text
+// fields save on leaving the field and go live on save — no draft/
+// publish (direct decision).
 export default function WebsiteContentEditor({
   pages,
   initialPage,
+  contactEmail,
 }: {
   pages: WebsitePageSummary[];
   initialPage: WebsitePageData;
+  // The Home page's email — passed for the Contact page only.
+  contactEmail: string | null;
 }) {
   const router = useRouter();
   const [page, setPage] = useState(initialPage);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saving, startSaving] = useTransition();
+
+  const isContact = page.kind === "CONTACT";
 
   function save() {
     setError(null);
@@ -69,6 +76,7 @@ export default function WebsiteContentEditor({
     <div className="h-full shadow-sm">
       <WebsiteContentView
         page={page}
+        email={isContact ? contactEmail : null}
         nav={[
           { label: "Home", href: null },
           ...pages.map((p) => ({ label: p.id === page.id ? page.name : p.name, href: null })),
@@ -130,26 +138,36 @@ export default function WebsiteContentEditor({
         />
       </div>
 
+      {isContact && (
+        <p className="text-xs text-neutral-500">
+          Email shown: {contactEmail || "none yet"} — change it on the Home page.
+        </p>
+      )}
+
       {saving && <p className="text-xs text-neutral-400">Saving…</p>}
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      <button
-        type="button"
-        onClick={() => setConfirmDelete(true)}
-        className="w-full rounded-md border border-neutral-300 bg-white py-2 text-sm text-neutral-700 hover:border-red-300 hover:text-red-600"
-      >
-        Delete page
-      </button>
+      {!isContact && (
+        <>
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            className="w-full rounded-md border border-neutral-300 bg-white py-2 text-sm text-neutral-700 hover:border-red-300 hover:text-red-600"
+          >
+            Delete page
+          </button>
 
-      <ConfirmDialog
-        open={confirmDelete}
-        title="Delete this page?"
-        message="It will disappear from the live website straight away. Any Home menu item linking to it will lose its link."
-        confirmLabel="Delete"
-        danger
-        onConfirm={handleDelete}
-        onCancel={() => setConfirmDelete(false)}
-      />
+          <ConfirmDialog
+            open={confirmDelete}
+            title="Delete this page?"
+            message="It will disappear from the live website straight away. Any Home menu item linking to it will lose its link."
+            confirmLabel="Delete"
+            danger
+            onConfirm={handleDelete}
+            onCancel={() => setConfirmDelete(false)}
+          />
+        </>
+      )}
     </div>
   );
 

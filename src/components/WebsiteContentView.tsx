@@ -18,7 +18,9 @@ export type WebsiteNavLink = {
 
 // A content page of the business website, jetenvoieca.com (2026-09-29).
 // The ONE render of this page — used by the editor's live preview now
-// and by the public site later, so the two can never drift apart.
+// and by the public site later, so the two can never drift apart. Also
+// renders the Contact page, which is the same page plus `email` shown
+// as a link beneath the text.
 //
 // Plain beige page, a simple centred column (small orange title, large
 // serif caption, body text, a decorative line), and a hamburger button
@@ -27,9 +29,12 @@ export type WebsiteNavLink = {
 export default function WebsiteContentView({
   page,
   nav,
+  email,
 }: {
   page: WebsiteContentViewPage;
   nav: WebsiteNavLink[];
+  // Contact page only.
+  email?: string | null;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -80,6 +85,14 @@ export default function WebsiteContentView({
         <p className="mt-8 max-w-[560px] whitespace-pre-line text-[15px] leading-[1.9] text-[#45413A]">
           {page.text}
         </p>
+        {email && (
+          <a
+            href={`mailto:${email}`}
+            className="mt-8 inline-block text-[12px] uppercase tracking-[0.2em] text-[#AB5C2E] hover:underline"
+          >
+            {email}
+          </a>
+        )}
         <div className="mt-28 border-t border-[#DDD5B8]" />
       </div>
     </div>

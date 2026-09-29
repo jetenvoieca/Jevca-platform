@@ -24,9 +24,19 @@ export default async function WebsiteEditorPage({ selectedId }: { selectedId: st
   } else {
     const page = await getWebsitePage(selectedId);
     if (!page) notFound();
+    // The Contact page shows the Home page's email (direct decision —
+    // one address, set in one place).
+    const contactEmail = page.kind === "CONTACT" ? (await getWebsiteHome()).email : null;
     // key: a fresh editor per page, so switching pages never carries
     // one page's typed-in state across to another.
-    content = <WebsiteContentEditor key={page.id} pages={pages} initialPage={page} />;
+    content = (
+      <WebsiteContentEditor
+        key={page.id}
+        pages={pages}
+        initialPage={page}
+        contactEmail={contactEmail}
+      />
+    );
   }
 
   return (

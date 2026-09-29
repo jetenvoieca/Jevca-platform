@@ -10,6 +10,11 @@ import { revalidatePath } from "next/cache";
 // draft/publish, direct decision). See WebsiteHome / WebsitePage /
 // WebsiteMenuItem in schema.prisma.
 
+// CONTENT = an ordinary content page. CONTACT = the one fixed Contact
+// page: same fields, plus the Home page's email shown as a link, and it
+// can't be deleted.
+export type WebsitePageKind = "CONTENT" | "CONTACT";
+
 export type WebsitePageSummary = {
   id: string;
   name: string;
@@ -18,6 +23,7 @@ export type WebsitePageSummary = {
 
 export type WebsitePageData = {
   id: string;
+  kind: WebsitePageKind;
   name: string;
   slug: string;
   title: string;
@@ -89,11 +95,12 @@ export async function listWebsitePages(): Promise<WebsitePageSummary[]> {
 export async function getWebsitePage(id: string): Promise<WebsitePageData | null> {
   return db.websitePage.findUnique({
     where: { id },
-    select: { id: true, name: true, slug: true, title: true, caption: true, text: true },
+    select: { id: true, kind: true, name: true, slug: true, title: true, caption: true, text: true },
   });
 }
 
 // "+ Add content page" — creates an empty page at the end of the list.
+// Always a CONTENT page: the one Contact page is created by migration.
 export async function createWebsitePage(): Promise<{ id: string }> {
   const name = "New page";
   const highest = await db.websitePage.findFirst({
@@ -114,13 +121,13 @@ export async function createWebsitePage(): Promise<{ id: string }> {
   return page;
 }
 
-// Saves every field of a content page. The web address is cleaned up
+// Saves every field of a page. The web address is cleaned up
 // (e.g. "Our Artists!" -> "our-artists"), taken from the name if left
 // blank, and refused if another page already uses it. Returns the
 // address actually saved.
 export async function updateWebsitePage(
   id: string,
-  data: Omit<WebsitePageData, "id">
+  data: Omit<WebsitePageData, "id" | "kind">
 ): Promise<{ slug: string } | { error: string }> {
   const name = data.name.trim();
   if (!name) return { error: "Page name is required." };
@@ -141,10 +148,11 @@ export async function updateWebsitePage(
   return { slug };
 }
 
-// Any Home menu item pointing at this page keeps its text but loses its
-// link (onDelete: SetNull in schema.prisma).
+// Content pages only — the Contact page is never deleted. Any Home menu
+// item pointing at a deleted page keeps its text but loses its link
+// (onDelete: SetNull in schema.prisma).
 export async function deleteWebsitePage(id: string): Promise<void> {
-  await db.websitePage.delete({ where: { id } });
+  await db.websitePage.deleteMany({ where: { id, kind: "CONTENT" } });
   revalidateWebsite();
 }
 
