@@ -48,6 +48,16 @@ export type WebsiteMenuItemData = {
 const HOME_ID = "singleton";
 const DEFAULT_WORDMARK = "JETENVOIECA";
 
+const pageSelect = {
+  id: true,
+  kind: true,
+  name: true,
+  slug: true,
+  title: true,
+  caption: true,
+  text: true,
+} as const;
+
 function revalidateWebsite() {
   revalidatePath("/accounts/website", "layout");
 }
@@ -93,10 +103,12 @@ export async function listWebsitePages(): Promise<WebsitePageSummary[]> {
 }
 
 export async function getWebsitePage(id: string): Promise<WebsitePageData | null> {
-  return db.websitePage.findUnique({
-    where: { id },
-    select: { id: true, kind: true, name: true, slug: true, title: true, caption: true, text: true },
-  });
+  return db.websitePage.findUnique({ where: { id }, select: pageSelect });
+}
+
+// For the public site — finds a page by its web address.
+export async function getWebsitePageBySlug(slug: string): Promise<WebsitePageData | null> {
+  return db.websitePage.findUnique({ where: { slug }, select: pageSelect });
 }
 
 // "+ Add content page" — creates an empty page at the end of the list.

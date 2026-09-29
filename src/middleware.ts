@@ -1,6 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 
+// The business website, jetenvoieca.com (2026-09-29). Requests to these
+// addresses never reach the admin tool: they're served from the public
+// routes under /public-website (the same WebsiteHomeView/
+// WebsiteContentView the editor previews), with no login. The bare
+// domain is sent to the www address, the site's main address (direct
+// decision). Only /api/media (the home image) is reachable from the
+// website; every other /api route is a 404 there.
+const WEBSITE_HOST = "www.jetenvoieca.com";
+const WEBSITE_BARE_HOST = "jetenvoieca.com";
+const WEBSITE_ROUTE_PREFIX = "/public-website";
+
 // Paths that authenticate themselves separately, or need to be reachable
 // without the app's shared password:
 // - /api/hopper/*         — the iPhone Shortcut, authenticated by its own
@@ -26,7 +37,7 @@ import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 // - /api/media/*          — serves the actual image/video files out of R2.
 //   Has to be reachable by things that aren't a logged-in browser session
 //   at all — Shotstack fetching source clips to render (what this fixes),
-//   and eventually the public-facing site itself once that's built. The
+//   and the public websites (jetenvoieca.com's home image, above). The
 //   files behind it aren't sensitive; the login wall exists to protect
 //   the admin tool, not the media library.
 // - /api/webhooks/resend-inbound — authenticated by Resend's own webhook
@@ -51,8 +62,22 @@ const PUBLIC_PATH_PREFIXES = [
 ];
 
 export async function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
+  const { pathname, search } = request.nextUrl;
+  const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
 
+  // ---- The business website ----
+  if (host === WEBSITE_BARE_HOST) {
+    return NextResponse.redirect(`https://${WEBSITE_HOST}${pathname}${search}`, 301);
+  }
+  if (host === WEBSITE_HOST) {
+    if (pathname.startsWith("/api/media")) return NextResponse.next();
+    if (pathname.startsWith("/api/")) return new NextResponse(null, { status: 404 });
+    const url = request.nextUrl.clone();
+    url.pathname = pathname === "/" ? WEBSITE_ROUTE_PREFIX : `${WEBSITE_ROUTE_PREFIX}${pathname}`;
+    return NextResponse.rewrite(url);
+  }
+
+  // ---- The admin tool ----
   if (PUBLIC_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))) {
     return NextResponse.next();
   }
