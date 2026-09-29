@@ -13,6 +13,16 @@ import { revalidatePath } from "next/cache";
 export type WebsitePageSummary = {
   id: string;
   name: string;
+  slug: string;
+};
+
+export type WebsitePageData = {
+  id: string;
+  name: string;
+  slug: string;
+  title: string;
+  caption: string;
+  text: string;
 };
 
 export type WebsiteHomeData = {
@@ -48,17 +58,12 @@ function slugify(name: string): string {
   return slug || "page";
 }
 
-// Adds -2, -3, ... until the slug isn't used by another page.
-async function uniqueSlug(name: string, excludeId?: string): Promise<string> {
+// For new pages only: adds -2, -3, ... until the slug isn't in use.
+async function uniqueSlug(name: string): Promise<string> {
   const base = slugify(name);
   let candidate = base;
   let n = 2;
-  while (
-    await db.websitePage.findFirst({
-      where: { slug: candidate, ...(excludeId ? { id: { not: excludeId } } : {}) },
-      select: { id: true },
-    })
-  ) {
+  while (await db.websitePage.findUnique({ where: { slug: candidate }, select: { id: true } })) {
     candidate = `${base}-${n}`;
     n += 1;
   }
@@ -77,7 +82,14 @@ function sanitizeFilename(name: string) {
 export async function listWebsitePages(): Promise<WebsitePageSummary[]> {
   return db.websitePage.findMany({
     orderBy: { position: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, slug: true },
+  });
+}
+
+export async function getWebsitePage(id: string): Promise<WebsitePageData | null> {
+  return db.websitePage.findUnique({
+    where: { id },
+    select: { id: true, name: true, slug: true, title: true, caption: true, text: true },
   });
 }
 
@@ -100,6 +112,40 @@ export async function createWebsitePage(): Promise<{ id: string }> {
 
   revalidateWebsite();
   return page;
+}
+
+// Saves every field of a content page. The web address is cleaned up
+// (e.g. "Our Artists!" -> "our-artists"), taken from the name if left
+// blank, and refused if another page already uses it. Returns the
+// address actually saved.
+export async function updateWebsitePage(
+  id: string,
+  data: Omit<WebsitePageData, "id">
+): Promise<{ slug: string } | { error: string }> {
+  const name = data.name.trim();
+  if (!name) return { error: "Page name is required." };
+
+  const slug = slugify(data.slug.trim() || name);
+  const clash = await db.websitePage.findFirst({
+    where: { slug, id: { not: id } },
+    select: { id: true },
+  });
+  if (clash) return { error: `jetenvoieca.com/${slug} is already used by another page.` };
+
+  await db.websitePage.update({
+    where: { id },
+    data: { name, slug, title: data.title, caption: data.caption, text: data.text },
+  });
+
+  revalidateWebsite();
+  return { slug };
+}
+
+// Any Home menu item pointing at this page keeps its text but loses its
+// link (onDelete: SetNull in schema.prisma).
+export async function deleteWebsitePage(id: string): Promise<void> {
+  await db.websitePage.delete({ where: { id } });
+  revalidateWebsite();
 }
 
 // ---- Home page ----------------------------------------------------
