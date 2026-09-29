@@ -7,20 +7,23 @@ import { createWebsitePage, type WebsitePageSummary } from "@/lib/actions/websit
 const ADD_PAGE = "__add__";
 const HOME = "__home__";
 
-// Editor for the business website, jetenvoieca.com (2026-09-29). Two
-// columns, per the mockups: a large live preview on the left, and the
-// fields for the selected page on the right, with the page dropdown at
-// the top. The corner ⤢/⤡ button gives the preview the full width.
-//
-// Step 1: layout and page dropdown only. The Home and Content page
-// previews and fields replace the placeholders in steps 2 and 3.
+// Layout of the business website editor, jetenvoieca.com (2026-09-29).
+// Two columns, per the mockups: a large live preview on the left, and
+// the fields for the selected page on the right, under the page
+// dropdown. The corner ⤢/⤡ button gives the preview the full width.
+// Each page kind's own editor (WebsiteHomeEditor, and the content page
+// editor) supplies `preview` and `fields`.
 export default function WebsiteEditor({
   pages,
   selectedId,
+  preview,
+  fields,
 }: {
   pages: WebsitePageSummary[];
   // null = the Home page.
   selectedId: string | null;
+  preview: React.ReactNode;
+  fields: React.ReactNode;
 }) {
   const router = useRouter();
   const [expanded, setExpanded] = useState(false);
@@ -55,9 +58,7 @@ export default function WebsiteEditor({
           >
             {expanded ? "⤡" : "⤢"}
           </button>
-          <div className="flex h-full min-h-[400px] items-center justify-center rounded-md border border-dashed border-neutral-300 text-sm text-neutral-400">
-            Preview
-          </div>
+          {preview}
         </div>
 
         {!expanded && (
@@ -77,9 +78,7 @@ export default function WebsiteEditor({
               <option value={ADD_PAGE}>+ Add content page</option>
             </select>
             {adding && <p className="mt-2 text-sm text-neutral-500">Adding page…</p>}
-            <p className="mt-4 text-sm text-neutral-400">
-              {selectedId ? "Content page fields" : "Home page fields"}
-            </p>
+            <div className="mt-4">{fields}</div>
           </div>
         )}
       </div>
