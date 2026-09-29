@@ -24,7 +24,12 @@ import {
   type TaskInput,
 } from "@/lib/actions/tasks";
 import { dismissAlert } from "@/lib/actions/subscriptions";
-import { refreshOpenAlerts } from "@/lib/actions/clientAlerts";
+import {
+  refreshOpenAlerts,
+  getProcessedAlerts,
+  deleteProcessedAlert,
+  type ProcessedAlertItem,
+} from "@/lib/actions/clientAlerts";
 import type { AlertItem } from "@/lib/alerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
 import type { Mailbox } from "@/lib/email";
@@ -74,9 +79,11 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon } from "@/components/Ac
 //     or Activity opens its window, and on Completed.
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
 //     old standalone Alerts page), modal = the selected alert, right =
-//     the same Done list. A payment-overdue alert opens the client's
-//     Owner/Domain/Subscription cards with an action panel (see
-//     AlertClientPanel); an overdue-invoice alert opens the same sale
+//     processed alerts — the ones dealt with (2026-09-28, direct request;
+//     it used to show the task Done list; see getProcessedAlerts). A
+//     payment-overdue alert opens the client's Owner/Domain/Subscription
+//     cards with an action panel (see AlertClientPanel); an
+//     overdue-invoice alert opens the same sale
 //     modal as Consolidated Sales (see SaleModal), as does a sale alert
 //     raised by the Studio app — which, being only for information, can
 //     also be deleted straight from the list; every other alert shows its
@@ -105,8 +112,8 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon } from "@/components/Ac
 // SwipeRow). Archiving also marks it read. In the Archived view the same
 // swipe/hover offers Move to Inbox and Delete. Sent messages, open tasks
 // and Done tasks can be deleted from their lists the same way (same day,
-// direct requests) — there Delete is the only action, so a full swipe
-// deletes (after the usual confirm).
+// direct requests), as can processed alerts — there Delete is the only
+// action, so a full swipe deletes (after the usual confirm).
 //
 // Make task (2026-09-28, direct request) — on a received message, in the
 // list's swipe/hover actions and in the opened message: makes a task from
@@ -286,11 +293,12 @@ export default function AdminInboxPanel({
   // type in Alert mode. "" = all. Cleared whenever the mode changes.
   const [typeFilter, setTypeFilter] = useState("");
 
-  // Right-hand column: Sent list (mail modes) or Done list (Task and
-  // Alert modes). `null` means "still loading". One artist filter serves
-  // both.
+  // Right-hand column: Sent list (mail modes), Done list (Task mode) or
+  // processed alerts (Alert mode). `null` means "still loading". One
+  // artist filter serves all three.
   const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
   const [doneList, setDoneList] = useState<TaskItem[] | null>(null);
+  const [processedAlerts, setProcessedAlerts] = useState<ProcessedAlertItem[] | null>(null);
   const [rightArtistId, setRightArtistId] = useState<string | null>(null);
   const [rightRefreshKey, setRightRefreshKey] = useState(0);
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
@@ -399,9 +407,13 @@ export default function AdminInboxPanel({
       getSentList(sentMailbox, rightArtistId || undefined).then((rows) => {
         if (!cancelled) setSentList(rows);
       });
-    } else {
+    } else if (mode === "task") {
       getCompletedTasks(rightArtistId || undefined).then((rows) => {
         if (!cancelled) setDoneList(rows);
+      });
+    } else {
+      getProcessedAlerts(rightArtistId || undefined).then((rows) => {
+        if (!cancelled) setProcessedAlerts(rows);
       });
     }
     return () => {
@@ -652,6 +664,21 @@ export default function AdminInboxPanel({
     return true;
   };
 
+  // Deletes a processed alert's record straight from the list (swipe/
+  // hover). Returns false if the confirm was cancelled, so a full swipe
+  // puts the row back (see SwipeRow).
+  const handleDeleteProcessedAlert = (id: string): boolean => {
+    if (!confirm("Delete this record? This can't be undone.")) return false;
+    setSwipedId(null);
+    setDeletingId(id);
+    startTransition(async () => {
+      await deleteProcessedAlert(id);
+      setDeletingId(null);
+      setProcessedAlerts((list) => (list ? list.filter((a) => a.id !== id) : list));
+    });
+    return true;
+  };
+
   const handleRecipientPick = (value: string) => {
     const match = composeRecipients.find((r) => r.email === value);
     setComposeTo(value);
@@ -815,22 +842,25 @@ export default function AdminInboxPanel({
   const handleAlertDismiss = (a: AlertItem) => {
     startTransition(async () => {
       await dismissAlert(a.id);
+      refreshRight();
       router.push(currentUrl());
     });
   };
 
   // Deletes an alert straight from the list, without opening it — for the
-  // sale alerts, which are only there for information.
+  // sale alerts, which are only there for information. It's dismissed, so
+  // it moves into the processed list.
   const handleAlertDelete = (a: AlertItem) => {
     startTransition(async () => {
       await dismissAlert(a.id);
       await refreshOpenAlerts();
+      refreshRight();
       router.refresh();
     });
   };
 
   // The client was marked up to date — close the modal and show the new
-  // entry in Done.
+  // entry in the processed list.
   const handleUpToDateDone = () => {
     refreshRight();
     router.push(currentUrl());
@@ -1148,31 +1178,63 @@ export default function AdminInboxPanel({
                 ))}
               </ul>
             )
-          ) : !doneList ? (
+          ) : mode === "task" ? (
+            !doneList ? (
+              <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
+            ) : doneList.length === 0 ? (
+              <p className="p-4 text-center text-sm text-neutral-400">Nothing completed yet.</p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">
+                {doneList.map((t) => (
+                  <li key={t.id}>
+                    <SwipeRow
+                      open={swipedId === t.id}
+                      onOpenChange={(open) => setSwipedId(open ? t.id : null)}
+                      busy={deletingId === t.id}
+                      actions={[
+                        { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteDoneTask(t.id) },
+                      ]}
+                    >
+                      <div className="px-3 py-2.5">
+                        <p className="truncate text-sm font-semibold text-neutral-900">
+                          {capitaliseParagraphs(t.name)}
+                        </p>
+                        <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
+                        <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-neutral-400">
+                          <span>Date completed</span>
+                          <span className="text-[10px]">{t.completedAt ? formatDate(t.completedAt) : ""}</span>
+                        </div>
+                      </div>
+                    </SwipeRow>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : !processedAlerts ? (
             <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
-          ) : doneList.length === 0 ? (
-            <p className="p-4 text-center text-sm text-neutral-400">Nothing completed yet.</p>
+          ) : processedAlerts.length === 0 ? (
+            <p className="p-4 text-center text-sm text-neutral-400">Nothing dealt with yet.</p>
           ) : (
             <ul className="divide-y divide-neutral-100">
-              {doneList.map((t) => (
-                <li key={t.id}>
+              {processedAlerts.map((a) => (
+                <li key={a.id}>
                   <SwipeRow
-                    open={swipedId === t.id}
-                    onOpenChange={(open) => setSwipedId(open ? t.id : null)}
-                    busy={deletingId === t.id}
+                    open={swipedId === a.id}
+                    onOpenChange={(open) => setSwipedId(open ? a.id : null)}
+                    busy={deletingId === a.id}
                     actions={[
-                      { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteDoneTask(t.id) },
+                      { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteProcessedAlert(a.id) },
                     ]}
                   >
                     <div className="px-3 py-2.5">
-                      <p className="truncate text-sm font-semibold text-neutral-900">
-                        {capitaliseParagraphs(t.name)}
-                      </p>
-                      <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
-                      <div className="mt-0.5 flex items-center justify-between gap-2 text-xs text-neutral-400">
-                        <span>Date completed</span>
-                        <span className="text-[10px]">{t.completedAt ? formatDate(t.completedAt) : ""}</span>
+                      <div className={itemHeadCls}>
+                        <span className="truncate text-sm font-semibold text-neutral-900">
+                          {ALERT_TYPE_LABELS[a.type] || a.type}
+                        </span>
+                        <span className="shrink-0 text-[10px] text-neutral-400">{formatDate(a.resolvedAt)}</span>
                       </div>
+                      <p className="truncate text-xs text-neutral-500">{a.artistName || "General"}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{capitaliseParagraphs(a.message)}</p>
                     </div>
                   </SwipeRow>
                 </li>

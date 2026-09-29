@@ -133,8 +133,7 @@ export async function saveTask(
 
 // Deletes a task, open or completed — from the open Task list (2026-09-27,
 // direct request: "need to be able to delete, not just say done") or the
-// Done list. That includes the Done entries the app writes itself, e.g.
-// "Subscription payments updated" (see markSubscriptionUpToDate).
+// Done list.
 export async function deleteTask(id: string): Promise<void> {
   await db.task.deleteMany({ where: { id } });
   revalidatePath("/accounts/inbox");
