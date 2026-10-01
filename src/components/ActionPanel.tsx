@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 // together in a cream panel, as narrow dark-grey buttons with cream text
 // — use these components rather than styling a one-off button, so
 // every action area looks the same.
-//   Panel:  #F9F6EF background
+//   Panel:  #F9F6EF background, #5E5E5E border
 //   Button: #5E5E5E background, #F9F6EF text
 //
 // `align` sets which side the stacked buttons hug (default: right).
@@ -14,11 +14,14 @@ import type { ReactNode } from "react";
 // bottom-right of the panel (e.g. "Up to date").
 //
 // The mini action bar (2026-10-01, direct request — see mock-up) is the
-// compact version for a header, such as an opened email's: smaller
-// buttons, two to a row, in a borderless darker cream panel so it stands
-// out against a tinted header.
-//   Panel:  #EEE7CB background
-//   Button: as above, smaller
+// same panel and buttons, sized to fit a header such as an opened
+// email's: less padding, narrower buttons, two to a row.
+
+// Shared by both button sizes, so they can't drift apart.
+const PANEL_CLS = "rounded-md border border-[#5E5E5E] bg-[#F9F6EF]";
+const BUTTON_CLS =
+  "h-[27px] rounded bg-[#5E5E5E] px-2 text-sm text-[#F9F6EF] hover:bg-[#4a4a4a] disabled:opacity-50";
+
 export function ActionPanel({
   children,
   align = "end",
@@ -29,7 +32,7 @@ export function ActionPanel({
   footer?: ReactNode;
 }) {
   return (
-    <div className="rounded-md border border-[#5E5E5E] bg-[#F9F6EF] p-5">
+    <div className={`${PANEL_CLS} p-5`}>
       <div className={`flex flex-col gap-3 ${align === "end" ? "items-end" : "items-start"}`}>{children}</div>
       {footer && <div className="mt-8 flex justify-end">{footer}</div>}
     </div>
@@ -48,13 +51,7 @@ export function ActionButton({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      title={title}
-      className="h-[27px] w-40 rounded bg-[#5E5E5E] px-2 text-sm text-[#F9F6EF] hover:bg-[#4a4a4a] disabled:opacity-50"
-    >
+    <button type="button" onClick={onClick} disabled={disabled} title={title} className={`${BUTTON_CLS} w-40`}>
       {children}
     </button>
   );
@@ -64,7 +61,9 @@ export function ActionButton({
 // phone it sits under the details, at its own size.
 export function MiniActionBar({ children }: { children: ReactNode }) {
   return (
-    <div className="grid shrink-0 grid-cols-2 content-center gap-1.5 self-start rounded-md bg-[#EEE7CB] p-2 sm:self-stretch">
+    <div
+      className={`${PANEL_CLS} grid shrink-0 grid-cols-2 content-center gap-2 self-start p-3 sm:self-stretch`}
+    >
       {children}
     </div>
   );
@@ -80,12 +79,7 @@ export function MiniActionButton({
   children: ReactNode;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="h-6 w-24 rounded-md bg-[#5E5E5E] px-2 text-xs text-[#F9F6EF] hover:bg-[#4a4a4a] disabled:opacity-50"
-    >
+    <button type="button" onClick={onClick} disabled={disabled} className={`${BUTTON_CLS} w-28`}>
       {children}
     </button>
   );
