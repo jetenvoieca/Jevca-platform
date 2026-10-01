@@ -78,3 +78,13 @@ export function TrashIcon() {
     </Icon>
   );
 }
+
+// An arrow curling back — Reinstate (a completed task back to open).
+export function ReinstateIcon() {
+  return (
+    <Icon>
+      <path d="M4 9h11a5 5 0 0 1 0 10H8" />
+      <path d="M8 5L4 9l4 4" />
+    </Icon>
+  );
+}

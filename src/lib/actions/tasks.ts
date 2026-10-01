@@ -131,6 +131,14 @@ export async function saveTask(
   return { ok: true, id: created.id };
 }
 
+// Reinstates a completed task (2026-09-28, direct request — for one
+// completed by mistake): it moves from the Done list back to the open
+// list, with its details, emails and notes untouched.
+export async function reopenTask(id: string): Promise<void> {
+  await db.task.updateMany({ where: { id, completedAt: { not: null } }, data: { completedAt: null } });
+  revalidatePath("/accounts/inbox");
+}
+
 // Deletes a task, open or completed — from the open Task list (2026-09-27,
 // direct request: "need to be able to delete, not just say done") or the
 // Done list.
