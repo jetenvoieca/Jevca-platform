@@ -44,6 +44,7 @@ import AlertClientPanel from "@/components/AlertClientPanel";
 import SaleModal from "@/components/SaleModal";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
+import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
 import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "@/components/ActionIcons";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
@@ -121,6 +122,13 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 // on the open list (see reopenTask), for one completed by mistake: the
 // same swipe/hover on its row, beside Delete. A full swipe reinstates,
 // so a stray swipe can never delete.
+//
+// Mini action bar (2026-10-01, direct request — see mock-up): an opened
+// email's actions (Show text, Delete, Forward, Make task) sit together
+// in a small panel on the right of its header, two to a row, so they no
+// longer get lost among its details (see MiniActionBar). Same for an
+// opened sent item (Delete, Forward). They keep that order, so each
+// button is always in the same place.
 //
 // Forward (2026-09-28, direct request) — on every message in an opened
 // thread and on an opened sent item: opens the Forward window (see
@@ -381,6 +389,9 @@ export default function AdminInboxPanel({
   // wider, under it on a phone.
   const itemHeadCls =
     "flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2";
+  // An opened email's header: its details on the left, the mini action
+  // bar on the right (under the details on a phone).
+  const emailHeadCls = "flex flex-col gap-2 bg-neutral-50 px-3 py-2 sm:flex-row sm:items-stretch";
 
   const selectedSent = sentList?.find((s) => s.id === selectedSentId) || null;
   const selectedAlert = initialAlerts.find((a) => a.id === selectedAlertId) || null;
@@ -1440,14 +1451,35 @@ export default function AdminInboxPanel({
                   )}
                 </div>
               ) : selectedSent ? (
-                <div className="mx-auto max-w-xl space-y-2">
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
-                      {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
-                    </span>
-                    <div className="flex items-center gap-3 text-xs">
-                      <button
-                        type="button"
+                <div className="mx-auto max-w-xl space-y-3">
+                  <div className={`${emailHeadCls} rounded-md border border-neutral-200`}>
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
+                        {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
+                      </span>
+                      <p className="text-sm font-medium text-neutral-800 [overflow-wrap:anywhere]">
+                        {selectedSent.subject || "(no subject)"}
+                      </p>
+                      <p className="truncate text-xs text-neutral-400">
+                        {selectedSent.fromAddress} → {selectedSent.toAddress}
+                      </p>
+                      <p className="text-xs text-neutral-400">{formatDateTime(selectedSent.sentAt)}</p>
+                      {(selectedSent.artistName || selectedSent.customerName || selectedSent.artworkTitle) && (
+                        <p className="text-xs text-neutral-400">
+                          {[selectedSent.artistName, selectedSent.customerName, selectedSent.artworkTitle]
+                            .filter(Boolean)
+                            .join(" — ")}
+                        </p>
+                      )}
+                    </div>
+                    <MiniActionBar>
+                      <MiniActionButton
+                        onClick={() => handleDeleteSentItem(selectedSent.id)}
+                        disabled={busyId === selectedSent.id || isPending}
+                      >
+                        {busyId === selectedSent.id ? "Deleting…" : "Delete"}
+                      </MiniActionButton>
+                      <MiniActionButton
                         onClick={() =>
                           setForwarding({
                             source: { kind: "OUT", id: selectedSent.id },
@@ -1455,33 +1487,12 @@ export default function AdminInboxPanel({
                             attachmentCount: 0,
                           })
                         }
-                        className="text-neutral-500 hover:text-neutral-900 hover:underline"
                       >
                         Forward
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteSentItem(selectedSent.id)}
-                        disabled={busyId === selectedSent.id || isPending}
-                        className={deleteBtnCls}
-                      >
-                        {busyId === selectedSent.id ? "Deleting…" : "Delete"}
-                      </button>
-                    </div>
+                      </MiniActionButton>
+                    </MiniActionBar>
                   </div>
-                  <p className="text-sm font-medium text-neutral-800">{selectedSent.subject || "(no subject)"}</p>
-                  <p className="text-xs text-neutral-400">
-                    {selectedSent.fromAddress} → {selectedSent.toAddress}
-                  </p>
-                  <p className="text-xs text-neutral-400">{formatDateTime(selectedSent.sentAt)}</p>
-                  {(selectedSent.artistName || selectedSent.customerName || selectedSent.artworkTitle) && (
-                    <p className="text-xs text-neutral-400">
-                      {[selectedSent.artistName, selectedSent.customerName, selectedSent.artworkTitle]
-                        .filter(Boolean)
-                        .join(" — ")}
-                    </p>
-                  )}
-                  <div className="mt-3 whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
+                  <div className="whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
                     {selectedSent.body || "(empty)"}
                   </div>
                 </div>
@@ -1492,68 +1503,57 @@ export default function AdminInboxPanel({
               ) : (
                 <div className="mx-auto max-w-xl space-y-4 pt-5">
                   {thread.map((item) => (
-                    // Each message's header (sender, date, Show text/HTML,
-                    // Delete, addresses, subject) stays pinned at the top
-                    // while its body scrolls, on a tinted background to set
-                    // it apart from the body (2026-09-24).
+                    // Each message's header (sender, date, addresses,
+                    // subject, and its mini action bar) stays pinned at the
+                    // top while its body scrolls, on a tinted background to
+                    // set it apart from the body (2026-09-24).
                     <div key={item.id} className="rounded-md border border-neutral-200 bg-white">
-                      <div className="sticky top-0 z-10 rounded-t-md border-b border-neutral-200 bg-neutral-50 px-3 py-2">
-                        <div className="flex items-center justify-between gap-2 text-xs text-neutral-500">
-                          <span className="min-w-0 truncate font-medium text-neutral-700">
-                            {item.direction === "OUT" ? "You" : item.fromName || item.fromAddress}
-                          </span>
-                          <div className="flex shrink-0 items-center gap-3">
-                            <span>{formatDateTime(item.at)}</span>
-                            {item.htmlBody && (
-                              <button
-                                type="button"
-                                onClick={() => setTextShownId(textShownId === item.id ? null : item.id)}
-                                className="text-neutral-500 hover:text-neutral-900 hover:underline"
-                              >
-                                {textShownId === item.id ? "Show HTML" : "Show text"}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setForwarding({
-                                  source: { kind: item.direction, id: item.id },
-                                  subject: item.subject,
-                                  attachmentCount: item.attachments.filter((a) => a.saved).length,
-                                })
-                              }
-                              className="text-neutral-500 hover:text-neutral-900 hover:underline"
-                            >
-                              Forward
-                            </button>
-                            {item.direction === "IN" && (
-                              <button
-                                type="button"
-                                onClick={() => handleMakeTask(item.id)}
-                                disabled={isPending}
-                                className="text-neutral-500 hover:text-neutral-900 hover:underline disabled:opacity-50"
-                              >
-                                {openListItem?.taskId ? "Open task" : "Make task"}
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteThreadItem(item)}
-                              disabled={busyId === item.id || isPending}
-                              className={deleteBtnCls}
-                            >
-                              {busyId === item.id ? "Deleting…" : "Delete"}
-                            </button>
+                      <div className={`${emailHeadCls} sticky top-0 z-10 rounded-t-md border-b border-neutral-200`}>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-3 text-xs text-neutral-500">
+                            <span className="min-w-0 truncate font-medium text-neutral-700">
+                              {item.direction === "OUT" ? "You" : item.fromName || item.fromAddress}
+                            </span>
+                            <span className="shrink-0">{formatDateTime(item.at)}</span>
                           </div>
-                        </div>
-                        {item.direction === "IN" && (
-                          <p className="mt-0.5 truncate text-xs text-neutral-400">
-                            {item.fromAddress} → {item.toAddress}
+                          {item.direction === "IN" && (
+                            <p className="mt-0.5 truncate text-xs text-neutral-400">
+                              {item.fromAddress} → {item.toAddress}
+                            </p>
+                          )}
+                          <p className="mt-0.5 text-sm font-medium text-neutral-800 [overflow-wrap:anywhere]">
+                            {item.subject}
                           </p>
-                        )}
-                        <p className="mt-0.5 text-sm font-medium text-neutral-800 [overflow-wrap:anywhere]">
-                          {item.subject}
-                        </p>
+                        </div>
+                        <MiniActionBar>
+                          {item.htmlBody && (
+                            <MiniActionButton onClick={() => setTextShownId(textShownId === item.id ? null : item.id)}>
+                              {textShownId === item.id ? "Show HTML" : "Show text"}
+                            </MiniActionButton>
+                          )}
+                          <MiniActionButton
+                            onClick={() => handleDeleteThreadItem(item)}
+                            disabled={busyId === item.id || isPending}
+                          >
+                            {busyId === item.id ? "Deleting…" : "Delete"}
+                          </MiniActionButton>
+                          <MiniActionButton
+                            onClick={() =>
+                              setForwarding({
+                                source: { kind: item.direction, id: item.id },
+                                subject: item.subject,
+                                attachmentCount: item.attachments.filter((a) => a.saved).length,
+                              })
+                            }
+                          >
+                            Forward
+                          </MiniActionButton>
+                          {item.direction === "IN" && (
+                            <MiniActionButton onClick={() => handleMakeTask(item.id)} disabled={isPending}>
+                              {openListItem?.taskId ? "Open task" : "Make task"}
+                            </MiniActionButton>
+                          )}
+                        </MiniActionBar>
                       </div>
 
                       <div className="p-3">

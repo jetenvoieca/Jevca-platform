@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 // you decide what to do with the information you've been shown (Save
 // Task, Task Completed, Up to date, Dismiss, etc.). They always sit
 // together in a cream panel, as narrow dark-grey buttons with cream text
-// — use these two components rather than styling a one-off button, so
+// — use these components rather than styling a one-off button, so
 // every action area looks the same.
 //   Panel:  #F9F6EF background
 //   Button: #5E5E5E background, #F9F6EF text
@@ -12,6 +12,13 @@ import type { ReactNode } from "react";
 // `align` sets which side the stacked buttons hug (default: right).
 // `footer` is for the one main button that belongs alone at the
 // bottom-right of the panel (e.g. "Up to date").
+//
+// The mini action bar (2026-10-01, direct request — see mock-up) is the
+// compact version for a header, such as an opened email's: smaller
+// buttons, two to a row, in a borderless darker cream panel so it stands
+// out against a tinted header.
+//   Panel:  #EEE7CB background
+//   Button: as above, smaller
 export function ActionPanel({
   children,
   align = "end",
@@ -47,6 +54,37 @@ export function ActionButton({
       disabled={disabled}
       title={title}
       className="h-[27px] w-40 rounded bg-[#5E5E5E] px-2 text-sm text-[#F9F6EF] hover:bg-[#4a4a4a] disabled:opacity-50"
+    >
+      {children}
+    </button>
+  );
+}
+
+// On a tablet or wider it fills the height of the row it sits in; on a
+// phone it sits under the details, at its own size.
+export function MiniActionBar({ children }: { children: ReactNode }) {
+  return (
+    <div className="grid shrink-0 grid-cols-2 content-center gap-1.5 self-start rounded-md bg-[#EEE7CB] p-2 sm:self-stretch">
+      {children}
+    </div>
+  );
+}
+
+export function MiniActionButton({
+  onClick,
+  disabled,
+  children,
+}: {
+  onClick: () => void;
+  disabled?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="h-6 w-24 rounded-md bg-[#5E5E5E] px-2 text-xs text-[#F9F6EF] hover:bg-[#4a4a4a] disabled:opacity-50"
     >
       {children}
     </button>
