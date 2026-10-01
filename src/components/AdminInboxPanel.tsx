@@ -14,7 +14,7 @@ import {
   type InboxThreadItem,
   type SentSummaryItem,
 } from "@/lib/actions/inboundEmail";
-import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail";
+import { sendAdminEmail, type ComposeRecipient, type ForwardSource } from "@/lib/actions/adminEmail";
 import {
   getCompletedTasks,
   saveTask,
@@ -41,6 +41,7 @@ import TaskActivityPanel, { type TaskPopup } from "@/components/TaskActivityPane
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
 import SaleModal from "@/components/SaleModal";
+import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
 import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon } from "@/components/ActionIcons";
 
@@ -115,6 +116,11 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon } from "@/components/Ac
 // direct requests), as can processed alerts — there Delete is the only
 // action, so a full swipe deletes (after the usual confirm).
 //
+// Forward (2026-09-28, direct request) — on every message in an opened
+// thread and on an opened sent item: opens the Forward window (see
+// ForwardEmailPopup) over the modal. Forwards go from the mailbox's own
+// shared address and appear in its Sent list.
+//
 // Make task (2026-09-28, direct request) — on a received message, in the
 // list's swipe/hover actions and in the opened message: makes a task from
 // it (see createTaskFromEmail) and switches straight to Task mode with the
@@ -156,6 +162,7 @@ const KIND_LABELS: Record<string, string> = {
   ADMIN: "Message",
   REPLY: "Reply",
   TASK: "Task",
+  FORWARD: "Forward",
   INVOICE: "Invoice",
   RECEIPT: "Receipt",
   CERTIFICATE: "Certificate",
@@ -341,6 +348,13 @@ export default function AdminInboxPanel({
   // TaskActivityPanel).
   const [taskPopup, setTaskPopup] = useState<TaskPopup | null>(null);
 
+  // The email whose Forward window is open, if any.
+  const [forwarding, setForwarding] = useState<{
+    source: ForwardSource;
+    subject: string | null;
+    attachmentCount: number;
+  } | null>(null);
+
   // The overdue-invoice alert whose sale modal is open, if any. Kept as
   // a copy of the alert (rather than looked up in the list) so the modal
   // stays open even after the alert itself clears.
@@ -429,6 +443,7 @@ export default function AdminInboxPanel({
     setComposing(false);
     setTaskForm(null);
     setTaskPopup(null);
+    setForwarding(null);
     setSaleAlert(null);
   };
 
@@ -812,6 +827,12 @@ export default function AdminInboxPanel({
       closeModal();
       refreshRight();
     });
+  };
+
+  // The forward has gone — close its window and show it in Sent.
+  const handleForwarded = () => {
+    setForwarding(null);
+    refreshRight();
   };
 
   // A sale alert opens the sale modal straight away; every other alert
@@ -1254,6 +1275,20 @@ export default function AdminInboxPanel({
         />
       )}
 
+      {/* ---- FORWARD: over an opened message or sent item ---- */}
+      {forwarding && (
+        <ForwardEmailPopup
+          key={`${forwarding.source.kind}-${forwarding.source.id}`}
+          source={forwarding.source}
+          subject={forwarding.subject}
+          attachmentCount={forwarding.attachmentCount}
+          fromAddress={modeMailbox ? mailboxAddresses[modeMailbox] : ""}
+          composeRecipients={composeRecipients}
+          onSent={handleForwarded}
+          onClose={() => setForwarding(null)}
+        />
+      )}
+
       {/* ---- MODAL: alert, task form, thread, sent detail, or compose ---- */}
       {modalOpen && (
         <div
@@ -1383,14 +1418,29 @@ export default function AdminInboxPanel({
                     <span className="inline-block rounded bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-neutral-500">
                       {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteSentItem(selectedSent.id)}
-                      disabled={deletingId === selectedSent.id || isPending}
-                      className={deleteBtnCls}
-                    >
-                      {deletingId === selectedSent.id ? "Deleting…" : "Delete"}
-                    </button>
+                    <div className="flex items-center gap-3 text-xs">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setForwarding({
+                            source: { kind: "OUT", id: selectedSent.id },
+                            subject: selectedSent.subject,
+                            attachmentCount: 0,
+                          })
+                        }
+                        className="text-neutral-500 hover:text-neutral-900 hover:underline"
+                      >
+                        Forward
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteSentItem(selectedSent.id)}
+                        disabled={deletingId === selectedSent.id || isPending}
+                        className={deleteBtnCls}
+                      >
+                        {deletingId === selectedSent.id ? "Deleting…" : "Delete"}
+                      </button>
+                    </div>
                   </div>
                   <p className="text-sm font-medium text-neutral-800">{selectedSent.subject || "(no subject)"}</p>
                   <p className="text-xs text-neutral-400">
@@ -1436,6 +1486,19 @@ export default function AdminInboxPanel({
                                 {textShownId === item.id ? "Show HTML" : "Show text"}
                               </button>
                             )}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setForwarding({
+                                  source: { kind: item.direction, id: item.id },
+                                  subject: item.subject,
+                                  attachmentCount: item.attachments.filter((a) => a.saved).length,
+                                })
+                              }
+                              className="text-neutral-500 hover:text-neutral-900 hover:underline"
+                            >
+                              Forward
+                            </button>
                             {item.direction === "IN" && (
                               <button
                                 type="button"

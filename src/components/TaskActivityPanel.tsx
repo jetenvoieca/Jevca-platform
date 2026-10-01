@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition, type ReactNode } from "react";
-import { createPortal } from "react-dom";
+import { useEffect, useState, useTransition } from "react";
 import { getTaskActivity, saveTaskNote, deleteTaskNote, type TaskActivityItem } from "@/lib/actions/tasks";
 import { sendAdminEmail } from "@/lib/actions/adminEmail";
 import type { Mailbox } from "@/lib/email";
@@ -9,6 +8,7 @@ import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 import SwipeRow from "@/components/SwipeRow";
+import PopupWindow from "@/components/PopupWindow";
 import { EditIcon, TrashIcon } from "@/components/ActionIcons";
 
 // A task's Activity (2026-09-27, direct request — "moving into managing
@@ -217,45 +217,6 @@ export default function TaskActivityPanel({
         </ul>
       )}
     </div>
-  );
-}
-
-// The window both popups open in, on top of the task. Rendered into
-// document.body so it sits above the task modal; React still treats it as
-// part of the task modal, so a click in it never reaches (and closes) the
-// task behind.
-function PopupWindow({
-  title,
-  busy,
-  onClose,
-  children,
-}: {
-  title: string;
-  busy: boolean;
-  onClose: () => void;
-  children: ReactNode;
-}) {
-  return createPortal(
-    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div
-        className="flex max-h-[90dvh] w-full max-w-xl flex-col overflow-hidden rounded-2xl bg-white shadow-lg"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="flex shrink-0 items-center justify-between border-b border-neutral-100 px-4 py-2">
-          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{title}</p>
-          <button
-            type="button"
-            onClick={onClose}
-            disabled={busy}
-            className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Close
-          </button>
-        </div>
-        <div className="flex-1 space-y-3 overflow-y-auto p-5">{children}</div>
-      </div>
-    </div>,
-    document.body,
   );
 }
 
