@@ -19,6 +19,7 @@ import {
   getCompletedTasks,
   saveTask,
   deleteTask,
+  reopenTask,
   createTaskFromEmail,
   type TaskItem,
   type TaskInput,
@@ -43,7 +44,7 @@ import AlertClientPanel from "@/components/AlertClientPanel";
 import SaleModal from "@/components/SaleModal";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
-import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon } from "@/components/ActionIcons";
+import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "@/components/ActionIcons";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every message received in one list,
@@ -115,6 +116,11 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon } from "@/components/Ac
 // and Done tasks can be deleted from their lists the same way (same day,
 // direct requests), as can processed alerts — there Delete is the only
 // action, so a full swipe deletes (after the usual confirm).
+//
+// Reinstate (2026-10-01, direct request) — a Done task can be put back
+// on the open list (see reopenTask), for one completed by mistake: the
+// same swipe/hover on its row, beside Delete. A full swipe reinstates,
+// so a stray swipe can never delete.
 //
 // Forward (2026-09-28, direct request) — on every message in an opened
 // thread and on an opened sent item: opens the Forward window (see
@@ -309,7 +315,9 @@ export default function AdminInboxPanel({
   const [rightArtistId, setRightArtistId] = useState<string | null>(null);
   const [rightRefreshKey, setRightRefreshKey] = useState(0);
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // The item being deleted (from the right-hand column or an open thread)
+  // or reinstated (a Done task), while that runs.
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   // The list row (message or task) that's swiped open — at most one
   // across both columns — and the received message or open task being
@@ -617,10 +625,10 @@ export default function AdminInboxPanel({
       const remaining = initialList.filter((m) => m.id !== item.id);
       const nextId = remaining[idx]?.id ?? remaining[idx - 1]?.id ?? null;
 
-      setDeletingId(item.id);
+      setBusyId(item.id);
       startTransition(async () => {
         await deleteInboundEmail(item.id);
-        setDeletingId(null);
+        setBusyId(null);
         if (nextId) {
           openThread(nextId); // Also refreshes the list underneath.
         } else {
@@ -630,10 +638,10 @@ export default function AdminInboxPanel({
         }
       });
     } else {
-      setDeletingId(item.id);
+      setBusyId(item.id);
       startTransition(async () => {
         await deleteOutboundEmail(item.id);
-        setDeletingId(null);
+        setBusyId(null);
         refreshRight();
         if (openId) openThread(openId);
       });
@@ -654,10 +662,10 @@ export default function AdminInboxPanel({
       selectedSentId === id ? remaining[idx]?.id ?? remaining[idx - 1]?.id ?? null : selectedSentId;
 
     setSwipedId(null);
-    setDeletingId(id);
+    setBusyId(id);
     startTransition(async () => {
       await deleteOutboundEmail(id);
-      setDeletingId(null);
+      setBusyId(null);
       setSentList(remaining);
       setSelectedSentId(nextSelectedId);
     });
@@ -670,13 +678,26 @@ export default function AdminInboxPanel({
   const handleDeleteDoneTask = (id: string): boolean => {
     if (!confirm("Delete this completed task? This can't be undone.")) return false;
     setSwipedId(null);
-    setDeletingId(id);
+    setBusyId(id);
     startTransition(async () => {
       await deleteTask(id);
-      setDeletingId(null);
+      setBusyId(null);
       setDoneList((list) => (list ? list.filter((t) => t.id !== id) : list));
     });
     return true;
+  };
+
+  // Puts a completed task back on the open list (swipe/hover on the Done
+  // list), with its details, emails and notes untouched.
+  const handleReinstateDoneTask = (id: string) => {
+    setSwipedId(null);
+    setBusyId(id);
+    startTransition(async () => {
+      await reopenTask(id);
+      setBusyId(null);
+      setDoneList((list) => (list ? list.filter((t) => t.id !== id) : list));
+      router.refresh();
+    });
   };
 
   // Deletes a processed alert's record straight from the list (swipe/
@@ -685,10 +706,10 @@ export default function AdminInboxPanel({
   const handleDeleteProcessedAlert = (id: string): boolean => {
     if (!confirm("Delete this record? This can't be undone.")) return false;
     setSwipedId(null);
-    setDeletingId(id);
+    setBusyId(id);
     startTransition(async () => {
       await deleteProcessedAlert(id);
-      setDeletingId(null);
+      setBusyId(null);
       setProcessedAlerts((list) => (list ? list.filter((a) => a.id !== id) : list));
     });
     return true;
@@ -1166,7 +1187,7 @@ export default function AdminInboxPanel({
                     <SwipeRow
                       open={swipedId === m.id}
                       onOpenChange={(open) => setSwipedId(open ? m.id : null)}
-                      busy={deletingId === m.id}
+                      busy={busyId === m.id}
                       actions={[
                         { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteSentItem(m.id) },
                       ]}
@@ -1211,8 +1232,14 @@ export default function AdminInboxPanel({
                     <SwipeRow
                       open={swipedId === t.id}
                       onOpenChange={(open) => setSwipedId(open ? t.id : null)}
-                      busy={deletingId === t.id}
+                      busy={busyId === t.id}
                       actions={[
+                        {
+                          label: "Reinstate",
+                          icon: <ReinstateIcon />,
+                          primary: true,
+                          onClick: () => handleReinstateDoneTask(t.id),
+                        },
                         { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteDoneTask(t.id) },
                       ]}
                     >
@@ -1242,7 +1269,7 @@ export default function AdminInboxPanel({
                   <SwipeRow
                     open={swipedId === a.id}
                     onOpenChange={(open) => setSwipedId(open ? a.id : null)}
-                    busy={deletingId === a.id}
+                    busy={busyId === a.id}
                     actions={[
                       { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteProcessedAlert(a.id) },
                     ]}
@@ -1435,10 +1462,10 @@ export default function AdminInboxPanel({
                       <button
                         type="button"
                         onClick={() => handleDeleteSentItem(selectedSent.id)}
-                        disabled={deletingId === selectedSent.id || isPending}
+                        disabled={busyId === selectedSent.id || isPending}
                         className={deleteBtnCls}
                       >
-                        {deletingId === selectedSent.id ? "Deleting…" : "Delete"}
+                        {busyId === selectedSent.id ? "Deleting…" : "Delete"}
                       </button>
                     </div>
                   </div>
@@ -1512,10 +1539,10 @@ export default function AdminInboxPanel({
                             <button
                               type="button"
                               onClick={() => handleDeleteThreadItem(item)}
-                              disabled={deletingId === item.id || isPending}
+                              disabled={busyId === item.id || isPending}
                               className={deleteBtnCls}
                             >
-                              {deletingId === item.id ? "Deleting…" : "Delete"}
+                              {busyId === item.id ? "Deleting…" : "Delete"}
                             </button>
                           </div>
                         </div>
