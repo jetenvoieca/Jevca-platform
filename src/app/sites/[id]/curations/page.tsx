@@ -21,7 +21,7 @@ export default async function CurationsPage({
 
   const site = await db.site.findUnique({
     where: { id },
-    select: { artistId: true, defaultCurrency: true },
+    select: { artistId: true },
   });
   if (!site) notFound();
 
@@ -35,7 +35,7 @@ export default async function CurationsPage({
   return (
     <CurationsView
       artistId={site.artistId}
-      currency={site.defaultCurrency}
+      siteId={id}
       curations={curations}
       initialSelected={initialSelected}
     />

@@ -2,6 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import ArtworkPicker from "@/components/ArtworkPicker";
+import CurationWorkPresentation from "@/components/CurationWorkPresentation";
 import {
   addWorksToCuration,
   createCuration,
@@ -35,7 +36,10 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // Curations page (2026-09-24, stage one). Two columns:
 // - left: the open curation — its name (click to rename), Delete, and
 //   its works in order (drag to reorder, hover × to remove, "+ Add
-//   Works" tile to pick more).
+//   Works" tile to pick more). Beside the works (2026-10-03), the
+//   selected work's presentation — images, Description and Purchase
+//   Options, all editable (see CurationWorkPresentation). Click a work
+//   to select it; the first work is selected to begin with.
 // - right: every curation; click one to open it, or add a new one.
 //
 // A centre column ("Display this curation using ……") originally sat
@@ -46,12 +50,12 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // did.
 export default function CurationsView({
   artistId,
-  currency,
+  siteId,
   curations: initialCurations,
   initialSelected,
 }: {
   artistId: string;
-  currency: string;
+  siteId: string;
   curations: CurationSummary[];
   initialSelected: CurationDetail | null;
 }) {
@@ -63,6 +67,10 @@ export default function CurationsView({
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
+  // The work whose presentation is shown beside the works. Falls back
+  // to the first work whenever it isn't (or is no longer) in the open
+  // curation — see shownWork below.
+  const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Which curation is meant to be open right now, readable inside
@@ -149,9 +157,7 @@ export default function CurationsView({
   const handleDelete = () => {
     if (!selected) return;
     if (
-      !confirm(
-        `Delete the curation "${selected.name}"? The artworks themselves are not affected.`
-      )
+      !confirm(`Delete the curation "${selected.name}"? The artworks themselves are not affected.`)
     ) {
       return;
     }
@@ -225,6 +231,8 @@ export default function CurationsView({
   };
 
   const activeId = loadingId ?? selected?.id ?? null;
+  const shownWork =
+    selected?.works.find((w) => w.artworkId === selectedWorkId) ?? selected?.works[0] ?? null;
 
   return (
     <div className="grid min-h-full grid-cols-[4fr_1fr]">
@@ -270,66 +278,94 @@ export default function CurationsView({
               </button>
             </div>
 
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
-              {selected.works.map((w, i) => {
-                const price = formatPrice(w.offeredPrice, currency);
-                return (
-                  <div
-                    key={w.artworkId}
-                    draggable
-                    onDragStart={(e) => {
-                      e.dataTransfer.effectAllowed = "move";
-                      e.dataTransfer.setData("text/plain", w.artworkId);
-                      setDragIndex(i);
-                    }}
-                    onDragOver={(e) => e.preventDefault()}
-                    onDrop={(e) => {
-                      e.preventDefault();
-                      handleDrop(i);
-                    }}
-                    onDragEnd={() => setDragIndex(null)}
-                    className={`group relative cursor-grab ${dragIndex === i ? "opacity-40" : ""}`}
-                  >
-                    {w.imageUrl ? (
-                      <img
-                        src={w.imageUrl}
-                        alt=""
-                        draggable={false}
-                        className="aspect-square w-full rounded-md object-cover"
-                      />
-                    ) : (
-                      <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                        No image
+            <div className="flex items-start gap-8">
+              <div className="min-w-0 flex-1">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
+                  {selected.works.map((w, i) => {
+                    const price = formatPrice(w.offeredPrice, w.priceCurrency);
+                    const isShown = shownWork?.artworkId === w.artworkId;
+                    return (
+                      <div
+                        key={w.artworkId}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", w.artworkId);
+                          setDragIndex(i);
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          handleDrop(i);
+                        }}
+                        onDragEnd={() => setDragIndex(null)}
+                        onClick={() => setSelectedWorkId(w.artworkId)}
+                        className={`group relative cursor-grab ${dragIndex === i ? "opacity-40" : ""}`}
+                      >
+                        {w.imageUrl ? (
+                          <img
+                            src={w.imageUrl}
+                            alt=""
+                            draggable={false}
+                            className={`aspect-square w-full rounded-md object-cover ${
+                              isShown ? "ring-2 ring-neutral-900 ring-offset-2" : ""
+                            }`}
+                          />
+                        ) : (
+                          <div
+                            className={`flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400 ${
+                              isShown ? "ring-2 ring-neutral-900 ring-offset-2" : ""
+                            }`}
+                          >
+                            No image
+                          </div>
+                        )}
+                        <p className="mt-2 truncate text-sm font-medium text-neutral-900">
+                          {w.catalogueName}
+                        </p>
+                        {price && <p className="text-sm text-neutral-400">{price}</p>}
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveWork(w.artworkId);
+                          }}
+                          title="Remove from this curation"
+                          className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                        >
+                          ✕
+                        </button>
                       </div>
-                    )}
-                    <p className="mt-2 truncate text-sm font-medium text-neutral-900">
-                      {w.catalogueName}
-                    </p>
-                    {price && <p className="text-sm text-neutral-400">{price}</p>}
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveWork(w.artworkId)}
-                      title="Remove from this curation"
-                      className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
-                    >
-                      ✕
-                    </button>
-                  </div>
-                );
-              })}
-              <ArtworkPicker
-                artistId={artistId}
-                mode="multi"
-                label="Add Works"
-                allowCreate={false}
-                excludeIds={selected.works.map((w) => w.artworkId)}
-                onSelect={handleAddWorks}
-              />
-            </div>
+                    );
+                  })}
+                  <ArtworkPicker
+                    artistId={artistId}
+                    mode="multi"
+                    label="Add Works"
+                    allowCreate={false}
+                    excludeIds={selected.works.map((w) => w.artworkId)}
+                    onSelect={handleAddWorks}
+                  />
+                </div>
 
-            {selected.works.length > 1 && (
-              <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
-            )}
+                {selected.works.length > 1 && (
+                  <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
+                )}
+              </div>
+
+              {shownWork && (
+                <div className="w-[26rem] shrink-0">
+                  <CurationWorkPresentation
+                    key={`${selected.id}:${shownWork.artworkId}`}
+                    curationId={selected.id}
+                    artworkId={shownWork.artworkId}
+                    artistId={artistId}
+                    siteId={siteId}
+                    onArtworkChanged={() => reload(selected.id)}
+                  />
+                </div>
+              )}
+            </div>
           </div>
         )}
       </section>

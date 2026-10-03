@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
+import { toArtworkImages, type ArtworkImage } from "@/lib/artworkImages";
 
 // Curations (2026-09-24) — named, ordered selections of an artist's
 // artworks. See the note on Curation in schema.prisma.
@@ -23,6 +24,7 @@ export type CurationWork = {
   artworkId: string;
   catalogueName: string;
   offeredPrice: string | null;
+  priceCurrency: string;
   imageUrl: string | null;
 };
 
@@ -32,12 +34,43 @@ export type CurationDetail = {
   works: CurationWork[];
 };
 
+// One work's presentation within a curation (2026-10-03) — shown beside
+// the works on the Curations page when that work is selected. The
+// Description is this curation's own (CurationItem.description); images
+// and price are the artwork's own, so editing them here changes them
+// everywhere. The number of instalments is the artist's Settings
+// default — artworks don't have their own.
+export type CurationWorkPresentation = {
+  artworkId: string;
+  description: string | null;
+  offeredPrice: string | null;
+  priceCurrency: string;
+  defaultInstalmentCount: number;
+  mainImageId: string | null;
+  images: ArtworkImage[];
+};
+
 type Result<T> = T | { error: string };
 
 function isUniqueViolation(err: unknown): boolean {
   return (
     typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002"
   );
+}
+
+// A newly added work's starting Description: its Type, Medium and Size,
+// one per line, skipping any that are blank. Filled in once — the
+// migration that added CurationItem.description used the same rule for
+// works already in a curation.
+function defaultDescription(artwork: {
+  type: string | null;
+  medium: string | null;
+  size: string | null;
+}): string | null {
+  const lines = [artwork.type, artwork.medium, artwork.size]
+    .map((v) => v?.trim())
+    .filter((v): v is string => Boolean(v));
+  return lines.length > 0 ? lines.join("\n") : null;
 }
 
 async function ownsCuration(curationId: string, artistId: string): Promise<boolean> {
@@ -79,6 +112,7 @@ export async function getCuration(
               id: true,
               catalogueName: true,
               offeredPrice: true,
+              priceCurrency: true,
               mainImage: { select: { url: true, thumbnailKey: true } },
               images: { take: 1, select: { url: true, thumbnailKey: true } },
             },
@@ -98,6 +132,7 @@ export async function getCuration(
         artworkId: artwork.id,
         catalogueName: artwork.catalogueName,
         offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
+        priceCurrency: artwork.priceCurrency,
         imageUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
       };
     }),
@@ -147,9 +182,10 @@ export async function deleteCuration(curationId: string, artistId: string): Prom
   await db.curation.deleteMany({ where: { id: curationId, artistId } });
 }
 
-// Adds works to the end of the curation, in the order they were picked.
-// Works already in the curation, or not belonging to this artist, are
-// skipped. Returns the updated curation.
+// Adds works to the end of the curation, in the order they were picked,
+// each with its starting Description (see defaultDescription). Works
+// already in the curation, or not belonging to this artist, are skipped.
+// Returns the updated curation.
 export async function addWorksToCuration(
   curationId: string,
   artistId: string,
@@ -161,7 +197,7 @@ export async function addWorksToCuration(
     const [owned, existing, last] = await Promise.all([
       db.artwork.findMany({
         where: { id: { in: artworkIds }, artistId },
-        select: { id: true },
+        select: { id: true, type: true, medium: true, size: true },
       }),
       db.curationItem.findMany({
         where: { curationId, artworkId: { in: artworkIds } },
@@ -174,16 +210,21 @@ export async function addWorksToCuration(
       }),
     ]);
 
-    const ownedIds = new Set(owned.map((a) => a.id));
+    const ownedById = new Map(owned.map((a) => [a.id, a]));
     const existingIds = new Set(existing.map((e) => e.artworkId));
     const toAdd = [...new Set(artworkIds)].filter(
-      (id) => ownedIds.has(id) && !existingIds.has(id)
+      (id) => ownedById.has(id) && !existingIds.has(id)
     );
     const start = last ? last.position + 1 : 0;
 
     if (toAdd.length > 0) {
       await db.curationItem.createMany({
-        data: toAdd.map((artworkId, i) => ({ curationId, artworkId, position: start + i })),
+        data: toAdd.map((artworkId, i) => ({
+          curationId,
+          artworkId,
+          position: start + i,
+          description: defaultDescription(ownedById.get(artworkId)!),
+        })),
         skipDuplicates: true,
       });
     }
@@ -222,4 +263,67 @@ export async function reorderCuration(
     WHERE ci."curationId" = ${curationId} AND ci."artworkId" = x.aid
   `;
   return { ok: true };
+}
+
+// One work's presentation within a curation — see
+// CurationWorkPresentation above. Loaded only for the work being viewed,
+// so opening a curation stays quick however many works it holds.
+export async function getCurationWorkPresentation(
+  curationId: string,
+  artistId: string,
+  artworkId: string
+): Promise<CurationWorkPresentation | null> {
+  const item = await db.curationItem.findFirst({
+    where: { curationId, artworkId, curation: { artistId } },
+    select: {
+      description: true,
+      artwork: {
+        select: {
+          offeredPrice: true,
+          priceCurrency: true,
+          mainImageId: true,
+          images: {
+            select: {
+              id: true,
+              url: true,
+              thumbnailKey: true,
+              displayKey: true,
+              kind: true,
+              posterUrl: true,
+            },
+          },
+          artist: { select: { defaultInstalmentCount: true } },
+        },
+      },
+    },
+  });
+  if (!item) return null;
+
+  const { artwork } = item;
+  return {
+    artworkId,
+    description: item.description,
+    offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
+    priceCurrency: artwork.priceCurrency,
+    defaultInstalmentCount: artwork.artist.defaultInstalmentCount,
+    mainImageId: artwork.mainImageId,
+    images: toArtworkImages(artwork.images, artwork.mainImageId),
+  };
+}
+
+// Saves a work's Description within this curation only. Blank clears it.
+export async function updateCurationWorkDescription(
+  curationId: string,
+  artistId: string,
+  artworkId: string,
+  descriptionRaw: string
+): Promise<Result<{ description: string | null }>> {
+  if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
+  const description = descriptionRaw.trim() || null;
+  const { count } = await db.curationItem.updateMany({
+    where: { curationId, artworkId },
+    data: { description },
+  });
+  if (count === 0) return { error: "This work is no longer in the curation." };
+  return { description };
 }
