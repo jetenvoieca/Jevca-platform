@@ -10,7 +10,6 @@ import {
 import { updateArtworkName, updateArtworkPrice } from "@/lib/actions/artworks";
 import { CURRENCIES } from "@/lib/currencies";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
-import { formatMoney } from "@/lib/studioShared";
 
 // One work's presentation within a curation (2026-10-03) — shown on the
 // Curations page beside the works, for whichever work is selected:
@@ -31,6 +30,21 @@ import { formatMoney } from "@/lib/studioShared";
 // the artwork's Type, Size and Medium.
 function shownDescription(p: Presentation): string {
   return p.description ?? p.defaultDescription ?? "";
+}
+
+// Amounts in Purchase Options: thousands separated, pence only when
+// there are any ("25,000", "4,999.50"). The currency is the dropdown
+// beside them.
+function formatAmount(n: number): string {
+  return new Intl.NumberFormat("en-GB", {
+    minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+    maximumFractionDigits: 2,
+  }).format(n);
+}
+
+// A typed price, with any thousands separators removed.
+function parsePriceInput(value: string): string {
+  return value.replace(/,/g, "").trim();
 }
 
 export default function CurationWorkPresentation({
@@ -55,6 +69,9 @@ export default function CurationWorkPresentation({
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [priceDraft, setPriceDraft] = useState("");
   const [currencyDraft, setCurrencyDraft] = useState("GBP");
+  // The price box shows the formatted amount ("25,000") except while
+  // it's being typed in.
+  const [editingPrice, setEditingPrice] = useState(false);
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
@@ -129,7 +146,8 @@ export default function CurationWorkPresentation({
 
   // Price and currency are saved together — called when the price box
   // loses focus, or straight away when the currency changes.
-  const savePrice = async (price: string, currency: string) => {
+  const savePrice = async (priceInput: string, currency: string) => {
+    const price = parsePriceInput(priceInput);
     const unchanged =
       currency === data.priceCurrency &&
       (price.trim() === ""
@@ -152,6 +170,11 @@ export default function CurationWorkPresentation({
   };
 
   const price = data.offeredPrice != null ? Number(data.offeredPrice) : null;
+  const typedPrice = Number(parsePriceInput(priceDraft));
+  const priceShown =
+    editingPrice || priceDraft.trim() === "" || !Number.isFinite(typedPrice)
+      ? priceDraft
+      : formatAmount(typedPrice);
   const count = data.defaultInstalmentCount;
   const perInstalment =
     price != null && price > 0 && isValidInstalmentCount(count)
@@ -204,14 +227,14 @@ export default function CurationWorkPresentation({
       <div className="rounded-xl border border-neutral-300 p-4">
         <h3 className="mb-3 text-center text-lg text-neutral-900">Purchase Options</h3>
         <label className="mb-1 block text-xs font-medium text-neutral-700">Full price</label>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
           <select
             value={currencyDraft}
             onChange={(e) => {
               setCurrencyDraft(e.target.value);
               savePrice(priceDraft, e.target.value);
             }}
-            className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            className="shrink-0 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
           >
             {CURRENCIES.map((c) => (
               <option key={c} value={c}>
@@ -219,33 +242,40 @@ export default function CurationWorkPresentation({
               </option>
             ))}
           </select>
-          <input
-            type="number"
-            min={0}
-            step="0.01"
-            value={priceDraft}
-            onChange={(e) => setPriceDraft(e.target.value)}
-            onBlur={() => savePrice(priceDraft, currencyDraft)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-            }}
-            placeholder="0.00"
-            className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-          />
+          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-neutral-200 p-1">
+            <input
+              type="text"
+              inputMode="decimal"
+              value={priceShown}
+              onFocus={() => {
+                setEditingPrice(true);
+                // Plain number while typing ("25000", not "25000.00").
+                if (priceDraft.trim() !== "" && Number.isFinite(typedPrice)) {
+                  setPriceDraft(String(typedPrice));
+                }
+              }}
+              onChange={(e) => setPriceDraft(e.target.value)}
+              onBlur={() => {
+                setEditingPrice(false);
+                savePrice(priceDraft, currencyDraft);
+              }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+              }}
+              placeholder="0"
+              className="w-24 min-w-0 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+            />
+            <span className="whitespace-nowrap text-sm text-neutral-500">
+              or {count} instalments of
+            </span>
+            <span
+              title="Follows the full price. The number of instalments is set in Settings → Financial → Payments defaults."
+              className="w-20 shrink-0 rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm text-neutral-700"
+            >
+              {perInstalment != null ? formatAmount(perInstalment) : "—"}
+            </span>
+          </div>
         </div>
-
-        {perInstalment != null ? (
-          <p className="mt-3 text-sm text-neutral-700">
-            or {count} instalments of {formatMoney(perInstalment, data.priceCurrency)}
-          </p>
-        ) : (
-          <p className="mt-3 text-sm text-neutral-400">
-            Set a price to show the instalment option.
-          </p>
-        )}
-        <p className="mt-1 text-xs text-neutral-400">
-          The number of instalments is set in Settings → Financial → Payments defaults.
-        </p>
       </div>
 
       {saving && <p className="text-xs text-neutral-400">Saving…</p>}
