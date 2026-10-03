@@ -7,7 +7,7 @@ import {
   updateCurationWorkDescription,
   type CurationWorkPresentation as Presentation,
 } from "@/lib/actions/curations";
-import { updateArtworkPrice } from "@/lib/actions/artworks";
+import { updateArtworkName, updateArtworkPrice } from "@/lib/actions/artworks";
 import { CURRENCIES } from "@/lib/currencies";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 import { formatMoney } from "@/lib/studioShared";
@@ -16,14 +16,23 @@ import { formatMoney } from "@/lib/studioShared";
 // Curations page beside the works, for whichever work is selected:
 // - Images: the artwork's own Main + 3 related images (adding or
 //   removing here changes the artwork itself).
-// - Description: this curation's own wording for the work — see
-//   CurationItem.description in schema.prisma.
+// - Name: the artwork's own name (renames it everywhere).
+// - Description: this curation's own wording for the work. Until one is
+//   written it shows the artwork's Type, Size and Medium, kept current
+//   with the Catalogue — see CurationItem.description in schema.prisma.
 // - Purchase Options: the artwork's own full price (changes it
 //   everywhere), and what it comes to in instalments. The number of
 //   instalments is the artist's Settings default, edited there only.
 //
 // Rendered with a key of curation + work by its parent, so it starts
 // fresh whenever a different work is shown.
+
+// The Description as shown: this curation's own once written, otherwise
+// the artwork's Type, Size and Medium.
+function shownDescription(p: Presentation): string {
+  return p.description ?? p.defaultDescription ?? "";
+}
+
 export default function CurationWorkPresentation({
   curationId,
   artworkId,
@@ -36,24 +45,30 @@ export default function CurationWorkPresentation({
   artistId: string;
   siteId: string;
   // Called after anything that changes how the work's tile looks (its
-  // Main image or price), so the parent can refresh the tiles.
+  // name, Main image or price), so the parent can refresh the tiles.
   onArtworkChanged: () => void;
 }) {
   const [data, setData] = useState<Presentation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [nameDraft, setNameDraft] = useState("");
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [priceDraft, setPriceDraft] = useState("");
   const [currencyDraft, setCurrencyDraft] = useState("GBP");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
-    const result = await getCurationWorkPresentation(curationId, artistId, artworkId);
-    setData(result);
-    if (result) {
-      setDescriptionDraft(result.description ?? "");
-      setPriceDraft(result.offeredPrice ?? "");
-      setCurrencyDraft(result.priceCurrency);
+    try {
+      const result = await getCurationWorkPresentation(curationId, artistId, artworkId);
+      setData(result);
+      if (result) {
+        setNameDraft(result.catalogueName);
+        setDescriptionDraft(shownDescription(result));
+        setPriceDraft(result.offeredPrice ?? "");
+        setCurrencyDraft(result.priceCurrency);
+      }
+    } catch {
+      setError("Couldn't load this work's details. Try reloading the page.");
     }
     setLoading(false);
   }, [curationId, artistId, artworkId]);
@@ -63,11 +78,37 @@ export default function CurationWorkPresentation({
   }, [load]);
 
   if (loading) return <p className="text-sm text-neutral-400">Loading…</p>;
-  if (!data)
-    return <p className="text-sm text-neutral-400">This work is no longer in the curation.</p>;
+  if (!data) {
+    return (
+      <p className="text-sm text-neutral-400">
+        {error ?? "This work is no longer in the curation."}
+      </p>
+    );
+  }
 
+  const saveName = async () => {
+    if (nameDraft.trim() === data.catalogueName) {
+      setNameDraft(data.catalogueName);
+      return;
+    }
+    setError(null);
+    setSaving(true);
+    const result = await updateArtworkName(artworkId, artistId, nameDraft);
+    setSaving(false);
+    if ("error" in result) {
+      setError(result.error);
+      setNameDraft(data.catalogueName);
+      return;
+    }
+    setData({ ...data, catalogueName: result.catalogueName });
+    setNameDraft(result.catalogueName);
+    onArtworkChanged();
+  };
+
+  // Saving the default unchanged writes nothing, so a work nobody has
+  // written a description for keeps following the Catalogue.
   const saveDescription = async () => {
-    if (descriptionDraft.trim() === (data.description ?? "")) return;
+    if (descriptionDraft.trim() === shownDescription(data).trim()) return;
     setError(null);
     setSaving(true);
     const result = await updateCurationWorkDescription(
@@ -79,11 +120,11 @@ export default function CurationWorkPresentation({
     setSaving(false);
     if ("error" in result) {
       setError(result.error);
-      setDescriptionDraft(data.description ?? "");
+      setDescriptionDraft(shownDescription(data));
       return;
     }
     setData({ ...data, description: result.description });
-    setDescriptionDraft(result.description ?? "");
+    setDescriptionDraft(result.description);
   };
 
   // Price and currency are saved together — called when the price box
@@ -135,6 +176,20 @@ export default function CurationWorkPresentation({
       />
 
       <div className="rounded-xl border border-neutral-300 p-4">
+        <h3 className="mb-2 text-center text-lg text-neutral-900">Name</h3>
+        <input
+          type="text"
+          value={nameDraft}
+          onChange={(e) => setNameDraft(e.target.value)}
+          onBlur={saveName}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
+        />
+      </div>
+
+      <div className="rounded-xl border border-neutral-300 p-4">
         <h3 className="mb-2 text-center text-lg text-neutral-900">Description</h3>
         <textarea
           value={descriptionDraft}
@@ -142,7 +197,7 @@ export default function CurationWorkPresentation({
           onBlur={saveDescription}
           rows={4}
           placeholder="Describe this work for this curation"
-          className="w-full resize-y rounded-md border border-transparent px-1 py-0.5 text-sm text-neutral-800 hover:border-neutral-300 focus:border-neutral-300 focus:outline-none"
+          className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
         />
       </div>
 

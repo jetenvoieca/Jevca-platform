@@ -36,13 +36,16 @@ export type CurationDetail = {
 
 // One work's presentation within a curation (2026-10-03) — shown beside
 // the works on the Curations page when that work is selected. The
-// Description is this curation's own (CurationItem.description); images
+// Description is this curation's own (CurationItem.description — null
+// until written, when defaultDescription is shown instead); name, images
 // and price are the artwork's own, so editing them here changes them
 // everywhere. The number of instalments is the artist's Settings
 // default — artworks don't have their own.
 export type CurationWorkPresentation = {
   artworkId: string;
+  catalogueName: string;
   description: string | null;
+  defaultDescription: string | null;
   offeredPrice: string | null;
   priceCurrency: string;
   defaultInstalmentCount: number;
@@ -58,16 +61,16 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-// A newly added work's starting Description: its Type, Medium and Size,
-// one per line, skipping any that are blank. Filled in once — the
-// migration that added CurationItem.description used the same rule for
-// works already in a curation.
+// What a work's Description shows until one is written for it: the
+// artwork's Type, Size and Medium, one per line, skipping any that are
+// blank. Worked out each time it's shown, so it always matches the
+// Catalogue.
 function defaultDescription(artwork: {
   type: string | null;
-  medium: string | null;
   size: string | null;
+  medium: string | null;
 }): string | null {
-  const lines = [artwork.type, artwork.medium, artwork.size]
+  const lines = [artwork.type, artwork.size, artwork.medium]
     .map((v) => v?.trim())
     .filter((v): v is string => Boolean(v));
   return lines.length > 0 ? lines.join("\n") : null;
@@ -182,10 +185,9 @@ export async function deleteCuration(curationId: string, artistId: string): Prom
   await db.curation.deleteMany({ where: { id: curationId, artistId } });
 }
 
-// Adds works to the end of the curation, in the order they were picked,
-// each with its starting Description (see defaultDescription). Works
-// already in the curation, or not belonging to this artist, are skipped.
-// Returns the updated curation.
+// Adds works to the end of the curation, in the order they were picked.
+// Works already in the curation, or not belonging to this artist, are
+// skipped. Returns the updated curation.
 export async function addWorksToCuration(
   curationId: string,
   artistId: string,
@@ -197,7 +199,7 @@ export async function addWorksToCuration(
     const [owned, existing, last] = await Promise.all([
       db.artwork.findMany({
         where: { id: { in: artworkIds }, artistId },
-        select: { id: true, type: true, medium: true, size: true },
+        select: { id: true },
       }),
       db.curationItem.findMany({
         where: { curationId, artworkId: { in: artworkIds } },
@@ -210,21 +212,16 @@ export async function addWorksToCuration(
       }),
     ]);
 
-    const ownedById = new Map(owned.map((a) => [a.id, a]));
+    const ownedIds = new Set(owned.map((a) => a.id));
     const existingIds = new Set(existing.map((e) => e.artworkId));
     const toAdd = [...new Set(artworkIds)].filter(
-      (id) => ownedById.has(id) && !existingIds.has(id)
+      (id) => ownedIds.has(id) && !existingIds.has(id)
     );
     const start = last ? last.position + 1 : 0;
 
     if (toAdd.length > 0) {
       await db.curationItem.createMany({
-        data: toAdd.map((artworkId, i) => ({
-          curationId,
-          artworkId,
-          position: start + i,
-          description: defaultDescription(ownedById.get(artworkId)!),
-        })),
+        data: toAdd.map((artworkId, i) => ({ curationId, artworkId, position: start + i })),
         skipDuplicates: true,
       });
     }
@@ -279,6 +276,10 @@ export async function getCurationWorkPresentation(
       description: true,
       artwork: {
         select: {
+          catalogueName: true,
+          type: true,
+          size: true,
+          medium: true,
           offeredPrice: true,
           priceCurrency: true,
           mainImageId: true,
@@ -302,7 +303,9 @@ export async function getCurationWorkPresentation(
   const { artwork } = item;
   return {
     artworkId,
+    catalogueName: artwork.catalogueName,
     description: item.description,
+    defaultDescription: defaultDescription(artwork),
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     priceCurrency: artwork.priceCurrency,
     defaultInstalmentCount: artwork.artist.defaultInstalmentCount,
@@ -311,15 +314,17 @@ export async function getCurationWorkPresentation(
   };
 }
 
-// Saves a work's Description within this curation only. Blank clears it.
+// Saves a work's Description within this curation only. From then on
+// it's kept as written — saving it blank keeps it blank rather than
+// going back to the default.
 export async function updateCurationWorkDescription(
   curationId: string,
   artistId: string,
   artworkId: string,
   descriptionRaw: string
-): Promise<Result<{ description: string | null }>> {
+): Promise<Result<{ description: string }>> {
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
-  const description = descriptionRaw.trim() || null;
+  const description = descriptionRaw.trim();
   const { count } = await db.curationItem.updateMany({
     where: { curationId, artworkId },
     data: { description },

@@ -645,6 +645,31 @@ export async function updateArtworkPrice(
   return { ok: true, offeredPrice };
 }
 
+// The artwork's name, edited from the Curations page (2026-10-03) — its
+// one and only name, so this renames it everywhere. Retires the payment
+// links on its unpaid sales, same as a rename from the Catalogue (see
+// updateCatalogue). Only ever changes an artwork belonging to this
+// artist.
+export async function updateArtworkName(
+  artworkId: string,
+  artistId: string,
+  nameRaw: string
+): Promise<{ ok: true; catalogueName: string } | { error: string }> {
+  const catalogueName = nameRaw.trim();
+  if (!catalogueName) return { error: "A name is required." };
+
+  const current = await db.artwork.findFirst({
+    where: { id: artworkId, artistId },
+    select: { catalogueName: true },
+  });
+  if (!current) return { error: "Artwork not found." };
+  if (current.catalogueName === catalogueName) return { ok: true, catalogueName };
+
+  await db.artwork.update({ where: { id: artworkId }, data: { catalogueName } });
+  await retireArtworkPaymentLinks(artworkId);
+  return { ok: true, catalogueName };
+}
+
 // Called when leaving the editor (Close) rather than on every keystroke —
 // deletes the record only if absolutely nothing has been added since
 // creation (still "Untitled", no image, no facet fields, no payment
