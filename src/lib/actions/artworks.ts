@@ -14,6 +14,7 @@ import {
 import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
 import { retireArtworkPaymentLinks } from "@/lib/paymentLinks";
 import { isCurrency } from "@/lib/currencies";
+import { toArtworkImages } from "@/lib/artworkImages";
 import { getArtistDefaultCurrency } from "@/lib/primarySite";
 import type { PurchaseDetail } from "./payments";
 
@@ -528,27 +529,8 @@ export async function getArtworkDetailForClient(id: string) {
     // between existing images — see actions/artworks.ts), so an id
     // comparison against this replaces the old positional guess.
     mainImageId: artwork.mainImageId,
-    images: artwork.images
-      .slice()
-      .sort((a, b) => {
-        // Main image first, if one is set — everything else keeps
-        // whatever order Prisma returned (2026-08-16).
-        if (a.id === artwork.mainImageId) return -1;
-        if (b.id === artwork.mainImageId) return 1;
-        return 0;
-      })
-      .map((img) => ({
-        id: img.id,
-        url: publicMediaUrl(img.thumbnailKey) || img.url,
-        // Larger version for the enlarged preview (2026-08-16) — the
-        // thumbnail above is deliberately small (600px) for a snappy
-        // strip of many of them; this is the 1800px one, still much
-        // smaller than the true original but plenty for an on-screen
-        // preview.
-        displayUrl: publicMediaUrl(img.displayKey) || publicMediaUrl(img.thumbnailKey) || img.url,
-        kind: img.kind,
-        posterUrl: img.posterUrl,
-      })),
+    // Main image first — see toArtworkImages (lib/artworkImages.ts).
+    images: toArtworkImages(artwork.images, artwork.mainImageId),
     activePurchase: purchases.find((p) => p.status === "ACTIVE") || null,
     purchaseHistory: purchases.filter((p) => p.status !== "ACTIVE"),
   };
@@ -633,6 +615,34 @@ export async function updateCatalogue(
   if (catalogueName && current && catalogueName !== current.catalogueName) {
     await retireArtworkPaymentLinks(id);
   }
+}
+
+// The artwork's price, edited from the Curations page's Purchase Options
+// (2026-10-03). Writes the same price fields updateCatalogue does —
+// offeredPrice, its presentationPrice mirror (see the note on
+// Artwork.presentationPrice in schema.prisma) and priceCurrency — so the
+// change applies everywhere the artwork is shown and sold. Only ever
+// changes an artwork belonging to this artist.
+export async function updateArtworkPrice(
+  artworkId: string,
+  artistId: string,
+  priceRaw: string,
+  currency: string
+): Promise<{ ok: true; offeredPrice: string | null } | { error: string }> {
+  const trimmed = priceRaw.trim();
+  const amount = trimmed ? Number(trimmed) : null;
+  if (amount != null && (!Number.isFinite(amount) || amount < 0)) {
+    return { error: "Enter a valid price." };
+  }
+  if (!isCurrency(currency)) return { error: "That currency isn't supported." };
+
+  const offeredPrice = amount != null ? amount.toFixed(2) : null;
+  const { count } = await db.artwork.updateMany({
+    where: { id: artworkId, artistId },
+    data: { offeredPrice, presentationPrice: offeredPrice, priceCurrency: currency },
+  });
+  if (count === 0) return { error: "Artwork not found." };
+  return { ok: true, offeredPrice };
 }
 
 // Called when leaving the editor (Close) rather than on every keystroke —

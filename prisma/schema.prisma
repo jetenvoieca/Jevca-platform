@@ -593,8 +593,9 @@ model Location {
 // itself, so it doesn't belong in the catalogue. Belongs to the artist
 // (not a Site), same as Artwork, so any of the artist's sites can use
 // the same curation. An artwork can be in any number of curations —
-// see CurationItem below. Stage one is curating only; how a curation is
-// displayed on a website is a later stage.
+// see CurationItem below. Each work's presentation within a curation
+// (its Description) is edited on the Curations page (2026-10-03); how a
+// curation is displayed on a website is a later stage.
 model Curation {
   id       String @id @default(cuid())
   artistId String
@@ -624,6 +625,14 @@ model CurationItem {
   artwork    Artwork  @relation(fields: [artworkId], references: [id], onDelete: Cascade)
 
   position Int @default(0)
+
+  // This work's Description within this curation only (2026-10-03) —
+  // the same artwork can read differently in each curation. Filled in
+  // once, when the work is added, from the artwork's Type, Medium and
+  // Size (one per line); edited freely from the Curations page after
+  // that, and never re-synced from the Catalogue. Images and price are
+  // not per curation — they stay the artwork's own.
+  description String?
 
   createdAt DateTime @default(now())
 
