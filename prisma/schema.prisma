@@ -627,11 +627,12 @@ model CurationItem {
   position Int @default(0)
 
   // This work's Description within this curation only (2026-10-03) —
-  // the same artwork can read differently in each curation. Filled in
-  // once, when the work is added, from the artwork's Type, Medium and
-  // Size (one per line); edited freely from the Curations page after
-  // that, and never re-synced from the Catalogue. Images and price are
-  // not per curation — they stay the artwork's own.
+  // the same artwork can read differently in each curation. Null until
+  // someone writes one on the Curations page; until then the page shows
+  // the artwork's own Type, Size and Medium (one per line), always
+  // current with the Catalogue. Once written it's kept as written ("" if
+  // deliberately cleared) and never re-synced. Name, images and price
+  // are not per curation — they stay the artwork's own.
   description String?
 
   createdAt DateTime @default(now())
