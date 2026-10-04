@@ -11,7 +11,10 @@ import type { ArtworkImage } from "@/lib/artworkImages";
 // changes this curation only, never the artwork or the Catalogue — see
 // CurationItem.ownImages in schema.prisma.
 // - Click one of the 3 smaller images to show "Make main image".
-// - Hover any image for ✕ to take it out of this curation.
+// - Hover a smaller image for ✕ to take it out of this curation. The main
+//   image has no ✕ (2026-10-04, direct request) — it's only ever changed
+//   by making another image main, so a work always keeps one once it has
+//   one. setCurationWorkImages enforces the same rule.
 // - "+" picks an image to add — the artwork's own (Related) or any other
 //   in the Media Catalogue (Marketing).
 export default function CurationImageEditor({
@@ -89,12 +92,11 @@ export default function CurationImageEditor({
   return (
     <div className={busy ? "pointer-events-none opacity-60" : ""}>
       {main ? (
-        <div className="group relative aspect-square overflow-hidden rounded-md bg-neutral-100">
+        <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
           <ImageFill image={main} large />
           <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1.5 py-0.5 text-[10px] text-white">
             Main
           </span>
-          {removeButton(main.id)}
         </div>
       ) : (
         addTile("add-main", "Add main image")

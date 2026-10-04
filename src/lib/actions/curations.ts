@@ -337,8 +337,9 @@ export async function getCurationWorkPresentation(
 // Sets a work's whole image set within this curation — `imageIds` in
 // order, main first. The first change gives the work its own set (see
 // CurationItem.ownImages); the artwork and the Catalogue are never
-// touched. Only the artist's own images are accepted. Returns the saved
-// set.
+// touched. Only the artist's own images are accepted. The current main
+// image must stay in the set (2026-10-04) — it can be swapped for another
+// image, never simply removed. Returns the saved set.
 export async function setCurationWorkImages(
   curationId: string,
   artistId: string,
@@ -352,9 +353,22 @@ export async function setCurationWorkImages(
 
   const item = await db.curationItem.findFirst({
     where: { curationId, artworkId, curation: { artistId } },
-    select: { id: true },
+    select: {
+      id: true,
+      ownImages: true,
+      images: { orderBy: { position: "asc" }, take: 1, select: { imageId: true } },
+      artwork: { select: { mainImageId: true, images: { take: 1, select: { id: true } } } },
+    },
   });
   if (!item) return { error: "This work is no longer in the curation." };
+
+  // The main image as shown now: this curation's own, or the Catalogue's.
+  const currentMainId = item.ownImages
+    ? (item.images[0]?.imageId ?? null)
+    : (item.artwork.mainImageId ?? item.artwork.images[0]?.id ?? null);
+  if (currentMainId && !ids.includes(currentMainId)) {
+    return { error: "The main image can't be removed — make another image main instead." };
+  }
 
   const images = await db.image.findMany({
     where: { id: { in: ids }, artistId },
