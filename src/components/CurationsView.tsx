@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import CurationWorkPresentation from "@/components/CurationWorkPresentation";
 import {
@@ -36,17 +36,20 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // Curations page (2026-09-24, stage one). Two columns:
 // - left: the open curation — its name (click to rename), Delete, and
 //   its works in order (drag to reorder, hover × to remove, "+ Add
-//   Works" tile to pick more). Beside the works (2026-10-03), the
-//   selected work's presentation — images, Description and Purchase
-//   Options, all editable (see CurationWorkPresentation). Click a work
-//   to select it; the first work is selected to begin with.
+//   Works" tile to pick more).
 // - right: every curation; click one to open it, or add a new one.
+//
+// Presentation (2026-10-03) — a work's images, Name, Description and
+// Purchase Options within this curation (see CurationWorkPresentation).
+// Curating and presenting are separate steps, so it opens in a centred
+// modal (2026-10-04, direct request) from the "Presentation" button that
+// appears when hovering over a work, rather than sitting beside the
+// works.
 //
 // Frozen headers (2026-10-04, general requirement): the page fills the
 // space under the site header and never scrolls as a whole. The open
 // curation's title row and the list's "Curation Name" heading stay put;
-// the works, the selected work's presentation and the list of curations
-// each scroll on their own.
+// the works and the list of curations each scroll on their own.
 //
 // A centre column ("Display this curation using ……") originally sat
 // between these for a planned stage-two display-mode chooser — removed
@@ -73,10 +76,8 @@ export default function CurationsView({
   const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [dragIndex, setDragIndex] = useState<number | null>(null);
-  // The work whose presentation is shown beside the works. Falls back
-  // to the first work whenever it isn't (or is no longer) in the open
-  // curation — see shownWork below.
-  const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
+  // The work whose presentation modal is open, if any.
+  const [presentingId, setPresentingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Which curation is meant to be open right now, readable inside
@@ -237,8 +238,26 @@ export default function CurationsView({
   };
 
   const activeId = loadingId ?? selected?.id ?? null;
-  const shownWork =
-    selected?.works.find((w) => w.artworkId === selectedWorkId) ?? selected?.works[0] ?? null;
+  // Closes by itself if the work leaves the curation, or another
+  // curation is opened.
+  const presentingWork = selected?.works.find((w) => w.artworkId === presentingId) ?? null;
+
+  // Leaving the field being edited first, so its change is saved (every
+  // presentation field saves when it loses focus).
+  const closePresentation = () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    setPresentingId(null);
+  };
+
+  useEffect(() => {
+    if (!presentingWork) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closePresentation();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presentingWork]);
 
   return (
     <div className="grid h-full grid-cols-[4fr_1fr] overflow-hidden">
@@ -287,99 +306,119 @@ export default function CurationsView({
               </button>
             </div>
 
-            {/* Two columns, each scrolling on its own: the works, and the
-                selected work's presentation. */}
-            <div className="flex min-h-0 flex-1 gap-8 px-6">
-              <div className="min-w-0 flex-1 overflow-y-auto p-1 pb-6">
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
-                  {selected.works.map((w, i) => {
-                    const price = formatPrice(w.offeredPrice, w.priceCurrency);
-                    const isShown = shownWork?.artworkId === w.artworkId;
-                    return (
-                      <div
-                        key={w.artworkId}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.effectAllowed = "move";
-                          e.dataTransfer.setData("text/plain", w.artworkId);
-                          setDragIndex(i);
-                        }}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          handleDrop(i);
-                        }}
-                        onDragEnd={() => setDragIndex(null)}
-                        onClick={() => setSelectedWorkId(w.artworkId)}
-                        className={`group relative cursor-grab ${dragIndex === i ? "opacity-40" : ""}`}
-                      >
+            {/* The works, scrolling on their own. */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
+                {selected.works.map((w, i) => {
+                  const price = formatPrice(w.offeredPrice, w.priceCurrency);
+                  return (
+                    <div
+                      key={w.artworkId}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", w.artworkId);
+                        setDragIndex(i);
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleDrop(i);
+                      }}
+                      onDragEnd={() => setDragIndex(null)}
+                      className={`group relative cursor-grab ${dragIndex === i ? "opacity-40" : ""}`}
+                    >
+                      <div className="relative">
                         {w.imageUrl ? (
                           <img
                             src={w.imageUrl}
                             alt=""
                             draggable={false}
-                            className={`aspect-square w-full rounded-md object-cover ${
-                              isShown ? "ring-2 ring-neutral-900 ring-offset-2" : ""
-                            }`}
+                            className="aspect-square w-full rounded-md object-cover"
                           />
                         ) : (
-                          <div
-                            className={`flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400 ${
-                              isShown ? "ring-2 ring-neutral-900 ring-offset-2" : ""
-                            }`}
-                          >
+                          <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
                             No image
                           </div>
                         )}
-                        <p className="mt-2 truncate text-sm font-medium text-neutral-900">
-                          {w.catalogueName}
-                        </p>
-                        {price && <p className="text-sm text-neutral-400">{price}</p>}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveWork(w.artworkId);
-                          }}
-                          title="Remove from this curation"
-                          className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                          onClick={() => setPresentingId(w.artworkId)}
+                          className="absolute bottom-2 left-1/2 hidden -translate-x-1/2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-neutral-900 shadow hover:bg-white group-hover:block"
                         >
-                          ✕
+                          Presentation
                         </button>
                       </div>
-                    );
-                  })}
-                  <ArtworkPicker
-                    artistId={artistId}
-                    mode="multi"
-                    label="Add Works"
-                    allowCreate={false}
-                    excludeIds={selected.works.map((w) => w.artworkId)}
-                    onSelect={handleAddWorks}
-                  />
-                </div>
-
-                {selected.works.length > 1 && (
-                  <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
-                )}
+                      <p className="mt-2 truncate text-sm font-medium text-neutral-900">
+                        {w.catalogueName}
+                      </p>
+                      {price && <p className="text-sm text-neutral-400">{price}</p>}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveWork(w.artworkId);
+                        }}
+                        title="Remove from this curation"
+                        className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+                <ArtworkPicker
+                  artistId={artistId}
+                  mode="multi"
+                  label="Add Works"
+                  allowCreate={false}
+                  excludeIds={selected.works.map((w) => w.artworkId)}
+                  onSelect={handleAddWorks}
+                />
               </div>
 
-              {shownWork && (
-                <div className="w-[26rem] shrink-0 overflow-y-auto pb-6">
-                  <CurationWorkPresentation
-                    key={`${selected.id}:${shownWork.artworkId}`}
-                    curationId={selected.id}
-                    artworkId={shownWork.artworkId}
-                    artistId={artistId}
-                    siteId={siteId}
-                    onArtworkChanged={() => reload(selected.id)}
-                  />
-                </div>
+              {selected.works.length > 1 && (
+                <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
               )}
             </div>
           </div>
         )}
       </section>
+
+      {selected && presentingWork && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closePresentation();
+          }}
+        >
+          <div className="flex max-h-full w-full max-w-md flex-col rounded-lg bg-white shadow-xl">
+            {/* Frozen: which work this is, and Close. */}
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3">
+              <h2 className="min-w-0 flex-1 truncate text-lg text-neutral-900">
+                Presentation — {presentingWork.catalogueName}
+              </h2>
+              <button
+                type="button"
+                onClick={closePresentation}
+                className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+              <CurationWorkPresentation
+                key={`${selected.id}:${presentingWork.artworkId}`}
+                curationId={selected.id}
+                artworkId={presentingWork.artworkId}
+                artistId={artistId}
+                siteId={siteId}
+                onArtworkChanged={() => reload(selected.id)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Right: every curation */}
       <aside className="flex min-h-0 flex-col py-6 pr-6">
