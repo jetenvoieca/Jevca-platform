@@ -945,7 +945,6 @@ model Site {
   updatedAt            DateTime   @updatedAt
 
   pages Page[]
-  menus Menu[]
 
   @@index([artistId])
   @@index([templateId])
@@ -961,10 +960,9 @@ model Page {
   visible   Boolean  @default(true)
   position  Int      @default(0)
   // Free-text marker for pages auto-created by another feature rather
-  // than the "+ Add New Page" flow (e.g. "pavilion", 2026-08-30) — used
-  // to keep the main site nav sidebar from being cluttered with every
-  // auto-created child page, while such a page still behaves as a normal
-  // Page everywhere else (Menu Builder's page picker, its own editor).
+  // than added by hand (e.g. "pavilion", 2026-08-30) — lets page lists
+  // leave out auto-created child pages, while such a page still behaves
+  // as a normal Page everywhere else (its own editor).
   sourceTag String?
 
   // Page-level background styling (2026-09-03) — deliberately real
@@ -989,61 +987,12 @@ model Page {
   draftBlocks Json  @default("[]")
   liveBlocks  Json?
 
-  menuItems MenuItem[]
-
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([siteId, slug])
   @@index([siteId])
   @@index([backgroundImageId])
-}
-
-model Menu {
-  id       String  @id @default(cuid())
-  siteId   String
-  site     Site    @relation(fields: [siteId], references: [id])
-  name     String
-  isActive Boolean @default(false)
-
-  groups MenuGroup[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([siteId])
-}
-
-model MenuGroup {
-  id       String @id @default(cuid())
-  menuId   String
-  menu     Menu   @relation(fields: [menuId], references: [id], onDelete: Cascade)
-  name     String
-  position Int    @default(0)
-
-  items MenuItem[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([menuId])
-}
-
-model MenuItem {
-  id       String    @id @default(cuid())
-  groupId  String
-  group    MenuGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
-  pageId   String
-  page     Page      @relation(fields: [pageId], references: [id])
-  label    String
-  byline   String?
-  position Int       @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([groupId])
-  @@index([pageId])
 }
 
 // A reusable design library (2026-09-06) — e.g. "ISYT", replicating the
@@ -1065,8 +1014,7 @@ model Template {
 // One named page slot within a Template (2026-09-06) — "+ Add new menu
 // item" in the mockups: a Page Name plus a fixed PageStyle. Shell only —
 // see the note on the PageStyle enum above. `position` orders pages
-// within the Template the same way MenuItem/MenuGroup already order
-// themselves elsewhere.
+// within the Template.
 model TemplatePage {
   id         String   @id @default(cuid())
   templateId String
