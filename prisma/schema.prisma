@@ -54,7 +54,7 @@ enum PageType {
   // home) from the same "+ Add New Page" list as Section/Private/
   // Pavilion, rather than one of those fixed system types. Which style
   // it actually is lives in Page.templateStyle, since the style is a
-  // PageStyle value, not a PageType — this is deliberately a single
+  // TemplatePageStyle value, not a PageType — this is deliberately a single
   // extra PageType, not one enum value per style, so adding a new style
   // later never means another migration here. Picking "freeform" from
   // that same list creates a PRIVATE page instead (see
@@ -84,9 +84,13 @@ enum PageType {
 // so a Page created from one of that Template's styles remembers which
 // style it is.
 //
-// No PageStyle has a real layout renderer yet beyond that plumbing —
+// No TemplatePageStyle has a real layout renderer yet beyond that plumbing —
 // that's later, one style at a time.
-enum PageStyle {
+//
+// Renamed from "PageStyle" (2026-10-04) so that name could go to the new
+// shared Page Styles (model PageStyle below). Marked for possible
+// clean-up later, along with the TEMPLATE_STYLE page type.
+enum TemplatePageStyle {
   PORTFOLIO
   SHOWCASE
   PROFILE
@@ -992,7 +996,7 @@ model Page {
   // `type` is a small fixed set of system behaviours (Section/Private/
   // Pavilion/Pavilion Visual/Template Style) while this is "which
   // style", a separate question that only applies to one of them.
-  templateStyle PageStyle?
+  templateStyle TemplatePageStyle?
 
   // The curation this page shows (2026-10-04) — optional; one per page
   // for now. Must be one of the site's own artist's curations (checked
@@ -1056,8 +1060,8 @@ model Template {
 }
 
 // One named page slot within a Template (2026-09-06) — "+ Add new menu
-// item" in the mockups: a Page Name plus a fixed PageStyle. Shell only —
-// see the note on the PageStyle enum above. `position` orders pages
+// item" in the mockups: a Page Name plus a fixed TemplatePageStyle. Shell
+// only — see the note on the TemplatePageStyle enum above. `position` orders pages
 // within the Template.
 model TemplatePage {
   id         String   @id @default(cuid())
@@ -1065,7 +1069,7 @@ model TemplatePage {
   template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
 
   name     String
-  style    PageStyle
+  style    TemplatePageStyle
   position Int       @default(0)
 
   createdAt DateTime @default(now())
