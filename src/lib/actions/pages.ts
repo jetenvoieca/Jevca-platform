@@ -2,7 +2,6 @@
 
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { slugify } from "@/lib/pageSlug";
 
 // Deliberately NOT calling revalidatePath(`/sites/${siteId}`) from the
 // actions below (2026-08-31 removal) — the same fix already made in
@@ -32,66 +31,27 @@ export async function uniqueSlug(siteId: string, base: string) {
   return slug;
 }
 
-export async function createPage(siteId: string, formData: FormData) {
-  const title = (formData.get("title") as string)?.trim();
-  if (!title) return;
-  const typeRaw = (formData.get("type") as string) || "";
-
-  // A Template's own page style is encoded as "STYLE:<value>" (2026-09-06
-  // — see the matching option list in SiteShell.tsx), so this one form
-  // field still covers both the four system types and any of the site's
-  // Template's styles, rather than needing a second control. "FREEFORM"
-  // is the one style that isn't a distinct PageType at all — picking it
-  // creates an ordinary PRIVATE page (the ordinary block editor); see
-  // the note on PageStyle.FREEFORM in schema.prisma.
-  let type: "SECTION" | "PRIVATE" | "PAVILION" | "PAVILION_VISUAL" | "TEMPLATE_STYLE" = "SECTION";
-  let templateStyle: "PORTFOLIO" | "SHOWCASE" | "PROFILE" | "EXHIBITIONS" | "HOME" | null = null;
-
-  if (typeRaw.startsWith("STYLE:")) {
-    const style = typeRaw.slice("STYLE:".length);
-    if (style === "FREEFORM") {
-      type = "PRIVATE";
-    } else if (
-      style === "PORTFOLIO" ||
-      style === "SHOWCASE" ||
-      style === "PROFILE" ||
-      style === "EXHIBITIONS" ||
-      style === "HOME"
-    ) {
-      type = "TEMPLATE_STYLE";
-      templateStyle = style;
-    }
-  } else if (typeRaw === "PRIVATE" || typeRaw === "PAVILION" || typeRaw === "PAVILION_VISUAL") {
-    type = typeRaw;
-  }
-
-  const baseSlug = slugify(title);
-  const slug = await uniqueSlug(siteId, baseSlug);
-
-  const maxPosition = await db.page.aggregate({
-    where: { siteId },
-    _max: { position: true },
-  });
-
-  const page = await db.page.create({
-    data: {
-      siteId,
-      type,
-      templateStyle,
-      title,
-      slug,
-      position: (maxPosition._max.position ?? -1) + 1,
-    },
-  });
-
-  redirect(`/sites/${siteId}/pages/${page.id}`);
-}
-
-// The visible toggle lets a page be built/edited in readiness without it
-// counting as "ready" — doesn't affect Draft/Publish (that's still about
-// content changes), just whether the page is meant to be found/shown yet.
-export async function updatePageVisibility(pageId: string, siteId: string, visible: boolean) {
-  await db.page.update({ where: { id: pageId }, data: { visible } });
+// Saves the Pages page's two lists in one go after a drag (2026-10-04):
+// Live pages first, then Hidden, each in the order shown. Position is
+// numbered straight through both lists, and `visible` follows which list
+// a page is in. Scoped by siteId so an id from another site is ignored.
+export async function reorderPages(
+  siteId: string,
+  liveIds: string[],
+  hiddenIds: string[]
+): Promise<void> {
+  const ordered = [
+    ...liveIds.map((id) => ({ id, visible: true })),
+    ...hiddenIds.map((id) => ({ id, visible: false })),
+  ];
+  await db.$transaction(
+    ordered.map((p, position) =>
+      db.page.updateMany({
+        where: { id: p.id, siteId },
+        data: { visible: p.visible, position },
+      })
+    )
+  );
 }
 
 // Renaming deliberately leaves the slug untouched — changing it would break
@@ -106,8 +66,9 @@ export async function updatePageTitle(
   await db.page.update({ where: { id: pageId }, data: { title } });
 }
 
+// Scoped by siteId, so a page can only be deleted from its own site.
 export async function deletePage(siteId: string, pageId: string) {
-  await db.page.delete({ where: { id: pageId } });
+  await db.page.deleteMany({ where: { id: pageId, siteId } });
   redirect(`/sites/${siteId}/pages`);
 }
 
