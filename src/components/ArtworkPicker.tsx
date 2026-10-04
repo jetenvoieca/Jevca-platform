@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { getArtworksForArtist, quickCreateArtwork } from "@/lib/actions/media";
+import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 
 type PickedArtwork = {
   id: string;
@@ -41,6 +42,15 @@ export default function ArtworkPicker({
 }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // Location and Type filters (2026-10-04) — the same lists the Artwork
+  // Catalogue's own filters offer, loaded the first time the picker
+  // opens.
+  const [location, setLocation] = useState("");
+  const [type, setType] = useState("");
+  const [filterOptions, setFilterOptions] = useState<{
+    locations: string[];
+    types: string[];
+  } | null>(null);
   const [artworks, setArtworks] = useState<PickedArtwork[]>([]);
   const [selected, setSelected] = useState<PickedArtwork[]>([]);
   const [newTitle, setNewTitle] = useState("");
@@ -52,9 +62,13 @@ export default function ArtworkPicker({
   const visibleArtworks =
     excluded.size > 0 ? artworks.filter((a) => !excluded.has(a.id)) : artworks;
 
-  const load = (q: string) => {
+  const load = (q: string, loc = location, t = type) => {
     startTransition(async () => {
-      const results = await getArtworksForArtist(artistId, q || undefined);
+      const results = await getArtworksForArtist(artistId, {
+        q: q || undefined,
+        location: loc || undefined,
+        type: t || undefined,
+      });
       setArtworks(
         results.map((a) => ({
           id: a.id,
@@ -71,6 +85,11 @@ export default function ArtworkPicker({
     setOpen(true);
     setSelected([]);
     load(query);
+    if (!filterOptions) {
+      getArtworkSettings(artistId).then((s) =>
+        setFilterOptions({ locations: s.locations.map((l) => l.name), types: s.artworkTypes })
+      );
+    }
   };
 
   // Debounced search-as-you-type (2026-08-31) — previously fired a full
@@ -169,10 +188,41 @@ export default function ArtworkPicker({
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search artworks…"
+            placeholder="Search title, catalogue #, medium"
             autoFocus
-            className="flex-1 rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
+          <select
+            value={location}
+            onChange={(e) => {
+              setLocation(e.target.value);
+              load(query, e.target.value, type);
+            }}
+            className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
+          >
+            <option value="">All locations</option>
+            {filterOptions?.locations.map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+          </select>
+          <select
+            value={type}
+            onChange={(e) => {
+              setType(e.target.value);
+              load(query, location, e.target.value);
+            }}
+            className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
+          >
+            <option value="">All types</option>
+            {filterOptions?.types.map((t) => (
+              <option key={t} value={t}>
+                {t}
+              </option>
+            ))}
+          </select>
+          <div className="flex-1" />
           {allowCreate && (
             <>
               <input
@@ -243,9 +293,11 @@ export default function ArtworkPicker({
           </div>
           {visibleArtworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
-              {allowCreate
-                ? "No artworks yet — type a name above to create one."
-                : "No artworks to add."}
+              {query || location || type
+                ? "No artworks match these filters."
+                : allowCreate
+                  ? "No artworks yet — type a name above to create one."
+                  : "No artworks to add."}
             </p>
           )}
         </div>

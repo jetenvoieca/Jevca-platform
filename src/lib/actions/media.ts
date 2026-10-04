@@ -5,6 +5,7 @@ import { getPresignedUploadUrl, getFromR2, uploadToR2, publicMediaUrl } from "@/
 import { generateImageSizes } from "@/lib/imageSizes";
 import { randomUUID } from "crypto";
 import { createArtworkWithRetry } from "./artworks";
+import { buildArtworkWhere, type ArtworkFilterInput } from "@/lib/artworkFilters";
 
 function sanitizeFilename(name: string) {
   return name
@@ -176,15 +177,18 @@ export async function listImages(artistId: string, q?: string) {
   });
 }
 
-// Used by ArtworkPicker (page editors, Hopper) — searches by Name. Scoped
-// to the artist, not the site, since a page on any of that artist's
-// sites can feature any of their artworks.
-export async function getArtworksForArtist(artistId: string, q?: string) {
+// ArtworkPicker's list (page editors, Hopper, Curations). Scoped to the
+// artist, not the site, since a page on any of that artist's sites can
+// feature any of their artworks. Search, Location and Type (2026-10-04)
+// mean exactly what they mean in the Artwork Catalogue — the same shared
+// buildArtworkWhere (lib/artworkFilters.ts) — so search also matches
+// catalogue number and medium, as the catalogue's does.
+export async function getArtworksForArtist(
+  artistId: string,
+  filters: Pick<ArtworkFilterInput, "q" | "location" | "type"> = {}
+) {
   const rows = await db.artwork.findMany({
-    where: {
-      artistId,
-      ...(q ? { catalogueName: { contains: q, mode: "insensitive" } } : {}),
-    },
+    where: buildArtworkWhere(artistId, filters),
     include: { images: { take: 1 }, mainImage: true },
     relationLoadStrategy: "query",
     orderBy: { createdAt: "desc" },
