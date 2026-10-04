@@ -6,7 +6,6 @@ import Link from "next/link";
 import {
   saveDraftBlocks,
   deletePage,
-  menuItemCountForPage,
   updatePageTitle,
   updatePageBackground,
 } from "@/lib/actions/pages";
@@ -558,14 +557,7 @@ export default function PageEditor({
 
   const handleDeletePage = async () => {
     setIsDeleting(true);
-    const menuCount = await menuItemCountForPage(pageId);
-    const warning =
-      menuCount > 0
-        ? `"${pageTitle}" is used in ${menuCount} menu placement${
-            menuCount === 1 ? "" : "s"
-          } — deleting it will remove those too. `
-        : "";
-    if (!confirm(`${warning}Delete "${pageTitle}"? This can't be undone.`)) {
+    if (!confirm(`Delete "${pageTitle}"? This can't be undone.`)) {
       setIsDeleting(false);
       return;
     }
