@@ -595,8 +595,8 @@ model Location {
 // the same curation. An artwork can be in any number of curations —
 // see CurationItem below. Each work's presentation within a curation
 // (its Description and images) is edited on the Curations page
-// (2026-10-03); how a curation is displayed on a website is a later
-// stage.
+// (2026-10-03). A website page can show one curation (2026-10-04) — see
+// Page.curationId.
 model Curation {
   id       String @id @default(cuid())
   artistId String
@@ -605,6 +605,8 @@ model Curation {
   name String
 
   items CurationItem[]
+  // Website pages showing this curation (2026-10-04) — see Page.curationId.
+  pages Page[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -954,7 +956,10 @@ model Page {
   id        String   @id @default(cuid())
   siteId    String
   site      Site     @relation(fields: [siteId], references: [id])
-  type      PageType
+  // Which of the old page editors this page uses. Null for every page
+  // made on the Pages page (2026-10-04) — those don't use the old
+  // editors; how they look will come from their Display Style instead.
+  type      PageType?
   title     String
   slug      String
   visible   Boolean  @default(true)
@@ -984,6 +989,13 @@ model Page {
   // style", a separate question that only applies to one of them.
   templateStyle PageStyle?
 
+  // The curation this page shows (2026-10-04) — optional; one per page
+  // for now. Must be one of the site's own artist's curations (checked
+  // in lib/actions/pages.ts). Cleared, not the page deleted, if the
+  // curation is deleted.
+  curationId String?
+  curation   Curation? @relation(fields: [curationId], references: [id], onDelete: SetNull)
+
   draftBlocks Json  @default("[]")
   liveBlocks  Json?
 
@@ -993,6 +1005,7 @@ model Page {
   @@unique([siteId, slug])
   @@index([siteId])
   @@index([backgroundImageId])
+  @@index([curationId])
 }
 
 // A reusable design library (2026-09-06) — e.g. "ISYT", replicating the
