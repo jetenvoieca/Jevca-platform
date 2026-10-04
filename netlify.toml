@@ -1,5 +1,9 @@
 [build]
-  command = "npx prisma generate && npx prisma migrate deploy && npm run build"
+  # TEMPORARY (2026-10-04): the "migrate resolve" step marks the failed
+  # attempt at the 20261004150000_page_styles migration as rolled back, so
+  # the fixed version can run. Remove that step once one deploy has
+  # succeeded — on later deploys it would fail, as nothing is left to resolve.
+  command = "npx prisma generate && npx prisma migrate resolve --rolled-back 20261004150000_page_styles && npx prisma migrate deploy && npm run build"
   publish = ".next"
 
 [build.environment]
