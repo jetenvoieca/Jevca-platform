@@ -42,6 +42,12 @@ function formatPrice(amount: string | null, currency: string): string | null {
 //   to select it; the first work is selected to begin with.
 // - right: every curation; click one to open it, or add a new one.
 //
+// Frozen headers (2026-10-04, general requirement): the page fills the
+// space under the site header and never scrolls as a whole. The open
+// curation's title row and the list's "Curation Name" heading stay put;
+// the works, the selected work's presentation and the list of curations
+// each scroll on their own.
+//
 // A centre column ("Display this curation using ……") originally sat
 // between these for a planned stage-two display-mode chooser — removed
 // 2026-09-26, direct request, after rethinking that part of the
@@ -235,24 +241,27 @@ export default function CurationsView({
     selected?.works.find((w) => w.artworkId === selectedWorkId) ?? selected?.works[0] ?? null;
 
   return (
-    <div className="grid min-h-full grid-cols-[4fr_1fr]">
+    <div className="grid h-full grid-cols-[4fr_1fr] overflow-hidden">
       {/* Left: the open curation */}
-      <section className="border-r border-neutral-200 p-6">
+      <section className="flex min-h-0 flex-col border-r border-neutral-200">
         {error && (
-          <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
+          <p className="mx-6 mt-6 shrink-0 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">
+            {error}
+          </p>
         )}
 
         {loadingId && !selected ? (
-          <p className="text-sm text-neutral-400">Loading…</p>
+          <p className="p-6 text-sm text-neutral-400">Loading…</p>
         ) : !selected ? (
-          <p className="text-sm text-neutral-400">
+          <p className="p-6 text-sm text-neutral-400">
             {curations.length === 0
               ? "No curations yet — add one from the list on the right."
               : "Choose a curation from the list on the right."}
           </p>
         ) : (
-          <div className={loadingId ? "opacity-60" : ""}>
-            <div className="mb-6 flex items-start gap-3">
+          <div className={`flex min-h-0 flex-1 flex-col ${loadingId ? "opacity-60" : ""}`}>
+            {/* Frozen: the curation's name and Delete. */}
+            <div className="flex shrink-0 items-start gap-3 px-6 pb-4 pt-6">
               <input
                 type="text"
                 value={titleDraft}
@@ -278,8 +287,10 @@ export default function CurationsView({
               </button>
             </div>
 
-            <div className="flex items-start gap-8">
-              <div className="min-w-0 flex-1">
+            {/* Two columns, each scrolling on its own: the works, and the
+                selected work's presentation. */}
+            <div className="flex min-h-0 flex-1 gap-8 px-6">
+              <div className="min-w-0 flex-1 overflow-y-auto p-1 pb-6">
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
                   {selected.works.map((w, i) => {
                     const price = formatPrice(w.offeredPrice, w.priceCurrency);
@@ -354,7 +365,7 @@ export default function CurationsView({
               </div>
 
               {shownWork && (
-                <div className="w-[26rem] shrink-0">
+                <div className="w-[26rem] shrink-0 overflow-y-auto pb-6">
                   <CurationWorkPresentation
                     key={`${selected.id}:${shownWork.artworkId}`}
                     curationId={selected.id}
@@ -371,74 +382,77 @@ export default function CurationsView({
       </section>
 
       {/* Right: every curation */}
-      <aside className="py-6 pr-6">
-        <div className="flex h-full min-h-[70vh] flex-col rounded-xl border border-neutral-300 p-4">
-          <h2 className="mb-4 text-center text-lg text-neutral-900">Curation Name</h2>
+      <aside className="flex min-h-0 flex-col py-6 pr-6">
+        <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-neutral-300 p-4">
+          {/* Frozen heading; the list beneath it scrolls. */}
+          <h2 className="mb-4 shrink-0 text-center text-lg text-neutral-900">Curation Name</h2>
 
-          <div className="flex flex-col gap-1">
-            {curations.map((c) => (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => openCuration(c.id)}
-                className={`truncate rounded-md px-2 py-1.5 text-left text-lg ${
-                  activeId === c.id
-                    ? "bg-neutral-100 text-neutral-900"
-                    : "text-neutral-700 hover:bg-neutral-50"
-                }`}
-              >
-                {c.name}
-              </button>
-            ))}
-          </div>
-
-          {adding ? (
-            <div className="mt-3 flex flex-col gap-1.5 rounded-md border border-neutral-200 p-2">
-              <input
-                type="text"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleCreate();
-                  if (e.key === "Escape") {
-                    setAdding(false);
-                    setNewName("");
-                  }
-                }}
-                autoFocus
-                placeholder="Curation name"
-                className="rounded border border-neutral-300 px-2 py-1 text-sm"
-              />
-              <div className="flex gap-1">
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <div className="flex flex-col gap-1">
+              {curations.map((c) => (
                 <button
+                  key={c.id}
                   type="button"
-                  onClick={handleCreate}
-                  disabled={!newName.trim() || isPending}
-                  className="flex-1 rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                  onClick={() => openCuration(c.id)}
+                  className={`truncate rounded-md px-2 py-1.5 text-left text-lg ${
+                    activeId === c.id
+                      ? "bg-neutral-100 text-neutral-900"
+                      : "text-neutral-700 hover:bg-neutral-50"
+                  }`}
                 >
-                  Create
+                  {c.name}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdding(false);
-                    setNewName("");
-                  }}
-                  className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-                >
-                  Cancel
-                </button>
-              </div>
+              ))}
             </div>
-          ) : (
-            <button
-              type="button"
-              onClick={() => setAdding(true)}
-              className="mt-3 rounded-md px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-50"
-            >
-              + Add New Curation
-            </button>
-          )}
+
+            {adding ? (
+              <div className="mt-3 flex flex-col gap-1.5 rounded-md border border-neutral-200 p-2">
+                <input
+                  type="text"
+                  value={newName}
+                  onChange={(e) => setNewName(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleCreate();
+                    if (e.key === "Escape") {
+                      setAdding(false);
+                      setNewName("");
+                    }
+                  }}
+                  autoFocus
+                  placeholder="Curation name"
+                  className="rounded border border-neutral-300 px-2 py-1 text-sm"
+                />
+                <div className="flex gap-1">
+                  <button
+                    type="button"
+                    onClick={handleCreate}
+                    disabled={!newName.trim() || isPending}
+                    className="flex-1 rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                  >
+                    Create
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdding(false);
+                      setNewName("");
+                    }}
+                    className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="mt-3 rounded-md px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-50"
+              >
+                + Add New Curation
+              </button>
+            )}
+          </div>
         </div>
       </aside>
     </div>
