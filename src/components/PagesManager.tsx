@@ -12,6 +12,7 @@ import {
 import type { CurationSummary } from "@/lib/actions/curations";
 import PageDetailsModal from "@/components/PageDetailsModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import PagePreview from "@/components/PagePreview";
 
 export type PageListItem = {
   id: string;
@@ -28,15 +29,16 @@ type ListKey = "live" | "hidden";
 // the selected page. Pages are dragged to reorder within a list or moved
 // between the two (moving one changes whether it's live). Every drop
 // saves both lists at once via reorderPages. Add and Edit open the same
-// modal (PageDetailsModal); a new page starts in Hidden Pages.
-//
-// The Preview's contents are a later step.
+// modal (PageDetailsModal); a new page starts in Hidden Pages. The
+// selected page is shown in the Preview panel (PagePreview).
 export default function PagesManager({
   siteId,
+  artistId,
   pages,
   curations,
 }: {
   siteId: string;
+  artistId: string;
   pages: PageListItem[];
   curations: CurationSummary[];
 }) {
@@ -203,11 +205,17 @@ export default function PagesManager({
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col rounded-lg border border-neutral-300 bg-white p-4">
         <h2 className="text-center text-base text-neutral-800">Preview</h2>
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-neutral-400">
-            {selected ? selected.title : "Select a page to preview it."}
-          </p>
-        </div>
+        {selected ? (
+          <PagePreview
+            artistId={artistId}
+            title={selected.title}
+            curationId={selected.curationId}
+          />
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-sm text-neutral-400">Select a page to preview it.</p>
+          </div>
+        )}
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">

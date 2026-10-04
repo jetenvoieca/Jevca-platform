@@ -21,5 +21,7 @@ export default async function PagesPage({ params }: { params: Promise<{ id: stri
     listCurations(site.artistId),
   ]);
 
-  return <PagesManager siteId={id} pages={pages} curations={curations} />;
+  return (
+    <PagesManager siteId={id} artistId={site.artistId} pages={pages} curations={curations} />
+  );
 }
