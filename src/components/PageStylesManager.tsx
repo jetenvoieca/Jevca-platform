@@ -138,11 +138,8 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
       {modal && (
         <PageStyleModal
           heading={modal === "add" ? "Add page style" : "Edit page style"}
-          initial={
-            modal === "edit" && selected
-              ? { name: selected.name, type: selected.type }
-              : { name: "", type: "" }
-          }
+          initialName={modal === "edit" && selected ? selected.name : ""}
+          initialStyle={modal === "edit" && selected ? selected : null}
           saving={isPending}
           error={modalError}
           onSave={handleSave}
