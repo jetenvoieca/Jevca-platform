@@ -39,6 +39,11 @@ enum SiteStatus {
 // PAVILION so trying this out can't affect or lose the original. Reuses
 // the same PavilionCard/PavilionContent shape and child-page actions;
 // only the editor UI (PavilionVisualEditor.tsx) differs.
+//
+// Since 2026-10-04 these are also the Style Types a PageStyle is built
+// from — SECTION and PRIVATE ("Private / Custom") only, for now.
+// PAVILION, PAVILION_VISUAL and TEMPLATE_STYLE, with their editors, are
+// marked for possible clean-up later: no longer offered anywhere.
 enum PageType {
   SECTION
   PRIVATE
@@ -996,6 +1001,12 @@ model Page {
   curationId String?
   curation   Curation? @relation(fields: [curationId], references: [id], onDelete: SetNull)
 
+  // The Page Style this page is displayed with (2026-10-04) — chosen as
+  // "Display Style" on the Pages page. Optional; cleared, not the page
+  // deleted, if the style is deleted.
+  pageStyleId String?
+  pageStyle   PageStyle? @relation(fields: [pageStyleId], references: [id], onDelete: SetNull)
+
   draftBlocks Json  @default("[]")
   liveBlocks  Json?
 
@@ -1006,6 +1017,26 @@ model Page {
   @@index([siteId])
   @@index([backgroundImageId])
   @@index([curationId])
+  @@index([pageStyleId])
+}
+
+// A Page Style (2026-10-04) — a named page layout, shared by every site,
+// managed under Templates → Page Styles. `type` is the old page type it
+// is built from (SECTION or PRIVATE only — see PageType); `layout` is
+// the arrangement of components for that type, with no content in it
+// (placeholders only), saved as JSON like Page.draftBlocks.
+model PageStyle {
+  id   String   @id @default(cuid())
+  name String   @unique
+  type PageType
+
+  layout Json @default("{}")
+
+  // Pages displayed with this style — see Page.pageStyleId.
+  pages Page[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 // A reusable design library (2026-09-06) — e.g. "ISYT", replicating the
