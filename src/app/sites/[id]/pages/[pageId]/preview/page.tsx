@@ -52,7 +52,7 @@ export default async function PreviewPage({
     );
   }
 
-  // Portfolio is the first PageStyle with a real renderer (2026-09-06) —
+  // Portfolio is the first TemplatePageStyle with a real renderer (2026-09-06) —
   // uses the exact same PortfolioGrid component as the editor's own live
   // preview column, so there's one render path for what a Portfolio page
   // looks like, not two that can drift apart. Every other, not-yet-built

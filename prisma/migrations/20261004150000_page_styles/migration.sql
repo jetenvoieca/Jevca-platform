@@ -1,3 +1,8 @@
+-- The old template-style enum was called "PageStyle"; it's renamed so
+-- that name can go to the new Page Styles table (Postgres won't allow a
+-- table and a type with the same name).
+ALTER TYPE "PageStyle" RENAME TO "TemplatePageStyle";
+
 -- Page Styles (2026-10-04): named page layouts shared by every site.
 CREATE TABLE "PageStyle" (
     "id" TEXT NOT NULL,

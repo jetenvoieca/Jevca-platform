@@ -23,7 +23,7 @@ const STYLE_LABELS: Record<PageStyleValue, string> = {
   PROFILE: "profile",
   EXHIBITIONS: "exhibitions",
   HOME: "home",
-  // Points at the existing free-form block/row editor (see PageStyle in
+  // Points at the existing free-form block/row editor (see TemplatePageStyle in
   // schema.prisma) rather than a fixed renderer of its own.
   FREEFORM: "freeform (existing block editor)",
 };

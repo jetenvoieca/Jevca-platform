@@ -183,7 +183,7 @@ export type PavilionContent = {
 };
 
 // The Portfolio page style's own fixed shape (2026-09-06, first real
-// PageStyle renderer) — like SectionContent/PavilionContent above, not
+// TemplatePageStyle renderer) — like SectionContent/PavilionContent above, not
 // built from Content Blocks. A Portfolio is a set of named categories
 // (e.g. "Head Sculptures", "Wall Mounted" — matching the isendyouthis.com
 // reference), each holding an ordered list of artworks. Stored in the
