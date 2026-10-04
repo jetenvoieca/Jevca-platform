@@ -594,8 +594,9 @@ model Location {
 // (not a Site), same as Artwork, so any of the artist's sites can use
 // the same curation. An artwork can be in any number of curations —
 // see CurationItem below. Each work's presentation within a curation
-// (its Description) is edited on the Curations page (2026-10-03); how a
-// curation is displayed on a website is a later stage.
+// (its Description and images) is edited on the Curations page
+// (2026-10-03); how a curation is displayed on a website is a later
+// stage.
 model Curation {
   id       String @id @default(cuid())
   artistId String
@@ -631,15 +632,43 @@ model CurationItem {
   // someone writes one on the Curations page; until then the page shows
   // the artwork's own Type, Size and Medium (one per line), always
   // current with the Catalogue. Once written it's kept as written ("" if
-  // deliberately cleared) and never re-synced. Name, images and price
-  // are not per curation — they stay the artwork's own.
+  // deliberately cleared) and never re-synced. Name and price are not
+  // per curation — they stay the artwork's own.
   description String?
+
+  // This work's images within this curation only (2026-10-03) — same
+  // rule as description. While false it shows the artwork's own images
+  // (Catalogue Main first). The first image change made on the Curations
+  // page (make main, remove, add) gives it its own set, held in `images`
+  // below, and sets this true; from then on the Catalogue's images no
+  // longer affect it, and nothing done here changes the Catalogue.
+  ownImages Boolean             @default(false)
+  images    CurationItemImage[]
 
   createdAt DateTime @default(now())
 
   @@unique([curationId, artworkId])
   @@index([curationId, position])
   @@index([artworkId])
+}
+
+// One image in a work's own image set within a curation (2026-10-03) —
+// see CurationItem.ownImages. Up to 4 per work, like an artwork's own
+// images; position 0 is this curation's main image. Any image of the
+// artist's can be used, whether or not it's linked to the artwork. Removed
+// automatically if the image itself is deleted.
+model CurationItemImage {
+  id             String       @id @default(cuid())
+  curationItemId String
+  curationItem   CurationItem @relation(fields: [curationItemId], references: [id], onDelete: Cascade)
+  imageId        String
+  image          Image        @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  position Int
+
+  @@unique([curationItemId, imageId])
+  @@index([curationItemId, position])
+  @@index([imageId])
 }
 
 // One unified messaging inbox for every address on the platform's
@@ -1450,6 +1479,9 @@ model Image {
   // (unlike the two 1:1 relations just above) the same Image can be the
   // background of more than one Page.
   backgroundOfPages Page[] @relation("PageBackgroundImage")
+  // Curations using this image in a work's own image set (2026-10-03) —
+  // see CurationItemImage.
+  curationItemImages CurationItemImage[]
 
   sourceVideoRender VideoRender?
 
