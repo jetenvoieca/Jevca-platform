@@ -12,12 +12,13 @@ import {
 import { pageStyleTypeLabel } from "@/lib/pageStyleTypes";
 import PageStyleModal from "@/components/PageStyleModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import PageStylePreview from "@/components/PageStylePreview";
 
 // Templates → Page Styles (2026-10-04, from Craig's mockup): Add / Edit /
 // Delete above the list of styles. Clicking a style selects it — Edit and
 // Delete act on the selected style. Add and Edit open the same modal
-// (PageStyleModal). The left-hand panel will preview the selected
-// style's layout (a later step).
+// (PageStyleModal). The Preview panel shows the selected style's layout
+// (PageStylePreview).
 export default function PageStylesManager({ styles }: { styles: PageStyleSummary[] }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -71,11 +72,18 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col rounded-lg border border-neutral-300 bg-white p-4">
         <h2 className="text-center text-base text-neutral-800">Preview</h2>
-        <div className="flex flex-1 items-center justify-center">
-          <p className="text-sm text-neutral-400">
-            {selected ? selected.name : "Select a style to preview it."}
-          </p>
-        </div>
+        {selected ? (
+          <div className="flex min-h-0 flex-1 flex-col">
+            <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{selected.name}</h3>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <PageStylePreview style={selected} />
+            </div>
+          </div>
+        ) : (
+          <div className="flex flex-1 items-center justify-center">
+            <p className="text-sm text-neutral-400">Select a style to preview it.</p>
+          </div>
+        )}
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">
