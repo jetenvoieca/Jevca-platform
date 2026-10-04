@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
+import { slugify } from "@/lib/pageSlug";
 
 // Deliberately NOT calling revalidatePath(`/sites/${siteId}`) from the
 // actions below (2026-08-31 removal) — the same fix already made in
@@ -29,6 +30,65 @@ export async function uniqueSlug(siteId: string, base: string) {
     n++;
   }
   return slug;
+}
+
+// What the Pages page's Add / Edit modal saves (2026-10-04). Display
+// Style is a placeholder for now, so it isn't saved yet.
+export type PageDetailsInput = { title: string; curationId: string | null };
+
+// A page can only show one of its own site's artist's curations —
+// anything else is treated as no curation.
+async function ownCurationId(siteId: string, curationId: string | null): Promise<string | null> {
+  if (!curationId) return null;
+  const curation = await db.curation.findFirst({
+    where: { id: curationId, artist: { sites: { some: { id: siteId } } } },
+    select: { id: true },
+  });
+  return curation?.id ?? null;
+}
+
+// Add (2026-10-04). A new page starts in Hidden Pages, at the bottom, so
+// nothing appears on the site until it's dragged into Live Pages.
+export async function createPage(
+  siteId: string,
+  input: PageDetailsInput
+): Promise<{ id: string } | { error: string }> {
+  const title = input.title.trim();
+  if (!title) return { error: "Give the page a name." };
+
+  const [slug, curationId, last] = await Promise.all([
+    uniqueSlug(siteId, slugify(title)),
+    ownCurationId(siteId, input.curationId),
+    db.page.aggregate({ where: { siteId }, _max: { position: true } }),
+  ]);
+
+  const page = await db.page.create({
+    data: {
+      siteId,
+      title,
+      slug,
+      curationId,
+      visible: false,
+      position: (last._max.position ?? -1) + 1,
+    },
+    select: { id: true },
+  });
+  return { id: page.id };
+}
+
+// Edit (2026-10-04). Renaming leaves the slug alone, same as
+// updatePageTitle below.
+export async function updatePageDetails(
+  siteId: string,
+  pageId: string,
+  input: PageDetailsInput
+): Promise<{ ok: true } | { error: string }> {
+  const title = input.title.trim();
+  if (!title) return { error: "Give the page a name." };
+
+  const curationId = await ownCurationId(siteId, input.curationId);
+  await db.page.updateMany({ where: { id: pageId, siteId }, data: { title, curationId } });
+  return { ok: true };
 }
 
 // Saves the Pages page's two lists in one go after a drag (2026-10-04):

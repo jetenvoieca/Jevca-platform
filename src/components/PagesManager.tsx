@@ -1,9 +1,24 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { deletePage, reorderPages } from "@/lib/actions/pages";
+import { useRouter } from "next/navigation";
+import {
+  createPage,
+  deletePage,
+  reorderPages,
+  updatePageDetails,
+  type PageDetailsInput,
+} from "@/lib/actions/pages";
+import type { CurationSummary } from "@/lib/actions/curations";
+import PageDetailsModal from "@/components/PageDetailsModal";
+import ConfirmDialog from "@/components/ConfirmDialog";
 
-export type PageListItem = { id: string; title: string; visible: boolean };
+export type PageListItem = {
+  id: string;
+  title: string;
+  visible: boolean;
+  curationId: string | null;
+};
 
 type ListKey = "live" | "hidden";
 
@@ -12,16 +27,20 @@ type ListKey = "live" | "hidden";
 // and Hidden Pages. Clicking a page selects it — Edit and Delete act on
 // the selected page. Pages are dragged to reorder within a list or moved
 // between the two (moving one changes whether it's live). Every drop
-// saves both lists at once via reorderPages.
+// saves both lists at once via reorderPages. Add and Edit open the same
+// modal (PageDetailsModal); a new page starts in Hidden Pages.
 //
-// Add / Edit (the page modal) and the Preview's contents are later steps.
+// The Preview's contents are a later step.
 export default function PagesManager({
   siteId,
   pages,
+  curations,
 }: {
   siteId: string;
   pages: PageListItem[];
+  curations: CurationSummary[];
 }) {
+  const router = useRouter();
   const [live, setLive] = useState(() => pages.filter((p) => p.visible));
   const [hidden, setHidden] = useState(() => pages.filter((p) => !p.visible));
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -32,6 +51,9 @@ export default function PagesManager({
     null
   );
   const [isPending, startTransition] = useTransition();
+  const [modal, setModal] = useState<"add" | "edit" | null>(null);
+  const [modalError, setModalError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   // Fresh server data (after a delete, or any refresh) replaces local state.
   useEffect(() => {
@@ -81,9 +103,35 @@ export default function PagesManager({
     );
   };
 
+  const openModal = (mode: "add" | "edit") => {
+    setModalError(null);
+    setModal(mode);
+  };
+
+  const handleSave = (input: PageDetailsInput) => {
+    startTransition(async () => {
+      if (modal === "add") {
+        const result = await createPage(siteId, input);
+        if ("error" in result) {
+          setModalError(result.error);
+          return;
+        }
+        setSelectedId(result.id);
+      } else if (modal === "edit" && selected) {
+        const result = await updatePageDetails(siteId, selected.id, input);
+        if ("error" in result) {
+          setModalError(result.error);
+          return;
+        }
+      }
+      setModal(null);
+      router.refresh();
+    });
+  };
+
   const handleDelete = () => {
     if (!selected) return;
-    if (!confirm(`Delete "${selected.title}"? This can't be undone.`)) return;
+    setConfirmingDelete(false);
     setSelectedId(null);
     startTransition(() => deletePage(siteId, selected.id));
   };
@@ -166,23 +214,23 @@ export default function PagesManager({
         <div className="grid grid-cols-3 gap-2">
           <button
             type="button"
-            disabled
-            title="Coming in the next step"
+            onClick={() => openModal("add")}
+            disabled={isPending}
             className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Add
           </button>
           <button
             type="button"
-            disabled
-            title="Coming in the next step"
+            onClick={() => openModal("edit")}
+            disabled={!selected || isPending}
             className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Edit
           </button>
           <button
             type="button"
-            onClick={handleDelete}
+            onClick={() => setConfirmingDelete(true)}
             disabled={!selected || isPending}
             className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
           >
@@ -193,6 +241,32 @@ export default function PagesManager({
         {renderList("live", "Live Pages", live)}
         {renderList("hidden", "Hidden Pages", hidden)}
       </aside>
+
+      {modal && (
+        <PageDetailsModal
+          heading={modal === "add" ? "Add page" : "Edit page"}
+          initial={
+            modal === "edit" && selected
+              ? { title: selected.title, curationId: selected.curationId }
+              : { title: "", curationId: null }
+          }
+          curations={curations}
+          saving={isPending}
+          error={modalError}
+          onSave={handleSave}
+          onCancel={() => setModal(null)}
+        />
+      )}
+
+      <ConfirmDialog
+        open={confirmingDelete && !!selected}
+        title="Delete this page?"
+        message={`"${selected?.title ?? ""}" will be deleted. This can't be undone.`}
+        confirmLabel="Delete page"
+        danger
+        onConfirm={handleDelete}
+        onCancel={() => setConfirmingDelete(false)}
+      />
     </div>
   );
 }
