@@ -14,11 +14,10 @@ import { slugify } from "@/lib/pageSlug";
 // router.refresh() — proven elsewhere in this project to be both
 // unnecessary and, in at least one case, actively harmful (it wiped
 // in-progress input in the Hopper's "Add Artwork" flow). Every caller of
-// these actions already refreshes what it needs itself: SiteShell calls
-// router.refresh() right after updatePageVisibility and updatePageTitle,
-// and createPage/deletePage redirect() to a fresh page anyway. publishSite
-// is invoked as a native form action, which Next refreshes automatically
-// on completion without any revalidatePath needed.
+// these actions already refreshes what it needs itself (router.refresh(),
+// or a redirect() to a fresh page). publishSite is invoked as a native
+// form action, which Next refreshes automatically on completion without
+// any revalidatePath needed.
 
 // Kept as an export here (async, so valid alongside the other Server
 // Actions in this file) rather than moving to pageSlug.ts alongside
@@ -96,7 +95,7 @@ export async function updatePageVisibility(pageId: string, siteId: string, visib
 }
 
 // Renaming deliberately leaves the slug untouched — changing it would break
-// any existing links/menu placements pointing at this page's URL.
+// any existing links pointing at this page's URL.
 export async function updatePageTitle(
   pageId: string,
   siteId: string,
@@ -107,22 +106,9 @@ export async function updatePageTitle(
   await db.page.update({ where: { id: pageId }, data: { title } });
 }
 
-// Used by the delete-confirmation prompt, so it can warn accurately
-// ("used in 2 menu placements") rather than a generic guess.
-export async function menuItemCountForPage(pageId: string) {
-  return db.menuItem.count({ where: { pageId } });
-}
-
-// Page has no cascade delete for MenuItems that reference it (a MenuItem's
-// own label/byline are independent of the Page, so losing the Page
-// shouldn't silently corrupt a saved Menu) — so any placements are removed
-// explicitly here, in the same transaction as the Page itself.
 export async function deletePage(siteId: string, pageId: string) {
-  await db.$transaction([
-    db.menuItem.deleteMany({ where: { pageId } }),
-    db.page.delete({ where: { id: pageId } }),
-  ]);
-  redirect(`/sites/${siteId}`);
+  await db.page.delete({ where: { id: pageId } });
+  redirect(`/sites/${siteId}/pages`);
 }
 
 export async function saveDraftBlocks(pageId: string, blocks: unknown) {

@@ -34,12 +34,10 @@ export async function createPavilionChildPage(
       title: trimmed,
       slug,
       position: (maxPosition._max.position ?? -1) + 1,
-      // Keeps this out of the main site nav sidebar (SiteLayout filters
-      // on this) so adding several Pavilions doesn't clutter it with an
-      // extra entry per one — it still behaves as a completely normal
-      // Page everywhere else: selectable in Menu Builder if you want to
-      // add it to a menu by hand, and openable directly to fill in with
-      // real content later.
+      // Marks this as auto-created by a Pavilion card rather than added
+      // by hand, so page lists can leave it out — it still behaves as a
+      // completely normal Page otherwise, openable directly to fill in
+      // with real content later.
       sourceTag: "pavilion",
     },
   });
@@ -58,14 +56,10 @@ export async function renamePavilionChildPage(childPageId: string, siteId: strin
   revalidatePath(`/sites/${siteId}`);
 }
 
-// Removing a card also removes its child Page — mirrors deletePage's own
-// cleanup (any Menu placements first, same transaction) but without its
-// redirect, since this is called from inside the Pavilions page's own
-// editor rather than a standalone page-delete flow.
+// Removing a card also removes its child Page — same as deletePage but
+// without its redirect, since this is called from inside the Pavilions
+// page's own editor rather than a standalone page-delete flow.
 export async function deletePavilionChildPage(childPageId: string, siteId: string) {
-  await db.$transaction([
-    db.menuItem.deleteMany({ where: { pageId: childPageId } }),
-    db.page.delete({ where: { id: childPageId } }),
-  ]);
+  await db.page.delete({ where: { id: childPageId } });
   revalidatePath(`/sites/${siteId}`);
 }
