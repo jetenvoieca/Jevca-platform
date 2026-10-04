@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { saveDraftBlocks, deletePage, menuItemCountForPage, updatePageTitle } from "@/lib/actions/pages";
+import { saveDraftBlocks, deletePage, updatePageTitle } from "@/lib/actions/pages";
 import {
   createPavilionChildPage,
   renamePavilionChildPage,
@@ -146,14 +146,7 @@ export default function PavilionEditor({
 
   const handleDeletePage = async () => {
     setIsDeleting(true);
-    const menuCount = await menuItemCountForPage(pageId);
-    const warning =
-      menuCount > 0
-        ? `"${pageTitle}" is used in ${menuCount} menu placement${
-            menuCount === 1 ? "" : "s"
-          } — deleting it will remove those too. `
-        : "";
-    if (!confirm(`${warning}Delete "${pageTitle}"? This can't be undone.`)) {
+    if (!confirm(`Delete "${pageTitle}"? This can't be undone.`)) {
       setIsDeleting(false);
       return;
     }
