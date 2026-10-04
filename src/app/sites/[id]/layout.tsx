@@ -10,12 +10,9 @@ import SiteNameField from "@/components/SiteNameField";
 
 // Without this, Next can treat this layout as static-cacheable (it uses
 // no dynamic APIs like cookies()/headers(), just plain db reads) and
-// serve a stale copy of the page list from the Full Route Cache after a
-// page is created/deleted/renamed elsewhere — the site's own Settings
-// page (src/app/sites/[id]/page.tsx) already sets this for the same
-// reason. Bug fixed 2026-09-07: a deleted page kept showing (and
-// 404'ing) in this sidebar until the next deploy, because this layout
-// specifically — not the page under it — was the stale piece.
+// serve stale counts (Hopper, needs-review, alerts, unpublished pages)
+// from the Full Route Cache — the site's own Settings page
+// (src/app/sites/[id]/page.tsx) already sets this for the same reason.
 export const dynamic = "force-dynamic";
 
 export default async function SiteLayout({
@@ -40,34 +37,11 @@ export default async function SiteLayout({
     mediaNeedsReviewCount,
     openAlerts,
   ] = await Promise.all([
+    // Only needed to know whether anything is waiting to be published —
+    // every page counts, since publishSite publishes every page.
     db.page.findMany({
-      // Excludes auto-created Pavilion child pages (sourceTag: "pavilion",
-      // 2026-08-30) from this sidebar — each one is still a real Page (so
-      // it can be opened, filled in, or added to a Menu by hand later),
-      // just not listed here too, or the sidebar would grow by one entry
-      // per Pavilion card.
-      //
-      // BUG FIXED 2026-08-30: originally written as
-      // `sourceTag: { not: "pavilion" }`, which excluded every ordinary
-      // page too — every page has sourceTag left empty (null), and "not
-      // equal to pavilion" doesn't reliably include empty values, so
-      // the entire sidebar list came back near-empty right after this
-      // filter shipped (pages weren't actually deleted, just no longer
-      // listed — but with no way to open them, understandably looked
-      // exactly like data loss). Written explicitly as an OR now so
-      // "untagged" is always unambiguously included, regardless of how
-      // any particular query engine treats an empty value in a "not
-      // equal" comparison.
-      where: { siteId: id, OR: [{ sourceTag: null }, { sourceTag: { not: "pavilion" } }] },
-      orderBy: { position: "asc" },
-      select: {
-        id: true,
-        title: true,
-        type: true,
-        visible: true,
-        draftBlocks: true,
-        liveBlocks: true,
-      },
+      where: { siteId: id },
+      select: { draftBlocks: true, liveBlocks: true },
     }),
     countHopper(site.artistId),
     countArtworksNeedingReview(site.artistId),
@@ -83,17 +57,12 @@ export default async function SiteLayout({
       <LastVisitedSiteTracker siteId={id} />
       <SiteShell
         siteId={id}
-        pages={pages.map((p) => ({ id: p.id, title: p.title, type: p.type, visible: p.visible }))}
         salesEnabled={site.salesEnabled}
         hopperCount={hopperCount}
         artworkNeedsReviewCount={artworkNeedsReviewCount}
         mediaNeedsReviewCount={mediaNeedsReviewCount}
         alertCount={openAlerts.length}
         hasUnpublished={hasUnpublished}
-        // Gates the extra Template-style options in the "+ Add New Page"
-        // dropdown (2026-09-06) — see the note on SiteShell's own
-        // hasTemplate prop.
-        hasTemplate={!!site.templateId}
         header={
           <SiteNameField
             site={{

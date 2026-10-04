@@ -85,9 +85,9 @@ export default function AppShell({
   // a full-width top bar until then. `pathname` closes the drawer
   // automatically the moment a link inside it is actually followed —
   // this works uniformly across every kind of nav content this
-  // component can render (plain SidebarNav links, a caller's own `nav`
-  // element, or a section's customChildren) without needing to hook
-  // into each one's individual click handlers.
+  // component can render (plain SidebarNav links or a caller's own
+  // `nav` element) without needing to hook into each one's individual
+  // click handlers.
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const pathname = usePathname();
   useEffect(() => {

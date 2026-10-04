@@ -1,5 +1,4 @@
 import type { AppShellNavEntry, AppShellNavItem } from "@/components/SidebarNav";
-import type { ReactNode } from "react";
 import { buildAccountsSection } from "@/lib/topNav";
 
 // Colour for every section that's specific to the site you're currently
@@ -13,10 +12,8 @@ export const SITE_SECTION_COLOR = "#635572";
 // Which page (within a site) is currently active, for highlighting and
 // for deciding which section the accordion opens on.
 // "profile" is the site's bare /sites/[id] Owner/Financial/Personal
-// Profile page (in Financial); "menu" is the Menu Builder; "pages" is
-// any individual page's own editor (/sites/[id]/pages/[pageId]) — an
-// open page editor highlights that page within the Website section's
-// page list instead, which SiteShell handles locally.
+// Profile page (in Financial); "pages" is the Pages manager
+// (/sites/[id]/pages) and anything beneath it.
 export type SiteNavKey =
   | "artworks"
   | "curations"
@@ -26,8 +23,8 @@ export type SiteNavKey =
   | "media"
   | "bucket"
   | "mediaSettings"
-  | "menu"
   | "pages"
+  | "analytics"
   | "account"
   | "sales"
   | "purchases"
@@ -39,7 +36,7 @@ const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "curations", "galleries", "artwo
 
 const MEDIA_KEYS: SiteNavKey[] = ["hopper", "media", "bucket", "mediaSettings"];
 
-const WEBSITE_KEYS: SiteNavKey[] = ["menu", "pages"];
+const WEBSITE_KEYS: SiteNavKey[] = ["pages", "analytics"];
 
 const FINANCIAL_KEYS: SiteNavKey[] = [
   "account",
@@ -58,7 +55,6 @@ export function buildSiteNavEntries({
   artworkNeedsReviewCount,
   mediaNeedsReviewCount,
   salesEnabled,
-  websiteSectionBody,
 }: {
   siteId: string;
   active: SiteNavKey | null;
@@ -67,10 +63,6 @@ export function buildSiteNavEntries({
   artworkNeedsReviewCount: number;
   mediaNeedsReviewCount: number;
   salesEnabled: boolean;
-  // The Website section needs more than plain links (per-page
-  // visibility toggles, an inline add-page form) — built by SiteShell,
-  // which holds the client-side state for it, and passed through here.
-  websiteSectionBody: ReactNode;
 }): AppShellNavEntry[] {
   const base = `/sites/${siteId}`;
 
@@ -107,6 +99,14 @@ export function buildSiteNavEntries({
       active: active === "mediaSettings",
       subtle: true,
     },
+  ];
+
+  // Menus are for navigating only (2026-10-04) — pages are created and
+  // managed on the Pages page itself, not inside this section.
+  // Analytics is a placeholder for now.
+  const websiteChildren: AppShellNavItem[] = [
+    { label: "Pages", href: `${base}/pages`, active: active === "pages" },
+    { label: "Analytics", href: `${base}/analytics`, active: active === "analytics" },
   ];
 
   // Sales and Customers sit behind salesEnabled; Account, Purchases and
@@ -159,7 +159,7 @@ export function buildSiteNavEntries({
       key: "website",
       color: SITE_SECTION_COLOR,
       active: sectionActive(WEBSITE_KEYS),
-      customChildren: websiteSectionBody,
+      children: websiteChildren,
     },
     {
       label: "Financial",

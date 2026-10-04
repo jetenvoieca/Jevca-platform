@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -40,15 +40,6 @@ export type AppShellNavItem = {
 // this treatment; the same AppShellNavItem shape used *inside* a
 // section (indented) keeps the plain-link look, since a pill button
 // repeated at every indent level would be far too heavy.
-//
-// A section's body is usually just a flat list of links (`children`),
-// which this component renders and lays out itself. Occasionally a
-// section needs something richer than a link list — e.g. the per-site
-// page list, with per-page visibility toggles and an inline "add page"
-// form — for that, a caller supplies pre-built `customChildren`
-// instead, and must also say explicitly whether the section is `active`
-// (since there are no child `.active` flags for this component to
-// infer it from).
 export type AppShellNavEntry =
   | AppShellNavItem
   | {
@@ -58,14 +49,6 @@ export type AppShellNavEntry =
       active?: boolean;
       color?: string;
       children: AppShellNavItem[];
-    }
-  | {
-      label: string;
-      section: true;
-      key?: string;
-      active: boolean;
-      color?: string;
-      customChildren: ReactNode;
     };
 
 type SectionEntry = Extract<AppShellNavEntry, { section: true }>;
@@ -80,7 +63,7 @@ function sectionKey(entry: SectionEntry): string {
 
 function isSectionActive(entry: SectionEntry): boolean {
   if (entry.active !== undefined) return entry.active;
-  return "children" in entry && entry.children.some((child) => child.active);
+  return entry.children.some((child) => child.active);
 }
 
 // Finds the section that contains the currently-active link, so the
@@ -104,7 +87,7 @@ function findActiveSectionKey(entries: AppShellNavEntry[]): string | null {
 // style below already used almost exactly this shade (neutral-200), so
 // this brings normal links in line with it rather than introducing a
 // third look.
-export function NavLink({ item, indented }: { item: AppShellNavItem; indented: boolean }) {
+function NavLink({ item, indented }: { item: AppShellNavItem; indented: boolean }) {
   if (item.disabled) {
     return (
       <span
@@ -220,11 +203,9 @@ export default function SidebarNav({ entries }: { entries: AppShellNavEntry[] })
               </button>
               {isOpen && (
                 <div className="mt-1 flex flex-col gap-1">
-                  {"customChildren" in entry
-                    ? entry.customChildren
-                    : entry.children.map((child) => (
-                        <NavLink key={child.href} item={child} indented />
-                      ))}
+                  {entry.children.map((child) => (
+                    <NavLink key={child.href} item={child} indented />
+                  ))}
                 </div>
               )}
             </div>

@@ -1,14 +1,10 @@
 "use client";
 
-import { useState, useTransition, type ReactNode } from "react";
-import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import type { ReactNode } from "react";
+import { usePathname } from "next/navigation";
 import AppShell from "@/components/AppShell";
-import { NavLink } from "@/components/SidebarNav";
-import { createPage, publishSite, updatePageVisibility } from "@/lib/actions/pages";
+import { publishSite } from "@/lib/actions/pages";
 import { buildSiteNavEntries, type SiteNavKey } from "@/lib/siteNav";
-
-type PageRow = { id: string; title: string; type: string; visible: boolean };
 
 // Works out which nav item should be highlighted/open purely from the
 // current path — this shell is rendered once from the shared site
@@ -26,8 +22,8 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
   if (pathname.startsWith(`${base}/media`)) return "media";
   if (pathname === `${base}/hopper`) return "hopper";
   if (pathname === `${base}/bucket`) return "bucket";
-  if (pathname.startsWith(`${base}/menus`)) return "menu";
-  if (pathname.startsWith(`${base}/pages/`)) return "pages";
+  if (pathname.startsWith(`${base}/pages`)) return "pages";
+  if (pathname.startsWith(`${base}/analytics`)) return "analytics";
   if (pathname.startsWith(`${base}/account`)) return "account";
   if (pathname.startsWith(`${base}/sales`)) return "sales";
   if (pathname.startsWith(`${base}/purchases/settings`)) return "purchasesSettings";
@@ -38,33 +34,22 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
 
 export default function SiteShell({
   siteId,
-  pages,
   salesEnabled,
   hopperCount,
   artworkNeedsReviewCount,
   mediaNeedsReviewCount,
   alertCount,
   hasUnpublished,
-  hasTemplate,
   header,
   children,
 }: {
   siteId: string;
-  pages: PageRow[];
   salesEnabled: boolean;
   hopperCount: number;
   artworkNeedsReviewCount: number;
   mediaNeedsReviewCount: number;
   alertCount: number;
   hasUnpublished: boolean;
-  // Whether this site has a Template assigned (2026-09-06, Site.templateId)
-  // — when true, the "+ Add New Page" dropdown below also offers that
-  // Template's page styles (portfolio/showcase/profile/exhibitions/home),
-  // alongside the four system types. Just a boolean, not the Template's
-  // own list of named pages — a style is available regardless of whether
-  // a TemplatePage of that style happens to exist in the Template's own
-  // authoring list (see TemplatePage in schema.prisma).
-  hasTemplate: boolean;
   // The site name / domain header, pinned above the scrolling page
   // content — built by the (server) layout since it needs the site
   // record, passed in ready-made.
@@ -72,152 +57,15 @@ export default function SiteShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
-  const router = useRouter();
-  const [adding, setAdding] = useState(false);
-  const [isPending, startTransition] = useTransition();
-
-  const activeKey = resolveActiveKey(pathname, siteId);
-  const menuActive = activeKey === "menu";
-
-  // The Website section's body: page list (with visibility toggles and
-  // an inline add-page form), then Menu. Profile lives in Financial
-  // (see siteNav.ts).
-  const websiteSectionBody = (
-    <>
-      <div className="flex flex-col gap-1 border-l border-neutral-200 py-1 pl-2">
-        {pages.map((p) => {
-          const active = pathname === `/sites/${siteId}/pages/${p.id}`;
-          return (
-            <div key={p.id} className="flex items-center gap-1">
-              <Link
-                prefetch={false}
-                href={`/sites/${siteId}/pages/${p.id}`}
-                className={`flex-1 truncate rounded-md px-3 py-1.5 ${
-                  active
-                    ? "bg-neutral-200 font-medium text-neutral-900"
-                    : "text-neutral-600 hover:bg-neutral-100"
-                }`}
-              >
-                {p.title}
-              </Link>
-              <button
-                type="button"
-                disabled={isPending}
-                onClick={() =>
-                  startTransition(async () => {
-                    await updatePageVisibility(p.id, siteId, !p.visible);
-                    router.refresh();
-                  })
-                }
-                title={
-                  p.visible
-                    ? "Visible — click to hide while you build/edit it"
-                    : "Hidden — building in readiness, click to make visible"
-                }
-                className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                  p.visible
-                    ? "bg-green-100 text-green-700"
-                    : "bg-neutral-200 text-neutral-500"
-                }`}
-              >
-                {p.visible ? "Visible" : "Hidden"}
-              </button>
-            </div>
-          );
-        })}
-
-        {adding ? (
-          <form
-            action={async (formData) => {
-              await createPage(siteId, formData);
-              setAdding(false);
-            }}
-            className="mt-1 flex flex-col gap-1.5 rounded-md border border-neutral-200 p-2"
-          >
-            <input
-              type="text"
-              name="title"
-              required
-              autoFocus
-              placeholder="Page title"
-              className="rounded border border-neutral-300 px-2 py-1 text-xs"
-            />
-            <select
-              name="type"
-              className="rounded border border-neutral-300 px-2 py-1 text-xs"
-            >
-              <option value="SECTION">Section</option>
-              <option value="PRIVATE">Private / Custom</option>
-              <option value="PAVILION">Pavilion</option>
-              {/* Experimental parallel version (2026-08-30) — same data,
-                  a simpler flow-layout canvas with no drag/resize, panel
-                  closed until you click the pencil. Kept as a separate
-                  type entirely so trying it never risks the original. */}
-              <option value="PAVILION_VISUAL">Pavilion (Visual)</option>
-              {/* Added 2026-09-06 — this site's own Template's page
-                  styles, offered alongside the four system types above,
-                  once a Template is assigned (Site.templateId). Encoded
-                  as "STYLE:<value>" so this stays one flat dropdown/one
-                  form field rather than a second control — createPage
-                  (lib/actions/pages.ts) decodes it back into
-                  type/templateStyle. "freeform" is the one exception: it
-                  decodes to an ordinary PRIVATE page (the existing block
-                  editor), not a distinct templateStyle — see the note
-                  there and on PageStyle.FREEFORM in schema.prisma. */}
-              {hasTemplate && (
-                <>
-                  <option value="STYLE:PORTFOLIO">portfolio</option>
-                  <option value="STYLE:SHOWCASE">showcase</option>
-                  <option value="STYLE:PROFILE">profile</option>
-                  <option value="STYLE:EXHIBITIONS">exhibitions</option>
-                  <option value="STYLE:HOME">home</option>
-                  <option value="STYLE:FREEFORM">freeform (existing block editor)</option>
-                </>
-              )}
-            </select>
-            <div className="flex gap-1">
-              <button
-                type="submit"
-                className="flex-1 rounded bg-neutral-900 px-2 py-1 text-xs font-medium text-white hover:bg-neutral-700"
-              >
-                Create
-              </button>
-              <button
-                type="button"
-                onClick={() => setAdding(false)}
-                className="rounded border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="rounded-md px-3 py-1.5 text-left text-neutral-500 hover:bg-neutral-100"
-          >
-            + Add New Page
-          </button>
-        )}
-      </div>
-
-      <NavLink
-        item={{ label: "Menu", href: `/sites/${siteId}/menus`, active: menuActive }}
-        indented
-      />
-    </>
-  );
 
   const navItems = buildSiteNavEntries({
     siteId,
-    active: activeKey,
+    active: resolveActiveKey(pathname, siteId),
     alertCount,
     hopperCount,
     artworkNeedsReviewCount,
     mediaNeedsReviewCount,
     salesEnabled,
-    websiteSectionBody,
   });
 
   return (
