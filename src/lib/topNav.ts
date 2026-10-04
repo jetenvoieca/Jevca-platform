@@ -4,6 +4,7 @@ export type TopNavKey =
   | "sites"
   | "clients"
   | "templates"
+  | "pageStyles"
   | "inbox"
   | "subscriptions"
   | "expenses"
@@ -72,14 +73,32 @@ export function buildAccountsSection(
   };
 }
 
+// "Templates" (2026-09-06) — the reusable, cross-site design library,
+// separate from any one Site. Sits above Sites, matching the ISYT design
+// mockups, rather than folded into the Administration group above. A
+// section since 2026-10-04: "Site Templates" (Template + TemplatePage)
+// and "Page Styles" (layouts a site's pages can use). Shared with the
+// per-site menu (siteNav.ts), same as buildAccountsSection.
+export function buildTemplatesSection(active: TopNavKey | null): AppShellNavEntry {
+  return {
+    label: "Templates",
+    section: true,
+    key: "templates",
+    children: [
+      { label: "Site Templates", href: "/templates", active: active === "templates" },
+      {
+        label: "Page Styles",
+        href: "/templates/page-styles",
+        active: active === "pageStyles",
+      },
+    ],
+  };
+}
+
 export function buildTopNavItems(active: TopNavKey, alertCount: number): AppShellNavEntry[] {
   return [
     buildAccountsSection(active, alertCount),
-    // "Templates" (2026-09-06) — a reusable, cross-site design library
-    // (Template + TemplatePage), separate from any one Site. Sits above
-    // Sites as its own peer item, matching the ISYT design mockups,
-    // rather than folded into the Administration group above.
-    { label: "Templates", href: "/templates", active: active === "templates" },
+    buildTemplatesSection(active),
     { label: "Sites", href: "/", active: active === "sites" },
   ];
 }

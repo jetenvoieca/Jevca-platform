@@ -1,5 +1,5 @@
 import type { AppShellNavEntry, AppShellNavItem } from "@/components/SidebarNav";
-import { buildAccountsSection } from "@/lib/topNav";
+import { buildAccountsSection, buildTemplatesSection } from "@/lib/topNav";
 
 // Colour for every section that's specific to the site you're currently
 // inside (Artworks, Media, Website, Financial) — distinct from the
@@ -132,10 +132,10 @@ export function buildSiteNavEntries({
   const sectionActive = (keys: SiteNavKey[]) => active !== null && keys.includes(active);
 
   return [
-    // Same "Administration" group as the top-level Accounts pages —
-    // none of its own keys apply while inside a site.
+    // Same "Administration" and "Templates" groups as the top-level
+    // pages — none of their own keys apply while inside a site.
     buildAccountsSection(null, alertCount),
-    { label: "Templates", href: "/templates", active: false },
+    buildTemplatesSection(null),
     { label: "Sites", href: "/", active: false },
     {
       label: "Artworks",
