@@ -2,27 +2,10 @@
 
 import { useState, useEffect } from "react";
 import MediaPicker from "@/components/MediaPicker";
-import VideoThumb from "@/components/VideoThumb";
+import ImageFill from "@/components/ImageFill";
 import SetMainFromHopperModal from "@/components/SetMainFromHopperModal";
 import { linkImagesToArtwork, unlinkImageFromArtwork } from "@/lib/actions/artworks";
 import type { ArtworkImage } from "@/lib/artworkImages";
-
-// One image or video's picture, filling its box. Videos show their
-// poster frame when they have one.
-function ImageFill({ image, large = false }: { image: ArtworkImage; large?: boolean }) {
-  if (image.kind === "VIDEO") {
-    return image.posterUrl ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={image.posterUrl} alt="" className="h-full w-full object-cover" />
-    ) : (
-      <VideoThumb src={image.url} className="h-full w-full object-cover" />
-    );
-  }
-  return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={large ? image.displayUrl : image.url} alt="" className="h-full w-full object-cover" />
-  );
-}
 
 // Reworked into a big preview + fixed 4-slot mini grid (2026-09-11,
 // direct request, replacing the "two per row, unlimited rows" layout
@@ -48,12 +31,6 @@ function ImageFill({ image, large = false }: { image: ArtworkImage; large?: bool
 // Because the grid is now four fixed positions rather than a free-
 // flowing, reorderable list, the old pointer-based drag-to-reorder is
 // gone.
-//
-// Two layouts (2026-10-03), the same images and actions in each:
-// - "grid" (default) — the Artwork Catalogue's detail panel, as above.
-// - "stacked" — the Curations page: Main large on top, the 3 related
-//   images in a row beneath it, as in that page's mockup. The big image
-//   is always Main there (no preview-swapping).
 export default function ArtworkImageManager({
   artworkId,
   siteId,
@@ -61,7 +38,6 @@ export default function ArtworkImageManager({
   images: initialImages,
   mainImageId,
   onDataChanged,
-  layout = "grid",
 }: {
   artworkId: string;
   siteId: string;
@@ -72,11 +48,12 @@ export default function ArtworkImageManager({
   // getArtworkDetailForClient in actions/artworks.ts).
   mainImageId: string | null;
   onDataChanged?: () => void;
-  layout?: "grid" | "stacked";
 }) {
   const [images, setImages] = useState(initialImages);
   const [localMainId, setLocalMainId] = useState(mainImageId);
-  const [activeId, setActiveId] = useState<string | null>(mainImageId ?? initialImages[0]?.id ?? null);
+  const [activeId, setActiveId] = useState<string | null>(
+    mainImageId ?? initialImages[0]?.id ?? null
+  );
   const [busy, setBusy] = useState(false);
   // Opened by "Delete & Replace" — see handleDeleteAndReplace below.
   const [showSetMainModal, setShowSetMainModal] = useState(false);
@@ -104,7 +81,7 @@ export default function ArtworkImageManager({
     }
   }, [images, activeId, localMainId]);
 
-  const mainImage = localMainId ? images.find((i) => i.id === localMainId) ?? null : null;
+  const mainImage = localMainId ? (images.find((i) => i.id === localMainId) ?? null) : null;
   const relatedImages = images.filter((i) => i.id !== localMainId);
   const activeImage = images.find((i) => i.id === activeId) ?? null;
 
@@ -166,16 +143,16 @@ export default function ArtworkImageManager({
 
   // An empty slot — picks an image or video to add to the artwork. The
   // first one added to an artwork with no Main becomes Main.
-  const addTile = (key: string, aspectClass: string, label = "Add") => (
-    <div key={key} className={aspectClass}>
+  const addTile = (key: string) => (
+    <div key={key} className="aspect-square">
       <MediaPicker
         artistId={artistId}
         siteId={siteId}
         mode="single"
-        label={label}
+        label="Add"
         linkedArtworkId={artworkId}
         mediaKinds={["PHOTO", "VIDEO"]}
-        previewClassName={`${aspectClass} h-full w-full`}
+        previewClassName="aspect-square h-full w-full"
         onSelect={(added) => handleAdd(added)}
       />
     </div>
@@ -195,7 +172,7 @@ export default function ArtworkImageManager({
   // record, so removing it always means replacing it with something
   // else, never just unlinking it into the Marketing pool the way a
   // Related image can be.
-  const replaceMainButton = (size: "sm" | "xs") => (
+  const replaceMainButton = (
     <span
       role="button"
       tabIndex={0}
@@ -203,9 +180,7 @@ export default function ArtworkImageManager({
         e.stopPropagation();
         handleDeleteAndReplace();
       }}
-      className={`absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 py-0.5 leading-tight text-white group-hover:block ${
-        size === "sm" ? "text-[10px]" : "text-[9px]"
-      }`}
+      className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1 py-0.5 text-[9px] leading-tight text-white group-hover:block"
     >
       Delete &amp; Replace
     </span>
@@ -236,40 +211,6 @@ export default function ArtworkImageManager({
     />
   );
 
-  if (layout === "stacked") {
-    return (
-      <div>
-        {mainImage ? (
-          <div className="group relative aspect-square overflow-hidden rounded-md bg-neutral-100">
-            <ImageFill image={mainImage} large />
-            {mainLabel("sm")}
-            {replaceMainButton("sm")}
-          </div>
-        ) : (
-          addTile("add-main", "aspect-square", "Add Main image")
-        )}
-
-        <div className="mt-3 grid grid-cols-3 gap-3">
-          {[0, 1, 2].map((i) => {
-            const img = relatedImages[i];
-            if (!img) return addTile(`add-related-${i}`, "aspect-[4/3]");
-            return (
-              <div
-                key={img.id}
-                className="group relative aspect-[4/3] overflow-hidden rounded-md bg-neutral-100"
-              >
-                <ImageFill image={img} />
-                {removeRelatedButton(img.id)}
-              </div>
-            );
-          })}
-        </div>
-        {busy && <p className="mt-1 text-xs text-neutral-400">Saving…</p>}
-        {setMainModal}
-      </div>
-    );
-  }
-
   return (
     <div className="mb-6">
       <div className="grid grid-cols-2 gap-3">
@@ -297,15 +238,15 @@ export default function ArtworkImageManager({
             >
               <ImageFill image={mainImage} />
               {mainLabel("xs")}
-              {replaceMainButton("xs")}
+              {replaceMainButton}
             </button>
           ) : (
-            addTile("add-main", "aspect-square")
+            addTile("add-main")
           )}
 
           {[0, 1, 2].map((i) => {
             const img = relatedImages[i];
-            if (!img) return addTile(`add-related-${i}`, "aspect-square");
+            if (!img) return addTile(`add-related-${i}`);
             return (
               <button
                 key={img.id}

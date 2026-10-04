@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import ArtworkImageManager from "@/components/ArtworkImageManager";
+import CurationImageEditor from "@/components/CurationImageEditor";
 import {
   getCurationWorkPresentation,
   updateCurationWorkDescription,
@@ -13,8 +13,9 @@ import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 
 // One work's presentation within a curation (2026-10-03) — shown on the
 // Curations page beside the works, for whichever work is selected:
-// - Images: the artwork's own Main + 3 related images (adding or
-//   removing here changes the artwork itself).
+// - Images: this curation's own main image + up to 3 more — the
+//   Catalogue's until changed here, and changing them never touches the
+//   Catalogue (see CurationImageEditor).
 // - Name: the artwork's own name (renames it everywhere).
 // - Description: this curation's own wording for the work. Until one is
 //   written it shows the artwork's Type, Size and Medium, kept current
@@ -59,7 +60,7 @@ export default function CurationWorkPresentation({
   artistId: string;
   siteId: string;
   // Called after anything that changes how the work's tile looks (its
-  // name, Main image or price), so the parent can refresh the tiles.
+  // name, main image or price), so the parent can refresh the tiles.
   onArtworkChanged: () => void;
 }) {
   const [data, setData] = useState<Presentation | null>(null);
@@ -185,17 +186,18 @@ export default function CurationWorkPresentation({
     <div className="flex flex-col gap-4">
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
-      <ArtworkImageManager
-        layout="stacked"
+      <CurationImageEditor
+        curationId={curationId}
         artworkId={artworkId}
-        siteId={siteId}
         artistId={artistId}
+        siteId={siteId}
         images={data.images}
-        mainImageId={data.mainImageId}
-        onDataChanged={() => {
-          load();
+        onSaved={(images) => {
+          setError(null);
+          setData({ ...data, images });
           onArtworkChanged();
         }}
+        onError={setError}
       />
 
       <div className="rounded-xl border border-neutral-300 p-4">

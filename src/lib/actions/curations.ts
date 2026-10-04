@@ -35,10 +35,11 @@ export type CurationDetail = {
 };
 
 // One work's presentation within a curation (2026-10-03) — shown beside
-// the works on the Curations page when that work is selected. The
-// Description is this curation's own (CurationItem.description — null
-// until written, when defaultDescription is shown instead); name, images
-// and price are the artwork's own, so editing them here changes them
+// the works on the Curations page when that work is selected.
+// Description and images are this curation's own: Description is null
+// until written (defaultDescription is shown instead), and images are the
+// Catalogue's until changed here (see CurationItem.ownImages). Name and
+// price are the artwork's own, so editing them here changes them
 // everywhere. The number of instalments is the artist's Settings
 // default — artworks don't have their own.
 export type CurationWorkPresentation = {
@@ -49,9 +50,22 @@ export type CurationWorkPresentation = {
   offeredPrice: string | null;
   priceCurrency: string;
   defaultInstalmentCount: number;
-  mainImageId: string | null;
+  // Main first — this curation's main image is images[0].
   images: ArtworkImage[];
 };
+
+// A work's images in a curation: up to 4, main first — the same limit as
+// an artwork's own images.
+const MAX_CURATION_IMAGES = 4;
+
+const IMAGE_FIELDS = {
+  id: true,
+  url: true,
+  thumbnailKey: true,
+  displayKey: true,
+  kind: true,
+  posterUrl: true,
+} as const;
 
 type Result<T> = T | { error: string };
 
@@ -96,8 +110,9 @@ export async function listCurations(artistId: string): Promise<CurationSummary[]
 }
 
 // One curation with its works, in their curated order. Image is the
-// artwork's Main image (falling back to its first image), as a small
-// thumbnail — same choice the Artwork Catalogue grid makes.
+// work's main image in this curation (see CurationItem.ownImages) — the
+// Catalogue's Main, falling back to its first image, until changed here —
+// as a small thumbnail.
 export async function getCuration(
   curationId: string,
   artistId: string
@@ -110,6 +125,12 @@ export async function getCuration(
       items: {
         orderBy: { position: "asc" },
         select: {
+          ownImages: true,
+          images: {
+            orderBy: { position: "asc" },
+            take: 1,
+            select: { image: { select: { url: true, thumbnailKey: true } } },
+          },
           artwork: {
             select: {
               id: true,
@@ -129,8 +150,10 @@ export async function getCuration(
   return {
     id: row.id,
     name: row.name,
-    works: row.items.map(({ artwork }) => {
-      const image = artwork.mainImage || artwork.images[0] || null;
+    works: row.items.map(({ ownImages, images, artwork }) => {
+      const image = ownImages
+        ? images[0]?.image ?? null
+        : artwork.mainImage || artwork.images[0] || null;
       return {
         artworkId: artwork.id,
         catalogueName: artwork.catalogueName,
@@ -274,6 +297,8 @@ export async function getCurationWorkPresentation(
     where: { curationId, artworkId, curation: { artistId } },
     select: {
       description: true,
+      ownImages: true,
+      images: { orderBy: { position: "asc" }, select: { image: { select: IMAGE_FIELDS } } },
       artwork: {
         select: {
           catalogueName: true,
@@ -283,16 +308,7 @@ export async function getCurationWorkPresentation(
           offeredPrice: true,
           priceCurrency: true,
           mainImageId: true,
-          images: {
-            select: {
-              id: true,
-              url: true,
-              thumbnailKey: true,
-              displayKey: true,
-              kind: true,
-              posterUrl: true,
-            },
-          },
+          images: { select: IMAGE_FIELDS },
           artist: { select: { defaultInstalmentCount: true } },
         },
       },
@@ -309,8 +325,57 @@ export async function getCurationWorkPresentation(
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     priceCurrency: artwork.priceCurrency,
     defaultInstalmentCount: artwork.artist.defaultInstalmentCount,
-    mainImageId: artwork.mainImageId,
-    images: toArtworkImages(artwork.images, artwork.mainImageId),
+    images: item.ownImages
+      ? toArtworkImages(
+          item.images.map((i) => i.image),
+          null
+        )
+      : toArtworkImages(artwork.images, artwork.mainImageId),
+  };
+}
+
+// Sets a work's whole image set within this curation — `imageIds` in
+// order, main first. The first change gives the work its own set (see
+// CurationItem.ownImages); the artwork and the Catalogue are never
+// touched. Only the artist's own images are accepted. Returns the saved
+// set.
+export async function setCurationWorkImages(
+  curationId: string,
+  artistId: string,
+  artworkId: string,
+  imageIds: string[]
+): Promise<Result<{ images: ArtworkImage[] }>> {
+  const ids = [...new Set(imageIds)];
+  if (ids.length > MAX_CURATION_IMAGES) {
+    return { error: `A work can have at most ${MAX_CURATION_IMAGES} images.` };
+  }
+
+  const item = await db.curationItem.findFirst({
+    where: { curationId, artworkId, curation: { artistId } },
+    select: { id: true },
+  });
+  if (!item) return { error: "This work is no longer in the curation." };
+
+  const images = await db.image.findMany({
+    where: { id: { in: ids }, artistId },
+    select: IMAGE_FIELDS,
+  });
+  if (images.length !== ids.length) return { error: "One of those images couldn't be found." };
+
+  await db.$transaction([
+    db.curationItemImage.deleteMany({ where: { curationItemId: item.id } }),
+    db.curationItemImage.createMany({
+      data: ids.map((imageId, position) => ({ curationItemId: item.id, imageId, position })),
+    }),
+    db.curationItem.update({ where: { id: item.id }, data: { ownImages: true } }),
+  ]);
+
+  const byId = new Map(images.map((img) => [img.id, img]));
+  return {
+    images: toArtworkImages(
+      ids.map((id) => byId.get(id)!),
+      null
+    ),
   };
 }
 
