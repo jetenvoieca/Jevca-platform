@@ -120,6 +120,7 @@ function StyledPage({
           works={curation.works}
           duration={block.doors.duration}
           speed={block.doors.speed}
+          gap={block.doors.gap}
           onOpen={onOpen}
         />
       );
