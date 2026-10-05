@@ -119,7 +119,8 @@ const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
 // Description.
 //
 // Canvas (2026-10-05): curation tile size, opening speed, opened size
-// (the first work's size when a curation opens, times the tile size) and
+// (the first work's size when a curation opens, times the tile size),
+// scroll speed (how far the canvas moves per scroll or drag) and
 // background colour; the curations themselves are chosen and placed on
 // each page.
 //
@@ -242,6 +243,15 @@ export default function PageStyleEditor({
                 value={canvas.openScale}
                 limits={CANVAS_LIMITS.openScale}
                 onCommit={(openScale) => setCanvas({ ...canvas, openScale })}
+                wide
+              />
+              <NumberField
+                label="Scroll speed"
+                unit="× normal"
+                step={0.1}
+                value={canvas.scrollSpeed}
+                limits={CANVAS_LIMITS.scrollSpeed}
+                onCommit={(scrollSpeed) => setCanvas({ ...canvas, scrollSpeed })}
                 wide
               />
             </div>
