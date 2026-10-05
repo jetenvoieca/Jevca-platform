@@ -37,6 +37,19 @@ export const SLIDING_DOORS_LIMITS = {
   gap: { min: 0, max: 100 },
 } as const;
 
+// The space between images in a grid of images (2026-10-05) — the
+// Section's artwork grid, or every Gallery block in a Private / Custom
+// style — in pixels: vertical = between rows, horizontal = between
+// columns. One setting per style.
+export type GridSpacing = { vertical: number; horizontal: number };
+
+export const DEFAULT_GRID_SPACING: GridSpacing = { vertical: 8, horizontal: 8 };
+
+export const GRID_SPACING_LIMITS = {
+  vertical: { min: 0, max: 100 },
+  horizontal: { min: 0, max: 100 },
+} as const;
+
 // `row` works as in blocks.ts: placeholders sharing a row id sit side
 // by side. `doors` is set on Sliding doors blocks only.
 export type LayoutBlock = {
@@ -52,15 +65,18 @@ export type CustomLayout = {
   // Whether the page has a background image — the image itself is
   // content, chosen on the page later.
   backgroundImage: boolean;
+  // Spacing for every Gallery block.
+  gridSpacing: GridSpacing;
   blocks: LayoutBlock[];
 };
 
 // Section is a fixed layout — a byline, an artwork grid filled from the
 // page's curation, and the curation's Description below it (2026-10-05).
-// Its settings: an optional background colour, and whether a video sits
-// below the Description (the video itself is content, chosen on the page
-// later).
+// Its settings: the grid's spacing, an optional background colour, and
+// whether a video sits below the Description (the video itself is
+// content, chosen on the page later).
 export type SectionLayout = {
+  gridSpacing: GridSpacing;
   backgroundColor: string | null;
   video: boolean;
 };
@@ -75,8 +91,16 @@ export function blockTypeLabel(type: LayoutBlockType): string {
 
 export function emptyLayout(type: PageStyleType): PageStyleLayout {
   return type === "SECTION"
-    ? { type, layout: { backgroundColor: null, video: false } }
-    : { type, layout: { backgroundColor: null, backgroundImage: false, blocks: [] } };
+    ? { type, layout: { gridSpacing: DEFAULT_GRID_SPACING, backgroundColor: null, video: false } }
+    : {
+        type,
+        layout: {
+          backgroundColor: null,
+          backgroundImage: false,
+          gridSpacing: DEFAULT_GRID_SPACING,
+          blocks: [],
+        },
+      };
 }
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
@@ -114,15 +138,30 @@ export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
   };
 }
 
+export function cleanGridSpacing(raw: unknown): GridSpacing {
+  const value = (raw ?? {}) as Partial<Record<keyof GridSpacing, unknown>>;
+  const d = DEFAULT_GRID_SPACING;
+  const l = GRID_SPACING_LIMITS;
+  return {
+    vertical: cleanNumber(value.vertical, l.vertical, d.vertical, 0),
+    horizontal: cleanNumber(value.horizontal, l.horizontal, d.horizontal, 0),
+  };
+}
+
 // Turns whatever is stored (or sent from the browser) into a valid
 // layout for the type — anything unknown or malformed is dropped, so a
-// bad value can never break the modal, the preview or a page.
+// bad value can never break the modal, the preview or a page. A style
+// saved before a setting existed gets that setting's default.
 export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLayout {
   if (type === "SECTION") {
     const value = (raw ?? {}) as Partial<Record<keyof SectionLayout, unknown>>;
     return {
       type,
-      layout: { backgroundColor: cleanColour(value.backgroundColor), video: value.video === true },
+      layout: {
+        gridSpacing: cleanGridSpacing(value.gridSpacing),
+        backgroundColor: cleanColour(value.backgroundColor),
+        video: value.video === true,
+      },
     };
   }
 
@@ -143,6 +182,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
     layout: {
       backgroundColor: cleanColour(value.backgroundColor),
       backgroundImage: value.backgroundImage === true,
+      gridSpacing: cleanGridSpacing(value.gridSpacing),
       blocks: clearLoneRows(blocks),
     },
   };

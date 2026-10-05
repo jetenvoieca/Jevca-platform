@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getCuration, type CurationDetail, type CurationWork } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
-import type { LayoutBlock } from "@/lib/pageStyleLayout";
+import type { GridSpacing, LayoutBlock } from "@/lib/pageStyleLayout";
 import { groupBlocksByRow } from "@/lib/blocks";
 import CurationWorkView from "@/components/CurationWorkView";
 import SlidingDoors from "@/components/SlidingDoors";
@@ -17,9 +17,10 @@ import SlidingDoors from "@/components/SlidingDoors";
 // - Private / Custom: Gallery blocks show the works' images, Text blocks
 //   the curation's Description, Sliding doors the works' main images in
 //   pairs (see SlidingDoors).
-// Anything with nothing to fill it yet (Byline, Header, Video, an empty
-// Gallery, no Description…) is left out, and no outlines or labels are
-// shown. Images are image only.
+// Grids of images use the style's grid spacing. Anything with nothing
+// to fill it yet (Byline, Header, Video, an empty Gallery, no
+// Description…) is left out, and no outlines or labels are shown. Images
+// are image only.
 //
 // Without one: a simple grid of the works with the curation's
 // Description in a box beside them, as on the Curations page.
@@ -104,7 +105,9 @@ function StyledPage({
   onOpen: (artworkId: string) => void;
 }) {
   const hasWorks = curation.works.length > 0;
-  const grid = hasWorks ? <ImageGrid works={curation.works} onOpen={onOpen} /> : null;
+  const grid = hasWorks ? (
+    <ImageGrid works={curation.works} spacing={style.layout.gridSpacing} onOpen={onOpen} />
+  ) : null;
   const description = curation.description ? (
     <p className="whitespace-pre-line break-words text-sm text-neutral-800">
       {curation.description}
@@ -226,17 +229,22 @@ function PlainPage({
   );
 }
 
-// The works' images only, in the curation's order. Clicking one opens
-// its presentation.
+// The works' images only, in the curation's order, spaced as the
+// style's grid spacing. Clicking one opens its presentation.
 function ImageGrid({
   works,
+  spacing,
   onOpen,
 }: {
   works: CurationWork[];
+  spacing: GridSpacing;
   onOpen: (artworkId: string) => void;
 }) {
   return (
-    <div className="grid grid-cols-4 gap-2">
+    <div
+      className="grid grid-cols-4"
+      style={{ rowGap: spacing.vertical, columnGap: spacing.horizontal }}
+    >
       {works.map((w) => (
         <button
           key={w.artworkId}

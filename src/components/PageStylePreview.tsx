@@ -1,13 +1,18 @@
 import type { ReactNode } from "react";
 import { groupBlocksByRow } from "@/lib/blocks";
-import { blockTypeLabel, type LayoutBlock, type PageStyleLayout } from "@/lib/pageStyleLayout";
+import {
+  blockTypeLabel,
+  type GridSpacing,
+  type LayoutBlock,
+  type PageStyleLayout,
+} from "@/lib/pageStyleLayout";
 
 // Draws a Page Style's layout as grey placeholders (2026-10-04) — what
 // goes where on the page, with no content. Used by the Page Styles
-// page's Preview panel.
+// page's Preview panel. Grids of images use the style's grid spacing.
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
   if (style.type === "SECTION") {
-    const { backgroundColor, video } = style.layout;
+    const { backgroundColor, video, gridSpacing } = style.layout;
     return (
       <div
         className="flex min-h-full flex-col gap-4 rounded-md p-4"
@@ -18,25 +23,21 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
           <Bar className="mx-auto h-3 w-1/2" />
         </Labelled>
         <Labelled label="Artwork grid — from the page's curation">
-          <div className="grid grid-cols-4 gap-3">
-            {Array.from({ length: 8 }, (_, i) => (
-              <div key={i} className="aspect-square rounded bg-neutral-200" />
-            ))}
-          </div>
+          <PlaceholderGrid count={8} spacing={gridSpacing} />
         </Labelled>
         <Labelled label="Description — from the page's curation">
-          <BlockShape block={{ id: "description", type: "text" }} />
+          <BlockShape block={{ id: "description", type: "text" }} spacing={gridSpacing} />
         </Labelled>
         {video && (
           <Labelled label="Video">
-            <BlockShape block={{ id: "video", type: "video" }} />
+            <BlockShape block={{ id: "video", type: "video" }} spacing={gridSpacing} />
           </Labelled>
         )}
       </div>
     );
   }
 
-  const { backgroundColor, backgroundImage, blocks } = style.layout;
+  const { backgroundColor, backgroundImage, gridSpacing, blocks } = style.layout;
   const rows = groupBlocksByRow(blocks);
 
   return (
@@ -61,7 +62,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
           {row.map((b) => (
             <div key={b.id} className="min-w-0 flex-1">
               <Labelled label={blockLabel(b)}>
-                <BlockShape block={b} />
+                <BlockShape block={b} spacing={gridSpacing} />
               </Labelled>
             </div>
           ))}
@@ -79,8 +80,22 @@ function blockLabel(block: LayoutBlock): string {
     : label;
 }
 
+// Grey squares, four across, spaced as the style's grid spacing.
+function PlaceholderGrid({ count, spacing }: { count: number; spacing: GridSpacing }) {
+  return (
+    <div
+      className="grid grid-cols-4"
+      style={{ rowGap: spacing.vertical, columnGap: spacing.horizontal }}
+    >
+      {Array.from({ length: count }, (_, i) => (
+        <div key={i} className="aspect-square rounded bg-neutral-200" />
+      ))}
+    </div>
+  );
+}
+
 // A rough outline of each block type, so the layout reads at a glance.
-function BlockShape({ block }: { block: LayoutBlock }) {
+function BlockShape({ block, spacing }: { block: LayoutBlock; spacing: GridSpacing }) {
   switch (block.type) {
     case "header":
       return <Bar className="h-7 w-2/3" />;
@@ -95,13 +110,7 @@ function BlockShape({ block }: { block: LayoutBlock }) {
     case "image":
       return <div className="h-40 rounded bg-neutral-200" />;
     case "gallery":
-      return (
-        <div className="grid grid-cols-4 gap-2">
-          {Array.from({ length: 4 }, (_, i) => (
-            <div key={i} className="aspect-square rounded bg-neutral-200" />
-          ))}
-        </div>
-      );
+      return <PlaceholderGrid count={8} spacing={spacing} />;
     case "artwork":
       return (
         <div className="flex gap-3">

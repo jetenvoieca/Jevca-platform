@@ -4,15 +4,18 @@ import { useEffect, useState } from "react";
 import { groupBlocksByRow } from "@/lib/blocks";
 import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pageStyleTypes";
 import {
+  GRID_SPACING_LIMITS,
   LAYOUT_BLOCK_TYPES,
   SLIDING_DOORS_LIMITS,
   addLayoutBlock,
   blockTypeLabel,
+  cleanGridSpacing,
   emptyLayout,
   moveLayoutRow,
   removeLayoutBlock,
   updateSlidingDoors,
   type CustomLayout,
+  type GridSpacing,
   type LayoutBlockType,
   type PageStyleLayout,
   type SectionLayout,
@@ -73,10 +76,11 @@ const DOORS_FIELDS: {
 // Templates → Page Styles' Add / Edit panel (2026-10-04, from Craig's
 // mockups): sits in the right-hand column, beside the Preview, and stays
 // open until Close. Style name, Style Type, then the chosen type's own
-// layout controls — layout only, no content. Private / Custom offers
-// the old block editor's controls, adding empty placeholders, plus
-// Sliding doors (2026-10-05) with its Duration, Slide speed and Gap.
-// Section (2026-10-05) is a fixed layout — byline, artwork grid,
+// layout controls — layout only, no content. Both types start with the
+// grid spacing (2026-10-05) for their grids of images. Private / Custom
+// offers the old block editor's controls, adding empty placeholders,
+// plus Sliding doors (2026-10-05) with its Duration, Slide speed and
+// Gap. Section (2026-10-05) is a fixed layout — byline, artwork grid,
 // Description — with an optional background colour and an optional
 // video below the Description. Saving is automatic (see
 // PageStylesManager); `status` reports it.
@@ -149,6 +153,10 @@ export default function PageStyleEditor({
 
         {draft.type === "SECTION" && (
           <div className="mt-2 flex flex-col gap-2.5">
+            <GridSpacingControl
+              value={section.gridSpacing}
+              onChange={(gridSpacing) => setSection({ ...section, gridSpacing })}
+            />
             <BackgroundColourControl
               value={section.backgroundColor}
               onChange={(backgroundColor) => setSection({ ...section, backgroundColor })}
@@ -180,6 +188,11 @@ export default function PageStyleEditor({
 
         {draft.type === "PRIVATE" && (
           <div className="mt-2 flex flex-col gap-2.5">
+            <GridSpacingControl
+              value={custom.gridSpacing}
+              onChange={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
+            />
+
             <button type="button" onClick={() => addBlock("header", "none")} className={smallButton}>
               + Add Header
             </button>
@@ -355,6 +368,39 @@ export default function PageStyleEditor({
   );
 }
 
+// Vertical and horizontal grid spacing (2026-10-05, from Craig's mockup)
+// — shared by both Style Types.
+function GridSpacingControl({
+  value,
+  onChange,
+}: {
+  value: GridSpacing;
+  onChange: (value: GridSpacing) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
+      <NumberField
+        label="Vertical grid spacing"
+        unit="pixels"
+        step={1}
+        value={value.vertical}
+        limits={GRID_SPACING_LIMITS.vertical}
+        onCommit={(vertical) => onChange(cleanGridSpacing({ ...value, vertical }))}
+        wide
+      />
+      <NumberField
+        label="Horizontal grid spacing"
+        unit="pixels"
+        step={1}
+        value={value.horizontal}
+        limits={GRID_SPACING_LIMITS.horizontal}
+        onCommit={(horizontal) => onChange(cleanGridSpacing({ ...value, horizontal }))}
+        wide
+      />
+    </div>
+  );
+}
+
 // "+ Add background colour", or the chosen colour with Remove — shared
 // by both Style Types.
 function BackgroundColourControl({
@@ -394,7 +440,7 @@ function BackgroundColourControl({
 
 // A number, applied when the box is left (or Enter). Kept within its
 // limits when saved; anything that isn't a number goes back to the
-// current value.
+// current value. `wide` gives room for a longer label.
 function NumberField({
   label,
   unit,
@@ -402,6 +448,7 @@ function NumberField({
   value,
   limits,
   onCommit,
+  wide = false,
 }: {
   label: string;
   unit: string;
@@ -409,6 +456,7 @@ function NumberField({
   value: number;
   limits: { min: number; max: number };
   onCommit: (value: number) => void;
+  wide?: boolean;
 }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
@@ -424,7 +472,7 @@ function NumberField({
 
   return (
     <label className="flex items-center gap-2 text-sm text-neutral-700">
-      <span className="w-24 shrink-0">{label}</span>
+      <span className={`${wide ? "flex-1" : "w-24"} shrink-0`}>{label}</span>
       <input
         type="number"
         min={limits.min}
@@ -436,7 +484,7 @@ function NumberField({
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+        className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-sm"
       />
       <span className="text-xs text-neutral-400">{unit}</span>
     </label>
