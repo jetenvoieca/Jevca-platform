@@ -3,8 +3,6 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import CurationWorkPresentation from "@/components/CurationWorkPresentation";
-import RichTextEditor from "@/components/RichTextEditor";
-import type { RichTextDoc } from "@/lib/richText";
 import {
   addWorksToCuration,
   createCuration,
@@ -40,8 +38,8 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // - left: the open curation — its name (click to rename), Delete, its
 //   works in order (drag to reorder, hover × to remove, "+ Add Works"
 //   tile to pick more), and beside them the curation's own Description
-//   (2026-10-05, from Craig's mockup — formatted text, see
-//   lib/richText.ts).
+//   (2026-10-05, from Craig's mockup — plain text, saved when the box
+//   is left).
 // - right: every curation; click one to open it, or add a new one.
 //
 // Presentation (2026-10-03) — a work's images, Name, Description and
@@ -77,6 +75,7 @@ export default function CurationsView({
   const [curations, setCurations] = useState<CurationSummary[]>(initialCurations);
   const [selected, setSelected] = useState<CurationDetail | null>(initialSelected);
   const [titleDraft, setTitleDraft] = useState(initialSelected?.name ?? "");
+  const [descriptionDraft, setDescriptionDraft] = useState(initialSelected?.description ?? "");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -103,6 +102,7 @@ export default function CurationsView({
     selectedIdRef.current = detail?.id ?? null;
     setSelected(detail);
     setTitleDraft(detail?.name ?? "");
+    setDescriptionDraft(detail?.description ?? "");
     updateUrlSelected(detail?.id ?? null);
   };
 
@@ -183,19 +183,27 @@ export default function CurationsView({
     });
   };
 
-  // Saved when the Description box is left (see RichTextEditor). Returns
-  // whether it saved, so a failed save is tried again next time.
-  const saveDescription = async (id: string, doc: RichTextDoc | null): Promise<boolean> => {
+  // Saved when the Description box is left, only if it changed. A failed
+  // save leaves the text in the box, so it's tried again next time.
+  const handleDescriptionSave = () => {
+    if (!selected) return;
+    const text = descriptionDraft.trim();
+    if (text === (selected.description ?? "")) return;
     setError(null);
-    const result = await updateCurationDescription(id, artistId, doc);
-    if ("error" in result) {
-      setError(result.error);
-      return false;
-    }
-    setSelected((prev) =>
-      prev && prev.id === id ? { ...prev, description: result.description } : prev
-    );
-    return true;
+    const id = selected.id;
+    startTransition(async () => {
+      const result = await updateCurationDescription(id, artistId, text);
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
+      if (selectedIdRef.current === id) {
+        setSelected((prev) =>
+          prev && prev.id === id ? { ...prev, description: result.description } : prev
+        );
+        setDescriptionDraft(result.description ?? "");
+      }
+    });
   };
 
   const handleAddWorks = (picked: { id: string }[]) => {
@@ -407,11 +415,14 @@ export default function CurationsView({
               {/* The curation's own Description. */}
               <div className="flex h-[31rem] max-h-full w-[27%] min-w-[16rem] shrink-0 flex-col self-start rounded-xl border border-neutral-300 p-4">
                 <h2 className="mb-2 shrink-0 text-center text-lg text-neutral-900">Description</h2>
-                <RichTextEditor
-                  key={selected.id}
-                  initialValue={selected.description}
-                  onSave={(doc) => saveDescription(selected.id, doc)}
-                  label={`Description of ${selected.name}`}
+                <textarea
+                  value={descriptionDraft}
+                  onChange={(e) => setDescriptionDraft(e.target.value)}
+                  onBlur={handleDescriptionSave}
+                  maxLength={20000}
+                  placeholder="Write a description…"
+                  aria-label={`Description of ${selected.name}`}
+                  className="min-h-0 w-full flex-1 resize-none rounded-md border border-transparent p-1 text-sm text-neutral-800 hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
                 />
               </div>
             </div>

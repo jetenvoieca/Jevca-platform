@@ -1,10 +1,8 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { Prisma } from "@/generated/prisma/client";
 import { publicMediaUrl } from "@/lib/r2";
 import { toArtworkImages, type ArtworkImage } from "@/lib/artworkImages";
-import { richTextLength, toRichTextDoc, type RichTextDoc } from "@/lib/richText";
 
 // Curations (2026-09-24) — named, ordered selections of an artist's
 // artworks. See the note on Curation in schema.prisma.
@@ -33,9 +31,9 @@ export type CurationWork = {
 export type CurationDetail = {
   id: string;
   name: string;
-  // The curation's own Description (2026-10-05) — formatted text, null
-  // until written. See Curation.description in schema.prisma.
-  description: RichTextDoc | null;
+  // The curation's own Description (2026-10-05) — plain text, null until
+  // written. See Curation.description in schema.prisma.
+  description: string | null;
   works: CurationWork[];
 };
 
@@ -159,7 +157,7 @@ export async function getCuration(
   return {
     id: row.id,
     name: row.name,
-    description: toRichTextDoc(row.description),
+    description: row.description,
     works: row.items.map(({ ownImages, images, artwork }) => {
       const image = ownImages
         ? images[0]?.image ?? null
@@ -212,24 +210,22 @@ export async function renameCuration(
   }
 }
 
-// Saves the curation's own Description. Whatever is sent is rebuilt
-// through toRichTextDoc first, so only the allowed formatting is ever
-// stored; one with no text at all is stored as nothing. Returns what
-// was saved.
+// Saves the curation's own Description, as plain text. Blank is stored
+// as nothing. Returns what was saved.
 export async function updateCurationDescription(
   curationId: string,
   artistId: string,
-  value: unknown
-): Promise<Result<{ description: RichTextDoc | null }>> {
-  const description = toRichTextDoc(value);
-  if (description && richTextLength(description) > MAX_DESCRIPTION_LENGTH) {
+  descriptionRaw: string
+): Promise<Result<{ description: string | null }>> {
+  const description = descriptionRaw.trim() || null;
+  if (description && description.length > MAX_DESCRIPTION_LENGTH) {
     return {
       error: `A Description can be at most ${MAX_DESCRIPTION_LENGTH.toLocaleString("en-GB")} characters.`,
     };
   }
   const { count } = await db.curation.updateMany({
     where: { id: curationId, artistId },
-    data: { description: description ?? Prisma.DbNull },
+    data: { description },
   });
   if (count === 0) return { error: "Curation not found." };
   return { description };
