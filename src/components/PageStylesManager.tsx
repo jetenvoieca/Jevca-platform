@@ -60,11 +60,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
   const save = (d: PageStyleDraft) => {
     queueRef.current = queueRef.current.then(async () => {
       setStatus({ text: "Saving…", isError: false });
-      const input = {
-        name: d.name,
-        type: d.type,
-        layout: d.type === "PRIVATE" ? d.custom : d.section,
-      };
+      const input = { name: d.name, type: d.type, layout: draftLayout(d)?.layout ?? {} };
       try {
         const id = editingIdRef.current;
         const result = id ? await updatePageStyle(id, input) : await createPageStyle(input);

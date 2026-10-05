@@ -23,6 +23,8 @@ import SlidingDoors from "@/components/SlidingDoors";
 // - Private / Custom: Gallery blocks show the works' images, Text blocks
 //   the curation's Description, Sliding doors the works' main images in
 //   pairs or one at a time (see SlidingDoors).
+// - Canvas: not drawn yet — its curations are placed on the page in the
+//   next step.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page, centred).
 // Anything with nothing to fill it yet (Byline, Header, Video, an empty
@@ -72,7 +74,9 @@ export default function PagePreview({
   const closeView = useCallback(() => setViewingId(null), []);
 
   let body: ReactNode;
-  if (!curationId) {
+  if (style?.type === "CANVAS") {
+    body = <Message text="Canvas pages will show here once their curations can be placed." />;
+  } else if (!curationId) {
     body = <Message text="This page has no curation. Choose one with Edit." />;
   } else if (loading) {
     body = <Message text="Loading…" />;
@@ -109,13 +113,14 @@ type Row = {
   between: number;
 };
 
-// The page in its Display Style — see the note at the top.
+// The page in its Display Style (Section or Private / Custom) — see the
+// note at the top.
 function StyledPage({
   style,
   curation,
   onOpen,
 }: {
-  style: PageStyleSummary;
+  style: Exclude<PageStyleSummary, { type: "CANVAS" }>;
   curation: CurationDetail;
   onOpen: (artworkId: string) => void;
 }) {
