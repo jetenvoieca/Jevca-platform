@@ -1,7 +1,8 @@
-import { Fragment, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { groupBlocksByRow } from "@/lib/blocks";
 import {
   blockTypeLabel,
+  blockWidthOf,
   rowKey,
   rowSpacingOf,
   type GridSpacing,
@@ -11,35 +12,38 @@ import {
 
 // Draws a Page Style's layout as grey placeholders (2026-10-04) — what
 // goes where on the page, with no content. Used by the Page Styles
-// page's Preview panel. Uses the style's grid and block spacing.
+// page's Preview panel. Uses the style's grid spacing, block spacing
+// and block widths (narrower blocks centred).
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
   if (style.type === "SECTION") {
-    const { backgroundColor, video, gridSpacing, spacing } = style.layout;
+    const { backgroundColor, video, gridSpacing, spacing, widths } = style.layout;
     return (
       <div
-        className="flex min-h-full flex-col rounded-md p-4"
+        className="flex min-h-full flex-col items-center rounded-md p-4"
         style={{ backgroundColor: backgroundColor ?? undefined }}
       >
-        <Bar className="mx-auto mb-4 h-6 w-1/3" />
-        <Labelled label="Byline">
-          <Bar className="mx-auto h-3 w-1/2" />
-        </Labelled>
-        <div style={{ marginTop: spacing.belowByline }}>
+        <Bar className="mb-4 h-6 w-1/3" />
+        <Part width={widths.byline}>
+          <Labelled label="Byline">
+            <Bar className="mx-auto h-3 w-1/2" />
+          </Labelled>
+        </Part>
+        <Part width={widths.grid} above={spacing.belowByline}>
           <Labelled label="Artwork grid — from the page's curation">
             <PlaceholderGrid count={8} spacing={gridSpacing} />
           </Labelled>
-        </div>
-        <div style={{ marginTop: spacing.belowGrid }}>
+        </Part>
+        <Part width={widths.description} above={spacing.belowGrid}>
           <Labelled label="Description — from the page's curation">
             <BlockShape block={{ id: "description", type: "text" }} spacing={gridSpacing} />
           </Labelled>
-        </div>
+        </Part>
         {video && (
-          <div style={{ marginTop: spacing.belowDescription }}>
+          <Part width={widths.video} above={spacing.belowDescription}>
             <Labelled label="Video">
               <BlockShape block={{ id: "video", type: "video" }} spacing={gridSpacing} />
             </Labelled>
-          </div>
+          </Part>
         )}
       </div>
     );
@@ -69,33 +73,46 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
         const key = rowKey(row);
         const above = i > 0 ? rowSpacingOf(layout, rowKey(rows[i - 1])).below : 0;
         return (
-          <Fragment key={key}>
-            <div
-              className="flex"
-              style={{ marginTop: above, gap: rowSpacingOf(layout, key).between }}
-            >
-              {row.map((b) => (
-                <div key={b.id} className="min-w-0 flex-1">
-                  <Labelled label={blockLabel(b)}>
-                    <BlockShape block={b} spacing={layout.gridSpacing} />
-                  </Labelled>
-                </div>
-              ))}
-            </div>
-          </Fragment>
+          <div
+            key={key}
+            className="flex justify-center"
+            style={{ marginTop: above, gap: rowSpacingOf(layout, key).between }}
+          >
+            {row.map((b) => (
+              <div key={b.id} className="min-w-0" style={{ width: `${blockWidthOf(b)}%` }}>
+                <Labelled label={blockLabel(b)}>
+                  <BlockShape block={b} spacing={layout.gridSpacing} />
+                </Labelled>
+              </div>
+            ))}
+          </div>
         );
       })}
     </div>
   );
 }
 
+// One part of a Section: its width, centred, and the space above it.
+function Part({
+  width,
+  above = 0,
+  children,
+}: {
+  width: number;
+  above?: number;
+  children: ReactNode;
+}) {
+  return <div style={{ width: `${width}%`, marginTop: above }}>{children}</div>;
+}
+
 function blockLabel(block: LayoutBlock): string {
   const label = blockTypeLabel(block.type);
+  const width = blockWidthOf(block) < 100 ? `, ${blockWidthOf(block)}% wide` : "";
   const d = block.doors;
-  if (!d) return label;
+  if (!d) return `${label}${width}`;
   return d.perSlide === 1
-    ? `${label} — one at a time from the page's curation, ${d.duration}s, slide ${d.speed}s`
-    : `${label} — pairs from the page's curation, ${d.duration}s, slide ${d.speed}s, gap ${d.gap}px`;
+    ? `${label} — one at a time from the page's curation, ${d.duration}s, slide ${d.speed}s${width}`
+    : `${label} — pairs from the page's curation, ${d.duration}s, slide ${d.speed}s, gap ${d.gap}px${width}`;
 }
 
 // Grey squares, four across, spaced as the style's grid spacing.

@@ -66,6 +66,13 @@ export const GRID_SPACING_LIMITS = {
 export const DEFAULT_BLOCK_SPACING = 16;
 export const BLOCK_SPACING_LIMITS = { min: 0, max: 200 } as const;
 
+// A block's width (2026-10-05), as a percentage of the page width; a
+// narrower block sits centred. Blocks side by side each keep their own
+// width, centred together, with the rest left as space — if together
+// they're wider than the page, they shrink to fit.
+export const DEFAULT_BLOCK_WIDTH = 100;
+export const BLOCK_WIDTH_LIMITS = { min: 10, max: 100 } as const;
+
 // One row of a Private / Custom layout's spacing: `below` = the space
 // between this row and the next (unused on the last row), `between` =
 // the space between its blocks when they sit side by side.
@@ -89,12 +96,29 @@ export const DEFAULT_SECTION_SPACING: SectionSpacing = {
   belowDescription: DEFAULT_BLOCK_SPACING,
 };
 
+// A Section's widths, one per part.
+export type SectionWidths = {
+  byline: number;
+  grid: number;
+  description: number;
+  video: number;
+};
+
+export const DEFAULT_SECTION_WIDTHS: SectionWidths = {
+  byline: DEFAULT_BLOCK_WIDTH,
+  grid: DEFAULT_BLOCK_WIDTH,
+  description: DEFAULT_BLOCK_WIDTH,
+  video: DEFAULT_BLOCK_WIDTH,
+};
+
 // `row` works as in blocks.ts: placeholders sharing a row id sit side
-// by side. `doors` is set on Sliding doors blocks only.
+// by side. `width` is unset until changed (see blockWidthOf). `doors` is
+// set on Sliding doors blocks only.
 export type LayoutBlock = {
   id: string;
   type: LayoutBlockType;
   row?: string;
+  width?: number;
   doors?: SlidingDoorsSettings;
 };
 
@@ -114,12 +138,14 @@ export type CustomLayout = {
 
 // Section is a fixed layout — a byline, an artwork grid filled from the
 // page's curation, and the curation's Description below it (2026-10-05).
-// Its settings: the grid's spacing, the spacing between its parts, an
-// optional background colour, and whether a video sits below the
-// Description (the video itself is content, chosen on the page later).
+// Its settings: the grid's spacing, the spacing between its parts, each
+// part's width, an optional background colour, and whether a video sits
+// below the Description (the video itself is content, chosen on the page
+// later).
 export type SectionLayout = {
   gridSpacing: GridSpacing;
   spacing: SectionSpacing;
+  widths: SectionWidths;
   backgroundColor: string | null;
   video: boolean;
 };
@@ -144,6 +170,10 @@ export function rowSpacingOf(layout: CustomLayout, key: string): RowSpacing {
   return layout.rowSpacing[key] ?? DEFAULT_ROW_SPACING;
 }
 
+export function blockWidthOf(block: LayoutBlock): number {
+  return block.width ?? DEFAULT_BLOCK_WIDTH;
+}
+
 export function emptyLayout(type: PageStyleType): PageStyleLayout {
   return type === "SECTION"
     ? {
@@ -151,6 +181,7 @@ export function emptyLayout(type: PageStyleType): PageStyleLayout {
         layout: {
           gridSpacing: DEFAULT_GRID_SPACING,
           spacing: DEFAULT_SECTION_SPACING,
+          widths: DEFAULT_SECTION_WIDTHS,
           backgroundColor: null,
           video: false,
         },
@@ -195,6 +226,10 @@ export function cleanBlockSpacing(value: unknown): number {
   return cleanNumber(value, BLOCK_SPACING_LIMITS, DEFAULT_BLOCK_SPACING, 0);
 }
 
+export function cleanBlockWidth(value: unknown): number {
+  return cleanNumber(value, BLOCK_WIDTH_LIMITS, DEFAULT_BLOCK_WIDTH, 0);
+}
+
 // A Sliding doors block saved before perSlide existed shows pairs, as
 // it always did.
 export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
@@ -228,6 +263,16 @@ function cleanSectionSpacing(raw: unknown): SectionSpacing {
   };
 }
 
+function cleanSectionWidths(raw: unknown): SectionWidths {
+  const value = (raw ?? {}) as Partial<Record<keyof SectionWidths, unknown>>;
+  return {
+    byline: cleanBlockWidth(value.byline),
+    grid: cleanBlockWidth(value.grid),
+    description: cleanBlockWidth(value.description),
+    video: cleanBlockWidth(value.video),
+  };
+}
+
 // Keeps spacing only for rows that still exist.
 function cleanRowSpacing(raw: unknown, blocks: LayoutBlock[]): Record<string, RowSpacing> {
   const value = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
@@ -254,6 +299,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
       layout: {
         gridSpacing: cleanGridSpacing(value.gridSpacing),
         spacing: cleanSectionSpacing(value.spacing),
+        widths: cleanSectionWidths(value.widths),
         backgroundColor: cleanColour(value.backgroundColor),
         video: value.video === true,
       },
@@ -268,6 +314,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (typeof block?.id !== "string" || !isLayoutBlockType(block.type)) return [];
           const clean: LayoutBlock = { id: block.id, type: block.type };
           if (typeof block.row === "string") clean.row = block.row;
+          if (block.width !== undefined) clean.width = cleanBlockWidth(block.width);
           if (block.type === "slidingdoors") clean.doors = cleanSlidingDoors(block.doors);
           return [clean];
         })
@@ -333,6 +380,11 @@ export function updateSlidingDoors(
   doors: SlidingDoorsSettings
 ): LayoutBlock[] {
   return blocks.map((b) => (b.id === id ? { ...b, doors: cleanSlidingDoors(doors) } : b));
+}
+
+// Changes one block's width, kept within its limits.
+export function updateBlockWidth(blocks: LayoutBlock[], id: string, width: number): LayoutBlock[] {
+  return blocks.map((b) => (b.id === id ? { ...b, width: cleanBlockWidth(width) } : b));
 }
 
 // Moves a whole row (one or more placeholders) up or down. Its spacing
