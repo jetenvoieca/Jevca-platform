@@ -27,33 +27,21 @@ enum SiteStatus {
   ISYT
 }
 
-// PAVILION added 2026-08-30 — a third page template alongside SECTION
-// (fixed byline + artwork grid) and PRIVATE (generic Content Blocks): a
-// freeform canvas of draggable/resizable cards, each one a real linked
-// child Page. See PavilionEditor.tsx / lib/blocks.ts (PavilionContent)
-// for the shape stored in draftBlocks/liveBlocks.
-//
-// PAVILION_VISUAL added 2026-08-30 (same day) — a deliberately separate,
-// parallel experiment with a different, simpler visual approach (no
-// drag/resize, panel closed by default), explicitly kept apart from
-// PAVILION so trying this out can't affect or lose the original. Reuses
-// the same PavilionCard/PavilionContent shape and child-page actions;
-// only the editor UI (PavilionVisualEditor.tsx) differs.
-//
-// Since 2026-10-04 these are also the Style Types a PageStyle is built
-// from — SECTION and PRIVATE ("Private / Custom") only, for now.
-// PAVILION, PAVILION_VISUAL and TEMPLATE_STYLE, with their editors, are
-// marked for possible clean-up later: no longer offered anywhere.
+// Which of the old page editors a page uses: SECTION (fixed byline +
+// artwork grid), PRIVATE (generic Content Blocks) or TEMPLATE_STYLE.
+// Since 2026-10-04 SECTION and PRIVATE ("Private / Custom") are also
+// the Style Types a PageStyle is built from. The Pavilion types were
+// removed 2026-10-05 (replaced by the Canvas page style).
+// TEMPLATE_STYLE, with its editors, is marked for possible clean-up
+// later: no longer offered anywhere.
 enum PageType {
   SECTION
   PRIVATE
-  PAVILION
-  PAVILION_VISUAL
   // Added 2026-09-06 — a page created by picking one of a Site's own
   // Template's page styles (portfolio, showcase, profile, exhibitions,
-  // home) from the same "+ Add New Page" list as Section/Private/
-  // Pavilion, rather than one of those fixed system types. Which style
-  // it actually is lives in Page.templateStyle, since the style is a
+  // home) from the same "+ Add New Page" list as Section/Private,
+  // rather than one of those fixed system types. Which style it actually
+  // is lives in Page.templateStyle, since the style is a
   // TemplatePageStyle value, not a PageType — this is deliberately a single
   // extra PageType, not one enum value per style, so adding a new style
   // later never means another migration here. Picking "freeform" from
@@ -977,11 +965,6 @@ model Page {
   slug      String
   visible   Boolean  @default(true)
   position  Int      @default(0)
-  // Free-text marker for pages auto-created by another feature rather
-  // than added by hand (e.g. "pavilion", 2026-08-30) — lets page lists
-  // leave out auto-created child pages, while such a page still behaves
-  // as a normal Page everywhere else (its own editor).
-  sourceTag String?
 
   // Page-level background styling (2026-09-03) — deliberately real
   // columns, not folded into draftBlocks/liveBlocks: these are page
@@ -998,8 +981,8 @@ model Page {
   // — set only when type is TEMPLATE_STYLE, null otherwise. Kept as its
   // own nullable field rather than repurposing `type` for this, since
   // `type` is a small fixed set of system behaviours (Section/Private/
-  // Pavilion/Pavilion Visual/Template Style) while this is "which
-  // style", a separate question that only applies to one of them.
+  // Template Style) while this is "which style", a separate question
+  // that only applies to one of them.
   templateStyle TemplatePageStyle?
 
   // The curation this page shows (2026-10-04) — optional; one per page
