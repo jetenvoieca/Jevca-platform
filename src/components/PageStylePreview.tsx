@@ -5,6 +5,7 @@ import {
   blockWidthOf,
   rowKey,
   rowSpacingOf,
+  type CanvasLayout,
   type GridSpacing,
   type LayoutBlock,
   type PageStyleLayout,
@@ -15,6 +16,8 @@ import {
 // page's Preview panel. Uses the style's grid spacing, block spacing
 // and block widths (narrower blocks centred).
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
+  if (style.type === "CANVAS") return <CanvasPreview layout={style.layout} />;
+
   if (style.type === "SECTION") {
     const { backgroundColor, video, gridSpacing, spacing, widths } = style.layout;
     return (
@@ -88,6 +91,64 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
           </div>
         );
       })}
+    </div>
+  );
+}
+
+// Where the example curations sit in the Canvas preview, as % of the
+// preview area.
+const CANVAS_EXAMPLE_TILES: [number, number][] = [
+  [4, 6],
+  [38, 4],
+  [74, 8],
+  [6, 64],
+  [76, 60],
+  [40, 76],
+];
+
+// A Canvas style: example curation tiles scattered at half the style's
+// tile size, and the one in the centre open — its first work large, the
+// next five around it.
+function CanvasPreview({ layout }: { layout: CanvasLayout }) {
+  const size = Math.round(layout.tileSize / 2);
+  const small = Math.round(size / 2.5);
+  return (
+    <div
+      className="relative h-[520px] overflow-hidden rounded-md border border-dashed border-neutral-300"
+      style={{ backgroundColor: layout.backgroundColor ?? undefined }}
+    >
+      <span className="absolute left-2 top-2 z-10 rounded bg-white/80 px-2 py-0.5 text-[10px] uppercase tracking-wide text-neutral-500">
+        Canvas — curations placed on each page, scrolls in any direction
+      </span>
+      {CANVAS_EXAMPLE_TILES.map(([x, y], i) => (
+        <div
+          key={i}
+          className="absolute flex items-center justify-center rounded bg-neutral-200 text-[10px] uppercase tracking-wide text-neutral-400"
+          style={{ left: `${x}%`, top: `${y}%`, width: size, height: size }}
+        >
+          Curation
+        </div>
+      ))}
+      <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-1.5 rounded-md border-2 border-dashed border-neutral-400 bg-white/70 p-1.5">
+        <div className="flex flex-col gap-1.5">
+          <div
+            className="flex items-center justify-center rounded bg-neutral-300 text-[10px] uppercase tracking-wide text-neutral-500"
+            style={{ width: size, height: size }}
+          >
+            Opened
+          </div>
+          <div className="flex gap-1.5">
+            {[0, 1].map((i) => (
+              <div key={i} className="rounded bg-neutral-200" style={{ width: small, height: small }} />
+            ))}
+          </div>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="rounded bg-neutral-200" style={{ width: small, height: small }} />
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -150,9 +150,31 @@ export type SectionLayout = {
   video: boolean;
 };
 
+// Canvas (2026-10-05, from Craig's mockups; replaced the Pavilion page
+// types): a large canvas that scrolls in any direction, holding the
+// curations chosen and dragged into place on each page — the canvas is
+// as big as their placement needs. Each curation shows as its first
+// work's main image with its name over it, `tileSize` pixels square;
+// the one nearest the centre of the screen opens over `openSpeed`
+// seconds, showing its first six works (the first large, the next five
+// around it).
+export type CanvasLayout = {
+  tileSize: number;
+  openSpeed: number;
+  backgroundColor: string | null;
+};
+
+export const DEFAULT_CANVAS: CanvasLayout = { tileSize: 240, openSpeed: 0.6, backgroundColor: null };
+
+export const CANVAS_LIMITS = {
+  tileSize: { min: 80, max: 600 },
+  openSpeed: { min: 0.1, max: 5 },
+} as const;
+
 export type PageStyleLayout =
   | { type: "SECTION"; layout: SectionLayout }
-  | { type: "PRIVATE"; layout: CustomLayout };
+  | { type: "PRIVATE"; layout: CustomLayout }
+  | { type: "CANVAS"; layout: CanvasLayout };
 
 export function blockTypeLabel(type: LayoutBlockType): string {
   return LAYOUT_BLOCK_TYPES.find((t) => t.value === type)?.label ?? type;
@@ -175,27 +197,29 @@ export function blockWidthOf(block: LayoutBlock): number {
 }
 
 export function emptyLayout(type: PageStyleType): PageStyleLayout {
-  return type === "SECTION"
-    ? {
-        type,
-        layout: {
-          gridSpacing: DEFAULT_GRID_SPACING,
-          spacing: DEFAULT_SECTION_SPACING,
-          widths: DEFAULT_SECTION_WIDTHS,
-          backgroundColor: null,
-          video: false,
-        },
-      }
-    : {
-        type,
-        layout: {
-          backgroundColor: null,
-          backgroundImage: false,
-          gridSpacing: DEFAULT_GRID_SPACING,
-          rowSpacing: {},
-          blocks: [],
-        },
-      };
+  if (type === "SECTION") {
+    return {
+      type,
+      layout: {
+        gridSpacing: DEFAULT_GRID_SPACING,
+        spacing: DEFAULT_SECTION_SPACING,
+        widths: DEFAULT_SECTION_WIDTHS,
+        backgroundColor: null,
+        video: false,
+      },
+    };
+  }
+  if (type === "CANVAS") return { type, layout: DEFAULT_CANVAS };
+  return {
+    type,
+    layout: {
+      backgroundColor: null,
+      backgroundImage: false,
+      gridSpacing: DEFAULT_GRID_SPACING,
+      rowSpacing: {},
+      blocks: [],
+    },
+  };
 }
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
@@ -254,6 +278,17 @@ export function cleanGridSpacing(raw: unknown): GridSpacing {
   };
 }
 
+export function cleanCanvas(raw: unknown): CanvasLayout {
+  const value = (raw ?? {}) as Partial<Record<keyof CanvasLayout, unknown>>;
+  const d = DEFAULT_CANVAS;
+  const l = CANVAS_LIMITS;
+  return {
+    tileSize: cleanNumber(value.tileSize, l.tileSize, d.tileSize, 0),
+    openSpeed: cleanNumber(value.openSpeed, l.openSpeed, d.openSpeed, 1),
+    backgroundColor: cleanColour(value.backgroundColor),
+  };
+}
+
 function cleanSectionSpacing(raw: unknown): SectionSpacing {
   const value = (raw ?? {}) as Partial<Record<keyof SectionSpacing, unknown>>;
   return {
@@ -305,6 +340,8 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
       },
     };
   }
+
+  if (type === "CANVAS") return { type, layout: cleanCanvas(raw) };
 
   const value = (raw ?? {}) as Partial<Record<keyof CustomLayout, unknown>>;
   const blocks = clearLoneRows(
