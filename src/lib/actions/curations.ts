@@ -20,6 +20,14 @@ export type CurationSummary = {
   name: string;
 };
 
+// A curation as it appears on a canvas (2026-10-05): its name and its
+// first work's main image, in the larger size.
+export type CurationCover = {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+};
+
 export type CurationWork = {
   artworkId: string;
   catalogueName: string;
@@ -77,8 +85,45 @@ const IMAGE_FIELDS = {
   posterUrl: true,
 } as const;
 
-// What a curation's work tile needs of its main image.
+// What a work's tile needs of an image, and of the curation item and
+// artwork to find its main image in this curation.
 const TILE_IMAGE_FIELDS = { url: true, thumbnailKey: true, displayKey: true } as const;
+
+const TILE_ITEM_IMAGES = {
+  ownImages: true,
+  images: {
+    orderBy: { position: "asc" },
+    take: 1,
+    select: { image: { select: TILE_IMAGE_FIELDS } },
+  },
+} as const;
+
+const TILE_ARTWORK_IMAGES = {
+  mainImage: { select: TILE_IMAGE_FIELDS },
+  images: { take: 1, select: TILE_IMAGE_FIELDS },
+} as const;
+
+type TileImage = { url: string; thumbnailKey: string | null; displayKey: string | null };
+
+// A work's main image in a curation (see CurationItem.ownImages) — the
+// Catalogue's Main, falling back to its first image, until changed on
+// the Curations page — as a small thumbnail and a larger version. Each
+// falls back to the original file when its smaller versions haven't
+// been generated.
+function tileUrls(item: {
+  ownImages: boolean;
+  images: { image: TileImage }[];
+  artwork: { mainImage: TileImage | null; images: TileImage[] };
+}): { imageUrl: string | null; displayUrl: string | null } {
+  const image = item.ownImages
+    ? (item.images[0]?.image ?? null)
+    : item.artwork.mainImage || item.artwork.images[0] || null;
+  if (!image) return { imageUrl: null, displayUrl: null };
+  return {
+    imageUrl: publicMediaUrl(image.thumbnailKey) || image.url,
+    displayUrl: publicMediaUrl(image.displayKey) || publicMediaUrl(image.thumbnailKey) || image.url,
+  };
+}
 
 type Result<T> = T | { error: string };
 
@@ -122,11 +167,31 @@ export async function listCurations(artistId: string): Promise<CurationSummary[]
   });
 }
 
-// One curation with its works, in their curated order. Image is the
-// work's main image in this curation (see CurationItem.ownImages) — the
-// Catalogue's Main, falling back to its first image, until changed here.
-// Each falls back to the original file when its smaller versions haven't
-// been generated.
+// Every curation with its cover (2026-10-05) — for placing curations on
+// a canvas. Same order as listCurations.
+export async function listCurationCovers(artistId: string): Promise<CurationCover[]> {
+  const rows = await db.curation.findMany({
+    where: { artistId },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      name: true,
+      items: {
+        orderBy: { position: "asc" },
+        take: 1,
+        select: { ...TILE_ITEM_IMAGES, artwork: { select: TILE_ARTWORK_IMAGES } },
+      },
+    },
+  });
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    imageUrl: r.items[0] ? tileUrls(r.items[0]).displayUrl : null,
+  }));
+}
+
+// One curation with its works, in their curated order, each with its
+// main image in this curation (see tileUrls).
 export async function getCuration(
   curationId: string,
   artistId: string
@@ -140,20 +205,14 @@ export async function getCuration(
       items: {
         orderBy: { position: "asc" },
         select: {
-          ownImages: true,
-          images: {
-            orderBy: { position: "asc" },
-            take: 1,
-            select: { image: { select: TILE_IMAGE_FIELDS } },
-          },
+          ...TILE_ITEM_IMAGES,
           artwork: {
             select: {
               id: true,
               catalogueName: true,
               offeredPrice: true,
               priceCurrency: true,
-              mainImage: { select: TILE_IMAGE_FIELDS },
-              images: { take: 1, select: TILE_IMAGE_FIELDS },
+              ...TILE_ARTWORK_IMAGES,
             },
           },
         },
@@ -166,21 +225,14 @@ export async function getCuration(
     id: row.id,
     name: row.name,
     description: row.description,
-    works: row.items.map(({ ownImages, images, artwork }) => {
-      const image = ownImages
-        ? images[0]?.image ?? null
-        : artwork.mainImage || artwork.images[0] || null;
-      return {
-        artworkId: artwork.id,
-        catalogueName: artwork.catalogueName,
-        offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
-        priceCurrency: artwork.priceCurrency,
-        imageUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
-        displayUrl: image
-          ? publicMediaUrl(image.displayKey) || publicMediaUrl(image.thumbnailKey) || image.url
-          : null,
-      };
-    }),
+    works: row.items.map((item) => ({
+      artworkId: item.artwork.id,
+      catalogueName: item.artwork.catalogueName,
+      offeredPrice:
+        item.artwork.offeredPrice != null ? item.artwork.offeredPrice.toString() : null,
+      priceCurrency: item.artwork.priceCurrency,
+      ...tileUrls(item),
+    })),
   };
 }
 
