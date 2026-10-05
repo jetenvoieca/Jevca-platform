@@ -87,8 +87,6 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
 
   const handleChange = (next: PageStyleDraft) => {
     setDraft(next);
-    // Choosing To left / To Right alone changes nothing that's saved.
-    if (draft && next.placement !== draft.placement && next.custom === draft.custom) return;
     if (timerRef.current) clearTimeout(timerRef.current);
     if (!next.name.trim() || !next.type) {
       pendingRef.current = null;

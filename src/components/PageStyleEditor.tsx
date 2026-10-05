@@ -7,7 +7,6 @@ import {
   BLOCK_SPACING_LIMITS,
   BLOCK_WIDTH_LIMITS,
   GRID_SPACING_LIMITS,
-  LAYOUT_BLOCK_TYPES,
   SLIDING_DOORS_LIMITS,
   addLayoutBlock,
   blockTypeLabel,
@@ -32,6 +31,7 @@ import {
   type SectionWidths,
   type SlidingDoorsSettings,
 } from "@/lib/pageStyleLayout";
+import AddBlockModal, { type BlockPlacement } from "@/components/AddBlockModal";
 
 // What's being edited: the Style name, the Style Type ("" until one is
 // chosen) and that type's layout. Held by PageStylesManager so its
@@ -41,9 +41,6 @@ export type PageStyleDraft = {
   type: PageStyleType | "";
   custom: CustomLayout;
   section: SectionLayout;
-  // One-shot, like the old block editor: the next block added sits
-  // beside the last row, then this resets.
-  placement: "none" | "left" | "right";
 };
 
 export const EMPTY_CUSTOM = (emptyLayout("PRIVATE") as Extract<PageStyleLayout, { type: "PRIVATE" }>)
@@ -58,7 +55,6 @@ export function draftFrom(name: string, style: PageStyleLayout | null): PageStyl
     type: style?.type ?? "",
     custom: style?.type === "PRIVATE" ? style.layout : EMPTY_CUSTOM,
     section: style?.type === "SECTION" ? style.layout : EMPTY_SECTION,
-    placement: "none",
   };
 }
 
@@ -101,13 +97,17 @@ const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
 // spacing of every gap between blocks separately and every block's
 // width (2026-10-05, % of the page, centred): Section in its own
 // boxes, Private / Custom in each row of the Layout list (width per
-// block, ↔ between side-by-side blocks, ↕ below the row). Private /
-// Custom offers the old block editor's controls, adding empty
-// placeholders, plus Sliding doors (2026-10-05) — pairs or one at a
-// time — with its Duration, Slide speed and (for pairs) Gap. Section is
-// a fixed layout — byline, artwork grid, Description — with an optional
-// background colour and an optional video below the Description. Saving
-// is automatic (see PageStylesManager); `status` reports it.
+// block, ↔ between side-by-side blocks, ↕ below the row).
+//
+// Private / Custom: background colour and image, then the Layout list,
+// then Sliding doors settings for any Sliding doors blocks. New blocks
+// (Header included) are added from "+ Add block", which opens
+// AddBlockModal (2026-10-05) — keeping adding separate from arranging.
+//
+// Section is a fixed layout — byline, artwork grid, Description — with
+// an optional background colour and an optional video below the
+// Description. Saving is automatic (see PageStylesManager); `status`
+// reports it.
 export default function PageStyleEditor({
   draft,
   onChange,
@@ -119,28 +119,21 @@ export default function PageStyleEditor({
   status: { text: string; isError: boolean };
   onClose: () => void;
 }) {
-  const { custom, section, placement } = draft;
+  const { custom, section } = draft;
+  const [adding, setAdding] = useState(false);
   const setCustom = (next: CustomLayout) => onChange({ ...draft, custom: next });
   const setSection = (next: SectionLayout) => onChange({ ...draft, section: next });
 
   const changeType = (value: string) => {
     if (!isPageStyleType(value)) return;
     // A different type has a different layout, so start it afresh.
-    onChange({
-      ...draft,
-      type: value,
-      custom: EMPTY_CUSTOM,
-      section: EMPTY_SECTION,
-      placement: "none",
-    });
+    onChange({ ...draft, type: value, custom: EMPTY_CUSTOM, section: EMPTY_SECTION });
   };
 
-  const addBlock = (blockType: LayoutBlockType, where: "none" | "left" | "right") =>
-    onChange({
-      ...draft,
-      custom: { ...custom, blocks: addLayoutBlock(custom.blocks, blockType, where) },
-      placement: "none",
-    });
+  const addBlock = (blockType: LayoutBlockType, placement: BlockPlacement) => {
+    setCustom({ ...custom, blocks: addLayoutBlock(custom.blocks, blockType, placement) });
+    setAdding(false);
+  };
 
   const setDoors = (id: string, doors: SlidingDoorsSettings) =>
     setCustom({ ...custom, blocks: updateSlidingDoors(custom.blocks, id, doors) });
@@ -285,18 +278,16 @@ export default function PageStyleEditor({
               onChange={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
             />
 
-            <button type="button" onClick={() => addBlock("header", "none")} className={smallButton}>
-              + Add Header
-            </button>
-
             <BackgroundColourControl
               value={custom.backgroundColor}
               onChange={(backgroundColor) => setCustom({ ...custom, backgroundColor })}
             />
 
             {custom.backgroundImage ? (
-              <div className="flex h-28 flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-neutral-300 bg-neutral-50 px-2 text-center">
-                <span className="text-sm text-neutral-500">Background image — chosen on the page</span>
+              <div className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2">
+                <span className="flex-1 text-sm text-neutral-700">
+                  Background image — chosen on the page
+                </span>
                 <button
                   type="button"
                   onClick={() => setCustom({ ...custom, backgroundImage: false })}
@@ -309,121 +300,127 @@ export default function PageStyleEditor({
               <button
                 type="button"
                 onClick={() => setCustom({ ...custom, backgroundImage: true })}
-                className="flex h-28 items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:bg-neutral-50"
+                className={smallButton}
               >
-                + Add background Image
+                + Add background image
               </button>
             )}
 
-            {rows.length > 0 && (
-              <div className="mt-2">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  Layout
-                </p>
-                <div className="flex flex-col gap-1.5">
-                  {rows.map((row, i) => {
-                    const key = rowKey(row);
-                    const spacing = rowSpacingOf(custom, key);
-                    return (
-                      <Fragment key={key}>
-                        <div className="flex items-center gap-1 rounded-md border border-neutral-200 p-1.5">
-                          <div className="flex min-w-0 flex-1 flex-col gap-1">
-                            <div className="flex min-w-0 gap-1">
-                              {row.map((b) => (
-                                <span
-                                  key={b.id}
-                                  className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-700"
-                                >
-                                  <span className="truncate">{blockTypeLabel(b.type)}</span>
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      setCustom({
-                                        ...custom,
-                                        blocks: removeLayoutBlock(custom.blocks, b.id),
-                                      })
-                                    }
-                                    aria-label={`Remove ${blockTypeLabel(b.type)}`}
-                                    className="text-neutral-400 hover:text-red-600"
-                                  >
-                                    ✕
-                                  </button>
-                                </span>
-                              ))}
-                            </div>
+            <div className="mt-2">
+              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                Layout
+              </p>
+              {rows.length === 0 && (
+                <p className="mb-2 text-xs text-neutral-400">No blocks yet.</p>
+              )}
+              <div className="flex flex-col gap-1.5">
+                {rows.map((row, i) => {
+                  const key = rowKey(row);
+                  const spacing = rowSpacingOf(custom, key);
+                  return (
+                    <Fragment key={key}>
+                      <div className="flex items-center gap-1 rounded-md border border-neutral-200 p-1.5">
+                        <div className="flex min-w-0 flex-1 flex-col gap-1">
+                          <div className="flex min-w-0 gap-1">
                             {row.map((b) => (
-                              <NumberField
+                              <span
                                 key={b.id}
-                                label={
-                                  row.length > 1 ? `${blockTypeLabel(b.type)} width` : "Width"
-                                }
-                                unit="%"
-                                step={5}
-                                value={blockWidthOf(b)}
-                                limits={BLOCK_WIDTH_LIMITS}
-                                onCommit={(width) =>
-                                  setCustom({
-                                    ...custom,
-                                    blocks: updateBlockWidth(custom.blocks, b.id, width),
-                                  })
-                                }
-                                compact
-                              />
+                                className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-700"
+                              >
+                                <span className="truncate">{blockTypeLabel(b.type)}</span>
+                                <button
+                                  type="button"
+                                  onClick={() =>
+                                    setCustom({
+                                      ...custom,
+                                      blocks: removeLayoutBlock(custom.blocks, b.id),
+                                    })
+                                  }
+                                  aria-label={`Remove ${blockTypeLabel(b.type)}`}
+                                  className="text-neutral-400 hover:text-red-600"
+                                >
+                                  ✕
+                                </button>
+                              </span>
                             ))}
-                            {row.length > 1 && (
-                              <NumberField
-                                label="↔ Between"
-                                unit="px"
-                                step={1}
-                                value={spacing.between}
-                                limits={BLOCK_SPACING_LIMITS}
-                                onCommit={(between) => setRowSpacing(key, { between })}
-                                compact
-                              />
-                            )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, -1) })
-                            }
-                            disabled={i === 0}
-                            aria-label="Move up"
-                            className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
-                          >
-                            ↑
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, 1) })
-                            }
-                            disabled={i === rows.length - 1}
-                            aria-label="Move down"
-                            className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
-                          >
-                            ↓
-                          </button>
-                        </div>
-                        {i < rows.length - 1 && (
-                          <div className="flex justify-center">
+                          {row.map((b) => (
                             <NumberField
-                              label="↕ Space"
-                              unit="px"
-                              step={1}
-                              value={spacing.below}
-                              limits={BLOCK_SPACING_LIMITS}
-                              onCommit={(below) => setRowSpacing(key, { below })}
+                              key={b.id}
+                              label={row.length > 1 ? `${blockTypeLabel(b.type)} width` : "Width"}
+                              unit="%"
+                              step={5}
+                              value={blockWidthOf(b)}
+                              limits={BLOCK_WIDTH_LIMITS}
+                              onCommit={(width) =>
+                                setCustom({
+                                  ...custom,
+                                  blocks: updateBlockWidth(custom.blocks, b.id, width),
+                                })
+                              }
                               compact
                             />
-                          </div>
-                        )}
-                      </Fragment>
-                    );
-                  })}
-                </div>
+                          ))}
+                          {row.length > 1 && (
+                            <NumberField
+                              label="↔ Between"
+                              unit="px"
+                              step={1}
+                              value={spacing.between}
+                              limits={BLOCK_SPACING_LIMITS}
+                              onCommit={(between) => setRowSpacing(key, { between })}
+                              compact
+                            />
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, -1) })
+                          }
+                          disabled={i === 0}
+                          aria-label="Move up"
+                          className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, 1) })
+                          }
+                          disabled={i === rows.length - 1}
+                          aria-label="Move down"
+                          className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                      {i < rows.length - 1 && (
+                        <div className="flex justify-center">
+                          <NumberField
+                            label="↕ Space"
+                            unit="px"
+                            step={1}
+                            value={spacing.below}
+                            limits={BLOCK_SPACING_LIMITS}
+                            onCommit={(below) => setRowSpacing(key, { below })}
+                            compact
+                          />
+                        </div>
+                      )}
+                    </Fragment>
+                  );
+                })}
               </div>
-            )}
+              <button
+                type="button"
+                onClick={() => setAdding(true)}
+                className="mt-2 w-full rounded-md border border-dashed border-neutral-400 px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
+              >
+                + Add block
+              </button>
+            </div>
 
             {doorsBlocks.map((b, i) => {
               const doors = b.doors!;
@@ -463,44 +460,6 @@ export default function PageStyleEditor({
                 </div>
               );
             })}
-
-            <div className="mt-2 flex items-center justify-between">
-              <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Add block</p>
-              <div className="flex gap-1">
-                {(["left", "right"] as const).map((side) => (
-                  <button
-                    key={side}
-                    type="button"
-                    disabled={custom.blocks.length === 0}
-                    onClick={() =>
-                      onChange({ ...draft, placement: placement === side ? "none" : side })
-                    }
-                    className={`rounded-md border px-2 py-1 text-xs disabled:opacity-30 ${
-                      placement === side
-                        ? "border-neutral-900 bg-neutral-900 text-white"
-                        : "border-neutral-300 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {side === "left" ? "To left" : "To Right"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            {placement !== "none" && (
-              <p className="text-xs text-amber-600">
-                The next block sits to the {placement} of the last row.
-              </p>
-            )}
-            {LAYOUT_BLOCK_TYPES.filter((t) => t.value !== "header").map((t) => (
-              <button
-                key={t.value}
-                type="button"
-                onClick={() => addBlock(t.value, placement)}
-                className={smallButton}
-              >
-                + {t.label}
-              </button>
-            ))}
           </div>
         )}
       </div>
@@ -517,6 +476,14 @@ export default function PageStyleEditor({
           Close
         </button>
       </div>
+
+      {adding && (
+        <AddBlockModal
+          canPlaceBeside={custom.blocks.length > 0}
+          onAdd={addBlock}
+          onClose={() => setAdding(false)}
+        />
+      )}
     </div>
   );
 }
