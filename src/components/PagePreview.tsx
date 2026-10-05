@@ -6,6 +6,7 @@ import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { LayoutBlock } from "@/lib/pageStyleLayout";
 import { groupBlocksByRow } from "@/lib/blocks";
 import CurationWorkView from "@/components/CurationWorkView";
+import SlidingDoors from "@/components/SlidingDoors";
 
 // The Pages page's Preview panel (2026-10-04): the selected page's
 // curation.
@@ -14,7 +15,8 @@ import CurationWorkView from "@/components/CurationWorkView";
 // filled from the curation, with the style's background colour.
 // - Section: the works' images, then the curation's Description.
 // - Private / Custom: Gallery blocks show the works' images, Text blocks
-//   the curation's Description.
+//   the curation's Description, Sliding doors the works' main images in
+//   pairs (see SlidingDoors).
 // Anything with nothing to fill it yet (Byline, Header, Video, an empty
 // Gallery, no Description…) is left out, and no outlines or labels are
 // shown. Images are image only.
@@ -101,8 +103,8 @@ function StyledPage({
   curation: CurationDetail;
   onOpen: (artworkId: string) => void;
 }) {
-  const grid =
-    curation.works.length > 0 ? <ImageGrid works={curation.works} onOpen={onOpen} /> : null;
+  const hasWorks = curation.works.length > 0;
+  const grid = hasWorks ? <ImageGrid works={curation.works} onOpen={onOpen} /> : null;
   const description = curation.description ? (
     <p className="whitespace-pre-line break-words text-sm text-neutral-800">
       {curation.description}
@@ -112,6 +114,16 @@ function StyledPage({
   const fill = (block: LayoutBlock): ReactNode => {
     if (block.type === "gallery") return grid;
     if (block.type === "text") return description;
+    if (block.type === "slidingdoors" && block.doors && curation.works.some((w) => w.displayUrl)) {
+      return (
+        <SlidingDoors
+          works={curation.works}
+          duration={block.doors.duration}
+          speed={block.doors.speed}
+          onOpen={onOpen}
+        />
+      );
+    }
     return null;
   };
 

@@ -25,7 +25,11 @@ export type CurationWork = {
   catalogueName: string;
   offeredPrice: string | null;
   priceCurrency: string;
+  // The work's main image in this curation: a small thumbnail for
+  // tiles, and a larger version (2026-10-05) for full-screen display
+  // such as Sliding doors.
   imageUrl: string | null;
+  displayUrl: string | null;
 };
 
 export type CurationDetail = {
@@ -73,6 +77,9 @@ const IMAGE_FIELDS = {
   posterUrl: true,
 } as const;
 
+// What a curation's work tile needs of its main image.
+const TILE_IMAGE_FIELDS = { url: true, thumbnailKey: true, displayKey: true } as const;
+
 type Result<T> = T | { error: string };
 
 function isUniqueViolation(err: unknown): boolean {
@@ -117,8 +124,9 @@ export async function listCurations(artistId: string): Promise<CurationSummary[]
 
 // One curation with its works, in their curated order. Image is the
 // work's main image in this curation (see CurationItem.ownImages) — the
-// Catalogue's Main, falling back to its first image, until changed here —
-// as a small thumbnail.
+// Catalogue's Main, falling back to its first image, until changed here.
+// Each falls back to the original file when its smaller versions haven't
+// been generated.
 export async function getCuration(
   curationId: string,
   artistId: string
@@ -136,7 +144,7 @@ export async function getCuration(
           images: {
             orderBy: { position: "asc" },
             take: 1,
-            select: { image: { select: { url: true, thumbnailKey: true } } },
+            select: { image: { select: TILE_IMAGE_FIELDS } },
           },
           artwork: {
             select: {
@@ -144,8 +152,8 @@ export async function getCuration(
               catalogueName: true,
               offeredPrice: true,
               priceCurrency: true,
-              mainImage: { select: { url: true, thumbnailKey: true } },
-              images: { take: 1, select: { url: true, thumbnailKey: true } },
+              mainImage: { select: TILE_IMAGE_FIELDS },
+              images: { take: 1, select: TILE_IMAGE_FIELDS },
             },
           },
         },
@@ -168,6 +176,9 @@ export async function getCuration(
         offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
         priceCurrency: artwork.priceCurrency,
         imageUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
+        displayUrl: image
+          ? publicMediaUrl(image.displayKey) || publicMediaUrl(image.thumbnailKey) || image.url
+          : null,
       };
     }),
   };

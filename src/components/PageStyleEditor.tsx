@@ -1,14 +1,17 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { groupBlocksByRow } from "@/lib/blocks";
 import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pageStyleTypes";
 import {
   LAYOUT_BLOCK_TYPES,
+  SLIDING_DOORS_LIMITS,
   addLayoutBlock,
   blockTypeLabel,
   emptyLayout,
   moveLayoutRow,
   removeLayoutBlock,
+  updateSlidingDoors,
   type CustomLayout,
   type LayoutBlockType,
   type PageStyleLayout,
@@ -58,7 +61,8 @@ const smallButton =
 // mockups): sits in the right-hand column, beside the Preview, and stays
 // open until Close. Style name, Style Type, then the chosen type's own
 // layout controls — layout only, no content. Private / Custom offers
-// the old block editor's controls, adding empty placeholders. Section
+// the old block editor's controls, adding empty placeholders, plus
+// Sliding doors (2026-10-05) with its Duration and Slide speed. Section
 // (2026-10-05) is a fixed layout — byline, artwork grid, Description —
 // with an optional background colour and an optional video below the
 // Description. Saving is automatic (see PageStylesManager); `status`
@@ -98,6 +102,7 @@ export default function PageStyleEditor({
     });
 
   const rows = groupBlocksByRow(custom.blocks);
+  const doorsBlocks = custom.blocks.filter((b) => b.type === "slidingdoors" && b.doors);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-300 bg-white">
@@ -251,6 +256,38 @@ export default function PageStyleEditor({
               </div>
             )}
 
+            {doorsBlocks.map((b, i) => (
+              <div key={b.id} className="rounded-md border border-neutral-200 p-2">
+                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                  Sliding doors{doorsBlocks.length > 1 ? ` ${i + 1}` : ""}
+                </p>
+                <div className="flex flex-col gap-2">
+                  <SecondsField
+                    label="Duration"
+                    value={b.doors!.duration}
+                    limits={SLIDING_DOORS_LIMITS.duration}
+                    onCommit={(duration) =>
+                      setCustom({
+                        ...custom,
+                        blocks: updateSlidingDoors(custom.blocks, b.id, { ...b.doors!, duration }),
+                      })
+                    }
+                  />
+                  <SecondsField
+                    label="Slide speed"
+                    value={b.doors!.speed}
+                    limits={SLIDING_DOORS_LIMITS.speed}
+                    onCommit={(speed) =>
+                      setCustom({
+                        ...custom,
+                        blocks: updateSlidingDoors(custom.blocks, b.id, { ...b.doors!, speed }),
+                      })
+                    }
+                  />
+                </div>
+              </div>
+            ))}
+
             <div className="mt-2 flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Add block</p>
               <div className="flex gap-1">
@@ -342,5 +379,52 @@ function BackgroundColourControl({
         Remove
       </button>
     </div>
+  );
+}
+
+// A number of seconds, applied when the box is left (or Enter). Kept
+// within its limits; anything that isn't a number goes back to the
+// current value.
+function SecondsField({
+  label,
+  value,
+  limits,
+  onCommit,
+}: {
+  label: string;
+  value: number;
+  limits: { min: number; max: number };
+  onCommit: (value: number) => void;
+}) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+
+  const commit = () => {
+    const n = Number(text);
+    if (text.trim() === "" || !Number.isFinite(n)) {
+      setText(String(value));
+      return;
+    }
+    if (n !== value) onCommit(n);
+  };
+
+  return (
+    <label className="flex items-center gap-2 text-sm text-neutral-700">
+      <span className="w-24 shrink-0">{label}</span>
+      <input
+        type="number"
+        min={limits.min}
+        max={limits.max}
+        step={0.5}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+      />
+      <span className="text-xs text-neutral-400">seconds</span>
+    </label>
   );
 }
