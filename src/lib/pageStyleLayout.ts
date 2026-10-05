@@ -8,7 +8,7 @@ import type { PageStyleType } from "@/lib/pageStyleTypes";
 
 // The components a Private / Custom style can be built from — the same
 // block types as the old block editor (see ContentBlock in blocks.ts),
-// as empty placeholders.
+// as empty placeholders, plus Sliding doors (2026-10-05).
 export const LAYOUT_BLOCK_TYPES = [
   { value: "header", label: "Header" },
   { value: "text", label: "Text" },
@@ -17,13 +17,33 @@ export const LAYOUT_BLOCK_TYPES = [
   { value: "artwork", label: "Artwork Feature" },
   { value: "video", label: "Video" },
   { value: "textgrid", label: "Text Grid" },
+  { value: "slidingdoors", label: "Sliding doors" },
 ] as const;
 
 export type LayoutBlockType = (typeof LAYOUT_BLOCK_TYPES)[number]["value"];
 
+// Sliding doors (2026-10-05, from Craig's mockup): the curation's main
+// images shown a pair at a time, side by side and full screen. After
+// `duration` seconds the pair slides apart over `speed` seconds,
+// revealing the next pair, on a continuous loop. Both are set in the
+// style, so every page using it behaves the same.
+export type SlidingDoorsSettings = { duration: number; speed: number };
+
+export const DEFAULT_SLIDING_DOORS: SlidingDoorsSettings = { duration: 5, speed: 1.5 };
+
+export const SLIDING_DOORS_LIMITS = {
+  duration: { min: 1, max: 60 },
+  speed: { min: 0.5, max: 10 },
+} as const;
+
 // `row` works as in blocks.ts: placeholders sharing a row id sit side
-// by side.
-export type LayoutBlock = { id: string; type: LayoutBlockType; row?: string };
+// by side. `doors` is set on Sliding doors blocks only.
+export type LayoutBlock = {
+  id: string;
+  type: LayoutBlockType;
+  row?: string;
+  doors?: SlidingDoorsSettings;
+};
 
 export type CustomLayout = {
   // A colour is styling, so the style keeps it; null = none.
@@ -68,6 +88,26 @@ function isLayoutBlockType(value: unknown): value is LayoutBlockType {
   return LAYOUT_BLOCK_TYPES.some((t) => t.value === value);
 }
 
+// A number within its limits, to one decimal place; anything else
+// becomes the default.
+function cleanSeconds(value: unknown, limits: { min: number; max: number }, fallback: number) {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.round(Math.min(limits.max, Math.max(limits.min, n)) * 10) / 10;
+}
+
+export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof SlidingDoorsSettings, unknown>>;
+  return {
+    duration: cleanSeconds(
+      value.duration,
+      SLIDING_DOORS_LIMITS.duration,
+      DEFAULT_SLIDING_DOORS.duration
+    ),
+    speed: cleanSeconds(value.speed, SLIDING_DOORS_LIMITS.speed, DEFAULT_SLIDING_DOORS.speed),
+  };
+}
+
 // Turns whatever is stored (or sent from the browser) into a valid
 // layout for the type — anything unknown or malformed is dropped, so a
 // bad value can never break the modal, the preview or a page.
@@ -85,11 +125,10 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
     ? value.blocks.flatMap((b): LayoutBlock[] => {
         const block = b as Partial<LayoutBlock>;
         if (typeof block?.id !== "string" || !isLayoutBlockType(block.type)) return [];
-        return [
-          typeof block.row === "string"
-            ? { id: block.id, type: block.type, row: block.row }
-            : { id: block.id, type: block.type },
-        ];
+        const clean: LayoutBlock = { id: block.id, type: block.type };
+        if (typeof block.row === "string") clean.row = block.row;
+        if (block.type === "slidingdoors") clean.doors = cleanSlidingDoors(block.doors);
+        return [clean];
       })
     : [];
 
@@ -103,10 +142,16 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
   };
 }
 
-// A row needs at least two placeholders; a lone one goes back to full width.
+// A row needs at least two placeholders; a lone one goes back to full
+// width. Everything else about the block is kept.
 function clearLoneRows(blocks: LayoutBlock[]): LayoutBlock[] {
   const groups = groupBlocksByRow(blocks);
-  return groups.flatMap((g) => (g.length === 1 ? [{ id: g[0].id, type: g[0].type }] : g));
+  return groups.flatMap((g) => {
+    if (g.length > 1) return g;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { row, ...rest } = g[0];
+    return [rest];
+  });
 }
 
 // Adds a placeholder at the end, or — with "left"/"right" — beside the
@@ -116,7 +161,10 @@ export function addLayoutBlock(
   type: LayoutBlockType,
   placement: "none" | "left" | "right"
 ): LayoutBlock[] {
-  const block: LayoutBlock = { id: crypto.randomUUID(), type };
+  const block: LayoutBlock =
+    type === "slidingdoors"
+      ? { id: crypto.randomUUID(), type, doors: DEFAULT_SLIDING_DOORS }
+      : { id: crypto.randomUUID(), type };
   if (placement === "none" || blocks.length === 0) return [...blocks, block];
 
   const groups = groupBlocksByRow(blocks);
@@ -130,6 +178,15 @@ export function addLayoutBlock(
 
 export function removeLayoutBlock(blocks: LayoutBlock[], id: string): LayoutBlock[] {
   return clearLoneRows(blocks.filter((b) => b.id !== id));
+}
+
+// Changes one Sliding doors block's settings, kept within their limits.
+export function updateSlidingDoors(
+  blocks: LayoutBlock[],
+  id: string,
+  doors: SlidingDoorsSettings
+): LayoutBlock[] {
+  return blocks.map((b) => (b.id === id ? { ...b, doors: cleanSlidingDoors(doors) } : b));
 }
 
 // Moves a whole row (one or more placeholders) up or down.

@@ -60,7 +60,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
         <div key={row[0].id} className="flex gap-4">
           {row.map((b) => (
             <div key={b.id} className="min-w-0 flex-1">
-              <Labelled label={blockTypeLabel(b.type)}>
+              <Labelled label={blockLabel(b)}>
                 <BlockShape type={b.type} />
               </Labelled>
             </div>
@@ -69,6 +69,13 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
       ))}
     </div>
   );
+}
+
+function blockLabel(block: LayoutBlock): string {
+  const label = blockTypeLabel(block.type);
+  return block.doors
+    ? `${label} — pairs from the page's curation, ${block.doors.duration}s, slide ${block.doors.speed}s`
+    : label;
 }
 
 // A rough outline of each block type, so the layout reads at a glance.
@@ -116,6 +123,17 @@ function BlockShape({ type }: { type: LayoutBlock["type"] }) {
           {Array.from({ length: 9 }, (_, i) => (
             <Bar key={i} className="h-2.5 w-full" />
           ))}
+        </div>
+      );
+    case "slidingdoors":
+      return (
+        <div className="relative flex h-48 gap-1">
+          <div className="flex-1 rounded bg-neutral-200" />
+          <div className="flex-1 rounded bg-neutral-200" />
+          <span className="absolute inset-0 flex items-center justify-between px-3 text-2xl text-neutral-400">
+            <span>◀</span>
+            <span>▶</span>
+          </span>
         </div>
       );
   }
