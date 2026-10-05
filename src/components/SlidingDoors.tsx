@@ -4,22 +4,25 @@ import { useEffect, useMemo, useState } from "react";
 import type { CurationWork } from "@/lib/actions/curations";
 
 // Sliding doors (2026-10-05, from Craig's mockup) — a curation's main
-// images a pair at a time, side by side, full screen. After `duration`
-// seconds the pair slides apart (left image off to the left, right image
-// off to the right) over `speed` seconds, revealing the next pair
-// already sitting behind it; then it repeats, looping back to the first
-// pair. Works are paired in curation order (1+2, 3+4…); with an odd
-// number the last pairs with the first. Works without an image are left
-// out. Clicking an image opens that work (onOpen).
+// images a pair at a time, side by side, full screen, `gap` pixels
+// apart. After `duration` seconds the pair slides apart (left image off
+// to the left, right image off to the right) over `speed` seconds,
+// revealing the next pair already sitting behind it; then it repeats,
+// looping back to the first pair. Works are paired in curation order
+// (1+2, 3+4…); with an odd number the last pairs with the first. Works
+// without an image are left out. Clicking an image opens that work
+// (onOpen). The page's background shows in the gap.
 export default function SlidingDoors({
   works,
   duration,
   speed,
+  gap,
   onOpen,
 }: {
   works: CurationWork[];
   duration: number;
   speed: number;
+  gap: number;
   onOpen: (artworkId: string) => void;
 }) {
   const pairs = useMemo(() => {
@@ -62,30 +65,31 @@ export default function SlidingDoors({
   const next = pairs[(index + 1) % pairs.length];
 
   return (
-    <div className="relative h-[75vh] w-full overflow-hidden rounded-md bg-neutral-100">
+    <div className="relative h-[75vh] w-full overflow-hidden">
       {pairs.length > 1 && (
-        <div className="absolute inset-0 flex" aria-hidden>
+        <div className="absolute inset-0 flex" style={{ gap }} aria-hidden>
           {next.map((w, side) => (
             <img
               key={side}
               src={w.displayUrl!}
               alt=""
-              className="h-full w-1/2 object-cover"
+              className="h-full min-w-0 flex-1 object-cover"
             />
           ))}
         </div>
       )}
 
       {/* Keyed by pair, so each new front pair starts closed with no
-          animation. */}
-      <div key={index} className="absolute inset-0 flex">
+          animation. Each image moves its own width plus nothing more,
+          which takes it exactly off its side whatever the gap. */}
+      <div key={index} className="absolute inset-0 flex" style={{ gap }}>
         {current.map((w, side) => (
           <button
             key={side}
             type="button"
             onClick={() => onOpen(w.artworkId)}
             title={w.catalogueName}
-            className="h-full w-1/2 overflow-hidden"
+            className="h-full min-w-0 flex-1 overflow-hidden"
             style={{
               transform: opening ? `translateX(${side === 0 ? "-100%" : "100%"})` : "translateX(0)",
               transition: opening ? `transform ${speed}s ease-in-out` : "none",

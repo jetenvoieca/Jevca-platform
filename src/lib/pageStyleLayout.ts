@@ -23,17 +23,18 @@ export const LAYOUT_BLOCK_TYPES = [
 export type LayoutBlockType = (typeof LAYOUT_BLOCK_TYPES)[number]["value"];
 
 // Sliding doors (2026-10-05, from Craig's mockup): the curation's main
-// images shown a pair at a time, side by side and full screen. After
-// `duration` seconds the pair slides apart over `speed` seconds,
-// revealing the next pair, on a continuous loop. Both are set in the
-// style, so every page using it behaves the same.
-export type SlidingDoorsSettings = { duration: number; speed: number };
+// images shown a pair at a time, side by side and full screen, `gap`
+// pixels apart. After `duration` seconds the pair slides apart over
+// `speed` seconds, revealing the next pair, on a continuous loop. All
+// set in the style, so every page using it behaves the same.
+export type SlidingDoorsSettings = { duration: number; speed: number; gap: number };
 
-export const DEFAULT_SLIDING_DOORS: SlidingDoorsSettings = { duration: 5, speed: 1.5 };
+export const DEFAULT_SLIDING_DOORS: SlidingDoorsSettings = { duration: 5, speed: 1.5, gap: 16 };
 
 export const SLIDING_DOORS_LIMITS = {
   duration: { min: 1, max: 60 },
   speed: { min: 0.5, max: 10 },
+  gap: { min: 0, max: 100 },
 } as const;
 
 // `row` works as in blocks.ts: placeholders sharing a row id sit side
@@ -88,23 +89,28 @@ function isLayoutBlockType(value: unknown): value is LayoutBlockType {
   return LAYOUT_BLOCK_TYPES.some((t) => t.value === value);
 }
 
-// A number within its limits, to one decimal place; anything else
-// becomes the default.
-function cleanSeconds(value: unknown, limits: { min: number; max: number }, fallback: number) {
+// A number within its limits, rounded to `decimals` places; anything
+// else becomes the default.
+function cleanNumber(
+  value: unknown,
+  limits: { min: number; max: number },
+  fallback: number,
+  decimals: number
+) {
   const n = typeof value === "number" ? value : Number(value);
   if (!Number.isFinite(n)) return fallback;
-  return Math.round(Math.min(limits.max, Math.max(limits.min, n)) * 10) / 10;
+  const factor = 10 ** decimals;
+  return Math.round(Math.min(limits.max, Math.max(limits.min, n)) * factor) / factor;
 }
 
 export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
   const value = (raw ?? {}) as Partial<Record<keyof SlidingDoorsSettings, unknown>>;
+  const d = DEFAULT_SLIDING_DOORS;
+  const l = SLIDING_DOORS_LIMITS;
   return {
-    duration: cleanSeconds(
-      value.duration,
-      SLIDING_DOORS_LIMITS.duration,
-      DEFAULT_SLIDING_DOORS.duration
-    ),
-    speed: cleanSeconds(value.speed, SLIDING_DOORS_LIMITS.speed, DEFAULT_SLIDING_DOORS.speed),
+    duration: cleanNumber(value.duration, l.duration, d.duration, 1),
+    speed: cleanNumber(value.speed, l.speed, d.speed, 1),
+    gap: cleanNumber(value.gap, l.gap, d.gap, 0),
   };
 }
 
