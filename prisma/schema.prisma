@@ -613,11 +613,9 @@ model Curation {
 
   name String
 
-  // The curation's own Description (2026-10-05) — formatted text
-  // (paragraphs with bold, italic and links), stored as JSON in the
-  // editor's own shape, never as HTML — see lib/richText.ts. Null until
-  // written. Shown on the Curations page and in the Pages preview.
-  description Json?
+  // The curation's own Description (2026-10-05) — plain text, null
+  // until written. Shown on the Curations page and in the Pages preview.
+  description String?
 
   items CurationItem[]
   // Website pages showing this curation (2026-10-04) — see Page.curationId.
