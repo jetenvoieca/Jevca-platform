@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import CurationWorkPresentation from "@/components/CurationWorkPresentation";
+import RichTextEditor from "@/components/RichTextEditor";
+import type { RichTextDoc } from "@/lib/richText";
 import {
   addWorksToCuration,
   createCuration,
@@ -11,6 +13,7 @@ import {
   removeWorkFromCuration,
   renameCuration,
   reorderCuration,
+  updateCurationDescription,
   type CurationDetail,
   type CurationSummary,
 } from "@/lib/actions/curations";
@@ -34,9 +37,11 @@ function formatPrice(amount: string | null, currency: string): string | null {
 }
 
 // Curations page (2026-09-24, stage one). Two columns:
-// - left: the open curation — its name (click to rename), Delete, and
-//   its works in order (drag to reorder, hover × to remove, "+ Add
-//   Works" tile to pick more).
+// - left: the open curation — its name (click to rename), Delete, its
+//   works in order (drag to reorder, hover × to remove, "+ Add Works"
+//   tile to pick more), and beside them the curation's own Description
+//   (2026-10-05, from Craig's mockup — formatted text, see
+//   lib/richText.ts).
 // - right: every curation; click one to open it, or add a new one.
 //
 // Presentation (2026-10-03) — a work's images, Name, Description and
@@ -48,8 +53,9 @@ function formatPrice(amount: string | null, currency: string): string | null {
 //
 // Frozen headers (2026-10-04, general requirement): the page fills the
 // space under the site header and never scrolls as a whole. The open
-// curation's title row and the list's "Curation Name" heading stay put;
-// the works and the list of curations each scroll on their own.
+// curation's title row, its Description box and the list's "Curation
+// Name" heading stay put; the works, the Description's text and the
+// list of curations each scroll on their own.
 //
 // A centre column ("Display this curation using ……") originally sat
 // between these for a planned stage-two display-mode chooser — removed
@@ -133,7 +139,7 @@ export default function CurationsView({
       setCurations((prev) => [...prev, result]);
       setNewName("");
       setAdding(false);
-      show({ id: result.id, name: result.name, works: [] });
+      show({ id: result.id, name: result.name, description: null, works: [] });
     });
   };
 
@@ -175,6 +181,21 @@ export default function CurationsView({
       setCurations((prev) => prev.filter((c) => c.id !== id));
       if (selectedIdRef.current === id) show(null);
     });
+  };
+
+  // Saved when the Description box is left (see RichTextEditor). Returns
+  // whether it saved, so a failed save is tried again next time.
+  const saveDescription = async (id: string, doc: RichTextDoc | null): Promise<boolean> => {
+    setError(null);
+    const result = await updateCurationDescription(id, artistId, doc);
+    if ("error" in result) {
+      setError(result.error);
+      return false;
+    }
+    setSelected((prev) =>
+      prev && prev.id === id ? { ...prev, description: result.description } : prev
+    );
+    return true;
   };
 
   const handleAddWorks = (picked: { id: string }[]) => {
@@ -306,80 +327,93 @@ export default function CurationsView({
               </button>
             </div>
 
-            {/* The works, scrolling on their own. */}
-            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
-                {selected.works.map((w, i) => {
-                  const price = formatPrice(w.offeredPrice, w.priceCurrency);
-                  return (
-                    <div
-                      key={w.artworkId}
-                      draggable
-                      onDragStart={(e) => {
-                        e.dataTransfer.effectAllowed = "move";
-                        e.dataTransfer.setData("text/plain", w.artworkId);
-                        setDragIndex(i);
-                      }}
-                      onDragOver={(e) => e.preventDefault()}
-                      onDrop={(e) => {
-                        e.preventDefault();
-                        handleDrop(i);
-                      }}
-                      onDragEnd={() => setDragIndex(null)}
-                      className={`group relative cursor-grab ${dragIndex === i ? "opacity-40" : ""}`}
-                    >
-                      <div className="relative">
-                        {w.imageUrl ? (
-                          <img
-                            src={w.imageUrl}
-                            alt=""
-                            draggable={false}
-                            className="aspect-square w-full rounded-md object-cover"
-                          />
-                        ) : (
-                          <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                            No image
-                          </div>
-                        )}
+            <div className="flex min-h-0 flex-1 gap-6 px-6 pb-6">
+              {/* The works, scrolling on their own. */}
+              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
+                  {selected.works.map((w, i) => {
+                    const price = formatPrice(w.offeredPrice, w.priceCurrency);
+                    return (
+                      <div
+                        key={w.artworkId}
+                        draggable
+                        onDragStart={(e) => {
+                          e.dataTransfer.effectAllowed = "move";
+                          e.dataTransfer.setData("text/plain", w.artworkId);
+                          setDragIndex(i);
+                        }}
+                        onDragOver={(e) => e.preventDefault()}
+                        onDrop={(e) => {
+                          e.preventDefault();
+                          handleDrop(i);
+                        }}
+                        onDragEnd={() => setDragIndex(null)}
+                        className={`group relative cursor-grab ${dragIndex === i ? "opacity-40" : ""}`}
+                      >
+                        <div className="relative">
+                          {w.imageUrl ? (
+                            <img
+                              src={w.imageUrl}
+                              alt=""
+                              draggable={false}
+                              className="aspect-square w-full rounded-md object-cover"
+                            />
+                          ) : (
+                            <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
+                              No image
+                            </div>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setPresentingId(w.artworkId)}
+                            className="absolute bottom-2 left-1/2 hidden -translate-x-1/2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-neutral-900 shadow hover:bg-white group-hover:block"
+                          >
+                            Presentation
+                          </button>
+                        </div>
+                        <p className="mt-2 truncate text-sm font-medium text-neutral-900">
+                          {w.catalogueName}
+                        </p>
+                        {price && <p className="text-sm text-neutral-400">{price}</p>}
                         <button
                           type="button"
-                          onClick={() => setPresentingId(w.artworkId)}
-                          className="absolute bottom-2 left-1/2 hidden -translate-x-1/2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-neutral-900 shadow hover:bg-white group-hover:block"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleRemoveWork(w.artworkId);
+                          }}
+                          title="Remove from this curation"
+                          className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
                         >
-                          Presentation
+                          ✕
                         </button>
                       </div>
-                      <p className="mt-2 truncate text-sm font-medium text-neutral-900">
-                        {w.catalogueName}
-                      </p>
-                      {price && <p className="text-sm text-neutral-400">{price}</p>}
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleRemoveWork(w.artworkId);
-                        }}
-                        title="Remove from this curation"
-                        className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  );
-                })}
-                <ArtworkPicker
-                  artistId={artistId}
-                  mode="multi"
-                  label="Add Works"
-                  allowCreate={false}
-                  excludeIds={selected.works.map((w) => w.artworkId)}
-                  onSelect={handleAddWorks}
-                />
+                    );
+                  })}
+                  <ArtworkPicker
+                    artistId={artistId}
+                    mode="multi"
+                    label="Add Works"
+                    allowCreate={false}
+                    excludeIds={selected.works.map((w) => w.artworkId)}
+                    onSelect={handleAddWorks}
+                  />
+                </div>
+
+                {selected.works.length > 1 && (
+                  <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
+                )}
               </div>
 
-              {selected.works.length > 1 && (
-                <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
-              )}
+              {/* The curation's own Description. */}
+              <div className="flex h-[31rem] max-h-full w-[27%] min-w-[16rem] shrink-0 flex-col self-start rounded-xl border border-neutral-300 p-4">
+                <h2 className="mb-2 shrink-0 text-center text-lg text-neutral-900">Description</h2>
+                <RichTextEditor
+                  key={selected.id}
+                  initialValue={selected.description}
+                  onSave={(doc) => saveDescription(selected.id, doc)}
+                  label={`Description of ${selected.name}`}
+                />
+              </div>
             </div>
           </div>
         )}
