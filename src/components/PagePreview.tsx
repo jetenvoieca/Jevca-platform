@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getCuration, type CurationDetail, type CurationWork } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { LayoutBlock } from "@/lib/pageStyleLayout";
 import { groupBlocksByRow } from "@/lib/blocks";
+import CurationWorkView from "@/components/CurationWorkView";
 
 // The Pages page's Preview panel (2026-10-04): the selected page's
 // curation.
@@ -19,6 +20,9 @@ import { groupBlocksByRow } from "@/lib/blocks";
 //
 // Without one: a simple grid of the works with the curation's
 // Description in a box beside them, as on the Curations page.
+//
+// Clicking a work (2026-10-05) opens its presentation in this curation,
+// read-only — see CurationWorkView.
 export default function PagePreview({
   artistId,
   title,
@@ -32,8 +36,10 @@ export default function PagePreview({
 }) {
   const [curation, setCuration] = useState<CurationDetail | null>(null);
   const [loading, setLoading] = useState(false);
+  const [viewingId, setViewingId] = useState<string | null>(null);
 
   useEffect(() => {
+    setViewingId(null);
     if (!curationId) {
       setCuration(null);
       return;
@@ -51,6 +57,8 @@ export default function PagePreview({
     };
   }, [curationId, artistId]);
 
+  const closeView = useCallback(() => setViewingId(null), []);
+
   let body: ReactNode;
   if (!curationId) {
     body = <Message text="This page has no curation. Choose one with Edit." />;
@@ -59,15 +67,23 @@ export default function PagePreview({
   } else if (!curation) {
     body = <Message text="This page's curation could not be found." />;
   } else if (style) {
-    body = <StyledPage style={style} curation={curation} />;
+    body = <StyledPage style={style} curation={curation} onOpen={setViewingId} />;
   } else {
-    body = <PlainPage curation={curation} />;
+    body = <PlainPage curation={curation} onOpen={setViewingId} />;
   }
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{title}</h3>
       <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+      {curation && viewingId && (
+        <CurationWorkView
+          curationId={curation.id}
+          artworkId={viewingId}
+          artistId={artistId}
+          onClose={closeView}
+        />
+      )}
     </div>
   );
 }
@@ -76,13 +92,15 @@ export default function PagePreview({
 function StyledPage({
   style,
   curation,
+  onOpen,
 }: {
   style: PageStyleSummary;
   curation: CurationDetail;
+  onOpen: (artworkId: string) => void;
 }) {
   if (style.type === "SECTION") {
     return curation.works.length > 0 ? (
-      <ImageGrid works={curation.works} />
+      <ImageGrid works={curation.works} onOpen={onOpen} />
     ) : (
       <Message text={`"${curation.name}" has no works yet.`} />
     );
@@ -90,7 +108,7 @@ function StyledPage({
 
   const fill = (block: LayoutBlock): ReactNode => {
     if (block.type === "gallery" && curation.works.length > 0) {
-      return <ImageGrid works={curation.works} />;
+      return <ImageGrid works={curation.works} onOpen={onOpen} />;
     }
     if (block.type === "text" && curation.description) {
       return (
@@ -135,7 +153,13 @@ function StyledPage({
 }
 
 // No Display Style: the works with the Description boxed beside them.
-function PlainPage({ curation }: { curation: CurationDetail }) {
+function PlainPage({
+  curation,
+  onOpen,
+}: {
+  curation: CurationDetail;
+  onOpen: (artworkId: string) => void;
+}) {
   return (
     <div className="flex items-start gap-6">
       <div className="min-w-0 flex-1">
@@ -144,8 +168,13 @@ function PlainPage({ curation }: { curation: CurationDetail }) {
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] items-start gap-4">
             {curation.works.map((w) => (
-              <figure key={w.artworkId}>
-                <div className="aspect-square overflow-hidden rounded-md bg-neutral-100">
+              <button
+                key={w.artworkId}
+                type="button"
+                onClick={() => onOpen(w.artworkId)}
+                className="text-left"
+              >
+                <div className="aspect-square overflow-hidden rounded-md bg-neutral-100 hover:opacity-90">
                   {w.imageUrl ? (
                     <img
                       src={w.imageUrl}
@@ -158,10 +187,10 @@ function PlainPage({ curation }: { curation: CurationDetail }) {
                     </div>
                   )}
                 </div>
-                <figcaption className="mt-1.5 truncate text-sm text-neutral-800">
+                <span className="mt-1.5 block truncate text-sm text-neutral-800">
                   {w.catalogueName}
-                </figcaption>
-              </figure>
+                </span>
+              </button>
             ))}
           </div>
         )}
@@ -181,22 +210,36 @@ function PlainPage({ curation }: { curation: CurationDetail }) {
   );
 }
 
-// The works' images only, in the curation's order.
-function ImageGrid({ works }: { works: CurationWork[] }) {
+// The works' images only, in the curation's order. Clicking one opens
+// its presentation.
+function ImageGrid({
+  works,
+  onOpen,
+}: {
+  works: CurationWork[];
+  onOpen: (artworkId: string) => void;
+}) {
   return (
     <div className="grid grid-cols-4 gap-2">
-      {works.map((w) =>
-        w.imageUrl ? (
-          <img
-            key={w.artworkId}
-            src={w.imageUrl}
-            alt={w.catalogueName}
-            className="aspect-square w-full rounded object-cover"
-          />
-        ) : (
-          <div key={w.artworkId} className="aspect-square w-full rounded bg-neutral-100" />
-        )
-      )}
+      {works.map((w) => (
+        <button
+          key={w.artworkId}
+          type="button"
+          onClick={() => onOpen(w.artworkId)}
+          title={w.catalogueName}
+          className="overflow-hidden rounded hover:opacity-90"
+        >
+          {w.imageUrl ? (
+            <img
+              src={w.imageUrl}
+              alt={w.catalogueName}
+              className="aspect-square w-full object-cover"
+            />
+          ) : (
+            <div className="aspect-square w-full bg-neutral-100" />
+          )}
+        </button>
+      ))}
     </div>
   );
 }
