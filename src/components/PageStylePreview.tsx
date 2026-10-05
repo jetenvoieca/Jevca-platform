@@ -75,9 +75,10 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
 function blockLabel(block: LayoutBlock): string {
   const label = blockTypeLabel(block.type);
   const d = block.doors;
-  return d
-    ? `${label} — pairs from the page's curation, ${d.duration}s, slide ${d.speed}s, gap ${d.gap}px`
-    : label;
+  if (!d) return label;
+  return d.perSlide === 1
+    ? `${label} — one at a time from the page's curation, ${d.duration}s, slide ${d.speed}s`
+    : `${label} — pairs from the page's curation, ${d.duration}s, slide ${d.speed}s, gap ${d.gap}px`;
 }
 
 // Grey squares, four across, spaced as the style's grid spacing.
@@ -135,17 +136,19 @@ function BlockShape({ block, spacing }: { block: LayoutBlock; spacing: GridSpaci
           ))}
         </div>
       );
-    case "slidingdoors":
+    case "slidingdoors": {
+      const single = block.doors?.perSlide === 1;
       return (
-        <div className="relative flex h-48" style={{ gap: block.doors?.gap ?? 0 }}>
+        <div className="relative flex h-48" style={{ gap: single ? 0 : (block.doors?.gap ?? 0) }}>
           <div className="flex-1 rounded bg-neutral-200" />
-          <div className="flex-1 rounded bg-neutral-200" />
+          {!single && <div className="flex-1 rounded bg-neutral-200" />}
           <span className="absolute inset-0 flex items-center justify-between px-3 text-2xl text-neutral-400">
             <span>◀</span>
-            <span>▶</span>
+            {!single && <span>▶</span>}
           </span>
         </div>
       );
+    }
   }
 }
 

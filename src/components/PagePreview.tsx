@@ -16,7 +16,7 @@ import SlidingDoors from "@/components/SlidingDoors";
 // - Section: the works' images, then the curation's Description.
 // - Private / Custom: Gallery blocks show the works' images, Text blocks
 //   the curation's Description, Sliding doors the works' main images in
-//   pairs (see SlidingDoors).
+//   pairs or one at a time (see SlidingDoors).
 // Grids of images use the style's grid spacing. Anything with nothing
 // to fill it yet (Byline, Header, Video, an empty Gallery, no
 // Description…) is left out, and no outlines or labels are shown. Images
@@ -124,6 +124,7 @@ function StyledPage({
           duration={block.doors.duration}
           speed={block.doors.speed}
           gap={block.doors.gap}
+          perSlide={block.doors.perSlide}
           onOpen={onOpen}
         />
       );

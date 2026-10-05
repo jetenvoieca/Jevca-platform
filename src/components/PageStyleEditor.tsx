@@ -61,9 +61,10 @@ export function draftLayout(draft: PageStyleDraft): PageStyleLayout | null {
 const smallButton =
   "rounded-md border border-neutral-300 px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50";
 
-// The Sliding doors settings shown in the editor, in order.
+// The Sliding doors number settings shown in the editor, in order. Gap
+// only applies to pairs.
 const DOORS_FIELDS: {
-  key: keyof SlidingDoorsSettings;
+  key: Exclude<keyof SlidingDoorsSettings, "perSlide">;
   label: string;
   unit: string;
   step: number;
@@ -79,11 +80,11 @@ const DOORS_FIELDS: {
 // layout controls — layout only, no content. Both types start with the
 // grid spacing (2026-10-05) for their grids of images. Private / Custom
 // offers the old block editor's controls, adding empty placeholders,
-// plus Sliding doors (2026-10-05) with its Duration, Slide speed and
-// Gap. Section (2026-10-05) is a fixed layout — byline, artwork grid,
-// Description — with an optional background colour and an optional
-// video below the Description. Saving is automatic (see
-// PageStylesManager); `status` reports it.
+// plus Sliding doors (2026-10-05) — pairs or one at a time — with its
+// Duration, Slide speed and (for pairs) Gap. Section (2026-10-05) is a
+// fixed layout — byline, artwork grid, Description — with an optional
+// background colour and an optional video below the Description. Saving
+// is automatic (see PageStylesManager); `status` reports it.
 export default function PageStyleEditor({
   draft,
   onChange,
@@ -117,6 +118,9 @@ export default function PageStyleEditor({
       custom: { ...custom, blocks: addLayoutBlock(custom.blocks, blockType, where) },
       placement: "none",
     });
+
+  const setDoors = (id: string, doors: SlidingDoorsSettings) =>
+    setCustom({ ...custom, blocks: updateSlidingDoors(custom.blocks, id, doors) });
 
   const rows = groupBlocksByRow(custom.blocks);
   const doorsBlocks = custom.blocks.filter((b) => b.type === "slidingdoors" && b.doors);
@@ -282,34 +286,44 @@ export default function PageStyleEditor({
               </div>
             )}
 
-            {doorsBlocks.map((b, i) => (
-              <div key={b.id} className="rounded-md border border-neutral-200 p-2">
-                <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-                  Sliding doors{doorsBlocks.length > 1 ? ` ${i + 1}` : ""}
-                </p>
-                <div className="flex flex-col gap-2">
-                  {DOORS_FIELDS.map((f) => (
-                    <NumberField
-                      key={f.key}
-                      label={f.label}
-                      unit={f.unit}
-                      step={f.step}
-                      value={b.doors![f.key]}
-                      limits={SLIDING_DOORS_LIMITS[f.key]}
-                      onCommit={(value) =>
-                        setCustom({
-                          ...custom,
-                          blocks: updateSlidingDoors(custom.blocks, b.id, {
-                            ...b.doors!,
-                            [f.key]: value,
-                          }),
-                        })
-                      }
-                    />
-                  ))}
+            {doorsBlocks.map((b, i) => {
+              const doors = b.doors!;
+              return (
+                <div key={b.id} className="rounded-md border border-neutral-200 p-2">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+                    Sliding doors{doorsBlocks.length > 1 ? ` ${i + 1}` : ""}
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <label className="flex items-center gap-2 text-sm text-neutral-700">
+                      <span className="w-24 shrink-0">Show</span>
+                      <select
+                        value={doors.perSlide}
+                        onChange={(e) =>
+                          setDoors(b.id, { ...doors, perSlide: e.target.value === "1" ? 1 : 2 })
+                        }
+                        className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                      >
+                        <option value={2}>Pairs</option>
+                        <option value={1}>One at a time</option>
+                      </select>
+                    </label>
+                    {DOORS_FIELDS.filter((f) => f.key !== "gap" || doors.perSlide === 2).map(
+                      (f) => (
+                        <NumberField
+                          key={f.key}
+                          label={f.label}
+                          unit={f.unit}
+                          step={f.step}
+                          value={doors[f.key]}
+                          limits={SLIDING_DOORS_LIMITS[f.key]}
+                          onCommit={(value) => setDoors(b.id, { ...doors, [f.key]: value })}
+                        />
+                      )
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
 
             <div className="mt-2 flex items-center justify-between">
               <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Add block</p>
