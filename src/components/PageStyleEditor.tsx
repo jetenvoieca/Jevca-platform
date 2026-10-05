@@ -118,8 +118,10 @@ const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
 // an optional background colour and an optional video below the
 // Description.
 //
-// Canvas (2026-10-05): curation tile size, opening speed and background
-// colour; the curations themselves are chosen and placed on each page.
+// Canvas (2026-10-05): curation tile size, opening speed, opened size
+// (the first work's size when a curation opens, times the tile size) and
+// background colour; the curations themselves are chosen and placed on
+// each page.
 //
 // Saving is automatic (see PageStylesManager); `status` reports it.
 export default function PageStyleEditor({
@@ -231,6 +233,15 @@ export default function PageStyleEditor({
                 value={canvas.openSpeed}
                 limits={CANVAS_LIMITS.openSpeed}
                 onCommit={(openSpeed) => setCanvas({ ...canvas, openSpeed })}
+                wide
+              />
+              <NumberField
+                label="Opened size"
+                unit="× tile"
+                step={0.1}
+                value={canvas.openScale}
+                limits={CANVAS_LIMITS.openScale}
+                onCommit={(openScale) => setCanvas({ ...canvas, openScale })}
                 wide
               />
             </div>
