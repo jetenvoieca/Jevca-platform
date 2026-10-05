@@ -78,11 +78,7 @@ export default async function PreviewPage({
       // fixed page structure to draw the nav from. See PortfolioSitePage
       // in PortfolioGrid.tsx.
       db.page.findMany({
-        where: {
-          siteId: id,
-          visible: true,
-          OR: [{ sourceTag: null }, { sourceTag: { not: "pavilion" } }],
-        },
+        where: { siteId: id, visible: true },
         orderBy: { position: "asc" },
         select: { id: true, title: true },
       }),

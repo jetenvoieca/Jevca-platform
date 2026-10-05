@@ -115,77 +115,10 @@ export type SectionContent = {
   artworkIds: string[];
 };
 
-// The shape PavilionCanvas actually needs to render and drag/resize a
-// tile — deliberately minimal, so a Pavilion, a Curator, and (now) an
-// Artist link can all be drawn on the same canvas by the same component
-// without it needing to know which one it's looking at. x/y/width/height
-// are percentages of the canvas (0–100), not pixels, so layout holds up
-// across different screen sizes.
-export type PavilionTile = {
-  id: string;
-  name: string;
-  description: string;
-  imageUrl: string;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-// One real Artist (the platform's own Artist record, ticked via the
-// picker in a Curator's edit form) attached to a Curator (2026-08-30).
-// `name` is a snapshot taken at the moment it's ticked — same
-// editor-only-preview convention already used by ArtworkBlock above —
-// deliberately not re-fetched live yet, since this whole level is
-// explicitly a placeholder ("dummy cards with just a name") ahead of
-// real Artist profile pages existing to link through to. `artistId` is
-// the real, authoritative link.
-export type PavilionCuratorArtist = PavilionTile & {
-  artistId: string;
-};
-
-// A Curator attached to a Pavilion (2026-08-30) — its own full record
-// with the same Name/Image/Description shape as a Pavilion itself,
-// edited with the identical form. Given its own x/y/width/height so
-// Curators can be shown and freely dragged/resized as cards on the
-// canvas too, when "drilled into" a specific Pavilion (clicking its
-// tile in full-screen mode hides every other Pavilion and shows this
-// one's Curators instead). Purely nested data, not a linked Page of its
-// own (unlike a Pavilion's childPageId).
-//
-// `artists` — real Artists ticked via the picker in this Curator's edit
-// form; drilling into a Curator on the canvas shows these instead.
-export type PavilionCurator = PavilionTile & {
-  imageId: string;
-  artists: PavilionCuratorArtist[];
-};
-
-// One card on a Pavilion page's freeform canvas (2026-08-30) — like
-// SectionContent above, a Pavilion page isn't built from Content Blocks
-// either; it's a fixed shape (an array of these cards), stored in the
-// same draftBlocks/liveBlocks columns.
-//
-// `childPageId` points at a real Page (type PRIVATE, tagged
-// sourceTag: "pavilion") created automatically the moment this card is
-// added — so it's a genuine destination that can be linked from a Menu
-// or filled in with its own content later, even though at creation it's
-// blank.
-//
-// `curators` — up to 9 per Pavilion, each a full PavilionCurator record.
-export type PavilionCard = PavilionTile & {
-  imageId: string;
-  childPageId: string;
-  curators: PavilionCurator[];
-};
-
-export type PavilionContent = {
-  cards: PavilionCard[];
-};
-
 // The Portfolio page style's own fixed shape (2026-09-06, first real
-// TemplatePageStyle renderer) — like SectionContent/PavilionContent above, not
-// built from Content Blocks. A Portfolio is a set of named categories
-// (e.g. "Head Sculptures", "Wall Mounted" — matching the isendyouthis.com
+// TemplatePageStyle renderer) — like SectionContent above, not built
+// from Content Blocks. A Portfolio is a set of named categories (e.g.
+// "Head Sculptures", "Wall Mounted" — matching the isendyouthis.com
 // reference), each holding an ordered list of artworks. Stored in the
 // same draftBlocks/liveBlocks columns as every other page type.
 export type PortfolioGroup = {
