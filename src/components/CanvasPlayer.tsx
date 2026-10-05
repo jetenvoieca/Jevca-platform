@@ -24,13 +24,13 @@ import CurationWorkView from "@/components/CurationWorkView";
 // scrollbars, trackpad, or dragging the background. Each curation shows
 // as its cover (first work's main image, name over it). The one whose
 // centre is within one tile of the middle of the view opens over the
-// style's opening speed: its first work at twice the tile size, the next
-// five at half the tile size — two below it, three up its right-hand
-// side — while every other curation moves aside to make room. Clicking
-// an opened image shows that work's presentation; clicking a closed
-// curation scrolls it to the middle. The canvas is bounded: it is as big
-// as the placements, plus half a view of margin all round so every
-// curation can reach the middle.
+// style's opening speed: its first work at the style's Opened size
+// (times the tile size), the next five at half the tile size — two
+// below it, three up its right-hand side — while every other curation
+// moves aside to make room. Clicking an opened image shows that work's
+// presentation; clicking a closed curation scrolls it to the middle.
+// The canvas is bounded: it is as big as the placements, plus half a
+// view of margin all round so every curation can reach the middle.
 //
 // The view is a fixed-height window (fix, 2026-10-05): the canvas's size
 // depends on the view's size, so the view must never grow to fit the
@@ -180,9 +180,10 @@ export default function CanvasPlayer({
     );
   }
 
-  // The opened curation's size, and how far everything else moves aside.
+  // The opened curation's sizes, and how far everything else moves aside.
+  const main = Math.round(T * layout.openScale);
   const small = Math.round(T / 2);
-  const openSize = 2 * T + GAP + small;
+  const openSize = main + GAP + small;
   const push = (openSize - T) / 2;
   const open = placements.find((p) => p.curationId === openId) ?? null;
 
@@ -212,10 +213,10 @@ export default function CanvasPlayer({
   const openedRects = (p: CanvasPlacement): Rect[] => {
     const left = p.x + marginX + T / 2 - openSize / 2;
     const top = p.y + marginY + T / 2 - openSize / 2;
-    const below = top + 2 * T + GAP;
-    const right = left + 2 * T + GAP;
+    const below = top + main + GAP;
+    const right = left + main + GAP;
     return [
-      { left, top, size: 2 * T },
+      { left, top, size: main },
       { left, top: below, size: small },
       { left: left + small + GAP, top: below, size: small },
       { left: right, top: below, size: small },
