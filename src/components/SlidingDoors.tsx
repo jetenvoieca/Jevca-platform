@@ -1,20 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import type { CurationWork } from "@/lib/actions/curations";
 
 // Sliding doors (2026-10-05, from Craig's mockup) — a curation's main
 // images shown full screen, a slide at a time, on a continuous loop.
 // After `duration` seconds the slide moves away over `speed` seconds,
 // revealing the next slide already sitting behind it.
-// - perSlide 2: a pair side by side, `gap` pixels apart; the left image
-//   slides off to the left, the right image off to the right. Works are
-//   paired in curation order (1+2, 3+4…); with an odd number the last
-//   pairs with the first. The page's background shows in the gap.
-// - perSlide 1 (2026-10-05, e.g. a home page): one image at a time,
-//   sliding off to the left.
-// Works without an image are left out. Clicking an image opens that work
-// (onOpen).
+// - perSlide 2: a pair, `gap` pixels apart; the first image moves off
+//   one way and the second the other. Works are paired in curation order
+//   (1+2, 3+4…); with an odd number the last pairs with the first. The
+//   page's background shows in the gap.
+// - perSlide 1 (e.g. a home page): one image at a time.
+// Direction follows the screen (2026-10-05): on larger screens the pair
+// sits side by side and slides left/right (a single image slides left);
+// on phones (narrower than Tailwind's md, 768px) the pair is stacked and
+// slides up/down (a single image slides up). Works without an image are
+// left out. Clicking an image opens that work (onOpen).
 export default function SlidingDoors({
   works,
   duration,
@@ -71,45 +73,54 @@ export default function SlidingDoors({
   const next = slides[(index + 1) % slides.length];
   const spacing = perSlide === 2 ? gap : 0;
 
+  // Stacked on phones, side by side from md up.
+  const rowClass = "absolute inset-0 flex flex-col md:flex-row";
+
   return (
     <div className="relative h-[75vh] w-full overflow-hidden">
       {slides.length > 1 && (
-        <div className="absolute inset-0 flex" style={{ gap: spacing }} aria-hidden>
+        <div className={rowClass} style={{ gap: spacing }} aria-hidden>
           {next.map((w, side) => (
             <img
               key={side}
               src={w.displayUrl!}
               alt=""
-              className="h-full min-w-0 flex-1 object-cover"
+              className="min-h-0 min-w-0 flex-1 object-cover"
             />
           ))}
         </div>
       )}
 
       {/* Keyed by slide, so each new front slide starts closed with no
-          animation. Each image moves its own width, which takes it
-          exactly off its side whatever the gap: the first image (or the
-          only one) to the left, the second to the right. */}
-      <div key={index} className="absolute inset-0 flex" style={{ gap: spacing }}>
-        {current.map((w, side) => (
-          <button
-            key={side}
-            type="button"
-            onClick={() => onOpen(w.artworkId)}
-            title={w.catalogueName}
-            className="h-full min-w-0 flex-1 overflow-hidden"
-            style={{
-              transform: opening ? `translateX(${side === 0 ? "-100%" : "100%"})` : "translateX(0)",
-              transition: opening ? `transform ${speed}s ease-in-out` : "none",
-            }}
-          >
-            <img
-              src={w.displayUrl!}
-              alt={w.catalogueName}
-              className="h-full w-full object-cover"
-            />
-          </button>
-        ))}
+          animation. Each image moves its own height (phones) or width
+          (larger screens), which takes it exactly off its side whatever
+          the gap: the first image (or the only one) up / left, the second
+          down / right. The distance is set as a CSS variable and the
+          screen size picks which one applies. */}
+      <div key={index} className={rowClass} style={{ gap: spacing }}>
+        {current.map((w, side) => {
+          const distance = opening ? (side === 0 ? "-100%" : "100%") : "0%";
+          const style = {
+            "--slide": distance,
+            transition: opening ? `transform ${speed}s ease-in-out` : "none",
+          } as CSSProperties;
+          return (
+            <button
+              key={side}
+              type="button"
+              onClick={() => onOpen(w.artworkId)}
+              title={w.catalogueName}
+              className="min-h-0 min-w-0 flex-1 overflow-hidden [transform:translateY(var(--slide))] md:[transform:translateX(var(--slide))]"
+              style={style}
+            >
+              <img
+                src={w.displayUrl!}
+                alt={w.catalogueName}
+                className="h-full w-full object-cover"
+              />
+            </button>
+          );
+        })}
       </div>
     </div>
   );
