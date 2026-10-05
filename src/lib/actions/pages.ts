@@ -32,9 +32,13 @@ export async function uniqueSlug(siteId: string, base: string) {
   return slug;
 }
 
-// What the Pages page's Add / Edit modal saves (2026-10-04). Display
-// Style is a placeholder for now, so it isn't saved yet.
-export type PageDetailsInput = { title: string; curationId: string | null };
+// What the Pages page's Add / Edit modal saves (2026-10-04): name,
+// curation and Display Style (a Page Style, 2026-10-05).
+export type PageDetailsInput = {
+  title: string;
+  curationId: string | null;
+  pageStyleId: string | null;
+};
 
 // A page can only show one of its own site's artist's curations —
 // anything else is treated as no curation.
@@ -47,6 +51,17 @@ async function ownCurationId(siteId: string, curationId: string | null): Promise
   return curation?.id ?? null;
 }
 
+// Page Styles are shared by every site, so any existing style is
+// allowed — an unknown id is treated as no style.
+async function existingPageStyleId(pageStyleId: string | null): Promise<string | null> {
+  if (!pageStyleId) return null;
+  const style = await db.pageStyle.findUnique({
+    where: { id: pageStyleId },
+    select: { id: true },
+  });
+  return style?.id ?? null;
+}
+
 // Add (2026-10-04). A new page starts in Hidden Pages, at the bottom, so
 // nothing appears on the site until it's dragged into Live Pages.
 export async function createPage(
@@ -56,9 +71,10 @@ export async function createPage(
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
-  const [slug, curationId, last] = await Promise.all([
+  const [slug, curationId, pageStyleId, last] = await Promise.all([
     uniqueSlug(siteId, slugify(title)),
     ownCurationId(siteId, input.curationId),
+    existingPageStyleId(input.pageStyleId),
     db.page.aggregate({ where: { siteId }, _max: { position: true } }),
   ]);
 
@@ -68,6 +84,7 @@ export async function createPage(
       title,
       slug,
       curationId,
+      pageStyleId,
       visible: false,
       position: (last._max.position ?? -1) + 1,
     },
@@ -86,8 +103,14 @@ export async function updatePageDetails(
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
-  const curationId = await ownCurationId(siteId, input.curationId);
-  await db.page.updateMany({ where: { id: pageId, siteId }, data: { title, curationId } });
+  const [curationId, pageStyleId] = await Promise.all([
+    ownCurationId(siteId, input.curationId),
+    existingPageStyleId(input.pageStyleId),
+  ]);
+  await db.page.updateMany({
+    where: { id: pageId, siteId },
+    data: { title, curationId, pageStyleId },
+  });
   return { ok: true };
 }
 

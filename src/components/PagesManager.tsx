@@ -10,6 +10,7 @@ import {
   type PageDetailsInput,
 } from "@/lib/actions/pages";
 import type { CurationSummary } from "@/lib/actions/curations";
+import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import PageDetailsModal from "@/components/PageDetailsModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PagePreview from "@/components/PagePreview";
@@ -19,6 +20,7 @@ export type PageListItem = {
   title: string;
   visible: boolean;
   curationId: string | null;
+  pageStyleId: string | null;
 };
 
 type ListKey = "live" | "hidden";
@@ -30,17 +32,20 @@ type ListKey = "live" | "hidden";
 // between the two (moving one changes whether it's live). Every drop
 // saves both lists at once via reorderPages. Add and Edit open the same
 // modal (PageDetailsModal); a new page starts in Hidden Pages. The
-// selected page is shown in the Preview panel (PagePreview).
+// selected page is shown in the Preview panel (PagePreview), in its
+// Display Style if it has one (2026-10-05).
 export default function PagesManager({
   siteId,
   artistId,
   pages,
   curations,
+  pageStyles,
 }: {
   siteId: string;
   artistId: string;
   pages: PageListItem[];
   curations: CurationSummary[];
+  pageStyles: PageStyleSummary[];
 }) {
   const router = useRouter();
   const [live, setLive] = useState(() => pages.filter((p) => p.visible));
@@ -64,6 +69,9 @@ export default function PagesManager({
   }, [pages]);
 
   const selected = [...live, ...hidden].find((p) => p.id === selectedId) ?? null;
+  const selectedStyle = selected
+    ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null)
+    : null;
 
   const handleDrop = () => {
     if (!dragged || !dropTarget) return;
@@ -210,6 +218,7 @@ export default function PagesManager({
             artistId={artistId}
             title={selected.title}
             curationId={selected.curationId}
+            style={selectedStyle}
           />
         ) : (
           <div className="flex flex-1 items-center justify-center">
@@ -255,10 +264,15 @@ export default function PagesManager({
           heading={modal === "add" ? "Add page" : "Edit page"}
           initial={
             modal === "edit" && selected
-              ? { title: selected.title, curationId: selected.curationId }
-              : { title: "", curationId: null }
+              ? {
+                  title: selected.title,
+                  curationId: selected.curationId,
+                  pageStyleId: selected.pageStyleId,
+                }
+              : { title: "", curationId: null, pageStyleId: null }
           }
           curations={curations}
+          pageStyles={pageStyles}
           saving={isPending}
           error={modalError}
           onSave={handleSave}

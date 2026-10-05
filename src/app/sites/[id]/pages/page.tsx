@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { listCurations } from "@/lib/actions/curations";
+import { listPageStyles } from "@/lib/actions/pageStyles";
 import PagesManager from "@/components/PagesManager";
 
 export const dynamic = "force-dynamic";
@@ -12,16 +13,23 @@ export default async function PagesPage({ params }: { params: Promise<{ id: stri
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   if (!site) notFound();
 
-  const [pages, curations] = await Promise.all([
+  const [pages, curations, pageStyles] = await Promise.all([
     db.page.findMany({
       where: { siteId: id },
       orderBy: { position: "asc" },
-      select: { id: true, title: true, visible: true, curationId: true },
+      select: { id: true, title: true, visible: true, curationId: true, pageStyleId: true },
     }),
     listCurations(site.artistId),
+    listPageStyles(),
   ]);
 
   return (
-    <PagesManager siteId={id} artistId={site.artistId} pages={pages} curations={curations} />
+    <PagesManager
+      siteId={id}
+      artistId={site.artistId}
+      pages={pages}
+      curations={curations}
+      pageStyles={pageStyles}
+    />
   );
 }

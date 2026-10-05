@@ -3,15 +3,17 @@
 import { useState } from "react";
 import type { CurationSummary } from "@/lib/actions/curations";
 import type { PageDetailsInput } from "@/lib/actions/pages";
+import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 
 // The Pages page's Add / Edit modal (2026-10-04, from Craig's mockup):
 // Page Name, Curation and Display Style. The same modal is used for both
-// — Edit opens it filled in with the selected page. Display Style is a
-// placeholder for now: one option, not saved.
+// — Edit opens it filled in with the selected page. Display Style is
+// one of the Page Styles (Templates → Page Styles, 2026-10-05).
 export default function PageDetailsModal({
   heading,
   initial,
   curations,
+  pageStyles,
   saving,
   error,
   onSave,
@@ -20,6 +22,7 @@ export default function PageDetailsModal({
   heading: string;
   initial: PageDetailsInput;
   curations: CurationSummary[];
+  pageStyles: PageStyleSummary[];
   saving: boolean;
   error: string | null;
   onSave: (input: PageDetailsInput) => void;
@@ -27,6 +30,7 @@ export default function PageDetailsModal({
 }) {
   const [title, setTitle] = useState(initial.title);
   const [curationId, setCurationId] = useState(initial.curationId ?? "");
+  const [pageStyleId, setPageStyleId] = useState(initial.pageStyleId ?? "");
 
   return (
     <div
@@ -38,7 +42,7 @@ export default function PageDetailsModal({
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
-          onSave({ title, curationId: curationId || null });
+          onSave({ title, curationId: curationId || null, pageStyleId: pageStyleId || null });
         }}
       >
         <h3 className="sr-only">{heading}</h3>
@@ -76,10 +80,16 @@ export default function PageDetailsModal({
           </label>
           <select
             id="page-display-style"
-            disabled
-            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:bg-neutral-50 disabled:text-neutral-500"
+            value={pageStyleId}
+            onChange={(e) => setPageStyleId(e.target.value)}
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
           >
-            <option>Template 1</option>
+            <option value="">None</option>
+            {pageStyles.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
           </select>
         </div>
 
