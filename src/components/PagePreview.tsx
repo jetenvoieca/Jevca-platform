@@ -10,13 +10,14 @@ import CurationWorkView from "@/components/CurationWorkView";
 // The Pages page's Preview panel (2026-10-04): the selected page's
 // curation.
 //
-// With a Display Style (2026-10-05, first experiment): the page drawn in
-// that style, filled from the curation — Gallery blocks show the works'
-// images (image only), Text blocks show the curation's Description. Any
-// block with nothing to fill it (Header, Video, an empty Gallery, Text
-// with no Description…) is left out, and no outlines or labels are shown.
-// A Section style is its artwork grid. The style's background colour is
-// applied.
+// With a Display Style (2026-10-05): the page drawn in that style,
+// filled from the curation, with the style's background colour.
+// - Section: the works' images, then the curation's Description.
+// - Private / Custom: Gallery blocks show the works' images, Text blocks
+//   the curation's Description.
+// Anything with nothing to fill it yet (Byline, Header, Video, an empty
+// Gallery, no Description…) is left out, and no outlines or labels are
+// shown. Images are image only.
 //
 // Without one: a simple grid of the works with the curation's
 // Description in a box beside them, as on the Curations page.
@@ -88,6 +89,8 @@ export default function PagePreview({
   );
 }
 
+type Cell = { id: string; content: ReactNode };
+
 // The page in its Display Style — see the note at the top.
 function StyledPage({
   style,
@@ -98,37 +101,37 @@ function StyledPage({
   curation: CurationDetail;
   onOpen: (artworkId: string) => void;
 }) {
-  if (style.type === "SECTION") {
-    return curation.works.length > 0 ? (
-      <ImageGrid works={curation.works} onOpen={onOpen} />
-    ) : (
-      <Message text={`"${curation.name}" has no works yet.`} />
-    );
-  }
+  const grid =
+    curation.works.length > 0 ? <ImageGrid works={curation.works} onOpen={onOpen} /> : null;
+  const description = curation.description ? (
+    <p className="whitespace-pre-line break-words text-sm text-neutral-800">
+      {curation.description}
+    </p>
+  ) : null;
 
   const fill = (block: LayoutBlock): ReactNode => {
-    if (block.type === "gallery" && curation.works.length > 0) {
-      return <ImageGrid works={curation.works} onOpen={onOpen} />;
-    }
-    if (block.type === "text" && curation.description) {
-      return (
-        <p className="whitespace-pre-line break-words text-sm text-neutral-800">
-          {curation.description}
-        </p>
-      );
-    }
+    if (block.type === "gallery") return grid;
+    if (block.type === "text") return description;
     return null;
   };
 
-  // Unfilled blocks are dropped, and so is any row left empty.
-  const rows = groupBlocksByRow(style.layout.blocks)
-    .map((row) =>
-      row.flatMap((b) => {
-        const content = fill(b);
-        return content ? [{ id: b.id, content }] : [];
-      })
-    )
-    .filter((row) => row.length > 0);
+  // Unfilled parts are dropped, and so is any row left empty.
+  const rows: Cell[][] =
+    style.type === "SECTION"
+      ? [
+          { id: "grid", content: grid },
+          { id: "description", content: description },
+        ]
+          .filter((c) => c.content)
+          .map((c) => [c])
+      : groupBlocksByRow(style.layout.blocks)
+          .map((row) =>
+            row.flatMap((b) => {
+              const content = fill(b);
+              return content ? [{ id: b.id, content }] : [];
+            })
+          )
+          .filter((row) => row.length > 0);
 
   return (
     <div
@@ -140,9 +143,9 @@ function StyledPage({
       ) : (
         rows.map((row) => (
           <div key={row[0].id} className="flex gap-4">
-            {row.map((b) => (
-              <div key={b.id} className="min-w-0 flex-1">
-                {b.content}
+            {row.map((c) => (
+              <div key={c.id} className="min-w-0 flex-1">
+                {c.content}
               </div>
             ))}
           </div>
