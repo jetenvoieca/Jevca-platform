@@ -21,16 +21,18 @@ import CurationWorkView from "@/components/CurationWorkView";
 
 // A Canvas page played (2026-10-05, from Craig's mockups): the page's
 // placed curations on a large canvas that scrolls in any direction —
-// scrollbars, trackpad, or dragging the background. Each curation shows
-// as its cover (first work's main image, name over it). The one whose
-// centre is within one tile of the middle of the view opens over the
-// style's opening speed: its first work at the style's Opened size
-// (times the tile size), the next five at half the tile size — two
-// below it, three up its right-hand side — while every other curation
-// moves aside to make room. Clicking an opened image shows that work's
-// presentation; clicking a closed curation scrolls it to the middle.
-// The canvas is bounded: it is as big as the placements, plus half a
-// view of margin all round so every curation can reach the middle.
+// mouse wheel, trackpad, scrollbars, or dragging the background. Wheel,
+// trackpad and drag movement are scaled by the style's Scroll speed.
+// Each curation shows as its cover (first work's main image, name over
+// it). The one whose centre is within one tile of the middle of the view
+// opens over the style's opening speed: its first work at the style's
+// Opened size (times the tile size), the next five at half the tile
+// size — two below it, three up its right-hand side — while every other
+// curation moves aside to make room. Clicking an opened image shows that
+// work's presentation; clicking a closed curation scrolls it to the
+// middle. The canvas is bounded: it is as big as the placements, plus
+// half a view of margin all round so every curation can reach the
+// middle.
 //
 // The view is a fixed-height window (fix, 2026-10-05): the canvas's size
 // depends on the view's size, so the view must never grow to fit the
@@ -41,6 +43,8 @@ import CurationWorkView from "@/components/CurationWorkView";
 const GAP = 8;
 // Works shown when a curation opens.
 const OPEN_COUNT = 6;
+// A wheel "line" in pixels, for mice that scroll by lines.
+const LINE_HEIGHT = 16;
 
 type Rect = { left: number; top: number; size: number };
 
@@ -91,6 +95,30 @@ export default function CanvasPlayer({
     observer.observe(el);
     return () => observer.disconnect();
   }, [placements]);
+
+  // Wheel and trackpad scrolling, slowed (or sped up) by Scroll speed.
+  // Whole pixels are scrolled and the remainder carried over, so slow
+  // speeds still move smoothly. Pinch-zoom (ctrl + wheel) is left alone.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    let carryX = 0;
+    let carryY = 0;
+    const onWheel = (e: WheelEvent) => {
+      if (e.ctrlKey) return;
+      e.preventDefault();
+      const unit = e.deltaMode === 1 ? LINE_HEIGHT : 1;
+      carryX += e.deltaX * unit * layout.scrollSpeed;
+      carryY += e.deltaY * unit * layout.scrollSpeed;
+      const dx = Math.trunc(carryX);
+      const dy = Math.trunc(carryY);
+      carryX -= dx;
+      carryY -= dy;
+      if (dx || dy) el.scrollBy(dx, dy);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [placements, layout.scrollSpeed]);
 
   const marginX = view ? Math.round(view.w / 2) : 0;
   const marginY = view ? Math.round(view.h / 2) : 0;
@@ -147,7 +175,7 @@ export default function CanvasPlayer({
     scrollRef.current?.scrollTo({ left: p.x + T / 2, top: p.y + T / 2, behavior: "smooth" });
   };
 
-  // Dragging the background pans the canvas.
+  // Dragging the background pans the canvas, scaled by Scroll speed.
   const startPan = (e: PointerEvent<HTMLDivElement>) => {
     if (e.target !== e.currentTarget || !scrollRef.current) return;
     e.currentTarget.setPointerCapture(e.pointerId);
@@ -162,8 +190,8 @@ export default function CanvasPlayer({
     const pan = panRef.current;
     const el = scrollRef.current;
     if (!pan || !el) return;
-    el.scrollLeft = pan.left - (e.clientX - pan.x);
-    el.scrollTop = pan.top - (e.clientY - pan.y);
+    el.scrollLeft = pan.left - (e.clientX - pan.x) * layout.scrollSpeed;
+    el.scrollTop = pan.top - (e.clientY - pan.y) * layout.scrollSpeed;
   };
   const endPan = () => {
     panRef.current = null;
