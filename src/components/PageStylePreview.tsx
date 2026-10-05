@@ -1,7 +1,9 @@
-import type { ReactNode } from "react";
+import { Fragment, type ReactNode } from "react";
 import { groupBlocksByRow } from "@/lib/blocks";
 import {
   blockTypeLabel,
+  rowKey,
+  rowSpacingOf,
   type GridSpacing,
   type LayoutBlock,
   type PageStyleLayout,
@@ -9,45 +11,51 @@ import {
 
 // Draws a Page Style's layout as grey placeholders (2026-10-04) — what
 // goes where on the page, with no content. Used by the Page Styles
-// page's Preview panel. Grids of images use the style's grid spacing.
+// page's Preview panel. Uses the style's grid and block spacing.
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
   if (style.type === "SECTION") {
-    const { backgroundColor, video, gridSpacing } = style.layout;
+    const { backgroundColor, video, gridSpacing, spacing } = style.layout;
     return (
       <div
-        className="flex min-h-full flex-col gap-4 rounded-md p-4"
+        className="flex min-h-full flex-col rounded-md p-4"
         style={{ backgroundColor: backgroundColor ?? undefined }}
       >
-        <Bar className="mx-auto h-6 w-1/3" />
+        <Bar className="mx-auto mb-4 h-6 w-1/3" />
         <Labelled label="Byline">
           <Bar className="mx-auto h-3 w-1/2" />
         </Labelled>
-        <Labelled label="Artwork grid — from the page's curation">
-          <PlaceholderGrid count={8} spacing={gridSpacing} />
-        </Labelled>
-        <Labelled label="Description — from the page's curation">
-          <BlockShape block={{ id: "description", type: "text" }} spacing={gridSpacing} />
-        </Labelled>
-        {video && (
-          <Labelled label="Video">
-            <BlockShape block={{ id: "video", type: "video" }} spacing={gridSpacing} />
+        <div style={{ marginTop: spacing.belowByline }}>
+          <Labelled label="Artwork grid — from the page's curation">
+            <PlaceholderGrid count={8} spacing={gridSpacing} />
           </Labelled>
+        </div>
+        <div style={{ marginTop: spacing.belowGrid }}>
+          <Labelled label="Description — from the page's curation">
+            <BlockShape block={{ id: "description", type: "text" }} spacing={gridSpacing} />
+          </Labelled>
+        </div>
+        {video && (
+          <div style={{ marginTop: spacing.belowDescription }}>
+            <Labelled label="Video">
+              <BlockShape block={{ id: "video", type: "video" }} spacing={gridSpacing} />
+            </Labelled>
+          </div>
         )}
       </div>
     );
   }
 
-  const { backgroundColor, backgroundImage, gridSpacing, blocks } = style.layout;
-  const rows = groupBlocksByRow(blocks);
+  const layout = style.layout;
+  const rows = groupBlocksByRow(layout.blocks);
 
   return (
     <div
-      className={`relative flex min-h-full flex-col gap-4 rounded-md p-4 ${
-        backgroundImage ? "border-2 border-dashed border-neutral-300" : ""
+      className={`relative flex min-h-full flex-col rounded-md p-4 ${
+        layout.backgroundImage ? "border-2 border-dashed border-neutral-300" : ""
       }`}
-      style={{ backgroundColor: backgroundColor ?? undefined }}
+      style={{ backgroundColor: layout.backgroundColor ?? undefined }}
     >
-      {backgroundImage && (
+      {layout.backgroundImage && (
         <span className="absolute right-2 top-2 rounded bg-white/80 px-2 py-0.5 text-[10px] uppercase tracking-wide text-neutral-500">
           Background image
         </span>
@@ -57,17 +65,26 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
           No blocks yet. Use Edit to add some.
         </p>
       )}
-      {rows.map((row) => (
-        <div key={row[0].id} className="flex gap-4">
-          {row.map((b) => (
-            <div key={b.id} className="min-w-0 flex-1">
-              <Labelled label={blockLabel(b)}>
-                <BlockShape block={b} spacing={gridSpacing} />
-              </Labelled>
+      {rows.map((row, i) => {
+        const key = rowKey(row);
+        const above = i > 0 ? rowSpacingOf(layout, rowKey(rows[i - 1])).below : 0;
+        return (
+          <Fragment key={key}>
+            <div
+              className="flex"
+              style={{ marginTop: above, gap: rowSpacingOf(layout, key).between }}
+            >
+              {row.map((b) => (
+                <div key={b.id} className="min-w-0 flex-1">
+                  <Labelled label={blockLabel(b)}>
+                    <BlockShape block={b} spacing={layout.gridSpacing} />
+                  </Labelled>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-      ))}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }
