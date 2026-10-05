@@ -16,6 +16,7 @@ import {
   type LayoutBlockType,
   type PageStyleLayout,
   type SectionLayout,
+  type SlidingDoorsSettings,
 } from "@/lib/pageStyleLayout";
 
 // What's being edited: the Style name, the Style Type ("" until one is
@@ -57,16 +58,28 @@ export function draftLayout(draft: PageStyleDraft): PageStyleLayout | null {
 const smallButton =
   "rounded-md border border-neutral-300 px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50";
 
+// The Sliding doors settings shown in the editor, in order.
+const DOORS_FIELDS: {
+  key: keyof SlidingDoorsSettings;
+  label: string;
+  unit: string;
+  step: number;
+}[] = [
+  { key: "duration", label: "Duration", unit: "seconds", step: 0.5 },
+  { key: "speed", label: "Slide speed", unit: "seconds", step: 0.5 },
+  { key: "gap", label: "Gap", unit: "pixels", step: 1 },
+];
+
 // Templates → Page Styles' Add / Edit panel (2026-10-04, from Craig's
 // mockups): sits in the right-hand column, beside the Preview, and stays
 // open until Close. Style name, Style Type, then the chosen type's own
 // layout controls — layout only, no content. Private / Custom offers
 // the old block editor's controls, adding empty placeholders, plus
-// Sliding doors (2026-10-05) with its Duration and Slide speed. Section
-// (2026-10-05) is a fixed layout — byline, artwork grid, Description —
-// with an optional background colour and an optional video below the
-// Description. Saving is automatic (see PageStylesManager); `status`
-// reports it.
+// Sliding doors (2026-10-05) with its Duration, Slide speed and Gap.
+// Section (2026-10-05) is a fixed layout — byline, artwork grid,
+// Description — with an optional background colour and an optional
+// video below the Description. Saving is automatic (see
+// PageStylesManager); `status` reports it.
 export default function PageStyleEditor({
   draft,
   onChange,
@@ -262,28 +275,25 @@ export default function PageStyleEditor({
                   Sliding doors{doorsBlocks.length > 1 ? ` ${i + 1}` : ""}
                 </p>
                 <div className="flex flex-col gap-2">
-                  <SecondsField
-                    label="Duration"
-                    value={b.doors!.duration}
-                    limits={SLIDING_DOORS_LIMITS.duration}
-                    onCommit={(duration) =>
-                      setCustom({
-                        ...custom,
-                        blocks: updateSlidingDoors(custom.blocks, b.id, { ...b.doors!, duration }),
-                      })
-                    }
-                  />
-                  <SecondsField
-                    label="Slide speed"
-                    value={b.doors!.speed}
-                    limits={SLIDING_DOORS_LIMITS.speed}
-                    onCommit={(speed) =>
-                      setCustom({
-                        ...custom,
-                        blocks: updateSlidingDoors(custom.blocks, b.id, { ...b.doors!, speed }),
-                      })
-                    }
-                  />
+                  {DOORS_FIELDS.map((f) => (
+                    <NumberField
+                      key={f.key}
+                      label={f.label}
+                      unit={f.unit}
+                      step={f.step}
+                      value={b.doors![f.key]}
+                      limits={SLIDING_DOORS_LIMITS[f.key]}
+                      onCommit={(value) =>
+                        setCustom({
+                          ...custom,
+                          blocks: updateSlidingDoors(custom.blocks, b.id, {
+                            ...b.doors!,
+                            [f.key]: value,
+                          }),
+                        })
+                      }
+                    />
+                  ))}
                 </div>
               </div>
             ))}
@@ -382,16 +392,20 @@ function BackgroundColourControl({
   );
 }
 
-// A number of seconds, applied when the box is left (or Enter). Kept
-// within its limits; anything that isn't a number goes back to the
+// A number, applied when the box is left (or Enter). Kept within its
+// limits when saved; anything that isn't a number goes back to the
 // current value.
-function SecondsField({
+function NumberField({
   label,
+  unit,
+  step,
   value,
   limits,
   onCommit,
 }: {
   label: string;
+  unit: string;
+  step: number;
   value: number;
   limits: { min: number; max: number };
   onCommit: (value: number) => void;
@@ -415,7 +429,7 @@ function SecondsField({
         type="number"
         min={limits.min}
         max={limits.max}
-        step={0.5}
+        step={step}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onBlur={commit}
@@ -424,7 +438,7 @@ function SecondsField({
         }}
         className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm"
       />
-      <span className="text-xs text-neutral-400">seconds</span>
+      <span className="text-xs text-neutral-400">{unit}</span>
     </label>
   );
 }

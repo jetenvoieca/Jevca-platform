@@ -25,11 +25,11 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
           </div>
         </Labelled>
         <Labelled label="Description — from the page's curation">
-          <BlockShape type="text" />
+          <BlockShape block={{ id: "description", type: "text" }} />
         </Labelled>
         {video && (
           <Labelled label="Video">
-            <BlockShape type="video" />
+            <BlockShape block={{ id: "video", type: "video" }} />
           </Labelled>
         )}
       </div>
@@ -61,7 +61,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
           {row.map((b) => (
             <div key={b.id} className="min-w-0 flex-1">
               <Labelled label={blockLabel(b)}>
-                <BlockShape type={b.type} />
+                <BlockShape block={b} />
               </Labelled>
             </div>
           ))}
@@ -73,14 +73,15 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
 
 function blockLabel(block: LayoutBlock): string {
   const label = blockTypeLabel(block.type);
-  return block.doors
-    ? `${label} — pairs from the page's curation, ${block.doors.duration}s, slide ${block.doors.speed}s`
+  const d = block.doors;
+  return d
+    ? `${label} — pairs from the page's curation, ${d.duration}s, slide ${d.speed}s, gap ${d.gap}px`
     : label;
 }
 
 // A rough outline of each block type, so the layout reads at a glance.
-function BlockShape({ type }: { type: LayoutBlock["type"] }) {
-  switch (type) {
+function BlockShape({ block }: { block: LayoutBlock }) {
+  switch (block.type) {
     case "header":
       return <Bar className="h-7 w-2/3" />;
     case "text":
@@ -127,7 +128,7 @@ function BlockShape({ type }: { type: LayoutBlock["type"] }) {
       );
     case "slidingdoors":
       return (
-        <div className="relative flex h-48 gap-1">
+        <div className="relative flex h-48" style={{ gap: block.doors?.gap ?? 0 }}>
           <div className="flex-1 rounded bg-neutral-200" />
           <div className="flex-1 rounded bg-neutral-200" />
           <span className="absolute inset-0 flex items-center justify-between px-3 text-2xl text-neutral-400">
