@@ -9,17 +9,17 @@ import localFont from "next/font/local";
 // installed with everything else, rather than next/font/google — that
 // downloads from Google Fonts during every build, and a failed or
 // stale download breaks the whole build. Latin, weights 400 and 500.
-const FONTS = "../../node_modules/@fontsource";
-
+// next/font needs every path written out in full, not built from a
+// variable.
 export const websiteSerif = localFont({
   src: [
     {
-      path: `${FONTS}/cormorant-garamond/files/cormorant-garamond-latin-400-normal.woff2`,
+      path: "../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-400-normal.woff2",
       weight: "400",
       style: "normal",
     },
     {
-      path: `${FONTS}/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2`,
+      path: "../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-500-normal.woff2",
       weight: "500",
       style: "normal",
     },
@@ -29,8 +29,16 @@ export const websiteSerif = localFont({
 
 export const websiteSans = localFont({
   src: [
-    { path: `${FONTS}/inter/files/inter-latin-400-normal.woff2`, weight: "400", style: "normal" },
-    { path: `${FONTS}/inter/files/inter-latin-500-normal.woff2`, weight: "500", style: "normal" },
+    {
+      path: "../../node_modules/@fontsource/inter/files/inter-latin-400-normal.woff2",
+      weight: "400",
+      style: "normal",
+    },
+    {
+      path: "../../node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2",
+      weight: "500",
+      style: "normal",
+    },
   ],
   display: "swap",
 });
