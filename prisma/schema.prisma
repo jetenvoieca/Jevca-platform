@@ -597,7 +597,8 @@ model Location {
 // see CurationItem below. Each work's presentation within a curation
 // (its Description and images) is edited on the Curations page
 // (2026-10-03). A website page can show one curation (2026-10-04) — see
-// Page.curationId.
+// Page.curationId — or, on a Canvas page, several (2026-10-05) — see
+// PageCanvasItem.
 model Curation {
   id       String @id @default(cuid())
   artistId String
@@ -612,6 +613,8 @@ model Curation {
   items CurationItem[]
   // Website pages showing this curation (2026-10-04) — see Page.curationId.
   pages Page[]
+  // Canvas pages it's placed on (2026-10-05) — see PageCanvasItem.
+  canvasItems PageCanvasItem[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -989,10 +992,11 @@ model Page {
   // that only applies to one of them.
   templateStyle TemplatePageStyle?
 
-  // The curation this page shows (2026-10-04) — optional; one per page
-  // for now. Must be one of the site's own artist's curations (checked
-  // in lib/actions/pages.ts). Cleared, not the page deleted, if the
-  // curation is deleted.
+  // The curation this page shows (2026-10-04) — optional; one per page.
+  // Must be one of the site's own artist's curations (checked in
+  // lib/actions/pages.ts). Cleared, not the page deleted, if the
+  // curation is deleted. Not used by a page with a Canvas style, which
+  // has its own placed curations instead (canvasItems below).
   curationId String?
   curation   Curation? @relation(fields: [curationId], references: [id], onDelete: SetNull)
 
@@ -1001,6 +1005,10 @@ model Page {
   // deleted, if the style is deleted.
   pageStyleId String?
   pageStyle   PageStyle? @relation(fields: [pageStyleId], references: [id], onDelete: SetNull)
+
+  // The curations placed on this page's canvas (2026-10-05) — used when
+  // its Display Style is a Canvas. See PageCanvasItem.
+  canvasItems PageCanvasItem[]
 
   draftBlocks Json  @default("[]")
   liveBlocks  Json?
@@ -1013,6 +1021,26 @@ model Page {
   @@index([backgroundImageId])
   @@index([curationId])
   @@index([pageStyleId])
+}
+
+// One curation placed on a Canvas page (2026-10-05) — its tile's
+// top-left corner at (x, y), in canvas pixels from the canvas's
+// top-left. Placed by dragging in the page's Arrange canvas editor; the
+// canvas is as big as the placements need. A curation appears at most
+// once per page, and must be the site's own artist's (checked in
+// lib/actions/pageCanvas.ts). Removed with its page or curation.
+model PageCanvasItem {
+  id         String   @id @default(cuid())
+  pageId     String
+  page       Page     @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  curationId String
+  curation   Curation @relation(fields: [curationId], references: [id], onDelete: Cascade)
+
+  x Int
+  y Int
+
+  @@unique([pageId, curationId])
+  @@index([curationId])
 }
 
 // A Page Style (2026-10-04) — a named page layout, shared by every site,
