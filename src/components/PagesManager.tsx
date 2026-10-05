@@ -36,7 +36,8 @@ type ListKey = "live" | "hidden";
 // new page starts in Hidden Pages. The selected page is shown in the
 // Preview panel (PagePreview), in its Display Style if it has one
 // (2026-10-05). Arrange (2026-10-05) opens the full-screen canvas editor
-// (CanvasArranger) for a page whose Display Style is a Canvas.
+// (CanvasArranger) for a page whose Display Style is a Canvas; closing
+// it redraws the preview with the new arrangement.
 export default function PagesManager({
   siteId,
   artistId,
@@ -65,6 +66,8 @@ export default function PagesManager({
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [arranging, setArranging] = useState(false);
+  // Bumped when Arrange closes, so the preview reloads the arrangement.
+  const [previewVersion, setPreviewVersion] = useState(0);
 
   // Fresh server data (after a delete, or any refresh) replaces local state.
   useEffect(() => {
@@ -223,6 +226,9 @@ export default function PagesManager({
         <h2 className="text-center text-base text-neutral-800">Preview</h2>
         {selected ? (
           <PagePreview
+            key={`${selected.id}:${previewVersion}`}
+            siteId={siteId}
+            pageId={selected.id}
             artistId={artistId}
             title={selected.title}
             curationId={selected.curationId}
@@ -305,7 +311,10 @@ export default function PagesManager({
           artistId={artistId}
           tileSize={canvasStyle.layout.tileSize}
           backgroundColor={canvasStyle.layout.backgroundColor}
-          onClose={() => setArranging(false)}
+          onClose={() => {
+            setArranging(false);
+            setPreviewVersion((v) => v + 1);
+          }}
         />
       )}
 
