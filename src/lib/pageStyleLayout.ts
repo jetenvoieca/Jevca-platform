@@ -156,19 +156,26 @@ export type SectionLayout = {
 // as big as their placement needs. Each curation shows as its first
 // work's main image with its name over it, `tileSize` pixels square;
 // the one nearest the centre of the screen opens over `openSpeed`
-// seconds, showing its first six works (the first large, the next five
-// around it).
+// seconds, showing its first six works: the first at `openScale` times
+// the tile size, the next five at half the tile size around it.
 export type CanvasLayout = {
   tileSize: number;
   openSpeed: number;
+  openScale: number;
   backgroundColor: string | null;
 };
 
-export const DEFAULT_CANVAS: CanvasLayout = { tileSize: 240, openSpeed: 0.6, backgroundColor: null };
+export const DEFAULT_CANVAS: CanvasLayout = {
+  tileSize: 240,
+  openSpeed: 0.6,
+  openScale: 1.5,
+  backgroundColor: null,
+};
 
 export const CANVAS_LIMITS = {
   tileSize: { min: 80, max: 600 },
   openSpeed: { min: 0.1, max: 5 },
+  openScale: { min: 1.2, max: 3 },
 } as const;
 
 export type PageStyleLayout =
@@ -285,6 +292,7 @@ export function cleanCanvas(raw: unknown): CanvasLayout {
   return {
     tileSize: cleanNumber(value.tileSize, l.tileSize, d.tileSize, 0),
     openSpeed: cleanNumber(value.openSpeed, l.openSpeed, d.openSpeed, 1),
+    openScale: cleanNumber(value.openScale, l.openScale, d.openScale, 1),
     backgroundColor: cleanColour(value.backgroundColor),
   };
 }
