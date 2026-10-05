@@ -13,18 +13,17 @@ import {
 import { groupBlocksByRow } from "@/lib/blocks";
 import CurationWorkView from "@/components/CurationWorkView";
 import SlidingDoors from "@/components/SlidingDoors";
+import CanvasPlayer from "@/components/CanvasPlayer";
 
-// The Pages page's Preview panel (2026-10-04): the selected page's
-// curation.
+// The Pages page's Preview panel (2026-10-04): the selected page.
 //
-// With a Display Style (2026-10-05): the page drawn in that style,
-// filled from the curation, with the style's background colour.
-// - Section: the works' images, then the curation's Description.
-// - Private / Custom: Gallery blocks show the works' images, Text blocks
-//   the curation's Description, Sliding doors the works' main images in
+// With a Display Style (2026-10-05): the page drawn in that style, with
+// the style's background colour.
+// - Section: the curation's works' images, then its Description.
+// - Private / Custom: Gallery blocks show the curation's works' images,
+//   Text blocks its Description, Sliding doors its works' main images in
 //   pairs or one at a time (see SlidingDoors).
-// - Canvas: not drawn yet — its curations are placed on the page in the
-//   next step.
+// - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page, centred).
 // Anything with nothing to fill it yet (Byline, Header, Video, an empty
@@ -32,17 +31,21 @@ import SlidingDoors from "@/components/SlidingDoors";
 // block is the space below the last one shown — and no outlines or
 // labels are shown. Images are image only.
 //
-// Without one: a simple grid of the works with the curation's
+// Without one: a simple grid of the curation's works with its
 // Description in a box beside them, as on the Curations page.
 //
 // Clicking a work (2026-10-05) opens its presentation in this curation,
 // read-only — see CurationWorkView.
 export default function PagePreview({
+  siteId,
+  pageId,
   artistId,
   title,
   curationId,
   style,
 }: {
+  siteId: string;
+  pageId: string;
   artistId: string;
   title: string;
   curationId: string | null;
@@ -75,7 +78,15 @@ export default function PagePreview({
 
   let body: ReactNode;
   if (style?.type === "CANVAS") {
-    body = <Message text="Canvas pages will show here once their curations can be placed." />;
+    body = (
+      <CanvasPlayer
+        key={pageId}
+        siteId={siteId}
+        pageId={pageId}
+        artistId={artistId}
+        layout={style.layout}
+      />
+    );
   } else if (!curationId) {
     body = <Message text="This page has no curation. Choose one with Edit." />;
   } else if (loading) {
