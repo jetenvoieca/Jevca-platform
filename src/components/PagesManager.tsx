@@ -14,6 +14,7 @@ import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import PageDetailsModal from "@/components/PageDetailsModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PagePreview from "@/components/PagePreview";
+import CanvasArranger from "@/components/CanvasArranger";
 
 export type PageListItem = {
   id: string;
@@ -26,14 +27,16 @@ export type PageListItem = {
 type ListKey = "live" | "hidden";
 
 // Website → Pages (2026-10-04, from Craig's mockup): a Preview panel on
-// the left; on the right, Add / Edit / Delete above two lists, Live Pages
-// and Hidden Pages. Clicking a page selects it — Edit and Delete act on
-// the selected page. Pages are dragged to reorder within a list or moved
-// between the two (moving one changes whether it's live). Every drop
-// saves both lists at once via reorderPages. Add and Edit open the same
-// modal (PageDetailsModal); a new page starts in Hidden Pages. The
-// selected page is shown in the Preview panel (PagePreview), in its
-// Display Style if it has one (2026-10-05).
+// the left; on the right, Add / Edit / Arrange / Delete above two lists,
+// Live Pages and Hidden Pages. Clicking a page selects it — Edit,
+// Arrange and Delete act on the selected page. Pages are dragged to
+// reorder within a list or moved between the two (moving one changes
+// whether it's live). Every drop saves both lists at once via
+// reorderPages. Add and Edit open the same modal (PageDetailsModal); a
+// new page starts in Hidden Pages. The selected page is shown in the
+// Preview panel (PagePreview), in its Display Style if it has one
+// (2026-10-05). Arrange (2026-10-05) opens the full-screen canvas editor
+// (CanvasArranger) for a page whose Display Style is a Canvas.
 export default function PagesManager({
   siteId,
   artistId,
@@ -61,6 +64,7 @@ export default function PagesManager({
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [arranging, setArranging] = useState(false);
 
   // Fresh server data (after a delete, or any refresh) replaces local state.
   useEffect(() => {
@@ -72,6 +76,7 @@ export default function PagesManager({
   const selectedStyle = selected
     ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null)
     : null;
+  const canvasStyle = selectedStyle?.type === "CANVAS" ? selectedStyle : null;
 
   const handleDrop = () => {
     if (!dragged || !dropTarget) return;
@@ -209,6 +214,9 @@ export default function PagesManager({
     </div>
   );
 
+  const buttonClass =
+    "rounded-md border border-neutral-300 px-2 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
+
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col rounded-lg border border-neutral-300 bg-white p-4">
@@ -228,12 +236,12 @@ export default function PagesManager({
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <button
             type="button"
             onClick={() => openModal("add")}
             disabled={isPending}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className={buttonClass}
           >
             Add
           </button>
@@ -241,15 +249,24 @@ export default function PagesManager({
             type="button"
             onClick={() => openModal("edit")}
             disabled={!selected || isPending}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+            className={buttonClass}
           >
             Edit
           </button>
           <button
             type="button"
+            onClick={() => setArranging(true)}
+            disabled={!canvasStyle || isPending}
+            title="For pages with a Canvas Display Style"
+            className={buttonClass}
+          >
+            Arrange
+          </button>
+          <button
+            type="button"
             onClick={() => setConfirmingDelete(true)}
             disabled={!selected || isPending}
-            className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:border-red-300 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:opacity-40"
+            className={`${buttonClass} hover:border-red-300 hover:bg-red-50 hover:text-red-700`}
           >
             Delete
           </button>
@@ -277,6 +294,18 @@ export default function PagesManager({
           error={modalError}
           onSave={handleSave}
           onCancel={() => setModal(null)}
+        />
+      )}
+
+      {arranging && selected && canvasStyle && (
+        <CanvasArranger
+          siteId={siteId}
+          pageId={selected.id}
+          pageTitle={selected.title}
+          artistId={artistId}
+          tileSize={canvasStyle.layout.tileSize}
+          backgroundColor={canvasStyle.layout.backgroundColor}
+          onClose={() => setArranging(false)}
         />
       )}
 

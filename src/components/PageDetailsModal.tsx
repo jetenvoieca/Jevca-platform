@@ -8,7 +8,10 @@ import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 // The Pages page's Add / Edit modal (2026-10-04, from Craig's mockup):
 // Page Name, Curation and Display Style. The same modal is used for both
 // — Edit opens it filled in with the selected page. Display Style is
-// one of the Page Styles (Templates → Page Styles, 2026-10-05).
+// one of the Page Styles (Templates → Page Styles, 2026-10-05). With a
+// Canvas style there's no Curation to choose — a Canvas page has its own
+// placed curations (Arrange on the Pages page) — so it's hidden and
+// saved as none.
 export default function PageDetailsModal({
   heading,
   initial,
@@ -32,6 +35,8 @@ export default function PageDetailsModal({
   const [curationId, setCurationId] = useState(initial.curationId ?? "");
   const [pageStyleId, setPageStyleId] = useState(initial.pageStyleId ?? "");
 
+  const isCanvas = pageStyles.find((s) => s.id === pageStyleId)?.type === "CANVAS";
+
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
@@ -42,7 +47,11 @@ export default function PageDetailsModal({
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
-          onSave({ title, curationId: curationId || null, pageStyleId: pageStyleId || null });
+          onSave({
+            title,
+            curationId: isCanvas ? null : curationId || null,
+            pageStyleId: pageStyleId || null,
+          });
         }}
       >
         <h3 className="sr-only">{heading}</h3>
@@ -58,22 +67,26 @@ export default function PageDetailsModal({
         />
 
         <div className="mb-6 grid grid-cols-[110px_1fr] items-center gap-x-3 gap-y-4">
-          <label htmlFor="page-curation" className="text-sm text-neutral-700">
-            Curation
-          </label>
-          <select
-            id="page-curation"
-            value={curationId}
-            onChange={(e) => setCurationId(e.target.value)}
-            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">None</option>
-            {curations.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          {!isCanvas && (
+            <>
+              <label htmlFor="page-curation" className="text-sm text-neutral-700">
+                Curation
+              </label>
+              <select
+                id="page-curation"
+                value={curationId}
+                onChange={(e) => setCurationId(e.target.value)}
+                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">None</option>
+                {curations.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
 
           <label htmlFor="page-display-style" className="text-sm text-neutral-700">
             Display Style
@@ -92,6 +105,12 @@ export default function PageDetailsModal({
             ))}
           </select>
         </div>
+
+        {isCanvas && (
+          <p className="mb-4 text-xs text-neutral-500">
+            A Canvas page&apos;s curations are placed with Arrange.
+          </p>
+        )}
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
