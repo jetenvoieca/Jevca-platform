@@ -12,15 +12,17 @@ import {
   type CustomLayout,
   type LayoutBlockType,
   type PageStyleLayout,
+  type SectionLayout,
 } from "@/lib/pageStyleLayout";
 
 // What's being edited: the Style name, the Style Type ("" until one is
-// chosen) and the Private / Custom layout. Held by PageStylesManager so
-// its Preview can show every change straight away.
+// chosen) and that type's layout. Held by PageStylesManager so its
+// Preview can show every change straight away.
 export type PageStyleDraft = {
   name: string;
   type: PageStyleType | "";
   custom: CustomLayout;
+  section: SectionLayout;
   // One-shot, like the old block editor: the next block added sits
   // beside the last row, then this resets.
   placement: "none" | "left" | "right";
@@ -29,29 +31,38 @@ export type PageStyleDraft = {
 export const EMPTY_CUSTOM = (emptyLayout("PRIVATE") as Extract<PageStyleLayout, { type: "PRIVATE" }>)
   .layout;
 
+export const EMPTY_SECTION = (emptyLayout("SECTION") as Extract<PageStyleLayout, { type: "SECTION" }>)
+  .layout;
+
 export function draftFrom(name: string, style: PageStyleLayout | null): PageStyleDraft {
   return {
     name,
     type: style?.type ?? "",
     custom: style?.type === "PRIVATE" ? style.layout : EMPTY_CUSTOM,
+    section: style?.type === "SECTION" ? style.layout : EMPTY_SECTION,
     placement: "none",
   };
 }
 
 // The draft as a layout, or null until a Style Type is chosen.
 export function draftLayout(draft: PageStyleDraft): PageStyleLayout | null {
-  if (draft.type === "SECTION") return { type: "SECTION", layout: {} };
+  if (draft.type === "SECTION") return { type: "SECTION", layout: draft.section };
   if (draft.type === "PRIVATE") return { type: "PRIVATE", layout: draft.custom };
   return null;
 }
+
+const smallButton =
+  "rounded-md border border-neutral-300 px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50";
 
 // Templates → Page Styles' Add / Edit panel (2026-10-04, from Craig's
 // mockups): sits in the right-hand column, beside the Preview, and stays
 // open until Close. Style name, Style Type, then the chosen type's own
 // layout controls — layout only, no content. Private / Custom offers
-// the old block editor's controls, adding empty placeholders; Section is
-// a fixed layout with no settings yet. Saving is automatic (see
-// PageStylesManager); `status` reports it.
+// the old block editor's controls, adding empty placeholders. Section
+// (2026-10-05) is a fixed layout — byline, artwork grid, Description —
+// with an optional background colour and an optional video below the
+// Description. Saving is automatic (see PageStylesManager); `status`
+// reports it.
 export default function PageStyleEditor({
   draft,
   onChange,
@@ -63,13 +74,20 @@ export default function PageStyleEditor({
   status: { text: string; isError: boolean };
   onClose: () => void;
 }) {
-  const { custom, placement } = draft;
+  const { custom, section, placement } = draft;
   const setCustom = (next: CustomLayout) => onChange({ ...draft, custom: next });
+  const setSection = (next: SectionLayout) => onChange({ ...draft, section: next });
 
   const changeType = (value: string) => {
     if (!isPageStyleType(value)) return;
     // A different type has a different layout, so start it afresh.
-    onChange({ ...draft, type: value, custom: EMPTY_CUSTOM, placement: "none" });
+    onChange({
+      ...draft,
+      type: value,
+      custom: EMPTY_CUSTOM,
+      section: EMPTY_SECTION,
+      placement: "none",
+    });
   };
 
   const addBlock = (blockType: LayoutBlockType, where: "none" | "left" | "right") =>
@@ -80,8 +98,6 @@ export default function PageStyleEditor({
     });
 
   const rows = groupBlocksByRow(custom.blocks);
-  const smallButton =
-    "rounded-md border border-neutral-300 px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50";
 
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-300 bg-white">
@@ -114,31 +130,19 @@ export default function PageStyleEditor({
         </select>
 
         {draft.type === "SECTION" && (
-          <p className="mt-2 text-xs text-neutral-400">
-            Section has a fixed layout — a Byline and an artwork grid from the page&apos;s
-            curation — with no settings yet.
-          </p>
-        )}
-
-        {draft.type === "PRIVATE" && (
           <div className="mt-2 flex flex-col gap-2.5">
-            <button type="button" onClick={() => addBlock("header", "none")} className={smallButton}>
-              + Add Header
-            </button>
-
-            {custom.backgroundColor ? (
+            <BackgroundColourControl
+              value={section.backgroundColor}
+              onChange={(backgroundColor) => setSection({ ...section, backgroundColor })}
+            />
+            {section.video ? (
               <div className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2">
-                <input
-                  type="color"
-                  value={custom.backgroundColor}
-                  onChange={(e) => setCustom({ ...custom, backgroundColor: e.target.value })}
-                  aria-label="Background colour"
-                  className="h-6 w-6 shrink-0 cursor-pointer rounded border border-neutral-300 p-0"
-                />
-                <span className="flex-1 text-sm text-neutral-700">{custom.backgroundColor}</span>
+                <span className="flex-1 text-sm text-neutral-700">
+                  Video — below the Description, chosen on the page
+                </span>
                 <button
                   type="button"
-                  onClick={() => setCustom({ ...custom, backgroundColor: null })}
+                  onClick={() => setSection({ ...section, video: false })}
                   className="text-xs text-red-500 hover:underline"
                 >
                   Remove
@@ -147,12 +151,25 @@ export default function PageStyleEditor({
             ) : (
               <button
                 type="button"
-                onClick={() => setCustom({ ...custom, backgroundColor: "#ffffff" })}
+                onClick={() => setSection({ ...section, video: true })}
                 className={smallButton}
               >
-                + Add background colour
+                + Video
               </button>
             )}
+          </div>
+        )}
+
+        {draft.type === "PRIVATE" && (
+          <div className="mt-2 flex flex-col gap-2.5">
+            <button type="button" onClick={() => addBlock("header", "none")} className={smallButton}>
+              + Add Header
+            </button>
+
+            <BackgroundColourControl
+              value={custom.backgroundColor}
+              onChange={(backgroundColor) => setCustom({ ...custom, backgroundColor })}
+            />
 
             {custom.backgroundImage ? (
               <div className="flex h-28 flex-col items-center justify-center gap-2 rounded-md border-2 border-dashed border-neutral-300 bg-neutral-50 px-2 text-center">
@@ -287,6 +304,43 @@ export default function PageStyleEditor({
           Close
         </button>
       </div>
+    </div>
+  );
+}
+
+// "+ Add background colour", or the chosen colour with Remove — shared
+// by both Style Types.
+function BackgroundColourControl({
+  value,
+  onChange,
+}: {
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  if (!value) {
+    return (
+      <button type="button" onClick={() => onChange("#ffffff")} className={smallButton}>
+        + Add background colour
+      </button>
+    );
+  }
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2">
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label="Background colour"
+        className="h-6 w-6 shrink-0 cursor-pointer rounded border border-neutral-300 p-0"
+      />
+      <span className="flex-1 text-sm text-neutral-700">{value}</span>
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        className="text-xs text-red-500 hover:underline"
+      >
+        Remove
+      </button>
     </div>
   );
 }

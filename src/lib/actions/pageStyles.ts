@@ -22,7 +22,7 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
 }
 
-// The layout is cleaned with the same rules the modal uses, so whatever
+// The layout is cleaned with the same rules the editor uses, so whatever
 // is saved is always valid for the type.
 function validate(
   input: PageStyleInput
@@ -66,6 +66,35 @@ export async function updatePageStyle(id: string, input: PageStyleInput): Promis
     return { ok: true };
   } catch (err) {
     if (isUniqueViolation(err)) return { error: "A style with that name already exists." };
+    throw err;
+  }
+}
+
+// Duplicate (2026-10-05): a copy of the style's type and layout, named
+// "<name> (copy)" — or "(copy 2)", "(copy 3)"… if that's taken. Pages
+// using the original are not moved to the copy.
+export async function duplicatePageStyle(
+  id: string
+): Promise<{ id: string } | { error: string }> {
+  const source = await db.pageStyle.findUnique({
+    where: { id },
+    select: { name: true, type: true, layout: true },
+  });
+  if (!source || !isPageStyleType(source.type)) return { error: "Style not found." };
+
+  let name = `${source.name} (copy)`;
+  for (let n = 2; await db.pageStyle.findUnique({ where: { name }, select: { id: true } }); n++) {
+    name = `${source.name} (copy ${n})`;
+  }
+
+  try {
+    const style = await db.pageStyle.create({
+      data: { name, ...normalizeLayout(source.type, source.layout) },
+      select: { id: true },
+    });
+    return { id: style.id };
+  } catch (err) {
+    if (isUniqueViolation(err)) return { error: "Couldn't duplicate — try again." };
     throw err;
   }
 }

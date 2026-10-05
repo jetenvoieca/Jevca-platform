@@ -7,8 +7,12 @@ import { blockTypeLabel, type LayoutBlock, type PageStyleLayout } from "@/lib/pa
 // page's Preview panel.
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
   if (style.type === "SECTION") {
+    const { backgroundColor, video } = style.layout;
     return (
-      <div className="flex flex-col gap-4">
+      <div
+        className="flex min-h-full flex-col gap-4 rounded-md p-4"
+        style={{ backgroundColor: backgroundColor ?? undefined }}
+      >
         <Bar className="mx-auto h-6 w-1/3" />
         <Labelled label="Byline">
           <Bar className="mx-auto h-3 w-1/2" />
@@ -20,6 +24,14 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
             ))}
           </div>
         </Labelled>
+        <Labelled label="Description — from the page's curation">
+          <BlockShape type="text" />
+        </Labelled>
+        {video && (
+          <Labelled label="Video">
+            <BlockShape type="video" />
+          </Labelled>
+        )}
       </div>
     );
   }

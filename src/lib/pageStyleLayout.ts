@@ -34,9 +34,15 @@ export type CustomLayout = {
   blocks: LayoutBlock[];
 };
 
-// Section is a fixed layout — a byline and an artwork grid filled from
-// the page's curation — with no settings of its own yet.
-export type SectionLayout = Record<string, never>;
+// Section is a fixed layout — a byline, an artwork grid filled from the
+// page's curation, and the curation's Description below it (2026-10-05).
+// Its settings: an optional background colour, and whether a video sits
+// below the Description (the video itself is content, chosen on the page
+// later).
+export type SectionLayout = {
+  backgroundColor: string | null;
+  video: boolean;
+};
 
 export type PageStyleLayout =
   | { type: "SECTION"; layout: SectionLayout }
@@ -48,11 +54,15 @@ export function blockTypeLabel(type: LayoutBlockType): string {
 
 export function emptyLayout(type: PageStyleType): PageStyleLayout {
   return type === "SECTION"
-    ? { type, layout: {} }
+    ? { type, layout: { backgroundColor: null, video: false } }
     : { type, layout: { backgroundColor: null, backgroundImage: false, blocks: [] } };
 }
 
 const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
+
+function cleanColour(value: unknown): string | null {
+  return typeof value === "string" && HEX_COLOUR.test(value) ? value : null;
+}
 
 function isLayoutBlockType(value: unknown): value is LayoutBlockType {
   return LAYOUT_BLOCK_TYPES.some((t) => t.value === value);
@@ -62,7 +72,13 @@ function isLayoutBlockType(value: unknown): value is LayoutBlockType {
 // layout for the type — anything unknown or malformed is dropped, so a
 // bad value can never break the modal, the preview or a page.
 export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLayout {
-  if (type === "SECTION") return { type, layout: {} };
+  if (type === "SECTION") {
+    const value = (raw ?? {}) as Partial<Record<keyof SectionLayout, unknown>>;
+    return {
+      type,
+      layout: { backgroundColor: cleanColour(value.backgroundColor), video: value.video === true },
+    };
+  }
 
   const value = (raw ?? {}) as Partial<Record<keyof CustomLayout, unknown>>;
   const blocks = Array.isArray(value.blocks)
@@ -80,10 +96,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
   return {
     type,
     layout: {
-      backgroundColor:
-        typeof value.backgroundColor === "string" && HEX_COLOUR.test(value.backgroundColor)
-          ? value.backgroundColor
-          : null,
+      backgroundColor: cleanColour(value.backgroundColor),
       backgroundImage: value.backgroundImage === true,
       blocks: clearLoneRows(blocks),
     },

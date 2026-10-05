@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import {
   createPageStyle,
   deletePageStyle,
+  duplicatePageStyle,
   updatePageStyle,
   type PageStyleSummary,
 } from "@/lib/actions/pageStyles";
@@ -22,19 +23,22 @@ type Status = { text: string; isError: boolean };
 const IDLE: Status = { text: "", isError: false };
 
 // Templates → Page Styles (2026-10-04, from Craig's mockups): the Preview
-// panel on the left; on the right, Add / Edit / Delete above the list of
-// styles. Clicking a style selects it — Edit and Delete act on it.
+// panel on the left; on the right, Add / Edit / Duplicate / Delete above
+// the list of styles. Clicking a style selects it — Edit, Duplicate
+// (2026-10-05) and Delete act on it.
 //
 // Add and Edit swap the list for the editor panel (PageStyleEditor),
 // which stays open until Close. Every change shows in the Preview at
 // once and saves itself shortly after (a new style is created the first
 // time it has both a name and a type). Saves run one at a time, in
 // order, so a quick run of changes can never create a style twice.
+// Duplicate makes a copy and selects it, ready to Edit.
 export default function PageStylesManager({ styles }: { styles: PageStyleSummary[] }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PageStyleDraft | null>(null);
   const [status, setStatus] = useState<Status>(IDLE);
+  const [listError, setListError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
@@ -56,7 +60,11 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
   const save = (d: PageStyleDraft) => {
     queueRef.current = queueRef.current.then(async () => {
       setStatus({ text: "Saving…", isError: false });
-      const input = { name: d.name, type: d.type, layout: d.type === "PRIVATE" ? d.custom : {} };
+      const input = {
+        name: d.name,
+        type: d.type,
+        layout: d.type === "PRIVATE" ? d.custom : d.section,
+      };
       try {
         const id = editingIdRef.current;
         const result = id ? await updatePageStyle(id, input) : await createPageStyle(input);
@@ -97,6 +105,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
   const openEditor = (mode: "add" | "edit") => {
     editingIdRef.current = mode === "edit" && selected ? selected.id : null;
     setStatus(IDLE);
+    setListError(null);
     setDraft(mode === "edit" && selected ? draftFrom(selected.name, selected) : draftFrom("", null));
   };
 
@@ -112,6 +121,20 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
     });
   };
 
+  const handleDuplicate = () => {
+    if (!selected) return;
+    setListError(null);
+    startTransition(async () => {
+      const result = await duplicatePageStyle(selected.id);
+      if ("error" in result) {
+        setListError(result.error);
+        return;
+      }
+      setSelectedId(result.id);
+      router.refresh();
+    });
+  };
+
   const handleDelete = () => {
     if (!selected) return;
     setConfirmingDelete(false);
@@ -123,7 +146,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
   };
 
   const buttonClass =
-    "rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
+    "rounded-md border border-neutral-300 px-2 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
 
   // While editing, the Preview shows the draft as it changes.
   const previewName = draft ? draft.name.trim() || "Untitled style" : selected?.name;
@@ -154,7 +177,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">
-        <div className="grid grid-cols-3 gap-2">
+        <div className="grid grid-cols-4 gap-2">
           <button
             type="button"
             onClick={() => openEditor("add")}
@@ -170,6 +193,14 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
             className={buttonClass}
           >
             Edit
+          </button>
+          <button
+            type="button"
+            onClick={handleDuplicate}
+            disabled={!!draft || !selected || isPending}
+            className={buttonClass}
+          >
+            Duplicate
           </button>
           <button
             type="button"
@@ -191,6 +222,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
         ) : (
           <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-300 bg-white p-3">
             <h2 className="mb-3 text-base text-neutral-800">Page Styles</h2>
+            {listError && <p className="mb-2 text-xs text-red-600">{listError}</p>}
             <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
               {styles.length === 0 && (
                 <p className="py-4 text-center text-xs text-neutral-400">
