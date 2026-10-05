@@ -31,6 +31,12 @@ import CurationWorkView from "@/components/CurationWorkView";
 // curation scrolls it to the middle. The canvas is bounded: it is as big
 // as the placements, plus half a view of margin all round so every
 // curation can reach the middle.
+//
+// The view is a fixed-height window (fix, 2026-10-05): the canvas's size
+// depends on the view's size, so the view must never grow to fit the
+// canvas, or the two keep enlarging each other. Nothing animates until
+// the view has been measured and centred, so tiles don't slide in from
+// where they sat before.
 
 const GAP = 8;
 // Works shown when a curation opens.
@@ -54,11 +60,11 @@ export default function CanvasPlayer({
   const [covers, setCovers] = useState<Map<string, CurationCover>>(new Map());
   const [works, setWorks] = useState<Map<string, CurationWork[]>>(new Map());
   const [view, setView] = useState<{ w: number; h: number } | null>(null);
+  const [ready, setReady] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<{ curationId: string; artworkId: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
-  const centredRef = useRef(false);
   const loadingRef = useRef(new Set<string>());
 
   useEffect(() => {
@@ -109,18 +115,19 @@ export default function CanvasPlayer({
     setOpenId(best);
   }, [placements, marginX, marginY, T]);
 
-  // Starts with the first placed curation in the middle of the view.
+  // Once the view is measured, starts with the first placed curation in
+  // the middle, then lets things animate.
   useLayoutEffect(() => {
     const el = scrollRef.current;
-    if (!el || !view || !placements || centredRef.current) return;
-    centredRef.current = true;
+    if (!el || !view || !placements || ready) return;
     const first = placements[0];
     if (first) {
       el.scrollLeft = first.x + T / 2;
       el.scrollTop = first.y + T / 2;
     }
     updateOpen();
-  }, [view, placements, T, updateOpen]);
+    setReady(true);
+  }, [view, placements, T, updateOpen, ready]);
 
   // Loads the opened curation's works the first time it opens.
   useEffect(() => {
@@ -183,7 +190,9 @@ export default function CanvasPlayer({
   const height = Math.max(...placements.map((p) => p.y)) + T + 2 * marginY;
 
   const s = layout.openSpeed;
-  const transition = `left ${s}s ease, top ${s}s ease, width ${s}s ease, height ${s}s ease, opacity ${s}s ease`;
+  const transition = ready
+    ? `left ${s}s ease, top ${s}s ease, width ${s}s ease, height ${s}s ease, opacity ${s}s ease`
+    : "none";
 
   // A closed tile's place, moved aside if another curation is open.
   const closedRect = (p: CanvasPlacement): Rect => {
@@ -226,76 +235,76 @@ export default function CanvasPlayer({
 
   return (
     <div
-      ref={scrollRef}
-      onScroll={updateOpen}
-      className="h-full min-h-[420px] w-full overflow-auto rounded-md"
+      className="relative h-[70vh] min-h-[420px] w-full overflow-hidden rounded-md"
       style={{ backgroundColor: layout.backgroundColor ?? undefined }}
     >
-      <div
-        className="relative cursor-grab touch-none select-none active:cursor-grabbing"
-        style={{ width, height }}
-        onPointerDown={startPan}
-        onPointerMove={movePan}
-        onPointerUp={endPan}
-        onPointerCancel={endPan}
-      >
-        {placements.map((p) => {
-          const cover = covers.get(p.curationId);
-          const isOpen = p === open;
-          const opened = isOpen ? openedRects(p) : null;
-          const closed = closedRect(p);
-          const curationWorks = works.get(p.curationId) ?? [];
-          // Closed, the smaller images wait hidden behind the cover.
-          const hidden: Rect = { left: closed.left + T / 4, top: closed.top + T / 4, size: small };
-          return (
-            <div key={p.curationId}>
-              {curationWorks.slice(1).map((w, i) => (
+      <div ref={scrollRef} onScroll={updateOpen} className="absolute inset-0 overflow-auto">
+        <div
+          className="relative cursor-grab touch-none select-none active:cursor-grabbing"
+          style={{ width, height }}
+          onPointerDown={startPan}
+          onPointerMove={movePan}
+          onPointerUp={endPan}
+          onPointerCancel={endPan}
+        >
+          {placements.map((p) => {
+            const cover = covers.get(p.curationId);
+            const isOpen = p === open;
+            const opened = isOpen ? openedRects(p) : null;
+            const closed = closedRect(p);
+            const curationWorks = works.get(p.curationId) ?? [];
+            // Closed, the smaller images wait hidden behind the cover.
+            const hidden: Rect = { left: closed.left + T / 4, top: closed.top + T / 4, size: small };
+            return (
+              <div key={p.curationId}>
+                {curationWorks.slice(1).map((w, i) => (
+                  <button
+                    key={w.artworkId}
+                    type="button"
+                    onClick={() => setViewing({ curationId: p.curationId, artworkId: w.artworkId })}
+                    title={w.catalogueName}
+                    className="absolute overflow-hidden rounded"
+                    style={rectStyle(opened ? opened[i + 1] : hidden, {
+                      opacity: opened ? 1 : 0,
+                      pointerEvents: opened ? "auto" : "none",
+                      zIndex: isOpen ? 10 : 0,
+                    })}
+                  >
+                    <img
+                      src={w.displayUrl!}
+                      alt={w.catalogueName}
+                      draggable={false}
+                      className="h-full w-full object-cover"
+                    />
+                  </button>
+                ))}
                 <button
-                  key={w.artworkId}
                   type="button"
-                  onClick={() => setViewing({ curationId: p.curationId, artworkId: w.artworkId })}
-                  title={w.catalogueName}
-                  className="absolute overflow-hidden rounded"
-                  style={rectStyle(opened ? opened[i + 1] : hidden, {
-                    opacity: opened ? 1 : 0,
-                    pointerEvents: opened ? "auto" : "none",
-                    zIndex: isOpen ? 10 : 0,
-                  })}
+                  onClick={() =>
+                    isOpen && curationWorks[0]
+                      ? setViewing({ curationId: p.curationId, artworkId: curationWorks[0].artworkId })
+                      : scrollToCentre(p)
+                  }
+                  title={cover?.name}
+                  className="absolute overflow-hidden rounded bg-neutral-200"
+                  style={rectStyle(opened ? opened[0] : closed, { zIndex: isOpen ? 10 : 1 })}
                 >
-                  <img
-                    src={w.displayUrl!}
-                    alt={w.catalogueName}
-                    draggable={false}
-                    className="h-full w-full object-cover"
-                  />
+                  {cover?.imageUrl && (
+                    <img
+                      src={cover.imageUrl}
+                      alt={cover.name}
+                      draggable={false}
+                      className="h-full w-full object-cover"
+                    />
+                  )}
+                  <span className="absolute inset-x-0 bottom-0 truncate bg-black/45 px-2 py-1 text-left text-sm text-white">
+                    {cover?.name ?? ""}
+                  </span>
                 </button>
-              ))}
-              <button
-                type="button"
-                onClick={() =>
-                  isOpen && curationWorks[0]
-                    ? setViewing({ curationId: p.curationId, artworkId: curationWorks[0].artworkId })
-                    : scrollToCentre(p)
-                }
-                title={cover?.name}
-                className="absolute overflow-hidden rounded bg-neutral-200"
-                style={rectStyle(opened ? opened[0] : closed, { zIndex: isOpen ? 10 : 1 })}
-              >
-                {cover?.imageUrl && (
-                  <img
-                    src={cover.imageUrl}
-                    alt={cover.name}
-                    draggable={false}
-                    className="h-full w-full object-cover"
-                  />
-                )}
-                <span className="absolute inset-x-0 bottom-0 truncate bg-black/45 px-2 py-1 text-left text-sm text-white">
-                  {cover?.name ?? ""}
-                </span>
-              </button>
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {viewing && (
