@@ -26,13 +26,14 @@ import CurationWorkView from "@/components/CurationWorkView";
 // Each curation shows as its cover (first work's main image, name over
 // it). The one whose centre is within one tile of the middle of the view
 // opens over the style's opening speed: its first work at the style's
-// Opened size (times the tile size), the next five at half the tile
-// size — two below it, three up its right-hand side — while every other
-// curation moves aside to make room. Clicking an opened image shows that
-// work's presentation; clicking a closed curation scrolls it to the
-// middle. The canvas is bounded: it is as big as the placements, plus
-// half a view of margin all round so every curation can reach the
-// middle.
+// Opened size (times the tile size), the next five around it as a tight
+// 3 × 3 grid — the first work fills a 2 × 2 corner, two sit below it and
+// three down its right-hand side — so each smaller image is half the
+// first's width less the gap. Every other curation moves aside to make
+// room. Clicking an opened image shows that work's presentation;
+// clicking a closed curation scrolls it to the middle. The canvas is
+// bounded: it is as big as the placements, plus half a view of margin
+// all round so every curation can reach the middle.
 //
 // The view is a fixed-height window (fix, 2026-10-05): the canvas's size
 // depends on the view's size, so the view must never grow to fit the
@@ -208,9 +209,11 @@ export default function CanvasPlayer({
     );
   }
 
-  // The opened curation's sizes, and how far everything else moves aside.
+  // The opened curation's sizes: the first work, and the smaller images
+  // sized so two of them plus a gap exactly match its width. Then how
+  // far everything else moves aside.
   const main = Math.round(T * layout.openScale);
-  const small = Math.round(T / 2);
+  const small = Math.round((main - GAP) / 2);
   const openSize = main + GAP + small;
   const push = (openSize - T) / 2;
   const open = placements.find((p) => p.curationId === openId) ?? null;
@@ -236,20 +239,22 @@ export default function CanvasPlayer({
     return { left, top, size: T };
   };
 
-  // Where an opened curation's images go, centred on its tile: the first
-  // large, then two below it, then three up its right-hand side.
+  // Where an opened curation's images go, centred on its tile, as a
+  // 3 × 3 grid: the first in the top-left 2 × 2, then the two below it,
+  // then the right-hand column from the bottom corner up.
   const openedRects = (p: CanvasPlacement): Rect[] => {
     const left = p.x + marginX + T / 2 - openSize / 2;
     const top = p.y + marginY + T / 2 - openSize / 2;
+    const step = small + GAP;
     const below = top + main + GAP;
     const right = left + main + GAP;
     return [
       { left, top, size: main },
       { left, top: below, size: small },
-      { left: left + small + GAP, top: below, size: small },
+      { left: left + step, top: below, size: small },
       { left: right, top: below, size: small },
-      { left: right, top: below - (small + GAP), size: small },
-      { left: right, top: below - 2 * (small + GAP), size: small },
+      { left: right, top: top + step, size: small },
+      { left: right, top, size: small },
     ];
   };
 
@@ -282,8 +287,13 @@ export default function CanvasPlayer({
             const opened = isOpen ? openedRects(p) : null;
             const closed = closedRect(p);
             const curationWorks = works.get(p.curationId) ?? [];
-            // Closed, the smaller images wait hidden behind the cover.
-            const hidden: Rect = { left: closed.left + T / 4, top: closed.top + T / 4, size: small };
+            // Closed, the smaller images wait hidden, centred behind the
+            // cover.
+            const hidden: Rect = {
+              left: closed.left + (T - small) / 2,
+              top: closed.top + (T - small) / 2,
+              size: small,
+            };
             return (
               <div key={p.curationId}>
                 {curationWorks.slice(1).map((w, i) => (
