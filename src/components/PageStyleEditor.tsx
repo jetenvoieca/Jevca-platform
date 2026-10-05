@@ -6,6 +6,7 @@ import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pag
 import {
   BLOCK_SPACING_LIMITS,
   BLOCK_WIDTH_LIMITS,
+  CANVAS_LIMITS,
   GRID_SPACING_LIMITS,
   SLIDING_DOORS_LIMITS,
   addLayoutBlock,
@@ -13,6 +14,7 @@ import {
   blockWidthOf,
   cleanBlockSpacing,
   cleanBlockWidth,
+  cleanCanvas,
   cleanGridSpacing,
   emptyLayout,
   moveLayoutRow,
@@ -21,6 +23,7 @@ import {
   rowSpacingOf,
   updateBlockWidth,
   updateSlidingDoors,
+  type CanvasLayout,
   type CustomLayout,
   type GridSpacing,
   type LayoutBlockType,
@@ -41,6 +44,7 @@ export type PageStyleDraft = {
   type: PageStyleType | "";
   custom: CustomLayout;
   section: SectionLayout;
+  canvas: CanvasLayout;
 };
 
 export const EMPTY_CUSTOM = (emptyLayout("PRIVATE") as Extract<PageStyleLayout, { type: "PRIVATE" }>)
@@ -49,12 +53,16 @@ export const EMPTY_CUSTOM = (emptyLayout("PRIVATE") as Extract<PageStyleLayout, 
 export const EMPTY_SECTION = (emptyLayout("SECTION") as Extract<PageStyleLayout, { type: "SECTION" }>)
   .layout;
 
+export const EMPTY_CANVAS = (emptyLayout("CANVAS") as Extract<PageStyleLayout, { type: "CANVAS" }>)
+  .layout;
+
 export function draftFrom(name: string, style: PageStyleLayout | null): PageStyleDraft {
   return {
     name,
     type: style?.type ?? "",
     custom: style?.type === "PRIVATE" ? style.layout : EMPTY_CUSTOM,
     section: style?.type === "SECTION" ? style.layout : EMPTY_SECTION,
+    canvas: style?.type === "CANVAS" ? style.layout : EMPTY_CANVAS,
   };
 }
 
@@ -62,6 +70,7 @@ export function draftFrom(name: string, style: PageStyleLayout | null): PageStyl
 export function draftLayout(draft: PageStyleDraft): PageStyleLayout | null {
   if (draft.type === "SECTION") return { type: "SECTION", layout: draft.section };
   if (draft.type === "PRIVATE") return { type: "PRIVATE", layout: draft.custom };
+  if (draft.type === "CANVAS") return { type: "CANVAS", layout: draft.canvas };
   return null;
 }
 
@@ -92,12 +101,13 @@ const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
 // Templates → Page Styles' Add / Edit panel (2026-10-04, from Craig's
 // mockups): sits in the right-hand column, beside the Preview, and stays
 // open until Close. Style name, Style Type, then the chosen type's own
-// layout controls — layout only, no content. Both types start with the
-// grid spacing (2026-10-05) for their grids of images, and set the
-// spacing of every gap between blocks separately and every block's
-// width (2026-10-05, % of the page, centred): Section in its own
-// boxes, Private / Custom in each row of the Layout list (width per
-// block, ↔ between side-by-side blocks, ↕ below the row).
+// layout controls — layout only, no content.
+//
+// Section and Private / Custom set their grid spacing (2026-10-05) for
+// grids of images, the spacing of every gap between blocks separately
+// and every block's width (2026-10-05, % of the page, centred): Section
+// in its own boxes, Private / Custom in each row of the Layout list
+// (width per block, ↔ between side-by-side blocks, ↕ below the row).
 //
 // Private / Custom: background colour and image, then the Layout list,
 // then Sliding doors settings for any Sliding doors blocks. New blocks
@@ -106,8 +116,12 @@ const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
 //
 // Section is a fixed layout — byline, artwork grid, Description — with
 // an optional background colour and an optional video below the
-// Description. Saving is automatic (see PageStylesManager); `status`
-// reports it.
+// Description.
+//
+// Canvas (2026-10-05): curation tile size, opening speed and background
+// colour; the curations themselves are chosen and placed on each page.
+//
+// Saving is automatic (see PageStylesManager); `status` reports it.
 export default function PageStyleEditor({
   draft,
   onChange,
@@ -119,15 +133,22 @@ export default function PageStyleEditor({
   status: { text: string; isError: boolean };
   onClose: () => void;
 }) {
-  const { custom, section } = draft;
+  const { custom, section, canvas } = draft;
   const [adding, setAdding] = useState(false);
   const setCustom = (next: CustomLayout) => onChange({ ...draft, custom: next });
   const setSection = (next: SectionLayout) => onChange({ ...draft, section: next });
+  const setCanvas = (next: CanvasLayout) => onChange({ ...draft, canvas: cleanCanvas(next) });
 
   const changeType = (value: string) => {
     if (!isPageStyleType(value)) return;
     // A different type has a different layout, so start it afresh.
-    onChange({ ...draft, type: value, custom: EMPTY_CUSTOM, section: EMPTY_SECTION });
+    onChange({
+      ...draft,
+      type: value,
+      custom: EMPTY_CUSTOM,
+      section: EMPTY_SECTION,
+      canvas: EMPTY_CANVAS,
+    });
   };
 
   const addBlock = (blockType: LayoutBlockType, placement: BlockPlacement) => {
@@ -190,6 +211,39 @@ export default function PageStyleEditor({
             </option>
           ))}
         </select>
+
+        {draft.type === "CANVAS" && (
+          <div className="mt-2 flex flex-col gap-2.5">
+            <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
+              <NumberField
+                label="Curation tile size"
+                unit="pixels"
+                step={10}
+                value={canvas.tileSize}
+                limits={CANVAS_LIMITS.tileSize}
+                onCommit={(tileSize) => setCanvas({ ...canvas, tileSize })}
+                wide
+              />
+              <NumberField
+                label="Opening speed"
+                unit="seconds"
+                step={0.1}
+                value={canvas.openSpeed}
+                limits={CANVAS_LIMITS.openSpeed}
+                onCommit={(openSpeed) => setCanvas({ ...canvas, openSpeed })}
+                wide
+              />
+            </div>
+            <BackgroundColourControl
+              value={canvas.backgroundColor}
+              onChange={(backgroundColor) => setCanvas({ ...canvas, backgroundColor })}
+            />
+            <p className="text-xs text-neutral-400">
+              The curations are chosen and dragged into place on each page; the canvas grows to
+              fit them. The curation nearest the centre of the screen opens.
+            </p>
+          </div>
+        )}
 
         {draft.type === "SECTION" && (
           <div className="mt-2 flex flex-col gap-2.5">
@@ -489,7 +543,7 @@ export default function PageStyleEditor({
 }
 
 // Vertical and horizontal grid spacing (2026-10-05, from Craig's mockup)
-// — shared by both Style Types.
+// — shared by Section and Private / Custom.
 function GridSpacingControl({
   value,
   onChange,
@@ -522,7 +576,7 @@ function GridSpacingControl({
 }
 
 // "+ Add background colour", or the chosen colour with Remove — shared
-// by both Style Types.
+// by every Style Type.
 function BackgroundColourControl({
   value,
   onChange,
