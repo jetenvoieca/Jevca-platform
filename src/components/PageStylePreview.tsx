@@ -106,12 +106,16 @@ const CANVAS_EXAMPLE_TILES: [number, number][] = [
   [40, 76],
 ];
 
+// The gap between an opened curation's images in the Canvas preview.
+const CANVAS_PREVIEW_GAP = 4;
+
 // A Canvas style: example curation tiles scattered at half the style's
-// tile size, and the one in the centre open — its first work large, the
-// next five around it.
+// tile size, and the one in the centre open as on a page (CanvasPlayer)
+// — a 3 × 3 grid, the first work filling a 2 × 2 corner at the style's
+// Opened size, the next five below it and down its right-hand side.
 function CanvasPreview({ layout }: { layout: CanvasLayout }) {
   const size = Math.round(layout.tileSize / 2);
-  const small = Math.round(size / 2.5);
+  const small = Math.round((size * layout.openScale - CANVAS_PREVIEW_GAP) / 2);
   return (
     <div
       className="relative h-[520px] overflow-hidden rounded-md border border-dashed border-neutral-300"
@@ -129,25 +133,20 @@ function CanvasPreview({ layout }: { layout: CanvasLayout }) {
           Curation
         </div>
       ))}
-      <div className="absolute left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 gap-1.5 rounded-md border-2 border-dashed border-neutral-400 bg-white/70 p-1.5">
-        <div className="flex flex-col gap-1.5">
-          <div
-            className="flex items-center justify-center rounded bg-neutral-300 text-[10px] uppercase tracking-wide text-neutral-500"
-            style={{ width: size, height: size }}
-          >
-            Opened
-          </div>
-          <div className="flex gap-1.5">
-            {[0, 1].map((i) => (
-              <div key={i} className="rounded bg-neutral-200" style={{ width: small, height: small }} />
-            ))}
-          </div>
+      <div
+        className="absolute left-1/2 top-1/2 grid -translate-x-1/2 -translate-y-1/2 rounded-md border-2 border-dashed border-neutral-400 bg-white/70 p-1.5"
+        style={{
+          gridTemplateColumns: `repeat(3, ${small}px)`,
+          gridAutoRows: `${small}px`,
+          gap: CANVAS_PREVIEW_GAP,
+        }}
+      >
+        <div className="col-span-2 row-span-2 flex items-center justify-center rounded bg-neutral-300 text-[10px] uppercase tracking-wide text-neutral-500">
+          Opened
         </div>
-        <div className="flex flex-col gap-1.5">
-          {[0, 1, 2].map((i) => (
-            <div key={i} className="rounded bg-neutral-200" style={{ width: small, height: small }} />
-          ))}
-        </div>
+        {Array.from({ length: 5 }, (_, i) => (
+          <div key={i} className="rounded bg-neutral-200" />
+        ))}
       </div>
     </div>
   );
