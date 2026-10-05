@@ -3,7 +3,12 @@
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getCuration, type CurationDetail, type CurationWork } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
-import type { GridSpacing, LayoutBlock } from "@/lib/pageStyleLayout";
+import {
+  rowKey,
+  rowSpacingOf,
+  type GridSpacing,
+  type LayoutBlock,
+} from "@/lib/pageStyleLayout";
 import { groupBlocksByRow } from "@/lib/blocks";
 import CurationWorkView from "@/components/CurationWorkView";
 import SlidingDoors from "@/components/SlidingDoors";
@@ -17,10 +22,12 @@ import SlidingDoors from "@/components/SlidingDoors";
 // - Private / Custom: Gallery blocks show the works' images, Text blocks
 //   the curation's Description, Sliding doors the works' main images in
 //   pairs or one at a time (see SlidingDoors).
-// Grids of images use the style's grid spacing. Anything with nothing
-// to fill it yet (Byline, Header, Video, an empty Gallery, no
-// Description…) is left out, and no outlines or labels are shown. Images
-// are image only.
+// Grids of images use the style's grid spacing, and the gaps between
+// blocks its block spacing. Anything with nothing to fill it yet
+// (Byline, Header, Video, an empty Gallery, no Description…) is left
+// out — the space above the next shown block is the space below the
+// last one shown — and no outlines or labels are shown. Images are image
+// only.
 //
 // Without one: a simple grid of the works with the curation's
 // Description in a box beside them, as on the Curations page.
@@ -92,7 +99,9 @@ export default function PagePreview({
   );
 }
 
-type Cell = { id: string; content: ReactNode };
+// One row of the page as shown: its blocks' contents, the space below
+// it and the space between its blocks.
+type Row = { key: string; cells: { id: string; content: ReactNode }[]; below: number; between: number };
 
 // The page in its Display Style — see the note at the top.
 function StyledPage({
@@ -132,35 +141,51 @@ function StyledPage({
     return null;
   };
 
-  // Unfilled parts are dropped, and so is any row left empty.
-  const rows: Cell[][] =
+  const allRows: Row[] =
     style.type === "SECTION"
       ? [
-          { id: "grid", content: grid },
-          { id: "description", content: description },
+          {
+            key: "grid",
+            cells: [{ id: "grid", content: grid }],
+            below: style.layout.spacing.belowGrid,
+            between: 0,
+          },
+          {
+            key: "description",
+            cells: [{ id: "description", content: description }],
+            below: style.layout.spacing.belowDescription,
+            between: 0,
+          },
         ]
-          .filter((c) => c.content)
-          .map((c) => [c])
-      : groupBlocksByRow(style.layout.blocks)
-          .map((row) =>
-            row.flatMap((b) => {
-              const content = fill(b);
-              return content ? [{ id: b.id, content }] : [];
-            })
-          )
-          .filter((row) => row.length > 0);
+      : groupBlocksByRow(style.layout.blocks).map((row) => {
+          const key = rowKey(row);
+          return {
+            key,
+            cells: row.map((b) => ({ id: b.id, content: fill(b) })),
+            ...rowSpacingOf(style.layout, key),
+          };
+        });
+
+  // Unfilled blocks are dropped, and so is any row left empty.
+  const rows = allRows
+    .map((r) => ({ ...r, cells: r.cells.filter((c) => c.content) }))
+    .filter((r) => r.cells.length > 0);
 
   return (
     <div
-      className="flex min-h-full flex-col gap-4 rounded-md p-4"
+      className="flex min-h-full flex-col rounded-md p-4"
       style={{ backgroundColor: style.layout.backgroundColor ?? undefined }}
     >
       {rows.length === 0 ? (
         <Message text="Nothing in this style can be filled from the page's curation yet." />
       ) : (
-        rows.map((row) => (
-          <div key={row[0].id} className="flex gap-4">
-            {row.map((c) => (
+        rows.map((row, i) => (
+          <div
+            key={row.key}
+            className="flex"
+            style={{ marginTop: i > 0 ? rows[i - 1].below : 0, gap: row.between }}
+          >
+            {row.cells.map((c) => (
               <div key={c.id} className="min-w-0 flex-1">
                 {c.content}
               </div>

@@ -1,24 +1,30 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { groupBlocksByRow } from "@/lib/blocks";
 import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pageStyleTypes";
 import {
+  BLOCK_SPACING_LIMITS,
   GRID_SPACING_LIMITS,
   LAYOUT_BLOCK_TYPES,
   SLIDING_DOORS_LIMITS,
   addLayoutBlock,
   blockTypeLabel,
+  cleanBlockSpacing,
   cleanGridSpacing,
   emptyLayout,
   moveLayoutRow,
   removeLayoutBlock,
+  rowKey,
+  rowSpacingOf,
   updateSlidingDoors,
   type CustomLayout,
   type GridSpacing,
   type LayoutBlockType,
   type PageStyleLayout,
+  type RowSpacing,
   type SectionLayout,
+  type SectionSpacing,
   type SlidingDoorsSettings,
 } from "@/lib/pageStyleLayout";
 
@@ -78,11 +84,14 @@ const DOORS_FIELDS: {
 // mockups): sits in the right-hand column, beside the Preview, and stays
 // open until Close. Style name, Style Type, then the chosen type's own
 // layout controls — layout only, no content. Both types start with the
-// grid spacing (2026-10-05) for their grids of images. Private / Custom
-// offers the old block editor's controls, adding empty placeholders,
-// plus Sliding doors (2026-10-05) — pairs or one at a time — with its
-// Duration, Slide speed and (for pairs) Gap. Section (2026-10-05) is a
-// fixed layout — byline, artwork grid, Description — with an optional
+// grid spacing (2026-10-05) for their grids of images, and set the
+// spacing of every gap between blocks separately (2026-10-05): Section
+// in its own Block spacing box, Private / Custom beside each row in the
+// Layout list (↕ below a row, ↔ between side-by-side blocks). Private /
+// Custom offers the old block editor's controls, adding empty
+// placeholders, plus Sliding doors (2026-10-05) — pairs or one at a
+// time — with its Duration, Slide speed and (for pairs) Gap. Section is
+// a fixed layout — byline, artwork grid, Description — with an optional
 // background colour and an optional video below the Description. Saving
 // is automatic (see PageStylesManager); `status` reports it.
 export default function PageStyleEditor({
@@ -121,6 +130,23 @@ export default function PageStyleEditor({
 
   const setDoors = (id: string, doors: SlidingDoorsSettings) =>
     setCustom({ ...custom, blocks: updateSlidingDoors(custom.blocks, id, doors) });
+
+  const setRowSpacing = (key: string, patch: Partial<RowSpacing>) => {
+    const current = rowSpacingOf(custom, key);
+    setCustom({
+      ...custom,
+      rowSpacing: {
+        ...custom.rowSpacing,
+        [key]: {
+          below: cleanBlockSpacing(patch.below ?? current.below),
+          between: cleanBlockSpacing(patch.between ?? current.between),
+        },
+      },
+    });
+  };
+
+  const setSectionSpacing = (key: keyof SectionSpacing, value: number) =>
+    setSection({ ...section, spacing: { ...section.spacing, [key]: cleanBlockSpacing(value) } });
 
   const rows = groupBlocksByRow(custom.blocks);
   const doorsBlocks = custom.blocks.filter((b) => b.type === "slidingdoors" && b.doors);
@@ -161,6 +187,37 @@ export default function PageStyleEditor({
               value={section.gridSpacing}
               onChange={(gridSpacing) => setSection({ ...section, gridSpacing })}
             />
+            <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
+              <NumberField
+                label="Space below byline"
+                unit="pixels"
+                step={1}
+                value={section.spacing.belowByline}
+                limits={BLOCK_SPACING_LIMITS}
+                onCommit={(v) => setSectionSpacing("belowByline", v)}
+                wide
+              />
+              <NumberField
+                label="Space below grid"
+                unit="pixels"
+                step={1}
+                value={section.spacing.belowGrid}
+                limits={BLOCK_SPACING_LIMITS}
+                onCommit={(v) => setSectionSpacing("belowGrid", v)}
+                wide
+              />
+              {section.video && (
+                <NumberField
+                  label="Space below description"
+                  unit="pixels"
+                  step={1}
+                  value={section.spacing.belowDescription}
+                  limits={BLOCK_SPACING_LIMITS}
+                  onCommit={(v) => setSectionSpacing("belowDescription", v)}
+                  wide
+                />
+              )}
+            </div>
             <BackgroundColourControl
               value={section.backgroundColor}
               onChange={(backgroundColor) => setSection({ ...section, backgroundColor })}
@@ -233,55 +290,87 @@ export default function PageStyleEditor({
                   Layout
                 </p>
                 <div className="flex flex-col gap-1.5">
-                  {rows.map((row, i) => (
-                    <div
-                      key={row[0].id}
-                      className="flex items-center gap-1 rounded-md border border-neutral-200 p-1.5"
-                    >
-                      <div className="flex min-w-0 flex-1 gap-1">
-                        {row.map((b) => (
-                          <span
-                            key={b.id}
-                            className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-700"
+                  {rows.map((row, i) => {
+                    const key = rowKey(row);
+                    const spacing = rowSpacingOf(custom, key);
+                    return (
+                      <Fragment key={key}>
+                        <div className="flex items-center gap-1 rounded-md border border-neutral-200 p-1.5">
+                          <div className="flex min-w-0 flex-1 flex-col gap-1">
+                            <div className="flex min-w-0 gap-1">
+                              {row.map((b) => (
+                                <span
+                                  key={b.id}
+                                  className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-700"
+                                >
+                                  <span className="truncate">{blockTypeLabel(b.type)}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setCustom({
+                                        ...custom,
+                                        blocks: removeLayoutBlock(custom.blocks, b.id),
+                                      })
+                                    }
+                                    aria-label={`Remove ${blockTypeLabel(b.type)}`}
+                                    className="text-neutral-400 hover:text-red-600"
+                                  >
+                                    ✕
+                                  </button>
+                                </span>
+                              ))}
+                            </div>
+                            {row.length > 1 && (
+                              <NumberField
+                                label="↔ Between"
+                                unit="px"
+                                step={1}
+                                value={spacing.between}
+                                limits={BLOCK_SPACING_LIMITS}
+                                onCommit={(between) => setRowSpacing(key, { between })}
+                                compact
+                              />
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, -1) })
+                            }
+                            disabled={i === 0}
+                            aria-label="Move up"
+                            className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
                           >
-                            <span className="truncate">{blockTypeLabel(b.type)}</span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setCustom({ ...custom, blocks: removeLayoutBlock(custom.blocks, b.id) })
-                              }
-                              aria-label={`Remove ${blockTypeLabel(b.type)}`}
-                              className="text-neutral-400 hover:text-red-600"
-                            >
-                              ✕
-                            </button>
-                          </span>
-                        ))}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, -1) })
-                        }
-                        disabled={i === 0}
-                        aria-label="Move up"
-                        className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
-                      >
-                        ↑
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, 1) })
-                        }
-                        disabled={i === rows.length - 1}
-                        aria-label="Move down"
-                        className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
-                      >
-                        ↓
-                      </button>
-                    </div>
-                  ))}
+                            ↑
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, 1) })
+                            }
+                            disabled={i === rows.length - 1}
+                            aria-label="Move down"
+                            className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
+                          >
+                            ↓
+                          </button>
+                        </div>
+                        {i < rows.length - 1 && (
+                          <div className="flex justify-center">
+                            <NumberField
+                              label="↕ Space"
+                              unit="px"
+                              step={1}
+                              value={spacing.below}
+                              limits={BLOCK_SPACING_LIMITS}
+                              onCommit={(below) => setRowSpacing(key, { below })}
+                              compact
+                            />
+                          </div>
+                        )}
+                      </Fragment>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -454,7 +543,8 @@ function BackgroundColourControl({
 
 // A number, applied when the box is left (or Enter). Kept within its
 // limits when saved; anything that isn't a number goes back to the
-// current value. `wide` gives room for a longer label.
+// current value. `wide` gives room for a longer label; `compact` is the
+// small version used for spacing inside the Layout list.
 function NumberField({
   label,
   unit,
@@ -463,6 +553,7 @@ function NumberField({
   limits,
   onCommit,
   wide = false,
+  compact = false,
 }: {
   label: string;
   unit: string;
@@ -471,6 +562,7 @@ function NumberField({
   limits: { min: number; max: number };
   onCommit: (value: number) => void;
   wide?: boolean;
+  compact?: boolean;
 }) {
   const [text, setText] = useState(String(value));
   useEffect(() => setText(String(value)), [value]);
@@ -484,9 +576,15 @@ function NumberField({
     if (n !== value) onCommit(n);
   };
 
+  const labelClass = compact ? "shrink-0" : `${wide ? "flex-1" : "w-24"} shrink-0`;
+
   return (
-    <label className="flex items-center gap-2 text-sm text-neutral-700">
-      <span className={`${wide ? "flex-1" : "w-24"} shrink-0`}>{label}</span>
+    <label
+      className={`flex items-center gap-2 ${
+        compact ? "text-xs text-neutral-500" : "text-sm text-neutral-700"
+      }`}
+    >
+      <span className={labelClass}>{label}</span>
       <input
         type="number"
         min={limits.min}
@@ -498,7 +596,9 @@ function NumberField({
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+        className={`rounded-md border border-neutral-300 px-2 ${
+          compact ? "w-14 py-0.5 text-xs" : "w-16 py-1 text-sm"
+        }`}
       />
       <span className="text-xs text-neutral-400">{unit}</span>
     </label>
