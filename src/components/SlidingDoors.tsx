@@ -4,51 +4,57 @@ import { useEffect, useMemo, useState } from "react";
 import type { CurationWork } from "@/lib/actions/curations";
 
 // Sliding doors (2026-10-05, from Craig's mockup) — a curation's main
-// images a pair at a time, side by side, full screen, `gap` pixels
-// apart. After `duration` seconds the pair slides apart (left image off
-// to the left, right image off to the right) over `speed` seconds,
-// revealing the next pair already sitting behind it; then it repeats,
-// looping back to the first pair. Works are paired in curation order
-// (1+2, 3+4…); with an odd number the last pairs with the first. Works
-// without an image are left out. Clicking an image opens that work
-// (onOpen). The page's background shows in the gap.
+// images shown full screen, a slide at a time, on a continuous loop.
+// After `duration` seconds the slide moves away over `speed` seconds,
+// revealing the next slide already sitting behind it.
+// - perSlide 2: a pair side by side, `gap` pixels apart; the left image
+//   slides off to the left, the right image off to the right. Works are
+//   paired in curation order (1+2, 3+4…); with an odd number the last
+//   pairs with the first. The page's background shows in the gap.
+// - perSlide 1 (2026-10-05, e.g. a home page): one image at a time,
+//   sliding off to the left.
+// Works without an image are left out. Clicking an image opens that work
+// (onOpen).
 export default function SlidingDoors({
   works,
   duration,
   speed,
   gap,
+  perSlide,
   onOpen,
 }: {
   works: CurationWork[];
   duration: number;
   speed: number;
   gap: number;
+  perSlide: 1 | 2;
   onOpen: (artworkId: string) => void;
 }) {
-  const pairs = useMemo(() => {
+  const slides = useMemo(() => {
     const shown = works.filter((w) => w.displayUrl);
-    const out: [CurationWork, CurationWork][] = [];
+    if (perSlide === 1) return shown.map((w) => [w]);
+    const out: CurationWork[][] = [];
     for (let i = 0; i < shown.length; i += 2) out.push([shown[i], shown[i + 1] ?? shown[0]]);
     return out;
-  }, [works]);
+  }, [works, perSlide]);
 
   const [index, setIndex] = useState(0);
   const [opening, setOpening] = useState(false);
 
-  // A different set of works starts again from the first pair.
+  // A different set of slides starts again from the first.
   useEffect(() => {
     setIndex(0);
     setOpening(false);
-  }, [pairs]);
+  }, [slides]);
 
   // Waits `duration`, then opens; once open (`speed` later), the next
-  // pair becomes the front pair, closed again, and the wait restarts.
+  // slide becomes the front slide, closed again, and the wait restarts.
   useEffect(() => {
-    if (pairs.length < 2) return;
+    if (slides.length < 2) return;
     const timer = setTimeout(
       () => {
         if (opening) {
-          setIndex((i) => (i + 1) % pairs.length);
+          setIndex((i) => (i + 1) % slides.length);
           setOpening(false);
         } else {
           setOpening(true);
@@ -57,17 +63,18 @@ export default function SlidingDoors({
       (opening ? speed : duration) * 1000
     );
     return () => clearTimeout(timer);
-  }, [opening, index, pairs.length, duration, speed]);
+  }, [opening, index, slides.length, duration, speed]);
 
-  if (pairs.length === 0) return null;
+  if (slides.length === 0) return null;
 
-  const current = pairs[index % pairs.length];
-  const next = pairs[(index + 1) % pairs.length];
+  const current = slides[index % slides.length];
+  const next = slides[(index + 1) % slides.length];
+  const spacing = perSlide === 2 ? gap : 0;
 
   return (
     <div className="relative h-[75vh] w-full overflow-hidden">
-      {pairs.length > 1 && (
-        <div className="absolute inset-0 flex" style={{ gap }} aria-hidden>
+      {slides.length > 1 && (
+        <div className="absolute inset-0 flex" style={{ gap: spacing }} aria-hidden>
           {next.map((w, side) => (
             <img
               key={side}
@@ -79,10 +86,11 @@ export default function SlidingDoors({
         </div>
       )}
 
-      {/* Keyed by pair, so each new front pair starts closed with no
-          animation. Each image moves its own width plus nothing more,
-          which takes it exactly off its side whatever the gap. */}
-      <div key={index} className="absolute inset-0 flex" style={{ gap }}>
+      {/* Keyed by slide, so each new front slide starts closed with no
+          animation. Each image moves its own width, which takes it
+          exactly off its side whatever the gap: the first image (or the
+          only one) to the left, the second to the right. */}
+      <div key={index} className="absolute inset-0 flex" style={{ gap: spacing }}>
         {current.map((w, side) => (
           <button
             key={side}
