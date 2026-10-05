@@ -5,18 +5,22 @@ import { groupBlocksByRow } from "@/lib/blocks";
 import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pageStyleTypes";
 import {
   BLOCK_SPACING_LIMITS,
+  BLOCK_WIDTH_LIMITS,
   GRID_SPACING_LIMITS,
   LAYOUT_BLOCK_TYPES,
   SLIDING_DOORS_LIMITS,
   addLayoutBlock,
   blockTypeLabel,
+  blockWidthOf,
   cleanBlockSpacing,
+  cleanBlockWidth,
   cleanGridSpacing,
   emptyLayout,
   moveLayoutRow,
   removeLayoutBlock,
   rowKey,
   rowSpacingOf,
+  updateBlockWidth,
   updateSlidingDoors,
   type CustomLayout,
   type GridSpacing,
@@ -25,6 +29,7 @@ import {
   type RowSpacing,
   type SectionLayout,
   type SectionSpacing,
+  type SectionWidths,
   type SlidingDoorsSettings,
 } from "@/lib/pageStyleLayout";
 
@@ -80,14 +85,23 @@ const DOORS_FIELDS: {
   { key: "gap", label: "Gap", unit: "pixels", step: 1 },
 ];
 
+// A Section's parts, for its Widths box.
+const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
+  { key: "byline", label: "Byline width" },
+  { key: "grid", label: "Grid width" },
+  { key: "description", label: "Description width" },
+  { key: "video", label: "Video width" },
+];
+
 // Templates → Page Styles' Add / Edit panel (2026-10-04, from Craig's
 // mockups): sits in the right-hand column, beside the Preview, and stays
 // open until Close. Style name, Style Type, then the chosen type's own
 // layout controls — layout only, no content. Both types start with the
 // grid spacing (2026-10-05) for their grids of images, and set the
-// spacing of every gap between blocks separately (2026-10-05): Section
-// in its own Block spacing box, Private / Custom beside each row in the
-// Layout list (↕ below a row, ↔ between side-by-side blocks). Private /
+// spacing of every gap between blocks separately and every block's
+// width (2026-10-05, % of the page, centred): Section in its own
+// boxes, Private / Custom in each row of the Layout list (width per
+// block, ↔ between side-by-side blocks, ↕ below the row). Private /
 // Custom offers the old block editor's controls, adding empty
 // placeholders, plus Sliding doors (2026-10-05) — pairs or one at a
 // time — with its Duration, Slide speed and (for pairs) Gap. Section is
@@ -148,6 +162,9 @@ export default function PageStyleEditor({
   const setSectionSpacing = (key: keyof SectionSpacing, value: number) =>
     setSection({ ...section, spacing: { ...section.spacing, [key]: cleanBlockSpacing(value) } });
 
+  const setSectionWidth = (key: keyof SectionWidths, value: number) =>
+    setSection({ ...section, widths: { ...section.widths, [key]: cleanBlockWidth(value) } });
+
   const rows = groupBlocksByRow(custom.blocks);
   const doorsBlocks = custom.blocks.filter((b) => b.type === "slidingdoors" && b.doors);
 
@@ -187,6 +204,20 @@ export default function PageStyleEditor({
               value={section.gridSpacing}
               onChange={(gridSpacing) => setSection({ ...section, gridSpacing })}
             />
+            <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
+              {SECTION_WIDTH_FIELDS.filter((f) => f.key !== "video" || section.video).map((f) => (
+                <NumberField
+                  key={f.key}
+                  label={f.label}
+                  unit="%"
+                  step={5}
+                  value={section.widths[f.key]}
+                  limits={BLOCK_WIDTH_LIMITS}
+                  onCommit={(v) => setSectionWidth(f.key, v)}
+                  wide
+                />
+              ))}
+            </div>
             <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
               <NumberField
                 label="Space below byline"
@@ -320,6 +351,25 @@ export default function PageStyleEditor({
                                 </span>
                               ))}
                             </div>
+                            {row.map((b) => (
+                              <NumberField
+                                key={b.id}
+                                label={
+                                  row.length > 1 ? `${blockTypeLabel(b.type)} width` : "Width"
+                                }
+                                unit="%"
+                                step={5}
+                                value={blockWidthOf(b)}
+                                limits={BLOCK_WIDTH_LIMITS}
+                                onCommit={(width) =>
+                                  setCustom({
+                                    ...custom,
+                                    blocks: updateBlockWidth(custom.blocks, b.id, width),
+                                  })
+                                }
+                                compact
+                              />
+                            ))}
                             {row.length > 1 && (
                               <NumberField
                                 label="↔ Between"
@@ -544,7 +594,7 @@ function BackgroundColourControl({
 // A number, applied when the box is left (or Enter). Kept within its
 // limits when saved; anything that isn't a number goes back to the
 // current value. `wide` gives room for a longer label; `compact` is the
-// small version used for spacing inside the Layout list.
+// small version used inside the Layout list.
 function NumberField({
   label,
   unit,

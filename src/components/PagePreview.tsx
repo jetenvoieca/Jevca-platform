@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { getCuration, type CurationDetail, type CurationWork } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import {
+  blockWidthOf,
   rowKey,
   rowSpacingOf,
   type GridSpacing,
@@ -22,12 +23,12 @@ import SlidingDoors from "@/components/SlidingDoors";
 // - Private / Custom: Gallery blocks show the works' images, Text blocks
 //   the curation's Description, Sliding doors the works' main images in
 //   pairs or one at a time (see SlidingDoors).
-// Grids of images use the style's grid spacing, and the gaps between
-// blocks its block spacing. Anything with nothing to fill it yet
-// (Byline, Header, Video, an empty Gallery, no Description…) is left
-// out — the space above the next shown block is the space below the
-// last one shown — and no outlines or labels are shown. Images are image
-// only.
+// Grids of images use the style's grid spacing, the gaps between blocks
+// its block spacing, and each block its width (% of the page, centred).
+// Anything with nothing to fill it yet (Byline, Header, Video, an empty
+// Gallery, no Description…) is left out — the space above the next shown
+// block is the space below the last one shown — and no outlines or
+// labels are shown. Images are image only.
 //
 // Without one: a simple grid of the works with the curation's
 // Description in a box beside them, as on the Curations page.
@@ -99,9 +100,14 @@ export default function PagePreview({
   );
 }
 
-// One row of the page as shown: its blocks' contents, the space below
-// it and the space between its blocks.
-type Row = { key: string; cells: { id: string; content: ReactNode }[]; below: number; between: number };
+// One row of the page as shown: its blocks' contents and widths, the
+// space below it and the space between its blocks.
+type Row = {
+  key: string;
+  cells: { id: string; content: ReactNode; width: number }[];
+  below: number;
+  between: number;
+};
 
 // The page in its Display Style — see the note at the top.
 function StyledPage({
@@ -146,13 +152,19 @@ function StyledPage({
       ? [
           {
             key: "grid",
-            cells: [{ id: "grid", content: grid }],
+            cells: [{ id: "grid", content: grid, width: style.layout.widths.grid }],
             below: style.layout.spacing.belowGrid,
             between: 0,
           },
           {
             key: "description",
-            cells: [{ id: "description", content: description }],
+            cells: [
+              {
+                id: "description",
+                content: description,
+                width: style.layout.widths.description,
+              },
+            ],
             below: style.layout.spacing.belowDescription,
             between: 0,
           },
@@ -161,7 +173,7 @@ function StyledPage({
           const key = rowKey(row);
           return {
             key,
-            cells: row.map((b) => ({ id: b.id, content: fill(b) })),
+            cells: row.map((b) => ({ id: b.id, content: fill(b), width: blockWidthOf(b) })),
             ...rowSpacingOf(style.layout, key),
           };
         });
@@ -182,11 +194,11 @@ function StyledPage({
         rows.map((row, i) => (
           <div
             key={row.key}
-            className="flex"
+            className="flex justify-center"
             style={{ marginTop: i > 0 ? rows[i - 1].below : 0, gap: row.between }}
           >
             {row.cells.map((c) => (
-              <div key={c.id} className="min-w-0 flex-1">
+              <div key={c.id} className="min-w-0" style={{ width: `${c.width}%` }}>
                 {c.content}
               </div>
             ))}
