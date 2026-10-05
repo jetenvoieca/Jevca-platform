@@ -30,10 +30,11 @@ enum SiteStatus {
 // Which of the old page editors a page uses: SECTION (fixed byline +
 // artwork grid), PRIVATE (generic Content Blocks) or TEMPLATE_STYLE.
 // Since 2026-10-04 SECTION and PRIVATE ("Private / Custom") are also
-// the Style Types a PageStyle is built from. The Pavilion types were
-// removed 2026-10-05 (replaced by the Canvas page style).
-// TEMPLATE_STYLE, with its editors, is marked for possible clean-up
-// later: no longer offered anywhere.
+// the Style Types a PageStyle is built from, and CANVAS (2026-10-05) is
+// a Style Type only — no page uses it as its own type. The Pavilion
+// types were removed 2026-10-05 (replaced by Canvas). TEMPLATE_STYLE,
+// with its editors, is marked for possible clean-up later: no longer
+// offered anywhere.
 enum PageType {
   SECTION
   PRIVATE
@@ -49,6 +50,9 @@ enum PageType {
   // src/lib/actions/pages.ts) — it's exactly the existing block editor,
   // so it needs no distinct type of its own.
   TEMPLATE_STYLE
+  // A large canvas of curations that scrolls in any direction — see
+  // CanvasLayout in lib/pageStyleLayout.ts.
+  CANVAS
 }
 
 // Fixed layout styles offered by the Templates library (2026-09-06) —
@@ -1012,10 +1016,10 @@ model Page {
 }
 
 // A Page Style (2026-10-04) — a named page layout, shared by every site,
-// managed under Templates → Page Styles. `type` is the old page type it
-// is built from (SECTION or PRIVATE only — see PageType); `layout` is
-// the arrangement of components for that type, with no content in it
-// (placeholders only), saved as JSON like Page.draftBlocks.
+// managed under Templates → Page Styles. `type` is its Style Type
+// (SECTION, PRIVATE or CANVAS — see PageType); `layout` is that type's
+// arrangement and settings, with no content in it, saved as JSON like
+// Page.draftBlocks (see lib/pageStyleLayout.ts).
 model PageStyle {
   id   String   @id @default(cuid())
   name String   @unique
