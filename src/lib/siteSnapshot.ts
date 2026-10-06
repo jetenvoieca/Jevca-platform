@@ -5,6 +5,7 @@ import type {
 } from "@/lib/actions/curations";
 import type { CanvasPlacement } from "@/lib/actions/pageCanvas";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
+import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
 import type { CurationSectionData } from "@/lib/curationSections";
 
 // A published site (2026-10-06) — everything its pages show, saved when
@@ -20,6 +21,8 @@ export const SNAPSHOT_VERSION = 1;
 
 // One live page, in menu order. `curationId` is the page's own curation
 // (not used with a Canvas style, whose curations are in `canvas`).
+// `menuStyleId` (2026-10-06) is the menu this page shows — its own, or
+// else the site's; null = no menu. Its settings are in `menus`.
 export type SnapshotPage = {
   id: string;
   title: string;
@@ -27,6 +30,7 @@ export type SnapshotPage = {
   curationId: string | null;
   style: PageStyleSummary | null;
   canvas: CanvasPlacement[];
+  menuStyleId: string | null;
 };
 
 // One curation shown somewhere on the site: its works, its sections, and
@@ -45,6 +49,8 @@ export type SiteSnapshot = {
   curations: Record<string, SnapshotCuration>;
   // Covers of the curations placed on Canvas pages.
   covers: CurationCover[];
+  // The menus the pages show (2026-10-06), by Menu Style id.
+  menus: Record<string, MenuStyleLayout>;
 };
 
 // What "Publish to live site" reports back (2026-10-06): when the site

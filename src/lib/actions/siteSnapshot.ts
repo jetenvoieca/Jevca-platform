@@ -11,6 +11,7 @@ import { listCurationSections } from "@/lib/actions/curationSections";
 import { getPageCanvas } from "@/lib/actions/pageCanvas";
 import { listPageStyles } from "@/lib/actions/pageStyles";
 import { normalizeLayout } from "@/lib/pageStyleLayout";
+import { normalizeMenuStyle, type MenuStyleLayout } from "@/lib/menuStyleLayout";
 import {
   SNAPSHOT_VERSION,
   type PublishResult,
@@ -22,7 +23,8 @@ import {
 // Publishing a site (2026-10-06) — see lib/siteSnapshot.ts. The whole
 // site at once: its Live Pages in order, each with its Display Style,
 // curation or canvas placements, and every curation those show, with
-// their works, sections and each work's presentation.
+// their works, sections and each work's presentation, and the menu each
+// page shows (2026-10-06 — the page's own, or else the site's).
 
 async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
   const site = await db.site.findUnique({
@@ -30,10 +32,18 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
     select: {
       name: true,
       artistId: true,
+      menuStyleId: true,
       pages: {
         where: { visible: true },
         orderBy: { position: "asc" },
-        select: { id: true, title: true, slug: true, curationId: true, pageStyleId: true },
+        select: {
+          id: true,
+          title: true,
+          slug: true,
+          curationId: true,
+          pageStyleId: true,
+          menuStyleId: true,
+        },
       },
     },
   });
@@ -51,9 +61,18 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
         curationId: isCanvas ? null : p.curationId,
         style,
         canvas: isCanvas ? await getPageCanvas(siteId, p.id) : [],
+        menuStyleId: p.menuStyleId ?? site.menuStyleId,
       };
     })
   );
+
+  const menuIds = [...new Set(pages.flatMap((p) => (p.menuStyleId ? [p.menuStyleId] : [])))];
+  const menuRows = await db.menuStyle.findMany({
+    where: { id: { in: menuIds } },
+    select: { id: true, layout: true },
+  });
+  const menus: Record<string, MenuStyleLayout> = {};
+  for (const m of menuRows) menus[m.id] = normalizeMenuStyle(m.layout);
 
   const curationIds = new Set<string>();
   for (const p of pages) {
@@ -80,7 +99,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
 
   const covers = (await listCurationCovers(site.artistId)).filter((c) => curationIds.has(c.id));
 
-  return { version: SNAPSHOT_VERSION, siteName: site.name, pages, curations, covers };
+  return { version: SNAPSHOT_VERSION, siteName: site.name, pages, curations, covers, menus };
 }
 
 // "Publish to live site" — replaces the site's published snapshot and
@@ -118,8 +137,9 @@ export async function getLastPublishedAt(siteId: string): Promise<Date | null> {
 // published in an older shape — see SNAPSHOT_VERSION). Each page's
 // Display Style is cleaned with the same rules as a saved style
 // (2026-10-06), so a style setting added after publishing takes its
-// default rather than breaking the page. Changes to a style's own
-// settings still need a publish to show.
+// default rather than breaking the page; menus (2026-10-06) the same. A
+// site published before menus existed shows none until it's published
+// again. Changes to a style's own settings still need a publish to show.
 export async function getPublishedSite(
   siteId: string
 ): Promise<{ snapshot: SiteSnapshot; publishedAt: Date } | null> {
@@ -136,6 +156,11 @@ export async function getPublishedSite(
       name: p.style.name,
       ...normalizeLayout(p.style.type, p.style.layout),
     },
+    menuStyleId: p.menuStyleId ?? null,
   }));
-  return { snapshot: { ...snapshot, pages }, publishedAt: row.publishedAt };
+  const menus: Record<string, MenuStyleLayout> = {};
+  for (const [id, layout] of Object.entries(snapshot.menus ?? {})) {
+    menus[id] = normalizeMenuStyle(layout);
+  }
+  return { snapshot: { ...snapshot, pages, menus }, publishedAt: row.publishedAt };
 }

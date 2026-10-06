@@ -1,12 +1,13 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { getPublishedSite } from "@/lib/actions/siteSnapshot";
+import { loadPublishedSite } from "../published";
 import PublishedSiteView from "@/components/PublishedSiteView";
 
 // A site's own pages, as last published (2026-10-06) — full screen,
 // drawn from the published snapshot only (see lib/siteSnapshot.ts). The
 // home page (no address after the site) is the first of its Live Pages;
-// the others are at their page's address. Private for now: like every
+// the others are at their page's address. The menu is drawn by the
+// layout (../layout.tsx). Private for now: like every
 // admin address, only reachable when logged in (see middleware.ts).
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ type Params = Promise<{ siteId: string; slug?: string[] }>;
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { siteId, slug } = await params;
-  const published = await getPublishedSite(siteId);
+  const published = await loadPublishedSite(siteId);
   if (!published) return { title: "Not published yet" };
   const { snapshot } = published;
   const page = slug?.[0] ? snapshot.pages.find((p) => p.slug === slug[0]) : snapshot.pages[0];
@@ -23,7 +24,7 @@ export async function generateMetadata({ params }: { params: Params }): Promise<
 
 export default async function SitePreviewPage({ params }: { params: Params }) {
   const { siteId, slug } = await params;
-  const published = await getPublishedSite(siteId);
+  const published = await loadPublishedSite(siteId);
 
   if (!published) {
     return (
@@ -50,5 +51,5 @@ export default async function SitePreviewPage({ params }: { params: Params }) {
     );
   }
 
-  return <PublishedSiteView siteId={siteId} snapshot={snapshot} pageId={page.id} />;
+  return <PublishedSiteView snapshot={snapshot} pageId={page.id} />;
 }
