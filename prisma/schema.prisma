@@ -1137,6 +1137,21 @@ model PageStyle {
   updatedAt DateTime @updatedAt
 }
 
+// A Menu Style (2026-10-06, from Craig's request) — a named site menu
+// design, shared by every site, managed under Templates → Menus. It sets
+// how the menu looks and behaves only: the menu's items and their order
+// are always the site's Live Pages. `layout` holds the settings as JSON
+// (see lib/menuStyleLayout.ts).
+model MenuStyle {
+  id   String @id @default(cuid())
+  name String @unique
+
+  layout Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // A reusable design library (2026-09-06) — e.g. "ISYT", replicating the
 // isendyouthis.com template set shown in the design mockups. Deliberately
 // its own top-level model, separate from Site/Page: a Template is
