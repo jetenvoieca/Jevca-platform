@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/pages";
 import type { CurationSummary } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
+import { LiveSiteData } from "@/lib/siteData";
 import PageDetailsModal from "@/components/PageDetailsModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PagePreview from "@/components/PagePreview";
@@ -35,9 +36,10 @@ type ListKey = "live" | "hidden";
 // reorderPages. Add and Edit open the same modal (PageDetailsModal); a
 // new page starts in Hidden Pages. The selected page is shown in the
 // Preview panel (PagePreview), in its Display Style if it has one
-// (2026-10-05). Arrange (2026-10-05) opens the full-screen canvas editor
-// (CanvasArranger) for a page whose Display Style is a Canvas; closing
-// it redraws the preview with the new arrangement.
+// (2026-10-05), from the site's working data (LiveSiteData). Arrange
+// (2026-10-05) opens the full-screen canvas editor (CanvasArranger) for
+// a page whose Display Style is a Canvas; closing it redraws the preview
+// with the new arrangement.
 export default function PagesManager({
   siteId,
   artistId,
@@ -225,15 +227,15 @@ export default function PagesManager({
       <section className="flex min-h-0 flex-col rounded-lg border border-neutral-300 bg-white p-4">
         <h2 className="text-center text-base text-neutral-800">Preview</h2>
         {selected ? (
-          <PagePreview
-            key={`${selected.id}:${previewVersion}`}
-            siteId={siteId}
-            pageId={selected.id}
-            artistId={artistId}
-            title={selected.title}
-            curationId={selected.curationId}
-            style={selectedStyle}
-          />
+          <LiveSiteData siteId={siteId} artistId={artistId}>
+            <PagePreview
+              key={`${selected.id}:${previewVersion}`}
+              pageId={selected.id}
+              title={selected.title}
+              curationId={selected.curationId}
+              style={selectedStyle}
+            />
+          </LiveSiteData>
         ) : (
           <div className="flex flex-1 items-center justify-center">
             <p className="text-sm text-neutral-400">Select a page to preview it.</p>

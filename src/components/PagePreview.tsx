@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { getCuration, type CurationDetail, type CurationWork } from "@/lib/actions/curations";
+import type { CurationDetail, CurationWork } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import {
   blockWidthOf,
@@ -11,11 +11,15 @@ import {
   type LayoutBlock,
 } from "@/lib/pageStyleLayout";
 import { groupBlocksByRow } from "@/lib/blocks";
+import { useSiteData } from "@/lib/siteData";
 import CurationWorkView from "@/components/CurationWorkView";
 import SlidingDoors from "@/components/SlidingDoors";
 import CanvasPlayer from "@/components/CanvasPlayer";
 
-// The Pages page's Preview panel (2026-10-04): the selected page.
+// A page, drawn in its Display Style (2026-10-04) — the Pages page's
+// Preview panel, and (2026-10-06) the site's own pages, full screen.
+// Content comes from the page's site data (lib/siteData.tsx): live in
+// the admin preview, the published snapshot on the site.
 //
 // With a Display Style (2026-10-05): the page drawn in that style, with
 // the style's background colour.
@@ -36,21 +40,23 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 //
 // Clicking a work (2026-10-05) opens its presentation in this curation,
 // read-only — see CurationWorkView.
+//
+// `fullScreen` (the site's own pages): no title above the page, and a
+// Canvas fills the browser window.
 export default function PagePreview({
-  siteId,
   pageId,
-  artistId,
   title,
   curationId,
   style,
+  fullScreen = false,
 }: {
-  siteId: string;
   pageId: string;
-  artistId: string;
   title: string;
   curationId: string | null;
   style: PageStyleSummary | null;
+  fullScreen?: boolean;
 }) {
+  const siteData = useSiteData();
   const [curation, setCuration] = useState<CurationDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
@@ -64,7 +70,7 @@ export default function PagePreview({
     // Ignores a reply that arrives after a different page was selected.
     let current = true;
     setLoading(true);
-    getCuration(curationId, artistId).then((detail) => {
+    siteData.getCuration(curationId).then((detail) => {
       if (!current) return;
       setCuration(detail);
       setLoading(false);
@@ -72,21 +78,13 @@ export default function PagePreview({
     return () => {
       current = false;
     };
-  }, [curationId, artistId]);
+  }, [siteData, curationId]);
 
   const closeView = useCallback(() => setViewingId(null), []);
 
   let body: ReactNode;
   if (style?.type === "CANVAS") {
-    body = (
-      <CanvasPlayer
-        key={pageId}
-        siteId={siteId}
-        pageId={pageId}
-        artistId={artistId}
-        layout={style.layout}
-      />
-    );
+    body = <CanvasPlayer key={pageId} pageId={pageId} layout={style.layout} fullScreen={fullScreen} />;
   } else if (!curationId) {
     body = <Message text="This page has no curation. Choose one with Edit." />;
   } else if (loading) {
@@ -99,18 +97,24 @@ export default function PagePreview({
     body = <PlainPage curation={curation} onOpen={setViewingId} />;
   }
 
+  const viewer = curation && viewingId && (
+    <CurationWorkView curationId={curation.id} artworkId={viewingId} onClose={closeView} />
+  );
+
+  if (fullScreen) {
+    return (
+      <>
+        {body}
+        {viewer}
+      </>
+    );
+  }
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{title}</h3>
       <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
-      {curation && viewingId && (
-        <CurationWorkView
-          curationId={curation.id}
-          artworkId={viewingId}
-          artistId={artistId}
-          onClose={closeView}
-        />
-      )}
+      {viewer}
     </div>
   );
 }
