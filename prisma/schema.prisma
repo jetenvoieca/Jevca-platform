@@ -1013,9 +1013,25 @@ model Site {
   updatedAt            DateTime   @updatedAt
 
   pages Page[]
+  // The site as last published (2026-10-06) — see SitePublication.
+  publication SitePublication?
 
   @@index([artistId])
   @@index([templateId])
+}
+
+// A site as last published (2026-10-06) — a snapshot of everything its
+// pages show (its Live Pages in order, their Display Styles, curations,
+// sections, canvas layouts and each work's presentation), saved by
+// "Publish to live site". The site's pages are drawn only from this, so
+// later edits don't show until the next publish. `data` is a
+// SiteSnapshot — see lib/siteSnapshot.ts. Removed with its site.
+model SitePublication {
+  siteId String @id
+  site   Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  data        Json
+  publishedAt DateTime @default(now())
 }
 
 model Page {
@@ -1032,12 +1048,11 @@ model Page {
   position  Int      @default(0)
 
   // Page-level background styling (2026-09-03) — deliberately real
-  // columns, not folded into draftBlocks/liveBlocks: these are page
-  // settings, not repeatable content, and apply to the page itself
-  // regardless of which draft/live content it currently holds.
-  // backgroundImageId is a plain (non-unique) relation, since the same
-  // image can reasonably be reused as the background on more than one
-  // page — unlike Artist.profileImageId above, which is genuinely 1:1.
+  // columns, not folded into draftBlocks: these are page settings, not
+  // repeatable content. backgroundImageId is a plain (non-unique)
+  // relation, since the same image can reasonably be reused as the
+  // background on more than one page — unlike Artist.profileImageId
+  // above, which is genuinely 1:1.
   backgroundColor   String?
   backgroundImageId String?
   backgroundImage   Image?  @relation("PageBackgroundImage", fields: [backgroundImageId], references: [id])
@@ -1068,8 +1083,10 @@ model Page {
   // its Display Style is a Canvas. See PageCanvasItem.
   canvasItems PageCanvasItem[]
 
-  draftBlocks Json  @default("[]")
-  liveBlocks  Json?
+  // The old page editors' content (Section / Private / Template Style
+  // pages). Publishing no longer copies it anywhere (2026-10-06) — see
+  // SitePublication.
+  draftBlocks Json @default("[]")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1104,8 +1121,8 @@ model PageCanvasItem {
 // A Page Style (2026-10-04) — a named page layout, shared by every site,
 // managed under Templates → Page Styles. `type` is its Style Type
 // (SECTION, PRIVATE or CANVAS — see PageType); `layout` is that type's
-// arrangement and settings, with no content in it, saved as JSON like
-// Page.draftBlocks (see lib/pageStyleLayout.ts).
+// arrangement and settings, with no content in it, saved as JSON (see
+// lib/pageStyleLayout.ts).
 model PageStyle {
   id   String   @id @default(cuid())
   name String   @unique
@@ -1707,9 +1724,8 @@ model PlatformSettings {
 //
 // `steps` is an ordered JSON array (`{ id, text, imageUrl }[]`) rather
 // than a child table — same convention already used for Page's
-// draftBlocks/liveBlocks — since steps are only ever read/written as one
-// whole unit from the guide's own edit panel, never queried on their
-// own.
+// draftBlocks — since steps are only ever read/written as one whole unit
+// from the guide's own edit panel, never queried on their own.
 model Guide {
   id       String        @id @default(cuid())
   category GuideCategory
