@@ -43,14 +43,13 @@ export type CurationWork = {
 export type CurationDetail = {
   id: string;
   name: string;
-  // The curation's own Description (2026-10-05) — plain text, null until
-  // written. See Curation.description in schema.prisma.
+  // The text of the curation's first Description section (2026-10-06),
+  // null if it has none — what page styles show as the curation's
+  // description. Edited on the Curations page; see CurationSection in
+  // schema.prisma.
   description: string | null;
   works: CurationWork[];
 };
-
-// The most text a curation's Description can hold.
-const MAX_DESCRIPTION_LENGTH = 20000;
 
 // One work's presentation within a curation (2026-10-03) — shown beside
 // the works on the Curations page when that work is selected.
@@ -191,7 +190,8 @@ export async function listCurationCovers(artistId: string): Promise<CurationCove
 }
 
 // One curation with its works, in their curated order, each with its
-// main image in this curation (see tileUrls).
+// main image in this curation (see tileUrls), and its description (see
+// CurationDetail).
 export async function getCuration(
   curationId: string,
   artistId: string
@@ -201,7 +201,12 @@ export async function getCuration(
     select: {
       id: true,
       name: true,
-      description: true,
+      sections: {
+        where: { type: "DESCRIPTION" },
+        orderBy: { position: "asc" },
+        take: 1,
+        select: { text: true },
+      },
       items: {
         orderBy: { position: "asc" },
         select: {
@@ -224,7 +229,7 @@ export async function getCuration(
   return {
     id: row.id,
     name: row.name,
-    description: row.description,
+    description: row.sections[0]?.text ?? null,
     works: row.items.map((item) => ({
       artworkId: item.artwork.id,
       catalogueName: item.artwork.catalogueName,
@@ -273,29 +278,8 @@ export async function renameCuration(
   }
 }
 
-// Saves the curation's own Description, as plain text. Blank is stored
-// as nothing. Returns what was saved.
-export async function updateCurationDescription(
-  curationId: string,
-  artistId: string,
-  descriptionRaw: string
-): Promise<Result<{ description: string | null }>> {
-  const description = descriptionRaw.trim() || null;
-  if (description && description.length > MAX_DESCRIPTION_LENGTH) {
-    return {
-      error: `A Description can be at most ${MAX_DESCRIPTION_LENGTH.toLocaleString("en-GB")} characters.`,
-    };
-  }
-  const { count } = await db.curation.updateMany({
-    where: { id: curationId, artistId },
-    data: { description },
-  });
-  if (count === 0) return { error: "Curation not found." };
-  return { description };
-}
-
-// Removes the curation and its list of works. The artworks themselves
-// are never touched.
+// Removes the curation, its list of works and its sections. The
+// artworks themselves are never touched.
 export async function deleteCuration(curationId: string, artistId: string): Promise<void> {
   await db.curation.deleteMany({ where: { id: curationId, artistId } });
 }
