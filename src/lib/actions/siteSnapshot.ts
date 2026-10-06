@@ -10,6 +10,7 @@ import {
 import { listCurationSections } from "@/lib/actions/curationSections";
 import { getPageCanvas } from "@/lib/actions/pageCanvas";
 import { listPageStyles } from "@/lib/actions/pageStyles";
+import { normalizeLayout } from "@/lib/pageStyleLayout";
 import {
   SNAPSHOT_VERSION,
   type SiteSnapshot,
@@ -93,7 +94,11 @@ export async function publishSite(siteId: string): Promise<void> {
 }
 
 // The site as last published, or null if it never has been (or was
-// published in an older shape — see SNAPSHOT_VERSION).
+// published in an older shape — see SNAPSHOT_VERSION). Each page's
+// Display Style is cleaned with the same rules as a saved style
+// (2026-10-06), so a style setting added after publishing takes its
+// default rather than breaking the page — no need to republish every
+// site when a setting is added.
 export async function getPublishedSite(
   siteId: string
 ): Promise<{ snapshot: SiteSnapshot; publishedAt: Date } | null> {
@@ -102,6 +107,14 @@ export async function getPublishedSite(
     select: { data: true, publishedAt: true },
   });
   const snapshot = row?.data as SiteSnapshot | undefined;
-  if (!row || snapshot?.version !== SNAPSHOT_VERSION) return null;
-  return { snapshot, publishedAt: row.publishedAt };
+  if (!row || !snapshot || snapshot.version !== SNAPSHOT_VERSION) return null;
+  const pages = snapshot.pages.map((p) => ({
+    ...p,
+    style: p.style && {
+      id: p.style.id,
+      name: p.style.name,
+      ...normalizeLayout(p.style.type, p.style.layout),
+    },
+  }));
+  return { snapshot: { ...snapshot, pages }, publishedAt: row.publishedAt };
 }

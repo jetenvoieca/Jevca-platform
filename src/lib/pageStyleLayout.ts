@@ -61,6 +61,25 @@ export const GRID_SPACING_LIMITS = {
   horizontal: { min: 0, max: 100 },
 } as const;
 
+// The page's margin (2026-10-06, from Craig's request for more
+// breathing space): the space between the page's edges and its
+// contents, in pixels — vertical = top and bottom, horizontal = left
+// and right — set separately for desktop and phone (narrower than
+// 768px). Section and Private / Custom only; a Canvas stays edge to
+// edge. The page's background colour shows in it. The default is the
+// padding pages had before the setting existed.
+export type PageMargin = { vertical: number; horizontal: number };
+export type PageMargins = { desktop: PageMargin; phone: PageMargin };
+
+export const DEFAULT_PAGE_MARGIN: PageMargin = { vertical: 16, horizontal: 16 };
+
+export const DEFAULT_PAGE_MARGINS: PageMargins = {
+  desktop: DEFAULT_PAGE_MARGIN,
+  phone: DEFAULT_PAGE_MARGIN,
+};
+
+export const PAGE_MARGIN_LIMITS = { min: 0, max: 300 } as const;
+
 // The space between blocks (2026-10-05), in pixels — set separately for
 // every gap, for more open layouts.
 export const DEFAULT_BLOCK_SPACING = 16;
@@ -130,6 +149,7 @@ export type CustomLayout = {
   backgroundImage: boolean;
   // Spacing for every Gallery block.
   gridSpacing: GridSpacing;
+  margins: PageMargins;
   // Each row's spacing, by rowKey(). A row with no entry uses
   // DEFAULT_ROW_SPACING.
   rowSpacing: Record<string, RowSpacing>;
@@ -138,12 +158,13 @@ export type CustomLayout = {
 
 // Section is a fixed layout — a byline, an artwork grid filled from the
 // page's curation, and the curation's Description below it (2026-10-05).
-// Its settings: the grid's spacing, the spacing between its parts, each
-// part's width, an optional background colour, and whether a video sits
-// below the Description (the video itself is content, chosen on the page
-// later).
+// Its settings: the grid's spacing, the page margin, the spacing between
+// its parts, each part's width, an optional background colour, and
+// whether a video sits below the Description (the video itself is
+// content, chosen on the page later).
 export type SectionLayout = {
   gridSpacing: GridSpacing;
+  margins: PageMargins;
   spacing: SectionSpacing;
   widths: SectionWidths;
   backgroundColor: string | null;
@@ -214,6 +235,7 @@ export function emptyLayout(type: PageStyleType): PageStyleLayout {
       type,
       layout: {
         gridSpacing: DEFAULT_GRID_SPACING,
+        margins: DEFAULT_PAGE_MARGINS,
         spacing: DEFAULT_SECTION_SPACING,
         widths: DEFAULT_SECTION_WIDTHS,
         backgroundColor: null,
@@ -228,6 +250,7 @@ export function emptyLayout(type: PageStyleType): PageStyleLayout {
       backgroundColor: null,
       backgroundImage: false,
       gridSpacing: DEFAULT_GRID_SPACING,
+      margins: DEFAULT_PAGE_MARGINS,
       rowSpacing: {},
       blocks: [],
     },
@@ -290,6 +313,21 @@ export function cleanGridSpacing(raw: unknown): GridSpacing {
   };
 }
 
+function cleanPageMargin(raw: unknown): PageMargin {
+  const value = (raw ?? {}) as Partial<Record<keyof PageMargin, unknown>>;
+  const d = DEFAULT_PAGE_MARGIN;
+  return {
+    vertical: cleanNumber(value.vertical, PAGE_MARGIN_LIMITS, d.vertical, 0),
+    horizontal: cleanNumber(value.horizontal, PAGE_MARGIN_LIMITS, d.horizontal, 0),
+  };
+}
+
+// A style saved before margins existed gets the default on both.
+export function cleanPageMargins(raw: unknown): PageMargins {
+  const value = (raw ?? {}) as Partial<Record<keyof PageMargins, unknown>>;
+  return { desktop: cleanPageMargin(value.desktop), phone: cleanPageMargin(value.phone) };
+}
+
 export function cleanCanvas(raw: unknown): CanvasLayout {
   const value = (raw ?? {}) as Partial<Record<keyof CanvasLayout, unknown>>;
   const d = DEFAULT_CANVAS;
@@ -347,6 +385,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
       type,
       layout: {
         gridSpacing: cleanGridSpacing(value.gridSpacing),
+        margins: cleanPageMargins(value.margins),
         spacing: cleanSectionSpacing(value.spacing),
         widths: cleanSectionWidths(value.widths),
         backgroundColor: cleanColour(value.backgroundColor),
@@ -378,6 +417,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
       backgroundColor: cleanColour(value.backgroundColor),
       backgroundImage: value.backgroundImage === true,
       gridSpacing: cleanGridSpacing(value.gridSpacing),
+      margins: cleanPageMargins(value.margins),
       rowSpacing: cleanRowSpacing(value.rowSpacing, blocks),
       blocks,
     },

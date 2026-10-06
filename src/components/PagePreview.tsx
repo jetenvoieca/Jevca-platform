@@ -12,6 +12,7 @@ import {
 } from "@/lib/pageStyleLayout";
 import { groupBlocksByRow } from "@/lib/blocks";
 import { useSiteData } from "@/lib/siteData";
+import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import CurationWorkView from "@/components/CurationWorkView";
 import SlidingDoors from "@/components/SlidingDoors";
 import CanvasPlayer from "@/components/CanvasPlayer";
@@ -22,7 +23,8 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 // the admin preview, the published snapshot on the site.
 //
 // With a Display Style (2026-10-05): the page drawn in that style, with
-// the style's background colour.
+// the style's background colour and page margin (2026-10-06, desktop
+// and phone — see components/pageMargins.ts).
 // - Section: the curation's works' images, then its Description.
 // - Private / Custom: Gallery blocks show the curation's works' images,
 //   Text blocks its Description, Sliding doors its works' main images in
@@ -205,8 +207,11 @@ function StyledPage({
 
   return (
     <div
-      className="flex min-h-full flex-col rounded-md p-4"
-      style={{ backgroundColor: style.layout.backgroundColor ?? undefined }}
+      className={`flex min-h-full flex-col rounded-md ${PAGE_MARGIN_CLASS}`}
+      style={{
+        ...pageMarginStyle(style.layout.margins),
+        backgroundColor: style.layout.backgroundColor ?? undefined,
+      }}
     >
       {rows.length === 0 ? (
         <Message text="Nothing in this style can be filled from the page's curation yet." />

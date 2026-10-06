@@ -10,20 +10,21 @@ import {
   type LayoutBlock,
   type PageStyleLayout,
 } from "@/lib/pageStyleLayout";
+import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 
 // Draws a Page Style's layout as grey placeholders (2026-10-04) — what
 // goes where on the page, with no content. Used by the Page Styles
-// page's Preview panel. Uses the style's grid spacing, block spacing
-// and block widths (narrower blocks centred).
+// page's Preview panel. Uses the style's grid spacing, block spacing,
+// block widths (narrower blocks centred) and page margin (2026-10-06).
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
   if (style.type === "CANVAS") return <CanvasPreview layout={style.layout} />;
 
   if (style.type === "SECTION") {
-    const { backgroundColor, video, gridSpacing, spacing, widths } = style.layout;
+    const { backgroundColor, video, gridSpacing, margins, spacing, widths } = style.layout;
     return (
       <div
-        className="flex min-h-full flex-col items-center rounded-md p-4"
-        style={{ backgroundColor: backgroundColor ?? undefined }}
+        className={`flex min-h-full flex-col items-center rounded-md ${PAGE_MARGIN_CLASS}`}
+        style={{ ...pageMarginStyle(margins), backgroundColor: backgroundColor ?? undefined }}
       >
         <Bar className="mb-4 h-6 w-1/3" />
         <Part width={widths.byline}>
@@ -57,10 +58,13 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
 
   return (
     <div
-      className={`relative flex min-h-full flex-col rounded-md p-4 ${
+      className={`relative flex min-h-full flex-col rounded-md ${PAGE_MARGIN_CLASS} ${
         layout.backgroundImage ? "border-2 border-dashed border-neutral-300" : ""
       }`}
-      style={{ backgroundColor: layout.backgroundColor ?? undefined }}
+      style={{
+        ...pageMarginStyle(layout.margins),
+        backgroundColor: layout.backgroundColor ?? undefined,
+      }}
     >
       {layout.backgroundImage && (
         <span className="absolute right-2 top-2 rounded bg-white/80 px-2 py-0.5 text-[10px] uppercase tracking-wide text-neutral-500">

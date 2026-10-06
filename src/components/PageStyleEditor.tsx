@@ -8,6 +8,7 @@ import {
   BLOCK_WIDTH_LIMITS,
   CANVAS_LIMITS,
   GRID_SPACING_LIMITS,
+  PAGE_MARGIN_LIMITS,
   SLIDING_DOORS_LIMITS,
   addLayoutBlock,
   blockTypeLabel,
@@ -16,6 +17,7 @@ import {
   cleanBlockWidth,
   cleanCanvas,
   cleanGridSpacing,
+  cleanPageMargins,
   emptyLayout,
   moveLayoutRow,
   removeLayoutBlock,
@@ -27,6 +29,8 @@ import {
   type CustomLayout,
   type GridSpacing,
   type LayoutBlockType,
+  type PageMargin,
+  type PageMargins,
   type PageStyleLayout,
   type RowSpacing,
   type SectionLayout,
@@ -98,16 +102,25 @@ const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
   { key: "video", label: "Video width" },
 ];
 
+// The page margin's four values, for its box.
+const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label: string }[] = [
+  { device: "desktop", side: "vertical", label: "Desktop margin, top & bottom" },
+  { device: "desktop", side: "horizontal", label: "Desktop margin, left & right" },
+  { device: "phone", side: "vertical", label: "Phone margin, top & bottom" },
+  { device: "phone", side: "horizontal", label: "Phone margin, left & right" },
+];
+
 // Templates → Page Styles' Add / Edit panel (2026-10-04, from Craig's
 // mockups): sits in the right-hand column, beside the Preview, and stays
 // open until Close. Style name, Style Type, then the chosen type's own
 // layout controls — layout only, no content.
 //
 // Section and Private / Custom set their grid spacing (2026-10-05) for
-// grids of images, the spacing of every gap between blocks separately
-// and every block's width (2026-10-05, % of the page, centred): Section
-// in its own boxes, Private / Custom in each row of the Layout list
-// (width per block, ↔ between side-by-side blocks, ↕ below the row).
+// grids of images, the page margin (2026-10-06, desktop and phone), the
+// spacing of every gap between blocks separately and every block's
+// width (2026-10-05, % of the page, centred): Section in its own boxes,
+// Private / Custom in each row of the Layout list (width per block, ↔
+// between side-by-side blocks, ↕ below the row).
 //
 // Private / Custom: background colour and image, then the Layout list,
 // then Sliding doors settings for any Sliding doors blocks. New blocks
@@ -122,7 +135,7 @@ const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
 // (the first work's size when a curation opens, times the tile size),
 // scroll speed (how far the canvas moves per scroll or drag) and
 // background colour; the curations themselves are chosen and placed on
-// each page.
+// each page. No margin — a Canvas stays edge to edge.
 //
 // Saving is automatic (see PageStylesManager); `status` reports it.
 export default function PageStyleEditor({
@@ -272,6 +285,10 @@ export default function PageStyleEditor({
               value={section.gridSpacing}
               onChange={(gridSpacing) => setSection({ ...section, gridSpacing })}
             />
+            <PageMarginControl
+              value={section.margins}
+              onChange={(margins) => setSection({ ...section, margins })}
+            />
             <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
               {SECTION_WIDTH_FIELDS.filter((f) => f.key !== "video" || section.video).map((f) => (
                 <NumberField
@@ -351,6 +368,11 @@ export default function PageStyleEditor({
             <GridSpacingControl
               value={custom.gridSpacing}
               onChange={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
+            />
+
+            <PageMarginControl
+              value={custom.margins}
+              onChange={(margins) => setCustom({ ...custom, margins })}
             />
 
             <BackgroundColourControl
@@ -592,6 +614,35 @@ function GridSpacingControl({
         onCommit={(horizontal) => onChange(cleanGridSpacing({ ...value, horizontal }))}
         wide
       />
+    </div>
+  );
+}
+
+// The page margin (2026-10-06): top & bottom and left & right, for
+// desktop and for phone — shared by Section and Private / Custom.
+function PageMarginControl({
+  value,
+  onChange,
+}: {
+  value: PageMargins;
+  onChange: (value: PageMargins) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
+      {MARGIN_FIELDS.map((f) => (
+        <NumberField
+          key={`${f.device}-${f.side}`}
+          label={f.label}
+          unit="pixels"
+          step={1}
+          value={value[f.device][f.side]}
+          limits={PAGE_MARGIN_LIMITS}
+          onCommit={(v) =>
+            onChange(cleanPageMargins({ ...value, [f.device]: { ...value[f.device], [f.side]: v } }))
+          }
+          wide
+        />
+      ))}
     </div>
   );
 }
