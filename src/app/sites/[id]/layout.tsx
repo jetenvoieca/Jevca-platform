@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { countHopper } from "@/lib/actions/hopper";
 import { countArtworksNeedingReview } from "@/lib/actions/artworks";
 import { countMediaNeedingReview } from "@/lib/actions/mediaCatalogue";
+import { getLastPublishedAt } from "@/lib/actions/siteSnapshot";
 import { getOpenAlerts } from "@/lib/alerts";
 import SiteShell from "@/components/SiteShell";
 import LastVisitedSiteTracker from "@/components/LastVisitedSiteTracker";
@@ -30,12 +31,13 @@ export default async function SiteLayout({
   });
   if (!site) notFound();
 
-  const [hopperCount, artworkNeedsReviewCount, mediaNeedsReviewCount, openAlerts] =
+  const [hopperCount, artworkNeedsReviewCount, mediaNeedsReviewCount, openAlerts, lastPublishedAt] =
     await Promise.all([
       countHopper(site.artistId),
       countArtworksNeedingReview(site.artistId),
       countMediaNeedingReview(site.artistId),
       getOpenAlerts(),
+      getLastPublishedAt(id),
     ]);
 
   return (
@@ -48,6 +50,7 @@ export default async function SiteLayout({
         artworkNeedsReviewCount={artworkNeedsReviewCount}
         mediaNeedsReviewCount={mediaNeedsReviewCount}
         alertCount={openAlerts.length}
+        lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
         header={
           <div className="flex items-start justify-between gap-4">
             <SiteNameField

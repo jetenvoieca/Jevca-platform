@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { logout } from "@/lib/actions/auth";
+import type { PublishResult } from "@/lib/siteSnapshot";
 import SidebarNav from "@/components/SidebarNav";
+import PublishButton from "@/components/PublishButton";
 import type { AppShellNavEntry } from "@/components/SidebarNav";
 
 export type { AppShellNavItem, AppShellNavEntry } from "@/components/SidebarNav";
@@ -14,6 +16,7 @@ export default function AppShell({
   rightPanel,
   publishEnabled = false,
   publishAction,
+  lastPublishedAt = null,
   navItems,
   nav,
 }: {
@@ -29,16 +32,18 @@ export default function AppShell({
   // (2026-08-13, in response to direct feedback that the list
   // disappearing was a step backward).
   rightPanel?: React.ReactNode;
-  // Publish is greyed out until there's a specific site open with pending
-  // draft changes — neither of which exists at the top-level Sites screen,
-  // so callers leave this false until that logic is built.
+  // Publish is greyed out unless a specific site is open — callers
+  // with nothing to publish leave this false.
   publishEnabled?: boolean;
-  // Server action that actually performs the publish, bound to whatever
-  // the caller needs (e.g. a specific site id). Callers with nothing
-  // publishable (the top-level Accounts pages) leave this undefined —
-  // the button then stays disabled regardless of publishEnabled, same
-  // as before this existed.
-  publishAction?: (formData: FormData) => void | Promise<void>;
+  // Server action that performs the publish, bound to whatever the
+  // caller needs (e.g. a specific site id), and reports the result
+  // (see PublishButton). Callers with nothing publishable (the
+  // top-level Accounts pages) leave this undefined — the button then
+  // stays disabled regardless of publishEnabled.
+  publishAction?: () => Promise<PublishResult>;
+  // When the site was last published (ISO date), shown under the
+  // button; null if never.
+  lastPublishedAt?: string | null;
   // Static nav data — AppShell renders it via SidebarNav itself. Fine
   // for navs that don't depend on anything besides props already known
   // server-side (e.g. an explicit "active" key passed in per page).
@@ -144,16 +149,14 @@ export default function AppShell({
             mobileNavOpen ? "translate-x-0" : "translate-x-full"
           } min-[1180px]:static min-[1180px]:inset-auto min-[1180px]:z-auto min-[1180px]:h-full min-[1180px]:w-auto min-[1180px]:translate-x-0 min-[1180px]:shadow-none min-[1180px]:transition-none`}
         >
-          <div className="flex items-center gap-2 border-b border-neutral-200 p-4">
-            <form action={publishAction} className="min-w-0 flex-1">
-              <button
-                type="submit"
-                disabled={!publishEnabled || !publishAction}
-                className="w-full rounded-md bg-neutral-900 px-3 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400 disabled:hover:bg-neutral-200"
-              >
-                Publish to live site
-              </button>
-            </form>
+          <div className="flex items-start gap-2 border-b border-neutral-200 p-4">
+            <div className="min-w-0 flex-1">
+              <PublishButton
+                action={publishAction}
+                enabled={publishEnabled}
+                lastPublishedAt={lastPublishedAt}
+              />
+            </div>
             {/* Explicit close, alongside the backdrop-tap — mobile only. */}
             <button
               type="button"

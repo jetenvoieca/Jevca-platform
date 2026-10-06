@@ -46,3 +46,7 @@ export type SiteSnapshot = {
   // Covers of the curations placed on Canvas pages.
   covers: CurationCover[];
 };
+
+// What "Publish to live site" reports back (2026-10-06): when the site
+// was published (ISO date), or what went wrong.
+export type PublishResult = { publishedAt: string } | { error: string };

@@ -13,6 +13,7 @@ import { listPageStyles } from "@/lib/actions/pageStyles";
 import { normalizeLayout } from "@/lib/pageStyleLayout";
 import {
   SNAPSHOT_VERSION,
+  type PublishResult,
   type SiteSnapshot,
   type SnapshotCuration,
   type SnapshotPage,
@@ -82,23 +83,43 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
   return { version: SNAPSHOT_VERSION, siteName: site.name, pages, curations, covers };
 }
 
-// "Publish to live site" — replaces the site's published snapshot.
-export async function publishSite(siteId: string): Promise<void> {
-  const snapshot = await buildSiteSnapshot(siteId);
-  if (!snapshot) return;
-  await db.sitePublication.upsert({
+// "Publish to live site" — replaces the site's published snapshot and
+// reports back when it was published, or what went wrong (2026-10-06),
+// so the button can say so.
+export async function publishSite(siteId: string): Promise<PublishResult> {
+  try {
+    const snapshot = await buildSiteSnapshot(siteId);
+    if (!snapshot) return { error: "Site not found." };
+    const publishedAt = new Date();
+    await db.sitePublication.upsert({
+      where: { siteId },
+      create: { siteId, data: snapshot as object, publishedAt },
+      update: { data: snapshot as object, publishedAt },
+    });
+    return { publishedAt: publishedAt.toISOString() };
+  } catch (err) {
+    console.error("publishSite failed", siteId, err);
+    return { error: "Publishing failed — please try again." };
+  }
+}
+
+// When the site was last published, or null if it never has been (or
+// was published in an older shape — see SNAPSHOT_VERSION). Reads only
+// the date, not the whole snapshot, for the admin's Publish button.
+export async function getLastPublishedAt(siteId: string): Promise<Date | null> {
+  const row = await db.sitePublication.findUnique({
     where: { siteId },
-    create: { siteId, data: snapshot as object },
-    update: { data: snapshot as object, publishedAt: new Date() },
+    select: { publishedAt: true },
   });
+  return row?.publishedAt ?? null;
 }
 
 // The site as last published, or null if it never has been (or was
 // published in an older shape — see SNAPSHOT_VERSION). Each page's
 // Display Style is cleaned with the same rules as a saved style
 // (2026-10-06), so a style setting added after publishing takes its
-// default rather than breaking the page — no need to republish every
-// site when a setting is added.
+// default rather than breaking the page. Changes to a style's own
+// settings still need a publish to show.
 export async function getPublishedSite(
   siteId: string
 ): Promise<{ snapshot: SiteSnapshot; publishedAt: Date } | null> {

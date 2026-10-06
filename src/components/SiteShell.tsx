@@ -33,7 +33,8 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
 }
 
 // "Publish to live site" (2026-10-06) is always available: it saves a
-// fresh snapshot of the whole site each time (lib/actions/siteSnapshot.ts).
+// fresh snapshot of the whole site each time (lib/actions/siteSnapshot.ts)
+// and shows when the site was last published (see PublishButton).
 export default function SiteShell({
   siteId,
   salesEnabled,
@@ -41,6 +42,7 @@ export default function SiteShell({
   artworkNeedsReviewCount,
   mediaNeedsReviewCount,
   alertCount,
+  lastPublishedAt,
   header,
   children,
 }: {
@@ -50,6 +52,8 @@ export default function SiteShell({
   artworkNeedsReviewCount: number;
   mediaNeedsReviewCount: number;
   alertCount: number;
+  // ISO date, or null if the site has never been published.
+  lastPublishedAt: string | null;
   // The site name / domain header, pinned above the scrolling page
   // content — built by the (server) layout since it needs the site
   // record, passed in ready-made.
@@ -72,6 +76,7 @@ export default function SiteShell({
     <AppShell
       publishEnabled
       publishAction={publishSite.bind(null, siteId)}
+      lastPublishedAt={lastPublishedAt}
       navItems={navItems}
       content={
         <div className="flex h-full flex-col">
