@@ -23,16 +23,22 @@ export const LAYOUT_BLOCK_TYPES = [
 export type LayoutBlockType = (typeof LAYOUT_BLOCK_TYPES)[number]["value"];
 
 // Sliding doors (2026-10-05, from Craig's mockup): the curation's main
-// images shown full screen, `perSlide` at a time — a pair, `gap` pixels
-// apart, or one at a time (e.g. a home page). After `duration` seconds
-// the slide moves away over `speed` seconds, revealing the next, on a
-// continuous loop. All set in the style, so every page using it behaves
-// the same.
+// images, `perSlide` at a time — a pair, `gap` pixels apart, or one at
+// a time (e.g. a home page). After `duration` seconds the slide moves
+// away over `speed` seconds, revealing the next, on a continuous loop.
+// Each image sits in a square panel (2026-10-06): `height` is the
+// panels' height as a % of the screen height inside the page's top &
+// bottom margins, separately for desktop and phone; a narrower space
+// shrinks them to fit. All set in the style, so every page using it
+// behaves the same.
+export type DoorsHeight = { desktop: number; phone: number };
+
 export type SlidingDoorsSettings = {
   perSlide: 1 | 2;
   duration: number;
   speed: number;
   gap: number;
+  height: DoorsHeight;
 };
 
 export const DEFAULT_SLIDING_DOORS: SlidingDoorsSettings = {
@@ -40,12 +46,14 @@ export const DEFAULT_SLIDING_DOORS: SlidingDoorsSettings = {
   duration: 5,
   speed: 1.5,
   gap: 16,
+  height: { desktop: 80, phone: 80 },
 };
 
 export const SLIDING_DOORS_LIMITS = {
   duration: { min: 1, max: 60 },
   speed: { min: 0.5, max: 10 },
   gap: { min: 0, max: 100 },
+  height: { min: 10, max: 100 },
 } as const;
 
 // The space between images in a grid of images (2026-10-05) — the
@@ -290,9 +298,10 @@ export function cleanBlockWidth(value: unknown): number {
 }
 
 // A Sliding doors block saved before perSlide existed shows pairs, as
-// it always did.
+// it always did; one saved before height existed gets the default.
 export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
   const value = (raw ?? {}) as Partial<Record<keyof SlidingDoorsSettings, unknown>>;
+  const height = (value.height ?? {}) as Partial<Record<keyof DoorsHeight, unknown>>;
   const d = DEFAULT_SLIDING_DOORS;
   const l = SLIDING_DOORS_LIMITS;
   return {
@@ -300,6 +309,10 @@ export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
     duration: cleanNumber(value.duration, l.duration, d.duration, 1),
     speed: cleanNumber(value.speed, l.speed, d.speed, 1),
     gap: cleanNumber(value.gap, l.gap, d.gap, 0),
+    height: {
+      desktop: cleanNumber(height.desktop, l.height, d.height.desktop, 0),
+      phone: cleanNumber(height.phone, l.height, d.height.phone, 0),
+    },
   };
 }
 

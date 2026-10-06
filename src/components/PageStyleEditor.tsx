@@ -27,6 +27,7 @@ import {
   updateSlidingDoors,
   type CanvasLayout,
   type CustomLayout,
+  type DoorsHeight,
   type GridSpacing,
   type LayoutBlockType,
   type PageMargin,
@@ -84,7 +85,7 @@ const smallButton =
 // The Sliding doors number settings shown in the editor, in order. Gap
 // only applies to pairs.
 const DOORS_FIELDS: {
-  key: Exclude<keyof SlidingDoorsSettings, "perSlide">;
+  key: Exclude<keyof SlidingDoorsSettings, "perSlide" | "height">;
   label: string;
   unit: string;
   step: number;
@@ -92,6 +93,12 @@ const DOORS_FIELDS: {
   { key: "duration", label: "Duration", unit: "seconds", step: 0.5 },
   { key: "speed", label: "Slide speed", unit: "seconds", step: 0.5 },
   { key: "gap", label: "Gap", unit: "pixels", step: 1 },
+];
+
+// The Sliding doors panels' height (2026-10-06), desktop and phone.
+const DOORS_HEIGHT_FIELDS: { key: keyof DoorsHeight; label: string }[] = [
+  { key: "desktop", label: "Height, desktop" },
+  { key: "phone", label: "Height, phone" },
 ];
 
 // A Section's parts, for its Widths box.
@@ -123,7 +130,8 @@ const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label:
 // between side-by-side blocks, ↕ below the row).
 //
 // Private / Custom: background colour and image, then the Layout list,
-// then Sliding doors settings for any Sliding doors blocks. New blocks
+// then Sliding doors settings for any Sliding doors blocks (including
+// the square panels' height, 2026-10-06, desktop and phone). New blocks
 // (Header included) are added from "+ Add block", which opens
 // AddBlockModal (2026-10-05) — keeping adding separate from arranging.
 //
@@ -553,6 +561,19 @@ export default function PageStyleEditor({
                         />
                       )
                     )}
+                    {DOORS_HEIGHT_FIELDS.map((f) => (
+                      <NumberField
+                        key={f.key}
+                        label={f.label}
+                        unit="% of screen"
+                        step={5}
+                        value={doors.height[f.key]}
+                        limits={SLIDING_DOORS_LIMITS.height}
+                        onCommit={(value) =>
+                          setDoors(b.id, { ...doors, height: { ...doors.height, [f.key]: value } })
+                        }
+                      />
+                    ))}
                   </div>
                 </div>
               );

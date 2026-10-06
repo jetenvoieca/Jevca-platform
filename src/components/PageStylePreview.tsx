@@ -174,9 +174,10 @@ function blockLabel(block: LayoutBlock): string {
   const width = blockWidthOf(block) < 100 ? `, ${blockWidthOf(block)}% wide` : "";
   const d = block.doors;
   if (!d) return `${label}${width}`;
+  const panels = `square panels ${d.height.desktop}% of screen high (phone ${d.height.phone}%)`;
   return d.perSlide === 1
-    ? `${label} — one at a time from the page's curation, ${d.duration}s, slide ${d.speed}s${width}`
-    : `${label} — pairs from the page's curation, ${d.duration}s, slide ${d.speed}s, gap ${d.gap}px${width}`;
+    ? `${label} — one at a time from the page's curation, ${d.duration}s, slide ${d.speed}s, ${panels}${width}`
+    : `${label} — pairs from the page's curation, ${d.duration}s, slide ${d.speed}s, gap ${d.gap}px, ${panels}${width}`;
 }
 
 // Grey squares, four across, spaced as the style's grid spacing.
@@ -235,12 +236,16 @@ function BlockShape({ block, spacing }: { block: LayoutBlock; spacing: GridSpaci
         </div>
       );
     case "slidingdoors": {
+      // Square panels, as on the page.
       const single = block.doors?.perSlide === 1;
       return (
-        <div className="relative flex h-48" style={{ gap: single ? 0 : (block.doors?.gap ?? 0) }}>
-          <div className="flex-1 rounded bg-neutral-200" />
-          {!single && <div className="flex-1 rounded bg-neutral-200" />}
-          <span className="absolute inset-0 flex items-center justify-between px-3 text-2xl text-neutral-400">
+        <div
+          className="relative flex h-48 justify-center"
+          style={{ gap: single ? 0 : (block.doors?.gap ?? 0) }}
+        >
+          <div className="aspect-square h-full rounded bg-neutral-200" />
+          {!single && <div className="aspect-square h-full rounded bg-neutral-200" />}
+          <span className="absolute inset-0 flex items-center justify-center gap-10 text-2xl text-neutral-400">
             <span>◀</span>
             {!single && <span>▶</span>}
           </span>

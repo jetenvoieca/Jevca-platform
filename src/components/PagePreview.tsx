@@ -28,7 +28,7 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 // - Section: the curation's works' images, then its Description.
 // - Private / Custom: Gallery blocks show the curation's works' images,
 //   Text blocks its Description, Sliding doors its works' main images in
-//   pairs or one at a time (see SlidingDoors).
+//   square panels, in pairs or one at a time (see SlidingDoors).
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page, centred).
@@ -162,6 +162,8 @@ function StyledPage({
           speed={block.doors.speed}
           gap={block.doors.gap}
           perSlide={block.doors.perSlide}
+          height={block.doors.height}
+          margins={style.layout.margins}
           onOpen={onOpen}
         />
       );
