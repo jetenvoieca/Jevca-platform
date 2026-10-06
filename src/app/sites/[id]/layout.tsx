@@ -49,18 +49,29 @@ export default async function SiteLayout({
         mediaNeedsReviewCount={mediaNeedsReviewCount}
         alertCount={openAlerts.length}
         header={
-          <SiteNameField
-            site={{
-              id: site.id,
-              name: site.name,
-              domain: site.domain,
-              defaultCurrency: site.defaultCurrency,
-              templateId: site.templateId,
-              domainStatus: site.domainStatus,
-              domainRenewalDate: site.domainRenewalDate,
-            }}
-            ownerName={site.artist.name}
-          />
+          <div className="flex items-start justify-between gap-4">
+            <SiteNameField
+              site={{
+                id: site.id,
+                name: site.name,
+                domain: site.domain,
+                defaultCurrency: site.defaultCurrency,
+                templateId: site.templateId,
+                domainStatus: site.domainStatus,
+                domainRenewalDate: site.domainRenewalDate,
+              }}
+              ownerName={site.artist.name}
+            />
+            {/* The site as last published (2026-10-06), in a new tab. */}
+            <a
+              href={`/site-preview/${site.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+            >
+              View published site ↗
+            </a>
+          </div>
         }
       >
         {children}
