@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import CurationWorkPresentation from "@/components/CurationWorkPresentation";
+import CurationSectionsEditor from "@/components/CurationSectionsEditor";
 import {
   addWorksToCuration,
   createCuration,
@@ -11,7 +12,6 @@ import {
   removeWorkFromCuration,
   renameCuration,
   reorderCuration,
-  updateCurationDescription,
   type CurationDetail,
   type CurationSummary,
 } from "@/lib/actions/curations";
@@ -37,9 +37,10 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // Curations page (2026-09-24, stage one). Two columns:
 // - left: the open curation — its name (click to rename), Delete, its
 //   works in order (drag to reorder, hover × to remove, "+ Add Works"
-//   tile to pick more), and beside them the curation's own Description
-//   (2026-10-05, from Craig's mockup — plain text, saved when the box
-//   is left).
+//   tile to pick more), and beside them the curation's presentation
+//   sections (2026-10-06, from Craig's mockups — Tag line, Description,
+//   Video, Free text, Images; see CurationSectionsEditor), which scroll
+//   on their own.
 // - right: every curation; click one to open it, or add a new one.
 //
 // Presentation (2026-10-03) — a work's images, Name, Description and
@@ -51,16 +52,9 @@ function formatPrice(amount: string | null, currency: string): string | null {
 //
 // Frozen headers (2026-10-04, general requirement): the page fills the
 // space under the site header and never scrolls as a whole. The open
-// curation's title row, its Description box and the list's "Curation
-// Name" heading stay put; the works, the Description's text and the
-// list of curations each scroll on their own.
-//
-// A centre column ("Display this curation using ……") originally sat
-// between these for a planned stage-two display-mode chooser — removed
-// 2026-09-26, direct request, after rethinking that part of the
-// workflow. Nothing else about stage one changes; if a display-mode
-// step is designed later it doesn't have to look like that placeholder
-// did.
+// curation's title row and the list's "Curation Name" heading stay put;
+// the works, the sections and the list of curations each scroll on
+// their own.
 export default function CurationsView({
   artistId,
   siteId,
@@ -75,7 +69,6 @@ export default function CurationsView({
   const [curations, setCurations] = useState<CurationSummary[]>(initialCurations);
   const [selected, setSelected] = useState<CurationDetail | null>(initialSelected);
   const [titleDraft, setTitleDraft] = useState(initialSelected?.name ?? "");
-  const [descriptionDraft, setDescriptionDraft] = useState(initialSelected?.description ?? "");
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
@@ -102,7 +95,6 @@ export default function CurationsView({
     selectedIdRef.current = detail?.id ?? null;
     setSelected(detail);
     setTitleDraft(detail?.name ?? "");
-    setDescriptionDraft(detail?.description ?? "");
     updateUrlSelected(detail?.id ?? null);
   };
 
@@ -180,29 +172,6 @@ export default function CurationsView({
       await deleteCuration(id, artistId);
       setCurations((prev) => prev.filter((c) => c.id !== id));
       if (selectedIdRef.current === id) show(null);
-    });
-  };
-
-  // Saved when the Description box is left, only if it changed. A failed
-  // save leaves the text in the box, so it's tried again next time.
-  const handleDescriptionSave = () => {
-    if (!selected) return;
-    const text = descriptionDraft.trim();
-    if (text === (selected.description ?? "")) return;
-    setError(null);
-    const id = selected.id;
-    startTransition(async () => {
-      const result = await updateCurationDescription(id, artistId, text);
-      if ("error" in result) {
-        setError(result.error);
-        return;
-      }
-      if (selectedIdRef.current === id) {
-        setSelected((prev) =>
-          prev && prev.id === id ? { ...prev, description: result.description } : prev
-        );
-        setDescriptionDraft(result.description ?? "");
-      }
     });
   };
 
@@ -412,17 +381,14 @@ export default function CurationsView({
                 )}
               </div>
 
-              {/* The curation's own Description. */}
-              <div className="flex h-[31rem] max-h-full w-[27%] min-w-[16rem] shrink-0 flex-col self-start rounded-xl border border-neutral-300 p-4">
-                <h2 className="mb-2 shrink-0 text-center text-lg text-neutral-900">Description</h2>
-                <textarea
-                  value={descriptionDraft}
-                  onChange={(e) => setDescriptionDraft(e.target.value)}
-                  onBlur={handleDescriptionSave}
-                  maxLength={20000}
-                  placeholder="Write a description…"
-                  aria-label={`Description of ${selected.name}`}
-                  className="min-h-0 w-full flex-1 resize-none rounded-md border border-transparent p-1 text-sm text-neutral-800 hover:border-neutral-200 focus:border-neutral-300 focus:outline-none"
+              {/* The curation's presentation sections, scrolling on their
+                  own. */}
+              <div className="min-h-0 w-[27%] min-w-[16rem] shrink-0 overflow-y-auto">
+                <CurationSectionsEditor
+                  key={selected.id}
+                  curationId={selected.id}
+                  artistId={artistId}
+                  siteId={siteId}
                 />
               </div>
             </div>
