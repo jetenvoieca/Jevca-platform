@@ -640,6 +640,11 @@ model Curation {
 // another). Any type can be used any number of times; `position` sets
 // the order (0 first). Edited on the Curations page. Removed with its
 // curation.
+//
+// Text sections (Tag line, Description, Free text) can also have a
+// `height` — a minimum height in pixels, the text centred in it; null =
+// just fits the text — and a `backgroundColor` (#rrggbb, null = none),
+// to space out and colour the panel (2026-10-06).
 model CurationSection {
   id         String              @id @default(cuid())
   curationId String
@@ -647,9 +652,11 @@ model CurationSection {
   type       CurationSectionType
   position   Int                 @default(0)
 
-  heading String?
-  text    String?
-  media   CurationSectionMedia[]
+  heading         String?
+  text            String?
+  height          Int?
+  backgroundColor String?
+  media           CurationSectionMedia[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
