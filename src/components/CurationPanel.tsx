@@ -1,19 +1,29 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import { getCuration, type CurationDetail } from "@/lib/actions/curations";
 import { listCurationSections } from "@/lib/actions/curationSections";
 import type { CurationSectionData } from "@/lib/curationSections";
 import CurationWorkView from "@/components/CurationWorkView";
 
+// How the grid's images fly in (2026-10-06): from this far below,
+// slightly smaller, over this long, each one in a row a little after the
+// one before.
+const FLY_DISTANCE = 48;
+const FLY_SCALE = 0.92;
+const FLY_DURATION = 0.6;
+const FLY_STAGGER_MS = 90;
+const GRID_COLUMNS = 4;
+
 // The curation panel (2026-10-06, from Craig's mockups) — opened by
 // clicking an artwork on a Canvas page. Scrolls as one: the artwork
 // clicked, large, with its name; then the curation's presentation
 // sections in order (Tag line, Description, Free text, Video, Images —
-// see CurationSection); then a grid of the curation's other works.
-// Clicking a work in the grid puts it at the top and scrolls back up.
-// Clicking the large image or its name opens that work's details
-// (CurationWorkView) on top; closing that comes back here.
+// see CurationSection); then a grid of the curation's other works,
+// which fly in as they're scrolled into view (see FlyIn). Clicking a
+// work in the grid puts it at the top and scrolls back up. Clicking the
+// large image or its name opens that work's details (CurationWorkView)
+// on top; closing that comes back here.
 export default function CurationPanel({
   curationId,
   artworkId,
@@ -84,7 +94,7 @@ export default function CurationPanel({
           </button>
         </div>
 
-        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto p-4">
+        <div ref={bodyRef} className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-4">
           {loading ? (
             <p className="py-10 text-center text-sm text-neutral-400">Loading…</p>
           ) : !curation || !work ? (
@@ -122,25 +132,35 @@ export default function CurationPanel({
               ))}
 
               {others.length > 0 && (
-                <div className="grid grid-cols-4 gap-2 pt-2">
-                  {others.map((w) => (
-                    <button
+                <div
+                  className="grid gap-2 pt-2"
+                  style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))` }}
+                >
+                  {others.map((w, i) => (
+                    <FlyIn
                       key={w.artworkId}
-                      type="button"
-                      onClick={() => showWork(w.artworkId)}
-                      title={w.catalogueName}
-                      className="overflow-hidden rounded hover:opacity-90"
+                      root={bodyRef}
+                      delayMs={(i % GRID_COLUMNS) * FLY_STAGGER_MS}
                     >
-                      {w.imageUrl ? (
-                        <img
-                          src={w.imageUrl}
-                          alt={w.catalogueName}
-                          className="aspect-square w-full object-cover"
-                        />
-                      ) : (
-                        <div className="aspect-square w-full bg-neutral-100" />
-                      )}
-                    </button>
+                      <button
+                        type="button"
+                        onClick={() => showWork(w.artworkId)}
+                        title={w.catalogueName}
+                        className="block w-full overflow-hidden rounded hover:opacity-90"
+                      >
+                        {w.imageUrl ? (
+                          <img
+                            src={w.imageUrl}
+                            alt={w.catalogueName}
+                            loading="lazy"
+                            decoding="async"
+                            className="aspect-square w-full object-cover"
+                          />
+                        ) : (
+                          <div className="aspect-square w-full bg-neutral-100" />
+                        )}
+                      </button>
+                    </FlyIn>
                   ))}
                 </div>
               )}
@@ -157,6 +177,59 @@ export default function CurationPanel({
           onClose={() => setDetailsOpen(false)}
         />
       )}
+    </div>
+  );
+}
+
+// Shows its content by flying it in — rising up and fading in, after
+// `delayMs` — the first time it scrolls into view within `root`. Moved
+// with transform and opacity only, so the graphics processor animates
+// it. Shown straight away, with no movement, when the device asks for
+// reduced motion.
+function FlyIn({
+  root,
+  delayMs,
+  children,
+}: {
+  root: RefObject<HTMLDivElement | null>;
+  delayMs: number;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [shown, setShown] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      setShown(true);
+      return;
+    }
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) {
+          setShown(true);
+          observer.disconnect();
+        }
+      },
+      { root: root.current, threshold: 0.15 }
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [root]);
+
+  return (
+    <div
+      ref={ref}
+      style={{
+        opacity: shown ? 1 : 0,
+        transform: shown
+          ? "none"
+          : `translate3d(0, ${FLY_DISTANCE}px, 0) scale(${FLY_SCALE})`,
+        transition: `opacity ${FLY_DURATION}s ease-out ${delayMs}ms, transform ${FLY_DURATION}s ease-out ${delayMs}ms`,
+      }}
+    >
+      {children}
     </div>
   );
 }
