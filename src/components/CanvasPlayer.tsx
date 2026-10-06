@@ -41,12 +41,23 @@ import CurationPanel from "@/components/CurationPanel";
 // canvas, or the two keep enlarging each other. Nothing animates until
 // the view has been measured and centred, so tiles don't slide in from
 // where they sat before.
+//
+// Light on the device (2026-10-06): every image keeps a fixed size and
+// is moved and resized only with a CSS transform (translate + scale) and
+// faded with opacity, which the graphics processor handles without the
+// page being laid out again each frame. A cover is drawn at its opened
+// size and scaled down when closed, so it stays sharp (its name scales
+// with it). Covers load only as they come near the view, and "which
+// curation is nearest the middle" is worked out at most once per screen
+// refresh while scrolling.
 
 const GAP = 8;
 // Works shown when a curation opens.
 const OPEN_COUNT = 6;
 // A wheel "line" in pixels, for mice that scroll by lines.
 const LINE_HEIGHT = 16;
+// A closed cover's name, in pixels.
+const NAME_FONT_SIZE = 14;
 
 type Rect = { left: number; top: number; size: number };
 
@@ -72,6 +83,7 @@ export default function CanvasPlayer({
   const scrollRef = useRef<HTMLDivElement>(null);
   const panRef = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   const loadingRef = useRef(new Set<string>());
+  const frameRef = useRef<number | null>(null);
 
   useEffect(() => {
     let current = true;
@@ -122,6 +134,14 @@ export default function CanvasPlayer({
     return () => el.removeEventListener("wheel", onWheel);
   }, [placements, layout.scrollSpeed]);
 
+  // Cancels a pending check when leaving the page.
+  useEffect(
+    () => () => {
+      if (frameRef.current !== null) cancelAnimationFrame(frameRef.current);
+    },
+    []
+  );
+
   const marginX = view ? Math.round(view.w / 2) : 0;
   const marginY = view ? Math.round(view.h / 2) : 0;
 
@@ -144,6 +164,16 @@ export default function CanvasPlayer({
     }
     setOpenId(best);
   }, [placements, marginX, marginY, T]);
+
+  // Scroll events can arrive many times per frame; check at most once
+  // per screen refresh.
+  const onScroll = () => {
+    if (frameRef.current !== null) return;
+    frameRef.current = requestAnimationFrame(() => {
+      frameRef.current = null;
+      updateOpen();
+    });
+  };
 
   // Once the view is measured, starts with the first placed curation in
   // the middle, then lets things animate.
@@ -225,9 +255,7 @@ export default function CanvasPlayer({
   const height = Math.max(...placements.map((p) => p.y)) + T + 2 * marginY;
 
   const s = layout.openSpeed;
-  const transition = ready
-    ? `left ${s}s ease, top ${s}s ease, width ${s}s ease, height ${s}s ease, opacity ${s}s ease`
-    : "none";
+  const transition = ready ? `transform ${s}s ease, opacity ${s}s ease` : "none";
 
   // A closed tile's place, moved aside if another curation is open.
   const closedRect = (p: CanvasPlacement): Rect => {
@@ -261,11 +289,15 @@ export default function CanvasPlayer({
     ];
   };
 
-  const rectStyle = (r: Rect, extra?: CSSProperties): CSSProperties => ({
-    left: r.left,
-    top: r.top,
-    width: r.size,
-    height: r.size,
+  // An element of fixed size `base`, placed and sized at `r` by a
+  // transform alone.
+  const rectStyle = (r: Rect, base: number, extra?: CSSProperties): CSSProperties => ({
+    left: 0,
+    top: 0,
+    width: base,
+    height: base,
+    transformOrigin: "0 0",
+    transform: `translate3d(${r.left}px, ${r.top}px, 0) scale(${r.size / base})`,
     transition,
     ...extra,
   });
@@ -275,9 +307,9 @@ export default function CanvasPlayer({
       className="relative h-[70vh] min-h-[420px] w-full overflow-hidden rounded-md"
       style={{ backgroundColor: layout.backgroundColor ?? undefined }}
     >
-      <div ref={scrollRef} onScroll={updateOpen} className="absolute inset-0 overflow-auto">
+      <div ref={scrollRef} onScroll={onScroll} className="absolute inset-0 overflow-auto">
         <div
-          className="relative cursor-grab touch-none select-none active:cursor-grabbing"
+          className="relative cursor-grab touch-none select-none overflow-hidden active:cursor-grabbing"
           style={{ width, height }}
           onPointerDown={startPan}
           onPointerMove={movePan}
@@ -306,7 +338,7 @@ export default function CanvasPlayer({
                     onClick={() => setViewing({ curationId: p.curationId, artworkId: w.artworkId })}
                     title={w.catalogueName}
                     className="absolute overflow-hidden rounded"
-                    style={rectStyle(opened ? opened[i + 1] : hidden, {
+                    style={rectStyle(opened ? opened[i + 1] : hidden, small, {
                       opacity: opened ? 1 : 0,
                       pointerEvents: opened ? "auto" : "none",
                       zIndex: isOpen ? 10 : 0,
@@ -316,6 +348,7 @@ export default function CanvasPlayer({
                       src={w.displayUrl!}
                       alt={w.catalogueName}
                       draggable={false}
+                      decoding="async"
                       className="h-full w-full object-cover"
                     />
                   </button>
@@ -329,17 +362,23 @@ export default function CanvasPlayer({
                   }
                   title={cover?.name}
                   className="absolute overflow-hidden rounded bg-neutral-200"
-                  style={rectStyle(opened ? opened[0] : closed, { zIndex: isOpen ? 10 : 1 })}
+                  style={rectStyle(opened ? opened[0] : closed, main, { zIndex: isOpen ? 10 : 1 })}
                 >
                   {cover?.imageUrl && (
                     <img
                       src={cover.imageUrl}
                       alt={cover.name}
                       draggable={false}
+                      loading="lazy"
+                      decoding="async"
                       className="h-full w-full object-cover"
                     />
                   )}
-                  <span className="absolute inset-x-0 bottom-0 truncate bg-black/45 px-2 py-1 text-left text-sm text-white">
+                  {/* Sized for the closed cover; grows with it when open. */}
+                  <span
+                    className="absolute inset-x-0 bottom-0 truncate bg-black/45 px-2 py-1 text-left text-white"
+                    style={{ fontSize: (NAME_FONT_SIZE * main) / T }}
+                  >
                     {cover?.name ?? ""}
                   </span>
                 </button>
