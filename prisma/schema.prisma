@@ -1016,8 +1016,16 @@ model Site {
   // The site as last published (2026-10-06) — see SitePublication.
   publication SitePublication?
 
+  // The site's menu (2026-10-06) — a Menu Style, chosen under Live
+  // Pages on the Pages page. Every page uses it unless it has its own
+  // (Page.menuStyleId). Optional; cleared, not the site changed, if the
+  // style is deleted.
+  menuStyleId String?
+  menuStyle   MenuStyle? @relation(fields: [menuStyleId], references: [id], onDelete: SetNull)
+
   @@index([artistId])
   @@index([templateId])
+  @@index([menuStyleId])
 }
 
 // A site as last published (2026-10-06) — a snapshot of everything its
@@ -1079,6 +1087,12 @@ model Page {
   pageStyleId String?
   pageStyle   PageStyle? @relation(fields: [pageStyleId], references: [id], onDelete: SetNull)
 
+  // This page's own menu (2026-10-06), in place of the site's
+  // (Site.menuStyleId) — null = the site's. Chosen as "Menu" in the
+  // page's Edit on the Pages page; cleared if the style is deleted.
+  menuStyleId String?
+  menuStyle   MenuStyle? @relation(fields: [menuStyleId], references: [id], onDelete: SetNull)
+
   // The curations placed on this page's canvas (2026-10-05) — used when
   // its Display Style is a Canvas. See PageCanvasItem.
   canvasItems PageCanvasItem[]
@@ -1096,6 +1110,7 @@ model Page {
   @@index([backgroundImageId])
   @@index([curationId])
   @@index([pageStyleId])
+  @@index([menuStyleId])
 }
 
 // One curation placed on a Canvas page (2026-10-05) — its tile's
@@ -1141,12 +1156,16 @@ model PageStyle {
 // design, shared by every site, managed under Templates → Menus. It sets
 // how the menu looks and behaves only: the menu's items and their order
 // are always the site's Live Pages. `layout` holds the settings as JSON
-// (see lib/menuStyleLayout.ts).
+// (see lib/menuStyleLayout.ts). Chosen per site, and optionally per page
+// (2026-10-06) — see Site.menuStyleId and Page.menuStyleId.
 model MenuStyle {
   id   String @id @default(cuid())
   name String @unique
 
   layout Json @default("{}")
+
+  sites Site[]
+  pages Page[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
