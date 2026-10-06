@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
-import { getCuration, type CurationDetail } from "@/lib/actions/curations";
-import { listCurationSections } from "@/lib/actions/curationSections";
+import type { CurationDetail } from "@/lib/actions/curations";
 import type { CurationSectionData } from "@/lib/curationSections";
+import { useSiteData } from "@/lib/siteData";
 import CurationWorkView from "@/components/CurationWorkView";
 
 // How the grid's images fly in (2026-10-06): from this far below,
@@ -23,18 +23,18 @@ const GRID_COLUMNS = 4;
 // which fly in as they're scrolled into view (see FlyIn). Clicking a
 // work in the grid puts it at the top and scrolls back up. Clicking the
 // large image or its name opens that work's details (CurationWorkView)
-// on top; closing that comes back here.
+// on top; closing that comes back here. Content comes from the page's
+// site data (lib/siteData.tsx).
 export default function CurationPanel({
   curationId,
   artworkId,
-  artistId,
   onClose,
 }: {
   curationId: string;
   artworkId: string;
-  artistId: string;
   onClose: () => void;
 }) {
+  const siteData = useSiteData();
   const [curation, setCuration] = useState<CurationDetail | null>(null);
   const [sections, setSections] = useState<CurationSectionData[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,7 +44,7 @@ export default function CurationPanel({
 
   useEffect(() => {
     let current = true;
-    Promise.all([getCuration(curationId, artistId), listCurationSections(curationId, artistId)]).then(
+    Promise.all([siteData.getCuration(curationId), siteData.listSections(curationId)]).then(
       ([detail, rows]) => {
         if (!current) return;
         setCuration(detail);
@@ -55,7 +55,7 @@ export default function CurationPanel({
     return () => {
       current = false;
     };
-  }, [curationId, artistId]);
+  }, [siteData, curationId]);
 
   // Escape closes the panel — unless the details are open on top, which
   // close themselves first.
@@ -173,7 +173,6 @@ export default function CurationPanel({
         <CurationWorkView
           curationId={curationId}
           artworkId={work.artworkId}
-          artistId={artistId}
           onClose={() => setDetailsOpen(false)}
         />
       )}

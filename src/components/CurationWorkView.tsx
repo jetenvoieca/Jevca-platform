@@ -1,19 +1,19 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import {
-  getCurationWorkPresentation,
-  type CurationWorkPresentation,
-} from "@/lib/actions/curations";
+import type { CurationWorkPresentation } from "@/lib/actions/curations";
+import { useSiteData } from "@/lib/siteData";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 
 // One work's presentation within a curation, read-only (2026-10-05, from
-// Craig's mockup) — opened by clicking a work in the Pages preview. Shows
-// just the contents, no field labels: the image being viewed, the
-// work's images beneath it (clicking one shows it above — it only
-// changes what's viewed here, nothing is saved), its name and this
-// curation's description, and its price with what it comes to in
-// instalments. Edited on the Curations page (CurationWorkPresentation).
+// Craig's mockup) — its details panel, opened from a page. Shows just
+// the contents, no field labels: the image being viewed, the work's
+// images beneath it (clicking one shows it above — it only changes
+// what's viewed here, nothing is saved), its name and this curation's
+// description, and its price with what it comes to in instalments.
+// Edited on the Curations page (CurationWorkPresentation). Content comes
+// from the page's site data (lib/siteData.tsx) — live in the admin
+// preview, the published snapshot on the site.
 
 function formatMoney(n: number, currency: string): string {
   const digits = Number.isInteger(n) ? 0 : 2;
@@ -32,14 +32,13 @@ function formatMoney(n: number, currency: string): string {
 export default function CurationWorkView({
   curationId,
   artworkId,
-  artistId,
   onClose,
 }: {
   curationId: string;
   artworkId: string;
-  artistId: string;
   onClose: () => void;
 }) {
+  const siteData = useSiteData();
   const [data, setData] = useState<CurationWorkPresentation | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewIndex, setViewIndex] = useState(0);
@@ -48,7 +47,7 @@ export default function CurationWorkView({
     let current = true;
     setLoading(true);
     setViewIndex(0);
-    getCurationWorkPresentation(curationId, artistId, artworkId).then((result) => {
+    siteData.getPresentation(curationId, artworkId).then((result) => {
       if (!current) return;
       setData(result);
       setLoading(false);
@@ -56,7 +55,7 @@ export default function CurationWorkView({
     return () => {
       current = false;
     };
-  }, [curationId, artistId, artworkId]);
+  }, [siteData, curationId, artworkId]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

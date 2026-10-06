@@ -9,14 +9,10 @@ import {
   type CSSProperties,
   type PointerEvent,
 } from "react";
-import {
-  getCuration,
-  listCurationCovers,
-  type CurationCover,
-  type CurationWork,
-} from "@/lib/actions/curations";
-import { getPageCanvas, type CanvasPlacement } from "@/lib/actions/pageCanvas";
+import type { CurationCover, CurationWork } from "@/lib/actions/curations";
+import type { CanvasPlacement } from "@/lib/actions/pageCanvas";
 import type { CanvasLayout } from "@/lib/pageStyleLayout";
+import { useSiteData } from "@/lib/siteData";
 import CurationPanel from "@/components/CurationPanel";
 
 // A Canvas page played (2026-10-05, from Craig's mockups): the page's
@@ -34,9 +30,11 @@ import CurationPanel from "@/components/CurationPanel";
 // (2026-10-06, see CurationPanel); clicking a closed curation scrolls it
 // to the middle. The canvas is bounded: it is as big as the placements,
 // plus half a view of margin all round so every curation can reach the
-// middle.
+// middle. Content comes from the page's site data (lib/siteData.tsx).
 //
-// The view is a fixed-height window (fix, 2026-10-05): the canvas's size
+// The view's height: `fullScreen` fills the whole browser window (the
+// site's own pages); otherwise a fixed-height window (the admin
+// preview). Either way it's fixed (fix, 2026-10-05): the canvas's size
 // depends on the view's size, so the view must never grow to fit the
 // canvas, or the two keep enlarging each other. Nothing animates until
 // the view has been measured and centred, so tiles don't slide in from
@@ -62,16 +60,15 @@ const NAME_FONT_SIZE = 14;
 type Rect = { left: number; top: number; size: number };
 
 export default function CanvasPlayer({
-  siteId,
   pageId,
-  artistId,
   layout,
+  fullScreen = false,
 }: {
-  siteId: string;
   pageId: string;
-  artistId: string;
   layout: CanvasLayout;
+  fullScreen?: boolean;
 }) {
+  const siteData = useSiteData();
   const T = layout.tileSize;
   const [placements, setPlacements] = useState<CanvasPlacement[] | null>(null);
   const [covers, setCovers] = useState<Map<string, CurationCover>>(new Map());
@@ -87,7 +84,7 @@ export default function CanvasPlayer({
 
   useEffect(() => {
     let current = true;
-    Promise.all([getPageCanvas(siteId, pageId), listCurationCovers(artistId)]).then(
+    Promise.all([siteData.getCanvas(pageId), siteData.listCovers()]).then(
       ([loadedPlacements, loadedCovers]) => {
         if (!current) return;
         setCovers(new Map(loadedCovers.map((c) => [c.id, c])));
@@ -97,7 +94,7 @@ export default function CanvasPlayer({
     return () => {
       current = false;
     };
-  }, [siteId, pageId, artistId]);
+  }, [siteData, pageId]);
 
   // The view's size, kept up to date as it changes.
   useLayoutEffect(() => {
@@ -193,7 +190,7 @@ export default function CanvasPlayer({
   useEffect(() => {
     if (!openId || works.has(openId) || loadingRef.current.has(openId)) return;
     loadingRef.current.add(openId);
-    getCuration(openId, artistId).then((detail) => {
+    siteData.getCuration(openId).then((detail) => {
       setWorks((prev) =>
         new Map(prev).set(
           openId,
@@ -201,7 +198,7 @@ export default function CanvasPlayer({
         )
       );
     });
-  }, [openId, works, artistId]);
+  }, [siteData, openId, works]);
 
   const closePanel = useCallback(() => setViewing(null), []);
 
@@ -304,7 +301,9 @@ export default function CanvasPlayer({
 
   return (
     <div
-      className="relative h-[70vh] min-h-[420px] w-full overflow-hidden rounded-md"
+      className={`relative w-full overflow-hidden ${
+        fullScreen ? "h-[100dvh]" : "h-[70vh] min-h-[420px] rounded-md"
+      }`}
       style={{ backgroundColor: layout.backgroundColor ?? undefined }}
     >
       <div ref={scrollRef} onScroll={onScroll} className="absolute inset-0 overflow-auto">
@@ -392,7 +391,6 @@ export default function CanvasPlayer({
         <CurationPanel
           curationId={viewing.curationId}
           artworkId={viewing.artworkId}
-          artistId={artistId}
           onClose={closePanel}
         />
       )}
