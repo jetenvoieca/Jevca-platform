@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { CurationSummary } from "@/lib/actions/curations";
 import type { PageDetailsInput } from "@/lib/actions/pages";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
+import type { MenuStyleSummary } from "@/lib/actions/menuStyles";
 
 // The Pages page's Add / Edit modal (2026-10-04, from Craig's mockup):
 // Page Name, Curation and Display Style. The same modal is used for both
@@ -11,12 +12,14 @@ import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 // one of the Page Styles (Templates → Page Styles, 2026-10-05). With a
 // Canvas style there's no Curation to choose — a Canvas page has its own
 // placed curations (Arrange on the Pages page) — so it's hidden and
-// saved as none.
+// saved as none. Menu (2026-10-06) is "Site menu" (the one chosen under
+// Live Pages) or one of the Menu Styles, for this page only.
 export default function PageDetailsModal({
   heading,
   initial,
   curations,
   pageStyles,
+  menuStyles,
   saving,
   error,
   onSave,
@@ -26,6 +29,7 @@ export default function PageDetailsModal({
   initial: PageDetailsInput;
   curations: CurationSummary[];
   pageStyles: PageStyleSummary[];
+  menuStyles: MenuStyleSummary[];
   saving: boolean;
   error: string | null;
   onSave: (input: PageDetailsInput) => void;
@@ -34,6 +38,7 @@ export default function PageDetailsModal({
   const [title, setTitle] = useState(initial.title);
   const [curationId, setCurationId] = useState(initial.curationId ?? "");
   const [pageStyleId, setPageStyleId] = useState(initial.pageStyleId ?? "");
+  const [menuStyleId, setMenuStyleId] = useState(initial.menuStyleId ?? "");
 
   const isCanvas = pageStyles.find((s) => s.id === pageStyleId)?.type === "CANVAS";
 
@@ -51,6 +56,7 @@ export default function PageDetailsModal({
             title,
             curationId: isCanvas ? null : curationId || null,
             pageStyleId: pageStyleId || null,
+            menuStyleId: menuStyleId || null,
           });
         }}
       >
@@ -101,6 +107,23 @@ export default function PageDetailsModal({
             {pageStyles.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.name}
+              </option>
+            ))}
+          </select>
+
+          <label htmlFor="page-menu" className="text-sm text-neutral-700">
+            Menu
+          </label>
+          <select
+            id="page-menu"
+            value={menuStyleId}
+            onChange={(e) => setMenuStyleId(e.target.value)}
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">Site menu</option>
+            {menuStyles.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
               </option>
             ))}
           </select>

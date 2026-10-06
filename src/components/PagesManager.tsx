@@ -7,10 +7,12 @@ import {
   deletePage,
   reorderPages,
   updatePageDetails,
+  updateSiteMenuStyle,
   type PageDetailsInput,
 } from "@/lib/actions/pages";
 import type { CurationSummary } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
+import type { MenuStyleSummary } from "@/lib/actions/menuStyles";
 import { LiveSiteData } from "@/lib/siteData";
 import PageDetailsModal from "@/components/PageDetailsModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -23,6 +25,7 @@ export type PageListItem = {
   visible: boolean;
   curationId: string | null;
   pageStyleId: string | null;
+  menuStyleId: string | null;
 };
 
 type ListKey = "live" | "hidden";
@@ -40,18 +43,26 @@ type ListKey = "live" | "hidden";
 // (2026-10-05) opens the full-screen canvas editor (CanvasArranger) for
 // a page whose Display Style is a Canvas; closing it redraws the preview
 // with the new arrangement.
+//
+// Site menu (2026-10-06): under Live Pages, the Menu Style the site's
+// menu uses (Templates → Menus) — saved as soon as it's changed. A page
+// can have its own instead, chosen in its Edit.
 export default function PagesManager({
   siteId,
   artistId,
   pages,
   curations,
   pageStyles,
+  menuStyles,
+  siteMenuStyleId,
 }: {
   siteId: string;
   artistId: string;
   pages: PageListItem[];
   curations: CurationSummary[];
   pageStyles: PageStyleSummary[];
+  menuStyles: MenuStyleSummary[];
+  siteMenuStyleId: string | null;
 }) {
   const router = useRouter();
   const [live, setLive] = useState(() => pages.filter((p) => p.visible));
@@ -70,6 +81,13 @@ export default function PagesManager({
   const [arranging, setArranging] = useState(false);
   // Bumped when Arrange closes, so the preview reloads the arrangement.
   const [previewVersion, setPreviewVersion] = useState(0);
+  const [siteMenuId, setSiteMenuId] = useState(siteMenuStyleId ?? "");
+  useEffect(() => setSiteMenuId(siteMenuStyleId ?? ""), [siteMenuStyleId]);
+
+  const changeSiteMenu = (id: string) => {
+    setSiteMenuId(id);
+    startTransition(() => updateSiteMenuStyle(siteId, id || null));
+  };
 
   // Fresh server data (after a delete, or any refresh) replaces local state.
   useEffect(() => {
@@ -281,6 +299,21 @@ export default function PagesManager({
         </div>
 
         {renderList("live", "Live Pages", live)}
+        <label className="flex items-center gap-3 rounded-lg border border-neutral-300 bg-white px-3 py-2">
+          <span className="shrink-0 text-sm text-neutral-800">Site menu</span>
+          <select
+            value={siteMenuId}
+            onChange={(e) => changeSiteMenu(e.target.value)}
+            className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">None</option>
+            {menuStyles.map((m) => (
+              <option key={m.id} value={m.id}>
+                {m.name}
+              </option>
+            ))}
+          </select>
+        </label>
         {renderList("hidden", "Hidden Pages", hidden)}
       </aside>
 
@@ -293,11 +326,13 @@ export default function PagesManager({
                   title: selected.title,
                   curationId: selected.curationId,
                   pageStyleId: selected.pageStyleId,
+                  menuStyleId: selected.menuStyleId,
                 }
-              : { title: "", curationId: null, pageStyleId: null }
+              : { title: "", curationId: null, pageStyleId: null, menuStyleId: null }
           }
           curations={curations}
           pageStyles={pageStyles}
+          menuStyles={menuStyles}
           saving={isPending}
           error={modalError}
           onSave={handleSave}

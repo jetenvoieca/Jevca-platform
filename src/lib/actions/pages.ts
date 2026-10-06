@@ -33,11 +33,13 @@ export async function uniqueSlug(siteId: string, base: string) {
 }
 
 // What the Pages page's Add / Edit modal saves (2026-10-04): name,
-// curation and Display Style (a Page Style, 2026-10-05).
+// curation, Display Style (a Page Style, 2026-10-05) and Menu (a Menu
+// Style, 2026-10-06 — null = the site's menu).
 export type PageDetailsInput = {
   title: string;
   curationId: string | null;
   pageStyleId: string | null;
+  menuStyleId: string | null;
 };
 
 // A page can only show one of its own site's artist's curations —
@@ -62,6 +64,26 @@ async function existingPageStyleId(pageStyleId: string | null): Promise<string |
   return style?.id ?? null;
 }
 
+// Menu Styles are shared by every site too — an unknown id is treated
+// as none (the site's menu).
+async function existingMenuStyleId(menuStyleId: string | null): Promise<string | null> {
+  if (!menuStyleId) return null;
+  const style = await db.menuStyle.findUnique({
+    where: { id: menuStyleId },
+    select: { id: true },
+  });
+  return style?.id ?? null;
+}
+
+// The site's menu (2026-10-06), chosen under Live Pages on the Pages
+// page — null = no menu chosen yet.
+export async function updateSiteMenuStyle(siteId: string, menuStyleId: string | null) {
+  await db.site.update({
+    where: { id: siteId },
+    data: { menuStyleId: await existingMenuStyleId(menuStyleId) },
+  });
+}
+
 // Add (2026-10-04). A new page starts in Hidden Pages, at the bottom, so
 // nothing appears on the site until it's dragged into Live Pages.
 export async function createPage(
@@ -71,10 +93,11 @@ export async function createPage(
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
-  const [slug, curationId, pageStyleId, last] = await Promise.all([
+  const [slug, curationId, pageStyleId, menuStyleId, last] = await Promise.all([
     uniqueSlug(siteId, slugify(title)),
     ownCurationId(siteId, input.curationId),
     existingPageStyleId(input.pageStyleId),
+    existingMenuStyleId(input.menuStyleId),
     db.page.aggregate({ where: { siteId }, _max: { position: true } }),
   ]);
 
@@ -85,6 +108,7 @@ export async function createPage(
       slug,
       curationId,
       pageStyleId,
+      menuStyleId,
       visible: false,
       position: (last._max.position ?? -1) + 1,
     },
@@ -103,13 +127,14 @@ export async function updatePageDetails(
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
-  const [curationId, pageStyleId] = await Promise.all([
+  const [curationId, pageStyleId, menuStyleId] = await Promise.all([
     ownCurationId(siteId, input.curationId),
     existingPageStyleId(input.pageStyleId),
+    existingMenuStyleId(input.menuStyleId),
   ]);
   await db.page.updateMany({
     where: { id: pageId, siteId },
-    data: { title, curationId, pageStyleId },
+    data: { title, curationId, pageStyleId, menuStyleId },
   });
   return { ok: true };
 }
