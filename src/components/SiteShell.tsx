@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import AppShell from "@/components/AppShell";
-import { publishSite } from "@/lib/actions/pages";
+import { publishSite } from "@/lib/actions/siteSnapshot";
 import { buildSiteNavEntries, type SiteNavKey } from "@/lib/siteNav";
 
 // Works out which nav item should be highlighted/open purely from the
@@ -32,6 +32,8 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
   return null;
 }
 
+// "Publish to live site" (2026-10-06) is always available: it saves a
+// fresh snapshot of the whole site each time (lib/actions/siteSnapshot.ts).
 export default function SiteShell({
   siteId,
   salesEnabled,
@@ -39,7 +41,6 @@ export default function SiteShell({
   artworkNeedsReviewCount,
   mediaNeedsReviewCount,
   alertCount,
-  hasUnpublished,
   header,
   children,
 }: {
@@ -49,7 +50,6 @@ export default function SiteShell({
   artworkNeedsReviewCount: number;
   mediaNeedsReviewCount: number;
   alertCount: number;
-  hasUnpublished: boolean;
   // The site name / domain header, pinned above the scrolling page
   // content — built by the (server) layout since it needs the site
   // record, passed in ready-made.
@@ -70,7 +70,7 @@ export default function SiteShell({
 
   return (
     <AppShell
-      publishEnabled={hasUnpublished}
+      publishEnabled
       publishAction={publishSite.bind(null, siteId)}
       navItems={navItems}
       content={

@@ -10,9 +10,9 @@ import SiteNameField from "@/components/SiteNameField";
 
 // Without this, Next can treat this layout as static-cacheable (it uses
 // no dynamic APIs like cookies()/headers(), just plain db reads) and
-// serve stale counts (Hopper, needs-review, alerts, unpublished pages)
-// from the Full Route Cache — the site's own Settings page
-// (src/app/sites/[id]/page.tsx) already sets this for the same reason.
+// serve stale counts (Hopper, needs-review, alerts) from the Full Route
+// Cache — the site's own Settings page (src/app/sites/[id]/page.tsx)
+// already sets this for the same reason.
 export const dynamic = "force-dynamic";
 
 export default async function SiteLayout({
@@ -30,27 +30,13 @@ export default async function SiteLayout({
   });
   if (!site) notFound();
 
-  const [
-    pages,
-    hopperCount,
-    artworkNeedsReviewCount,
-    mediaNeedsReviewCount,
-    openAlerts,
-  ] = await Promise.all([
-    // Only needed to know whether anything is waiting to be published —
-    // every page counts, since publishSite publishes every page.
-    db.page.findMany({
-      where: { siteId: id },
-      select: { draftBlocks: true, liveBlocks: true },
-    }),
-    countHopper(site.artistId),
-    countArtworksNeedingReview(site.artistId),
-    countMediaNeedingReview(site.artistId),
-    getOpenAlerts(),
-  ]);
-  const hasUnpublished = pages.some(
-    (p) => JSON.stringify(p.draftBlocks) !== JSON.stringify(p.liveBlocks)
-  );
+  const [hopperCount, artworkNeedsReviewCount, mediaNeedsReviewCount, openAlerts] =
+    await Promise.all([
+      countHopper(site.artistId),
+      countArtworksNeedingReview(site.artistId),
+      countMediaNeedingReview(site.artistId),
+      getOpenAlerts(),
+    ]);
 
   return (
     <>
@@ -62,7 +48,6 @@ export default async function SiteLayout({
         artworkNeedsReviewCount={artworkNeedsReviewCount}
         mediaNeedsReviewCount={mediaNeedsReviewCount}
         alertCount={openAlerts.length}
-        hasUnpublished={hasUnpublished}
         header={
           <SiteNameField
             site={{

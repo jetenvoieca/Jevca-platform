@@ -15,9 +15,9 @@ import { slugify } from "@/lib/pageSlug";
 // unnecessary and, in at least one case, actively harmful (it wiped
 // in-progress input in the Hopper's "Add Artwork" flow). Every caller of
 // these actions already refreshes what it needs itself (router.refresh(),
-// or a redirect() to a fresh page). publishSite is invoked as a native
-// form action, which Next refreshes automatically on completion without
-// any revalidatePath needed.
+// or a redirect() to a fresh page).
+//
+// Publishing a site lives in lib/actions/siteSnapshot.ts (2026-10-06).
 
 // Kept as an export here (async, so valid alongside the other Server
 // Actions in this file) rather than moving to pageSlug.ts alongside
@@ -156,7 +156,7 @@ export async function deletePage(siteId: string, pageId: string) {
 }
 
 export async function saveDraftBlocks(pageId: string, blocks: unknown) {
-  const page = await db.page.update({
+  await db.page.update({
     where: { id: pageId },
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: { draftBlocks: blocks as any },
@@ -166,11 +166,11 @@ export async function saveDraftBlocks(pageId: string, blocks: unknown) {
 
 // Page-level background styling (2026-09-03) — deliberately separate
 // from saveDraftBlocks above: backgroundColor/backgroundImageId are
-// real columns on Page, not part of the draftBlocks/liveBlocks content
-// JSON (see the note on those columns in schema.prisma), so this is its
-// own small action rather than being folded into the blocks payload.
-// Either value can be explicitly set to null to clear it (e.g. removing
-// a background image while leaving the colour as is).
+// real columns on Page, not part of the draftBlocks content JSON (see
+// the note on those columns in schema.prisma), so this is its own small
+// action rather than being folded into the blocks payload. Either value
+// can be explicitly set to null to clear it (e.g. removing a background
+// image while leaving the colour as is).
 export async function updatePageBackground(
   pageId: string,
   data: { backgroundColor?: string | null; backgroundImageId?: string | null }
@@ -183,17 +183,4 @@ export async function updatePageBackground(
     },
   });
   return { ok: true };
-}
-
-export async function publishSite(siteId: string): Promise<void> {
-  const pages = await db.page.findMany({ where: { siteId } });
-
-  await db.$transaction(
-    pages.map((p) =>
-      db.page.update({
-        where: { id: p.id },
-        data: { liveBlocks: p.draftBlocks as object },
-      })
-    )
-  );
 }
