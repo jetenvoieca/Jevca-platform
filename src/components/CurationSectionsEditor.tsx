@@ -8,6 +8,7 @@ import {
   listCurationSections,
   reorderCurationSections,
   setCurationSectionMedia,
+  updateCurationSectionStyle,
   updateCurationSectionText,
 } from "@/lib/actions/curationSections";
 import {
@@ -15,7 +16,9 @@ import {
   MAX_SECTION_HEADING,
   MAX_SECTION_IMAGES,
   MAX_SECTION_TEXT,
+  SECTION_HEIGHT_LIMITS,
   curationSectionLabel,
+  isTextSection,
   type CurationSectionData,
   type CurationSectionType,
 } from "@/lib/curationSections";
@@ -25,9 +28,11 @@ import {
 // Tag line, Description, Video, Free text and Images, any number of
 // each, in any order. Each section is its own box: text saves when the
 // box is left, a video or images save as soon as they're picked. ↑ ↓
-// reorder, ✕ deletes. "+ Add section" adds one at the end. Loaded for
-// one curation; the Curations page remounts it (key) when another is
-// opened.
+// reorder, ✕ deletes. "+ Add section" adds one at the end. Text sections
+// also have a Height (pixels; blank = just fits the text) and a
+// background colour (2026-10-06), shown on the text box here too.
+// Loaded for one curation; the Curations page remounts it (key) when
+// another is opened.
 export default function CurationSectionsEditor({
   curationId,
   artistId,
@@ -225,11 +230,12 @@ function SectionBody({
   };
 
   const fieldClass =
-    "w-full rounded-md border border-transparent p-1 text-sm text-neutral-800 hover:border-neutral-200 focus:border-neutral-300 focus:outline-none";
+    "w-full rounded-md border border-transparent bg-transparent p-1 text-sm text-neutral-800 hover:border-neutral-300 focus:border-neutral-400 focus:outline-none";
 
-  switch (section.type) {
-    case "TAGLINE":
-      return (
+  if (isTextSection(section.type)) {
+    let fields;
+    if (section.type === "TAGLINE") {
+      fields = (
         <input
           type="text"
           value={text}
@@ -240,9 +246,8 @@ function SectionBody({
           className={`${fieldClass} text-center`}
         />
       );
-
-    case "DESCRIPTION":
-      return (
+    } else if (section.type === "DESCRIPTION") {
+      fields = (
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -253,9 +258,8 @@ function SectionBody({
           className={`${fieldClass} resize-y`}
         />
       );
-
-    case "TEXT":
-      return (
+    } else {
+      fields = (
         <div className="flex flex-col gap-1">
           <input
             type="text"
@@ -277,68 +281,169 @@ function SectionBody({
           />
         </div>
       );
-
-    case "VIDEO": {
-      const video = section.media[0];
-      return (
-        <div className="flex flex-col gap-1">
-          <MediaPicker
-            artistId={artistId}
-            siteId={siteId}
-            videoOnly
-            label="Choose video"
-            previewUrl={video ? (video.posterUrl ?? video.url) : undefined}
-            previewKind={video && !video.posterUrl ? "video" : "image"}
-            previewClassName="aspect-video"
-            onSelect={(picked) => picked[0] && saveMedia([picked[0].id])}
-          />
-          {video && (
-            <button
-              type="button"
-              onClick={() => saveMedia([])}
-              className="self-end text-xs text-red-500 hover:underline"
-            >
-              Remove video
-            </button>
-          )}
-        </div>
-      );
     }
-
-    case "IMAGES":
-      return (
-        <div className="grid grid-cols-3 gap-2">
-          {section.media.map((m) => (
-            <div key={m.imageId} className="group relative">
-              <img src={m.url} alt="" className="aspect-square w-full rounded-md object-cover" />
-              <button
-                type="button"
-                onClick={() =>
-                  saveMedia(section.media.filter((x) => x.imageId !== m.imageId).map((x) => x.imageId))
-                }
-                aria-label="Remove image"
-                className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
-              >
-                ✕
-              </button>
-            </div>
-          ))}
-          {section.media.length < MAX_SECTION_IMAGES && (
-            <MediaPicker
-              artistId={artistId}
-              siteId={siteId}
-              mode="multi"
-              label="Add images"
-              previewClassName="aspect-square"
-              onSelect={(picked) =>
-                saveMedia([
-                  ...section.media.map((m) => m.imageId),
-                  ...picked.map((p) => p.id),
-                ])
-              }
-            />
-          )}
+    return (
+      <div className="flex flex-col gap-2">
+        <div
+          className="rounded-md p-1"
+          style={{ backgroundColor: section.backgroundColor ?? undefined }}
+        >
+          {fields}
         </div>
-      );
+        <TextStyleControls
+          section={section}
+          artistId={artistId}
+          onSaved={onSaved}
+          onError={onError}
+        />
+      </div>
+    );
   }
+
+  if (section.type === "VIDEO") {
+    const video = section.media[0];
+    return (
+      <div className="flex flex-col gap-1">
+        <MediaPicker
+          artistId={artistId}
+          siteId={siteId}
+          videoOnly
+          label="Choose video"
+          previewUrl={video ? (video.posterUrl ?? video.url) : undefined}
+          previewKind={video && !video.posterUrl ? "video" : "image"}
+          previewClassName="aspect-video"
+          onSelect={(picked) => picked[0] && saveMedia([picked[0].id])}
+        />
+        {video && (
+          <button
+            type="button"
+            onClick={() => saveMedia([])}
+            className="self-end text-xs text-red-500 hover:underline"
+          >
+            Remove video
+          </button>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid grid-cols-3 gap-2">
+      {section.media.map((m) => (
+        <div key={m.imageId} className="group relative">
+          <img src={m.url} alt="" className="aspect-square w-full rounded-md object-cover" />
+          <button
+            type="button"
+            onClick={() =>
+              saveMedia(section.media.filter((x) => x.imageId !== m.imageId).map((x) => x.imageId))
+            }
+            aria-label="Remove image"
+            className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+      {section.media.length < MAX_SECTION_IMAGES && (
+        <MediaPicker
+          artistId={artistId}
+          siteId={siteId}
+          mode="multi"
+          label="Add images"
+          previewClassName="aspect-square"
+          onSelect={(picked) =>
+            saveMedia([...section.media.map((m) => m.imageId), ...picked.map((p) => p.id)])
+          }
+        />
+      )}
+    </div>
+  );
+}
+
+// A text section's Height (pixels, applied when the box is left; blank =
+// just fits the text) and background colour (+ to add, Remove to clear).
+function TextStyleControls({
+  section,
+  artistId,
+  onSaved,
+  onError,
+}: {
+  section: CurationSectionData;
+  artistId: string;
+  onSaved: (section: CurationSectionData) => void;
+  onError: (error: string | null) => void;
+}) {
+  const [heightText, setHeightText] = useState(section.height?.toString() ?? "");
+
+  const save = async (input: { height?: number | null; backgroundColor?: string | null }) => {
+    onError(null);
+    const result = await updateCurationSectionStyle(section.id, artistId, input);
+    if ("error" in result) {
+      onError(result.error);
+      return;
+    }
+    onSaved({ ...section, ...result });
+    setHeightText(result.height?.toString() ?? "");
+  };
+
+  const commitHeight = () => {
+    const trimmed = heightText.trim();
+    const height = trimmed === "" ? null : Number(trimmed);
+    if (height !== null && !Number.isFinite(height)) {
+      setHeightText(section.height?.toString() ?? "");
+      return;
+    }
+    if (height === section.height) return;
+    save({ height });
+  };
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-neutral-500">
+      <label className="flex items-center gap-1.5">
+        Height
+        <input
+          type="number"
+          min={SECTION_HEIGHT_LIMITS.min}
+          max={SECTION_HEIGHT_LIMITS.max}
+          step={10}
+          value={heightText}
+          onChange={(e) => setHeightText(e.target.value)}
+          onBlur={commitHeight}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") e.currentTarget.blur();
+          }}
+          placeholder="Auto"
+          className="w-16 rounded-md border border-neutral-300 px-1.5 py-0.5 text-xs"
+        />
+        px
+      </label>
+
+      {section.backgroundColor ? (
+        <span className="flex items-center gap-1.5">
+          <input
+            type="color"
+            value={section.backgroundColor}
+            onChange={(e) => save({ backgroundColor: e.target.value })}
+            aria-label="Background colour"
+            className="h-5 w-5 cursor-pointer rounded border border-neutral-300 p-0"
+          />
+          <button
+            type="button"
+            onClick={() => save({ backgroundColor: null })}
+            className="text-red-500 hover:underline"
+          >
+            Remove colour
+          </button>
+        </span>
+      ) : (
+        <button
+          type="button"
+          onClick={() => save({ backgroundColor: "#f5f5f5" })}
+          className="hover:text-neutral-900"
+        >
+          + Background colour
+        </button>
+      )}
+    </div>
+  );
 }
