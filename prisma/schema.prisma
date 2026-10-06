@@ -167,6 +167,16 @@ enum Mailbox {
   BUSINESS
 }
 
+// The kinds of section a curation's presentation can have (2026-10-06)
+// — see CurationSection.
+enum CurationSectionType {
+  TAGLINE
+  DESCRIPTION
+  VIDEO
+  TEXT
+  IMAGES
+}
+
 model Artist {
   id        String       @id @default(cuid())
   name      String
@@ -598,7 +608,9 @@ model Location {
 // (its Description and images) is edited on the Curations page
 // (2026-10-03). A website page can show one curation (2026-10-04) — see
 // Page.curationId — or, on a Canvas page, several (2026-10-05) — see
-// PageCanvasItem.
+// PageCanvasItem. The curation's own presentation — tag line,
+// description, video and so on — is its sections (2026-10-06, which
+// replaced a single Description column) — see CurationSection.
 model Curation {
   id       String @id @default(cuid())
   artistId String
@@ -606,11 +618,8 @@ model Curation {
 
   name String
 
-  // The curation's own Description (2026-10-05) — plain text, null
-  // until written. Shown on the Curations page and in the Pages preview.
-  description String?
-
-  items CurationItem[]
+  items    CurationItem[]
+  sections CurationSection[]
   // Website pages showing this curation (2026-10-04) — see Page.curationId.
   pages Page[]
   // Canvas pages it's placed on (2026-10-05) — see PageCanvasItem.
@@ -621,6 +630,48 @@ model Curation {
 
   @@unique([artistId, name])
   @@index([artistId])
+}
+
+// One section of a curation's presentation (2026-10-06, from Craig's
+// mockups), shown in order in the curation panel on a page: a Tag line
+// (`text`, one line), a Description (`text`), Free text (`heading` +
+// `text`), a Video (one video from the Media Catalogue, in `media`) or
+// Images (photos from the Media Catalogue, in `media`, shown one under
+// another). Any type can be used any number of times; `position` sets
+// the order (0 first). Edited on the Curations page. Removed with its
+// curation.
+model CurationSection {
+  id         String              @id @default(cuid())
+  curationId String
+  curation   Curation            @relation(fields: [curationId], references: [id], onDelete: Cascade)
+  type       CurationSectionType
+  position   Int                 @default(0)
+
+  heading String?
+  text    String?
+  media   CurationSectionMedia[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([curationId, position])
+}
+
+// One video or image in a curation section (2026-10-06) — see
+// CurationSection. `position` orders them (0 first). Removed if the
+// section or the image itself is deleted.
+model CurationSectionMedia {
+  id        String          @id @default(cuid())
+  sectionId String
+  section   CurationSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  imageId   String
+  image     Image           @relation(fields: [imageId], references: [id], onDelete: Cascade)
+
+  position Int
+
+  @@unique([sectionId, imageId])
+  @@index([sectionId, position])
+  @@index([imageId])
 }
 
 // One artwork's place in one Curation (2026-09-24). `position` sets the
@@ -1497,6 +1548,9 @@ model Image {
   // Curations using this image in a work's own image set (2026-10-03) —
   // see CurationItemImage.
   curationItemImages CurationItemImage[]
+  // Curation sections showing this image or video (2026-10-06) — see
+  // CurationSectionMedia.
+  curationSectionMedia CurationSectionMedia[]
 
   sourceVideoRender VideoRender?
 
