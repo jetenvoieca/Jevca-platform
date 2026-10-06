@@ -17,7 +17,7 @@ import {
 } from "@/lib/actions/curations";
 import { getPageCanvas, type CanvasPlacement } from "@/lib/actions/pageCanvas";
 import type { CanvasLayout } from "@/lib/pageStyleLayout";
-import CurationWorkView from "@/components/CurationWorkView";
+import CurationPanel from "@/components/CurationPanel";
 
 // A Canvas page played (2026-10-05, from Craig's mockups): the page's
 // placed curations on a large canvas that scrolls in any direction —
@@ -30,10 +30,11 @@ import CurationWorkView from "@/components/CurationWorkView";
 // 3 × 3 grid — the first work fills a 2 × 2 corner, two sit below it and
 // three down its right-hand side — so each smaller image is half the
 // first's width less the gap. Every other curation moves aside to make
-// room. Clicking an opened image shows that work's presentation;
-// clicking a closed curation scrolls it to the middle. The canvas is
-// bounded: it is as big as the placements, plus half a view of margin
-// all round so every curation can reach the middle.
+// room. Clicking an opened image opens the curation panel at that work
+// (2026-10-06, see CurationPanel); clicking a closed curation scrolls it
+// to the middle. The canvas is bounded: it is as big as the placements,
+// plus half a view of margin all round so every curation can reach the
+// middle.
 //
 // The view is a fixed-height window (fix, 2026-10-05): the canvas's size
 // depends on the view's size, so the view must never grow to fit the
@@ -171,6 +172,8 @@ export default function CanvasPlayer({
       );
     });
   }, [openId, works, artistId]);
+
+  const closePanel = useCallback(() => setViewing(null), []);
 
   const scrollToCentre = (p: CanvasPlacement) => {
     scrollRef.current?.scrollTo({ left: p.x + T / 2, top: p.y + T / 2, behavior: "smooth" });
@@ -347,11 +350,11 @@ export default function CanvasPlayer({
       </div>
 
       {viewing && (
-        <CurationWorkView
+        <CurationPanel
           curationId={viewing.curationId}
           artworkId={viewing.artworkId}
           artistId={artistId}
-          onClose={() => setViewing(null)}
+          onClose={closePanel}
         />
       )}
     </div>
