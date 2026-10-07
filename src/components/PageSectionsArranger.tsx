@@ -14,15 +14,15 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { clearPageComponent, setPageComponent } from "@/lib/actions/pageComponents";
-import { groupBlocksByRow } from "@/lib/blocks";
 import { curationSectionLabel, type CurationSectionData } from "@/lib/curationSections";
 import { contentFits, type ContentKind } from "@/lib/pageComponents";
 import {
   blockTypeLabel,
   blockWidthOf,
+  groupBlocksByRow,
   rowKey,
   rowSettingsOf,
-  type CustomLayout,
+  type BlockBuildLayout,
   type GridSpacing,
   type LayoutBlock,
 } from "@/lib/pageStyleLayout";
@@ -31,7 +31,7 @@ import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 import { BlockShape, Labelled } from "@/components/PageStylePreview";
 import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 
-// Arrange for a Private / Custom page (2026-10-07, from Craig's mockup)
+// Arrange for a Block Build page (2026-10-07, from Craig's mockup)
 // — shown in the Pages page's Preview panel. On the left, the page's
 // curation's sections, plus its works; on the right, the page's Display
 // Style, drawn as in the Page Styles editor (desktop width). Drag one
@@ -90,7 +90,7 @@ export default function PageSectionsArranger({
   siteId: string;
   pageId: string;
   curationId: string;
-  layout: CustomLayout;
+  layout: BlockBuildLayout;
 }) {
   const siteData = useSiteData();
   const [sections, setSections] = useState<CurationSectionData[] | null>(null);

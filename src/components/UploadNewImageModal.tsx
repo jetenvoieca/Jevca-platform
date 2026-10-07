@@ -12,7 +12,7 @@ export type UploadedImage = Awaited<ReturnType<typeof uploadFileDirect>>;
 // leaving for the full Hopper page. Used directly by MediaPicker's own
 // "Upload new" (every "+ Add" tile across the app goes through
 // MediaPicker, so this alone covers Related images, Marketing uploads,
-// Content Block images, Section artwork grids, etc.), and wrapped by
+// curation images and videos, etc.), and wrapped by
 // SetMainFromHopperModal for Delete & Replace's extra "then delete the
 // old Main" step — one shared modal, not a separately-maintained copy
 // per caller.
