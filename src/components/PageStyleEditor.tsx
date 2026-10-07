@@ -8,8 +8,10 @@ import {
   BLOCK_WIDTH_LIMITS,
   CANVAS_LIMITS,
   GRID_SPACING_LIMITS,
+  HORIZONTAL_ALIGNS,
   PAGE_MARGIN_LIMITS,
   SLIDING_DOORS_LIMITS,
+  VERTICAL_ALIGNS,
   addLayoutBlock,
   blockTypeLabel,
   blockWidthOf,
@@ -18,26 +20,29 @@ import {
   cleanCanvas,
   cleanGridSpacing,
   cleanPageMargins,
+  cleanRowSettings,
   emptyLayout,
   moveLayoutRow,
   removeLayoutBlock,
   rowKey,
-  rowSpacingOf,
+  rowSettingsOf,
   updateBlockWidth,
   updateSlidingDoors,
   type CanvasLayout,
   type CustomLayout,
   type DoorsHeight,
   type GridSpacing,
+  type HorizontalAlign,
   type LayoutBlockType,
   type PageMargin,
   type PageMargins,
   type PageStyleLayout,
-  type RowSpacing,
+  type RowSettings,
   type SectionLayout,
   type SectionSpacing,
   type SectionWidths,
   type SlidingDoorsSettings,
+  type VerticalAlign,
 } from "@/lib/pageStyleLayout";
 import AddBlockModal, { type BlockPlacement } from "@/components/AddBlockModal";
 import NumberField from "@/components/NumberField";
@@ -110,6 +115,19 @@ const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
   { key: "video", label: "Video width" },
 ];
 
+// The alignment choices' labels.
+const HORIZONTAL_LABELS: Record<HorizontalAlign, string> = {
+  left: "Left",
+  center: "Centre",
+  right: "Right",
+};
+
+const VERTICAL_LABELS: Record<VerticalAlign, string> = {
+  top: "Top",
+  middle: "Middle",
+  bottom: "Bottom",
+};
+
 // The page margin's four values, for its box.
 const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label: string }[] = [
   { device: "desktop", side: "vertical", label: "Desktop margin, top & bottom" },
@@ -126,9 +144,10 @@ const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label:
 // Section and Private / Custom set their grid spacing (2026-10-05) for
 // grids of images, the page margin (2026-10-06, desktop and phone), the
 // spacing of every gap between blocks separately and every block's
-// width (2026-10-05, % of the page, centred): Section in its own boxes,
-// Private / Custom in each row of the Layout list (width per block, ↔
-// between side-by-side blocks, ↕ below the row).
+// width (2026-10-05, % of the page) and alignment (2026-10-07): Section
+// in its own boxes, Private / Custom in each row of the Layout list
+// (width per block, ↔ between side-by-side blocks, alignment, ↕ below
+// the row).
 //
 // Private / Custom: background colour and image, then the Layout list,
 // then Sliding doors settings for any Sliding doors blocks (including
@@ -184,25 +203,23 @@ export default function PageStyleEditor({
   const setDoors = (id: string, doors: SlidingDoorsSettings) =>
     setCustom({ ...custom, blocks: updateSlidingDoors(custom.blocks, id, doors) });
 
-  const setRowSpacing = (key: string, patch: Partial<RowSpacing>) => {
-    const current = rowSpacingOf(custom, key);
+  const setRow = (key: string, patch: Partial<RowSettings>) =>
     setCustom({
       ...custom,
-      rowSpacing: {
-        ...custom.rowSpacing,
-        [key]: {
-          below: cleanBlockSpacing(patch.below ?? current.below),
-          between: cleanBlockSpacing(patch.between ?? current.between),
-        },
+      rows: {
+        ...custom.rows,
+        [key]: cleanRowSettings({ ...rowSettingsOf(custom, key), ...patch }),
       },
     });
-  };
 
   const setSectionSpacing = (key: keyof SectionSpacing, value: number) =>
     setSection({ ...section, spacing: { ...section.spacing, [key]: cleanBlockSpacing(value) } });
 
   const setSectionWidth = (key: keyof SectionWidths, value: number) =>
     setSection({ ...section, widths: { ...section.widths, [key]: cleanBlockWidth(value) } });
+
+  const setSectionAlign = (key: keyof SectionWidths, value: HorizontalAlign) =>
+    setSection({ ...section, aligns: { ...section.aligns, [key]: value } });
 
   const rows = groupBlocksByRow(custom.blocks);
   const doorsBlocks = custom.blocks.filter((b) => b.type === "slidingdoors" && b.doors);
@@ -300,16 +317,24 @@ export default function PageStyleEditor({
             />
             <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
               {SECTION_WIDTH_FIELDS.filter((f) => f.key !== "video" || section.video).map((f) => (
-                <NumberField
-                  key={f.key}
-                  label={f.label}
-                  unit="%"
-                  step={5}
-                  value={section.widths[f.key]}
-                  limits={BLOCK_WIDTH_LIMITS}
-                  onCommit={(v) => setSectionWidth(f.key, v)}
-                  wide
-                />
+                <Fragment key={f.key}>
+                  <NumberField
+                    label={f.label}
+                    unit="%"
+                    step={5}
+                    value={section.widths[f.key]}
+                    limits={BLOCK_WIDTH_LIMITS}
+                    onCommit={(v) => setSectionWidth(f.key, v)}
+                    wide
+                  />
+                  <AlignSelect
+                    label="Align"
+                    value={section.aligns[f.key]}
+                    options={HORIZONTAL_ALIGNS}
+                    labels={HORIZONTAL_LABELS}
+                    onChange={(v) => setSectionAlign(f.key, v)}
+                  />
+                </Fragment>
               ))}
             </div>
             <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
@@ -422,7 +447,7 @@ export default function PageStyleEditor({
               <div className="flex flex-col gap-1.5">
                 {rows.map((row, i) => {
                   const key = rowKey(row);
-                  const spacing = rowSpacingOf(custom, key);
+                  const settings = rowSettingsOf(custom, key);
                   return (
                     <Fragment key={key}>
                       <div className="flex items-center gap-1 rounded-md border border-neutral-200 p-1.5">
@@ -472,10 +497,26 @@ export default function PageStyleEditor({
                               label="↔ Between"
                               unit="px"
                               step={1}
-                              value={spacing.between}
+                              value={settings.between}
                               limits={BLOCK_SPACING_LIMITS}
-                              onCommit={(between) => setRowSpacing(key, { between })}
+                              onCommit={(between) => setRow(key, { between })}
                               compact
+                            />
+                          )}
+                          <AlignSelect
+                            label="Align"
+                            value={settings.horizontal}
+                            options={HORIZONTAL_ALIGNS}
+                            labels={HORIZONTAL_LABELS}
+                            onChange={(horizontal) => setRow(key, { horizontal })}
+                          />
+                          {row.length > 1 && (
+                            <AlignSelect
+                              label="Line up"
+                              value={settings.vertical}
+                              options={VERTICAL_ALIGNS}
+                              labels={VERTICAL_LABELS}
+                              onChange={(vertical) => setRow(key, { vertical })}
                             />
                           )}
                         </div>
@@ -508,9 +549,9 @@ export default function PageStyleEditor({
                             label="↕ Space"
                             unit="px"
                             step={1}
-                            value={spacing.below}
+                            value={settings.below}
                             limits={BLOCK_SPACING_LIMITS}
-                            onCommit={(below) => setRowSpacing(key, { below })}
+                            onCommit={(below) => setRow(key, { below })}
                             compact
                           />
                         </div>
@@ -666,6 +707,38 @@ function PageMarginControl({
         />
       ))}
     </div>
+  );
+}
+
+// A row's (or Section part's) alignment, from a short list.
+function AlignSelect<T extends string>({
+  label,
+  value,
+  options,
+  labels,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: readonly T[];
+  labels: Record<T, string>;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-xs text-neutral-700">
+      <span className="flex-1">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value as T)}
+        className="rounded-md border border-neutral-300 px-2 py-1 text-xs"
+      >
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {labels[o]}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
 

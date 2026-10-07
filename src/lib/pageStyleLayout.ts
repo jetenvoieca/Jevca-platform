@@ -93,21 +93,44 @@ export const PAGE_MARGIN_LIMITS = { min: 0, max: 300 } as const;
 export const DEFAULT_BLOCK_SPACING = 16;
 export const BLOCK_SPACING_LIMITS = { min: 0, max: 200 } as const;
 
-// A block's width (2026-10-05), as a percentage of the page width; a
-// narrower block sits centred. Blocks side by side each keep their own
-// width, centred together, with the rest left as space — if together
-// they're wider than the page, they shrink to fit.
+// A block's width on desktop (2026-10-05), as a percentage of the page
+// width; a narrower block sits as its row's alignment says. Blocks side
+// by side each keep their own width, placed together, with the rest left
+// as space — if together they're wider than the page, they shrink to
+// fit. On a phone every block is full width (2026-10-07).
 export const DEFAULT_BLOCK_WIDTH = 100;
 export const BLOCK_WIDTH_LIMITS = { min: 10, max: 100 } as const;
 
-// One row of a Private / Custom layout's spacing: `below` = the space
-// between this row and the next (unused on the last row), `between` =
-// the space between its blocks when they sit side by side.
-export type RowSpacing = { below: number; between: number };
+// How a row sits on desktop (2026-10-07): `horizontal` places its
+// blocks together left, centred or right in the page's width; `vertical`
+// lines up side-by-side blocks of different heights at their tops,
+// middles or bottoms. On a phone every block is stacked full width, so
+// alignment applies from desktop width up only.
+export const HORIZONTAL_ALIGNS = ["left", "center", "right"] as const;
+export type HorizontalAlign = (typeof HORIZONTAL_ALIGNS)[number];
 
-export const DEFAULT_ROW_SPACING: RowSpacing = {
+export const VERTICAL_ALIGNS = ["top", "middle", "bottom"] as const;
+export type VerticalAlign = (typeof VERTICAL_ALIGNS)[number];
+
+export const DEFAULT_HORIZONTAL_ALIGN: HorizontalAlign = "center";
+export const DEFAULT_VERTICAL_ALIGN: VerticalAlign = "top";
+
+// One row of a Private / Custom layout: `below` = the space between this
+// row and the next (unused on the last row), `between` = the space
+// between its blocks when they sit side by side (and between them when
+// stacked on a phone), plus its alignment.
+export type RowSettings = {
+  below: number;
+  between: number;
+  horizontal: HorizontalAlign;
+  vertical: VerticalAlign;
+};
+
+export const DEFAULT_ROW_SETTINGS: RowSettings = {
   below: DEFAULT_BLOCK_SPACING,
   between: DEFAULT_BLOCK_SPACING,
+  horizontal: DEFAULT_HORIZONTAL_ALIGN,
+  vertical: DEFAULT_VERTICAL_ALIGN,
 };
 
 // A Section's spacing, one value per gap down the page.
@@ -138,6 +161,17 @@ export const DEFAULT_SECTION_WIDTHS: SectionWidths = {
   video: DEFAULT_BLOCK_WIDTH,
 };
 
+// A Section's horizontal alignment (2026-10-07), one per part — each
+// part is a row of its own, so it has no vertical alignment.
+export type SectionAligns = Record<keyof SectionWidths, HorizontalAlign>;
+
+export const DEFAULT_SECTION_ALIGNS: SectionAligns = {
+  byline: DEFAULT_HORIZONTAL_ALIGN,
+  grid: DEFAULT_HORIZONTAL_ALIGN,
+  description: DEFAULT_HORIZONTAL_ALIGN,
+  video: DEFAULT_HORIZONTAL_ALIGN,
+};
+
 // `row` works as in blocks.ts: placeholders sharing a row id sit side
 // by side. `width` is unset until changed (see blockWidthOf). `doors` is
 // set on Sliding doors blocks only.
@@ -158,23 +192,24 @@ export type CustomLayout = {
   // Spacing for every Gallery block.
   gridSpacing: GridSpacing;
   margins: PageMargins;
-  // Each row's spacing, by rowKey(). A row with no entry uses
-  // DEFAULT_ROW_SPACING.
-  rowSpacing: Record<string, RowSpacing>;
+  // Each row's spacing and alignment, by rowKey(). A row with no entry
+  // uses DEFAULT_ROW_SETTINGS.
+  rows: Record<string, RowSettings>;
   blocks: LayoutBlock[];
 };
 
 // Section is a fixed layout — a byline, an artwork grid filled from the
 // page's curation, and the curation's Description below it (2026-10-05).
 // Its settings: the grid's spacing, the page margin, the spacing between
-// its parts, each part's width, an optional background colour, and
-// whether a video sits below the Description (the video itself is
-// content, chosen on the page later).
+// its parts, each part's width and alignment, an optional background
+// colour, and whether a video sits below the Description (the video
+// itself is content, chosen on the page later).
 export type SectionLayout = {
   gridSpacing: GridSpacing;
   margins: PageMargins;
   spacing: SectionSpacing;
   widths: SectionWidths;
+  aligns: SectionAligns;
   backgroundColor: string | null;
   video: boolean;
 };
@@ -221,16 +256,16 @@ export function blockTypeLabel(type: LayoutBlockType): string {
   return LAYOUT_BLOCK_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
-// What a row's spacing is stored under: its row id when its blocks sit
+// What a row's settings are stored under: its row id when its blocks sit
 // side by side, otherwise its one block's id. A block paired with
 // another takes its own id as the new row id (see addLayoutBlock), so
-// its spacing carries over.
+// its settings carry over.
 export function rowKey(row: LayoutBlock[]): string {
   return row[0].row ?? row[0].id;
 }
 
-export function rowSpacingOf(layout: CustomLayout, key: string): RowSpacing {
-  return layout.rowSpacing[key] ?? DEFAULT_ROW_SPACING;
+export function rowSettingsOf(layout: CustomLayout, key: string): RowSettings {
+  return layout.rows[key] ?? DEFAULT_ROW_SETTINGS;
 }
 
 export function blockWidthOf(block: LayoutBlock): number {
@@ -246,6 +281,7 @@ export function emptyLayout(type: PageStyleType): PageStyleLayout {
         margins: DEFAULT_PAGE_MARGINS,
         spacing: DEFAULT_SECTION_SPACING,
         widths: DEFAULT_SECTION_WIDTHS,
+        aligns: DEFAULT_SECTION_ALIGNS,
         backgroundColor: null,
         video: false,
       },
@@ -259,7 +295,7 @@ export function emptyLayout(type: PageStyleType): PageStyleLayout {
       backgroundImage: false,
       gridSpacing: DEFAULT_GRID_SPACING,
       margins: DEFAULT_PAGE_MARGINS,
-      rowSpacing: {},
+      rows: {},
       blocks: [],
     },
   };
@@ -269,6 +305,14 @@ const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
 
 function cleanColour(value: unknown): string | null {
   return typeof value === "string" && HEX_COLOUR.test(value) ? value : null;
+}
+
+export function cleanHorizontalAlign(value: unknown): HorizontalAlign {
+  return HORIZONTAL_ALIGNS.find((a) => a === value) ?? DEFAULT_HORIZONTAL_ALIGN;
+}
+
+export function cleanVerticalAlign(value: unknown): VerticalAlign {
+  return VERTICAL_ALIGNS.find((a) => a === value) ?? DEFAULT_VERTICAL_ALIGN;
 }
 
 function isLayoutBlockType(value: unknown): value is LayoutBlockType {
@@ -363,6 +407,16 @@ function cleanSectionSpacing(raw: unknown): SectionSpacing {
   };
 }
 
+function cleanSectionAligns(raw: unknown): SectionAligns {
+  const value = (raw ?? {}) as Partial<Record<keyof SectionAligns, unknown>>;
+  return {
+    byline: cleanHorizontalAlign(value.byline),
+    grid: cleanHorizontalAlign(value.grid),
+    description: cleanHorizontalAlign(value.description),
+    video: cleanHorizontalAlign(value.video),
+  };
+}
+
 function cleanSectionWidths(raw: unknown): SectionWidths {
   const value = (raw ?? {}) as Partial<Record<keyof SectionWidths, unknown>>;
   return {
@@ -373,16 +427,24 @@ function cleanSectionWidths(raw: unknown): SectionWidths {
   };
 }
 
-// Keeps spacing only for rows that still exist.
-function cleanRowSpacing(raw: unknown, blocks: LayoutBlock[]): Record<string, RowSpacing> {
+export function cleanRowSettings(raw: unknown): RowSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof RowSettings, unknown>>;
+  return {
+    below: cleanBlockSpacing(value.below),
+    between: cleanBlockSpacing(value.between),
+    horizontal: cleanHorizontalAlign(value.horizontal),
+    vertical: cleanVerticalAlign(value.vertical),
+  };
+}
+
+// Keeps settings only for rows that still exist.
+function cleanRows(raw: unknown, blocks: LayoutBlock[]): Record<string, RowSettings> {
   const value = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const out: Record<string, RowSpacing> = {};
+  const out: Record<string, RowSettings> = {};
   for (const row of groupBlocksByRow(blocks)) {
     const key = rowKey(row);
-    const entry = value[key] as Partial<Record<keyof RowSpacing, unknown>> | undefined;
-    if (entry && typeof entry === "object") {
-      out[key] = { below: cleanBlockSpacing(entry.below), between: cleanBlockSpacing(entry.between) };
-    }
+    const entry = value[key];
+    if (entry && typeof entry === "object") out[key] = cleanRowSettings(entry);
   }
   return out;
 }
@@ -401,6 +463,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
         margins: cleanPageMargins(value.margins),
         spacing: cleanSectionSpacing(value.spacing),
         widths: cleanSectionWidths(value.widths),
+        aligns: cleanSectionAligns(value.aligns),
         backgroundColor: cleanColour(value.backgroundColor),
         video: value.video === true,
       },
@@ -409,7 +472,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
 
   if (type === "CANVAS") return { type, layout: cleanCanvas(raw) };
 
-  const value = (raw ?? {}) as Partial<Record<keyof CustomLayout, unknown>>;
+  // `rowSpacing` is what row settings were stored under before
+  // alignment existed (2026-10-07); those rows keep their spacing.
+  const value = (raw ?? {}) as Partial<Record<keyof CustomLayout | "rowSpacing", unknown>>;
   const blocks = clearLoneRows(
     Array.isArray(value.blocks)
       ? value.blocks.flatMap((b): LayoutBlock[] => {
@@ -431,7 +496,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
       backgroundImage: value.backgroundImage === true,
       gridSpacing: cleanGridSpacing(value.gridSpacing),
       margins: cleanPageMargins(value.margins),
-      rowSpacing: cleanRowSpacing(value.rowSpacing, blocks),
+      rows: cleanRows(value.rows ?? value.rowSpacing, blocks),
       blocks,
     },
   };
@@ -452,7 +517,7 @@ function clearLoneRows(blocks: LayoutBlock[]): LayoutBlock[] {
 // Adds a placeholder at the end, or — with "left"/"right" — beside the
 // last row, same as the old block editor's To left / To Right. A new
 // row takes its first block's id as its row id, so that row keeps its
-// spacing (see rowKey).
+// settings (see rowKey).
 export function addLayoutBlock(
   blocks: LayoutBlock[],
   type: LayoutBlockType,
@@ -491,8 +556,8 @@ export function updateBlockWidth(blocks: LayoutBlock[], id: string, width: numbe
   return blocks.map((b) => (b.id === id ? { ...b, width: cleanBlockWidth(width) } : b));
 }
 
-// Moves a whole row (one or more placeholders) up or down. Its spacing
-// moves with it.
+// Moves a whole row (one or more placeholders) up or down. Its settings
+// move with it.
 export function moveLayoutRow(blocks: LayoutBlock[], rowIndex: number, direction: -1 | 1) {
   const groups = groupBlocksByRow(blocks);
   const target = rowIndex + direction;
