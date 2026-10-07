@@ -58,8 +58,8 @@ export async function createSite(
   revalidatePath("/");
   // Back to the Sites Directory with the new site's details panel already
   // open, rather than into the Web Site editor — which, for a site with no
-  // pages yet, just looks blank. Domain, currency, template etc. all get
-  // filled in from right here.
+  // pages yet, just looks blank. Domain, currency etc. all get filled
+  // in from right here.
   redirect(`/?selected=${site.id}`);
 }
 
@@ -69,12 +69,6 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
   const name = (formData.get("name") as string)?.trim();
   const domainRaw = (formData.get("domain") as string)?.trim() || null;
   const defaultCurrency = (formData.get("defaultCurrency") as string)?.trim() || "GBP";
-  // Replaces the old free-text `template` field (2026-09-06) — a real
-  // link to a Template record now (see Site.templateId in
-  // schema.prisma). Empty string (the "— None —" option) means null,
-  // not a template literally named "".
-  const templateIdRaw = (formData.get("templateId") as string)?.trim() || "";
-  const templateId = templateIdRaw || null;
   const domainStatus = (formData.get("domainStatus") as string)?.trim() || null;
   const domainRenewalDateRaw = (formData.get("domainRenewalDate") as string)?.trim();
   const domainRenewalDate = domainRenewalDateRaw ? new Date(domainRenewalDateRaw) : null;
@@ -91,7 +85,6 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
       name,
       domain,
       defaultCurrency,
-      templateId,
       domainStatus,
       domainRenewalDate,
     },
