@@ -9,17 +9,14 @@ import {
   GRID_SPACING_LIMITS,
   HORIZONTAL_ALIGNS,
   PAGE_MARGIN_LIMITS,
-  SLIDING_DOORS_LIMITS,
   cleanBlockSpacing,
   cleanBlockWidth,
   cleanCanvas,
   cleanGridSpacing,
   cleanPageMargins,
   emptyLayout,
-  updateSlidingDoors,
   type CanvasLayout,
   type CustomLayout,
-  type DoorsHeight,
   type GridSpacing,
   type HorizontalAlign,
   type PageMargin,
@@ -28,7 +25,6 @@ import {
   type SectionLayout,
   type SectionSpacing,
   type SectionWidths,
-  type SlidingDoorsSettings,
 } from "@/lib/pageStyleLayout";
 import NumberField from "@/components/NumberField";
 
@@ -73,25 +69,6 @@ export function draftLayout(draft: PageStyleDraft): PageStyleLayout | null {
 const smallButton =
   "rounded-md border border-neutral-300 px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50";
 
-// The Sliding doors number settings shown in the editor, in order. Gap
-// only applies to pairs.
-const DOORS_FIELDS: {
-  key: Exclude<keyof SlidingDoorsSettings, "perSlide" | "height">;
-  label: string;
-  unit: string;
-  step: number;
-}[] = [
-  { key: "duration", label: "Duration", unit: "seconds", step: 0.5 },
-  { key: "speed", label: "Slide speed", unit: "seconds", step: 0.5 },
-  { key: "gap", label: "Gap", unit: "pixels", step: 1 },
-];
-
-// The Sliding doors panels' height (2026-10-06), desktop and phone.
-const DOORS_HEIGHT_FIELDS: { key: keyof DoorsHeight; label: string }[] = [
-  { key: "desktop", label: "Height, desktop" },
-  { key: "phone", label: "Height, phone" },
-];
-
 // A Section's parts, for its Widths box.
 const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
   { key: "byline", label: "Byline width" },
@@ -123,12 +100,13 @@ const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label:
 // Section and Private / Custom set their grid spacing (2026-10-05) for
 // grids of images and the page margin (2026-10-06, desktop and phone).
 //
-// Private / Custom: background colour and image, then Sliding doors
-// settings for any Sliding doors blocks (including the square panels'
-// height, 2026-10-06, desktop and phone). Its components are added,
-// moved, sized, spaced and aligned in the visual editor
-// (VisualLayoutEditor, 2026-10-07), which replaces the Preview while
-// it's edited.
+// Private / Custom: background colour and image, then a Fine-tune
+// section, closed by default (2026-10-07), with the exact page margins
+// and gallery image spacing. Its components are added, moved, sized,
+// spaced and aligned in the visual editor (VisualLayoutEditor,
+// 2026-10-07), which replaces the Preview while it's edited; a
+// component's own numbers and a Sliding doors component's settings are
+// on its bar there.
 //
 // Section is a fixed layout — byline, artwork grid, Description — with
 // each part's width and alignment (2026-10-07), the spacing between its
@@ -170,9 +148,6 @@ export default function PageStyleEditor({
     });
   };
 
-  const setDoors = (id: string, doors: SlidingDoorsSettings) =>
-    setCustom({ ...custom, blocks: updateSlidingDoors(custom.blocks, id, doors) });
-
   const setSectionSpacing = (key: keyof SectionSpacing, value: number) =>
     setSection({ ...section, spacing: { ...section.spacing, [key]: cleanBlockSpacing(value) } });
 
@@ -181,8 +156,6 @@ export default function PageStyleEditor({
 
   const setSectionAlign = (key: keyof SectionWidths, value: HorizontalAlign) =>
     setSection({ ...section, aligns: { ...section.aligns, [key]: value } });
-
-  const doorsBlocks = custom.blocks.filter((b) => b.type === "slidingdoors" && b.doors);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-300 bg-white">
@@ -359,16 +332,6 @@ export default function PageStyleEditor({
 
         {draft.type === "PRIVATE" && (
           <div className="mt-2 flex flex-col gap-2.5">
-            <GridSpacingControl
-              value={custom.gridSpacing}
-              onChange={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
-            />
-
-            <PageMarginControl
-              value={custom.margins}
-              onChange={(margins) => setCustom({ ...custom, margins })}
-            />
-
             <BackgroundColourControl
               value={custom.backgroundColor}
               onChange={(backgroundColor) => setCustom({ ...custom, backgroundColor })}
@@ -397,57 +360,21 @@ export default function PageStyleEditor({
               </button>
             )}
 
-            {doorsBlocks.map((b, i) => {
-              const doors = b.doors!;
-              return (
-                <div key={b.id} className="rounded-md border border-neutral-200 p-2">
-                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-                    Sliding doors{doorsBlocks.length > 1 ? ` ${i + 1}` : ""}
-                  </p>
-                  <div className="flex flex-col gap-2">
-                    <label className="flex items-center gap-2 text-sm text-neutral-700">
-                      <span className="w-24 shrink-0">Show</span>
-                      <select
-                        value={doors.perSlide}
-                        onChange={(e) =>
-                          setDoors(b.id, { ...doors, perSlide: e.target.value === "1" ? 1 : 2 })
-                        }
-                        className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
-                      >
-                        <option value={2}>Pairs</option>
-                        <option value={1}>One at a time</option>
-                      </select>
-                    </label>
-                    {DOORS_FIELDS.filter((f) => f.key !== "gap" || doors.perSlide === 2).map(
-                      (f) => (
-                        <NumberField
-                          key={f.key}
-                          label={f.label}
-                          unit={f.unit}
-                          step={f.step}
-                          value={doors[f.key]}
-                          limits={SLIDING_DOORS_LIMITS[f.key]}
-                          onCommit={(value) => setDoors(b.id, { ...doors, [f.key]: value })}
-                        />
-                      )
-                    )}
-                    {DOORS_HEIGHT_FIELDS.map((f) => (
-                      <NumberField
-                        key={f.key}
-                        label={f.label}
-                        unit="% of screen"
-                        step={5}
-                        value={doors.height[f.key]}
-                        limits={SLIDING_DOORS_LIMITS.height}
-                        onCommit={(value) =>
-                          setDoors(b.id, { ...doors, height: { ...doors.height, [f.key]: value } })
-                        }
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
+            <details className="rounded-md border border-neutral-300">
+              <summary className="cursor-pointer select-none px-3 py-2 text-sm text-neutral-700">
+                Fine-tune
+              </summary>
+              <div className="flex flex-col gap-2.5 border-t border-neutral-200 p-2">
+                <PageMarginControl
+                  value={custom.margins}
+                  onChange={(margins) => setCustom({ ...custom, margins })}
+                />
+                <GridSpacingControl
+                  value={custom.gridSpacing}
+                  onChange={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
+                />
+              </div>
+            </details>
           </div>
         )}
       </div>
@@ -469,7 +396,7 @@ export default function PageStyleEditor({
 }
 
 // Vertical and horizontal grid spacing (2026-10-05, from Craig's mockup)
-// — shared by Section and Private / Custom.
+// — shared by Section and Private / Custom (in its Fine-tune section).
 function GridSpacingControl({
   value,
   onChange,
@@ -502,7 +429,8 @@ function GridSpacingControl({
 }
 
 // The page margin (2026-10-06): top & bottom and left & right, for
-// desktop and for phone — shared by Section and Private / Custom.
+// desktop and for phone — shared by Section and Private / Custom (in its
+// Fine-tune section).
 function PageMarginControl({
   value,
   onChange,

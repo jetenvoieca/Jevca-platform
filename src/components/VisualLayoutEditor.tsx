@@ -24,8 +24,10 @@ import {
 import { groupBlocksByRow } from "@/lib/blocks";
 import {
   BLOCK_SPACING_LIMITS,
+  BLOCK_WIDTH_LIMITS,
   LAYOUT_BLOCK_TYPES,
   PAGE_MARGIN_LIMITS,
+  SLIDING_DOORS_LIMITS,
   blockTypeLabel,
   blockWidthLabel,
   blockWidthOf,
@@ -39,16 +41,20 @@ import {
   snapSpacing,
   updateBlockWidth,
   updateRowSettings,
+  updateSlidingDoors,
   type BlockDropTarget,
   type CustomLayout,
   type HorizontalAlign,
   type LayoutBlock,
   type LayoutBlockType,
   type PageMargin,
+  type RowSettings,
+  type SlidingDoorsSettings,
   type VerticalAlign,
 } from "@/lib/pageStyleLayout";
 import { rowBlockClass, rowBlockStyle, rowClass, type PreviewDevice } from "@/components/pageRows";
 import { BlockShape, Labelled } from "@/components/PageStylePreview";
+import NumberField from "@/components/NumberField";
 
 // The visual editor for a Private / Custom Page Style (2026-10-07, from
 // Craig's request to replace the numbers with something he can see):
@@ -67,6 +73,10 @@ import { BlockShape, Labelled } from "@/components/PageStylePreview";
 // - Align: a selected component's bar sets its row's alignment — left,
 //   centre or right, and for side-by-side components top, middle or
 //   bottom (desktop only). The bar also removes it (as does Delete).
+// - Fine-tune: the bar's Fine-tune button shows the exact numbers for
+//   the component's width and the gaps around its row; a Sliding doors
+//   component's Settings button shows its own settings (pairs or one at
+//   a time, timings, gap and height).
 // Every change goes straight to `onChange`, which saves it.
 
 const FRAME_WIDTH: Record<PreviewDevice, number> = { desktop: 1280, phone: 390 };
@@ -402,7 +412,7 @@ function Page({
       {rows.map((row, i) => {
         const key = rowKey(row);
         const settings = rowSettingsOf(layout, key);
-        const setRow = (patch: Parameters<typeof updateRowSettings>[2]) =>
+        const setRow = (patch: Partial<RowSettings>) =>
           onChange(updateRowSettings(layout, key, patch));
         return (
           <div key={key}>
@@ -429,9 +439,9 @@ function Page({
                     block={b}
                     rowIndex={i}
                     rowSize={row.length}
+                    lastRow={i === rows.length - 1}
                     device={device}
-                    horizontal={settings.horizontal}
-                    vertical={settings.vertical}
+                    settings={settings}
                     contentWidth={contentWidth}
                     selected={b.id === selectedId}
                     faded={b.id === draggingId}
@@ -445,7 +455,13 @@ function Page({
                     onWidth={(width) =>
                       onChange({ ...layout, blocks: updateBlockWidth(layout.blocks, b.id, width) })
                     }
-                    onAlign={(patch) => setRow(patch)}
+                    onRow={setRow}
+                    onDoors={(doors) =>
+                      onChange({
+                        ...layout,
+                        blocks: updateSlidingDoors(layout.blocks, b.id, doors),
+                      })
+                    }
                     onRemove={() => {
                       onChange(removeLayoutBlock(layout, b.id));
                       onSelect(null);
@@ -500,9 +516,9 @@ function BlockItem({
   block,
   rowIndex,
   rowSize,
+  lastRow,
   device,
-  horizontal,
-  vertical,
+  settings,
   contentWidth,
   selected,
   faded,
@@ -510,15 +526,16 @@ function BlockItem({
   gridSpacing,
   onSelect,
   onWidth,
-  onAlign,
+  onRow,
+  onDoors,
   onRemove,
 }: {
   block: LayoutBlock;
   rowIndex: number;
   rowSize: number;
+  lastRow: boolean;
   device: PreviewDevice;
-  horizontal: HorizontalAlign;
-  vertical: VerticalAlign;
+  settings: RowSettings;
   contentWidth: number;
   selected: boolean;
   faded: boolean;
@@ -526,7 +543,8 @@ function BlockItem({
   gridSpacing: CustomLayout["gridSpacing"];
   onSelect: () => void;
   onWidth: (width: number) => void;
-  onAlign: (patch: { horizontal?: HorizontalAlign; vertical?: VerticalAlign }) => void;
+  onRow: (patch: Partial<RowSettings>) => void;
+  onDoors: (doors: SlidingDoorsSettings) => void;
   onRemove: () => void;
 }) {
   const item: DragItem = { kind: "move", block };
@@ -535,8 +553,11 @@ function BlockItem({
   const zone = useDroppable({ id: `drop:${block.id}`, data: drop });
   const scale = useContext(ScaleContext);
   const [resizing, setResizing] = useState(false);
+  const [panel, setPanel] = useState<Panel | null>(null);
   const width = blockWidthOf(block);
   const desktop = device === "desktop";
+  const { horizontal, vertical } = settings;
+  const togglePanel = (p: Panel) => setPanel((current) => (current === p ? null : p));
 
   // Dragging an edge: the new width from how far it has moved, snapped
   // to the nearest fraction. A centred row grows on both sides, so the
@@ -606,12 +627,170 @@ function BlockItem({
             sideBySide={rowSize > 1}
             horizontal={horizontal}
             vertical={vertical}
-            onAlign={onAlign}
+            hasSettings={!!block.doors}
+            panel={panel}
+            onAlign={onRow}
+            onPanel={togglePanel}
             onRemove={onRemove}
           />
         </Unscaled>
       )}
+
+      {selected && panel && (
+        <Unscaled className="absolute left-0 top-0 z-30" origin="0 0">
+          <PanelBox
+            title={panel === "fine" ? "Fine-tune" : "Sliding doors"}
+            onClose={() => setPanel(null)}
+          >
+            {panel === "fine" ? (
+              <>
+                <NumberField
+                  label="Width, desktop"
+                  unit="%"
+                  step={1}
+                  value={width}
+                  limits={BLOCK_WIDTH_LIMITS}
+                  onCommit={onWidth}
+                  wide
+                />
+                {rowSize > 1 && (
+                  <NumberField
+                    label="Space between"
+                    unit="pixels"
+                    step={1}
+                    value={settings.between}
+                    limits={BLOCK_SPACING_LIMITS}
+                    onCommit={(between) => onRow({ between })}
+                    wide
+                  />
+                )}
+                {!lastRow && (
+                  <NumberField
+                    label="Space below"
+                    unit="pixels"
+                    step={1}
+                    value={settings.below}
+                    limits={BLOCK_SPACING_LIMITS}
+                    onCommit={(below) => onRow({ below })}
+                    wide
+                  />
+                )}
+                <p className="text-xs text-neutral-400">
+                  On a phone every component is full width.
+                </p>
+              </>
+            ) : (
+              block.doors && <DoorsSettings doors={block.doors} onChange={onDoors} />
+            )}
+          </PanelBox>
+        </Unscaled>
+      )}
     </div>
+  );
+}
+
+// The panel a selected component's bar opens: its exact numbers, or a
+// Sliding doors component's own settings.
+type Panel = "fine" | "doors";
+
+function PanelBox({
+  title,
+  onClose,
+  children,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div
+      onPointerDown={(e) => e.stopPropagation()}
+      onClick={(e) => e.stopPropagation()}
+      className="flex w-72 cursor-default flex-col gap-2 rounded-md border border-neutral-300 bg-white p-3 shadow-md"
+    >
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{title}</p>
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="text-neutral-400 hover:text-neutral-900"
+        >
+          ✕
+        </button>
+      </div>
+      {children}
+    </div>
+  );
+}
+
+// The Sliding doors number settings, in order. Gap only applies to pairs.
+const DOORS_FIELDS: {
+  key: Exclude<keyof SlidingDoorsSettings, "perSlide" | "height">;
+  label: string;
+  unit: string;
+  step: number;
+}[] = [
+  { key: "duration", label: "Duration", unit: "seconds", step: 0.5 },
+  { key: "speed", label: "Slide speed", unit: "seconds", step: 0.5 },
+  { key: "gap", label: "Gap", unit: "pixels", step: 1 },
+];
+
+// A Sliding doors component's settings (2026-10-05; on the component
+// itself from 2026-10-07): pairs or one at a time, how long each slide
+// shows, how fast it moves, the gap between a pair, and the square
+// panels' height on desktop and phone.
+function DoorsSettings({
+  doors,
+  onChange,
+}: {
+  doors: SlidingDoorsSettings;
+  onChange: (doors: SlidingDoorsSettings) => void;
+}) {
+  return (
+    <>
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <span className="flex-1">Show</span>
+        <select
+          value={doors.perSlide}
+          onChange={(e) => onChange({ ...doors, perSlide: e.target.value === "1" ? 1 : 2 })}
+          className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+        >
+          <option value={2}>Pairs</option>
+          <option value={1}>One at a time</option>
+        </select>
+      </label>
+      {DOORS_FIELDS.filter((f) => f.key !== "gap" || doors.perSlide === 2).map((f) => (
+        <NumberField
+          key={f.key}
+          label={f.label}
+          unit={f.unit}
+          step={f.step}
+          value={doors[f.key]}
+          limits={SLIDING_DOORS_LIMITS[f.key]}
+          onCommit={(value) => onChange({ ...doors, [f.key]: value })}
+          wide
+        />
+      ))}
+      <NumberField
+        label="Height, desktop"
+        unit="% of screen"
+        step={5}
+        value={doors.height.desktop}
+        limits={SLIDING_DOORS_LIMITS.height}
+        onCommit={(desktop) => onChange({ ...doors, height: { ...doors.height, desktop } })}
+        wide
+      />
+      <NumberField
+        label="Height, phone"
+        unit="% of screen"
+        step={5}
+        value={doors.height.phone}
+        limits={SLIDING_DOORS_LIMITS.height}
+        onCommit={(phone) => onChange({ ...doors, height: { ...doors.height, phone } })}
+        wide
+      />
+    </>
   );
 }
 
@@ -673,16 +852,26 @@ function Toolbar({
   sideBySide,
   horizontal,
   vertical,
+  hasSettings,
+  panel,
   onAlign,
+  onPanel,
   onRemove,
 }: {
   desktop: boolean;
   sideBySide: boolean;
   horizontal: HorizontalAlign;
   vertical: VerticalAlign;
+  hasSettings: boolean;
+  panel: Panel | null;
   onAlign: (patch: { horizontal?: HorizontalAlign; vertical?: VerticalAlign }) => void;
+  onPanel: (panel: Panel) => void;
   onRemove: () => void;
 }) {
+  const textButton = (active: boolean) =>
+    `rounded px-2 py-1 text-xs ${
+      active ? "bg-blue-100 text-blue-700" : "text-neutral-700 hover:bg-neutral-100"
+    }`;
   const button = (active: boolean) =>
     `flex h-7 w-7 items-center justify-center rounded ${
       active ? "bg-blue-100 text-blue-700" : "text-neutral-600 hover:bg-neutral-100"
@@ -722,6 +911,23 @@ function Toolbar({
           </button>
         ))}
       {desktop && <span className="mx-0.5 h-5 w-px bg-neutral-200" />}
+      {hasSettings && (
+        <button
+          type="button"
+          onClick={() => onPanel("doors")}
+          className={textButton(panel === "doors")}
+        >
+          Settings
+        </button>
+      )}
+      <button
+        type="button"
+        onClick={() => onPanel("fine")}
+        className={textButton(panel === "fine")}
+      >
+        Fine-tune
+      </button>
+      <span className="mx-0.5 h-5 w-px bg-neutral-200" />
       <button
         type="button"
         onClick={onRemove}
