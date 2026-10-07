@@ -161,6 +161,25 @@ export const DEFAULT_SECTION_WIDTHS: SectionWidths = {
   video: DEFAULT_BLOCK_WIDTH,
 };
 
+// A Section's parts, in order down the page (2026-10-07); the video
+// only when the style has one. Each part is a row of its own.
+export type SectionPart = keyof SectionWidths;
+
+export const SECTION_PARTS: SectionPart[] = ["byline", "grid", "description", "video"];
+
+export function sectionParts(layout: SectionLayout): SectionPart[] {
+  return layout.video ? SECTION_PARTS : SECTION_PARTS.filter((p) => p !== "video");
+}
+
+// Which of a Section's spacings is the gap below a part; the video,
+// always last, has none.
+export function sectionSpacingBelow(part: SectionPart): keyof SectionSpacing | null {
+  if (part === "byline") return "belowByline";
+  if (part === "grid") return "belowGrid";
+  if (part === "description") return "belowDescription";
+  return null;
+}
+
 // A Section's horizontal alignment (2026-10-07), one per part — each
 // part is a row of its own, so it has no vertical alignment.
 export type SectionAligns = Record<keyof SectionWidths, HorizontalAlign>;

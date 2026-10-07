@@ -1,16 +1,10 @@
 "use client";
 
-import { Fragment } from "react";
 import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pageStyleTypes";
 import {
-  BLOCK_SPACING_LIMITS,
-  BLOCK_WIDTH_LIMITS,
   CANVAS_LIMITS,
   GRID_SPACING_LIMITS,
-  HORIZONTAL_ALIGNS,
   PAGE_MARGIN_LIMITS,
-  cleanBlockSpacing,
-  cleanBlockWidth,
   cleanCanvas,
   cleanGridSpacing,
   cleanPageMargins,
@@ -18,13 +12,10 @@ import {
   type CanvasLayout,
   type CustomLayout,
   type GridSpacing,
-  type HorizontalAlign,
   type PageMargin,
   type PageMargins,
   type PageStyleLayout,
   type SectionLayout,
-  type SectionSpacing,
-  type SectionWidths,
 } from "@/lib/pageStyleLayout";
 import NumberField from "@/components/NumberField";
 
@@ -69,21 +60,6 @@ export function draftLayout(draft: PageStyleDraft): PageStyleLayout | null {
 const smallButton =
   "rounded-md border border-neutral-300 px-3 py-2 text-left text-sm text-neutral-800 hover:bg-neutral-50";
 
-// A Section's parts, for its Widths box.
-const SECTION_WIDTH_FIELDS: { key: keyof SectionWidths; label: string }[] = [
-  { key: "byline", label: "Byline width" },
-  { key: "grid", label: "Grid width" },
-  { key: "description", label: "Description width" },
-  { key: "video", label: "Video width" },
-];
-
-// The alignment choices' labels.
-const HORIZONTAL_LABELS: Record<HorizontalAlign, string> = {
-  left: "Left",
-  center: "Centre",
-  right: "Right",
-};
-
 // The page margin's four values, for its box.
 const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label: string }[] = [
   { device: "desktop", side: "vertical", label: "Desktop margin, top & bottom" },
@@ -97,20 +73,18 @@ const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label:
 // open until Close. Style name, Style Type, then the chosen type's own
 // layout controls — layout only, no content.
 //
-// Section and Private / Custom set their grid spacing (2026-10-05) for
-// grids of images and the page margin (2026-10-06, desktop and phone).
+// Section and Private / Custom are laid out in their visual editors
+// (VisualLayoutEditor / SectionVisualEditor, 2026-10-07), which replace
+// the Preview while they're edited — components sized, spaced and
+// aligned by hand, with each one's own numbers (and a Sliding doors
+// component's settings) on its bar there. Here: the background colour,
+// then a Fine-tune section, closed by default, with the exact page
+// margins (2026-10-06, desktop and phone) and the spacing of grids of
+// images (2026-10-05).
 //
-// Private / Custom: background colour and image, then a Fine-tune
-// section, closed by default (2026-10-07), with the exact page margins
-// and gallery image spacing. Its components are added, moved, sized,
-// spaced and aligned in the visual editor (VisualLayoutEditor,
-// 2026-10-07), which replaces the Preview while it's edited; a
-// component's own numbers and a Sliding doors component's settings are
-// on its bar there.
-//
-// Section is a fixed layout — byline, artwork grid, Description — with
-// each part's width and alignment (2026-10-07), the spacing between its
-// parts, an optional background colour and an optional video below the
+// Private / Custom also has an optional background image (the image
+// itself chosen on the page). Section is a fixed layout — byline,
+// artwork grid, Description — with an optional video below the
 // Description.
 //
 // Canvas (2026-10-05): curation tile size, opening speed, opened size
@@ -147,15 +121,6 @@ export default function PageStyleEditor({
       canvas: EMPTY_CANVAS,
     });
   };
-
-  const setSectionSpacing = (key: keyof SectionSpacing, value: number) =>
-    setSection({ ...section, spacing: { ...section.spacing, [key]: cleanBlockSpacing(value) } });
-
-  const setSectionWidth = (key: keyof SectionWidths, value: number) =>
-    setSection({ ...section, widths: { ...section.widths, [key]: cleanBlockWidth(value) } });
-
-  const setSectionAlign = (key: keyof SectionWidths, value: HorizontalAlign) =>
-    setSection({ ...section, aligns: { ...section.aligns, [key]: value } });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-300 bg-white">
@@ -240,67 +205,6 @@ export default function PageStyleEditor({
 
         {draft.type === "SECTION" && (
           <div className="mt-2 flex flex-col gap-2.5">
-            <GridSpacingControl
-              value={section.gridSpacing}
-              onChange={(gridSpacing) => setSection({ ...section, gridSpacing })}
-            />
-            <PageMarginControl
-              value={section.margins}
-              onChange={(margins) => setSection({ ...section, margins })}
-            />
-            <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
-              {SECTION_WIDTH_FIELDS.filter((f) => f.key !== "video" || section.video).map((f) => (
-                <Fragment key={f.key}>
-                  <NumberField
-                    label={f.label}
-                    unit="%"
-                    step={5}
-                    value={section.widths[f.key]}
-                    limits={BLOCK_WIDTH_LIMITS}
-                    onCommit={(v) => setSectionWidth(f.key, v)}
-                    wide
-                  />
-                  <AlignSelect
-                    label="Align"
-                    value={section.aligns[f.key]}
-                    options={HORIZONTAL_ALIGNS}
-                    labels={HORIZONTAL_LABELS}
-                    onChange={(v) => setSectionAlign(f.key, v)}
-                  />
-                </Fragment>
-              ))}
-            </div>
-            <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
-              <NumberField
-                label="Space below byline"
-                unit="pixels"
-                step={1}
-                value={section.spacing.belowByline}
-                limits={BLOCK_SPACING_LIMITS}
-                onCommit={(v) => setSectionSpacing("belowByline", v)}
-                wide
-              />
-              <NumberField
-                label="Space below grid"
-                unit="pixels"
-                step={1}
-                value={section.spacing.belowGrid}
-                limits={BLOCK_SPACING_LIMITS}
-                onCommit={(v) => setSectionSpacing("belowGrid", v)}
-                wide
-              />
-              {section.video && (
-                <NumberField
-                  label="Space below description"
-                  unit="pixels"
-                  step={1}
-                  value={section.spacing.belowDescription}
-                  limits={BLOCK_SPACING_LIMITS}
-                  onCommit={(v) => setSectionSpacing("belowDescription", v)}
-                  wide
-                />
-              )}
-            </div>
             <BackgroundColourControl
               value={section.backgroundColor}
               onChange={(backgroundColor) => setSection({ ...section, backgroundColor })}
@@ -327,6 +231,13 @@ export default function PageStyleEditor({
                 + Video
               </button>
             )}
+
+            <FineTuneSection
+              margins={section.margins}
+              gridSpacing={section.gridSpacing}
+              onMargins={(margins) => setSection({ ...section, margins })}
+              onGridSpacing={(gridSpacing) => setSection({ ...section, gridSpacing })}
+            />
           </div>
         )}
 
@@ -360,21 +271,12 @@ export default function PageStyleEditor({
               </button>
             )}
 
-            <details className="rounded-md border border-neutral-300">
-              <summary className="cursor-pointer select-none px-3 py-2 text-sm text-neutral-700">
-                Fine-tune
-              </summary>
-              <div className="flex flex-col gap-2.5 border-t border-neutral-200 p-2">
-                <PageMarginControl
-                  value={custom.margins}
-                  onChange={(margins) => setCustom({ ...custom, margins })}
-                />
-                <GridSpacingControl
-                  value={custom.gridSpacing}
-                  onChange={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
-                />
-              </div>
-            </details>
+            <FineTuneSection
+              margins={custom.margins}
+              gridSpacing={custom.gridSpacing}
+              onMargins={(margins) => setCustom({ ...custom, margins })}
+              onGridSpacing={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
+            />
           </div>
         )}
       </div>
@@ -395,8 +297,33 @@ export default function PageStyleEditor({
   );
 }
 
-// Vertical and horizontal grid spacing (2026-10-05, from Craig's mockup)
-// — shared by Section and Private / Custom (in its Fine-tune section).
+// The exact page margins and grid spacing, closed by default (2026-10-07)
+// — shared by Section and Private / Custom.
+function FineTuneSection({
+  margins,
+  gridSpacing,
+  onMargins,
+  onGridSpacing,
+}: {
+  margins: PageMargins;
+  gridSpacing: GridSpacing;
+  onMargins: (margins: PageMargins) => void;
+  onGridSpacing: (gridSpacing: GridSpacing) => void;
+}) {
+  return (
+    <details className="rounded-md border border-neutral-300">
+      <summary className="cursor-pointer select-none px-3 py-2 text-sm text-neutral-700">
+        Fine-tune
+      </summary>
+      <div className="flex flex-col gap-2.5 border-t border-neutral-200 p-2">
+        <PageMarginControl value={margins} onChange={onMargins} />
+        <GridSpacingControl value={gridSpacing} onChange={onGridSpacing} />
+      </div>
+    </details>
+  );
+}
+
+// Vertical and horizontal grid spacing (2026-10-05, from Craig's mockup).
 function GridSpacingControl({
   value,
   onChange,
@@ -429,8 +356,7 @@ function GridSpacingControl({
 }
 
 // The page margin (2026-10-06): top & bottom and left & right, for
-// desktop and for phone — shared by Section and Private / Custom (in its
-// Fine-tune section).
+// desktop and for phone.
 function PageMarginControl({
   value,
   onChange,
@@ -455,38 +381,6 @@ function PageMarginControl({
         />
       ))}
     </div>
-  );
-}
-
-// A Section part's alignment, from a short list.
-function AlignSelect<T extends string>({
-  label,
-  value,
-  options,
-  labels,
-  onChange,
-}: {
-  label: string;
-  value: T;
-  options: readonly T[];
-  labels: Record<T, string>;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <label className="flex items-center gap-2 text-xs text-neutral-700">
-      <span className="flex-1">{label}</span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value as T)}
-        className="rounded-md border border-neutral-300 px-2 py-1 text-xs"
-      >
-        {options.map((o) => (
-          <option key={o} value={o}>
-            {labels[o]}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 
