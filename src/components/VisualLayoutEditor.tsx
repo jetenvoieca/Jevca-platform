@@ -61,6 +61,8 @@ import {
 //   add it at the end). A blue line shows where it will land: above or
 //   below a row, or beside a component (desktop only).
 // - Move: drag a component the same way.
+// - Remove: drag a component back onto the tray, which turns red while
+//   it's over it — or select it and use its bar's Remove (or Delete).
 // - Size: select a component and drag its edge (desktop only — on a
 //   phone every component is full width).
 // - Spacing: drag the shaded strips — the gaps between rows, between
@@ -68,7 +70,7 @@ import {
 //   desktop and phone).
 // - Align: a selected component's bar sets its row's alignment — left,
 //   centre or right, and for side-by-side components top, middle or
-//   bottom (desktop only). The bar also removes it (as does Delete).
+//   bottom (desktop only).
 // - Fine-tune: the bar's Fine-tune button shows the exact numbers for
 //   the component's width and the gaps around its row; a Sliding doors
 //   component's Settings button shows its own settings (pairs or one at
@@ -79,6 +81,9 @@ type DragItem = { kind: "new"; type: LayoutBlockType } | { kind: "move"; block: 
 
 // What a component's drop zone knows about where it is.
 type DropData = { blockId: string; rowIndex: number };
+
+// The tray's drop zone id: a component dropped here is removed.
+const TRAY_ID = "tray";
 
 export default function VisualLayoutEditor({
   layout,
@@ -91,16 +96,24 @@ export default function VisualLayoutEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragItem | null>(null);
   const [dropTarget, setDropTarget] = useState<BlockDropTarget | null>(null);
+  // A component being moved is over the tray, so dropping removes it.
+  const [overTray, setOverTray] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = groupBlocksByRow(layout.blocks);
 
+  const remove = useCallback(
+    (blockId: string) => {
+      onChange(removeLayoutBlock(layout, blockId));
+      setSelectedId((current) => (current === blockId ? null : current));
+    },
+    [layout, onChange]
+  );
+
   const deselect = useCallback(() => setSelectedId(null), []);
   const removeSelected = useCallback(() => {
-    if (!selectedId) return;
-    onChange(removeLayoutBlock(layout, selectedId));
-    setSelectedId(null);
-  }, [layout, onChange, selectedId]);
+    if (selectedId) remove(selectedId);
+  }, [remove, selectedId]);
   useSelectionKeys(!!selectedId, deselect, removeSelected);
 
   const place = (block: LayoutBlock, target: BlockDropTarget) => {
@@ -111,18 +124,21 @@ export default function VisualLayoutEditor({
   const handleDragStart = (e: DragStartEvent) => {
     setDragging((e.active.data.current as DragItem | undefined) ?? null);
     setDropTarget(null);
+    setOverTray(false);
   };
 
   // Works out the landing place from the pointer's position over a
   // component: its top or bottom quarter = a row of its own above or
   // below that row; otherwise beside it, on the side the pointer is on.
-  // On a phone components stack, so it's always above or below.
+  // On a phone components stack, so it's always above or below. Over
+  // the tray, a component being moved is marked for removal instead.
   const handleDragMove = (e: DragMoveEvent) => {
     const item = e.active.data.current as DragItem | undefined;
     const start = e.activatorEvent as PointerEvent;
     const over = e.over;
+    const onTray = item?.kind === "move" && over?.id === TRAY_ID;
     let target: BlockDropTarget | null = null;
-    if (item && over) {
+    if (item && over && over.id !== TRAY_ID) {
       if (over.id === "end") {
         target = { kind: "row", index: rows.length };
       } else {
@@ -141,13 +157,16 @@ export default function VisualLayoutEditor({
         target = null;
       }
     }
+    setOverTray(onTray);
     setDropTarget((current) =>
       JSON.stringify(current) === JSON.stringify(target) ? current : target
     );
   };
 
   const handleDragEnd = () => {
-    if (dragging && dropTarget) {
+    if (dragging?.kind === "move" && overTray) {
+      remove(dragging.block.id);
+    } else if (dragging && dropTarget) {
       if (dragging.kind === "new") {
         const block = newLayoutBlock(dragging.type);
         place(block, dropTarget);
@@ -156,13 +175,13 @@ export default function VisualLayoutEditor({
         place(dragging.block, dropTarget);
       }
     }
-    setDragging(null);
-    setDropTarget(null);
+    handleDragCancel();
   };
 
   const handleDragCancel = () => {
     setDragging(null);
     setDropTarget(null);
+    setOverTray(false);
   };
 
   const addAtEnd = (type: LayoutBlockType) => {
@@ -184,15 +203,7 @@ export default function VisualLayoutEditor({
       onDragCancel={handleDragCancel}
     >
       <div className="flex min-h-0 flex-1 gap-3">
-        <aside className="flex w-36 shrink-0 flex-col gap-1.5">
-          <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Components</p>
-          {LAYOUT_BLOCK_TYPES.map((t) => (
-            <TrayItem key={t.value} type={t.value} label={t.label} onAdd={addAtEnd} />
-          ))}
-          <p className="mt-1 text-xs text-neutral-400">
-            Drag onto the page, or click to add at the end.
-          </p>
-        </aside>
+        <Tray moving={!!draggingId} over={overTray} onAdd={addAtEnd} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <DeviceSwitch device={device} onDevice={setDevice} />
@@ -261,10 +272,7 @@ export default function VisualLayoutEditor({
                                 blocks: updateSlidingDoors(layout.blocks, b.id, doors),
                               })
                             }
-                            onRemove={() => {
-                              onChange(removeLayoutBlock(layout, b.id));
-                              setSelectedId(null);
-                            }}
+                            onRemove={() => remove(b.id)}
                           />
                         </BlockWithGap>
                       ))}
@@ -284,7 +292,12 @@ export default function VisualLayoutEditor({
 
       <DragOverlay dropAnimation={null}>
         {dragging && (
-          <div className="rounded-md border border-blue-500 bg-white px-3 py-2 text-sm text-neutral-800 shadow-md">
+          <div
+            className={`rounded-md border bg-white px-3 py-2 text-sm shadow-md ${
+              overTray ? "border-red-500 text-red-700" : "border-blue-500 text-neutral-800"
+            }`}
+          >
+            {overTray ? "Remove " : ""}
             {blockTypeLabel(dragging.kind === "new" ? dragging.type : dragging.block.type)}
           </div>
         )}
@@ -299,6 +312,42 @@ function changesNothing(rows: LayoutBlock[][], blockId: string, target: BlockDro
   if (target.kind === "beside") return target.blockId === blockId;
   const index = rows.findIndex((r) => r.some((b) => b.id === blockId));
   return rows[index]?.length === 1 && (target.index === index || target.index === index + 1);
+}
+
+// The Components tray: components to drag onto the page, and — while a
+// component on the page is being dragged — the place to drop it to
+// remove it (outlined in red, filled red when it's over it).
+function Tray({
+  moving,
+  over,
+  onAdd,
+}: {
+  moving: boolean;
+  over: boolean;
+  onAdd: (type: LayoutBlockType) => void;
+}) {
+  const { setNodeRef } = useDroppable({ id: TRAY_ID });
+  const outline = !moving
+    ? "border-transparent"
+    : over
+      ? "border-red-500 bg-red-50"
+      : "border-dashed border-red-300";
+  return (
+    <aside
+      ref={setNodeRef}
+      className={`flex w-40 shrink-0 flex-col gap-1.5 rounded-lg border-2 p-1.5 ${outline}`}
+    >
+      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Components</p>
+      {LAYOUT_BLOCK_TYPES.map((t) => (
+        <TrayItem key={t.value} type={t.value} label={t.label} onAdd={onAdd} />
+      ))}
+      <p className={`mt-1 text-xs ${moving ? "text-red-600" : "text-neutral-400"}`}>
+        {moving
+          ? "Drop here to remove."
+          : "Drag onto the page, or click to add at the end. Drag back here to remove."}
+      </p>
+    </aside>
+  );
 }
 
 function TrayItem({
