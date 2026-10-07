@@ -307,11 +307,11 @@ function cleanColour(value: unknown): string | null {
   return typeof value === "string" && HEX_COLOUR.test(value) ? value : null;
 }
 
-export function cleanHorizontalAlign(value: unknown): HorizontalAlign {
+function cleanHorizontalAlign(value: unknown): HorizontalAlign {
   return HORIZONTAL_ALIGNS.find((a) => a === value) ?? DEFAULT_HORIZONTAL_ALIGN;
 }
 
-export function cleanVerticalAlign(value: unknown): VerticalAlign {
+function cleanVerticalAlign(value: unknown): VerticalAlign {
   return VERTICAL_ALIGNS.find((a) => a === value) ?? DEFAULT_VERTICAL_ALIGN;
 }
 
@@ -427,7 +427,7 @@ function cleanSectionWidths(raw: unknown): SectionWidths {
   };
 }
 
-export function cleanRowSettings(raw: unknown): RowSettings {
+function cleanRowSettings(raw: unknown): RowSettings {
   const value = (raw ?? {}) as Partial<Record<keyof RowSettings, unknown>>;
   return {
     below: cleanBlockSpacing(value.below),
@@ -505,41 +505,148 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
 // A row needs at least two placeholders; a lone one goes back to full
 // width. Everything else about the block is kept.
 function clearLoneRows(blocks: LayoutBlock[]): LayoutBlock[] {
-  const groups = groupBlocksByRow(blocks);
-  return groups.flatMap((g) => {
-    if (g.length > 1) return g;
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { row, ...rest } = g[0];
-    return [rest];
+  return groupBlocksByRow(blocks).flatMap((g) => (g.length > 1 ? g : [withoutRow(g[0])]));
+}
+
+function withoutRow(block: LayoutBlock): LayoutBlock {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { row, ...rest } = block;
+  return rest;
+}
+
+// The widths a block snaps to while its edge is dragged in the visual
+// editor (2026-10-07, Craig's choice: tidy fractions, the same on every
+// site). Stored as whole percentages.
+export const WIDTH_SNAPS = [
+  { value: 25, label: "¼" },
+  { value: 33, label: "⅓" },
+  { value: 50, label: "½" },
+  { value: 67, label: "⅔" },
+  { value: 75, label: "¾" },
+  { value: 100, label: "Full" },
+] as const;
+
+export function snapBlockWidth(raw: number): number {
+  return WIDTH_SNAPS.reduce((best, s) =>
+    Math.abs(s.value - raw) < Math.abs(best.value - raw) ? s : best
+  ).value;
+}
+
+// "½ width", or the exact % for a width set some other way.
+export function blockWidthLabel(width: number): string {
+  const snap = WIDTH_SNAPS.find((s) => s.value === width);
+  return snap ? `${snap.label} width` : `${width}% width`;
+}
+
+// Spacing and margins dragged in the visual editor move in steps of
+// this many pixels, within their limits.
+export const SPACING_STEP = 4;
+
+export function snapSpacing(raw: number, limits: { min: number; max: number }): number {
+  const stepped = Math.round(raw / SPACING_STEP) * SPACING_STEP;
+  return Math.min(limits.max, Math.max(limits.min, stepped));
+}
+
+// Where a dragged block lands (2026-10-07): a new row of its own before
+// row `index` (rows counted as they are before the move; the row count
+// = at the end), or beside another block in that block's row.
+export type BlockDropTarget =
+  | { kind: "row"; index: number }
+  | { kind: "beside"; blockId: string; side: "left" | "right" };
+
+export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
+  return type === "slidingdoors"
+    ? { id: crypto.randomUUID(), type, doors: DEFAULT_SLIDING_DOORS }
+    : { id: crypto.randomUUID(), type };
+}
+
+// Puts a block — new, or already in the layout (a move) — at `target`.
+// Each row keeps its spacing and alignment as long as any of its other
+// blocks stay in it; a block moved into a row of its own keeps its old
+// row's settings only if it was alone there.
+export function placeLayoutBlock(
+  layout: CustomLayout,
+  block: LayoutBlock,
+  target: BlockDropTarget
+): CustomLayout {
+  if (target.kind === "beside" && target.blockId === block.id) return layout;
+  const before = groupBlocksByRow(layout.blocks);
+  const groups: LayoutBlock[][] = [];
+  let insertAt = -1;
+  before.forEach((g, i) => {
+    if (target.kind === "row" && i === target.index) insertAt = groups.length;
+    const rest = g.filter((b) => b.id !== block.id);
+    if (rest.length > 0) groups.push(rest);
   });
+
+  const moving = withoutRow(block);
+  if (target.kind === "row") {
+    groups.splice(insertAt < 0 ? groups.length : insertAt, 0, [moving]);
+  } else {
+    const group = groups.find((g) => g.some((b) => b.id === target.blockId));
+    if (!group) return layout;
+    const at = group.findIndex((b) => b.id === target.blockId) + (target.side === "right" ? 1 : 0);
+    group.splice(at, 0, moving);
+  }
+  return rebuildRows(layout, groups, block.id);
 }
 
-// Adds a placeholder at the end, or — with "left"/"right" — beside the
-// last row, same as the old block editor's To left / To Right. A new
-// row takes its first block's id as its row id, so that row keeps its
-// settings (see rowKey).
-export function addLayoutBlock(
-  blocks: LayoutBlock[],
-  type: LayoutBlockType,
-  placement: "none" | "left" | "right"
-): LayoutBlock[] {
-  const block: LayoutBlock =
-    type === "slidingdoors"
-      ? { id: crypto.randomUUID(), type, doors: DEFAULT_SLIDING_DOORS }
-      : { id: crypto.randomUUID(), type };
-  if (placement === "none" || blocks.length === 0) return [...blocks, block];
-
-  const groups = groupBlocksByRow(blocks);
-  const last = groups[groups.length - 1];
-  const row = last[0].row ?? last[0].id;
-  const before = groups.slice(0, -1).flat();
-  const lastRow = last.map((b) => ({ ...b, row }));
-  const paired = { ...block, row };
-  return [...before, ...(placement === "left" ? [paired, ...lastRow] : [...lastRow, paired])];
+export function removeLayoutBlock(layout: CustomLayout, id: string): CustomLayout {
+  const groups = groupBlocksByRow(layout.blocks)
+    .map((g) => g.filter((b) => b.id !== id))
+    .filter((g) => g.length > 0);
+  return rebuildRows(layout, groups, id);
 }
 
-export function removeLayoutBlock(blocks: LayoutBlock[], id: string): LayoutBlock[] {
-  return clearLoneRows(blocks.filter((b) => b.id !== id));
+// Turns rows (as lists of blocks) back into the stored blocks and row
+// settings. A row of two or more keeps its row id unless that id is
+// also a block's id elsewhere (row ids used to be a block's id), when
+// it gets a fresh one; its settings follow its blocks.
+function rebuildRows(layout: CustomLayout, groups: LayoutBlock[][], movedId: string): CustomLayout {
+  const settingsByBlock = new Map<string, RowSettings>();
+  let movedWasAlone = false;
+  for (const g of groupBlocksByRow(layout.blocks)) {
+    const settings = layout.rows[rowKey(g)];
+    if (g.length === 1 && g[0].id === movedId) movedWasAlone = true;
+    if (settings) for (const b of g) settingsByBlock.set(b.id, settings);
+  }
+  const blockIds = new Set(groups.flat().map((b) => b.id));
+
+  const blocks: LayoutBlock[] = [];
+  const rows: Record<string, RowSettings> = {};
+  for (const g of groups) {
+    const kept = g.find((b) => b.id !== movedId);
+    const settings = kept
+      ? settingsByBlock.get(kept.id)
+      : movedWasAlone
+        ? settingsByBlock.get(movedId)
+        : undefined;
+    let key: string;
+    if (g.length === 1) {
+      key = g[0].id;
+      blocks.push(withoutRow(g[0]));
+    } else {
+      const candidate = kept?.row ?? kept?.id;
+      const clashes =
+        candidate !== undefined && blockIds.has(candidate) && !g.some((b) => b.id === candidate);
+      key = candidate && !clashes ? candidate : crypto.randomUUID();
+      blocks.push(...g.map((b) => ({ ...b, row: key })));
+    }
+    if (settings) rows[key] = settings;
+  }
+  return { ...layout, blocks, rows };
+}
+
+// Changes one row's settings, kept within their limits.
+export function updateRowSettings(
+  layout: CustomLayout,
+  key: string,
+  patch: Partial<RowSettings>
+): CustomLayout {
+  return {
+    ...layout,
+    rows: { ...layout.rows, [key]: cleanRowSettings({ ...rowSettingsOf(layout, key), ...patch }) },
+  };
 }
 
 // Changes one Sliding doors block's settings, kept within their limits.
@@ -554,14 +661,4 @@ export function updateSlidingDoors(
 // Changes one block's width, kept within its limits.
 export function updateBlockWidth(blocks: LayoutBlock[], id: string, width: number): LayoutBlock[] {
   return blocks.map((b) => (b.id === id ? { ...b, width: cleanBlockWidth(width) } : b));
-}
-
-// Moves a whole row (one or more placeholders) up or down. Its settings
-// move with it.
-export function moveLayoutRow(blocks: LayoutBlock[], rowIndex: number, direction: -1 | 1) {
-  const groups = groupBlocksByRow(blocks);
-  const target = rowIndex + direction;
-  if (target < 0 || target >= groups.length) return blocks;
-  [groups[rowIndex], groups[target]] = [groups[target], groups[rowIndex]];
-  return groups.flat();
 }

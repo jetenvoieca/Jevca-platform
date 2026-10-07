@@ -1,7 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
-import { groupBlocksByRow } from "@/lib/blocks";
+import { Fragment } from "react";
 import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pageStyleTypes";
 import {
   BLOCK_SPACING_LIMITS,
@@ -11,40 +10,26 @@ import {
   HORIZONTAL_ALIGNS,
   PAGE_MARGIN_LIMITS,
   SLIDING_DOORS_LIMITS,
-  VERTICAL_ALIGNS,
-  addLayoutBlock,
-  blockTypeLabel,
-  blockWidthOf,
   cleanBlockSpacing,
   cleanBlockWidth,
   cleanCanvas,
   cleanGridSpacing,
   cleanPageMargins,
-  cleanRowSettings,
   emptyLayout,
-  moveLayoutRow,
-  removeLayoutBlock,
-  rowKey,
-  rowSettingsOf,
-  updateBlockWidth,
   updateSlidingDoors,
   type CanvasLayout,
   type CustomLayout,
   type DoorsHeight,
   type GridSpacing,
   type HorizontalAlign,
-  type LayoutBlockType,
   type PageMargin,
   type PageMargins,
   type PageStyleLayout,
-  type RowSettings,
   type SectionLayout,
   type SectionSpacing,
   type SectionWidths,
   type SlidingDoorsSettings,
-  type VerticalAlign,
 } from "@/lib/pageStyleLayout";
-import AddBlockModal, { type BlockPlacement } from "@/components/AddBlockModal";
 import NumberField from "@/components/NumberField";
 
 // What's being edited: the Style name, the Style Type ("" until one is
@@ -122,12 +107,6 @@ const HORIZONTAL_LABELS: Record<HorizontalAlign, string> = {
   right: "Right",
 };
 
-const VERTICAL_LABELS: Record<VerticalAlign, string> = {
-  top: "Top",
-  middle: "Middle",
-  bottom: "Bottom",
-};
-
 // The page margin's four values, for its box.
 const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label: string }[] = [
   { device: "desktop", side: "vertical", label: "Desktop margin, top & bottom" },
@@ -142,21 +121,18 @@ const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label:
 // layout controls — layout only, no content.
 //
 // Section and Private / Custom set their grid spacing (2026-10-05) for
-// grids of images, the page margin (2026-10-06, desktop and phone), the
-// spacing of every gap between blocks separately and every block's
-// width (2026-10-05, % of the page) and alignment (2026-10-07): Section
-// in its own boxes, Private / Custom in each row of the Layout list
-// (width per block, ↔ between side-by-side blocks, alignment, ↕ below
-// the row).
+// grids of images and the page margin (2026-10-06, desktop and phone).
 //
-// Private / Custom: background colour and image, then the Layout list,
-// then Sliding doors settings for any Sliding doors blocks (including
-// the square panels' height, 2026-10-06, desktop and phone). New blocks
-// (Header included) are added from "+ Add block", which opens
-// AddBlockModal (2026-10-05) — keeping adding separate from arranging.
+// Private / Custom: background colour and image, then Sliding doors
+// settings for any Sliding doors blocks (including the square panels'
+// height, 2026-10-06, desktop and phone). Its components are added,
+// moved, sized, spaced and aligned in the visual editor
+// (VisualLayoutEditor, 2026-10-07), which replaces the Preview while
+// it's edited.
 //
 // Section is a fixed layout — byline, artwork grid, Description — with
-// an optional background colour and an optional video below the
+// each part's width and alignment (2026-10-07), the spacing between its
+// parts, an optional background colour and an optional video below the
 // Description.
 //
 // Canvas (2026-10-05): curation tile size, opening speed, opened size
@@ -178,7 +154,6 @@ export default function PageStyleEditor({
   onClose: () => void;
 }) {
   const { custom, section, canvas } = draft;
-  const [adding, setAdding] = useState(false);
   const setCustom = (next: CustomLayout) => onChange({ ...draft, custom: next });
   const setSection = (next: SectionLayout) => onChange({ ...draft, section: next });
   const setCanvas = (next: CanvasLayout) => onChange({ ...draft, canvas: cleanCanvas(next) });
@@ -195,22 +170,8 @@ export default function PageStyleEditor({
     });
   };
 
-  const addBlock = (blockType: LayoutBlockType, placement: BlockPlacement) => {
-    setCustom({ ...custom, blocks: addLayoutBlock(custom.blocks, blockType, placement) });
-    setAdding(false);
-  };
-
   const setDoors = (id: string, doors: SlidingDoorsSettings) =>
     setCustom({ ...custom, blocks: updateSlidingDoors(custom.blocks, id, doors) });
-
-  const setRow = (key: string, patch: Partial<RowSettings>) =>
-    setCustom({
-      ...custom,
-      rows: {
-        ...custom.rows,
-        [key]: cleanRowSettings({ ...rowSettingsOf(custom, key), ...patch }),
-      },
-    });
 
   const setSectionSpacing = (key: keyof SectionSpacing, value: number) =>
     setSection({ ...section, spacing: { ...section.spacing, [key]: cleanBlockSpacing(value) } });
@@ -221,7 +182,6 @@ export default function PageStyleEditor({
   const setSectionAlign = (key: keyof SectionWidths, value: HorizontalAlign) =>
     setSection({ ...section, aligns: { ...section.aligns, [key]: value } });
 
-  const rows = groupBlocksByRow(custom.blocks);
   const doorsBlocks = custom.blocks.filter((b) => b.type === "slidingdoors" && b.doors);
 
   return (
@@ -437,138 +397,6 @@ export default function PageStyleEditor({
               </button>
             )}
 
-            <div className="mt-2">
-              <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
-                Layout
-              </p>
-              {rows.length === 0 && (
-                <p className="mb-2 text-xs text-neutral-400">No blocks yet.</p>
-              )}
-              <div className="flex flex-col gap-1.5">
-                {rows.map((row, i) => {
-                  const key = rowKey(row);
-                  const settings = rowSettingsOf(custom, key);
-                  return (
-                    <Fragment key={key}>
-                      <div className="flex items-center gap-1 rounded-md border border-neutral-200 p-1.5">
-                        <div className="flex min-w-0 flex-1 flex-col gap-1">
-                          <div className="flex min-w-0 gap-1">
-                            {row.map((b) => (
-                              <span
-                                key={b.id}
-                                className="flex min-w-0 flex-1 items-center justify-between gap-1 rounded bg-neutral-100 px-2 py-1 text-xs text-neutral-700"
-                              >
-                                <span className="truncate">{blockTypeLabel(b.type)}</span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    setCustom({
-                                      ...custom,
-                                      blocks: removeLayoutBlock(custom.blocks, b.id),
-                                    })
-                                  }
-                                  aria-label={`Remove ${blockTypeLabel(b.type)}`}
-                                  className="text-neutral-400 hover:text-red-600"
-                                >
-                                  ✕
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                          {row.map((b) => (
-                            <NumberField
-                              key={b.id}
-                              label={row.length > 1 ? `${blockTypeLabel(b.type)} width` : "Width"}
-                              unit="%"
-                              step={5}
-                              value={blockWidthOf(b)}
-                              limits={BLOCK_WIDTH_LIMITS}
-                              onCommit={(width) =>
-                                setCustom({
-                                  ...custom,
-                                  blocks: updateBlockWidth(custom.blocks, b.id, width),
-                                })
-                              }
-                              compact
-                            />
-                          ))}
-                          {row.length > 1 && (
-                            <NumberField
-                              label="↔ Between"
-                              unit="px"
-                              step={1}
-                              value={settings.between}
-                              limits={BLOCK_SPACING_LIMITS}
-                              onCommit={(between) => setRow(key, { between })}
-                              compact
-                            />
-                          )}
-                          <AlignSelect
-                            label="Align"
-                            value={settings.horizontal}
-                            options={HORIZONTAL_ALIGNS}
-                            labels={HORIZONTAL_LABELS}
-                            onChange={(horizontal) => setRow(key, { horizontal })}
-                          />
-                          {row.length > 1 && (
-                            <AlignSelect
-                              label="Line up"
-                              value={settings.vertical}
-                              options={VERTICAL_ALIGNS}
-                              labels={VERTICAL_LABELS}
-                              onChange={(vertical) => setRow(key, { vertical })}
-                            />
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, -1) })
-                          }
-                          disabled={i === 0}
-                          aria-label="Move up"
-                          className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
-                        >
-                          ↑
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setCustom({ ...custom, blocks: moveLayoutRow(custom.blocks, i, 1) })
-                          }
-                          disabled={i === rows.length - 1}
-                          aria-label="Move down"
-                          className="px-1 text-xs text-neutral-400 hover:text-neutral-900 disabled:opacity-30"
-                        >
-                          ↓
-                        </button>
-                      </div>
-                      {i < rows.length - 1 && (
-                        <div className="flex justify-center">
-                          <NumberField
-                            label="↕ Space"
-                            unit="px"
-                            step={1}
-                            value={settings.below}
-                            limits={BLOCK_SPACING_LIMITS}
-                            onCommit={(below) => setRow(key, { below })}
-                            compact
-                          />
-                        </div>
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </div>
-              <button
-                type="button"
-                onClick={() => setAdding(true)}
-                className="mt-2 w-full rounded-md border border-dashed border-neutral-400 px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50"
-              >
-                + Add block
-              </button>
-            </div>
-
             {doorsBlocks.map((b, i) => {
               const doors = b.doors!;
               return (
@@ -636,14 +464,6 @@ export default function PageStyleEditor({
           Close
         </button>
       </div>
-
-      {adding && (
-        <AddBlockModal
-          canPlaceBeside={custom.blocks.length > 0}
-          onAdd={addBlock}
-          onClose={() => setAdding(false)}
-        />
-      )}
     </div>
   );
 }
@@ -710,7 +530,7 @@ function PageMarginControl({
   );
 }
 
-// A row's (or Section part's) alignment, from a short list.
+// A Section part's alignment, from a short list.
 function AlignSelect<T extends string>({
   label,
   value,
