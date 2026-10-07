@@ -33,8 +33,7 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 // With a Display Style (2026-10-05): the page drawn in that style, with
 // the style's background colour and page margin (2026-10-06, desktop
 // and phone — see components/pageMargins.ts).
-// - Section: the curation's works' images, then its Description.
-// - Private / Custom (2026-10-07): each component shows what was put in
+// - Block Build (2026-10-07, was Private / Custom): each component shows what was put in
 //   it in the page's Arrange (see lib/pageComponents.ts) — a text
 //   section (in a Header, Text or Text grid, in the style's font, size,
 //   style and colour for that component type), a video, an Images
@@ -123,8 +122,6 @@ export default function PagePreview({
         onOpen={setViewingId}
       />
     );
-  } else if (style) {
-    body = <SectionPage style={style} curation={curation} onOpen={setViewingId} />;
   } else {
     body = <PlainPage curation={curation} onOpen={setViewingId} />;
   }
@@ -151,7 +148,7 @@ export default function PagePreview({
 }
 
 // What a page shows, loaded together. Sections and components are only
-// loaded for a Private / Custom page.
+// loaded for a Block Build page.
 type PageContent = {
   curation: CurationDetail | null;
   sections: CurationSectionData[];
@@ -169,57 +166,7 @@ type Row = {
   vertical: VerticalAlign;
 };
 
-// A Section page — see the note at the top.
-function SectionPage({
-  style,
-  curation,
-  onOpen,
-}: {
-  style: Extract<PageStyleSummary, { type: "SECTION" }>;
-  curation: CurationDetail;
-  onOpen: (artworkId: string) => void;
-}) {
-  const { layout } = style;
-  const grid =
-    curation.works.length > 0 ? (
-      <ImageGrid images={worksImages(curation)} spacing={layout.gridSpacing} onOpen={onOpen} />
-    ) : null;
-  const description = curation.description ? (
-    <p className="whitespace-pre-line break-words text-sm text-neutral-800">
-      {curation.description}
-    </p>
-  ) : null;
-
-  const rows: Row[] = [
-    {
-      key: "grid",
-      cells: [{ id: "grid", content: grid, width: layout.widths.grid }],
-      below: layout.spacing.belowGrid,
-      between: 0,
-      horizontal: layout.aligns.grid,
-      vertical: "top",
-    },
-    {
-      key: "description",
-      cells: [{ id: "description", content: description, width: layout.widths.description }],
-      below: layout.spacing.belowDescription,
-      between: 0,
-      horizontal: layout.aligns.description,
-      vertical: "top",
-    },
-  ];
-
-  return (
-    <StyledFrame
-      margins={layout.margins}
-      backgroundColor={layout.backgroundColor}
-      rows={rows}
-      empty="Nothing in this style can be filled from the page's curation yet."
-    />
-  );
-}
-
-// A Private / Custom page — see the note at the top.
+// A Block Build page — see the note at the top.
 function CustomPage({
   style,
   curation,

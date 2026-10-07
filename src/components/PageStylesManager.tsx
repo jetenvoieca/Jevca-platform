@@ -18,7 +18,6 @@ import PageStyleEditor, {
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PageStylePreview from "@/components/PageStylePreview";
 import VisualLayoutEditor from "@/components/VisualLayoutEditor";
-import SectionVisualEditor from "@/components/SectionVisualEditor";
 
 type Status = { text: string; isError: boolean };
 
@@ -30,11 +29,10 @@ const IDLE: Status = { text: "", isError: false };
 // (2026-10-05) and Delete act on it.
 //
 // Add and Edit swap the list for the editor panel (PageStyleEditor),
-// which stays open until Close. While a Private / Custom or Section style
-// is being edited, the Preview panel becomes its visual editor
-// (VisualLayoutEditor / SectionVisualEditor, 2026-10-07), where its
-// components are sized, spaced and aligned by hand (and a Private /
-// Custom style's added and moved). Every change shows at once
+// which stays open until Close. While a Block Build style is being
+// edited, the Preview panel becomes its visual editor
+// (VisualLayoutEditor, 2026-10-07), where its components are added,
+// moved, sized, spaced and aligned by hand. Every change shows at once
 // and saves itself shortly after (a new style is created the first
 // time it has both a name and a type). Saves run one at a time, in
 // order, so a quick run of changes can never create a style twice.
@@ -149,10 +147,10 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
     "rounded-md border border-neutral-300 px-2 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
 
   // While editing, the Preview shows the draft as it changes — as the
-  // visual editor for a Private / Custom or Section style.
+  // visual editor for a Block Build style.
   const previewName = draft ? draft.name.trim() || "Untitled style" : selected?.name;
   const previewStyle = draft ? draftLayout(draft) : selected;
-  const editingVisually = draft?.type === "PRIVATE" || draft?.type === "SECTION";
+  const editingVisually = draft?.type === "PRIVATE";
 
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
@@ -167,11 +165,6 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
               <VisualLayoutEditor
                 layout={draft.custom}
                 onChange={(custom) => handleChange({ ...draft, custom })}
-              />
-            ) : draft?.type === "SECTION" ? (
-              <SectionVisualEditor
-                layout={draft.section}
-                onChange={(section) => handleChange({ ...draft, section })}
               />
             ) : (
               <div className="min-h-0 flex-1 overflow-y-auto">

@@ -12,6 +12,7 @@ import { getPageCanvas } from "@/lib/actions/pageCanvas";
 import { getPageComponents } from "@/lib/actions/pageComponents";
 import { listPageStyles } from "@/lib/actions/pageStyles";
 import { normalizeLayout } from "@/lib/pageStyleLayout";
+import { isPageStyleType } from "@/lib/pageStyleTypes";
 import { normalizeMenuStyle, type MenuStyleLayout } from "@/lib/menuStyleLayout";
 import {
   SNAPSHOT_VERSION,
@@ -23,8 +24,8 @@ import {
 
 // Publishing a site (2026-10-06) — see lib/siteSnapshot.ts. The whole
 // site at once: its Live Pages in order, each with its Display Style,
-// curation or canvas placements, what fills its components (Private /
-// Custom, 2026-10-07), and every curation those show, with their works,
+// curation or canvas placements, what fills its components (Block
+// Build, 2026-10-07), and every curation those show, with their works,
 // sections and each work's presentation, and the menu each page shows
 // (2026-10-06 — the page's own, or else the site's).
 
@@ -140,10 +141,12 @@ export async function getLastPublishedAt(siteId: string): Promise<Date | null> {
 // published in an older shape — see SNAPSHOT_VERSION). Each page's
 // Display Style is cleaned with the same rules as a saved style
 // (2026-10-06), so a style setting added after publishing takes its
-// default rather than breaking the page; menus (2026-10-06) the same. A
-// site published before menus existed shows none until it's published
-// again, and one published before components' content existed
-// (2026-10-07) shows its Private / Custom pages empty until then.
+// default rather than breaking the page, and one of a type that no
+// longer exists (Section, removed 2026-10-07) is dropped; menus
+// (2026-10-06) the same. A site published before menus existed shows
+// none until it's published again, and one published before
+// components' content existed (2026-10-07) shows its Block Build pages
+// empty until then.
 // Changes to a style's own settings still need a publish to show.
 export async function getPublishedSite(
   siteId: string
@@ -156,11 +159,10 @@ export async function getPublishedSite(
   if (!row || !snapshot || snapshot.version !== SNAPSHOT_VERSION) return null;
   const pages = snapshot.pages.map((p) => ({
     ...p,
-    style: p.style && {
-      id: p.style.id,
-      name: p.style.name,
-      ...normalizeLayout(p.style.type, p.style.layout),
-    },
+    style:
+      p.style && isPageStyleType(p.style.type)
+        ? { id: p.style.id, name: p.style.name, ...normalizeLayout(p.style.type, p.style.layout) }
+        : null,
     components: p.components ?? [],
     menuStyleId: p.menuStyleId ?? null,
   }));
