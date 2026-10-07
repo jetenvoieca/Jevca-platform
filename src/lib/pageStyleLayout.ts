@@ -1,4 +1,3 @@
-import { groupBlocksByRow } from "@/lib/blocks";
 import type { PageStyleType } from "@/lib/pageStyleTypes";
 import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 
@@ -8,9 +7,8 @@ import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 // server actions all share the same shape and the same clean-up rules.
 
 // The components a Block Build style (2026-10-07, was Private /
-// Custom) is built from — the same block types as the old block editor
-// (see ContentBlock in blocks.ts), as empty placeholders, plus Sliding
-// doors (2026-10-05).
+// Custom) is built from, as empty placeholders — each filled from the
+// page's curation in the page's Arrange (see lib/pageComponents.ts).
 export const LAYOUT_BLOCK_TYPES = [
   { value: "header", label: "Header" },
   { value: "text", label: "Text" },
@@ -179,9 +177,9 @@ const DEFAULT_TEXT_STYLES: TextStyles = {
   textgrid: DEFAULT_TEXT_STYLE,
 };
 
-// `row` works as in blocks.ts: placeholders sharing a row id sit side
-// by side. `width` is unset until changed (see blockWidthOf). `doors` is
-// set on Sliding doors blocks only.
+// `row`: placeholders sharing a row id sit side by side (see
+// groupBlocksByRow). `width` is unset until changed (see blockWidthOf).
+// `doors` is set on Sliding doors blocks only.
 export type LayoutBlock = {
   id: string;
   type: LayoutBlockType;
@@ -190,7 +188,7 @@ export type LayoutBlock = {
   doors?: SlidingDoorsSettings;
 };
 
-export type CustomLayout = {
+export type BlockBuildLayout = {
   // A colour is styling, so the style keeps it; null = none.
   backgroundColor: string | null;
   // Whether the page has a background image — the image itself is
@@ -241,8 +239,24 @@ export const CANVAS_LIMITS = {
 } as const;
 
 export type PageStyleLayout =
-  | { type: "PRIVATE"; layout: CustomLayout }
+  | { type: "BLOCK_BUILD"; layout: BlockBuildLayout }
   | { type: "CANVAS"; layout: CanvasLayout };
+
+// Groups a style's blocks into the rows they're drawn as: a run of
+// blocks sharing the same `row` id is one row, side by side; any other
+// block is a row of its own.
+export function groupBlocksByRow(blocks: LayoutBlock[]): LayoutBlock[][] {
+  const groups: LayoutBlock[][] = [];
+  for (const block of blocks) {
+    const current = groups[groups.length - 1];
+    if (block.row && current && current[0].row === block.row) {
+      current.push(block);
+    } else {
+      groups.push([block]);
+    }
+  }
+  return groups;
+}
 
 export function blockTypeLabel(type: LayoutBlockType): string {
   return LAYOUT_BLOCK_TYPES.find((t) => t.value === type)?.label ?? type;
@@ -256,7 +270,7 @@ export function rowKey(row: LayoutBlock[]): string {
   return row[0].row ?? row[0].id;
 }
 
-export function rowSettingsOf(layout: CustomLayout, key: string): RowSettings {
+export function rowSettingsOf(layout: BlockBuildLayout, key: string): RowSettings {
   return layout.rows[key] ?? DEFAULT_ROW_SETTINGS;
 }
 
@@ -436,7 +450,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
 
   // `rowSpacing` is what row settings were stored under before
   // alignment existed (2026-10-07); those rows keep their spacing.
-  const value = (raw ?? {}) as Partial<Record<keyof CustomLayout | "rowSpacing", unknown>>;
+  const value = (raw ?? {}) as Partial<Record<keyof BlockBuildLayout | "rowSpacing", unknown>>;
   const blocks = clearLoneRows(
     Array.isArray(value.blocks)
       ? value.blocks.flatMap((b): LayoutBlock[] => {
@@ -528,10 +542,10 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
 // blocks stay in it; a block moved into a row of its own keeps its old
 // row's settings only if it was alone there.
 export function placeLayoutBlock(
-  layout: CustomLayout,
+  layout: BlockBuildLayout,
   block: LayoutBlock,
   target: BlockDropTarget
-): CustomLayout {
+): BlockBuildLayout {
   if (target.kind === "beside" && target.blockId === block.id) return layout;
   const before = groupBlocksByRow(layout.blocks);
   const groups: LayoutBlock[][] = [];
@@ -554,7 +568,7 @@ export function placeLayoutBlock(
   return rebuildRows(layout, groups, block.id);
 }
 
-export function removeLayoutBlock(layout: CustomLayout, id: string): CustomLayout {
+export function removeLayoutBlock(layout: BlockBuildLayout, id: string): BlockBuildLayout {
   const groups = groupBlocksByRow(layout.blocks)
     .map((g) => g.filter((b) => b.id !== id))
     .filter((g) => g.length > 0);
@@ -565,7 +579,11 @@ export function removeLayoutBlock(layout: CustomLayout, id: string): CustomLayou
 // settings. A row of two or more keeps its row id unless that id is
 // also a block's id elsewhere (row ids used to be a block's id), when
 // it gets a fresh one; its settings follow its blocks.
-function rebuildRows(layout: CustomLayout, groups: LayoutBlock[][], movedId: string): CustomLayout {
+function rebuildRows(
+  layout: BlockBuildLayout,
+  groups: LayoutBlock[][],
+  movedId: string
+): BlockBuildLayout {
   const settingsByBlock = new Map<string, RowSettings>();
   let movedWasAlone = false;
   for (const g of groupBlocksByRow(layout.blocks)) {
@@ -602,10 +620,10 @@ function rebuildRows(layout: CustomLayout, groups: LayoutBlock[][], movedId: str
 
 // Changes one row's settings, kept within their limits.
 export function updateRowSettings(
-  layout: CustomLayout,
+  layout: BlockBuildLayout,
   key: string,
   patch: Partial<RowSettings>
-): CustomLayout {
+): BlockBuildLayout {
   return {
     ...layout,
     rows: { ...layout.rows, [key]: cleanRowSettings({ ...rowSettingsOf(layout, key), ...patch }) },
