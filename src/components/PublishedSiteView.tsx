@@ -24,7 +24,6 @@ export default function PublishedSiteView({
         <PagePreview
           key={page.id}
           pageId={page.id}
-          title={page.title}
           curationId={page.curationId}
           style={page.style}
           fullScreen
