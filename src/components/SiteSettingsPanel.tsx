@@ -34,10 +34,6 @@ type SiteData = {
   status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
   createdAt: string;
   defaultCurrency: string;
-  // Replaces the old free-text `template` (2026-09-06) — a real link to
-  // a Template record now (see Site.templateId in schema.prisma). Null
-  // = no Template assigned.
-  templateId: string | null;
   salesEnabled: boolean;
   domainStatus: string | null;
   domainRenewalDate: string;
