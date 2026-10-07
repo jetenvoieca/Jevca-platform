@@ -7,6 +7,7 @@ import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections
 import type { ComponentContent } from "@/lib/pageComponents";
 import {
   blockWidthOf,
+  isTextComponent,
   rowKey,
   rowSettingsOf,
   type GridSpacing,
@@ -35,9 +36,11 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 // - Section: the curation's works' images, then its Description.
 // - Private / Custom (2026-10-07): each component shows what was put in
 //   it in the page's Arrange (see lib/pageComponents.ts) — a text
-//   section, a video, an Images section (one image in a Single Image,
-//   a grid in a Gallery), or the curation's works (a grid in a Gallery,
-//   square panels in Sliding doors — see SlidingDoors).
+//   section (in a Header, Text or Text grid, in the style's font, size,
+//   style and colour for that component type), a video, an Images
+//   section (one image in a Single Image, a grid in a Gallery), or the
+//   curation's works (a grid in a Gallery, square panels in Sliding
+//   doors — see SlidingDoors).
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page) and its
@@ -274,7 +277,12 @@ function CustomPage({
         />
       );
     }
-    return <CurationSectionView section={section} />;
+    return (
+      <CurationSectionView
+        section={section}
+        textStyle={isTextComponent(block.type) ? layout.textStyles[block.type] : undefined}
+      />
+    );
   };
 
   const rows: Row[] = groupBlocksByRow(layout.blocks).map((row) => {
