@@ -15,7 +15,7 @@ import {
   cleanTextStyle,
   emptyLayout,
   type CanvasLayout,
-  type CustomLayout,
+  type BlockBuildLayout,
   type GridSpacing,
   type PageMargin,
   type PageMargins,
@@ -32,12 +32,13 @@ import NumberField from "@/components/NumberField";
 export type PageStyleDraft = {
   name: string;
   type: PageStyleType | "";
-  custom: CustomLayout;
+  blockBuild: BlockBuildLayout;
   canvas: CanvasLayout;
 };
 
-export const EMPTY_CUSTOM = (emptyLayout("PRIVATE") as Extract<PageStyleLayout, { type: "PRIVATE" }>)
-  .layout;
+export const EMPTY_BLOCK_BUILD = (
+  emptyLayout("BLOCK_BUILD") as Extract<PageStyleLayout, { type: "BLOCK_BUILD" }>
+).layout;
 
 export const EMPTY_CANVAS = (emptyLayout("CANVAS") as Extract<PageStyleLayout, { type: "CANVAS" }>)
   .layout;
@@ -46,14 +47,14 @@ export function draftFrom(name: string, style: PageStyleLayout | null): PageStyl
   return {
     name,
     type: style?.type ?? "",
-    custom: style?.type === "PRIVATE" ? style.layout : EMPTY_CUSTOM,
+    blockBuild: style?.type === "BLOCK_BUILD" ? style.layout : EMPTY_BLOCK_BUILD,
     canvas: style?.type === "CANVAS" ? style.layout : EMPTY_CANVAS,
   };
 }
 
 // The draft as a layout, or null until a Style Type is chosen.
 export function draftLayout(draft: PageStyleDraft): PageStyleLayout | null {
-  if (draft.type === "PRIVATE") return { type: "PRIVATE", layout: draft.custom };
+  if (draft.type === "BLOCK_BUILD") return { type: "BLOCK_BUILD", layout: draft.blockBuild };
   if (draft.type === "CANVAS") return { type: "CANVAS", layout: draft.canvas };
   return null;
 }
@@ -104,8 +105,8 @@ export default function PageStyleEditor({
   status: { text: string; isError: boolean };
   onClose: () => void;
 }) {
-  const { custom, canvas } = draft;
-  const setCustom = (next: CustomLayout) => onChange({ ...draft, custom: next });
+  const { blockBuild, canvas } = draft;
+  const setBlockBuild = (next: BlockBuildLayout) => onChange({ ...draft, blockBuild: next });
   const setCanvas = (next: CanvasLayout) => onChange({ ...draft, canvas: cleanCanvas(next) });
 
   const changeType = (value: string) => {
@@ -114,7 +115,7 @@ export default function PageStyleEditor({
     onChange({
       ...draft,
       type: value,
-      custom: EMPTY_CUSTOM,
+      blockBuild: EMPTY_BLOCK_BUILD,
       canvas: EMPTY_CANVAS,
     });
   };
@@ -200,21 +201,21 @@ export default function PageStyleEditor({
           </div>
         )}
 
-        {draft.type === "PRIVATE" && (
+        {draft.type === "BLOCK_BUILD" && (
           <div className="mt-2 flex flex-col gap-2.5">
             <BackgroundColourControl
-              value={custom.backgroundColor}
-              onChange={(backgroundColor) => setCustom({ ...custom, backgroundColor })}
+              value={blockBuild.backgroundColor}
+              onChange={(backgroundColor) => setBlockBuild({ ...blockBuild, backgroundColor })}
             />
 
-            {custom.backgroundImage ? (
+            {blockBuild.backgroundImage ? (
               <div className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2">
                 <span className="flex-1 text-sm text-neutral-700">
                   Background image — chosen on the page
                 </span>
                 <button
                   type="button"
-                  onClick={() => setCustom({ ...custom, backgroundImage: false })}
+                  onClick={() => setBlockBuild({ ...blockBuild, backgroundImage: false })}
                   className="text-xs text-red-500 hover:underline"
                 >
                   Remove
@@ -223,7 +224,7 @@ export default function PageStyleEditor({
             ) : (
               <button
                 type="button"
-                onClick={() => setCustom({ ...custom, backgroundImage: true })}
+                onClick={() => setBlockBuild({ ...blockBuild, backgroundImage: true })}
                 className={smallButton}
               >
                 + Add background image
@@ -231,14 +232,14 @@ export default function PageStyleEditor({
             )}
 
             <FineTuneSection
-              margins={custom.margins}
-              gridSpacing={custom.gridSpacing}
-              onMargins={(margins) => setCustom({ ...custom, margins })}
-              onGridSpacing={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
+              margins={blockBuild.margins}
+              gridSpacing={blockBuild.gridSpacing}
+              onMargins={(margins) => setBlockBuild({ ...blockBuild, margins })}
+              onGridSpacing={(gridSpacing) => setBlockBuild({ ...blockBuild, gridSpacing })}
             >
               <TextStylesControl
-                value={custom.textStyles}
-                onChange={(textStyles) => setCustom({ ...custom, textStyles })}
+                value={blockBuild.textStyles}
+                onChange={(textStyles) => setBlockBuild({ ...blockBuild, textStyles })}
               />
             </FineTuneSection>
           </div>

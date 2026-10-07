@@ -7,6 +7,7 @@ import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections
 import type { ComponentContent } from "@/lib/pageComponents";
 import {
   blockWidthOf,
+  groupBlocksByRow,
   isTextComponent,
   rowKey,
   rowSettingsOf,
@@ -16,7 +17,6 @@ import {
   type PageMargins,
   type VerticalAlign,
 } from "@/lib/pageStyleLayout";
-import { groupBlocksByRow } from "@/lib/blocks";
 import { useSiteData } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
@@ -33,13 +33,13 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 // With a Display Style (2026-10-05): the page drawn in that style, with
 // the style's background colour and page margin (2026-10-06, desktop
 // and phone — see components/pageMargins.ts).
-// - Block Build (2026-10-07, was Private / Custom): each component shows what was put in
-//   it in the page's Arrange (see lib/pageComponents.ts) — a text
-//   section (in a Header, Text or Text grid, in the style's font, size,
-//   style and colour for that component type), a video, an Images
-//   section (one image in a Single Image, a grid in a Gallery), or the
-//   curation's works (a grid in a Gallery, square panels in Sliding
-//   doors — see SlidingDoors).
+// - Block Build (2026-10-07, was Private / Custom): each component
+//   shows what was put in it in the page's Arrange (see
+//   lib/pageComponents.ts) — a text section (in a Header, Text or Text
+//   grid, in the style's font, size, style and colour for that
+//   component type), a video, an Images section (one image in a Single
+//   Image, a grid in a Gallery), or the curation's works (a grid in a
+//   Gallery, square panels in Sliding doors — see SlidingDoors).
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page) and its
@@ -75,7 +75,7 @@ export default function PagePreview({
   const [content, setContent] = useState<PageContent | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
-  const custom = style?.type === "PRIVATE";
+  const blockBuild = style?.type === "BLOCK_BUILD";
 
   useEffect(() => {
     setViewingId(null);
@@ -88,8 +88,10 @@ export default function PagePreview({
     setLoading(true);
     Promise.all([
       siteData.getCuration(curationId),
-      custom ? siteData.listSections(curationId) : Promise.resolve<CurationSectionData[]>([]),
-      custom ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
+      blockBuild
+        ? siteData.listSections(curationId)
+        : Promise.resolve<CurationSectionData[]>([]),
+      blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
     ]).then(([curation, sections, components]) => {
       if (!current) return;
       setContent({ curation, sections, components });
@@ -98,7 +100,7 @@ export default function PagePreview({
     return () => {
       current = false;
     };
-  }, [siteData, curationId, pageId, custom]);
+  }, [siteData, curationId, pageId, blockBuild]);
 
   const closeView = useCallback(() => setViewingId(null), []);
   const curation = content?.curation ?? null;
@@ -112,9 +114,9 @@ export default function PagePreview({
     body = <Message text="Loading…" />;
   } else if (!curation) {
     body = <Message text="This page's curation could not be found." />;
-  } else if (style?.type === "PRIVATE") {
+  } else if (style?.type === "BLOCK_BUILD") {
     body = (
-      <CustomPage
+      <BlockBuildPage
         style={style}
         curation={curation}
         sections={content.sections}
@@ -167,14 +169,14 @@ type Row = {
 };
 
 // A Block Build page — see the note at the top.
-function CustomPage({
+function BlockBuildPage({
   style,
   curation,
   sections,
   components,
   onOpen,
 }: {
-  style: Extract<PageStyleSummary, { type: "PRIVATE" }>;
+  style: Extract<PageStyleSummary, { type: "BLOCK_BUILD" }>;
   curation: CurationDetail;
   sections: CurationSectionData[];
   components: ComponentContent[];
