@@ -39,10 +39,12 @@ type ListKey = "live" | "hidden";
 // reorderPages. Add and Edit open the same modal (PageDetailsModal); a
 // new page starts in Hidden Pages. The selected page is shown in the
 // Preview panel (PagePreview), in its Display Style if it has one
-// (2026-10-05), from the site's working data (LiveSiteData). Arrange
-// (2026-10-05) opens the full-screen canvas editor (CanvasArranger) for
-// a page whose Display Style is a Canvas; closing it redraws the preview
-// with the new arrangement.
+// (2026-10-05), from the site's working data (LiveSiteData). The panel
+// has no heading or page title (2026-10-07), so the page starts where
+// it does on the published site. Arrange (2026-10-05) opens the
+// full-screen canvas editor (CanvasArranger) for a page whose Display
+// Style is a Canvas; closing it redraws the preview with the new
+// arrangement.
 //
 // Site menu (2026-10-06): under Live Pages, the Menu Style the site's
 // menu uses (Templates → Menus) — saved as soon as it's changed. A page
@@ -243,13 +245,11 @@ export default function PagesManager({
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col rounded-lg border border-neutral-300 bg-white p-4">
-        <h2 className="text-center text-base text-neutral-800">Preview</h2>
         {selected ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
             <PagePreview
               key={`${selected.id}:${previewVersion}`}
               pageId={selected.id}
-              title={selected.title}
               curationId={selected.curationId}
               style={selectedStyle}
             />
