@@ -2,6 +2,7 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import ClientsDirectoryView from "@/components/ClientsDirectoryView";
 import { getOpenAlerts } from "@/lib/alerts";
+import { getRecentSites } from "@/lib/recentSites";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 
 export const dynamic = "force-dynamic";
@@ -36,7 +37,14 @@ export default async function ClientsDirectoryPage() {
     createdAt: s.createdAt.toISOString(),
   }));
 
-  const openAlerts = await getOpenAlerts();
+  const [openAlerts, recentSites] = await Promise.all([getOpenAlerts(), getRecentSites()]);
 
-  return <ClientsDirectoryView sites={rows} status={status} alertCount={openAlerts.length} />;
+  return (
+    <ClientsDirectoryView
+      sites={rows}
+      status={status}
+      alertCount={openAlerts.length}
+      recentSites={recentSites}
+    />
+  );
 }

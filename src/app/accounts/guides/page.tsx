@@ -1,6 +1,7 @@
 import AppShell from "@/components/AppShell";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import { getRecentSites } from "@/lib/recentSites";
 import GuidesPanel from "@/components/GuidesPanel";
 import { listGuides } from "@/lib/actions/guides";
 
@@ -11,12 +12,16 @@ export const dynamic = "force-dynamic";
 // menu just above Settings. Platform-wide, same pattern as the Settings
 // page just below it.
 export default async function GuidesPage() {
-  const [guides, openAlerts] = await Promise.all([listGuides(), getOpenAlerts()]);
+  const [guides, openAlerts, recentSites] = await Promise.all([
+    listGuides(),
+    getOpenAlerts(),
+    getRecentSites(),
+  ]);
 
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("guides", openAlerts.length)}
+      navItems={buildTopNavItems("guides", openAlerts.length, recentSites)}
       content={
         <div className="mx-auto max-w-2xl px-6 py-6">
           <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Guides</h1>

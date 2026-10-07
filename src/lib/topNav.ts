@@ -1,4 +1,5 @@
 import type { AppShellNavEntry } from "@/components/SidebarNav";
+import type { RecentSite } from "@/lib/recentSites";
 
 export type TopNavKey =
   | "sites"
@@ -98,10 +99,43 @@ export function buildTemplatesSection(active: TopNavKey | null): AppShellNavEntr
   };
 }
 
-export function buildTopNavItems(active: TopNavKey, alertCount: number): AppShellNavEntry[] {
+// "Sites" (a section since 2026-10-07) — the two most recently opened
+// sites, then "See all" for the full Sites list ("/"). Each site opens
+// on its Artwork Catalogue, same as picking it from the list.
+// `onSitesList` opens the section and highlights "See all";
+// `currentSiteId` highlights that site without opening the section, so
+// the site's own section (Artworks, Media…) stays the open one.
+export function buildSitesSection(
+  recentSites: RecentSite[],
+  {
+    onSitesList = false,
+    currentSiteId = null,
+  }: { onSitesList?: boolean; currentSiteId?: string | null } = {}
+): AppShellNavEntry {
+  return {
+    label: "Sites",
+    section: true,
+    key: "sites",
+    active: onSitesList,
+    children: [
+      ...recentSites.map((site) => ({
+        label: site.label,
+        href: `/sites/${site.id}/artworks`,
+        active: site.id === currentSiteId,
+      })),
+      { label: "See all", href: "/", active: onSitesList, subtle: true },
+    ],
+  };
+}
+
+export function buildTopNavItems(
+  active: TopNavKey,
+  alertCount: number,
+  recentSites: RecentSite[]
+): AppShellNavEntry[] {
   return [
     buildAccountsSection(active, alertCount),
     buildTemplatesSection(active),
-    { label: "Sites", href: "/", active: active === "sites" },
+    buildSitesSection(recentSites, { onSitesList: active === "sites" }),
   ];
 }

@@ -1,6 +1,7 @@
 import AppShell from "@/components/AppShell";
 import SitesListColumn from "@/components/SitesListColumn";
 import { buildTopNavItems } from "@/lib/topNav";
+import type { RecentSite } from "@/lib/recentSites";
 
 type SiteRow = {
   id: string;
@@ -20,21 +21,24 @@ export default function ClientsDirectoryView({
   sites,
   status,
   alertCount = 0,
+  recentSites,
 }: {
   sites: SiteRow[];
   status: string;
   alertCount?: number;
+  recentSites: RecentSite[];
 }) {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("clients", alertCount)}
+      navItems={buildTopNavItems("clients", alertCount, recentSites)}
       rightPanel={
         <SitesListColumn
           sites={sites}
           q=""
           sort="owner"
           status={status}
+          pinnedSiteId={recentSites[0]?.id ?? null}
           liveSearch={false}
           basePath="/clients"
         />

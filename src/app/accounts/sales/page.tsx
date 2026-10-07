@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { saleTitle } from "@/lib/saleMath";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import { getRecentSites } from "@/lib/recentSites";
 import ConsolidatedSalesView, {
   type ConsolidatedMonthGroup,
 } from "@/components/ConsolidatedSalesView";
@@ -11,7 +12,7 @@ import ConsolidatedSalesView, {
 export const dynamic = "force-dynamic";
 
 export default async function ConsolidatedSalesPage() {
-  const [purchases, openAlerts] = await Promise.all([
+  const [purchases, openAlerts, recentSites] = await Promise.all([
     // Abandoned sales excluded — they never happened, so they'd distort
     // both the monthly totals and the "how much did we actually sell"
     // question this page exists to answer. Every artist's own Sales page
@@ -49,6 +50,7 @@ export default async function ConsolidatedSalesPage() {
       orderBy: { createdAt: "desc" },
     }),
     getOpenAlerts(),
+    getRecentSites(),
   ]);
 
   const months = new Map<string, ConsolidatedMonthGroup>();
@@ -101,7 +103,7 @@ export default async function ConsolidatedSalesPage() {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("sales", openAlerts.length)}
+      navItems={buildTopNavItems("sales", openAlerts.length, recentSites)}
       content={
         // Reverted to max-w-4xl (2026-09-12) — widening the whole page
         // just spaced every column out further rather than helping the

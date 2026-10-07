@@ -3,6 +3,7 @@ import AppShell from "@/components/AppShell";
 import { db } from "@/lib/db";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import { getRecentSites } from "@/lib/recentSites";
 import AccountsBackfillButton from "@/components/AccountsBackfillButton";
 import AccountsPeriodView from "@/components/AccountsPeriodView";
 
@@ -33,7 +34,7 @@ export default async function AccountsPage() {
     include: { artist: { select: { name: true, paymentMethod: true } } },
     orderBy: { paidAt: "desc" },
   });
-  const openAlerts = await getOpenAlerts();
+  const [openAlerts, recentSites] = await Promise.all([getOpenAlerts(), getRecentSites()]);
 
   const months = new Map<string, MonthGroup>();
   for (const p of payments) {
@@ -78,7 +79,7 @@ export default async function AccountsPage() {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("subscriptions", openAlerts.length)}
+      navItems={buildTopNavItems("subscriptions", openAlerts.length, recentSites)}
       content={
         <div className="mx-auto max-w-3xl px-6 py-6">
           <div className="mb-1 flex items-center justify-between">

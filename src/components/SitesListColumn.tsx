@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { LAST_VISITED_SITE_KEY } from "@/components/LastVisitedSiteTracker";
 import { SITES_STATUS_FILTER_COOKIE } from "@/lib/sitesStatusFilter";
 
 type SiteRow = {
@@ -49,8 +48,8 @@ function compareSites(a: SiteRow, b: SiteRow, sort: SortValue): number {
   if (sort === "payment") {
     // No payment method set sorts last, not first — an unset value isn't
     // "before Direct Debit alphabetically", it's just not answered yet.
-    const pa = a.paymentMethod || "\uFFFF";
-    const pb = b.paymentMethod || "\uFFFF";
+    const pa = a.paymentMethod || "￿";
+    const pb = b.paymentMethod || "￿";
     const cmp = pa.localeCompare(pb);
     // Same type of payment groups together, then alphabetical by owner
     // within that group — otherwise same-type sites are left in
@@ -88,6 +87,7 @@ export default function SitesListColumn({
   sort,
   status,
   selectedId = null,
+  pinnedSiteId = null,
   liveSearch = true,
   basePath = "/sites",
   siteLinkSuffix = "",
@@ -97,6 +97,12 @@ export default function SitesListColumn({
   sort: string;
   status: string;
   selectedId?: string | null;
+  // The most recently opened site (Site.lastVisitedAt), pinned to the
+  // top with a "Recent" label on top of whichever sort is active, so
+  // getting back to the site you were just working on doesn't mean
+  // re-scanning the full list (2026-08-17; from the database since
+  // 2026-10-07, same as the recent sites in the menu).
+  pinnedSiteId?: string | null;
   // The Sites Directory ("/") wants search-as-you-type against the full,
   // server-side catalogue — that's this component's default. The
   // per-site settings page also renders this same component as a
@@ -126,8 +132,7 @@ export default function SitesListColumn({
   // Starts from whatever the server rendered (so the very first paint
   // matches exactly, no hydration mismatch), then a moment later picks
   // up whatever this browser last actually chose — same SSR-safe
-  // "default now, override right after mount" pattern used for the
-  // pinned-recent-site lookup just below.
+  // "default now, override right after mount" pattern.
   const [clientSort, setClientSort] = useState<SortValue>(
     sort === "date" || sort === "payment" ? sort : "owner"
   );
@@ -181,29 +186,6 @@ export default function SitesListColumn({
     }, SEARCH_DEBOUNCE_MS);
   };
 
-  // Pins whichever site was last actually opened to the very top of the
-  // list, on top of whichever sort is otherwise active — added
-  // 2026-08-17 so getting back to the site you were just working on,
-  // after a trip to Accounts or Alerts, doesn't mean re-scanning or
-  // re-searching the full list every time.
-  //
-  // Read from localStorage (via LastVisitedSiteTracker, mounted on every
-  // site-scoped page) rather than the server, since this is a per-browser
-  // convenience, not shared data — matches every other localStorage use
-  // in this project. Starts null and is only set after mount, specifically
-  // so the server-rendered HTML and the first client render match exactly
-  // (a hydration mismatch would otherwise flash the wrong order for a
-  // moment); the pin appears a beat after the list first paints instead.
-  const [lastVisitedId, setLastVisitedId] = useState<string | null>(null);
-
-  useEffect(() => {
-    try {
-      setLastVisitedId(localStorage.getItem(LAST_VISITED_SITE_KEY));
-    } catch {
-      // Private browsing / storage disabled — falls back to no pinning.
-    }
-  }, []);
-
   // Non-live-search mode (the per-site "jump to another site" panel)
   // filters the already-fetched `sites` prop entirely in the browser —
   // no navigation at all, so the page you're on, and everything in its
@@ -233,8 +215,8 @@ export default function SitesListColumn({
   // (possibly search-filtered) list — searching or filtering to
   // "archived" always shows exactly what those controls say, never
   // force-including something that wouldn't otherwise match.
-  const pinnedIndex = lastVisitedId
-    ? sortedSites.findIndex((s) => s.id === lastVisitedId)
+  const pinnedIndex = pinnedSiteId
+    ? sortedSites.findIndex((s) => s.id === pinnedSiteId)
     : -1;
   const displaySites =
     pinnedIndex > 0
@@ -362,12 +344,9 @@ export default function SitesListColumn({
           <ul className="divide-y divide-neutral-100">
             {displaySites.map((site, index) => {
               const active = site.id === selectedId;
-              // Only the top row can ever be the pinned one (index 0 in
-              // displaySites is exactly where the reorder above puts it)
-              // — checking pinnedIndex too, not just index === 0, so nothing
-              // is mislabelled on the very first render before the effect
-              // above has run (pinnedIndex is still -1 at that point).
-              const isPinned = index === 0 && pinnedIndex > 0;
+              // Only the top row can be the pinned one — that's where the
+              // reorder above puts it.
+              const isPinned = index === 0 && pinnedIndex >= 0;
               return (
                 <li key={site.id}>
                   <Link

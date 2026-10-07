@@ -1,6 +1,7 @@
 import AppShell from "@/components/AppShell";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import { getRecentSites } from "@/lib/recentSites";
 import PlatformListCard from "@/components/PlatformListCard";
 import {
   getPlatformExpenseCategories,
@@ -21,16 +22,17 @@ export const dynamic = "force-dynamic";
 // group, same pattern as each artist's own Purchases Settings page.
 // Task categories added 2026-09-19 (CRM Phase 2) as a second list here.
 export default async function AccountsSettingsPage() {
-  const [expenseCategories, taskCategories, openAlerts] = await Promise.all([
+  const [expenseCategories, taskCategories, openAlerts, recentSites] = await Promise.all([
     getPlatformExpenseCategories(),
     getPlatformTaskCategories(),
     getOpenAlerts(),
+    getRecentSites(),
   ]);
 
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("accountSettings", openAlerts.length)}
+      navItems={buildTopNavItems("accountSettings", openAlerts.length, recentSites)}
       content={
         <div className="mx-auto max-w-2xl px-6 py-6">
           <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Settings</h1>

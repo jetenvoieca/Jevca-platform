@@ -1,6 +1,7 @@
 import AppShell from "@/components/AppShell";
 import AdminInboxPanel from "@/components/AdminInboxPanel";
 import { buildTopNavItems } from "@/lib/topNav";
+import { getRecentSites } from "@/lib/recentSites";
 import { getOpenAlerts, overdueAlertArtistId } from "@/lib/alerts";
 import { getInboxList, getArtistFilterOptions } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
@@ -36,16 +37,25 @@ export default async function InboxPage({
   const showArchived = archived === "1";
   const mailbox: Mailbox = mailboxParam === "business" ? "BUSINESS" : "ART";
 
-  const [alerts, list, artistOptions, composeRecipients, mailboxAddresses, tasks, taskCategories] =
-    await Promise.all([
-      getOpenAlerts(),
-      getInboxList(mailbox, artistId || undefined, showArchived),
-      getArtistFilterOptions(),
-      getComposeRecipients(),
-      getMailboxAddresses(),
-      getOpenTasks(artistId || undefined),
-      getPlatformTaskCategories(),
-    ]);
+  const [
+    alerts,
+    list,
+    artistOptions,
+    composeRecipients,
+    mailboxAddresses,
+    tasks,
+    taskCategories,
+    recentSites,
+  ] = await Promise.all([
+    getOpenAlerts(),
+    getInboxList(mailbox, artistId || undefined, showArchived),
+    getArtistFilterOptions(),
+    getComposeRecipients(),
+    getMailboxAddresses(),
+    getOpenTasks(artistId || undefined),
+    getPlatformTaskCategories(),
+    getRecentSites(),
+  ]);
 
   // Derived from the alert id rather than looked up in `alerts`, so the
   // panel stays open after the alert itself clears (e.g. once the missing
@@ -56,7 +66,7 @@ export default async function InboxPage({
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("inbox", alerts.length)}
+      navItems={buildTopNavItems("inbox", alerts.length, recentSites)}
       content={
         <AdminInboxPanel
           mailbox={mailbox}

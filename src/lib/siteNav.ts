@@ -1,5 +1,6 @@
 import type { AppShellNavEntry, AppShellNavItem } from "@/components/SidebarNav";
-import { buildAccountsSection, buildTemplatesSection } from "@/lib/topNav";
+import { buildAccountsSection, buildSitesSection, buildTemplatesSection } from "@/lib/topNav";
+import type { RecentSite } from "@/lib/recentSites";
 
 // Colour for every section that's specific to the site you're currently
 // inside (Artworks, Media, Website, Financial) — distinct from the
@@ -55,6 +56,7 @@ export function buildSiteNavEntries({
   artworkNeedsReviewCount,
   mediaNeedsReviewCount,
   salesEnabled,
+  recentSites,
 }: {
   siteId: string;
   active: SiteNavKey | null;
@@ -63,6 +65,8 @@ export function buildSiteNavEntries({
   artworkNeedsReviewCount: number;
   mediaNeedsReviewCount: number;
   salesEnabled: boolean;
+  // This site first, then the one opened before it — see the site layout.
+  recentSites: RecentSite[];
 }): AppShellNavEntry[] {
   const base = `/sites/${siteId}`;
 
@@ -136,7 +140,7 @@ export function buildSiteNavEntries({
     // pages — none of their own keys apply while inside a site.
     buildAccountsSection(null, alertCount),
     buildTemplatesSection(null),
-    { label: "Sites", href: "/", active: false },
+    buildSitesSection(recentSites, { currentSiteId: siteId }),
     {
       label: "Artworks",
       section: true,

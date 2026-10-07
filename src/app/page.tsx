@@ -3,6 +3,7 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import SitesDirectoryView from "@/components/SitesDirectoryView";
 import { getOpenAlerts } from "@/lib/alerts";
+import { getRecentSites } from "@/lib/recentSites";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 
 export const dynamic = "force-dynamic";
@@ -86,7 +87,7 @@ export default async function SitesDirectoryPage({
     createdAt: s.createdAt.toISOString(),
   }));
 
-  const openAlerts = await getOpenAlerts();
+  const [openAlerts, recentSites] = await Promise.all([getOpenAlerts(), getRecentSites()]);
 
   return (
     <SitesDirectoryView
@@ -95,6 +96,7 @@ export default async function SitesDirectoryPage({
       sort={sort}
       status={status}
       alertCount={openAlerts.length}
+      recentSites={recentSites}
     />
   );
 }

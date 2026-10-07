@@ -5,6 +5,7 @@ import AppShell from "@/components/AppShell";
 import ClientOwnerPanel from "@/components/ClientOwnerPanel";
 import SitesListColumn from "@/components/SitesListColumn";
 import { buildTopNavItems } from "@/lib/topNav";
+import { getRecentSites } from "@/lib/recentSites";
 import { getOpenAlerts } from "@/lib/alerts";
 import { getClientPanelData } from "@/lib/clientPanelData";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
@@ -30,7 +31,7 @@ export default async function ClientAdminPage({
   const cookieStore = await cookies();
   const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
 
-  const [data, allSites, openAlerts] = await Promise.all([
+  const [data, allSites, openAlerts, recentSites] = await Promise.all([
     getClientPanelData(id),
     db.site.findMany({
       where: status ? { status } : { status: { not: "ARCHIVED" } },
@@ -45,13 +46,14 @@ export default async function ClientAdminPage({
       orderBy: { artist: { name: "asc" } },
     }),
     getOpenAlerts(),
+    getRecentSites(),
   ]);
   if (!data) notFound();
 
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("clients", openAlerts.length)}
+      navItems={buildTopNavItems("clients", openAlerts.length, recentSites)}
       rightPanel={
         <SitesListColumn
           sites={allSites.map((s) => ({
@@ -66,6 +68,7 @@ export default async function ClientAdminPage({
           sort="owner"
           status={status}
           selectedId={id}
+          pinnedSiteId={recentSites[0]?.id ?? null}
           liveSearch={false}
           basePath="/clients"
         />

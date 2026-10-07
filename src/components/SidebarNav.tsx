@@ -33,13 +33,13 @@ export type AppShellNavItem = {
 // nav. `color` (any CSS colour) defaults to grey — see
 // DEFAULT_SECTION_COLOR above.
 //
-// A plain top-level entry (e.g. "Sites" — nothing to expand, it's just
-// a page to go to) renders with the same button styling as a section
-// header (2026-08-31 — they looked inconsistent otherwise), it just
-// navigates on click instead of toggling. Only top-level entries get
-// this treatment; the same AppShellNavItem shape used *inside* a
-// section (indented) keeps the plain-link look, since a pill button
-// repeated at every indent level would be far too heavy.
+// A plain top-level entry (nothing to expand, just a page to go to —
+// e.g. "Sites" on the Namecheap Sync page) renders with the same button
+// styling as a section header (2026-08-31 — they looked inconsistent
+// otherwise), it just navigates on click instead of toggling. Only
+// top-level entries get this treatment; the same AppShellNavItem shape
+// used *inside* a section (indented) keeps the plain-link look, since a
+// pill button repeated at every indent level would be far too heavy.
 export type AppShellNavEntry =
   | AppShellNavItem
   | {

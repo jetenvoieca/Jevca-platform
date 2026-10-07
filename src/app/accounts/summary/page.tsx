@@ -2,6 +2,7 @@ import AppShell from "@/components/AppShell";
 import { db } from "@/lib/db";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import { getRecentSites } from "@/lib/recentSites";
 import { buildAccountMonths } from "@/lib/accountMonths";
 import AccountSummaryView from "@/components/AccountSummaryView";
 
@@ -17,10 +18,11 @@ export const dynamic = "force-dynamic";
 // Month grouping is shared with each artist's own Account page
 // (/sites/[id]/account) via buildAccountMonths (2026-09-27).
 export default async function AccountSummaryPage() {
-  const [payments, expenses, openAlerts] = await Promise.all([
+  const [payments, expenses, openAlerts, recentSites] = await Promise.all([
     db.subscriptionPayment.findMany({ select: { amount: true, currency: true, paidAt: true } }),
     db.platformExpense.findMany({ select: { amount: true, currency: true, date: true } }),
     getOpenAlerts(),
+    getRecentSites(),
   ]);
 
   const now = new Date();
@@ -33,7 +35,7 @@ export default async function AccountSummaryPage() {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("accountSummary", openAlerts.length)}
+      navItems={buildTopNavItems("accountSummary", openAlerts.length, recentSites)}
       content={
         <div className="mx-auto max-w-5xl px-6 py-6">
           <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Account</h1>

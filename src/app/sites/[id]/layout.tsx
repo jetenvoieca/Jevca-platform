@@ -5,8 +5,8 @@ import { countArtworksNeedingReview } from "@/lib/actions/artworks";
 import { countMediaNeedingReview } from "@/lib/actions/mediaCatalogue";
 import { getLastPublishedAt } from "@/lib/actions/siteSnapshot";
 import { getOpenAlerts } from "@/lib/alerts";
+import { getRecentSites, recordSiteVisit } from "@/lib/recentSites";
 import SiteShell from "@/components/SiteShell";
-import LastVisitedSiteTracker from "@/components/LastVisitedSiteTracker";
 import SiteNameField from "@/components/SiteNameField";
 
 // Without this, Next can treat this layout as static-cacheable (it uses
@@ -31,54 +31,64 @@ export default async function SiteLayout({
   });
   if (!site) notFound();
 
-  const [hopperCount, artworkNeedsReviewCount, mediaNeedsReviewCount, openAlerts, lastPublishedAt] =
-    await Promise.all([
-      countHopper(site.artistId),
-      countArtworksNeedingReview(site.artistId),
-      countMediaNeedingReview(site.artistId),
-      getOpenAlerts(),
-      getLastPublishedAt(id),
-    ]);
+  // Opening a site records the visit (Site.lastVisitedAt). The recent
+  // sites under "Sites" in the menu are this site, then the one opened
+  // before it.
+  const [
+    hopperCount,
+    artworkNeedsReviewCount,
+    mediaNeedsReviewCount,
+    openAlerts,
+    lastPublishedAt,
+    previousSites,
+  ] = await Promise.all([
+    countHopper(site.artistId),
+    countArtworksNeedingReview(site.artistId),
+    countMediaNeedingReview(site.artistId),
+    getOpenAlerts(),
+    getLastPublishedAt(id),
+    getRecentSites({ excludeSiteId: id, take: 1 }),
+    recordSiteVisit(id),
+  ]);
+  const recentSites = [{ id, label: site.artist.name }, ...previousSites];
 
   return (
-    <>
-      <LastVisitedSiteTracker siteId={id} />
-      <SiteShell
-        siteId={id}
-        salesEnabled={site.salesEnabled}
-        hopperCount={hopperCount}
-        artworkNeedsReviewCount={artworkNeedsReviewCount}
-        mediaNeedsReviewCount={mediaNeedsReviewCount}
-        alertCount={openAlerts.length}
-        lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
-        header={
-          <div className="flex items-start justify-between gap-4">
-            <SiteNameField
-              site={{
-                id: site.id,
-                name: site.name,
-                domain: site.domain,
-                defaultCurrency: site.defaultCurrency,
-                templateId: site.templateId,
-                domainStatus: site.domainStatus,
-                domainRenewalDate: site.domainRenewalDate,
-              }}
-              ownerName={site.artist.name}
-            />
-            {/* The site as last published (2026-10-06), in a new tab. */}
-            <a
-              href={`/site-preview/${site.id}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
-            >
-              View published site ↗
-            </a>
-          </div>
-        }
-      >
-        {children}
-      </SiteShell>
-    </>
+    <SiteShell
+      siteId={id}
+      salesEnabled={site.salesEnabled}
+      hopperCount={hopperCount}
+      artworkNeedsReviewCount={artworkNeedsReviewCount}
+      mediaNeedsReviewCount={mediaNeedsReviewCount}
+      alertCount={openAlerts.length}
+      lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
+      recentSites={recentSites}
+      header={
+        <div className="flex items-start justify-between gap-4">
+          <SiteNameField
+            site={{
+              id: site.id,
+              name: site.name,
+              domain: site.domain,
+              defaultCurrency: site.defaultCurrency,
+              templateId: site.templateId,
+              domainStatus: site.domainStatus,
+              domainRenewalDate: site.domainRenewalDate,
+            }}
+            ownerName={site.artist.name}
+          />
+          {/* The site as last published (2026-10-06), in a new tab. */}
+          <a
+            href={`/site-preview/${site.id}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+          >
+            View published site ↗
+          </a>
+        </div>
+      }
+    >
+      {children}
+    </SiteShell>
   );
 }

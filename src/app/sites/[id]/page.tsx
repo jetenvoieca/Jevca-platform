@@ -156,6 +156,8 @@ export default async function SiteSettingsPage({
           sort="owner"
           status={status}
           selectedId={id}
+          // The site that's open is the most recently opened one.
+          pinnedSiteId={id}
           // This panel is a compact "jump to another site" list, not the
           // full filterable Directory — see the comment on the query
           // above. Live search would navigate away from the site you're

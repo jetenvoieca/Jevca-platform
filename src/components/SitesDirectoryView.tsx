@@ -1,6 +1,7 @@
 import AppShell from "@/components/AppShell";
 import SitesListColumn from "@/components/SitesListColumn";
 import { buildTopNavItems } from "@/lib/topNav";
+import type { RecentSite } from "@/lib/recentSites";
 
 type SiteRow = {
   id: string;
@@ -17,23 +18,26 @@ export default function SitesDirectoryView({
   sort,
   status,
   alertCount = 0,
+  recentSites,
 }: {
   sites: SiteRow[];
   q: string;
   sort: string;
   status: string;
   alertCount?: number;
+  recentSites: RecentSite[];
 }) {
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("sites", alertCount)}
+      navItems={buildTopNavItems("sites", alertCount, recentSites)}
       rightPanel={
         <SitesListColumn
           sites={sites}
           q={q}
           sort={sort}
           status={status}
+          pinnedSiteId={recentSites[0]?.id ?? null}
           // 2026-09-12, direct request — picking a site from this list
           // opens straight onto its Artwork Catalogue (Content section)
           // rather than its Profile/Overview page.

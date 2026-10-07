@@ -4,6 +4,7 @@ import WebsiteHomeEditor from "@/components/WebsiteHomeEditor";
 import WebsiteContentEditor from "@/components/WebsiteContentEditor";
 import { getOpenAlerts } from "@/lib/alerts";
 import { buildTopNavItems } from "@/lib/topNav";
+import { getRecentSites } from "@/lib/recentSites";
 import {
   getWebsiteHome,
   getWebsitePage,
@@ -15,7 +16,11 @@ import {
 // route (/accounts/website/[pageId]) — one place builds the editor.
 // selectedId null = the Home page.
 export default async function WebsiteEditorPage({ selectedId }: { selectedId: string | null }) {
-  const [pages, openAlerts] = await Promise.all([listWebsitePages(), getOpenAlerts()]);
+  const [pages, openAlerts, recentSites] = await Promise.all([
+    listWebsitePages(),
+    getOpenAlerts(),
+    getRecentSites(),
+  ]);
 
   let content: React.ReactNode;
   if (selectedId === null) {
@@ -42,7 +47,7 @@ export default async function WebsiteEditorPage({ selectedId }: { selectedId: st
   return (
     <AppShell
       publishEnabled={false}
-      navItems={buildTopNavItems("website", openAlerts.length)}
+      navItems={buildTopNavItems("website", openAlerts.length, recentSites)}
       content={content}
     />
   );

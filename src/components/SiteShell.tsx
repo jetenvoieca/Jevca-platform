@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { publishSite } from "@/lib/actions/siteSnapshot";
 import { buildSiteNavEntries, type SiteNavKey } from "@/lib/siteNav";
+import type { RecentSite } from "@/lib/recentSites";
 
 // Works out which nav item should be highlighted/open purely from the
 // current path — this shell is rendered once from the shared site
@@ -43,6 +44,7 @@ export default function SiteShell({
   mediaNeedsReviewCount,
   alertCount,
   lastPublishedAt,
+  recentSites,
   header,
   children,
 }: {
@@ -54,6 +56,8 @@ export default function SiteShell({
   alertCount: number;
   // ISO date, or null if the site has never been published.
   lastPublishedAt: string | null;
+  // The recent sites under "Sites" in the menu — this site first.
+  recentSites: RecentSite[];
   // The site name / domain header, pinned above the scrolling page
   // content — built by the (server) layout since it needs the site
   // record, passed in ready-made.
@@ -70,6 +74,7 @@ export default function SiteShell({
     artworkNeedsReviewCount,
     mediaNeedsReviewCount,
     salesEnabled,
+    recentSites,
   });
 
   return (
