@@ -640,7 +640,8 @@ model Curation {
 // another). Any type can be used any number of times; `position` sets
 // the order (0 first). Edited on the Curations page. Removed with its
 // curation. Text sections are plain text (2026-10-07 — their height and
-// background colour were removed).
+// background colour were removed). Can also be put in a Private /
+// Custom page's components (2026-10-07) — see PageComponentContent.
 model CurationSection {
   id         String              @id @default(cuid())
   curationId String
@@ -651,6 +652,8 @@ model CurationSection {
   heading String?
   text    String?
   media   CurationSectionMedia[]
+
+  pageComponents PageComponentContent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1095,6 +1098,10 @@ model Page {
   // its Display Style is a Canvas. See PageCanvasItem.
   canvasItems PageCanvasItem[]
 
+  // What fills this page's components (2026-10-07) — used when its
+  // Display Style is a Private / Custom. See PageComponentContent.
+  componentContents PageComponentContent[]
+
   // The old page editors' content (Section / Private / Template Style
   // pages). Publishing no longer copies it anywhere (2026-10-06) — see
   // SitePublication.
@@ -1129,6 +1136,28 @@ model PageCanvasItem {
 
   @@unique([pageId, curationId])
   @@index([curationId])
+}
+
+// What fills one component of a Private / Custom page (2026-10-07, from
+// Craig's mockup): one of the page's curation's sections, dragged onto
+// it in the page's Arrange, or — `sectionId` null — the curation's
+// works. One per component. `blockId` is the component's id in the
+// page's Display Style (PageStyle.layout, JSON), so it isn't a foreign
+// key: a row for a component later removed from the style is never
+// shown. Removed with its page or its section; cleared when the page's
+// Display Style changes, and its sections when the page's curation
+// changes (see updatePageDetails in lib/actions/pages.ts). See
+// lib/pageComponents.ts.
+model PageComponentContent {
+  id        String           @id @default(cuid())
+  pageId    String
+  page      Page             @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  blockId   String
+  sectionId String?
+  section   CurationSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, blockId])
+  @@index([sectionId])
 }
 
 // A Page Style (2026-10-04) — a named page layout, shared by every site,
