@@ -106,14 +106,14 @@ export const BLOCK_WIDTH_LIMITS = { min: 10, max: 100 } as const;
 // lines up side-by-side blocks of different heights at their tops,
 // middles or bottoms. On a phone every block is stacked full width, so
 // alignment applies from desktop width up only.
-export const HORIZONTAL_ALIGNS = ["left", "center", "right"] as const;
+const HORIZONTAL_ALIGNS = ["left", "center", "right"] as const;
 export type HorizontalAlign = (typeof HORIZONTAL_ALIGNS)[number];
 
-export const VERTICAL_ALIGNS = ["top", "middle", "bottom"] as const;
+const VERTICAL_ALIGNS = ["top", "middle", "bottom"] as const;
 export type VerticalAlign = (typeof VERTICAL_ALIGNS)[number];
 
-export const DEFAULT_HORIZONTAL_ALIGN: HorizontalAlign = "center";
-export const DEFAULT_VERTICAL_ALIGN: VerticalAlign = "top";
+const DEFAULT_HORIZONTAL_ALIGN: HorizontalAlign = "center";
+const DEFAULT_VERTICAL_ALIGN: VerticalAlign = "top";
 
 // One row of a Private / Custom layout: `below` = the space between this
 // row and the next (unused on the last row), `between` = the space
@@ -126,7 +126,7 @@ export type RowSettings = {
   vertical: VerticalAlign;
 };
 
-export const DEFAULT_ROW_SETTINGS: RowSettings = {
+const DEFAULT_ROW_SETTINGS: RowSettings = {
   below: DEFAULT_BLOCK_SPACING,
   between: DEFAULT_BLOCK_SPACING,
   horizontal: DEFAULT_HORIZONTAL_ALIGN,
@@ -165,7 +165,7 @@ export const DEFAULT_SECTION_WIDTHS: SectionWidths = {
 // only when the style has one. Each part is a row of its own.
 export type SectionPart = keyof SectionWidths;
 
-export const SECTION_PARTS: SectionPart[] = ["byline", "grid", "description", "video"];
+const SECTION_PARTS: SectionPart[] = ["byline", "grid", "description", "video"];
 
 export function sectionParts(layout: SectionLayout): SectionPart[] {
   return layout.video ? SECTION_PARTS : SECTION_PARTS.filter((p) => p !== "video");
@@ -184,7 +184,7 @@ export function sectionSpacingBelow(part: SectionPart): keyof SectionSpacing | n
 // part is a row of its own, so it has no vertical alignment.
 export type SectionAligns = Record<keyof SectionWidths, HorizontalAlign>;
 
-export const DEFAULT_SECTION_ALIGNS: SectionAligns = {
+const DEFAULT_SECTION_ALIGNS: SectionAligns = {
   byline: DEFAULT_HORIZONTAL_ALIGN,
   grid: DEFAULT_HORIZONTAL_ALIGN,
   description: DEFAULT_HORIZONTAL_ALIGN,
@@ -276,9 +276,9 @@ export function blockTypeLabel(type: LayoutBlockType): string {
 }
 
 // What a row's settings are stored under: its row id when its blocks sit
-// side by side, otherwise its one block's id. A block paired with
-// another takes its own id as the new row id (see addLayoutBlock), so
-// its settings carry over.
+// side by side, otherwise its one block's id. When blocks are added,
+// moved or removed, each row's settings follow its blocks (see
+// rebuildRows).
 export function rowKey(row: LayoutBlock[]): string {
   return row[0].row ?? row[0].id;
 }
@@ -536,7 +536,7 @@ function withoutRow(block: LayoutBlock): LayoutBlock {
 // The widths a block snaps to while its edge is dragged in the visual
 // editor (2026-10-07, Craig's choice: tidy fractions, the same on every
 // site). Stored as whole percentages.
-export const WIDTH_SNAPS = [
+const WIDTH_SNAPS = [
   { value: 25, label: "¼" },
   { value: 33, label: "⅓" },
   { value: 50, label: "½" },
@@ -559,7 +559,7 @@ export function blockWidthLabel(width: number): string {
 
 // Spacing and margins dragged in the visual editor move in steps of
 // this many pixels, within their limits.
-export const SPACING_STEP = 4;
+const SPACING_STEP = 4;
 
 export function snapSpacing(raw: number, limits: { min: number; max: number }): number {
   const stepped = Math.round(raw / SPACING_STEP) * SPACING_STEP;
