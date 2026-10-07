@@ -1011,6 +1011,9 @@ model Site {
   artist               Artist     @relation(fields: [artistId], references: [id])
   createdAt            DateTime   @default(now())
   updatedAt            DateTime   @updatedAt
+  // When the site was last opened in the admin (2026-10-07) — drives the
+  // recent sites under "Sites" in the main menu. Null = never opened.
+  lastVisitedAt        DateTime?
 
   pages Page[]
   // The site as last published (2026-10-06) — see SitePublication.
@@ -1026,6 +1029,7 @@ model Site {
   @@index([artistId])
   @@index([templateId])
   @@index([menuStyleId])
+  @@index([lastVisitedAt])
 }
 
 // A site as last published (2026-10-06) — a snapshot of everything its
