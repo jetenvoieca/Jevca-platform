@@ -19,10 +19,10 @@ import { slugify } from "@/lib/pageSlug";
 //
 // Publishing a site lives in lib/actions/siteSnapshot.ts (2026-10-06).
 
-// Kept as an export here (async, so valid alongside the other Server
-// Actions in this file) rather than moving to pageSlug.ts alongside
-// slugify — this one needs `db`, so it stays server-only regardless.
-export async function uniqueSlug(siteId: string, base: string) {
+// The page's web address: its name as a slug, with -2, -3… added if
+// another page on the site already has it. Not exported, so it isn't
+// callable from the browser.
+async function uniqueSlug(siteId: string, base: string) {
   let slug = base;
   let n = 2;
   while (await db.page.findFirst({ where: { siteId, slug } })) {
@@ -117,8 +117,8 @@ export async function createPage(
   return { id: page.id };
 }
 
-// Edit (2026-10-04). Renaming leaves the slug alone, same as
-// updatePageTitle below. What fills the page's components (2026-10-07,
+// Edit (2026-10-04). Renaming leaves the slug alone, so links to the
+// page keep working. What fills the page's components (2026-10-07,
 // see PageComponentContent) belongs to its Display Style's components
 // and its curation's sections, so it goes when they change: all of it
 // with a new style, and the sections (not the works) with a new
@@ -183,50 +183,8 @@ export async function reorderPages(
   );
 }
 
-// Renaming deliberately leaves the slug untouched — changing it would break
-// any existing links pointing at this page's URL.
-export async function updatePageTitle(
-  pageId: string,
-  siteId: string,
-  formData: FormData
-): Promise<void> {
-  const title = (formData.get("title") as string)?.trim();
-  if (!title) return;
-  await db.page.update({ where: { id: pageId }, data: { title } });
-}
-
 // Scoped by siteId, so a page can only be deleted from its own site.
 export async function deletePage(siteId: string, pageId: string) {
   await db.page.deleteMany({ where: { id: pageId, siteId } });
   redirect(`/sites/${siteId}/pages`);
-}
-
-export async function saveDraftBlocks(pageId: string, blocks: unknown) {
-  await db.page.update({
-    where: { id: pageId },
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    data: { draftBlocks: blocks as any },
-  });
-  return { ok: true };
-}
-
-// Page-level background styling (2026-09-03) — deliberately separate
-// from saveDraftBlocks above: backgroundColor/backgroundImageId are
-// real columns on Page, not part of the draftBlocks content JSON (see
-// the note on those columns in schema.prisma), so this is its own small
-// action rather than being folded into the blocks payload. Either value
-// can be explicitly set to null to clear it (e.g. removing a background
-// image while leaving the colour as is).
-export async function updatePageBackground(
-  pageId: string,
-  data: { backgroundColor?: string | null; backgroundImageId?: string | null }
-) {
-  await db.page.update({
-    where: { id: pageId },
-    data: {
-      ...(data.backgroundColor !== undefined && { backgroundColor: data.backgroundColor }),
-      ...(data.backgroundImageId !== undefined && { backgroundImageId: data.backgroundImageId }),
-    },
-  });
-  return { ok: true };
 }

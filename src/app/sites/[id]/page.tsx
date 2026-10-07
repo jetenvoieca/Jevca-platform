@@ -81,7 +81,6 @@ export default async function SiteSettingsPage({
             status: site.status,
             createdAt: site.createdAt.toISOString(),
             defaultCurrency: site.defaultCurrency,
-            templateId: site.templateId,
             salesEnabled: site.salesEnabled,
             domainStatus: site.domainStatus,
             domainRenewalDate: site.domainRenewalDate
