@@ -7,9 +7,10 @@ import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 // Plain module, not "use server", so the modal, the preview and the
 // server actions all share the same shape and the same clean-up rules.
 
-// The components a Private / Custom style can be built from — the same
-// block types as the old block editor (see ContentBlock in blocks.ts),
-// as empty placeholders, plus Sliding doors (2026-10-05).
+// The components a Block Build style (2026-10-07, was Private /
+// Custom) is built from — the same block types as the old block editor
+// (see ContentBlock in blocks.ts), as empty placeholders, plus Sliding
+// doors (2026-10-05).
 export const LAYOUT_BLOCK_TYPES = [
   { value: "header", label: "Header" },
   { value: "text", label: "Text" },
@@ -57,10 +58,9 @@ export const SLIDING_DOORS_LIMITS = {
   height: { min: 10, max: 100 },
 } as const;
 
-// The space between images in a grid of images (2026-10-05) — the
-// Section's artwork grid, or every Gallery block in a Private / Custom
-// style — in pixels: vertical = between rows, horizontal = between
-// columns. One setting per style.
+// The space between images in a grid of images (2026-10-05) — every
+// Gallery block in a Block Build style — in pixels: vertical = between
+// rows, horizontal = between columns. One setting per style.
 export type GridSpacing = { vertical: number; horizontal: number };
 
 export const DEFAULT_GRID_SPACING: GridSpacing = { vertical: 8, horizontal: 8 };
@@ -74,9 +74,9 @@ export const GRID_SPACING_LIMITS = {
 // breathing space): the space between the page's edges and its
 // contents, in pixels — vertical = top and bottom, horizontal = left
 // and right — set separately for desktop and phone (narrower than
-// 768px). Section and Private / Custom only; a Canvas stays edge to
-// edge. The page's background colour shows in it. The default is the
-// padding pages had before the setting existed.
+// 768px). Block Build only; a Canvas stays edge to edge. The page's
+// background colour shows in it. The default is the padding pages had
+// before the setting existed.
 export type PageMargin = { vertical: number; horizontal: number };
 export type PageMargins = { desktop: PageMargin; phone: PageMargin };
 
@@ -116,7 +116,7 @@ export type VerticalAlign = (typeof VERTICAL_ALIGNS)[number];
 const DEFAULT_HORIZONTAL_ALIGN: HorizontalAlign = "center";
 const DEFAULT_VERTICAL_ALIGN: VerticalAlign = "top";
 
-// One row of a Private / Custom layout: `below` = the space between this
+// One row of a Block Build layout: `below` = the space between this
 // row and the next (unused on the last row), `between` = the space
 // between its blocks when they sit side by side (and between them when
 // stacked on a phone), plus its alignment.
@@ -134,7 +134,7 @@ const DEFAULT_ROW_SETTINGS: RowSettings = {
   vertical: DEFAULT_VERTICAL_ALIGN,
 };
 
-// How the text in a Private / Custom style's Header, Text and Text grid
+// How the text in a Block Build style's Header, Text and Text grid
 // components looks (2026-10-07, from Craig's mockup) — one setting per
 // component type, for the whole style, the same on desktop and phone:
 // a font from the set list (lib/siteFonts.ts), a size in pixels, a
@@ -179,64 +179,6 @@ const DEFAULT_TEXT_STYLES: TextStyles = {
   textgrid: DEFAULT_TEXT_STYLE,
 };
 
-// A Section's spacing, one value per gap down the page.
-export type SectionSpacing = {
-  belowByline: number;
-  belowGrid: number;
-  belowDescription: number;
-};
-
-export const DEFAULT_SECTION_SPACING: SectionSpacing = {
-  belowByline: DEFAULT_BLOCK_SPACING,
-  belowGrid: DEFAULT_BLOCK_SPACING,
-  belowDescription: DEFAULT_BLOCK_SPACING,
-};
-
-// A Section's widths, one per part.
-export type SectionWidths = {
-  byline: number;
-  grid: number;
-  description: number;
-  video: number;
-};
-
-export const DEFAULT_SECTION_WIDTHS: SectionWidths = {
-  byline: DEFAULT_BLOCK_WIDTH,
-  grid: DEFAULT_BLOCK_WIDTH,
-  description: DEFAULT_BLOCK_WIDTH,
-  video: DEFAULT_BLOCK_WIDTH,
-};
-
-// A Section's parts, in order down the page (2026-10-07); the video
-// only when the style has one. Each part is a row of its own.
-export type SectionPart = keyof SectionWidths;
-
-const SECTION_PARTS: SectionPart[] = ["byline", "grid", "description", "video"];
-
-export function sectionParts(layout: SectionLayout): SectionPart[] {
-  return layout.video ? SECTION_PARTS : SECTION_PARTS.filter((p) => p !== "video");
-}
-
-// Which of a Section's spacings is the gap below a part; the video,
-// always last, has none.
-export function sectionSpacingBelow(part: SectionPart): keyof SectionSpacing | null {
-  if (part === "byline") return "belowByline";
-  if (part === "grid") return "belowGrid";
-  if (part === "description") return "belowDescription";
-  return null;
-}
-
-// A Section's horizontal alignment (2026-10-07), one per part — each
-// part is a row of its own, so it has no vertical alignment.
-export type SectionAligns = Record<keyof SectionWidths, HorizontalAlign>;
-
-const DEFAULT_SECTION_ALIGNS: SectionAligns = {
-  byline: DEFAULT_HORIZONTAL_ALIGN,
-  grid: DEFAULT_HORIZONTAL_ALIGN,
-  description: DEFAULT_HORIZONTAL_ALIGN,
-  video: DEFAULT_HORIZONTAL_ALIGN,
-};
-
 // `row` works as in blocks.ts: placeholders sharing a row id sit side
 // by side. `width` is unset until changed (see blockWidthOf). `doors` is
 // set on Sliding doors blocks only.
@@ -263,22 +205,6 @@ export type CustomLayout = {
   // uses DEFAULT_ROW_SETTINGS.
   rows: Record<string, RowSettings>;
   blocks: LayoutBlock[];
-};
-
-// Section is a fixed layout — a byline, an artwork grid filled from the
-// page's curation, and the curation's Description below it (2026-10-05).
-// Its settings: the grid's spacing, the page margin, the spacing between
-// its parts, each part's width and alignment, an optional background
-// colour, and whether a video sits below the Description (the video
-// itself is content, chosen on the page later).
-export type SectionLayout = {
-  gridSpacing: GridSpacing;
-  margins: PageMargins;
-  spacing: SectionSpacing;
-  widths: SectionWidths;
-  aligns: SectionAligns;
-  backgroundColor: string | null;
-  video: boolean;
 };
 
 // Canvas (2026-10-05, from Craig's mockups; replaced the Pavilion page
@@ -315,7 +241,6 @@ export const CANVAS_LIMITS = {
 } as const;
 
 export type PageStyleLayout =
-  | { type: "SECTION"; layout: SectionLayout }
   | { type: "PRIVATE"; layout: CustomLayout }
   | { type: "CANVAS"; layout: CanvasLayout };
 
@@ -340,20 +265,6 @@ export function blockWidthOf(block: LayoutBlock): number {
 }
 
 export function emptyLayout(type: PageStyleType): PageStyleLayout {
-  if (type === "SECTION") {
-    return {
-      type,
-      layout: {
-        gridSpacing: DEFAULT_GRID_SPACING,
-        margins: DEFAULT_PAGE_MARGINS,
-        spacing: DEFAULT_SECTION_SPACING,
-        widths: DEFAULT_SECTION_WIDTHS,
-        aligns: DEFAULT_SECTION_ALIGNS,
-        backgroundColor: null,
-        video: false,
-      },
-    };
-  }
   if (type === "CANVAS") return { type, layout: DEFAULT_CANVAS };
   return {
     type,
@@ -494,35 +405,6 @@ export function cleanCanvas(raw: unknown): CanvasLayout {
   };
 }
 
-function cleanSectionSpacing(raw: unknown): SectionSpacing {
-  const value = (raw ?? {}) as Partial<Record<keyof SectionSpacing, unknown>>;
-  return {
-    belowByline: cleanBlockSpacing(value.belowByline),
-    belowGrid: cleanBlockSpacing(value.belowGrid),
-    belowDescription: cleanBlockSpacing(value.belowDescription),
-  };
-}
-
-function cleanSectionAligns(raw: unknown): SectionAligns {
-  const value = (raw ?? {}) as Partial<Record<keyof SectionAligns, unknown>>;
-  return {
-    byline: cleanHorizontalAlign(value.byline),
-    grid: cleanHorizontalAlign(value.grid),
-    description: cleanHorizontalAlign(value.description),
-    video: cleanHorizontalAlign(value.video),
-  };
-}
-
-function cleanSectionWidths(raw: unknown): SectionWidths {
-  const value = (raw ?? {}) as Partial<Record<keyof SectionWidths, unknown>>;
-  return {
-    byline: cleanBlockWidth(value.byline),
-    grid: cleanBlockWidth(value.grid),
-    description: cleanBlockWidth(value.description),
-    video: cleanBlockWidth(value.video),
-  };
-}
-
 function cleanRowSettings(raw: unknown): RowSettings {
   const value = (raw ?? {}) as Partial<Record<keyof RowSettings, unknown>>;
   return {
@@ -550,22 +432,6 @@ function cleanRows(raw: unknown, blocks: LayoutBlock[]): Record<string, RowSetti
 // bad value can never break the modal, the preview or a page. A style
 // saved before a setting existed gets that setting's default.
 export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLayout {
-  if (type === "SECTION") {
-    const value = (raw ?? {}) as Partial<Record<keyof SectionLayout, unknown>>;
-    return {
-      type,
-      layout: {
-        gridSpacing: cleanGridSpacing(value.gridSpacing),
-        margins: cleanPageMargins(value.margins),
-        spacing: cleanSectionSpacing(value.spacing),
-        widths: cleanSectionWidths(value.widths),
-        aligns: cleanSectionAligns(value.aligns),
-        backgroundColor: cleanColour(value.backgroundColor),
-        video: value.video === true,
-      },
-    };
-  }
-
   if (type === "CANVAS") return { type, layout: cleanCanvas(raw) };
 
   // `rowSpacing` is what row settings were stored under before

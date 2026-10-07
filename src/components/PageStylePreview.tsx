@@ -5,14 +5,10 @@ import {
   blockWidthOf,
   rowKey,
   rowSettingsOf,
-  sectionParts,
-  sectionSpacingBelow,
   type CanvasLayout,
   type GridSpacing,
-  type HorizontalAlign,
   type LayoutBlock,
   type PageStyleLayout,
-  type SectionPart,
 } from "@/lib/pageStyleLayout";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
@@ -22,40 +18,11 @@ import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 // page's Preview panel. Uses the style's grid spacing, block spacing,
 // block widths, page margin (2026-10-06) and row alignment (2026-10-07),
 // drawn the same way as the site's pages (see components/pageRows.ts).
-// BlockShape, Labelled, SectionPartShape and PageTitleBar are shared with
-// the visual editors (VisualLayoutEditor, SectionVisualEditor), so a
-// block looks the same in all of them.
+// BlockShape and Labelled are shared with the visual editor
+// (VisualLayoutEditor) and the Pages page's Arrange
+// (PageSectionsArranger), so a block looks the same in all of them.
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
   if (style.type === "CANVAS") return <CanvasPreview layout={style.layout} />;
-
-  if (style.type === "SECTION") {
-    const section = style.layout;
-    const parts = sectionParts(section);
-    return (
-      <div
-        className={`flex min-h-full flex-col rounded-md ${PAGE_MARGIN_CLASS}`}
-        style={{
-          ...pageMarginStyle(section.margins),
-          backgroundColor: section.backgroundColor ?? undefined,
-        }}
-      >
-        <PageTitleBar />
-        {parts.map((part, i) => {
-          const above = i > 0 ? sectionSpacingBelow(parts[i - 1]) : null;
-          return (
-            <Part
-              key={part}
-              width={section.widths[part]}
-              align={section.aligns[part]}
-              above={above ? section.spacing[above] : 0}
-            >
-              <SectionPartShape part={part} spacing={section.gridSpacing} />
-            </Part>
-          );
-        })}
-      </div>
-    );
-  }
 
   const layout = style.layout;
   const rows = groupBlocksByRow(layout.blocks);
@@ -161,28 +128,6 @@ function CanvasPreview({ layout }: { layout: CanvasLayout }) {
   );
 }
 
-// One part of a Section — a row of its own: its width, its alignment
-// and the space above it.
-function Part({
-  width,
-  align,
-  above = 0,
-  children,
-}: {
-  width: number;
-  align: HorizontalAlign;
-  above?: number;
-  children: ReactNode;
-}) {
-  return (
-    <div className={rowClass(align, "top")} style={{ marginTop: above }}>
-      <div className={rowBlockClass()} style={rowBlockStyle(width)}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 function blockLabel(block: LayoutBlock): string {
   const label = blockTypeLabel(block.type);
   const width = blockWidthOf(block) < 100 ? `, ${blockWidthOf(block)}% wide` : "";
@@ -192,32 +137,6 @@ function blockLabel(block: LayoutBlock): string {
   return d.perSlide === 1
     ? `${label} — one at a time from the page's curation, ${d.duration}s, slide ${d.speed}s, ${panels}${width}`
     : `${label} — pairs from the page's curation, ${d.duration}s, slide ${d.speed}s, gap ${d.gap}px, ${panels}${width}`;
-}
-
-// A Section part's labelled outline.
-const SECTION_PART_LABELS: Record<SectionPart, string> = {
-  byline: "Byline",
-  grid: "Artwork grid — from the page's curation",
-  description: "Description — from the page's curation",
-  video: "Video",
-};
-
-export function SectionPartShape({ part, spacing }: { part: SectionPart; spacing: GridSpacing }) {
-  return (
-    <Labelled label={SECTION_PART_LABELS[part]}>
-      {part === "byline" && <Bar className="mx-auto h-3 w-1/2" />}
-      {part === "grid" && <PlaceholderGrid count={8} spacing={spacing} />}
-      {part === "description" && (
-        <BlockShape block={{ id: "description", type: "text" }} spacing={spacing} />
-      )}
-      {part === "video" && <BlockShape block={{ id: "video", type: "video" }} spacing={spacing} />}
-    </Labelled>
-  );
-}
-
-// Where a Section page's title sits, above its parts.
-export function PageTitleBar() {
-  return <Bar className="mb-4 h-6 w-1/3 self-center" />;
 }
 
 // Grey squares, four across, spaced as the style's grid spacing.
