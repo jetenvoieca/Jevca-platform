@@ -64,7 +64,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
         curationId: isCanvas ? null : p.curationId,
         style,
         canvas: isCanvas ? await getPageCanvas(siteId, p.id) : [],
-        components: style?.type === "PRIVATE" ? await getPageComponents(siteId, p.id) : [],
+        components: style?.type === "BLOCK_BUILD" ? await getPageComponents(siteId, p.id) : [],
         menuStyleId: p.menuStyleId ?? site.menuStyleId,
       };
     })

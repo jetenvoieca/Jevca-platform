@@ -150,7 +150,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
   // visual editor for a Block Build style.
   const previewName = draft ? draft.name.trim() || "Untitled style" : selected?.name;
   const previewStyle = draft ? draftLayout(draft) : selected;
-  const editingVisually = draft?.type === "PRIVATE";
+  const editingVisually = draft?.type === "BLOCK_BUILD";
 
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
@@ -161,10 +161,10 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
         {previewName !== undefined ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{previewName}</h3>
-            {draft?.type === "PRIVATE" ? (
+            {draft?.type === "BLOCK_BUILD" ? (
               <VisualLayoutEditor
-                layout={draft.custom}
-                onChange={(custom) => handleChange({ ...draft, custom })}
+                layout={draft.blockBuild}
+                onChange={(blockBuild) => handleChange({ ...draft, blockBuild })}
               />
             ) : (
               <div className="min-h-0 flex-1 overflow-y-auto">

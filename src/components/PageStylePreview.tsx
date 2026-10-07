@@ -1,8 +1,8 @@
 import type { ReactNode } from "react";
-import { groupBlocksByRow } from "@/lib/blocks";
 import {
   blockTypeLabel,
   blockWidthOf,
+  groupBlocksByRow,
   rowKey,
   rowSettingsOf,
   type CanvasLayout,
