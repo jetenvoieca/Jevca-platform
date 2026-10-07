@@ -13,7 +13,6 @@ import {
   type DragMoveEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { groupBlocksByRow } from "@/lib/blocks";
 import {
   BLOCK_SPACING_LIMITS,
   BLOCK_WIDTH_LIMITS,
@@ -21,6 +20,7 @@ import {
   SLIDING_DOORS_LIMITS,
   blockTypeLabel,
   blockWidthOf,
+  groupBlocksByRow,
   newLayoutBlock,
   placeLayoutBlock,
   removeLayoutBlock,
@@ -30,7 +30,7 @@ import {
   updateRowSettings,
   updateSlidingDoors,
   type BlockDropTarget,
-  type CustomLayout,
+  type BlockBuildLayout,
   type LayoutBlock,
   type LayoutBlockType,
   type RowSettings,
@@ -53,10 +53,9 @@ import {
   useSelectionKeys,
 } from "@/components/visualEditorParts";
 
-// The visual editor for a Private / Custom Page Style (2026-10-07, from
+// The visual editor for a Block Build Page Style (2026-10-07, from
 // Craig's request to replace the numbers with something he can see) —
-// built from the pieces in visualEditorParts, shared with the Section
-// editor.
+// built from the pieces in visualEditorParts.
 // - Add: drag a component from the tray onto the page (or click it to
 //   add it at the end). A blue line shows where it will land: above or
 //   below a row, or beside a component (desktop only).
@@ -89,8 +88,8 @@ export default function VisualLayoutEditor({
   layout,
   onChange,
 }: {
-  layout: CustomLayout;
-  onChange: (layout: CustomLayout) => void;
+  layout: BlockBuildLayout;
+  onChange: (layout: BlockBuildLayout) => void;
 }) {
   const [device, setDevice] = useState<PreviewDevice>("desktop");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -437,7 +436,7 @@ function BlockItem({
   selected: boolean;
   faded: boolean;
   dropSide: "left" | "right" | null;
-  gridSpacing: CustomLayout["gridSpacing"];
+  gridSpacing: BlockBuildLayout["gridSpacing"];
   onSelect: () => void;
   onWidth: (width: number) => void;
   onRow: (patch: Partial<RowSettings>) => void;
