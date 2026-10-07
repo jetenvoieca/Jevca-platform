@@ -27,68 +27,16 @@ enum SiteStatus {
   ISYT
 }
 
-// Which of the old page editors a page uses: SECTION (fixed byline +
-// artwork grid), PRIVATE (generic Content Blocks) or TEMPLATE_STYLE.
-// Since 2026-10-04 SECTION and PRIVATE ("Private / Custom") are also
-// the Style Types a PageStyle is built from, and CANVAS (2026-10-05) is
-// a Style Type only — no page uses it as its own type. The Pavilion
-// types were removed 2026-10-05 (replaced by Canvas). TEMPLATE_STYLE,
-// with its editors, is marked for possible clean-up later: no longer
-// offered anywhere.
-enum PageType {
-  SECTION
-  PRIVATE
-  // Added 2026-09-06 — a page created by picking one of a Site's own
-  // Template's page styles (portfolio, showcase, profile, exhibitions,
-  // home) from the same "+ Add New Page" list as Section/Private,
-  // rather than one of those fixed system types. Which style it actually
-  // is lives in Page.templateStyle, since the style is a
-  // TemplatePageStyle value, not a PageType — this is deliberately a single
-  // extra PageType, not one enum value per style, so adding a new style
-  // later never means another migration here. Picking "freeform" from
-  // that same list creates a PRIVATE page instead (see
-  // src/lib/actions/pages.ts) — it's exactly the existing block editor,
-  // so it needs no distinct type of its own.
-  TEMPLATE_STYLE
-  // A large canvas of curations that scrolls in any direction — see
-  // CanvasLayout in lib/pageStyleLayout.ts.
+// A Page Style's Style Type (2026-10-04) — each a fundamentally
+// different way of building a page, not a different look. BLOCK_BUILD
+// (2026-10-07, was PRIVATE / "Private / Custom"): a page built from
+// components, each filled from the page's curation. CANVAS (2026-10-05):
+// the curations placed on a canvas that scrolls in any direction. See
+// lib/pageStyleTypes.ts. Section and the old page editors' types were
+// removed 2026-10-07.
+enum PageStyleType {
+  BLOCK_BUILD
   CANVAS
-}
-
-// Fixed layout styles offered by the Templates library (2026-09-06) —
-// each one its own purpose-built renderer (thumbnail grid + detail
-// panel, hero shot + text, sliding showcase, etc.), replicating the
-// isendyouthis.com template set shown in the design mockups. Deliberately
-// NOT built from the free-form block/row system used by PageType.PRIVATE
-// (see blocks.ts) — these are a different kind of page altogether, per
-// direct decision (2026-09-06).
-//
-// FREEFORM is the escape hatch: a TemplatePage of this style means "use
-// the existing block/row editor" — so the one existing free-form system
-// has a place in this same list rather than being a special case
-// scattered through the Templates UI. A real Page never actually stores
-// FREEFORM as its own templateStyle (see Page.templateStyle below) —
-// picking it from the "+ Add New Page" list just creates an ordinary
-// PRIVATE page instead.
-//
-// Also referenced directly by Page.templateStyle (2026-09-06) — not just
-// TemplatePage — once a Site is linked to a Template (Site.templateId),
-// so a Page created from one of that Template's styles remembers which
-// style it is.
-//
-// No TemplatePageStyle has a real layout renderer yet beyond that plumbing —
-// that's later, one style at a time.
-//
-// Renamed from "PageStyle" (2026-10-04) so that name could go to the new
-// shared Page Styles (model PageStyle below). Marked for possible
-// clean-up later, along with the TEMPLATE_STYLE page type.
-enum TemplatePageStyle {
-  PORTFOLIO
-  SHOWCASE
-  PROFILE
-  EXHIBITIONS
-  HOME
-  FREEFORM
 }
 
 enum ArtworkAvailability {
@@ -640,8 +588,8 @@ model Curation {
 // another). Any type can be used any number of times; `position` sets
 // the order (0 first). Edited on the Curations page. Removed with its
 // curation. Text sections are plain text (2026-10-07 — their height and
-// background colour were removed). Can also be put in a Private /
-// Custom page's components (2026-10-07) — see PageComponentContent.
+// background colour were removed). Can also be put in a Block Build
+// page's components (2026-10-07) — see PageComponentContent.
 model CurationSection {
   id         String              @id @default(cuid())
   curationId String
@@ -997,11 +945,6 @@ model Site {
   multiLanguageEnabled Boolean    @default(false)
   salesEnabled         Boolean    @default(false)
   defaultCurrency      String     @default("GBP")
-  // Replaces the old free-text `template` field (2026-09-06) — a real
-  // link to a Template record now (see Site.templateId in schema.prisma). Null
-  // = no Template assigned.
-  templateId           String?
-  template             Template?  @relation(fields: [templateId], references: [id])
   domainStatus         String?
   domainRenewalDate    DateTime?
   artistId             String
@@ -1024,7 +967,6 @@ model Site {
   menuStyle   MenuStyle? @relation(fields: [menuStyleId], references: [id], onDelete: SetNull)
 
   @@index([artistId])
-  @@index([templateId])
   @@index([menuStyleId])
   @@index([lastVisitedAt])
 }
@@ -1047,32 +989,10 @@ model Page {
   id        String   @id @default(cuid())
   siteId    String
   site      Site     @relation(fields: [siteId], references: [id])
-  // Which of the old page editors this page uses. Null for every page
-  // made on the Pages page (2026-10-04) — those don't use the old
-  // editors; how they look will come from their Display Style instead.
-  type      PageType?
   title     String
   slug      String
   visible   Boolean  @default(true)
   position  Int      @default(0)
-
-  // Page-level background styling (2026-09-03) — deliberately real
-  // columns, not folded into draftBlocks: these are page settings, not
-  // repeatable content. backgroundImageId is a plain (non-unique)
-  // relation, since the same image can reasonably be reused as the
-  // background on more than one page — unlike Artist.profileImageId
-  // above, which is genuinely 1:1.
-  backgroundColor   String?
-  backgroundImageId String?
-  backgroundImage   Image?  @relation("PageBackgroundImage", fields: [backgroundImageId], references: [id])
-
-  // Which of the Site's Template's page styles this page is (2026-09-06)
-  // — set only when type is TEMPLATE_STYLE, null otherwise. Kept as its
-  // own nullable field rather than repurposing `type` for this, since
-  // `type` is a small fixed set of system behaviours (Section/Private/
-  // Template Style) while this is "which style", a separate question
-  // that only applies to one of them.
-  templateStyle TemplatePageStyle?
 
   // The curation this page shows (2026-10-04) — optional; one per page.
   // Must be one of the site's own artist's curations (checked in
@@ -1099,20 +1019,14 @@ model Page {
   canvasItems PageCanvasItem[]
 
   // What fills this page's components (2026-10-07) — used when its
-  // Display Style is a Private / Custom. See PageComponentContent.
+  // Display Style is a Block Build. See PageComponentContent.
   componentContents PageComponentContent[]
-
-  // The old page editors' content (Section / Private / Template Style
-  // pages). Publishing no longer copies it anywhere (2026-10-06) — see
-  // SitePublication.
-  draftBlocks Json @default("[]")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([siteId, slug])
   @@index([siteId])
-  @@index([backgroundImageId])
   @@index([curationId])
   @@index([pageStyleId])
   @@index([menuStyleId])
@@ -1138,7 +1052,7 @@ model PageCanvasItem {
   @@index([curationId])
 }
 
-// What fills one component of a Private / Custom page (2026-10-07, from
+// What fills one component of a Block Build page (2026-10-07, from
 // Craig's mockup): one of the page's curation's sections, dragged onto
 // it in the page's Arrange, or — `sectionId` null — the curation's
 // works. One per component. `blockId` is the component's id in the
@@ -1162,13 +1076,13 @@ model PageComponentContent {
 
 // A Page Style (2026-10-04) — a named page layout, shared by every site,
 // managed under Templates → Page Styles. `type` is its Style Type
-// (SECTION, PRIVATE or CANVAS — see PageType); `layout` is that type's
+// (BLOCK_BUILD or CANVAS — see PageStyleType); `layout` is that type's
 // arrangement and settings, with no content in it, saved as JSON (see
 // lib/pageStyleLayout.ts).
 model PageStyle {
-  id   String   @id @default(cuid())
-  name String   @unique
-  type PageType
+  id   String        @id @default(cuid())
+  name String        @unique
+  type PageStyleType
 
   layout Json @default("{}")
 
@@ -1196,41 +1110,6 @@ model MenuStyle {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-}
-
-// A reusable design library (2026-09-06) — e.g. "ISYT", replicating the
-// isendyouthis.com template set shown in the design mockups. Deliberately
-// its own top-level model, separate from Site/Page: a Template is
-// authored once here and referenced by many Sites (100+, eventually)
-// rather than belonging to one — see Site.templateId.
-model Template {
-  id   String @id @default(cuid())
-  name String
-
-  pages TemplatePage[]
-  sites Site[]
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
-// One named page slot within a Template (2026-09-06) — "+ Add new menu
-// item" in the mockups: a Page Name plus a fixed TemplatePageStyle. Shell
-// only — see the note on the TemplatePageStyle enum above. `position` orders pages
-// within the Template.
-model TemplatePage {
-  id         String   @id @default(cuid())
-  templateId String
-  template   Template @relation(fields: [templateId], references: [id], onDelete: Cascade)
-
-  name     String
-  style    TemplatePageStyle
-  position Int       @default(0)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([templateId])
 }
 
 model Artwork {
@@ -1626,10 +1505,6 @@ model Image {
 
   mainImageOfArtwork Artwork? @relation("ArtworkMainImage")
   profileImageOfArtist Artist? @relation("ArtistProfileImage")
-  // Back-relation for Page.backgroundImageId above — plural, since
-  // (unlike the two 1:1 relations just above) the same Image can be the
-  // background of more than one Page.
-  backgroundOfPages Page[] @relation("PageBackgroundImage")
   // Curations using this image in a work's own image set (2026-10-03) —
   // see CurationItemImage.
   curationItemImages CurationItemImage[]
@@ -1784,9 +1659,9 @@ model PlatformSettings {
 // documentation, managed centrally in one place rather than per site.
 //
 // `steps` is an ordered JSON array (`{ id, text, imageUrl }[]`) rather
-// than a child table — same convention already used for Page's
-// draftBlocks — since steps are only ever read/written as one whole unit
-// from the guide's own edit panel, never queried on their own.
+// than a child table, since steps are only ever read/written as one
+// whole unit from the guide's own edit panel, never queried on their
+// own.
 model Guide {
   id       String        @id @default(cuid())
   category GuideCategory
