@@ -44,6 +44,21 @@ export type CurationSectionData = {
   media: SectionMedia[];
 };
 
+// Whether a section has nothing to show yet — empty sections are left
+// out wherever they're shown.
+export function sectionIsEmpty(section: CurationSectionData): boolean {
+  switch (section.type) {
+    case "TAGLINE":
+    case "DESCRIPTION":
+      return !section.text;
+    case "TEXT":
+      return !section.heading && !section.text;
+    case "VIDEO":
+    case "IMAGES":
+      return section.media.length === 0;
+  }
+}
+
 export const MAX_SECTION_HEADING = 200;
 export const MAX_SECTION_TEXT = 20000;
 export const MAX_SECTION_IMAGES = 20;

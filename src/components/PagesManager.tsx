@@ -18,6 +18,7 @@ import PageDetailsModal from "@/components/PageDetailsModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import PagePreview from "@/components/PagePreview";
 import CanvasArranger from "@/components/CanvasArranger";
+import PageSectionsArranger from "@/components/PageSectionsArranger";
 
 export type PageListItem = {
   id: string;
@@ -41,10 +42,16 @@ type ListKey = "live" | "hidden";
 // Preview panel (PagePreview), in its Display Style if it has one
 // (2026-10-05), from the site's working data (LiveSiteData). The panel
 // has no heading, page title or inner padding (2026-10-07), so the page
-// fills it as it fills the browser on the published site. Arrange
-// (2026-10-05) opens the full-screen canvas editor (CanvasArranger) for
-// a page whose Display Style is a Canvas; closing it redraws the preview
-// with the new arrangement.
+// fills it as it fills the browser on the published site.
+//
+// Arrange:
+// - Canvas (2026-10-05): opens the full-screen canvas editor
+//   (CanvasArranger).
+// - Private / Custom with a curation (2026-10-07, from Craig's mockup):
+//   the Preview panel becomes PageSectionsArranger — the curation's
+//   sections dragged onto the style's components — with a Close button
+//   under Hidden Pages. Choosing another page, Add or Edit closes it.
+// Closing either redraws the preview.
 //
 // Site menu (2026-10-06): under Live Pages, the Menu Style the site's
 // menu uses (Templates → Menus) — saved as soon as it's changed. A page
@@ -81,7 +88,7 @@ export default function PagesManager({
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [arranging, setArranging] = useState(false);
-  // Bumped when Arrange closes, so the preview reloads the arrangement.
+  // Bumped when Arrange closes, so the preview reloads what it shows.
   const [previewVersion, setPreviewVersion] = useState(0);
   const [siteMenuId, setSiteMenuId] = useState(siteMenuStyleId ?? "");
   useEffect(() => setSiteMenuId(siteMenuStyleId ?? ""), [siteMenuStyleId]);
@@ -102,6 +109,17 @@ export default function PagesManager({
     ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null)
     : null;
   const canvasStyle = selectedStyle?.type === "CANVAS" ? selectedStyle : null;
+  // A Private / Custom page is arranged from its curation's sections, so
+  // it needs one.
+  const customStyle =
+    selectedStyle?.type === "PRIVATE" && selected?.curationId ? selectedStyle : null;
+  const canArrange = !!canvasStyle || !!customStyle;
+  const arrangingSections = arranging && !!customStyle;
+
+  const closeArrange = () => {
+    setArranging(false);
+    setPreviewVersion((v) => v + 1);
+  };
 
   const handleDrop = () => {
     if (!dragged || !dropTarget) return;
@@ -143,7 +161,13 @@ export default function PagesManager({
     );
   };
 
+  const selectPage = (id: string) => {
+    setSelectedId(id === selectedId ? null : id);
+    setArranging(false);
+  };
+
   const openModal = (mode: "add" | "edit") => {
+    setArranging(false);
     setModalError(null);
     setModal(mode);
   };
@@ -173,6 +197,7 @@ export default function PagesManager({
     if (!selected) return;
     setConfirmingDelete(false);
     setSelectedId(null);
+    setArranging(false);
     startTransition(() => deletePage(siteId, selected.id));
   };
 
@@ -220,7 +245,7 @@ export default function PagesManager({
                   e.stopPropagation();
                   setDropTarget({ list: key, beforeId: p.id });
                 }}
-                onClick={() => setSelectedId(p.id === selectedId ? null : p.id)}
+                onClick={() => selectPage(p.id)}
                 className={`w-full cursor-grab truncate rounded-md border px-3 py-2 text-left text-sm active:cursor-grabbing ${
                   p.id === selectedId
                     ? "border-neutral-900 bg-neutral-100 text-neutral-900"
@@ -245,7 +270,17 @@ export default function PagesManager({
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white">
-        {selected ? (
+        {selected && arrangingSections && customStyle && selected.curationId ? (
+          <LiveSiteData siteId={siteId} artistId={artistId}>
+            <PageSectionsArranger
+              key={selected.id}
+              siteId={siteId}
+              pageId={selected.id}
+              curationId={selected.curationId}
+              layout={customStyle.layout}
+            />
+          </LiveSiteData>
+        ) : selected ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
             <PagePreview
               key={`${selected.id}:${previewVersion}`}
@@ -282,8 +317,8 @@ export default function PagesManager({
           <button
             type="button"
             onClick={() => setArranging(true)}
-            disabled={!canvasStyle || isPending}
-            title="For pages with a Canvas Display Style"
+            disabled={!canArrange || isPending}
+            title="For Canvas pages, and Private / Custom pages with a curation"
             className={buttonClass}
           >
             Arrange
@@ -315,6 +350,18 @@ export default function PagesManager({
           </select>
         </label>
         {renderList("hidden", "Hidden Pages", hidden)}
+
+        {arrangingSections && (
+          <div className="flex justify-end rounded-lg border border-neutral-300 bg-white p-3">
+            <button
+              type="button"
+              onClick={closeArrange}
+              className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              Close
+            </button>
+          </div>
+        )}
       </aside>
 
       {modal && (
@@ -348,10 +395,7 @@ export default function PagesManager({
           artistId={artistId}
           tileSize={canvasStyle.layout.tileSize}
           backgroundColor={canvasStyle.layout.backgroundColor}
-          onClose={() => {
-            setArranging(false);
-            setPreviewVersion((v) => v + 1);
-          }}
+          onClose={closeArrange}
         />
       )}
 

@@ -9,6 +9,7 @@ import {
 } from "@/lib/actions/curations";
 import { listCurationSections } from "@/lib/actions/curationSections";
 import { getPageCanvas } from "@/lib/actions/pageCanvas";
+import { getPageComponents } from "@/lib/actions/pageComponents";
 import { listPageStyles } from "@/lib/actions/pageStyles";
 import { normalizeLayout } from "@/lib/pageStyleLayout";
 import { normalizeMenuStyle, type MenuStyleLayout } from "@/lib/menuStyleLayout";
@@ -22,9 +23,10 @@ import {
 
 // Publishing a site (2026-10-06) — see lib/siteSnapshot.ts. The whole
 // site at once: its Live Pages in order, each with its Display Style,
-// curation or canvas placements, and every curation those show, with
-// their works, sections and each work's presentation, and the menu each
-// page shows (2026-10-06 — the page's own, or else the site's).
+// curation or canvas placements, what fills its components (Private /
+// Custom, 2026-10-07), and every curation those show, with their works,
+// sections and each work's presentation, and the menu each page shows
+// (2026-10-06 — the page's own, or else the site's).
 
 async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
   const site = await db.site.findUnique({
@@ -61,6 +63,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
         curationId: isCanvas ? null : p.curationId,
         style,
         canvas: isCanvas ? await getPageCanvas(siteId, p.id) : [],
+        components: style?.type === "PRIVATE" ? await getPageComponents(siteId, p.id) : [],
         menuStyleId: p.menuStyleId ?? site.menuStyleId,
       };
     })
@@ -139,7 +142,9 @@ export async function getLastPublishedAt(siteId: string): Promise<Date | null> {
 // (2026-10-06), so a style setting added after publishing takes its
 // default rather than breaking the page; menus (2026-10-06) the same. A
 // site published before menus existed shows none until it's published
-// again. Changes to a style's own settings still need a publish to show.
+// again, and one published before components' content existed
+// (2026-10-07) shows its Private / Custom pages empty until then.
+// Changes to a style's own settings still need a publish to show.
 export async function getPublishedSite(
   siteId: string
 ): Promise<{ snapshot: SiteSnapshot; publishedAt: Date } | null> {
@@ -156,6 +161,7 @@ export async function getPublishedSite(
       name: p.style.name,
       ...normalizeLayout(p.style.type, p.style.layout),
     },
+    components: p.components ?? [],
     menuStyleId: p.menuStyleId ?? null,
   }));
   const menus: Record<string, MenuStyleLayout> = {};

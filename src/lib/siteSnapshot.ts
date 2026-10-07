@@ -7,6 +7,7 @@ import type { CanvasPlacement } from "@/lib/actions/pageCanvas";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
 import type { CurationSectionData } from "@/lib/curationSections";
+import type { ComponentContent } from "@/lib/pageComponents";
 
 // A published site (2026-10-06) — everything its pages show, saved when
 // "Publish to live site" is pressed (see SitePublication in
@@ -23,6 +24,8 @@ export const SNAPSHOT_VERSION = 1;
 // (not used with a Canvas style, whose curations are in `canvas`).
 // `menuStyleId` (2026-10-06) is the menu this page shows — its own, or
 // else the site's; null = no menu. Its settings are in `menus`.
+// `components` (2026-10-07) is what fills a Private / Custom page's
+// components; a site published before it existed reads it as empty.
 export type SnapshotPage = {
   id: string;
   title: string;
@@ -30,6 +33,7 @@ export type SnapshotPage = {
   curationId: string | null;
   style: PageStyleSummary | null;
   canvas: CanvasPlacement[];
+  components: ComponentContent[];
   menuStyleId: string | null;
 };
 

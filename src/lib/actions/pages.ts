@@ -118,7 +118,11 @@ export async function createPage(
 }
 
 // Edit (2026-10-04). Renaming leaves the slug alone, same as
-// updatePageTitle below.
+// updatePageTitle below. What fills the page's components (2026-10-07,
+// see PageComponentContent) belongs to its Display Style's components
+// and its curation's sections, so it goes when they change: all of it
+// with a new style, and the sections (not the works) with a new
+// curation.
 export async function updatePageDetails(
   siteId: string,
   pageId: string,
@@ -127,15 +131,32 @@ export async function updatePageDetails(
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
+  const current = await db.page.findFirst({
+    where: { id: pageId, siteId },
+    select: { curationId: true, pageStyleId: true },
+  });
+  if (!current) return { error: "Page not found." };
+
   const [curationId, pageStyleId, menuStyleId] = await Promise.all([
     ownCurationId(siteId, input.curationId),
     existingPageStyleId(input.pageStyleId),
     existingMenuStyleId(input.menuStyleId),
   ]);
-  await db.page.updateMany({
-    where: { id: pageId, siteId },
-    data: { title, curationId, pageStyleId, menuStyleId },
-  });
+
+  const clearComponents =
+    current.pageStyleId !== pageStyleId
+      ? db.pageComponentContent.deleteMany({ where: { pageId } })
+      : current.curationId !== curationId
+        ? db.pageComponentContent.deleteMany({ where: { pageId, sectionId: { not: null } } })
+        : null;
+
+  await db.$transaction([
+    db.page.update({
+      where: { id: pageId },
+      data: { title, curationId, pageStyleId, menuStyleId },
+    }),
+    ...(clearComponents ? [clearComponents] : []),
+  ]);
   return { ok: true };
 }
 

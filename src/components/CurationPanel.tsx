@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, type ReactNode, type RefObject } from "rea
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { CurationSectionData } from "@/lib/curationSections";
 import { useSiteData } from "@/lib/siteData";
+import CurationSectionView from "@/components/CurationSectionView";
 import CurationWorkView from "@/components/CurationWorkView";
 
 // How the grid's images fly in (2026-10-06): from this far below,
@@ -19,7 +20,7 @@ const GRID_COLUMNS = 4;
 // clicking an artwork on a Canvas page. Scrolls as one: the artwork
 // clicked, large, with its name; then the curation's presentation
 // sections in order (Tag line, Description, Free text, Video, Images —
-// see CurationSection); then a grid of the curation's other works,
+// see CurationSectionView); then a grid of the curation's other works,
 // which fly in as they're scrolled into view (see FlyIn). Clicking a
 // work in the grid puts it at the top and scrolls back up. Clicking the
 // large image or its name opens that work's details (CurationWorkView)
@@ -128,7 +129,7 @@ export default function CurationPanel({
               </button>
 
               {sections.map((s) => (
-                <Section key={s.id} section={s} />
+                <CurationSectionView key={s.id} section={s} />
               ))}
 
               {others.length > 0 && (
@@ -231,55 +232,4 @@ function FlyIn({
       {children}
     </div>
   );
-}
-
-// One presentation section, as visitors see it. Text sections are plain
-// text (2026-10-07). Empty sections are left out.
-function Section({ section }: { section: CurationSectionData }) {
-  switch (section.type) {
-    case "TAGLINE":
-      return section.text ? (
-        <p className="text-center text-base italic text-neutral-700">{section.text}</p>
-      ) : null;
-
-    case "DESCRIPTION":
-      return section.text ? (
-        <p className="whitespace-pre-line break-words text-sm text-neutral-800">{section.text}</p>
-      ) : null;
-
-    case "TEXT":
-      return section.heading || section.text ? (
-        <div>
-          {section.heading && (
-            <h3 className="mb-1 text-base font-medium text-neutral-900">{section.heading}</h3>
-          )}
-          {section.text && (
-            <p className="whitespace-pre-line break-words text-sm text-neutral-800">
-              {section.text}
-            </p>
-          )}
-        </div>
-      ) : null;
-
-    case "VIDEO": {
-      const video = section.media[0];
-      return video ? (
-        <video
-          src={video.url}
-          poster={video.posterUrl ?? undefined}
-          controls
-          className="w-full rounded-md bg-black"
-        />
-      ) : null;
-    }
-
-    case "IMAGES":
-      return section.media.length > 0 ? (
-        <div className="flex flex-col gap-2">
-          {section.media.map((m) => (
-            <img key={m.imageId} src={m.url} alt="" className="w-full rounded-md" />
-          ))}
-        </div>
-      ) : null;
-  }
 }

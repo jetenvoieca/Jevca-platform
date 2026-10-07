@@ -27,10 +27,12 @@ import { rowBlockClass, rowBlockStyle, type PreviewDevice } from "@/components/p
 
 // The pieces the Page Styles visual editors share (2026-10-07): the
 // Private / Custom editor (VisualLayoutEditor) and the Section editor
-// (SectionVisualEditor). The page is drawn at a desktop's (1280px) or a
-// phone's (390px) width, shrunk to fit the panel; its margins, gaps and
-// components' edges are dragged by hand, and a selected component has a
-// bar for alignment and its other actions.
+// (SectionVisualEditor) — and the frame, the Pages page's Arrange for a
+// Private / Custom page (PageSectionsArranger). The page is drawn at a
+// desktop's (1280px) or a phone's (390px) width, shrunk to fit the
+// panel; its margins, gaps and components' edges are dragged by hand,
+// and a selected component has a bar for alignment and its other
+// actions.
 
 const FRAME_WIDTH: Record<PreviewDevice, number> = { desktop: 1280, phone: 390 };
 
@@ -117,9 +119,10 @@ export function ScaledFrame({ device, children }: { device: PreviewDevice; child
   );
 }
 
-// The page itself: its background, its margin (shaded and draggable on
-// all four sides, for the device shown) and its contents. Clicking an
-// empty part of it lets go of the selected component.
+// The page itself: its background, its margin and its contents. With
+// `onMargins` (the editors), the margin is shaded and draggable on all
+// four sides, for the device shown; without it (Arrange), it's just
+// space. Clicking an empty part of it lets go of the selected component.
 export function PageFrame({
   margins,
   device,
@@ -133,13 +136,13 @@ export function PageFrame({
   device: PreviewDevice;
   backgroundColor: string | null;
   backgroundImage?: boolean;
-  onMargins: (margins: PageMargins) => void;
-  onDeselect: () => void;
+  onMargins?: (margins: PageMargins) => void;
+  onDeselect?: () => void;
   children: ReactNode;
 }) {
   const margin = margins[device];
   const setMargin = (patch: Partial<PageMargin>) =>
-    onMargins(cleanPageMargins({ ...margins, [device]: { ...margin, ...patch } }));
+    onMargins?.(cleanPageMargins({ ...margins, [device]: { ...margin, ...patch } }));
   return (
     <div
       onClick={onDeselect}
@@ -151,10 +154,14 @@ export function PageFrame({
         backgroundColor: backgroundColor ?? undefined,
       }}
     >
-      <MarginHandle side="top" margin={margin} onChange={setMargin} />
-      <MarginHandle side="bottom" margin={margin} onChange={setMargin} />
-      <MarginHandle side="left" margin={margin} onChange={setMargin} />
-      <MarginHandle side="right" margin={margin} onChange={setMargin} />
+      {onMargins && (
+        <>
+          <MarginHandle side="top" margin={margin} onChange={setMargin} />
+          <MarginHandle side="bottom" margin={margin} onChange={setMargin} />
+          <MarginHandle side="left" margin={margin} onChange={setMargin} />
+          <MarginHandle side="right" margin={margin} onChange={setMargin} />
+        </>
+      )}
       {children}
     </div>
   );
