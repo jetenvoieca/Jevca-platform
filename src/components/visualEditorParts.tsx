@@ -25,10 +25,9 @@ import {
 } from "@/lib/pageStyleLayout";
 import { rowBlockClass, rowBlockStyle, type PreviewDevice } from "@/components/pageRows";
 
-// The pieces the Page Styles visual editors share (2026-10-07): the
-// Private / Custom editor (VisualLayoutEditor) and the Section editor
-// (SectionVisualEditor) — and the frame, the Pages page's Arrange for a
-// Private / Custom page (PageSectionsArranger). The page is drawn at a
+// The pieces of the Page Styles visual editor (VisualLayoutEditor,
+// 2026-10-07) — the frame also shared with the Pages page's Arrange for
+// a Block Build page (PageSectionsArranger). The page is drawn at a
 // desktop's (1280px) or a phone's (390px) width, shrunk to fit the
 // panel; its margins, gaps and components' edges are dragged by hand,
 // and a selected component has a bar for alignment and its other
@@ -205,7 +204,7 @@ function startHandleDrag(
 // a blue outline, grips on its free edges to drag its width (desktop
 // only; snaps to ¼ ⅓ ½ ⅔ ¾ or full, with a label while dragging), its
 // bar above it and, when one is open, its panel over it. `boxRef` and
-// `boxProps` go on the box itself — the Custom editor makes it
+// `boxProps` go on the box itself — the Block Build editor makes it
 // draggable with them; the grips, bar and panel sit beside it.
 export function EditableBlock({
   width,

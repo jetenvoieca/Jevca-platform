@@ -47,7 +47,7 @@ type ListKey = "live" | "hidden";
 // Arrange:
 // - Canvas (2026-10-05): opens the full-screen canvas editor
 //   (CanvasArranger).
-// - Private / Custom with a curation (2026-10-07, from Craig's mockup):
+// - Block Build with a curation (2026-10-07, from Craig's mockup):
 //   the Preview panel becomes PageSectionsArranger — the curation's
 //   sections dragged onto the style's components — with a Close button
 //   under Hidden Pages. Choosing another page, Add or Edit closes it.
@@ -109,12 +109,12 @@ export default function PagesManager({
     ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null)
     : null;
   const canvasStyle = selectedStyle?.type === "CANVAS" ? selectedStyle : null;
-  // A Private / Custom page is arranged from its curation's sections, so
+  // A Block Build page is arranged from its curation's sections, so
   // it needs one.
-  const customStyle =
-    selectedStyle?.type === "PRIVATE" && selected?.curationId ? selectedStyle : null;
-  const canArrange = !!canvasStyle || !!customStyle;
-  const arrangingSections = arranging && !!customStyle;
+  const blockBuildStyle =
+    selectedStyle?.type === "BLOCK_BUILD" && selected?.curationId ? selectedStyle : null;
+  const canArrange = !!canvasStyle || !!blockBuildStyle;
+  const arrangingSections = arranging && !!blockBuildStyle;
 
   const closeArrange = () => {
     setArranging(false);
@@ -270,14 +270,14 @@ export default function PagesManager({
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white">
-        {selected && arrangingSections && customStyle && selected.curationId ? (
+        {selected && arrangingSections && blockBuildStyle && selected.curationId ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
             <PageSectionsArranger
               key={selected.id}
               siteId={siteId}
               pageId={selected.id}
               curationId={selected.curationId}
-              layout={customStyle.layout}
+              layout={blockBuildStyle.layout}
             />
           </LiveSiteData>
         ) : selected ? (
@@ -318,7 +318,7 @@ export default function PagesManager({
             type="button"
             onClick={() => setArranging(true)}
             disabled={!canArrange || isPending}
-            title="For Canvas pages, and Private / Custom pages with a curation"
+            title="For Canvas pages, and Block Build pages with a curation"
             className={buttonClass}
           >
             Arrange
