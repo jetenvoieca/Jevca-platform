@@ -1,13 +1,18 @@
 "use client";
 
+import { useEffect, useState, type ReactNode } from "react";
 import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pageStyleTypes";
 import {
   CANVAS_LIMITS,
   GRID_SPACING_LIMITS,
   PAGE_MARGIN_LIMITS,
+  TEXT_COMPONENT_TYPES,
+  TEXT_LOOKS,
+  TEXT_SIZE_LIMITS,
   cleanCanvas,
   cleanGridSpacing,
   cleanPageMargins,
+  cleanTextStyle,
   emptyLayout,
   type CanvasLayout,
   type CustomLayout,
@@ -16,7 +21,10 @@ import {
   type PageMargins,
   type PageStyleLayout,
   type SectionLayout,
+  type TextStyle,
+  type TextStyles,
 } from "@/lib/pageStyleLayout";
+import { SITE_FONTS, SITE_FONT_KINDS, isSiteFontId } from "@/lib/siteFonts";
 import NumberField from "@/components/NumberField";
 
 // What's being edited: the Style name, the Style Type ("" until one is
@@ -80,7 +88,9 @@ const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label:
 // component's settings) on its bar there. Here: the background colour,
 // then a Fine-tune section, closed by default, with the exact page
 // margins (2026-10-06, desktop and phone) and the spacing of grids of
-// images (2026-10-05).
+// images (2026-10-05) — and, for Private / Custom, how the text in its
+// Header, Text and Text grid components looks (2026-10-07, from Craig's
+// mockup: font, size, style and colour).
 //
 // Private / Custom also has an optional background image (the image
 // itself chosen on the page). Section is a fixed layout — byline,
@@ -276,7 +286,12 @@ export default function PageStyleEditor({
               gridSpacing={custom.gridSpacing}
               onMargins={(margins) => setCustom({ ...custom, margins })}
               onGridSpacing={(gridSpacing) => setCustom({ ...custom, gridSpacing })}
-            />
+            >
+              <TextStylesControl
+                value={custom.textStyles}
+                onChange={(textStyles) => setCustom({ ...custom, textStyles })}
+              />
+            </FineTuneSection>
           </div>
         )}
       </div>
@@ -298,17 +313,20 @@ export default function PageStyleEditor({
 }
 
 // The exact page margins and grid spacing, closed by default (2026-10-07)
-// — shared by Section and Private / Custom.
+// — shared by Section and Private / Custom — then anything a type adds
+// (`children`).
 function FineTuneSection({
   margins,
   gridSpacing,
   onMargins,
   onGridSpacing,
+  children,
 }: {
   margins: PageMargins;
   gridSpacing: GridSpacing;
   onMargins: (margins: PageMargins) => void;
   onGridSpacing: (gridSpacing: GridSpacing) => void;
+  children?: ReactNode;
 }) {
   return (
     <details className="rounded-md border border-neutral-300">
@@ -318,6 +336,7 @@ function FineTuneSection({
       <div className="flex flex-col gap-2.5 border-t border-neutral-200 p-2">
         <PageMarginControl value={margins} onChange={onMargins} />
         <GridSpacingControl value={gridSpacing} onChange={onGridSpacing} />
+        {children}
       </div>
     </details>
   );
@@ -381,6 +400,182 @@ function PageMarginControl({
         />
       ))}
     </div>
+  );
+}
+
+// How the text in each text component type looks (2026-10-07, from
+// Craig's mockup) — one box each for Header, Text and Text grid.
+function TextStylesControl({
+  value,
+  onChange,
+}: {
+  value: TextStyles;
+  onChange: (value: TextStyles) => void;
+}) {
+  return (
+    <>
+      {TEXT_COMPONENT_TYPES.map((t) => (
+        <TextStyleBox
+          key={t.value}
+          label={t.label}
+          value={value[t.value]}
+          onChange={(style) => onChange({ ...value, [t.value]: style })}
+        />
+      ))}
+    </>
+  );
+}
+
+// One component type's Font and Size, then Style and Colour. Anything
+// left blank keeps the text's own look.
+function TextStyleBox({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: TextStyle;
+  onChange: (value: TextStyle) => void;
+}) {
+  const set = (patch: Partial<TextStyle>) => onChange(cleanTextStyle({ ...value, ...patch }));
+  const selectClass = (empty: boolean) =>
+    `min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm ${
+      empty ? "text-neutral-400" : "text-neutral-800"
+    }`;
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
+      <p className="text-sm text-neutral-700">{label}</p>
+      <div className="flex items-center gap-2">
+        <select
+          value={value.font ?? ""}
+          onChange={(e) => set({ font: isSiteFontId(e.target.value) ? e.target.value : null })}
+          aria-label={`${label} font`}
+          className={selectClass(!value.font)}
+        >
+          <option value="">Font</option>
+          {SITE_FONT_KINDS.map((kind) => (
+            <optgroup key={kind} label={kind}>
+              {SITE_FONTS.filter((f) => f.kind === kind).map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.label}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        <SizeField label={label} value={value.size} onCommit={(size) => set({ size })} />
+      </div>
+      <div className="flex items-center gap-2">
+        <select
+          value={value.look ?? ""}
+          onChange={(e) =>
+            set({ look: TEXT_LOOKS.find((l) => l.value === e.target.value)?.value ?? null })
+          }
+          aria-label={`${label} style`}
+          className={selectClass(!value.look)}
+        >
+          <option value="">Style</option>
+          {TEXT_LOOKS.map((l) => (
+            <option key={l.value} value={l.value}>
+              {l.label}
+            </option>
+          ))}
+        </select>
+        <ColourField label={label} value={value.colour} onChange={(colour) => set({ colour })} />
+      </div>
+    </div>
+  );
+}
+
+// Text size in pixels, applied when the box is left (or Enter); blank =
+// the text's own size.
+function SizeField({
+  label,
+  value,
+  onCommit,
+}: {
+  label: string;
+  value: number | null;
+  onCommit: (value: number | null) => void;
+}) {
+  const [text, setText] = useState(value?.toString() ?? "");
+  useEffect(() => setText(value?.toString() ?? ""), [value]);
+
+  const commit = () => {
+    const trimmed = text.trim();
+    if (trimmed === "") {
+      if (value !== null) onCommit(null);
+      return;
+    }
+    const n = Number(trimmed);
+    if (!Number.isFinite(n)) {
+      setText(value?.toString() ?? "");
+      return;
+    }
+    if (n !== value) onCommit(n);
+  };
+
+  return (
+    <label className="flex shrink-0 items-center gap-1">
+      <input
+        type="number"
+        min={TEXT_SIZE_LIMITS.min}
+        max={TEXT_SIZE_LIMITS.max}
+        step={1}
+        value={text}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+        }}
+        placeholder="Size"
+        aria-label={`${label} size`}
+        className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+      />
+      <span className="text-xs text-neutral-400">px</span>
+    </label>
+  );
+}
+
+// "+ Colour", or the chosen colour with ✕ to clear it.
+function ColourField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string | null;
+  onChange: (value: string | null) => void;
+}) {
+  if (!value) {
+    return (
+      <button
+        type="button"
+        onClick={() => onChange("#000000")}
+        className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700"
+      >
+        + Colour
+      </button>
+    );
+  }
+  return (
+    <span className="flex shrink-0 items-center gap-1.5 rounded-md border border-neutral-300 px-2 py-1">
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={`${label} colour`}
+        className="h-5 w-5 cursor-pointer rounded border border-neutral-300 p-0"
+      />
+      <button
+        type="button"
+        onClick={() => onChange(null)}
+        aria-label={`Clear ${label} colour`}
+        className="text-xs text-neutral-400 hover:text-red-600"
+      >
+        ✕
+      </button>
+    </span>
   );
 }
 
