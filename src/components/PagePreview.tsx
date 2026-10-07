@@ -15,7 +15,7 @@ import {
 import { groupBlocksByRow } from "@/lib/blocks";
 import { useSiteData } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
-import { ROW_BLOCK_CLASS, rowBlockStyle, rowClass } from "@/components/pageRows";
+import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 import CurationWorkView from "@/components/CurationWorkView";
 import SlidingDoors from "@/components/SlidingDoors";
 import CanvasPlayer from "@/components/CanvasPlayer";
@@ -236,7 +236,7 @@ function StyledPage({
             style={{ marginTop: i > 0 ? rows[i - 1].below : 0, gap: row.between }}
           >
             {row.cells.map((c) => (
-              <div key={c.id} className={ROW_BLOCK_CLASS} style={rowBlockStyle(c.width)}>
+              <div key={c.id} className={rowBlockClass()} style={rowBlockStyle(c.width)}>
                 {c.content}
               </div>
             ))}

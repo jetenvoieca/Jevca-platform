@@ -12,13 +12,15 @@ import {
   type PageStyleLayout,
 } from "@/lib/pageStyleLayout";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
-import { ROW_BLOCK_CLASS, rowBlockStyle, rowClass } from "@/components/pageRows";
+import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 
 // Draws a Page Style's layout as grey placeholders (2026-10-04) — what
 // goes where on the page, with no content. Used by the Page Styles
 // page's Preview panel. Uses the style's grid spacing, block spacing,
 // block widths, page margin (2026-10-06) and row alignment (2026-10-07),
 // drawn the same way as the site's pages (see components/pageRows.ts).
+// BlockShape and Labelled are shared with the visual editor
+// (VisualLayoutEditor), so a block looks the same in both.
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
   if (style.type === "CANVAS") return <CanvasPreview layout={style.layout} />;
 
@@ -91,7 +93,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
             style={{ marginTop: above, gap: settings.between }}
           >
             {row.map((b) => (
-              <div key={b.id} className={ROW_BLOCK_CLASS} style={rowBlockStyle(blockWidthOf(b))}>
+              <div key={b.id} className={rowBlockClass()} style={rowBlockStyle(blockWidthOf(b))}>
                 <Labelled label={blockLabel(b)}>
                   <BlockShape block={b} spacing={layout.gridSpacing} />
                 </Labelled>
@@ -176,7 +178,7 @@ function Part({
 }) {
   return (
     <div className={rowClass(align, "top")} style={{ marginTop: above }}>
-      <div className={ROW_BLOCK_CLASS} style={rowBlockStyle(width)}>
+      <div className={rowBlockClass()} style={rowBlockStyle(width)}>
         {children}
       </div>
     </div>
@@ -209,7 +211,7 @@ function PlaceholderGrid({ count, spacing }: { count: number; spacing: GridSpaci
 }
 
 // A rough outline of each block type, so the layout reads at a glance.
-function BlockShape({ block, spacing }: { block: LayoutBlock; spacing: GridSpacing }) {
+export function BlockShape({ block, spacing }: { block: LayoutBlock; spacing: GridSpacing }) {
   switch (block.type) {
     case "header":
       return <Bar className="h-7 w-2/3" />;
@@ -269,7 +271,7 @@ function BlockShape({ block, spacing }: { block: LayoutBlock; spacing: GridSpaci
   }
 }
 
-function Labelled({ label, children }: { label: string; children: ReactNode }) {
+export function Labelled({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="rounded-md border border-dashed border-neutral-300 bg-white/70 p-3">
       <p className="mb-2 text-[10px] uppercase tracking-wide text-neutral-400">{label}</p>
