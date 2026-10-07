@@ -6,13 +6,16 @@ import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import {
   blockWidthOf,
   rowKey,
-  rowSpacingOf,
+  rowSettingsOf,
   type GridSpacing,
+  type HorizontalAlign,
   type LayoutBlock,
+  type VerticalAlign,
 } from "@/lib/pageStyleLayout";
 import { groupBlocksByRow } from "@/lib/blocks";
 import { useSiteData } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
+import { ROW_BLOCK_CLASS, rowBlockStyle, rowClass } from "@/components/pageRows";
 import CurationWorkView from "@/components/CurationWorkView";
 import SlidingDoors from "@/components/SlidingDoors";
 import CanvasPlayer from "@/components/CanvasPlayer";
@@ -31,7 +34,9 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 //   square panels, in pairs or one at a time (see SlidingDoors).
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Grids of images use the style's grid spacing, the gaps between blocks
-// its block spacing, and each block its width (% of the page, centred).
+// its block spacing, and each block its width (% of the page) and its
+// row's alignment (2026-10-07). On a phone a row's blocks stack, full
+// width — see components/pageRows.ts.
 // Anything with nothing to fill it yet (Byline, Header, Video, an empty
 // Gallery, no Description…) is left out — the space above the next shown
 // block is the space below the last one shown — and no outlines or
@@ -122,12 +127,14 @@ export default function PagePreview({
 }
 
 // One row of the page as shown: its blocks' contents and widths, the
-// space below it and the space between its blocks.
+// space below it, the space between its blocks and its alignment.
 type Row = {
   key: string;
   cells: { id: string; content: ReactNode; width: number }[];
   below: number;
   between: number;
+  horizontal: HorizontalAlign;
+  vertical: VerticalAlign;
 };
 
 // The page in its Display Style (Section or Private / Custom) — see the
@@ -179,6 +186,8 @@ function StyledPage({
             cells: [{ id: "grid", content: grid, width: style.layout.widths.grid }],
             below: style.layout.spacing.belowGrid,
             between: 0,
+            horizontal: style.layout.aligns.grid,
+            vertical: "top",
           },
           {
             key: "description",
@@ -191,6 +200,8 @@ function StyledPage({
             ],
             below: style.layout.spacing.belowDescription,
             between: 0,
+            horizontal: style.layout.aligns.description,
+            vertical: "top",
           },
         ]
       : groupBlocksByRow(style.layout.blocks).map((row) => {
@@ -198,7 +209,7 @@ function StyledPage({
           return {
             key,
             cells: row.map((b) => ({ id: b.id, content: fill(b), width: blockWidthOf(b) })),
-            ...rowSpacingOf(style.layout, key),
+            ...rowSettingsOf(style.layout, key),
           };
         });
 
@@ -221,11 +232,11 @@ function StyledPage({
         rows.map((row, i) => (
           <div
             key={row.key}
-            className="flex justify-center"
+            className={rowClass(row.horizontal, row.vertical)}
             style={{ marginTop: i > 0 ? rows[i - 1].below : 0, gap: row.between }}
           >
             {row.cells.map((c) => (
-              <div key={c.id} className="min-w-0" style={{ width: `${c.width}%` }}>
+              <div key={c.id} className={ROW_BLOCK_CLASS} style={rowBlockStyle(c.width)}>
                 {c.content}
               </div>
             ))}

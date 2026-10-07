@@ -4,46 +4,50 @@ import {
   blockTypeLabel,
   blockWidthOf,
   rowKey,
-  rowSpacingOf,
+  rowSettingsOf,
   type CanvasLayout,
   type GridSpacing,
+  type HorizontalAlign,
   type LayoutBlock,
   type PageStyleLayout,
 } from "@/lib/pageStyleLayout";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
+import { ROW_BLOCK_CLASS, rowBlockStyle, rowClass } from "@/components/pageRows";
 
 // Draws a Page Style's layout as grey placeholders (2026-10-04) — what
 // goes where on the page, with no content. Used by the Page Styles
 // page's Preview panel. Uses the style's grid spacing, block spacing,
-// block widths (narrower blocks centred) and page margin (2026-10-06).
+// block widths, page margin (2026-10-06) and row alignment (2026-10-07),
+// drawn the same way as the site's pages (see components/pageRows.ts).
 export default function PageStylePreview({ style }: { style: PageStyleLayout }) {
   if (style.type === "CANVAS") return <CanvasPreview layout={style.layout} />;
 
   if (style.type === "SECTION") {
-    const { backgroundColor, video, gridSpacing, margins, spacing, widths } = style.layout;
+    const { backgroundColor, video, gridSpacing, margins, spacing, widths, aligns } =
+      style.layout;
     return (
       <div
-        className={`flex min-h-full flex-col items-center rounded-md ${PAGE_MARGIN_CLASS}`}
+        className={`flex min-h-full flex-col rounded-md ${PAGE_MARGIN_CLASS}`}
         style={{ ...pageMarginStyle(margins), backgroundColor: backgroundColor ?? undefined }}
       >
-        <Bar className="mb-4 h-6 w-1/3" />
-        <Part width={widths.byline}>
+        <Bar className="mb-4 h-6 w-1/3 self-center" />
+        <Part width={widths.byline} align={aligns.byline}>
           <Labelled label="Byline">
             <Bar className="mx-auto h-3 w-1/2" />
           </Labelled>
         </Part>
-        <Part width={widths.grid} above={spacing.belowByline}>
+        <Part width={widths.grid} align={aligns.grid} above={spacing.belowByline}>
           <Labelled label="Artwork grid — from the page's curation">
             <PlaceholderGrid count={8} spacing={gridSpacing} />
           </Labelled>
         </Part>
-        <Part width={widths.description} above={spacing.belowGrid}>
+        <Part width={widths.description} align={aligns.description} above={spacing.belowGrid}>
           <Labelled label="Description — from the page's curation">
             <BlockShape block={{ id: "description", type: "text" }} spacing={gridSpacing} />
           </Labelled>
         </Part>
         {video && (
-          <Part width={widths.video} above={spacing.belowDescription}>
+          <Part width={widths.video} align={aligns.video} above={spacing.belowDescription}>
             <Labelled label="Video">
               <BlockShape block={{ id: "video", type: "video" }} spacing={gridSpacing} />
             </Labelled>
@@ -78,15 +82,16 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
       )}
       {rows.map((row, i) => {
         const key = rowKey(row);
-        const above = i > 0 ? rowSpacingOf(layout, rowKey(rows[i - 1])).below : 0;
+        const settings = rowSettingsOf(layout, key);
+        const above = i > 0 ? rowSettingsOf(layout, rowKey(rows[i - 1])).below : 0;
         return (
           <div
             key={key}
-            className="flex justify-center"
-            style={{ marginTop: above, gap: rowSpacingOf(layout, key).between }}
+            className={rowClass(settings.horizontal, settings.vertical)}
+            style={{ marginTop: above, gap: settings.between }}
           >
             {row.map((b) => (
-              <div key={b.id} className="min-w-0" style={{ width: `${blockWidthOf(b)}%` }}>
+              <div key={b.id} className={ROW_BLOCK_CLASS} style={rowBlockStyle(blockWidthOf(b))}>
                 <Labelled label={blockLabel(b)}>
                   <BlockShape block={b} spacing={layout.gridSpacing} />
                 </Labelled>
@@ -156,17 +161,26 @@ function CanvasPreview({ layout }: { layout: CanvasLayout }) {
   );
 }
 
-// One part of a Section: its width, centred, and the space above it.
+// One part of a Section — a row of its own: its width, its alignment
+// and the space above it.
 function Part({
   width,
+  align,
   above = 0,
   children,
 }: {
   width: number;
+  align: HorizontalAlign;
   above?: number;
   children: ReactNode;
 }) {
-  return <div style={{ width: `${width}%`, marginTop: above }}>{children}</div>;
+  return (
+    <div className={rowClass(align, "top")} style={{ marginTop: above }}>
+      <div className={ROW_BLOCK_CLASS} style={rowBlockStyle(width)}>
+        {children}
+      </div>
+    </div>
+  );
 }
 
 function blockLabel(block: LayoutBlock): string {
