@@ -1,6 +1,6 @@
 // The Style Types a Page Style can be built from (2026-10-04) — see
-// PageType in schema.prisma. Each is a fundamentally different way of
-// building a page, not a different look:
+// PageStyleType in schema.prisma. Each is a fundamentally different way
+// of building a page, not a different look:
 // - Block Build (2026-10-07, was "Private / Custom"): a page built from
 //   components, each filled from the page's curation in Arrange.
 // - Canvas (2026-10-05): the curations placed on a canvas that scrolls
@@ -9,7 +9,7 @@
 // components now. Plain module, not "use server", so both the server
 // actions and the editor can import it.
 export const PAGE_STYLE_TYPES = [
-  { value: "PRIVATE", label: "Block Build" },
+  { value: "BLOCK_BUILD", label: "Block Build" },
   { value: "CANVAS", label: "Canvas" },
 ] as const;
 

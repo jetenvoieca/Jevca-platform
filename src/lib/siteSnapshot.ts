@@ -17,14 +17,15 @@ import type { ComponentContent } from "@/lib/pageComponents";
 // share the shapes.
 
 // Bumped whenever the shape below changes; an older snapshot is treated
-// as not published until the site is published again.
-export const SNAPSHOT_VERSION = 1;
+// as not published until the site is published again. 2 (2026-10-07):
+// the Block Build Style Type is stored as BLOCK_BUILD (was PRIVATE).
+export const SNAPSHOT_VERSION = 2;
 
 // One live page, in menu order. `curationId` is the page's own curation
 // (not used with a Canvas style, whose curations are in `canvas`).
 // `menuStyleId` (2026-10-06) is the menu this page shows — its own, or
 // else the site's; null = no menu. Its settings are in `menus`.
-// `components` (2026-10-07) is what fills a Private / Custom page's
+// `components` (2026-10-07) is what fills a Block Build page's
 // components; a site published before it existed reads it as empty.
 export type SnapshotPage = {
   id: string;

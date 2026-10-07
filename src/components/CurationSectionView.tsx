@@ -4,7 +4,7 @@ import { bodyTextCss, headingTextCss } from "@/components/textStyleCss";
 
 // One curation section as visitors see it (2026-10-06; shared
 // 2026-10-07) — in the curation panel on a Canvas page (CurationPanel),
-// and in a Private / Custom page's component it's been put in
+// and in a Block Build page's component it's been put in
 // (PagePreview). Text sections are plain text; in a page's Header, Text
 // or Text grid component they take that component's font, size, style
 // and colour from the page's style (`textStyle`, 2026-10-07 — see

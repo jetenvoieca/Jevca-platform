@@ -24,12 +24,10 @@ type SubscriptionPaymentRow = {
 export default function ClientOwnerPanel({
   site,
   artist,
-  templates,
   subscriptionPayments,
 }: {
   site: SiteRecord;
   artist: ArtistRecord;
-  templates: { id: string; name: string }[];
   subscriptionPayments: SubscriptionPaymentRow[];
 }) {
   return (
@@ -37,7 +35,7 @@ export default function ClientOwnerPanel({
       <h1 className="mb-4 text-lg font-semibold text-neutral-900">{site.name}</h1>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <OwnerCard artist={artist} className="lg:flex-1" />
-        <DomainCard site={site} templates={templates} className="lg:flex-1" />
+        <DomainCard site={site} className="lg:flex-1" />
         <div className="flex flex-col gap-4 lg:flex-1">
           <SubscriptionCard
             artist={artist}

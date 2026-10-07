@@ -77,7 +77,6 @@ export default async function ClientAdminPage({
         <ClientOwnerPanel
           site={data.site}
           artist={data.artist}
-          templates={data.templates}
           subscriptionPayments={data.subscriptionPayments}
         />
       }

@@ -41,7 +41,7 @@ export default function AlertClientPanel({
     <div className="grid grid-cols-[repeat(auto-fit,minmax(340px,1fr))] items-start gap-4">
       <div className="flex flex-col gap-4">
         <OwnerCard artist={data.artist} />
-        <DomainCard site={data.site} templates={data.templates} />
+        <DomainCard site={data.site} />
       </div>
 
       <div className="flex flex-col gap-4">

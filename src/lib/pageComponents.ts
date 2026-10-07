@@ -1,7 +1,7 @@
 import type { CurationSectionType } from "@/lib/curationSections";
 import type { LayoutBlockType } from "@/lib/pageStyleLayout";
 
-// What fills a Private / Custom page's components (2026-10-07, from
+// What fills a Block Build page's components (2026-10-07, from
 // Craig's mockup) — set per page in the Pages page's Arrange, by
 // dragging the page's curation's sections onto its Display Style's
 // components. One per component; a component with nothing in it shows

@@ -1,5 +1,4 @@
 import { db } from "@/lib/db";
-import { getTemplatesForDirectory } from "@/lib/actions/templates";
 import type { ArtistRecord, SiteRecord } from "@/lib/clientPanelTypes";
 
 // Everything the client cards (Owner / Domain / Subscription / Hopper
@@ -10,7 +9,6 @@ import type { ArtistRecord, SiteRecord } from "@/lib/clientPanelTypes";
 export type ClientPanelData = {
   site: SiteRecord;
   artist: ArtistRecord;
-  templates: { id: string; name: string }[];
   subscriptionPayments: {
     id: string;
     source: "STRIPE" | "MANUAL";
@@ -28,13 +26,10 @@ export async function getClientPanelData(siteId: string): Promise<ClientPanelDat
   });
   if (!site) return null;
 
-  const [payments, templates] = await Promise.all([
-    db.subscriptionPayment.findMany({
-      where: { artistId: site.artistId },
-      orderBy: { paidAt: "desc" },
-    }),
-    getTemplatesForDirectory(""),
-  ]);
+  const payments = await db.subscriptionPayment.findMany({
+    where: { artistId: site.artistId },
+    orderBy: { paidAt: "desc" },
+  });
 
   return {
     site: {
@@ -43,7 +38,6 @@ export async function getClientPanelData(siteId: string): Promise<ClientPanelDat
       domain: site.domain,
       status: site.status,
       defaultCurrency: site.defaultCurrency,
-      templateId: site.templateId,
       domainStatus: site.domainStatus,
       domainRenewalDate: site.domainRenewalDate ? site.domainRenewalDate.toISOString().slice(0, 10) : "",
     },
@@ -69,7 +63,6 @@ export async function getClientPanelData(siteId: string): Promise<ClientPanelDat
       stripeSubscriptionCustomerId: site.artist.stripeSubscriptionCustomerId,
       stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
     },
-    templates: templates.map((t) => ({ id: t.id, name: t.name })),
     subscriptionPayments: payments.map((p) => ({
       id: p.id,
       source: p.source as "STRIPE" | "MANUAL",
