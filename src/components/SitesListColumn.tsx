@@ -48,9 +48,8 @@ function compareSites(a: SiteRow, b: SiteRow, sort: SortValue): number {
   if (sort === "payment") {
     // No payment method set sorts last, not first — an unset value isn't
     // "before Direct Debit alphabetically", it's just not answered yet.
-    const pa = a.paymentMethod || "\\uFFFF";
-    const pb = b.paymentMethod || "\\uFFFF";
-    const cmp = pa.localeCompare(pb);
+    if (!a.paymentMethod !== !b.paymentMethod) return a.paymentMethod ? -1 : 1;
+    const cmp = (a.paymentMethod ?? "").localeCompare(b.paymentMethod ?? "");
     // Same type of payment groups together, then alphabetical by owner
     // within that group — otherwise same-type sites are left in
     // whatever order the server happened to return them.
