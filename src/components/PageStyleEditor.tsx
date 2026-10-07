@@ -20,7 +20,6 @@ import {
   type PageMargin,
   type PageMargins,
   type PageStyleLayout,
-  type SectionLayout,
   type TextStyle,
   type TextStyles,
 } from "@/lib/pageStyleLayout";
@@ -34,14 +33,10 @@ export type PageStyleDraft = {
   name: string;
   type: PageStyleType | "";
   custom: CustomLayout;
-  section: SectionLayout;
   canvas: CanvasLayout;
 };
 
 export const EMPTY_CUSTOM = (emptyLayout("PRIVATE") as Extract<PageStyleLayout, { type: "PRIVATE" }>)
-  .layout;
-
-export const EMPTY_SECTION = (emptyLayout("SECTION") as Extract<PageStyleLayout, { type: "SECTION" }>)
   .layout;
 
 export const EMPTY_CANVAS = (emptyLayout("CANVAS") as Extract<PageStyleLayout, { type: "CANVAS" }>)
@@ -52,14 +47,12 @@ export function draftFrom(name: string, style: PageStyleLayout | null): PageStyl
     name,
     type: style?.type ?? "",
     custom: style?.type === "PRIVATE" ? style.layout : EMPTY_CUSTOM,
-    section: style?.type === "SECTION" ? style.layout : EMPTY_SECTION,
     canvas: style?.type === "CANVAS" ? style.layout : EMPTY_CANVAS,
   };
 }
 
 // The draft as a layout, or null until a Style Type is chosen.
 export function draftLayout(draft: PageStyleDraft): PageStyleLayout | null {
-  if (draft.type === "SECTION") return { type: "SECTION", layout: draft.section };
   if (draft.type === "PRIVATE") return { type: "PRIVATE", layout: draft.custom };
   if (draft.type === "CANVAS") return { type: "CANVAS", layout: draft.canvas };
   return null;
@@ -81,21 +74,17 @@ const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label:
 // open until Close. Style name, Style Type, then the chosen type's own
 // layout controls — layout only, no content.
 //
-// Section and Private / Custom are laid out in their visual editors
-// (VisualLayoutEditor / SectionVisualEditor, 2026-10-07), which replace
-// the Preview while they're edited — components sized, spaced and
-// aligned by hand, with each one's own numbers (and a Sliding doors
-// component's settings) on its bar there. Here: the background colour,
-// then a Fine-tune section, closed by default, with the exact page
-// margins (2026-10-06, desktop and phone) and the spacing of grids of
-// images (2026-10-05) — and, for Private / Custom, how the text in its
-// Header, Text and Text grid components looks (2026-10-07, from Craig's
-// mockup: font, size, style and colour).
-//
-// Private / Custom also has an optional background image (the image
-// itself chosen on the page). Section is a fixed layout — byline,
-// artwork grid, Description — with an optional video below the
-// Description.
+// Block Build (2026-10-07, was Private / Custom) is laid out in its
+// visual editor (VisualLayoutEditor), which replaces the Preview while
+// it's edited — components added, moved, sized, spaced and aligned by
+// hand, with each one's own numbers (and a Sliding doors component's
+// settings) on its bar there. Here: the background colour, an optional
+// background image (the image itself chosen on the page), then a
+// Fine-tune section, closed by default, with the exact page margins
+// (2026-10-06, desktop and phone), the spacing of grids of images
+// (2026-10-05) and how the text in its Header, Text and Text grid
+// components looks (2026-10-07, from Craig's mockup: font, size, style
+// and colour).
 //
 // Canvas (2026-10-05): curation tile size, opening speed, opened size
 // (the first work's size when a curation opens, times the tile size),
@@ -115,9 +104,8 @@ export default function PageStyleEditor({
   status: { text: string; isError: boolean };
   onClose: () => void;
 }) {
-  const { custom, section, canvas } = draft;
+  const { custom, canvas } = draft;
   const setCustom = (next: CustomLayout) => onChange({ ...draft, custom: next });
-  const setSection = (next: SectionLayout) => onChange({ ...draft, section: next });
   const setCanvas = (next: CanvasLayout) => onChange({ ...draft, canvas: cleanCanvas(next) });
 
   const changeType = (value: string) => {
@@ -127,7 +115,6 @@ export default function PageStyleEditor({
       ...draft,
       type: value,
       custom: EMPTY_CUSTOM,
-      section: EMPTY_SECTION,
       canvas: EMPTY_CANVAS,
     });
   };
@@ -213,44 +200,6 @@ export default function PageStyleEditor({
           </div>
         )}
 
-        {draft.type === "SECTION" && (
-          <div className="mt-2 flex flex-col gap-2.5">
-            <BackgroundColourControl
-              value={section.backgroundColor}
-              onChange={(backgroundColor) => setSection({ ...section, backgroundColor })}
-            />
-            {section.video ? (
-              <div className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2">
-                <span className="flex-1 text-sm text-neutral-700">
-                  Video — below the Description, chosen on the page
-                </span>
-                <button
-                  type="button"
-                  onClick={() => setSection({ ...section, video: false })}
-                  className="text-xs text-red-500 hover:underline"
-                >
-                  Remove
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setSection({ ...section, video: true })}
-                className={smallButton}
-              >
-                + Video
-              </button>
-            )}
-
-            <FineTuneSection
-              margins={section.margins}
-              gridSpacing={section.gridSpacing}
-              onMargins={(margins) => setSection({ ...section, margins })}
-              onGridSpacing={(gridSpacing) => setSection({ ...section, gridSpacing })}
-            />
-          </div>
-        )}
-
         {draft.type === "PRIVATE" && (
           <div className="mt-2 flex flex-col gap-2.5">
             <BackgroundColourControl
@@ -312,9 +261,8 @@ export default function PageStyleEditor({
   );
 }
 
-// The exact page margins and grid spacing, closed by default (2026-10-07)
-// — shared by Section and Private / Custom — then anything a type adds
-// (`children`).
+// The exact page margins and grid spacing, closed by default
+// (2026-10-07), then the text components' look (`children`).
 function FineTuneSection({
   margins,
   gridSpacing,

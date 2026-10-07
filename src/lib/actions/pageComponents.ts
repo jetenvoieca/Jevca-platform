@@ -5,7 +5,7 @@ import { isCurationSectionType } from "@/lib/curationSections";
 import { contentFits, type ComponentContent, type ContentKind } from "@/lib/pageComponents";
 import { blockTypeLabel, normalizeLayout } from "@/lib/pageStyleLayout";
 
-// What fills a Private / Custom page's components (2026-10-07) — see
+// What fills a Block Build page's components (2026-10-07) — see
 // lib/pageComponents.ts and PageComponentContent in schema.prisma.
 // Scoped by siteId; only the page's own curation's sections can be
 // used, and only in a component they fit.
@@ -48,7 +48,7 @@ export async function setPageComponent(
   if (!page) return { error: "Page not found." };
   if (!page.curationId) return { error: "This page has no curation. Choose one with Edit." };
   if (page.pageStyle?.type !== "PRIVATE") {
-    return { error: "Only pages with a Private / Custom Display Style are arranged this way." };
+    return { error: "Only pages with a Block Build Display Style are arranged this way." };
   }
   const style = normalizeLayout("PRIVATE", page.pageStyle.layout);
   if (style.type !== "PRIVATE") return { error: "Page not found." };
