@@ -25,7 +25,7 @@ type MediaRow = {
   artwork: { id: string; catalogueName: string } | null;
 };
 
-// videoOnly stays exactly as it was (used by the Video content block) —
+// videoOnly stays exactly as it was (used by a curation's Video section) —
 // mediaKinds is the new, more general option, for pickers that want both
 // kinds together (e.g. an artwork's Related Images, since ancillary media
 // was always meant to include video — see the original Hopper spec).
@@ -64,8 +64,6 @@ export default function MediaPicker({
   previewUrl,
   previewKind = "image",
   previewClassName,
-  previewObjectFit = "cover",
-  previewStyle,
   onSelect,
 }: {
   artistId: string;
@@ -99,33 +97,17 @@ export default function MediaPicker({
   // this one picker is now both the preview and the trigger.
   previewUrl?: string;
   // "video" renders previewUrl in a muted <video> instead of an <img>
-  // (2026-09-04, Content Blocks' Video block) — e.g. pass a poster
+  // (2026-09-04; e.g. a curation's Video section) — pass a poster
   // frame's URL with previewKind="image" if one exists, or the video
   // file itself with previewKind="video" as a fallback when it doesn't.
   previewKind?: "image" | "video";
   // Overrides the default `aspect-[4/3] w-full` box the preview/trigger
-  // renders at (2026-09-04) — e.g. `h-full w-full` for a drag-resized
-  // row, or an aspect-ratio class for a responsive standalone box (see
-  // @/lib/blockMedia). Also applied to the empty (no
-  // previewUrl yet) dashed placeholder, so a not-yet-picked slot sizes
-  // the same way an already-picked one would. Every other existing
-  // caller (Artist profile photo, Artwork main image, etc.) is
-  // unaffected — they don't pass this, so they keep the original
-  // aspect-[4/3]/aspect-square boxes exactly as before.
+  // renders at (2026-09-04) — e.g. `aspect-video` for a video. Also
+  // applied to the empty (no previewUrl yet) dashed placeholder, so a
+  // not-yet-picked slot sizes the same way an already-picked one would.
+  // Callers that don't pass this (Artist profile photo, Artwork main
+  // image, etc.) keep the original aspect-[4/3]/aspect-square boxes.
   previewClassName?: string;
-  // "contain" (2026-09-04) — whole image visible, scaled to fit rather
-  // than cropped, anchored top-left so it doesn't drift as the box is
-  // resized. Used for the Content Blocks row-resize feature; every
-  // other caller keeps the default "cover".
-  previewObjectFit?: "cover" | "contain";
-  // Explicit inline style, layered on top of previewClassName — e.g. an
-  // exact pixel `height` for a drag-resized row (2026-09-05: delivered
-  // as a real number here rather than a CSS percentage inherited through
-  // parent wrappers, so it can't be silently overridden by an ancestor's
-  // own content-based sizing the way `h-full` was). Applied identically
-  // whether or not previewUrl is set yet, so an empty slot can carry a
-  // `minHeight` floor and never collapse to a sliver.
-  previewStyle?: React.CSSProperties;
   onSelect: (images: PickedImage[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -227,32 +209,28 @@ export default function MediaPicker({
 
   // Same trigger everywhere an image/video can be added — a blank dashed
   // tile, not a button — so adding media looks and behaves identically
-  // across the Artwork Catalogue, Media Catalogue, page Content Blocks,
-  // and Section artwork grids. See decisions-log.md, 2026-07-31.
+  // across the Artwork Catalogue, Media Catalogue and Curations. See
+  // decisions-log.md, 2026-07-31.
   //
   // When a previewUrl is given (2026-08-30), that convention still
   // applies but scaled up: the actual image fills the tile at a real
   // size instead of a small placeholder, with the same dashed-border
   // language shown as a hover overlay rather than the whole tile.
   if (!open) {
-    const fitClass =
-      previewObjectFit === "contain" ? "object-contain object-left-top" : "object-cover";
-
     if (previewUrl) {
       return (
         <button
           type="button"
           onClick={handleOpen}
-          style={previewStyle}
           className={`group relative block w-full overflow-hidden rounded-md ${
             previewClassName ?? "aspect-[4/3]"
           }`}
         >
           {previewKind === "video" ? (
-            <video src={previewUrl} muted playsInline className={`h-full w-full ${fitClass}`} />
+            <video src={previewUrl} muted playsInline className="h-full w-full object-cover" />
           ) : (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewUrl} alt="" className={`h-full w-full ${fitClass}`} />
+            <img src={previewUrl} alt="" className="h-full w-full object-cover" />
           )}
           <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
             <div className="hidden h-2/3 w-2/3 items-center justify-center border-2 border-dashed border-white group-hover:flex">
@@ -266,7 +244,6 @@ export default function MediaPicker({
       <button
         type="button"
         onClick={handleOpen}
-        style={previewStyle}
         className={`flex w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600 ${
           previewClassName ?? "aspect-square"
         }`}
