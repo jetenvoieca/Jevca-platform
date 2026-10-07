@@ -6,9 +6,7 @@ import {
   MAX_SECTION_HEADING,
   MAX_SECTION_IMAGES,
   MAX_SECTION_TEXT,
-  SECTION_HEIGHT_LIMITS,
   isCurationSectionType,
-  isTextSection,
   type CurationSectionData,
   type SectionMedia,
 } from "@/lib/curationSections";
@@ -20,15 +18,11 @@ import {
 
 type Result<T> = T | { error: string };
 
-const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
-
 const SECTION_SELECT = {
   id: true,
   type: true,
   heading: true,
   text: true,
-  height: true,
-  backgroundColor: true,
   media: {
     orderBy: { position: "asc" },
     select: {
@@ -42,8 +36,6 @@ type SectionRow = {
   type: string;
   heading: string | null;
   text: string | null;
-  height: number | null;
-  backgroundColor: string | null;
   media: {
     image: {
       id: string;
@@ -70,8 +62,6 @@ function toData(row: SectionRow): CurationSectionData {
     type: isCurationSectionType(row.type) ? row.type : "TEXT",
     heading: row.heading,
     text: row.text,
-    height: row.height,
-    backgroundColor: row.backgroundColor,
     media: row.media.map((m) => toMedia(m.image)),
   };
 }
@@ -151,45 +141,6 @@ export async function updateCurationSectionText(
     select: { heading: true, text: true },
   });
   return saved;
-}
-
-// Saves a text section's height (pixels, kept within limits; null =
-// just fits its text) and/or background colour (#rrggbb; null = none).
-export async function updateCurationSectionStyle(
-  sectionId: string,
-  artistId: string,
-  input: { height?: number | null; backgroundColor?: string | null }
-): Promise<Result<{ height: number | null; backgroundColor: string | null }>> {
-  const section = await db.curationSection.findFirst({
-    where: { id: sectionId, curation: { artistId } },
-    select: { id: true, type: true },
-  });
-  if (!section) return { error: "Section not found." };
-  if (!isCurationSectionType(section.type) || !isTextSection(section.type)) {
-    return { error: "Only text sections have a height and background colour." };
-  }
-
-  const data: { height?: number | null; backgroundColor?: string | null } = {};
-  if (input.height !== undefined) {
-    data.height =
-      input.height === null || !Number.isFinite(input.height)
-        ? null
-        : Math.round(
-            Math.min(SECTION_HEIGHT_LIMITS.max, Math.max(SECTION_HEIGHT_LIMITS.min, input.height))
-          );
-  }
-  if (input.backgroundColor !== undefined) {
-    if (input.backgroundColor !== null && !HEX_COLOUR.test(input.backgroundColor)) {
-      return { error: "That isn't a colour." };
-    }
-    data.backgroundColor = input.backgroundColor;
-  }
-
-  return db.curationSection.update({
-    where: { id: sectionId },
-    data,
-    select: { height: true, backgroundColor: true },
-  });
 }
 
 // Sets a Video section's video (one, or none) or an Images section's

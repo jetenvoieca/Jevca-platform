@@ -233,46 +233,23 @@ function FlyIn({
   );
 }
 
-// A text section's box (2026-10-06): its background colour, with some
-// padding when it has one, and its height as a minimum, the text centred
-// in it.
-function TextBox({ section, children }: { section: CurationSectionData; children: ReactNode }) {
-  return (
-    <div
-      className={`flex flex-col justify-center rounded-md ${section.backgroundColor ? "px-4 py-3" : ""}`}
-      style={{
-        backgroundColor: section.backgroundColor ?? undefined,
-        minHeight: section.height ?? undefined,
-      }}
-    >
-      {children}
-    </div>
-  );
-}
-
-// One presentation section, as visitors see it. Empty sections are left
-// out.
+// One presentation section, as visitors see it. Text sections are plain
+// text (2026-10-07). Empty sections are left out.
 function Section({ section }: { section: CurationSectionData }) {
   switch (section.type) {
     case "TAGLINE":
       return section.text ? (
-        <TextBox section={section}>
-          <p className="text-center text-base italic text-neutral-700">{section.text}</p>
-        </TextBox>
+        <p className="text-center text-base italic text-neutral-700">{section.text}</p>
       ) : null;
 
     case "DESCRIPTION":
       return section.text ? (
-        <TextBox section={section}>
-          <p className="whitespace-pre-line break-words text-sm text-neutral-800">
-            {section.text}
-          </p>
-        </TextBox>
+        <p className="whitespace-pre-line break-words text-sm text-neutral-800">{section.text}</p>
       ) : null;
 
     case "TEXT":
       return section.heading || section.text ? (
-        <TextBox section={section}>
+        <div>
           {section.heading && (
             <h3 className="mb-1 text-base font-medium text-neutral-900">{section.heading}</h3>
           )}
@@ -281,7 +258,7 @@ function Section({ section }: { section: CurationSectionData }) {
               {section.text}
             </p>
           )}
-        </TextBox>
+        </div>
       ) : null;
 
     case "VIDEO": {
