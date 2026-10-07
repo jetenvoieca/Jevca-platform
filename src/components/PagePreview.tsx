@@ -48,17 +48,17 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 // Clicking a work (2026-10-05) opens its presentation in this curation,
 // read-only — see CurationWorkView.
 //
-// `fullScreen` (the site's own pages): no title above the page, and a
-// Canvas fills the browser window.
+// No title is drawn above the page (2026-10-07), so the admin preview
+// starts where the published page does.
+//
+// `fullScreen` (the site's own pages): a Canvas fills the browser window.
 export default function PagePreview({
   pageId,
-  title,
   curationId,
   style,
   fullScreen = false,
 }: {
   pageId: string;
-  title: string;
   curationId: string | null;
   style: PageStyleSummary | null;
   fullScreen?: boolean;
@@ -119,7 +119,6 @@ export default function PagePreview({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{title}</h3>
       <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
       {viewer}
     </div>
