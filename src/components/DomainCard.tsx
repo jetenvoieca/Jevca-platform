@@ -16,9 +16,9 @@ const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:opacity-50";
 const cardCls = "rounded-lg border border-neutral-200 bg-white p-4";
 
-type Field = "domain" | "templateId" | "domainStatus" | "domainRenewalDate";
+type Field = "domain" | "domainStatus" | "domainRenewalDate";
 
-// Domain / Site status / Domain renewal / Template — split out of the
+// Domain / Site status / Domain renewal — split out of the
 // old SiteSettingsPanel (2026-09-12), same reasoning as OwnerCard: this
 // card is shared between the per-site "Profile" page and the
 // Administration → Clients page. Site status itself stays as
@@ -26,11 +26,9 @@ type Field = "domain" | "templateId" | "domainStatus" | "domainRenewalDate";
 // part of the resubmit-everything updateSite form.
 export default function DomainCard({
   site,
-  templates,
   className = "",
 }: {
   site: SiteRecord;
-  templates: { id: string; name: string }[];
   className?: string;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -47,9 +45,6 @@ export default function DomainCard({
     switch (field) {
       case "domain":
         changes = { domain: value };
-        break;
-      case "templateId":
-        changes = { templateId: value };
         break;
       case "domainStatus":
         changes = { domainStatus: value };
@@ -123,33 +118,6 @@ export default function DomainCard({
             Editable here, or updated in bulk via Namecheap Sync.
           </p>
         </div>
-
-        {/* Real Templates (2026-09-06) — populates this dropdown instead
-            of a hardcoded "Default" option. "— None —" (empty value)
-            means this site has no Template assigned, a perfectly normal
-            state (ordinary Section/Private/Pavilion pages don't need
-            one) — see Site.templateId in schema.prisma. */}
-        <label className={`${labelCls} mt-3`}>Template</label>
-        <select
-          key={`template-${site.id}`}
-          defaultValue={site.templateId || ""}
-          onChange={(e) => save("templateId", e.target.value)}
-          disabled={isPending}
-          className={inputCls}
-        >
-          <option value="">— None —</option>
-          {templates.map((t) => (
-            <option key={t.id} value={t.id}>
-              {t.name}
-            </option>
-          ))}
-        </select>
-        {templates.length === 0 && (
-          <p className="mt-1 text-xs text-neutral-400">
-            No templates yet — create one under Templates in the nav.
-          </p>
-        )}
-        {savedField === "templateId" && <p className="mt-1 text-xs text-green-600">Saved</p>}
       </div>
     </div>
   );

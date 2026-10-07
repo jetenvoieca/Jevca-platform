@@ -70,7 +70,6 @@ export default async function SiteLayout({
               name: site.name,
               domain: site.domain,
               defaultCurrency: site.defaultCurrency,
-              templateId: site.templateId,
               domainStatus: site.domainStatus,
               domainRenewalDate: site.domainRenewalDate,
             }}

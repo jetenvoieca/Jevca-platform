@@ -56,7 +56,6 @@ export type SiteFormFields = {
   name: string;
   domain: string;
   defaultCurrency: string;
-  templateId: string;
   domainStatus: string;
   domainRenewalDate: string;
 };
@@ -67,7 +66,6 @@ export function buildSiteFormData(base: SiteFormFields, changes: Partial<SiteFor
   fd.set("name", merged.name);
   fd.set("domain", merged.domain);
   fd.set("defaultCurrency", merged.defaultCurrency);
-  fd.set("templateId", merged.templateId);
   fd.set("domainStatus", merged.domainStatus);
   fd.set("domainRenewalDate", merged.domainRenewalDate);
   return fd;
@@ -132,7 +130,6 @@ export type SiteRecord = {
   domain: string | null;
   status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT";
   defaultCurrency: string;
-  templateId: string | null;
   domainStatus: string | null;
   domainRenewalDate: string;
 };
@@ -142,7 +139,6 @@ export function toSiteFormFields(site: SiteRecord): SiteFormFields {
     name: site.name,
     domain: site.domain || "",
     defaultCurrency: site.defaultCurrency,
-    templateId: site.templateId || "",
     domainStatus: site.domainStatus || "",
     domainRenewalDate: site.domainRenewalDate,
   };

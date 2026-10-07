@@ -47,11 +47,11 @@ export async function setPageComponent(
   });
   if (!page) return { error: "Page not found." };
   if (!page.curationId) return { error: "This page has no curation. Choose one with Edit." };
-  if (page.pageStyle?.type !== "PRIVATE") {
+  if (page.pageStyle?.type !== "BLOCK_BUILD") {
     return { error: "Only pages with a Block Build Display Style are arranged this way." };
   }
-  const style = normalizeLayout("PRIVATE", page.pageStyle.layout);
-  if (style.type !== "PRIVATE") return { error: "Page not found." };
+  const style = normalizeLayout("BLOCK_BUILD", page.pageStyle.layout);
+  if (style.type !== "BLOCK_BUILD") return { error: "Page not found." };
   const block = style.layout.blocks.find((b) => b.id === blockId);
   if (!block) return { error: "That component is no longer in the page's Display Style." };
 

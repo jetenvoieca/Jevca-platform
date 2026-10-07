@@ -27,7 +27,7 @@ export type SiteData = {
   listSections(curationId: string): Promise<CurationSectionData[]>;
   getPresentation(curationId: string, artworkId: string): Promise<CurationWorkPresentation | null>;
   getCanvas(pageId: string): Promise<CanvasPlacement[]>;
-  // What fills a Private / Custom page's components (2026-10-07).
+  // What fills a Block Build page's components (2026-10-07).
   getComponents(pageId: string): Promise<ComponentContent[]>;
   listCovers(): Promise<CurationCover[]>;
 };
