@@ -3,7 +3,7 @@ import { buildAccountsSection, buildSitesSection, buildTemplatesSection } from "
 import type { RecentSite } from "@/lib/recentSites";
 
 // Colour for every section that's specific to the site you're currently
-// inside (Artworks, Media, Website, Financial) — distinct from the
+// inside (Artworks, Media, Website, Financial, Marketing) — distinct from the
 // default grey used for Administration/Templates/Sites, so it's
 // visually obvious which groups are "always there" versus "belong to
 // this particular site". Also reused by the evaluation-only nav
@@ -31,7 +31,11 @@ export type SiteNavKey =
   | "purchases"
   | "customers"
   | "profile"
-  | "purchasesSettings";
+  | "purchasesSettings"
+  | "subscribers"
+  | "mailCampaigns"
+  | "socialMedia"
+  | "pr";
 
 const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "curations", "galleries", "artworkSettings"];
 
@@ -47,6 +51,8 @@ const FINANCIAL_KEYS: SiteNavKey[] = [
   "profile",
   "purchasesSettings",
 ];
+
+const MARKETING_KEYS: SiteNavKey[] = ["subscribers", "mailCampaigns", "socialMedia", "pr"];
 
 export function buildSiteNavEntries({
   siteId,
@@ -133,6 +139,24 @@ export function buildSiteNavEntries({
     },
   ];
 
+  // Marketing (2026-10-08, from Craig's mockup). Social Media and PR are
+  // placeholders for now.
+  const marketingBase = `${base}/marketing`;
+  const marketingChildren: AppShellNavItem[] = [
+    {
+      label: "Subscribers",
+      href: `${marketingBase}/subscribers`,
+      active: active === "subscribers",
+    },
+    {
+      label: "Mail Campaigns",
+      href: `${marketingBase}/campaigns`,
+      active: active === "mailCampaigns",
+    },
+    { label: "Social Media", href: `${marketingBase}/social`, active: active === "socialMedia" },
+    { label: "PR", href: `${marketingBase}/pr`, active: active === "pr" },
+  ];
+
   const sectionActive = (keys: SiteNavKey[]) => active !== null && keys.includes(active);
 
   return [
@@ -172,6 +196,14 @@ export function buildSiteNavEntries({
       color: SITE_SECTION_COLOR,
       active: sectionActive(FINANCIAL_KEYS),
       children: financialChildren,
+    },
+    {
+      label: "Marketing",
+      section: true,
+      key: "marketing",
+      color: SITE_SECTION_COLOR,
+      active: sectionActive(MARKETING_KEYS),
+      children: marketingChildren,
     },
   ];
 }

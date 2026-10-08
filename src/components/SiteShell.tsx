@@ -30,6 +30,10 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
   if (pathname.startsWith(`${base}/purchases/settings`)) return "purchasesSettings";
   if (pathname.startsWith(`${base}/purchases`)) return "purchases";
   if (pathname.startsWith(`${base}/customers`)) return "customers";
+  if (pathname.startsWith(`${base}/marketing/subscribers`)) return "subscribers";
+  if (pathname.startsWith(`${base}/marketing/campaigns`)) return "mailCampaigns";
+  if (pathname.startsWith(`${base}/marketing/social`)) return "socialMedia";
+  if (pathname.startsWith(`${base}/marketing/pr`)) return "pr";
   return null;
 }
 
