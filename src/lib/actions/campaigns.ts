@@ -3,8 +3,21 @@
 import { db } from "@/lib/db";
 import { normalizeMailTemplate, type MailTemplateLayout } from "@/lib/mailTemplateLayout";
 import {
+  DEFAULT_FOLLOW_UP,
+  SHARE_LIMITS,
+  campaignMailOrder,
+  cleanFollowUpDays,
+  defaultShares,
+  isFollowUpCondition,
+  principalShare,
+  MAX_ALTERNATIVES,
+  type CampaignMailKind,
+  type FollowUpCondition,
+} from "@/lib/campaignMails";
+import {
   cleanMailContent,
   mailReferences,
+  moveMailContent,
   pictureKey,
   type Localized,
   type MailContent,
@@ -14,13 +27,20 @@ import { loadMailAssets } from "@/lib/mailAssets";
 import { renderMailHtml } from "@/lib/mailHtml";
 
 // Marketing → Mail Campaigns (2026-10-08, step 3) — see Campaign and
-// CampaignMail in schema.prisma. Every action is scoped by the site the
+// CampaignMail in schema.prisma, and lib/campaignMails.ts for how a
+// campaign's mails fit together. Every action is scoped by the site the
 // page belongs to. No revalidatePath: the page keeps its own list up to
 // date.
 
 export type CampaignMailData = {
   id: string;
-  kind: "PRINCIPAL";
+  kind: CampaignMailKind;
+  position: number;
+  templateId: string | null;
+  // An alternative's share of the audience (null for the other mails).
+  sharePercent: number | null;
+  // The follow-up's condition and days (null for the other mails).
+  followUp: { condition: FollowUpCondition; days: number } | null;
   layout: MailTemplateLayout;
   content: MailContent;
   subject: Localized<string>;
@@ -28,6 +48,13 @@ export type CampaignMailData = {
 };
 
 export type CampaignSummary = { id: string; name: string; mails: CampaignMailData[] };
+
+// The Add / Edit window: the campaign's name, and its mails with the
+// template each starts from. `id` is null for a mail being added; a
+// mail left out is removed. `templateId` null keeps the mail's layout
+// as it is.
+export type CampaignMailSetup = { id: string | null; kind: CampaignMailKind; templateId: string | null };
+export type CampaignSetup = { name: string; mails: CampaignMailSetup[] };
 
 // What the mail editor saves.
 export type CampaignMailInput = {
@@ -54,6 +81,11 @@ function cleanSubjectLine(value: unknown): string | null {
 const MAIL_SELECT = {
   id: true,
   kind: true,
+  position: true,
+  templateId: true,
+  sharePercent: true,
+  followUpCondition: true,
+  followUpDays: true,
   layout: true,
   content: true,
   subjectEn: true,
@@ -62,20 +94,39 @@ const MAIL_SELECT = {
   previewFr: true,
 } as const;
 
-function toMailData(row: {
+const CAMPAIGN_SELECT = { id: true, name: true, mails: { select: MAIL_SELECT } } as const;
+
+type MailRow = {
   id: string;
-  kind: "PRINCIPAL";
+  kind: CampaignMailKind;
+  position: number;
+  templateId: string | null;
+  sharePercent: number | null;
+  followUpCondition: FollowUpCondition | null;
+  followUpDays: number | null;
   layout: unknown;
   content: unknown;
   subjectEn: string | null;
   subjectFr: string | null;
   previewEn: string | null;
   previewFr: string | null;
-}): CampaignMailData {
+};
+
+function toMailData(row: MailRow): CampaignMailData {
   const layout = normalizeMailTemplate(row.layout);
   return {
     id: row.id,
     kind: row.kind,
+    position: row.position,
+    templateId: row.templateId,
+    sharePercent: row.kind === "ALTERNATIVE" ? (row.sharePercent ?? SHARE_LIMITS.min) : null,
+    followUp:
+      row.kind === "FOLLOW_UP"
+        ? {
+            condition: row.followUpCondition ?? DEFAULT_FOLLOW_UP.condition,
+            days: row.followUpDays ?? DEFAULT_FOLLOW_UP.days,
+          }
+        : null,
     layout,
     content: cleanMailContent(row.content, layout),
     subject: { en: row.subjectEn ?? "", fr: row.subjectFr ?? "" },
@@ -83,53 +134,147 @@ function toMailData(row: {
   };
 }
 
+function toSummary(row: { id: string; name: string; mails: MailRow[] }): CampaignSummary {
+  const mails = row.mails
+    .map(toMailData)
+    .sort((a, b) => campaignMailOrder(a) - campaignMailOrder(b));
+  return { id: row.id, name: row.name, mails };
+}
+
 // Newest first, as campaigns are made one after another.
 export async function listCampaigns(siteId: string): Promise<CampaignSummary[]> {
   const rows = await db.campaign.findMany({
     where: { siteId },
     orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      name: true,
-      mails: { orderBy: { createdAt: "asc" }, select: MAIL_SELECT },
-    },
+    select: CAMPAIGN_SELECT,
   });
-  return rows.map((r) => ({ id: r.id, name: r.name, mails: r.mails.map(toMailData) }));
+  return rows.map(toSummary);
 }
 
-// A new campaign, with its principal mail started from a copy of the
-// chosen Mail Template.
-export async function createCampaign(
+// Whether the window's mails make a valid campaign: one principal mail,
+// up to 2 alternatives and at most one follow-up.
+function checkSetup(mails: CampaignMailSetup[]): string | null {
+  const count = (kind: CampaignMailKind) => mails.filter((m) => m.kind === kind).length;
+  if (count("PRINCIPAL") !== 1) return "A campaign has one principal mail.";
+  if (count("ALTERNATIVE") > MAX_ALTERNATIVES)
+    return `A campaign has at most ${MAX_ALTERNATIVES} alternative mails.`;
+  if (count("FOLLOW_UP") > 1) return "A campaign has at most one follow-up mail.";
+  if (mails.some((m) => !m.id && !m.templateId)) return "Choose a template for each new mail.";
+  return null;
+}
+
+// Adds a campaign (`id` null) or saves the Add / Edit window for one:
+// its name, and its mails with their templates. A new mail starts as a
+// copy of its template. A mail switched to another template takes that
+// template's layout, its content moved across by moveMailContent (the
+// window has already warned about anything that won't fit). A mail left
+// out is removed. When the alternatives change, their shares start again
+// from the defaults.
+export async function saveCampaign(
   siteId: string,
-  input: { name: string; templateId: string }
+  id: string | null,
+  setup: CampaignSetup
 ): Promise<{ campaign: CampaignSummary } | { error: string }> {
-  const name = input.name.trim();
+  const name = setup.name.trim();
   if (!name) return { error: "Give the campaign a name." };
-  const template = await db.mailTemplate.findUnique({
-    where: { id: input.templateId },
-    select: { layout: true },
-  });
-  if (!template) return { error: "Choose a mail template." };
-  const layout = normalizeMailTemplate(template.layout);
+  const problem = checkSetup(setup.mails);
+  if (problem) return { error: problem };
 
-  try {
-    const campaign = await db.campaign.create({
-      data: { siteId, name, mails: { create: { kind: "PRINCIPAL", layout, content: {} } } },
-      select: { id: true, name: true, mails: { select: MAIL_SELECT } },
-    });
-    return { campaign: { ...campaign, mails: campaign.mails.map(toMailData) } };
-  } catch (err) {
-    if (isUniqueViolation(err)) return { error: "A campaign with that name already exists." };
-    throw err;
+  const templateIds = [...new Set(setup.mails.flatMap((m) => (m.templateId ? [m.templateId] : [])))];
+  const templates = new Map(
+    (
+      await db.mailTemplate.findMany({
+        where: { id: { in: templateIds } },
+        select: { id: true, layout: true },
+      })
+    ).map((t) => [t.id, normalizeMailTemplate(t.layout)])
+  );
+  if (templates.size !== templateIds.length) return { error: "A chosen template no longer exists." };
+
+  const existing = id
+    ? await db.campaign.findFirst({
+        where: { id, siteId },
+        select: { mails: { select: { id: true, kind: true, templateId: true, layout: true, content: true } } },
+      })
+    : null;
+  if (id && !existing) return { error: "Campaign not found." };
+  const current = new Map((existing?.mails ?? []).map((m) => [m.id, m]));
+  for (const m of setup.mails) {
+    const found = m.id ? current.get(m.id) : null;
+    if (m.id && (!found || found.kind !== m.kind)) return { error: "Mail not found." };
   }
-}
 
-export async function renameCampaign(id: string, siteId: string, name: string): Promise<Result> {
-  const clean = name.trim();
-  if (!clean) return { error: "Give the campaign a name." };
+  const keptAlternatives = new Set(
+    setup.mails.filter((m) => m.kind === "ALTERNATIVE" && m.id).map((m) => m.id)
+  );
+  const alternatives = setup.mails.filter((m) => m.kind === "ALTERNATIVE");
+  const oldAlternatives = (existing?.mails ?? []).filter((m) => m.kind === "ALTERNATIVE");
+  const alternativesChanged =
+    alternatives.length !== oldAlternatives.length ||
+    oldAlternatives.some((m) => !keptAlternatives.has(m.id));
+  const shares = defaultShares(alternatives.length);
+
   try {
-    const { count } = await db.campaign.updateMany({ where: { id, siteId }, data: { name: clean } });
-    return count === 1 ? { ok: true } : { error: "Campaign not found." };
+    const campaignId = await db.$transaction(async (tx) => {
+      const campaign = id
+        ? await tx.campaign.update({ where: { id }, data: { name }, select: { id: true } })
+        : await tx.campaign.create({ data: { siteId, name }, select: { id: true } });
+
+      const removed = [...current.keys()].filter((mailId) => !setup.mails.some((m) => m.id === mailId));
+      if (removed.length > 0) {
+        await tx.campaignMail.deleteMany({ where: { id: { in: removed }, campaignId: campaign.id } });
+      }
+
+      for (const m of setup.mails) {
+        const position = m.kind === "ALTERNATIVE" ? alternatives.indexOf(m) + 1 : 0;
+        const share =
+          m.kind === "ALTERNATIVE" && alternativesChanged ? { sharePercent: shares[position - 1] } : {};
+        const template = m.templateId ? templates.get(m.templateId)! : null;
+        const old = m.id ? current.get(m.id) : null;
+
+        if (old) {
+          const switched = template && m.templateId !== old.templateId;
+          const layout = switched ? template : null;
+          await tx.campaignMail.update({
+            where: { id: old.id },
+            data: {
+              position,
+              ...share,
+              ...(layout
+                ? {
+                    templateId: m.templateId,
+                    layout,
+                    content: moveMailContent(
+                      cleanMailContent(old.content, normalizeMailTemplate(old.layout)),
+                      normalizeMailTemplate(old.layout),
+                      layout
+                    ).content,
+                  }
+                : {}),
+            },
+          });
+        } else if (template) {
+          await tx.campaignMail.create({
+            data: {
+              campaignId: campaign.id,
+              kind: m.kind,
+              templateId: m.templateId,
+              position,
+              ...share,
+              ...(m.kind === "FOLLOW_UP"
+                ? { followUpCondition: DEFAULT_FOLLOW_UP.condition, followUpDays: DEFAULT_FOLLOW_UP.days }
+                : {}),
+              layout: template,
+              content: {},
+            },
+          });
+        }
+      }
+      return campaign.id;
+    });
+
+    const saved = await db.campaign.findUnique({ where: { id: campaignId }, select: CAMPAIGN_SELECT });
+    return saved ? { campaign: toSummary(saved) } : { error: "Campaign not found." };
   } catch (err) {
     if (isUniqueViolation(err)) return { error: "A campaign with that name already exists." };
     throw err;
@@ -144,7 +289,7 @@ export async function duplicateCampaign(
 ): Promise<{ campaign: CampaignSummary } | { error: string }> {
   const source = await db.campaign.findFirst({
     where: { id, siteId },
-    select: { name: true, mails: { orderBy: { createdAt: "asc" }, select: MAIL_SELECT } },
+    select: { name: true, mails: { select: MAIL_SELECT } },
   });
   if (!source) return { error: "Campaign not found." };
 
@@ -165,6 +310,11 @@ export async function duplicateCampaign(
         mails: {
           create: source.mails.map((m) => ({
             kind: m.kind,
+            templateId: m.templateId,
+            position: m.position,
+            sharePercent: m.sharePercent,
+            followUpCondition: m.followUpCondition,
+            followUpDays: m.followUpDays,
             layout: m.layout ?? {},
             content: m.content ?? {},
             subjectEn: m.subjectEn,
@@ -174,9 +324,9 @@ export async function duplicateCampaign(
           })),
         },
       },
-      select: { id: true, name: true, mails: { orderBy: { createdAt: "asc" }, select: MAIL_SELECT } },
+      select: CAMPAIGN_SELECT,
     });
-    return { campaign: { ...campaign, mails: campaign.mails.map(toMailData) } };
+    return { campaign: toSummary(campaign) };
   } catch (err) {
     if (isUniqueViolation(err)) return { error: "Couldn't duplicate — try again." };
     throw err;
@@ -185,6 +335,48 @@ export async function duplicateCampaign(
 
 export async function deleteCampaign(id: string, siteId: string): Promise<void> {
   await db.campaign.deleteMany({ where: { id, siteId } });
+}
+
+// An alternative's share of the audience. The alternatives together
+// must leave at least 1% for the principal mail.
+export async function setAlternativeShare(
+  mailId: string,
+  siteId: string,
+  percent: number
+): Promise<Result> {
+  const share = Math.round(percent);
+  if (!Number.isFinite(share) || share < SHARE_LIMITS.min || share > SHARE_LIMITS.max) {
+    return { error: `A share is between ${SHARE_LIMITS.min}% and ${SHARE_LIMITS.max}%.` };
+  }
+  const mail = await db.campaignMail.findFirst({
+    where: { id: mailId, kind: "ALTERNATIVE", campaign: { siteId } },
+    select: { campaignId: true },
+  });
+  if (!mail) return { error: "Mail not found." };
+  const others = await db.campaignMail.findMany({
+    where: { campaignId: mail.campaignId, kind: "ALTERNATIVE", id: { not: mailId } },
+    select: { sharePercent: true },
+  });
+  const shares = [...others.map((o) => o.sharePercent ?? SHARE_LIMITS.min), share];
+  if (principalShare(shares) < SHARE_LIMITS.min) {
+    return { error: "The alternatives can total at most 99% — the principal mail needs the rest." };
+  }
+  await db.campaignMail.update({ where: { id: mailId }, data: { sharePercent: share } });
+  return { ok: true };
+}
+
+// Who the follow-up mail goes to, and how many days after the campaign.
+export async function setFollowUp(
+  mailId: string,
+  siteId: string,
+  input: { condition: string; days: number }
+): Promise<Result> {
+  if (!isFollowUpCondition(input.condition)) return { error: "Choose who the follow-up goes to." };
+  const { count } = await db.campaignMail.updateMany({
+    where: { id: mailId, kind: "FOLLOW_UP", campaign: { siteId } },
+    data: { followUpCondition: input.condition, followUpDays: cleanFollowUpDays(input.days) },
+  });
+  return count === 1 ? { ok: true } : { error: "Mail not found." };
 }
 
 // Saves a mail's layout, content, subject and preview text — each
@@ -235,7 +427,7 @@ export async function renderCampaignMailPreview(
   };
 }
 
-// Small pictures for the Content panel: each picture and artwork the
+// Small pictures for the mail editor: each picture and artwork the
 // mail uses, by pictureKey() (artworks by "artwork:<id>"), with a name.
 export type MailPictureThumb = { url: string | null; label: string };
 

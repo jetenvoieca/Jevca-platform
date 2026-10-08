@@ -11,9 +11,9 @@ import {
 import {
   ConsentCheckbox,
   ListSelect,
-  SubscriberModal,
   primaryButtonCls,
 } from "@/components/subscriberFormParts";
+import FormModal from "@/components/FormModal";
 
 // Marketing → Subscribers → Add from Customers (2026-10-08): ticks the
 // artist's individual customers who have an email address. Customers
@@ -89,7 +89,7 @@ export default function SubscribeCustomersPanel({
 
   if (result) {
     return (
-      <SubscriberModal title="Add from Customers" busy={false} onClose={onClose}>
+      <FormModal title="Add from Customers" busy={false} onClose={onClose}>
         <p className="text-sm text-neutral-700">
           {result.added} added
           {result.alreadyOnFile > 0 && `, ${result.alreadyOnFile} already on file (left unchanged)`}.
@@ -97,12 +97,12 @@ export default function SubscribeCustomersPanel({
         <button type="button" onClick={onClose} className={primaryButtonCls}>
           Done
         </button>
-      </SubscriberModal>
+      </FormModal>
     );
   }
 
   return (
-    <SubscriberModal title="Add from Customers" busy={isPending} onClose={onClose}>
+    <FormModal title="Add from Customers" busy={isPending} onClose={onClose}>
       {customers === null ? (
         <p className="text-sm text-neutral-400">Loading…</p>
       ) : customers.length === 0 ? (
@@ -167,6 +167,6 @@ export default function SubscribeCustomersPanel({
           </button>
         </>
       )}
-    </SubscriberModal>
+    </FormModal>
   );
 }

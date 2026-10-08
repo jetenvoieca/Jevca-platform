@@ -10,10 +10,10 @@ import {
 import {
   ConsentCheckbox,
   ListSelect,
-  SubscriberModal,
   primaryButtonCls,
   secondaryButtonCls,
 } from "@/components/subscriberFormParts";
+import FormModal from "@/components/FormModal";
 
 // Rows sent to the server per call, so progress can be shown and no one
 // request gets too large (the server accepts up to 500).
@@ -95,7 +95,7 @@ export default function SubscriberImportPanel({
   const total = parsed?.rows.length ?? 0;
 
   return (
-    <SubscriberModal title="Import subscribers from CSV" busy={importing} onClose={onClose}>
+    <FormModal title="Import subscribers from CSV" busy={importing} onClose={onClose}>
       {!parsed && !parsing && (
         <>
           <p className="text-sm text-neutral-500">
@@ -191,6 +191,6 @@ export default function SubscriberImportPanel({
       )}
 
       {error && <p className="text-xs text-red-600">{error}</p>}
-    </SubscriberModal>
+    </FormModal>
   );
 }

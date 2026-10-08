@@ -1,6 +1,11 @@
 import { cleanColour } from "@/lib/rowLayout";
-import { cleanLinkUrl, cleanRichText, EMPTY_RICH_TEXT, type RichText } from "@/lib/richText";
-import type { MailBlock, MailBlockType, MailTemplateLayout } from "@/lib/mailTemplateLayout";
+import { cleanLinkUrl, cleanRichText, EMPTY_RICH_TEXT, isRichTextEmpty, type RichText } from "@/lib/richText";
+import {
+  mailBlockTypeLabel,
+  type MailBlock,
+  type MailBlockType,
+  type MailTemplateLayout,
+} from "@/lib/mailTemplateLayout";
 
 // What fills a campaign mail's components (2026-10-08, Marketing step 3)
 // — saved in CampaignMail.content (JSON), keyed by component id. Every
@@ -181,4 +186,64 @@ export function mailReferences(content: MailContent): {
     if (c.type === "artwork" && c.artworkId) artworkIds.push(c.artworkId);
   }
   return { pictures, artworkIds: [...new Set(artworkIds)] };
+}
+
+// Whether a component's content has nothing in it yet, in either
+// language.
+export function isBlockContentEmpty(content: BlockContent): boolean {
+  const blank = (text: Localized<string>) => !text.en.trim() && !text.fr.trim();
+  const blankRich = (text: Localized<RichText>) => isRichTextEmpty(text.en) && isRichTextEmpty(text.fr);
+  switch (content.type) {
+    case "header":
+      return blank(content.text);
+    case "text":
+      return blankRich(content.text);
+    case "textgrid":
+      return content.cells.every(blankRich);
+    case "image":
+      return !content.picture;
+    case "gallery":
+      return content.pictures.length === 0;
+    case "artwork":
+      return !content.artworkId;
+    case "button":
+      return blank(content.label) && !content.url;
+  }
+}
+
+// Moves a mail's content into a new layout when its template is changed
+// (Craig's rule): each component's content goes to the component of the
+// same kind in the same order — the 1st Text to the 1st Text, the 1st
+// Gallery to the 1st Gallery. `dropped` names the components whose
+// content has nowhere to go (empty ones aren't counted), e.g.
+// ["Text", "Gallery"], so the person can be warned first.
+export function moveMailContent(
+  content: MailContent,
+  from: MailTemplateLayout,
+  to: MailTemplateLayout
+): { content: MailContent; dropped: string[] } {
+  const byType = (layout: MailTemplateLayout) => {
+    const lists = new Map<MailBlockType, MailBlock[]>();
+    // A layout's blocks are kept in reading order.
+    for (const block of layout.blocks) {
+      if (!hasContent(block.type)) continue;
+      lists.set(block.type, [...(lists.get(block.type) ?? []), block]);
+    }
+    return lists;
+  };
+  const source = byType(from);
+  const target = byType(to);
+  const moved: MailContent = {};
+  const dropped: string[] = [];
+  for (const [type, blocks] of source) {
+    const places = target.get(type) ?? [];
+    blocks.forEach((block, i) => {
+      const found = content[block.id];
+      if (!found || found.type !== type) return;
+      const place = places[i];
+      if (place) moved[place.id] = found;
+      else if (!isBlockContentEmpty(found)) dropped.push(mailBlockTypeLabel(type));
+    });
+  }
+  return { content: cleanMailContent(moved, to), dropped };
 }

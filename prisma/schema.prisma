@@ -1211,6 +1211,9 @@ model MailTemplate {
 
   layout Json @default("{}")
 
+  // The campaign mails started from this template (kept if it's deleted).
+  campaignMails CampaignMail[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
@@ -1899,10 +1902,21 @@ model Campaign {
   @@unique([siteId, name])
 }
 
-// Which of a campaign's mails this is. Only the principal mail exists
-// for now; alternative versions and the follow-up come in step 4.
+// Which of a campaign's mails this is (2026-10-08): the principal mail,
+// up to 2 alternatives (each recipient gets one of these three, by
+// share), and at most one follow-up.
 enum CampaignMailKind {
   PRINCIPAL
+  ALTERNATIVE
+  FOLLOW_UP
+}
+
+// Who a campaign's follow-up mail goes to, N days after the campaign.
+enum FollowUpCondition {
+  NOT_OPENED
+  OPENED
+  CLICKED
+  NOT_CLICKED
 }
 
 // One mail of a campaign (2026-10-08). `layout` is a copy of the Mail
@@ -1910,12 +1924,22 @@ enum CampaignMailKind {
 // can then change; `content` is what fills each component, in English
 // and French (lib/mailContent.ts). Subject and preview text are per
 // language; a mail with no French subject isn't sent to French
-// subscribers (Craig's choice).
+// subscribers (Craig's choice). `templateId` is the template it started
+// from (or was last switched to). An alternative has its `position` (1
+// or 2) and `sharePercent` of the audience — the principal mail gets
+// the rest. The follow-up has its condition and days.
 model CampaignMail {
   id         String           @id @default(cuid())
   campaignId String
   campaign   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
   kind       CampaignMailKind @default(PRINCIPAL)
+  templateId String?
+  template   MailTemplate?    @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  position   Int              @default(0)
+
+  sharePercent      Int?
+  followUpCondition FollowUpCondition?
+  followUpDays      Int?
 
   layout  Json @default("{}")
   content Json @default("{}")
@@ -1929,4 +1953,5 @@ model CampaignMail {
   updatedAt DateTime @updatedAt
 
   @@index([campaignId])
+  @@index([templateId])
 }

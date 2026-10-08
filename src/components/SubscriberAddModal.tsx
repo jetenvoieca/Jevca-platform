@@ -10,11 +10,11 @@ import {
 import {
   ConsentCheckbox,
   LanguageSelect,
-  SubscriberModal,
   inputCls,
   labelCls,
   primaryButtonCls,
 } from "@/components/subscriberFormParts";
+import FormModal from "@/components/FormModal";
 
 // Marketing → Subscribers → Add subscriber (2026-10-08). Starts in the
 // mail list being viewed, if any.
@@ -65,7 +65,7 @@ export default function SubscriberAddModal({
   };
 
   return (
-    <SubscriberModal title="Add subscriber" busy={isPending} onClose={onClose}>
+    <FormModal title="Add subscriber" busy={isPending} onClose={onClose}>
       <div>
         <label className={labelCls}>Email</label>
         <input
@@ -132,6 +132,6 @@ export default function SubscriberAddModal({
       >
         {isPending ? "Adding…" : "Add subscriber"}
       </button>
-    </SubscriberModal>
+    </FormModal>
   );
 }

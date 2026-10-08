@@ -2,12 +2,12 @@
 
 import { useEffect, useState, useTransition } from "react";
 import {
-  createCampaign,
   deleteCampaign,
   describeMailPictures,
   duplicateCampaign,
-  renameCampaign,
   renderCampaignMailPreview,
+  setAlternativeShare,
+  setFollowUp,
   updateCampaignMail,
   type CampaignMailData,
   type CampaignMailInput,
@@ -15,6 +15,7 @@ import {
   type MailPictureThumb,
 } from "@/lib/actions/campaigns";
 import type { MailTemplateSummary } from "@/lib/actions/mailTemplates";
+import { campaignMailLabel, type FollowUpCondition } from "@/lib/campaignMails";
 import {
   cleanMailContent,
   contentOf,
@@ -29,6 +30,8 @@ import type { MailBlock, MailTemplateLayout } from "@/lib/mailTemplateLayout";
 import MailLayoutEditor, { MailBlockShape } from "@/components/MailLayoutEditor";
 import MailBlockContent, { ButtonSettings, type PictureThumbs } from "@/components/MailBlockContent";
 import MailPreviewFrame from "@/components/MailPreviewFrame";
+import CampaignSetupModal from "@/components/CampaignSetupModal";
+import CampaignMailList from "@/components/CampaignMailList";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAutoSave } from "@/components/useAutoSave";
 
@@ -38,8 +41,10 @@ import { useAutoSave } from "@/components/useAutoSave";
 // the selected mail — its template's layout as a form, with each
 // component's content typed straight into it, and the EN | FR switch
 // (which language is typed, and previewed) above it with the subject and
-// preview text; on the right, Add / Edit / Duplicate / Delete, the
-// Campaigns list and the selected campaign's mails. Every change shows
+// preview text; on the right, Add / Edit / Duplicate / Delete (Add and
+// Edit open the campaign's window: its name, and its mails with their
+// templates), the Campaigns list, and the selected campaign's mails
+// with their shares and the follow-up's condition. Every change shows
 // in the Preview and saves itself shortly after. The audience and
 // sending come in a later step.
 
@@ -50,11 +55,7 @@ type MailDraft = {
   preview: Localized<string>;
 };
 
-type CampaignForm = { mode: "add" | "edit"; name: string; templateId: string };
-
 const PREVIEW_DELAY_MS = 400;
-
-const MAIL_LABELS: Record<CampaignMailData["kind"], string> = { PRINCIPAL: "Principal mail" };
 
 const buttonClass =
   "rounded-md border border-neutral-300 px-2 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
@@ -65,6 +66,9 @@ const inputClass =
 function toDraft(mail: CampaignMailData): MailDraft {
   return { layout: mail.layout, content: mail.content, subject: mail.subject, preview: mail.preview };
 }
+
+// Which window is open: Add (null) or Edit (the campaign).
+type SetupWindow = { campaign: CampaignSummary | null };
 
 function listButtonClass(selected: boolean): string {
   return `flex w-full items-center justify-between gap-2 truncate rounded-md border px-3 py-2 text-left text-sm ${
@@ -93,7 +97,7 @@ export default function CampaignsView({
   const [language, setLanguage] = useState<MailLanguage>("en");
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
-  const [form, setForm] = useState<CampaignForm | null>(null);
+  const [setup, setSetup] = useState<SetupWindow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -160,31 +164,55 @@ export default function CampaignsView({
 
   // ---- Campaigns ----
 
-  const saveForm = () => {
-    if (!form) return;
+  // Add / Edit: anything still being typed is saved first, so the window
+  // works from the latest content.
+  const openSetup = (campaign: CampaignSummary | null) => {
     setError(null);
     startTransition(async () => {
-      if (form.mode === "add") {
-        const result = await createCampaign(siteId, { name: form.name, templateId: form.templateId });
-        if ("error" in result) {
-          setError(result.error);
-          return;
-        }
-        setCampaigns((prev) => [result.campaign, ...prev]);
-        setForm(null);
-        openMail(result.campaign, result.campaign.mails[0] ?? null);
-      } else if (selected) {
-        const result = await renameCampaign(selected.id, siteId, form.name);
-        if ("error" in result) {
-          setError(result.error);
-          return;
-        }
-        const name = form.name.trim();
-        setCampaigns((prev) => prev.map((c) => (c.id === selected.id ? { ...c, name } : c)));
-        setForm(null);
+      await autoSave.flush();
+      setSetup({ campaign });
+    });
+  };
+
+  // After Add / Edit: the saved campaign replaces (or joins) the list,
+  // and the mail being edited stays open if it's still there.
+  const handleSetupSaved = (saved: CampaignSummary) => {
+    const isNew = !campaigns.some((c) => c.id === saved.id);
+    setCampaigns((prev) => (isNew ? [saved, ...prev] : prev.map((c) => (c.id === saved.id ? saved : c))));
+    setSetup(null);
+    const keep = saved.mails.find((m) => m.id === mailId);
+    openMail(saved, keep ?? saved.mails[0] ?? null);
+  };
+
+  // Changes one mail's settings in the list straight away, then saves
+  // them; if saving is refused, the list goes back and says why.
+  const changeMailSettings = (
+    mailId: string,
+    patch: Partial<CampaignMailData>,
+    save: () => Promise<{ ok: true } | { error: string }>
+  ) => {
+    const before = campaigns;
+    setError(null);
+    setCampaigns((prev) =>
+      prev.map((c) => ({
+        ...c,
+        mails: c.mails.map((m) => (m.id === mailId ? { ...m, ...patch } : m)),
+      }))
+    );
+    startTransition(async () => {
+      const result = await save();
+      if ("error" in result) {
+        setCampaigns(before);
+        setError(result.error);
       }
     });
   };
+
+  const handleShare = (id: string, percent: number) =>
+    changeMailSettings(id, { sharePercent: percent }, () => setAlternativeShare(id, siteId, percent));
+
+  const handleFollowUp = (id: string, followUp: { condition: FollowUpCondition; days: number }) =>
+    changeMailSettings(id, { followUp }, () => setFollowUp(id, siteId, followUp));
 
   const handleDuplicate = () => {
     if (!selected) return;
@@ -272,7 +300,7 @@ export default function CampaignsView({
     };
   };
 
-  const busy = !!form || isPending;
+  const busy = !!setup || isPending;
 
   return (
     <div className="grid h-full grid-cols-[minmax(0,0.85fr)_minmax(0,1.35fr)_300px] gap-4 p-4">
@@ -295,7 +323,7 @@ export default function CampaignsView({
         {draft && mail ? (
           <>
             <div className="mb-3 flex items-center justify-between gap-3">
-              <h2 className="text-base text-neutral-800">{MAIL_LABELS[mail.kind]}</h2>
+              <h2 className="text-base text-neutral-800">{campaignMailLabel(mail.kind, mail.position)}</h2>
               <div className="flex rounded-md border border-neutral-300 p-0.5">
                 {MAIL_LANGUAGES.map((l) => (
                   <button
@@ -355,10 +383,7 @@ export default function CampaignsView({
         <div className="grid grid-cols-4 gap-2">
           <button
             type="button"
-            onClick={() => {
-              setError(null);
-              setForm({ mode: "add", name: "", templateId: templates[0]?.id ?? "" });
-            }}
+            onClick={() => openSetup(null)}
             disabled={busy}
             className={buttonClass}
           >
@@ -366,10 +391,7 @@ export default function CampaignsView({
           </button>
           <button
             type="button"
-            onClick={() => {
-              setError(null);
-              if (selected) setForm({ mode: "edit", name: selected.name, templateId: "" });
-            }}
+            onClick={() => selected && openSetup(selected)}
             disabled={busy || !selected}
             className={buttonClass}
           >
@@ -392,70 +414,10 @@ export default function CampaignsView({
             Delete
           </button>
         </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
 
         <div className="flex min-h-[10rem] flex-col rounded-lg border border-neutral-300 bg-white p-3">
           <h2 className="mb-3 text-center text-base text-neutral-800">Campaigns</h2>
-
-          {form && (
-            <form
-              onSubmit={(e) => {
-                e.preventDefault();
-                saveForm();
-              }}
-              className="mb-3 space-y-2 rounded-md bg-neutral-50 p-2"
-            >
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Campaign name"
-                aria-label="Campaign name"
-                autoFocus
-                className={inputClass}
-              />
-              {form.mode === "add" &&
-                (templates.length > 0 ? (
-                  <select
-                    value={form.templateId}
-                    onChange={(e) => setForm({ ...form, templateId: e.target.value })}
-                    aria-label="Mail template"
-                    className={inputClass}
-                  >
-                    {templates.map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <p className="text-xs text-neutral-500">
-                    Make a mail template first, under Templates → Mail Templates.
-                  </p>
-                ))}
-              <div className="flex gap-2">
-                <button
-                  type="submit"
-                  disabled={
-                    isPending || !form.name.trim() || (form.mode === "add" && !form.templateId)
-                  }
-                  className="flex-1 rounded-md bg-neutral-900 px-2 py-1.5 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-                >
-                  {form.mode === "add" ? "Add campaign" : "Save name"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setForm(null);
-                    setError(null);
-                  }}
-                  className="rounded-md border border-neutral-300 px-2 py-1.5 text-xs hover:bg-white"
-                >
-                  Cancel
-                </button>
-              </div>
-            </form>
-          )}
-          {error && <p className="mb-2 text-xs text-red-600">{error}</p>}
 
           <div className="flex flex-col gap-1">
             {campaigns.map((c) => (
@@ -480,24 +442,29 @@ export default function CampaignsView({
 
         {selected && draft && (
           <div className="flex flex-col gap-2 rounded-lg border border-neutral-300 bg-white p-3">
-            <div className="flex flex-col gap-1">
-              {selected.mails.map((m) => (
-                <button
-                  key={m.id}
-                  type="button"
-                  onClick={() => m.id !== mailId && openMail(selected, m)}
-                  className={listButtonClass(m.id === mailId)}
-                >
-                  <span className="truncate">{MAIL_LABELS[m.kind]}</span>
-                </button>
-              ))}
-            </div>
+            <CampaignMailList
+              mails={selected.mails}
+              selectedId={mailId}
+              onSelect={(m) => openMail(selected, m)}
+              onShare={handleShare}
+              onFollowUp={handleFollowUp}
+            />
             <p className={`text-xs ${autoSave.status.isError ? "text-red-600" : "text-neutral-500"}`}>
               {autoSave.status.text}
             </p>
           </div>
         )}
       </aside>
+
+      {setup && (
+        <CampaignSetupModal
+          siteId={siteId}
+          campaign={setup.campaign}
+          templates={templates}
+          onSaved={handleSetupSaved}
+          onClose={() => setSetup(null)}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmingDelete && !!selected}
