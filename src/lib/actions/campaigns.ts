@@ -27,6 +27,7 @@ import {
 import { Resend } from "resend";
 import { loadMailAssets } from "@/lib/mailAssets";
 import { CAMPAIGN_PUBLIC_URL, artistCampaignAddresses } from "@/lib/email";
+import { TEST_UNSUBSCRIBE_TOKEN, unsubscribeHeaders, unsubscribePageUrl } from "@/lib/unsubscribe";
 import { renderMailHtml } from "@/lib/mailHtml";
 
 // Marketing → Mail Campaigns (2026-10-08, step 3) — see Campaign and
@@ -450,8 +451,8 @@ const TEST_LANGUAGE_NAMES: Record<MailLanguage, string> = { en: "English", fr: "
 // as it stands to one address typed in, in both languages as two emails
 // — from the artist's campaign address, with replies to their normal
 // one. A language with no subject isn't sent (as a French subscriber
-// wouldn't get it). The subject starts "[Test]". The unsubscribe link
-// goes to the unsubscribe page's test address.
+// wouldn't get it). The subject starts "[Test]". Its unsubscribe link
+// and headers use the test token, which unsubscribes no one.
 export async function sendCampaignTestMail(
   siteId: string,
   input: CampaignMailInput,
@@ -477,7 +478,7 @@ export async function sendCampaignTestMail(
   for (const { value: language } of MAIL_LANGUAGES) {
     const name = TEST_LANGUAGE_NAMES[language];
     const mail = await renderCampaignMail(siteId, input, language, {
-      unsubscribeUrl: `${CAMPAIGN_PUBLIC_URL}/unsubscribe/test`,
+      unsubscribeUrl: unsubscribePageUrl(TEST_UNSUBSCRIBE_TOKEN),
     });
     if ("error" in mail) return mail;
     if (!mail.subject) {
@@ -490,6 +491,7 @@ export async function sendCampaignTestMail(
       to: address,
       subject: `[Test] ${mail.subject}`,
       html: mail.html,
+      headers: unsubscribeHeaders(TEST_UNSUBSCRIBE_TOKEN),
     });
     if (error) return { error: `${name}: ${error.message || "Resend could not send the email."}` };
     sent.push(name);

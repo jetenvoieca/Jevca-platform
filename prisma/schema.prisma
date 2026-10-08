@@ -998,6 +998,12 @@ model Subscriber {
   consentAt      DateTime?
   unsubscribedAt DateTime?
 
+  // The secret in this subscriber's unsubscribe link (2026-10-08) —
+  // news.jevca.art/unsubscribe/<token>, in every campaign mail and its
+  // one-click List-Unsubscribe header. Random and unguessable, so the
+  // link can't be used to unsubscribe anyone else.
+  unsubscribeToken String @unique @default(dbgenerated("replace(gen_random_uuid()::text, '-', '') || replace(gen_random_uuid()::text, '-', '')"))
+
   customerId String?
   customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
 
