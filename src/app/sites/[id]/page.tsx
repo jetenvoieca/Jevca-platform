@@ -117,6 +117,7 @@ export default async function SiteSettingsPage({
             stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
             profileImageUrl: site.artist.profileImage?.url ?? null,
             story: site.artist.story,
+            writingVoice: site.artist.writingVoice,
             signatureUrl: site.artist.signatureUrl,
             // This artist's own @jevca.art local part (2026-09-05, Email
             // Integration) — see the Owner card, now on the

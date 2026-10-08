@@ -161,6 +161,10 @@ model Artist {
   // the Media Catalogue — see the note there).
   profileImageId String? @unique
   story          String?
+  // How the artist writes (2026-10-08) — given to the translator when a
+  // campaign mail is translated into French, so the French reads in
+  // their voice (lib/actions/translateMail.ts).
+  writingVoice   String?
 
   hopperToken String @unique @default(cuid())
 

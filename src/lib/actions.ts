@@ -215,14 +215,19 @@ export async function setArtistProfileImage(artistId: string, imageId: string): 
   revalidatePath("/");
 }
 
-// Personal Profile tab's "Story" text — its own action rather than
-// folded into updateArtist's big multi-field form, so saving it doesn't
-// require passing every other Owner field through unchanged just to
-// change this one.
-export async function updateArtistStory(artistId: string, story: string): Promise<void> {
+// Personal Profile tab's texts — the artist's Story, and their Writing
+// voice (2026-10-08, used when a campaign mail is translated). Their
+// own action rather than folded into updateArtist's big multi-field
+// form, so saving one doesn't require passing every other Owner field
+// through unchanged.
+export async function updateArtistProfileText(
+  artistId: string,
+  field: "story" | "writingVoice",
+  value: string
+): Promise<void> {
   await db.artist.update({
     where: { id: artistId },
-    data: { story: story || null },
+    data: { [field]: value.trim() || null },
   });
   revalidatePath("/");
 }

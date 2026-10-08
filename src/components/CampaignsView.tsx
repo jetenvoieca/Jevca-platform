@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import {
   deleteCampaign,
   describeMailPictures,
@@ -15,6 +15,8 @@ import {
   type MailPictureThumb,
 } from "@/lib/actions/campaigns";
 import type { MailTemplateSummary } from "@/lib/actions/mailTemplates";
+import { translateMailToFrench } from "@/lib/actions/translateMail";
+import { applyFrench, frenchGaps, hasNoFrench } from "@/lib/mailTranslation";
 import { campaignMailLabel, type FollowUpCondition } from "@/lib/campaignMails";
 import {
   cleanMailContent,
@@ -41,7 +43,8 @@ import { useAutoSave } from "@/components/useAutoSave";
 // the selected mail — its template's layout as a form, with each
 // component's content typed straight into it, and the EN | FR switch
 // (which language is typed, and previewed) above it with the subject and
-// preview text; on the right, Add / Edit / Duplicate / Delete (Add and
+// preview text — in French, "Translate now" fills whatever has English
+// but no French yet; on the right, Add / Edit / Duplicate / Delete (Add and
 // Edit open the campaign's window: its name, and its mails with their
 // templates), the Campaigns list, and the selected campaign's mails
 // with their shares and the follow-up's condition. Every change shows
@@ -98,12 +101,24 @@ export default function CampaignsView({
   const [previewHtml, setPreviewHtml] = useState<string | null>(null);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [setup, setSetup] = useState<SetupWindow | null>(null);
+  const [translating, setTranslating] = useState(false);
+  const [translateError, setTranslateError] = useState<string | null>(null);
+  // Goes up when a translation replaces the content, so the text boxes
+  // show it.
+  const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const selected = campaigns.find((c) => c.id === selectedId) ?? null;
   const mail = selected?.mails.find((m) => m.id === mailId) ?? null;
+
+  // The draft as it is now — the translation, which takes a few seconds,
+  // is put into whatever has been typed meanwhile.
+  const latestDraft = useRef(draft);
+  latestDraft.current = draft;
+  const mailIdRef = useRef(mailId);
+  mailIdRef.current = mailId;
 
   const autoSave = useAutoSave<MailDraft>({
     update: (id, d) => updateCampaignMail(id, siteId, d),
@@ -133,6 +148,7 @@ export default function CampaignsView({
       setSelectedId(campaign?.id ?? null);
       setMailId(next?.id ?? null);
       setDraft(next ? toDraft(next) : null);
+      setTranslateError(null);
       autoSave.begin(next?.id ?? null);
       if (next) setThumbs(await describeMailPictures(siteId, next.content));
     });
@@ -277,6 +293,7 @@ export default function CampaignsView({
         blockId={block.id}
         content={contentOf(draft.content, block as MailBlock & { type: BlockContent["type"] })}
         language={language}
+        revision={revision}
         onChange={(next) => changeBlockContent(block.id, next)}
         pickers={pickers}
       />
@@ -298,6 +315,26 @@ export default function CampaignsView({
         />
       ),
     };
+  };
+
+  // Translate now: the French of every part that has English but no
+  // French yet, from the artist's own voice (Settings → Writing voice).
+  const handleTranslate = async () => {
+    if (!draft) return;
+    const translatingMailId = mailId;
+    setTranslating(true);
+    setTranslateError(null);
+    const result = await translateMailToFrench(siteId, draft);
+    setTranslating(false);
+    if ("error" in result) {
+      setTranslateError(result.error);
+      return;
+    }
+    const current = latestDraft.current;
+    if (current && translatingMailId === mailIdRef.current) {
+      changeDraft(applyFrench(current, result.fill));
+      setRevision((n) => n + 1);
+    }
   };
 
   const busy = !!setup || isPending;
@@ -357,6 +394,26 @@ export default function CampaignsView({
                 className={inputClass}
               />
             </div>
+            {language === "fr" && frenchGaps(draft).length > 0 && (
+              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2">
+                <p className="text-sm text-neutral-700">
+                  {hasNoFrench(draft)
+                    ? "No French version yet — translate from the English, or type it directly below."
+                    : "Some parts have no French yet — translate them from the English, or type them below."}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleTranslate}
+                  disabled={translating}
+                  className="shrink-0 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                >
+                  {translating ? "Translating…" : "Translate now"}
+                </button>
+              </div>
+            )}
+            {language === "fr" && translateError && (
+              <p className="mb-3 text-xs text-red-600">{translateError}</p>
+            )}
             {language === "fr" && !draft.subject.fr.trim() && (
               <p className="mb-3 text-xs text-neutral-500">
                 With no French subject, French subscribers don&apos;t get this campaign.

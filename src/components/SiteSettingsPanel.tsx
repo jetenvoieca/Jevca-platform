@@ -11,7 +11,7 @@ import {
   saveArtistLogo,
   saveArtistSignature,
   setArtistProfileImage,
-  updateArtistStory,
+  updateArtistProfileText,
 } from "@/lib/actions";
 import {
   toArtistFormFields,
@@ -68,6 +68,7 @@ type ArtistData = {
   stripeSubscriptionStatus: string | null;
   profileImageUrl: string | null;
   story: string | null;
+  writingVoice: string | null;
   // The Certificate of Authenticity's signature image (2026-09-03) —
   // see the matching note by saveArtistSignature in lib/actions.ts.
   signatureUrl: string | null;
@@ -314,11 +315,11 @@ export default function SiteSettingsPanel({
     });
   };
 
-  const handleStorySave = (value: string) => {
+  const handleProfileTextSave = (field: "story" | "writingVoice", value: string) => {
     startTransition(async () => {
-      await updateArtistStory(artist.id, value);
+      await updateArtistProfileText(artist.id, field, value);
       router.refresh();
-      flash("story");
+      flash(field);
     });
   };
 
@@ -384,13 +385,28 @@ export default function SiteSettingsPanel({
               <textarea
                 key={`story-${artist.id}`}
                 defaultValue={artist.story || ""}
-                onBlur={(e) => handleStorySave(e.target.value.trim())}
+                onBlur={(e) => handleProfileTextSave("story", e.target.value)}
                 disabled={isPending}
                 rows={10}
                 placeholder="This artist's story…"
                 className={inputCls}
               />
               {savedField === "story" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+
+              <label className={`${labelCls} mt-4`}>Writing voice</label>
+              <textarea
+                key={`voice-${artist.id}`}
+                defaultValue={artist.writingVoice || ""}
+                onBlur={(e) => handleProfileTextSave("writingVoice", e.target.value)}
+                disabled={isPending}
+                rows={4}
+                placeholder="How this artist writes — e.g. warm, first-person, playful…"
+                className={inputCls}
+              />
+              <p className="mt-1 text-xs text-neutral-400">
+                Used when a campaign mail is translated into French, so it reads in this artist&apos;s voice.
+              </p>
+              {savedField === "writingVoice" && <p className="mt-1 text-xs text-green-600">Saved</p>}
             </div>
           ) : (
             <div className="flex flex-col gap-4">

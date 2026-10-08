@@ -25,7 +25,9 @@ import { ColourControl } from "@/components/layoutControls";
 // time — the EN | FR switch above the editor; pictures, artworks, links
 // and colours are the same in both. Pressing inside never starts a drag
 // (the component is moved by its label strip). Every change goes
-// straight to `onChange`; the mail saves itself.
+// straight to `onChange`; the mail saves itself. `revision` changes when
+// the content is replaced from outside (Translate now), so the text
+// boxes start again from it.
 
 export type PictureThumbs = Record<string, MailPictureThumb>;
 
@@ -47,12 +49,14 @@ export default function MailBlockContent({
   blockId,
   content,
   language,
+  revision,
   onChange,
   pickers,
 }: {
   blockId: string;
   content: BlockContent;
   language: MailLanguage;
+  revision: number;
   onChange: (content: BlockContent) => void;
   pickers: PickerContext;
 }) {
@@ -74,7 +78,7 @@ export default function MailBlockContent({
 
       {content.type === "text" && (
         <RichTextField
-          key={`${blockId}:${language}`}
+          key={`${blockId}:${language}:${revision}`}
           label={`Text · ${inLanguage}`}
           value={content.text[language]}
           onChange={(doc) => onChange({ ...content, text: { ...content.text, [language]: doc } })}
@@ -90,7 +94,7 @@ export default function MailBlockContent({
             {content.cells.map((cell, i) => (
               <div key={`${i}:${content.cells.length}`} className="relative">
                 <RichTextField
-                  key={`${blockId}:${i}:${content.cells.length}:${language}`}
+                  key={`${blockId}:${i}:${content.cells.length}:${language}:${revision}`}
                   label={`Column ${i + 1}`}
                   value={cell[language]}
                   onChange={(doc) =>
