@@ -620,7 +620,7 @@ export function useSelectionKeys(selected: boolean, onDeselect: () => void, onDe
         e.preventDefault();
         onDelete();
       } else if (e.key === "Escape") {
-        onDelete && onDeselect();
+        onDeselect();
       }
     };
     window.addEventListener("keydown", onKey);
