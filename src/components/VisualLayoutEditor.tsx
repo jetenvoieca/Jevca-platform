@@ -43,7 +43,6 @@ import {
   ScaledFrame,
   SelectionBar,
   SpacingHandle,
-  desktopContentWidth,
   useSelectionKeys,
 } from "@/components/visualEditorParts";
 
@@ -70,9 +69,11 @@ import {
 // - Fine-tune: the bar's Fine-tune button shows the exact numbers for
 //   the component's width and the gaps around its row; a component with
 //   settings of its own (e.g. Sliding doors) has a button for those.
-// - A caller can add one more button to a component's bar (`blockButton`
-//   — a campaign mail's Content), for something shown outside the
-//   editor.
+// - What's inside each component is the caller's: an outline (Page
+//   Styles, Mail Templates) or boxes to type its content into (a
+//   campaign mail, drawn `fluid` so they stay full size). Pressing in
+//   those boxes never starts a drag — the caller stops it — so a
+//   component is moved by its label strip.
 // `footer` is a fixed part drawn below the components (a mail's
 // footer). Every change goes straight to `onChange`, which saves it.
 
@@ -82,9 +83,6 @@ export type EditorComponent<T extends string> = { value: T; label: string };
 // A component's own settings, opened from its bar: the button's label,
 // the panel's title and its contents.
 export type BlockSettingsPanel = { button: string; title: string; content: ReactNode };
-
-// An extra button on a component's bar, handled by the caller.
-export type BlockBarButton = { label: string; onClick: () => void };
 
 type DragItem<B extends RowBlock> =
   | { kind: "new"; type: B["type"] }
@@ -103,27 +101,26 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   newBlock,
   renderBlock,
   settingsPanel,
-  blockButton,
   desktopWidth,
   backgroundColor,
   backgroundImage = false,
   surroundColor = null,
+  fluid = false,
   footer,
 }: {
   layout: L;
   onChange: (layout: L) => void;
   components: readonly EditorComponent<B["type"]>[];
   newBlock: (type: B["type"]) => B;
-  // How a component is drawn (its outline, or later its content).
+  // How a component is drawn: its outline, or its content to type into.
   renderBlock: (block: B) => ReactNode;
   // A component's own settings, if it has any; `onBlock` saves them.
   settingsPanel?: (block: B, onBlock: (block: B) => void) => BlockSettingsPanel | null;
-  // An extra button on a component's bar, if it has one.
-  blockButton?: (block: B) => BlockBarButton | null;
   desktopWidth: number;
   backgroundColor: string | null;
   backgroundImage?: boolean;
   surroundColor?: string | null;
+  fluid?: boolean;
   footer?: ReactNode;
 }) {
   const [device, setDevice] = useState<PreviewDevice>("desktop");
@@ -225,7 +222,6 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
     setSelectedId(block.id);
   };
 
-  const contentWidth = desktopContentWidth(layout.margins, desktopWidth);
   const draggingId = dragging?.kind === "move" ? dragging.block.id : null;
 
   return (
@@ -242,7 +238,12 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
 
         <div className="flex min-w-0 flex-1 flex-col">
           <DeviceSwitch device={device} onDevice={setDevice} />
-          <ScaledFrame device={device} desktopWidth={desktopWidth} surroundColor={surroundColor}>
+          <ScaledFrame
+            device={device}
+            desktopWidth={desktopWidth}
+            surroundColor={surroundColor}
+            fluid={fluid}
+          >
             <PageFrame
               margins={layout.margins}
               device={device}
@@ -285,7 +286,7 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
                             lastRow={i === rows.length - 1}
                             device={device}
                             settings={settings}
-                            contentWidth={contentWidth}
+                            horizontalMargin={layout.margins.desktop.horizontal}
                             selected={b.id === selectedId}
                             faded={b.id === draggingId}
                             dropSide={
@@ -296,7 +297,6 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
                             ownSettings={settingsPanel?.(b, (next) =>
                               onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
                             )}
-                            extraButton={blockButton?.(b) ?? null}
                             onSelect={() => setSelectedId(b.id)}
                             onWidth={(width) =>
                               onChange({
@@ -455,12 +455,11 @@ function BlockItem<B extends RowBlock>({
   lastRow,
   device,
   settings,
-  contentWidth,
+  horizontalMargin,
   selected,
   faded,
   dropSide,
   ownSettings,
-  extraButton,
   onSelect,
   onWidth,
   onRow,
@@ -474,12 +473,11 @@ function BlockItem<B extends RowBlock>({
   lastRow: boolean;
   device: PreviewDevice;
   settings: RowSettings;
-  contentWidth: number;
+  horizontalMargin: number;
   selected: boolean;
   faded: boolean;
   dropSide: "left" | "right" | null;
   ownSettings: BlockSettingsPanel | null | undefined;
-  extraButton: BlockBarButton | null;
   onSelect: () => void;
   onWidth: (width: number) => void;
   onRow: (patch: Partial<RowSettings>) => void;
@@ -499,7 +497,7 @@ function BlockItem<B extends RowBlock>({
       width={width}
       device={device}
       horizontal={settings.horizontal}
-      contentWidth={contentWidth}
+      horizontalMargin={horizontalMargin}
       label={`${label} — drag to move, click to select`}
       selected={selected}
       faded={faded}
@@ -526,9 +524,6 @@ function BlockItem<B extends RowBlock>({
           vertical={rowSize > 1 ? settings.vertical : undefined}
           onAlign={onRow}
         >
-          {extraButton && (
-            <BarButton onClick={extraButton.onClick}>{extraButton.label}</BarButton>
-          )}
           {ownSettings && (
             <BarButton active={panel === "own"} onClick={() => togglePanel("own")}>
               {ownSettings.button}

@@ -41,6 +41,11 @@ const PHONE_WIDTH = 390;
 // grown by it so they stay a readable size.
 const ScaleContext = createContext(1);
 
+// The page's drawn width, in page pixels — what a component's width (a %
+// of the contents inside the margin) is measured against when its edge
+// is dragged.
+const FrameWidthContext = createContext(PAGE_DESKTOP_WIDTH);
+
 // The Desktop / Phone switch, with a hint for each, above the page.
 export function DeviceSwitch({
   device,
@@ -77,22 +82,28 @@ export function DeviceSwitch({
 // Draws the layout at its real width — `desktopWidth` on desktop —
 // shrunk to fit the space available, in a scrolling area with room
 // above for the first component's bar. `surroundColor` fills the space
-// around it (a mail's surround).
+// around it (a mail's surround). With `fluid` (a campaign mail, whose
+// components hold boxes to type into), it isn't shrunk: when there's
+// less room than its real width it's drawn narrower instead, so the
+// boxes stay full size; the Preview shows it at its real width.
 export function ScaledFrame({
   device,
   desktopWidth,
   surroundColor = null,
+  fluid = false,
   children,
 }: {
   device: PreviewDevice;
   desktopWidth: number;
   surroundColor?: string | null;
+  fluid?: boolean;
   children: ReactNode;
 }) {
-  const width = device === "desktop" ? desktopWidth : PHONE_WIDTH;
+  const fullWidth = device === "desktop" ? desktopWidth : PHONE_WIDTH;
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
+  const [width, setWidth] = useState(fullWidth);
   const [height, setHeight] = useState(0);
 
   useEffect(() => {
@@ -100,7 +111,14 @@ export function ScaledFrame({
     const inner = innerRef.current;
     if (!outer || !inner) return;
     const measure = () => {
-      setScale(Math.min(1, outer.clientWidth / width));
+      const room = outer.clientWidth;
+      if (fluid) {
+        setScale(1);
+        setWidth(Math.min(fullWidth, room));
+      } else {
+        setScale(Math.min(1, room / fullWidth));
+        setWidth(fullWidth);
+      }
       setHeight(inner.offsetHeight);
     };
     const observer = new ResizeObserver(measure);
@@ -108,7 +126,7 @@ export function ScaledFrame({
     observer.observe(inner);
     measure();
     return () => observer.disconnect();
-  }, [width]);
+  }, [fullWidth, fluid]);
 
   return (
     <div
@@ -126,7 +144,9 @@ export function ScaledFrame({
             ref={innerRef}
             style={{ width, transform: `scale(${scale})`, transformOrigin: "0 0" }}
           >
-            <ScaleContext.Provider value={scale}>{children}</ScaleContext.Provider>
+            <ScaleContext.Provider value={scale}>
+              <FrameWidthContext.Provider value={width}>{children}</FrameWidthContext.Provider>
+            </ScaleContext.Provider>
           </div>
         </div>
       </div>
@@ -182,13 +202,6 @@ export function PageFrame({
   );
 }
 
-// The width of the contents on a desktop, inside the margin: what a
-// component's width (a % of it) is measured against when its edge is
-// dragged.
-export function desktopContentWidth(margins: PageMargins, desktopWidth: number): number {
-  return desktopWidth - 2 * margins.desktop.horizontal;
-}
-
 // Starts a pointer drag on a handle: `onDrag` gets how far the pointer
 // has moved since it went down, in page pixels (screen pixels divided by
 // the page's `scale`).
@@ -223,11 +236,12 @@ function startHandleDrag(
 // bar above it and, when one is open, its panel over it. `boxRef` and
 // `boxProps` go on the box itself — the Block Build editor makes it
 // draggable with them; the grips, bar and panel sit beside it.
+// `horizontalMargin` is the page's desktop side margin.
 export function EditableBlock({
   width,
   device,
   horizontal,
-  contentWidth,
+  horizontalMargin,
   label,
   selected,
   faded = false,
@@ -243,7 +257,7 @@ export function EditableBlock({
   width: number;
   device: PreviewDevice;
   horizontal: HorizontalAlign;
-  contentWidth: number;
+  horizontalMargin: number;
   label: string;
   selected: boolean;
   faded?: boolean;
@@ -257,6 +271,7 @@ export function EditableBlock({
   children: ReactNode;
 }) {
   const scale = useContext(ScaleContext);
+  const contentWidth = useContext(FrameWidthContext) - 2 * horizontalMargin;
   const [resizing, setResizing] = useState(false);
   const desktop = device === "desktop";
 
@@ -605,7 +620,7 @@ export function useSelectionKeys(selected: boolean, onDeselect: () => void, onDe
         e.preventDefault();
         onDelete();
       } else if (e.key === "Escape") {
-        onDeselect();
+        onDelete && onDeselect();
       }
     };
     window.addEventListener("keydown", onKey);
