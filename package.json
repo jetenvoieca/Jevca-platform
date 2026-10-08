@@ -47,7 +47,10 @@
     "@fontsource/raleway": "^5.1.0",
     "@fontsource/source-sans-3": "^5.1.0",
     "@fontsource/space-mono": "^5.1.0",
-    "@fontsource/work-sans": "^5.1.0"
+    "@fontsource/work-sans": "^5.1.0",
+    "@tiptap/pm": "^3.31.4",
+    "@tiptap/react": "^3.31.4",
+    "@tiptap/starter-kit": "^3.31.4"
   },
   "devDependencies": {
     "typescript": "^5.9.0",

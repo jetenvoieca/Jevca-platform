@@ -1069,6 +1069,9 @@ model Site {
   menuStyleId String?
   menuStyle   MenuStyle? @relation(fields: [menuStyleId], references: [id], onDelete: SetNull)
 
+  // Marketing → Mail Campaigns (2026-10-08). See Campaign below.
+  campaigns Campaign[]
+
   @@index([artistId])
   @@index([menuStyleId])
   @@index([lastVisitedAt])
@@ -1394,7 +1397,6 @@ model Purchase {
   artwork   Artwork @relation(fields: [artworkId], references: [id])
 
   status PurchaseStatus @default(ACTIVE)
-
   channel SaleChannel @default(STRIPE)
 
   buyerName    String?
@@ -1876,4 +1878,55 @@ model WebsiteMenuItem {
 
   @@index([position])
   @@index([pageId])
+}
+
+// A mail campaign (2026-10-08, Marketing step 3) — made on a site's
+// Marketing → Mail Campaigns page, sent to that artist's subscribers.
+// Belongs to the site (not just the artist) so its mails link to that
+// site's website. Its mails are in CampaignMail. Names are unique within
+// a site, so the list stays readable.
+model Campaign {
+  id     String @id @default(cuid())
+  siteId String
+  site   Site   @relation(fields: [siteId], references: [id])
+  name   String
+
+  mails CampaignMail[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([siteId, name])
+}
+
+// Which of a campaign's mails this is. Only the principal mail exists
+// for now; alternative versions and the follow-up come in step 4.
+enum CampaignMailKind {
+  PRINCIPAL
+}
+
+// One mail of a campaign (2026-10-08). `layout` is a copy of the Mail
+// Template it started from (lib/mailTemplateLayout.ts), which the mail
+// can then change; `content` is what fills each component, in English
+// and French (lib/mailContent.ts). Subject and preview text are per
+// language; a mail with no French subject isn't sent to French
+// subscribers (Craig's choice).
+model CampaignMail {
+  id         String           @id @default(cuid())
+  campaignId String
+  campaign   Campaign         @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  kind       CampaignMailKind @default(PRINCIPAL)
+
+  layout  Json @default("{}")
+  content Json @default("{}")
+
+  subjectEn String?
+  subjectFr String?
+  previewEn String?
+  previewFr String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([campaignId])
 }

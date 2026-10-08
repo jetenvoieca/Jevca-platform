@@ -70,6 +70,9 @@ import {
 // - Fine-tune: the bar's Fine-tune button shows the exact numbers for
 //   the component's width and the gaps around its row; a component with
 //   settings of its own (e.g. Sliding doors) has a button for those.
+// - A caller can add one more button to a component's bar (`blockButton`
+//   — a campaign mail's Content), for something shown outside the
+//   editor.
 // `footer` is a fixed part drawn below the components (a mail's
 // footer). Every change goes straight to `onChange`, which saves it.
 
@@ -79,6 +82,9 @@ export type EditorComponent<T extends string> = { value: T; label: string };
 // A component's own settings, opened from its bar: the button's label,
 // the panel's title and its contents.
 export type BlockSettingsPanel = { button: string; title: string; content: ReactNode };
+
+// An extra button on a component's bar, handled by the caller.
+export type BlockBarButton = { label: string; onClick: () => void };
 
 type DragItem<B extends RowBlock> =
   | { kind: "new"; type: B["type"] }
@@ -97,6 +103,7 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   newBlock,
   renderBlock,
   settingsPanel,
+  blockButton,
   desktopWidth,
   backgroundColor,
   backgroundImage = false,
@@ -111,6 +118,8 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   renderBlock: (block: B) => ReactNode;
   // A component's own settings, if it has any; `onBlock` saves them.
   settingsPanel?: (block: B, onBlock: (block: B) => void) => BlockSettingsPanel | null;
+  // An extra button on a component's bar, if it has one.
+  blockButton?: (block: B) => BlockBarButton | null;
   desktopWidth: number;
   backgroundColor: string | null;
   backgroundImage?: boolean;
@@ -287,6 +296,7 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
                             ownSettings={settingsPanel?.(b, (next) =>
                               onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
                             )}
+                            extraButton={blockButton?.(b) ?? null}
                             onSelect={() => setSelectedId(b.id)}
                             onWidth={(width) =>
                               onChange({
@@ -450,6 +460,7 @@ function BlockItem<B extends RowBlock>({
   faded,
   dropSide,
   ownSettings,
+  extraButton,
   onSelect,
   onWidth,
   onRow,
@@ -468,6 +479,7 @@ function BlockItem<B extends RowBlock>({
   faded: boolean;
   dropSide: "left" | "right" | null;
   ownSettings: BlockSettingsPanel | null | undefined;
+  extraButton: BlockBarButton | null;
   onSelect: () => void;
   onWidth: (width: number) => void;
   onRow: (patch: Partial<RowSettings>) => void;
@@ -514,6 +526,9 @@ function BlockItem<B extends RowBlock>({
           vertical={rowSize > 1 ? settings.vertical : undefined}
           onAlign={onRow}
         >
+          {extraButton && (
+            <BarButton onClick={extraButton.onClick}>{extraButton.label}</BarButton>
+          )}
           {ownSettings && (
             <BarButton active={panel === "own"} onClick={() => togglePanel("own")}>
               {ownSettings.button}

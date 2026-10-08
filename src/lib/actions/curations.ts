@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
+import { artworkDetailLines } from "@/lib/artworkDetails";
 import { toArtworkImages, type ArtworkImage } from "@/lib/artworkImages";
 
 // Curations (2026-09-24) — named, ordered selections of an artist's
@@ -141,9 +142,7 @@ function defaultDescription(artwork: {
   size: string | null;
   medium: string | null;
 }): string | null {
-  const lines = [artwork.type, artwork.size, artwork.medium]
-    .map((v) => v?.trim())
-    .filter((v): v is string => Boolean(v));
+  const lines = artworkDetailLines(artwork);
   return lines.length > 0 ? lines.join("\n") : null;
 }
 
