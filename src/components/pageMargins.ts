@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { PageMargins } from "@/lib/pageStyleLayout";
+import type { PageMargins } from "@/lib/rowLayout";
 
 // A Display Style's page margin (2026-10-06) as padding: the phone
 // values below Tailwind's md (768px), the desktop values from md up.

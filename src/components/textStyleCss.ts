@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { TextStyle } from "@/lib/pageStyleLayout";
+import type { PageTextStyle } from "@/lib/pageStyleLayout";
 import { SITE_FONT_FAMILY } from "@/lib/siteFontFaces";
 
 // How a text component's settings (Page Styles → Fine-tune, 2026-10-07)
@@ -9,11 +9,11 @@ import { SITE_FONT_FAMILY } from "@/lib/siteFontFaces";
 // (Craig's choice).
 const HEADING_SCALE = 1.25;
 
-function hasAny(style: TextStyle): boolean {
+function hasAny(style: PageTextStyle): boolean {
   return Boolean(style.font || style.size || style.look || style.colour);
 }
 
-export function bodyTextCss(style: TextStyle): CSSProperties {
+export function bodyTextCss(style: PageTextStyle): CSSProperties {
   return {
     fontFamily: style.font ? SITE_FONT_FAMILY[style.font] : undefined,
     fontSize: style.size ?? undefined,
@@ -24,7 +24,7 @@ export function bodyTextCss(style: TextStyle): CSSProperties {
 }
 
 // The same font, colour and italic, always bold, a little bigger.
-export function headingTextCss(style: TextStyle): CSSProperties {
+export function headingTextCss(style: PageTextStyle): CSSProperties {
   if (!hasAny(style)) return {};
   return {
     fontFamily: style.font ? SITE_FONT_FAMILY[style.font] : undefined,

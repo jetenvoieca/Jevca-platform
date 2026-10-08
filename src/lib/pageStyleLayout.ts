@@ -1,10 +1,27 @@
 import type { PageStyleType } from "@/lib/pageStyleTypes";
 import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
+import {
+  DEFAULT_GRID_SPACING,
+  DEFAULT_PAGE_MARGINS,
+  cleanColour,
+  cleanGridSpacing,
+  cleanNumber,
+  cleanPageMargins,
+  cleanRowBlock,
+  cleanRows,
+  clearLoneRows,
+  type GridSpacing,
+  type RowBlock,
+  type RowLayout,
+} from "@/lib/rowLayout";
+import { cleanTextStyles, type TextStyle, type TextStyles } from "@/lib/textStyle";
 
 // The layout a Page Style holds (2026-10-04) — the arrangement of
 // components only, never content. Saved in PageStyle.layout (JSON).
 // Plain module, not "use server", so the modal, the preview and the
 // server actions all share the same shape and the same clean-up rules.
+// The rows, widths, spacing, alignment and margins a Block Build style
+// is made of are shared with Mail Templates — see lib/rowLayout.ts.
 
 // The components a Block Build style (2026-10-07, was Private /
 // Custom) is built from, as empty placeholders — each filled from the
@@ -21,6 +38,14 @@ export const LAYOUT_BLOCK_TYPES = [
 ] as const;
 
 export type LayoutBlockType = (typeof LAYOUT_BLOCK_TYPES)[number]["value"];
+
+function isLayoutBlockType(value: unknown): value is LayoutBlockType {
+  return LAYOUT_BLOCK_TYPES.some((t) => t.value === value);
+}
+
+export function blockTypeLabel(type: LayoutBlockType): string {
+  return LAYOUT_BLOCK_TYPES.find((t) => t.value === type)?.label ?? type;
+}
 
 // Sliding doors (2026-10-05, from Craig's mockup): the curation's main
 // images, `perSlide` at a time — a pair, `gap` pixels apart, or one at
@@ -56,139 +81,42 @@ export const SLIDING_DOORS_LIMITS = {
   height: { min: 10, max: 100 },
 } as const;
 
-// The space between images in a grid of images (2026-10-05) — every
-// Gallery block in a Block Build style — in pixels: vertical = between
-// rows, horizontal = between columns. One setting per style.
-export type GridSpacing = { vertical: number; horizontal: number };
-
-export const DEFAULT_GRID_SPACING: GridSpacing = { vertical: 8, horizontal: 8 };
-
-export const GRID_SPACING_LIMITS = {
-  vertical: { min: 0, max: 100 },
-  horizontal: { min: 0, max: 100 },
-} as const;
-
-// The page's margin (2026-10-06, from Craig's request for more
-// breathing space): the space between the page's edges and its
-// contents, in pixels — vertical = top and bottom, horizontal = left
-// and right — set separately for desktop and phone (narrower than
-// 768px). Block Build only; a Canvas stays edge to edge. The page's
-// background colour shows in it. The default is the padding pages had
-// before the setting existed.
-export type PageMargin = { vertical: number; horizontal: number };
-export type PageMargins = { desktop: PageMargin; phone: PageMargin };
-
-export const DEFAULT_PAGE_MARGIN: PageMargin = { vertical: 16, horizontal: 16 };
-
-export const DEFAULT_PAGE_MARGINS: PageMargins = {
-  desktop: DEFAULT_PAGE_MARGIN,
-  phone: DEFAULT_PAGE_MARGIN,
-};
-
-export const PAGE_MARGIN_LIMITS = { min: 0, max: 300 } as const;
-
-// The space between blocks (2026-10-05), in pixels — set separately for
-// every gap, for more open layouts.
-export const DEFAULT_BLOCK_SPACING = 16;
-export const BLOCK_SPACING_LIMITS = { min: 0, max: 200 } as const;
-
-// A block's width on desktop (2026-10-05), as a percentage of the page
-// width; a narrower block sits as its row's alignment says. Blocks side
-// by side each keep their own width, placed together, with the rest left
-// as space — if together they're wider than the page, they shrink to
-// fit. On a phone every block is full width (2026-10-07).
-export const DEFAULT_BLOCK_WIDTH = 100;
-export const BLOCK_WIDTH_LIMITS = { min: 10, max: 100 } as const;
-
-// How a row sits on desktop (2026-10-07): `horizontal` places its
-// blocks together left, centred or right in the page's width; `vertical`
-// lines up side-by-side blocks of different heights at their tops,
-// middles or bottoms. On a phone every block is stacked full width, so
-// alignment applies from desktop width up only.
-const HORIZONTAL_ALIGNS = ["left", "center", "right"] as const;
-export type HorizontalAlign = (typeof HORIZONTAL_ALIGNS)[number];
-
-const VERTICAL_ALIGNS = ["top", "middle", "bottom"] as const;
-export type VerticalAlign = (typeof VERTICAL_ALIGNS)[number];
-
-const DEFAULT_HORIZONTAL_ALIGN: HorizontalAlign = "center";
-const DEFAULT_VERTICAL_ALIGN: VerticalAlign = "top";
-
-// One row of a Block Build layout: `below` = the space between this
-// row and the next (unused on the last row), `between` = the space
-// between its blocks when they sit side by side (and between them when
-// stacked on a phone), plus its alignment.
-export type RowSettings = {
-  below: number;
-  between: number;
-  horizontal: HorizontalAlign;
-  vertical: VerticalAlign;
-};
-
-const DEFAULT_ROW_SETTINGS: RowSettings = {
-  below: DEFAULT_BLOCK_SPACING,
-  between: DEFAULT_BLOCK_SPACING,
-  horizontal: DEFAULT_HORIZONTAL_ALIGN,
-  vertical: DEFAULT_VERTICAL_ALIGN,
-};
-
-// How the text in a Block Build style's Header, Text and Text grid
-// components looks (2026-10-07, from Craig's mockup) — one setting per
-// component type, for the whole style, the same on desktop and phone:
-// a font from the set list (lib/siteFonts.ts), a size in pixels, a
-// style (regular, bold or italic) and a colour (#rrggbb). Anything null
-// keeps the text's own look.
-export const TEXT_COMPONENT_TYPES = [
-  { value: "header", label: "Header" },
-  { value: "text", label: "Text" },
-  { value: "textgrid", label: "Text grid" },
-] as const;
-
-export type TextComponentType = (typeof TEXT_COMPONENT_TYPES)[number]["value"];
-
-export function isTextComponent(type: LayoutBlockType): type is TextComponentType {
-  return TEXT_COMPONENT_TYPES.some((t) => t.value === type);
+// A Sliding doors block saved before perSlide existed shows pairs, as
+// it always did; one saved before height existed gets the default.
+export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof SlidingDoorsSettings, unknown>>;
+  const height = (value.height ?? {}) as Partial<Record<keyof DoorsHeight, unknown>>;
+  const d = DEFAULT_SLIDING_DOORS;
+  const l = SLIDING_DOORS_LIMITS;
+  return {
+    perSlide: value.perSlide === 1 ? 1 : 2,
+    duration: cleanNumber(value.duration, l.duration, d.duration, 1),
+    speed: cleanNumber(value.speed, l.speed, d.speed, 1),
+    gap: cleanNumber(value.gap, l.gap, d.gap, 0),
+    height: {
+      desktop: cleanNumber(height.desktop, l.height, d.height.desktop, 0),
+      phone: cleanNumber(height.phone, l.height, d.height.phone, 0),
+    },
+  };
 }
 
-export const TEXT_LOOKS = [
-  { value: "regular", label: "Regular" },
-  { value: "bold", label: "Bold" },
-  { value: "italic", label: "Italic" },
-] as const;
+// The text styles a Page Style holds use the site fonts.
+export type PageTextStyle = TextStyle<SiteFontId>;
 
-export type TextLook = (typeof TEXT_LOOKS)[number]["value"];
+const DEFAULT_TEXT_STYLE: PageTextStyle = { font: null, size: null, look: null, colour: null };
 
-export type TextStyle = {
-  font: SiteFontId | null;
-  size: number | null;
-  look: TextLook | null;
-  colour: string | null;
-};
-
-export type TextStyles = Record<TextComponentType, TextStyle>;
-
-export const TEXT_SIZE_LIMITS = { min: 8, max: 200 } as const;
-
-const DEFAULT_TEXT_STYLE: TextStyle = { font: null, size: null, look: null, colour: null };
-
-const DEFAULT_TEXT_STYLES: TextStyles = {
+const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
   header: DEFAULT_TEXT_STYLE,
   text: DEFAULT_TEXT_STYLE,
   textgrid: DEFAULT_TEXT_STYLE,
 };
 
-// `row`: placeholders sharing a row id sit side by side (see
-// groupBlocksByRow). `width` is unset until changed (see blockWidthOf).
-// `doors` is set on Sliding doors blocks only.
-export type LayoutBlock = {
-  id: string;
-  type: LayoutBlockType;
-  row?: string;
-  width?: number;
+// A Block Build component. `doors` is set on Sliding doors blocks only.
+export type LayoutBlock = RowBlock<LayoutBlockType> & {
   doors?: SlidingDoorsSettings;
 };
 
-export type BlockBuildLayout = {
+export type BlockBuildLayout = RowLayout<LayoutBlock> & {
   // A colour is styling, so the style keeps it; null = none.
   backgroundColor: string | null;
   // Whether the page has a background image — the image itself is
@@ -196,13 +124,8 @@ export type BlockBuildLayout = {
   backgroundImage: boolean;
   // Spacing for every Gallery block.
   gridSpacing: GridSpacing;
-  margins: PageMargins;
   // How the text in its Header, Text and Text grid components looks.
-  textStyles: TextStyles;
-  // Each row's spacing and alignment, by rowKey(). A row with no entry
-  // uses DEFAULT_ROW_SETTINGS.
-  rows: Record<string, RowSettings>;
-  blocks: LayoutBlock[];
+  textStyles: TextStyles<SiteFontId>;
 };
 
 // Canvas (2026-10-05, from Craig's mockups; replaced the Pavilion page
@@ -242,42 +165,6 @@ export type PageStyleLayout =
   | { type: "BLOCK_BUILD"; layout: BlockBuildLayout }
   | { type: "CANVAS"; layout: CanvasLayout };
 
-// Groups a style's blocks into the rows they're drawn as: a run of
-// blocks sharing the same `row` id is one row, side by side; any other
-// block is a row of its own.
-export function groupBlocksByRow(blocks: LayoutBlock[]): LayoutBlock[][] {
-  const groups: LayoutBlock[][] = [];
-  for (const block of blocks) {
-    const current = groups[groups.length - 1];
-    if (block.row && current && current[0].row === block.row) {
-      current.push(block);
-    } else {
-      groups.push([block]);
-    }
-  }
-  return groups;
-}
-
-export function blockTypeLabel(type: LayoutBlockType): string {
-  return LAYOUT_BLOCK_TYPES.find((t) => t.value === type)?.label ?? type;
-}
-
-// What a row's settings are stored under: its row id when its blocks sit
-// side by side, otherwise its one block's id. When blocks are added,
-// moved or removed, each row's settings follow its blocks (see
-// rebuildRows).
-export function rowKey(row: LayoutBlock[]): string {
-  return row[0].row ?? row[0].id;
-}
-
-export function rowSettingsOf(layout: BlockBuildLayout, key: string): RowSettings {
-  return layout.rows[key] ?? DEFAULT_ROW_SETTINGS;
-}
-
-export function blockWidthOf(block: LayoutBlock): number {
-  return block.width ?? DEFAULT_BLOCK_WIDTH;
-}
-
 export function emptyLayout(type: PageStyleType): PageStyleLayout {
   if (type === "CANVAS") return { type, layout: DEFAULT_CANVAS };
   return {
@@ -294,118 +181,6 @@ export function emptyLayout(type: PageStyleType): PageStyleLayout {
   };
 }
 
-const HEX_COLOUR = /^#[0-9a-fA-F]{6}$/;
-
-function cleanColour(value: unknown): string | null {
-  return typeof value === "string" && HEX_COLOUR.test(value) ? value : null;
-}
-
-function cleanHorizontalAlign(value: unknown): HorizontalAlign {
-  return HORIZONTAL_ALIGNS.find((a) => a === value) ?? DEFAULT_HORIZONTAL_ALIGN;
-}
-
-function cleanVerticalAlign(value: unknown): VerticalAlign {
-  return VERTICAL_ALIGNS.find((a) => a === value) ?? DEFAULT_VERTICAL_ALIGN;
-}
-
-function isLayoutBlockType(value: unknown): value is LayoutBlockType {
-  return LAYOUT_BLOCK_TYPES.some((t) => t.value === value);
-}
-
-// A number within its limits, rounded to `decimals` places; anything
-// else becomes the default.
-function cleanNumber(
-  value: unknown,
-  limits: { min: number; max: number },
-  fallback: number,
-  decimals: number
-) {
-  const n = typeof value === "number" ? value : Number(value);
-  if (!Number.isFinite(n)) return fallback;
-  const factor = 10 ** decimals;
-  return Math.round(Math.min(limits.max, Math.max(limits.min, n)) * factor) / factor;
-}
-
-export function cleanBlockSpacing(value: unknown): number {
-  return cleanNumber(value, BLOCK_SPACING_LIMITS, DEFAULT_BLOCK_SPACING, 0);
-}
-
-export function cleanBlockWidth(value: unknown): number {
-  return cleanNumber(value, BLOCK_WIDTH_LIMITS, DEFAULT_BLOCK_WIDTH, 0);
-}
-
-// A Sliding doors block saved before perSlide existed shows pairs, as
-// it always did; one saved before height existed gets the default.
-export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
-  const value = (raw ?? {}) as Partial<Record<keyof SlidingDoorsSettings, unknown>>;
-  const height = (value.height ?? {}) as Partial<Record<keyof DoorsHeight, unknown>>;
-  const d = DEFAULT_SLIDING_DOORS;
-  const l = SLIDING_DOORS_LIMITS;
-  return {
-    perSlide: value.perSlide === 1 ? 1 : 2,
-    duration: cleanNumber(value.duration, l.duration, d.duration, 1),
-    speed: cleanNumber(value.speed, l.speed, d.speed, 1),
-    gap: cleanNumber(value.gap, l.gap, d.gap, 0),
-    height: {
-      desktop: cleanNumber(height.desktop, l.height, d.height.desktop, 0),
-      phone: cleanNumber(height.phone, l.height, d.height.phone, 0),
-    },
-  };
-}
-
-export function cleanGridSpacing(raw: unknown): GridSpacing {
-  const value = (raw ?? {}) as Partial<Record<keyof GridSpacing, unknown>>;
-  const d = DEFAULT_GRID_SPACING;
-  const l = GRID_SPACING_LIMITS;
-  return {
-    vertical: cleanNumber(value.vertical, l.vertical, d.vertical, 0),
-    horizontal: cleanNumber(value.horizontal, l.horizontal, d.horizontal, 0),
-  };
-}
-
-function cleanPageMargin(raw: unknown): PageMargin {
-  const value = (raw ?? {}) as Partial<Record<keyof PageMargin, unknown>>;
-  const d = DEFAULT_PAGE_MARGIN;
-  return {
-    vertical: cleanNumber(value.vertical, PAGE_MARGIN_LIMITS, d.vertical, 0),
-    horizontal: cleanNumber(value.horizontal, PAGE_MARGIN_LIMITS, d.horizontal, 0),
-  };
-}
-
-// A style saved before margins existed gets the default on both.
-export function cleanPageMargins(raw: unknown): PageMargins {
-  const value = (raw ?? {}) as Partial<Record<keyof PageMargins, unknown>>;
-  return { desktop: cleanPageMargin(value.desktop), phone: cleanPageMargin(value.phone) };
-}
-
-// One text component's look; a size left blank (or not a number) stays
-// blank, any other size is kept within its limits.
-export function cleanTextStyle(raw: unknown): TextStyle {
-  const value = (raw ?? {}) as Partial<Record<keyof TextStyle, unknown>>;
-  const size =
-    value.size === null || value.size === undefined || value.size === ""
-      ? null
-      : Number.isFinite(Number(value.size))
-        ? cleanNumber(value.size, TEXT_SIZE_LIMITS, TEXT_SIZE_LIMITS.min, 0)
-        : null;
-  return {
-    font: isSiteFontId(value.font) ? value.font : null,
-    size,
-    look: TEXT_LOOKS.find((l) => l.value === value.look)?.value ?? null,
-    colour: cleanColour(value.colour),
-  };
-}
-
-// A style saved before text styles existed keeps every text's own look.
-function cleanTextStyles(raw: unknown): TextStyles {
-  const value = (raw ?? {}) as Partial<Record<TextComponentType, unknown>>;
-  return {
-    header: cleanTextStyle(value.header),
-    text: cleanTextStyle(value.text),
-    textgrid: cleanTextStyle(value.textgrid),
-  };
-}
-
 export function cleanCanvas(raw: unknown): CanvasLayout {
   const value = (raw ?? {}) as Partial<Record<keyof CanvasLayout, unknown>>;
   const d = DEFAULT_CANVAS;
@@ -417,28 +192,6 @@ export function cleanCanvas(raw: unknown): CanvasLayout {
     scrollSpeed: cleanNumber(value.scrollSpeed, l.scrollSpeed, d.scrollSpeed, 1),
     backgroundColor: cleanColour(value.backgroundColor),
   };
-}
-
-function cleanRowSettings(raw: unknown): RowSettings {
-  const value = (raw ?? {}) as Partial<Record<keyof RowSettings, unknown>>;
-  return {
-    below: cleanBlockSpacing(value.below),
-    between: cleanBlockSpacing(value.between),
-    horizontal: cleanHorizontalAlign(value.horizontal),
-    vertical: cleanVerticalAlign(value.vertical),
-  };
-}
-
-// Keeps settings only for rows that still exist.
-function cleanRows(raw: unknown, blocks: LayoutBlock[]): Record<string, RowSettings> {
-  const value = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
-  const out: Record<string, RowSettings> = {};
-  for (const row of groupBlocksByRow(blocks)) {
-    const key = rowKey(row);
-    const entry = value[key];
-    if (entry && typeof entry === "object") out[key] = cleanRowSettings(entry);
-  }
-  return out;
 }
 
 // Turns whatever is stored (or sent from the browser) into a valid
@@ -454,12 +207,11 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
   const blocks = clearLoneRows(
     Array.isArray(value.blocks)
       ? value.blocks.flatMap((b): LayoutBlock[] => {
-          const block = b as Partial<LayoutBlock>;
-          if (typeof block?.id !== "string" || !isLayoutBlockType(block.type)) return [];
-          const clean: LayoutBlock = { id: block.id, type: block.type };
-          if (typeof block.row === "string") clean.row = block.row;
-          if (block.width !== undefined) clean.width = cleanBlockWidth(block.width);
-          if (block.type === "slidingdoors") clean.doors = cleanSlidingDoors(block.doors);
+          const clean: LayoutBlock | null = cleanRowBlock(b, isLayoutBlockType);
+          if (!clean) return [];
+          if (clean.type === "slidingdoors") {
+            clean.doors = cleanSlidingDoors((b as Partial<LayoutBlock>).doors);
+          }
           return [clean];
         })
       : []
@@ -472,174 +224,15 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
       backgroundImage: value.backgroundImage === true,
       gridSpacing: cleanGridSpacing(value.gridSpacing),
       margins: cleanPageMargins(value.margins),
-      textStyles: cleanTextStyles(value.textStyles),
+      textStyles: cleanTextStyles(value.textStyles, isSiteFontId),
       rows: cleanRows(value.rows ?? value.rowSpacing, blocks),
       blocks,
     },
   };
 }
 
-// A row needs at least two placeholders; a lone one goes back to full
-// width. Everything else about the block is kept.
-function clearLoneRows(blocks: LayoutBlock[]): LayoutBlock[] {
-  return groupBlocksByRow(blocks).flatMap((g) => (g.length > 1 ? g : [withoutRow(g[0])]));
-}
-
-function withoutRow(block: LayoutBlock): LayoutBlock {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { row, ...rest } = block;
-  return rest;
-}
-
-// The widths a block snaps to while its edge is dragged in the visual
-// editor (2026-10-07, Craig's choice: tidy fractions, the same on every
-// site). Stored as whole percentages.
-const WIDTH_SNAPS = [
-  { value: 25, label: "¼" },
-  { value: 33, label: "⅓" },
-  { value: 50, label: "½" },
-  { value: 67, label: "⅔" },
-  { value: 75, label: "¾" },
-  { value: 100, label: "Full" },
-] as const;
-
-export function snapBlockWidth(raw: number): number {
-  return WIDTH_SNAPS.reduce((best, s) =>
-    Math.abs(s.value - raw) < Math.abs(best.value - raw) ? s : best
-  ).value;
-}
-
-// "½ width", or the exact % for a width set some other way.
-export function blockWidthLabel(width: number): string {
-  const snap = WIDTH_SNAPS.find((s) => s.value === width);
-  return snap ? `${snap.label} width` : `${width}% width`;
-}
-
-// Spacing and margins dragged in the visual editor move in steps of
-// this many pixels, within their limits.
-const SPACING_STEP = 4;
-
-export function snapSpacing(raw: number, limits: { min: number; max: number }): number {
-  const stepped = Math.round(raw / SPACING_STEP) * SPACING_STEP;
-  return Math.min(limits.max, Math.max(limits.min, stepped));
-}
-
-// Where a dragged block lands (2026-10-07): a new row of its own before
-// row `index` (rows counted as they are before the move; the row count
-// = at the end), or beside another block in that block's row.
-export type BlockDropTarget =
-  | { kind: "row"; index: number }
-  | { kind: "beside"; blockId: string; side: "left" | "right" };
-
 export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   return type === "slidingdoors"
     ? { id: crypto.randomUUID(), type, doors: DEFAULT_SLIDING_DOORS }
     : { id: crypto.randomUUID(), type };
-}
-
-// Puts a block — new, or already in the layout (a move) — at `target`.
-// Each row keeps its spacing and alignment as long as any of its other
-// blocks stay in it; a block moved into a row of its own keeps its old
-// row's settings only if it was alone there.
-export function placeLayoutBlock(
-  layout: BlockBuildLayout,
-  block: LayoutBlock,
-  target: BlockDropTarget
-): BlockBuildLayout {
-  if (target.kind === "beside" && target.blockId === block.id) return layout;
-  const before = groupBlocksByRow(layout.blocks);
-  const groups: LayoutBlock[][] = [];
-  let insertAt = -1;
-  before.forEach((g, i) => {
-    if (target.kind === "row" && i === target.index) insertAt = groups.length;
-    const rest = g.filter((b) => b.id !== block.id);
-    if (rest.length > 0) groups.push(rest);
-  });
-
-  const moving = withoutRow(block);
-  if (target.kind === "row") {
-    groups.splice(insertAt < 0 ? groups.length : insertAt, 0, [moving]);
-  } else {
-    const group = groups.find((g) => g.some((b) => b.id === target.blockId));
-    if (!group) return layout;
-    const at = group.findIndex((b) => b.id === target.blockId) + (target.side === "right" ? 1 : 0);
-    group.splice(at, 0, moving);
-  }
-  return rebuildRows(layout, groups, block.id);
-}
-
-export function removeLayoutBlock(layout: BlockBuildLayout, id: string): BlockBuildLayout {
-  const groups = groupBlocksByRow(layout.blocks)
-    .map((g) => g.filter((b) => b.id !== id))
-    .filter((g) => g.length > 0);
-  return rebuildRows(layout, groups, id);
-}
-
-// Turns rows (as lists of blocks) back into the stored blocks and row
-// settings. A row of two or more keeps its row id unless that id is
-// also a block's id elsewhere (row ids used to be a block's id), when
-// it gets a fresh one; its settings follow its blocks.
-function rebuildRows(
-  layout: BlockBuildLayout,
-  groups: LayoutBlock[][],
-  movedId: string
-): BlockBuildLayout {
-  const settingsByBlock = new Map<string, RowSettings>();
-  let movedWasAlone = false;
-  for (const g of groupBlocksByRow(layout.blocks)) {
-    const settings = layout.rows[rowKey(g)];
-    if (g.length === 1 && g[0].id === movedId) movedWasAlone = true;
-    if (settings) for (const b of g) settingsByBlock.set(b.id, settings);
-  }
-  const blockIds = new Set(groups.flat().map((b) => b.id));
-
-  const blocks: LayoutBlock[] = [];
-  const rows: Record<string, RowSettings> = {};
-  for (const g of groups) {
-    const kept = g.find((b) => b.id !== movedId);
-    const settings = kept
-      ? settingsByBlock.get(kept.id)
-      : movedWasAlone
-        ? settingsByBlock.get(movedId)
-        : undefined;
-    let key: string;
-    if (g.length === 1) {
-      key = g[0].id;
-      blocks.push(withoutRow(g[0]));
-    } else {
-      const candidate = kept?.row ?? kept?.id;
-      const clashes =
-        candidate !== undefined && blockIds.has(candidate) && !g.some((b) => b.id === candidate);
-      key = candidate && !clashes ? candidate : crypto.randomUUID();
-      blocks.push(...g.map((b) => ({ ...b, row: key })));
-    }
-    if (settings) rows[key] = settings;
-  }
-  return { ...layout, blocks, rows };
-}
-
-// Changes one row's settings, kept within their limits.
-export function updateRowSettings(
-  layout: BlockBuildLayout,
-  key: string,
-  patch: Partial<RowSettings>
-): BlockBuildLayout {
-  return {
-    ...layout,
-    rows: { ...layout.rows, [key]: cleanRowSettings({ ...rowSettingsOf(layout, key), ...patch }) },
-  };
-}
-
-// Changes one Sliding doors block's settings, kept within their limits.
-export function updateSlidingDoors(
-  blocks: LayoutBlock[],
-  id: string,
-  doors: SlidingDoorsSettings
-): LayoutBlock[] {
-  return blocks.map((b) => (b.id === id ? { ...b, doors: cleanSlidingDoors(doors) } : b));
-}
-
-// Changes one block's width, kept within its limits.
-export function updateBlockWidth(blocks: LayoutBlock[], id: string, width: number): LayoutBlock[] {
-  return blocks.map((b) => (b.id === id ? { ...b, width: cleanBlockWidth(width) } : b));
 }

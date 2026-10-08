@@ -16,28 +16,22 @@ import {
 import {
   BLOCK_SPACING_LIMITS,
   BLOCK_WIDTH_LIMITS,
-  LAYOUT_BLOCK_TYPES,
-  SLIDING_DOORS_LIMITS,
-  blockTypeLabel,
   blockWidthOf,
   groupBlocksByRow,
-  newLayoutBlock,
   placeLayoutBlock,
   removeLayoutBlock,
+  replaceBlock,
   rowKey,
   rowSettingsOf,
   updateBlockWidth,
   updateRowSettings,
-  updateSlidingDoors,
   type BlockDropTarget,
-  type BlockBuildLayout,
-  type LayoutBlock,
-  type LayoutBlockType,
+  type RowBlock,
+  type RowLayout,
   type RowSettings,
-  type SlidingDoorsSettings,
-} from "@/lib/pageStyleLayout";
+} from "@/lib/rowLayout";
 import { rowClass, type PreviewDevice } from "@/components/pageRows";
-import { BlockShape, Labelled } from "@/components/PageStylePreview";
+import { Labelled } from "@/components/blockShapes";
 import NumberField from "@/components/NumberField";
 import {
   BarButton,
@@ -53,10 +47,13 @@ import {
   useSelectionKeys,
 } from "@/components/visualEditorParts";
 
-// The visual editor for a Block Build Page Style (2026-10-07, from
-// Craig's request to replace the numbers with something he can see) —
-// built from the pieces in visualEditorParts.
-// - Add: drag a component from the tray onto the page (or click it to
+// The visual editor for a row-based layout (2026-10-07, from Craig's
+// request to replace the numbers with something he can see; shared by
+// Page Styles and Mail Templates from 2026-10-08) — built from the
+// pieces in visualEditorParts. What the components are, how each is
+// drawn and any settings of its own come from the caller
+// (PageStyleLayoutEditor, MailLayoutEditor).
+// - Add: drag a component from the tray onto the layout (or click it to
 //   add it at the end). A blue line shows where it will land: above or
 //   below a row, or beside a component (desktop only).
 // - Move: drag a component the same way.
@@ -65,18 +62,28 @@ import {
 // - Size: select a component and drag its edge (desktop only — on a
 //   phone every component is full width).
 // - Spacing: drag the shaded strips — the gaps between rows, between
-//   side-by-side components, and the page margin (set separately for
-//   desktop and phone).
+//   side-by-side components, and the margin (set separately for desktop
+//   and phone).
 // - Align: a selected component's bar sets its row's alignment — left,
 //   centre or right, and for side-by-side components top, middle or
 //   bottom (desktop only).
 // - Fine-tune: the bar's Fine-tune button shows the exact numbers for
-//   the component's width and the gaps around its row; a Sliding doors
-//   component's Settings button shows its own settings (pairs or one at
-//   a time, timings, gap and height).
-// Every change goes straight to `onChange`, which saves it.
+//   the component's width and the gaps around its row; a component with
+//   settings of its own (e.g. Sliding doors) has a button for those.
+// `header` and `footer` are fixed parts drawn above and below the
+// components (a mail's logo and footer). Every change goes straight to
+// `onChange`, which saves it.
 
-type DragItem = { kind: "new"; type: LayoutBlockType } | { kind: "move"; block: LayoutBlock };
+// A component offered in the tray.
+export type EditorComponent<T extends string> = { value: T; label: string };
+
+// A component's own settings, opened from its bar: the button's label,
+// the panel's title and its contents.
+export type BlockSettingsPanel = { button: string; title: string; content: ReactNode };
+
+type DragItem<B extends RowBlock> =
+  | { kind: "new"; type: B["type"] }
+  | { kind: "move"; block: B };
 
 // What a component's drop zone knows about where it is.
 type DropData = { blockId: string; rowIndex: number };
@@ -84,26 +91,49 @@ type DropData = { blockId: string; rowIndex: number };
 // The tray's drop zone id: a component dropped here is removed.
 const TRAY_ID = "tray";
 
-export default function VisualLayoutEditor({
+export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayout<B>>({
   layout,
   onChange,
+  components,
+  newBlock,
+  renderBlock,
+  settingsPanel,
+  desktopWidth,
+  backgroundColor,
+  backgroundImage = false,
+  surroundColor = null,
+  header,
+  footer,
 }: {
-  layout: BlockBuildLayout;
-  onChange: (layout: BlockBuildLayout) => void;
+  layout: L;
+  onChange: (layout: L) => void;
+  components: readonly EditorComponent<B["type"]>[];
+  newBlock: (type: B["type"]) => B;
+  // How a component is drawn (its outline, or later its content).
+  renderBlock: (block: B) => ReactNode;
+  // A component's own settings, if it has any; `onBlock` saves them.
+  settingsPanel?: (block: B, onBlock: (block: B) => void) => BlockSettingsPanel | null;
+  desktopWidth: number;
+  backgroundColor: string | null;
+  backgroundImage?: boolean;
+  surroundColor?: string | null;
+  header?: ReactNode;
+  footer?: ReactNode;
 }) {
   const [device, setDevice] = useState<PreviewDevice>("desktop");
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [dragging, setDragging] = useState<DragItem | null>(null);
+  const [dragging, setDragging] = useState<DragItem<B> | null>(null);
   const [dropTarget, setDropTarget] = useState<BlockDropTarget | null>(null);
   // A component being moved is over the tray, so dropping removes it.
   const [overTray, setOverTray] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = groupBlocksByRow(layout.blocks);
+  const labelOf = (type: B["type"]) => components.find((c) => c.value === type)?.label ?? type;
 
   const remove = useCallback(
     (blockId: string) => {
-      onChange(removeLayoutBlock(layout, blockId));
+      onChange(removeLayoutBlock<B, L>(layout, blockId));
       setSelectedId((current) => (current === blockId ? null : current));
     },
     [layout, onChange]
@@ -115,13 +145,13 @@ export default function VisualLayoutEditor({
   }, [remove, selectedId]);
   useSelectionKeys(!!selectedId, deselect, removeSelected);
 
-  const place = (block: LayoutBlock, target: BlockDropTarget) => {
-    const next = placeLayoutBlock(layout, block, target);
+  const place = (block: B, target: BlockDropTarget) => {
+    const next = placeLayoutBlock<B, L>(layout, block, target);
     if (next !== layout) onChange(next);
   };
 
   const handleDragStart = (e: DragStartEvent) => {
-    setDragging((e.active.data.current as DragItem | undefined) ?? null);
+    setDragging((e.active.data.current as DragItem<B> | undefined) ?? null);
     setDropTarget(null);
     setOverTray(false);
   };
@@ -132,7 +162,7 @@ export default function VisualLayoutEditor({
   // On a phone components stack, so it's always above or below. Over
   // the tray, a component being moved is marked for removal instead.
   const handleDragMove = (e: DragMoveEvent) => {
-    const item = e.active.data.current as DragItem | undefined;
+    const item = e.active.data.current as DragItem<B> | undefined;
     const start = e.activatorEvent as PointerEvent;
     const over = e.over;
     const onTray = item?.kind === "move" && over?.id === TRAY_ID;
@@ -167,7 +197,7 @@ export default function VisualLayoutEditor({
       remove(dragging.block.id);
     } else if (dragging && dropTarget) {
       if (dragging.kind === "new") {
-        const block = newLayoutBlock(dragging.type);
+        const block = newBlock(dragging.type);
         place(block, dropTarget);
         setSelectedId(block.id);
       } else {
@@ -183,13 +213,13 @@ export default function VisualLayoutEditor({
     setOverTray(false);
   };
 
-  const addAtEnd = (type: LayoutBlockType) => {
-    const block = newLayoutBlock(type);
+  const addAtEnd = (type: B["type"]) => {
+    const block = newBlock(type);
     place(block, { kind: "row", index: rows.length });
     setSelectedId(block.id);
   };
 
-  const contentWidth = desktopContentWidth(layout.margins);
+  const contentWidth = desktopContentWidth(layout.margins, desktopWidth);
   const draggingId = dragging?.kind === "move" ? dragging.block.id : null;
 
   return (
@@ -202,19 +232,20 @@ export default function VisualLayoutEditor({
       onDragCancel={handleDragCancel}
     >
       <div className="flex min-h-0 flex-1 gap-3">
-        <Tray moving={!!draggingId} over={overTray} onAdd={addAtEnd} />
+        <Tray components={components} moving={!!draggingId} over={overTray} onAdd={addAtEnd} />
 
         <div className="flex min-w-0 flex-1 flex-col">
           <DeviceSwitch device={device} onDevice={setDevice} />
-          <ScaledFrame device={device}>
+          <ScaledFrame device={device} desktopWidth={desktopWidth} surroundColor={surroundColor}>
             <PageFrame
               margins={layout.margins}
               device={device}
-              backgroundColor={layout.backgroundColor}
-              backgroundImage={layout.backgroundImage}
+              backgroundColor={backgroundColor}
+              backgroundImage={backgroundImage}
               onMargins={(margins) => onChange({ ...layout, margins })}
               onDeselect={deselect}
             >
+              {header}
               {rows.map((row, i) => {
                 const key = rowKey(row);
                 const settings = rowSettingsOf(layout, key);
@@ -243,6 +274,7 @@ export default function VisualLayoutEditor({
                         >
                           <BlockItem
                             block={b}
+                            label={labelOf(b.type)}
                             rowIndex={i}
                             rowSize={row.length}
                             lastRow={i === rows.length - 1}
@@ -256,7 +288,9 @@ export default function VisualLayoutEditor({
                                 ? dropTarget.side
                                 : null
                             }
-                            gridSpacing={layout.gridSpacing}
+                            ownSettings={settingsPanel?.(b, (next) =>
+                              onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
+                            )}
                             onSelect={() => setSelectedId(b.id)}
                             onWidth={(width) =>
                               onChange({
@@ -265,14 +299,10 @@ export default function VisualLayoutEditor({
                               })
                             }
                             onRow={setRow}
-                            onDoors={(doors) =>
-                              onChange({
-                                ...layout,
-                                blocks: updateSlidingDoors(layout.blocks, b.id, doors),
-                              })
-                            }
                             onRemove={() => remove(b.id)}
-                          />
+                          >
+                            {renderBlock(b)}
+                          </BlockItem>
                         </BlockWithGap>
                       ))}
                     </div>
@@ -284,6 +314,7 @@ export default function VisualLayoutEditor({
                 empty={rows.length === 0}
                 showLine={dropTarget?.kind === "row" && dropTarget.index === rows.length}
               />
+              {footer}
             </PageFrame>
           </ScaledFrame>
         </div>
@@ -297,7 +328,7 @@ export default function VisualLayoutEditor({
             }`}
           >
             {overTray ? "Remove " : ""}
-            {blockTypeLabel(dragging.kind === "new" ? dragging.type : dragging.block.type)}
+            {labelOf(dragging.kind === "new" ? dragging.type : dragging.block.type)}
           </div>
         )}
       </DragOverlay>
@@ -305,25 +336,27 @@ export default function VisualLayoutEditor({
   );
 }
 
-// Whether dropping a block at `target` would leave the layout as it is:
-// a block alone in its row dropped just above or below itself.
-function changesNothing(rows: LayoutBlock[][], blockId: string, target: BlockDropTarget): boolean {
+// Whether dropping a component at `target` would leave the layout as it
+// is: a component alone in its row dropped just above or below itself.
+function changesNothing(rows: RowBlock[][], blockId: string, target: BlockDropTarget): boolean {
   if (target.kind === "beside") return target.blockId === blockId;
   const index = rows.findIndex((r) => r.some((b) => b.id === blockId));
   return rows[index]?.length === 1 && (target.index === index || target.index === index + 1);
 }
 
-// The Components tray: components to drag onto the page, and — while a
-// component on the page is being dragged — the place to drop it to
-// remove it (outlined in red, filled red when it's over it).
-function Tray({
+// The Components tray: components to drag onto the layout, and — while
+// a component on it is being dragged — the place to drop it to remove it
+// (outlined in red, filled red when it's over it).
+function Tray<T extends string>({
+  components,
   moving,
   over,
   onAdd,
 }: {
+  components: readonly EditorComponent<T>[];
   moving: boolean;
   over: boolean;
-  onAdd: (type: LayoutBlockType) => void;
+  onAdd: (type: T) => void;
 }) {
   const { setNodeRef } = useDroppable({ id: TRAY_ID });
   const outline = !moving
@@ -337,28 +370,28 @@ function Tray({
       className={`flex w-40 shrink-0 flex-col gap-1.5 rounded-lg border-2 p-1.5 ${outline}`}
     >
       <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Components</p>
-      {LAYOUT_BLOCK_TYPES.map((t) => (
-        <TrayItem key={t.value} type={t.value} label={t.label} onAdd={onAdd} />
+      {components.map((c) => (
+        <TrayItem key={c.value} type={c.value} label={c.label} onAdd={onAdd} />
       ))}
       <p className={`mt-1 text-xs ${moving ? "text-red-600" : "text-neutral-400"}`}>
         {moving
           ? "Drop here to remove."
-          : "Drag onto the page, or click to add at the end. Drag back here to remove."}
+          : "Drag onto the layout, or click to add at the end. Drag back here to remove."}
       </p>
     </aside>
   );
 }
 
-function TrayItem({
+function TrayItem<T extends string>({
   type,
   label,
   onAdd,
 }: {
-  type: LayoutBlockType;
+  type: T;
   label: string;
-  onAdd: (type: LayoutBlockType) => void;
+  onAdd: (type: T) => void;
 }) {
-  const item: DragItem = { kind: "new", type };
+  const item = { kind: "new", type };
   const { setNodeRef, attributes, listeners } = useDraggable({ id: `new:${type}`, data: item });
   return (
     <button
@@ -404,12 +437,13 @@ function BlockWithGap({
   );
 }
 
-// The panel a selected component's bar opens: its exact numbers, or a
-// Sliding doors component's own settings.
-type Panel = "fine" | "doors";
+// The panel a selected component's bar opens: its exact numbers, or its
+// own settings.
+type Panel = "fine" | "own";
 
-function BlockItem({
+function BlockItem<B extends RowBlock>({
   block,
+  label,
   rowIndex,
   rowSize,
   lastRow,
@@ -419,14 +453,15 @@ function BlockItem({
   selected,
   faded,
   dropSide,
-  gridSpacing,
+  ownSettings,
   onSelect,
   onWidth,
   onRow,
-  onDoors,
   onRemove,
+  children,
 }: {
-  block: LayoutBlock;
+  block: B;
+  label: string;
   rowIndex: number;
   rowSize: number;
   lastRow: boolean;
@@ -436,21 +471,20 @@ function BlockItem({
   selected: boolean;
   faded: boolean;
   dropSide: "left" | "right" | null;
-  gridSpacing: BlockBuildLayout["gridSpacing"];
+  ownSettings: BlockSettingsPanel | null | undefined;
   onSelect: () => void;
   onWidth: (width: number) => void;
   onRow: (patch: Partial<RowSettings>) => void;
-  onDoors: (doors: SlidingDoorsSettings) => void;
   onRemove: () => void;
+  children: ReactNode;
 }) {
-  const item: DragItem = { kind: "move", block };
+  const item: DragItem<B> = { kind: "move", block };
   const drop: DropData = { blockId: block.id, rowIndex };
   const drag = useDraggable({ id: `block:${block.id}`, data: item });
   const zone = useDroppable({ id: `drop:${block.id}`, data: drop });
   const [panel, setPanel] = useState<Panel | null>(null);
   const togglePanel = (p: Panel) => setPanel((current) => (current === p ? null : p));
   const width = blockWidthOf(block);
-  const label = blockTypeLabel(block.type);
 
   return (
     <EditableBlock
@@ -484,9 +518,9 @@ function BlockItem({
           vertical={rowSize > 1 ? settings.vertical : undefined}
           onAlign={onRow}
         >
-          {block.doors && (
-            <BarButton active={panel === "doors"} onClick={() => togglePanel("doors")}>
-              Settings
+          {ownSettings && (
+            <BarButton active={panel === "own"} onClick={() => togglePanel("own")}>
+              {ownSettings.button}
             </BarButton>
           )}
           <BarButton active={panel === "fine"} onClick={() => togglePanel("fine")}>
@@ -499,129 +533,50 @@ function BlockItem({
         </SelectionBar>
       }
       panel={
-        panel && (
-          <PanelBox
-            title={panel === "fine" ? "Fine-tune" : "Sliding doors"}
-            onClose={() => setPanel(null)}
-          >
-            {panel === "fine" ? (
-              <>
-                <NumberField
-                  label="Width, desktop"
-                  unit="%"
-                  step={1}
-                  value={width}
-                  limits={BLOCK_WIDTH_LIMITS}
-                  onCommit={onWidth}
-                  wide
-                />
-                {rowSize > 1 && (
-                  <NumberField
-                    label="Space between"
-                    unit="pixels"
-                    step={1}
-                    value={settings.between}
-                    limits={BLOCK_SPACING_LIMITS}
-                    onCommit={(between) => onRow({ between })}
-                    wide
-                  />
-                )}
-                {!lastRow && (
-                  <NumberField
-                    label="Space below"
-                    unit="pixels"
-                    step={1}
-                    value={settings.below}
-                    limits={BLOCK_SPACING_LIMITS}
-                    onCommit={(below) => onRow({ below })}
-                    wide
-                  />
-                )}
-                <p className="text-xs text-neutral-400">
-                  On a phone every component is full width.
-                </p>
-              </>
-            ) : (
-              block.doors && <DoorsSettings doors={block.doors} onChange={onDoors} />
+        panel === "fine" ? (
+          <PanelBox title="Fine-tune" onClose={() => setPanel(null)}>
+            <NumberField
+              label="Width, desktop"
+              unit="%"
+              step={1}
+              value={width}
+              limits={BLOCK_WIDTH_LIMITS}
+              onCommit={onWidth}
+              wide
+            />
+            {rowSize > 1 && (
+              <NumberField
+                label="Space between"
+                unit="pixels"
+                step={1}
+                value={settings.between}
+                limits={BLOCK_SPACING_LIMITS}
+                onCommit={(between) => onRow({ between })}
+                wide
+              />
             )}
+            {!lastRow && (
+              <NumberField
+                label="Space below"
+                unit="pixels"
+                step={1}
+                value={settings.below}
+                limits={BLOCK_SPACING_LIMITS}
+                onCommit={(below) => onRow({ below })}
+                wide
+              />
+            )}
+            <p className="text-xs text-neutral-400">On a phone every component is full width.</p>
           </PanelBox>
-        )
+        ) : panel === "own" && ownSettings ? (
+          <PanelBox title={ownSettings.title} onClose={() => setPanel(null)}>
+            {ownSettings.content}
+          </PanelBox>
+        ) : null
       }
     >
-      <Labelled label={label}>
-        <BlockShape block={block} spacing={gridSpacing} />
-      </Labelled>
+      <Labelled label={label}>{children}</Labelled>
     </EditableBlock>
-  );
-}
-
-// The Sliding doors number settings, in order. Gap only applies to pairs.
-const DOORS_FIELDS: {
-  key: Exclude<keyof SlidingDoorsSettings, "perSlide" | "height">;
-  label: string;
-  unit: string;
-  step: number;
-}[] = [
-  { key: "duration", label: "Duration", unit: "seconds", step: 0.5 },
-  { key: "speed", label: "Slide speed", unit: "seconds", step: 0.5 },
-  { key: "gap", label: "Gap", unit: "pixels", step: 1 },
-];
-
-// A Sliding doors component's settings (2026-10-05; on the component
-// itself from 2026-10-07): pairs or one at a time, how long each slide
-// shows, how fast it moves, the gap between a pair, and the square
-// panels' height on desktop and phone.
-function DoorsSettings({
-  doors,
-  onChange,
-}: {
-  doors: SlidingDoorsSettings;
-  onChange: (doors: SlidingDoorsSettings) => void;
-}) {
-  return (
-    <>
-      <label className="flex items-center gap-2 text-sm text-neutral-700">
-        <span className="flex-1">Show</span>
-        <select
-          value={doors.perSlide}
-          onChange={(e) => onChange({ ...doors, perSlide: e.target.value === "1" ? 1 : 2 })}
-          className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
-        >
-          <option value={2}>Pairs</option>
-          <option value={1}>One at a time</option>
-        </select>
-      </label>
-      {DOORS_FIELDS.filter((f) => f.key !== "gap" || doors.perSlide === 2).map((f) => (
-        <NumberField
-          key={f.key}
-          label={f.label}
-          unit={f.unit}
-          step={f.step}
-          value={doors[f.key]}
-          limits={SLIDING_DOORS_LIMITS[f.key]}
-          onCommit={(value) => onChange({ ...doors, [f.key]: value })}
-          wide
-        />
-      ))}
-      <NumberField
-        label="Height, desktop"
-        unit="% of screen"
-        step={5}
-        value={doors.height.desktop}
-        limits={SLIDING_DOORS_LIMITS.height}
-        onCommit={(desktop) => onChange({ ...doors, height: { ...doors.height, desktop } })}
-        wide
-      />
-      <NumberField
-        label="Height, phone"
-        unit="% of screen"
-        step={5}
-        value={doors.height.phone}
-        limits={SLIDING_DOORS_LIMITS.height}
-        onCommit={(phone) => onChange({ ...doors, height: { ...doors.height, phone } })}
-        wide
-      />
-    </>
   );
 }
 

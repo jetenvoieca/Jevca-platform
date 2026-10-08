@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { HorizontalAlign, VerticalAlign } from "@/lib/pageStyleLayout";
+import type { HorizontalAlign, VerticalAlign } from "@/lib/rowLayout";
 
 // How a Display Style's rows are drawn (2026-10-07) — shared by the
 // site's pages (PagePreview), the Page Styles preview (PageStylePreview)
