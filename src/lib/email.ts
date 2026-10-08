@@ -38,3 +38,29 @@ export function artistFromAddress(artist: {
   const address = `${artist.emailSlug}@${EMAIL_DOMAIN}`;
   return { ok: true, from: `${artist.name} <${address}>`, address };
 }
+
+// Campaign mails (2026-10-08, Craig's choice) go out from the artist's
+// address at news.jevca.art, which has Resend's open and click tracking
+// on — jevca.art keeps tracking off for invoices, receipts and replies.
+// Replies go to the artist's normal jevca.art address, so they land in
+// the Inbox. The same host serves the mails' images and the unsubscribe
+// page (see middleware.ts).
+export const CAMPAIGN_EMAIL_DOMAIN = "news.jevca.art";
+export const CAMPAIGN_PUBLIC_URL = `https://${CAMPAIGN_EMAIL_DOMAIN}`;
+
+export type CampaignAddressesResult =
+  | { ok: true; from: string; replyTo: string }
+  | { ok: false; error: string };
+
+export function artistCampaignAddresses(artist: {
+  name: string;
+  emailSlug: string | null;
+}): CampaignAddressesResult {
+  const normal = artistFromAddress(artist);
+  if (!normal.ok) return normal;
+  return {
+    ok: true,
+    from: `${artist.name} <${artist.emailSlug}@${CAMPAIGN_EMAIL_DOMAIN}>`,
+    replyTo: normal.address,
+  };
+}

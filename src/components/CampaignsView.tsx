@@ -34,6 +34,7 @@ import MailBlockContent, { ButtonSettings, type PictureThumbs } from "@/componen
 import MailPreviewFrame from "@/components/MailPreviewFrame";
 import CampaignSetupModal from "@/components/CampaignSetupModal";
 import CampaignMailList from "@/components/CampaignMailList";
+import CampaignAudience from "@/components/CampaignAudience";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAutoSave } from "@/components/useAutoSave";
 
@@ -47,7 +48,8 @@ import { useAutoSave } from "@/components/useAutoSave";
 // but no French yet; on the right, Add / Edit / Duplicate / Delete (Add and
 // Edit open the campaign's window: its name, and its mails with their
 // templates), the Campaigns list, and the selected campaign's mails
-// with their shares and the follow-up's condition. Every change shows
+// with their shares and the follow-up's condition, then the Audience
+// box (Test message for now). Every change shows
 // in the Preview and saves itself shortly after. The audience and
 // sending come in a later step.
 
@@ -84,11 +86,13 @@ function listButtonClass(selected: boolean): string {
 export default function CampaignsView({
   siteId,
   artistId,
+  artistEmail,
   initialCampaigns,
   templates,
 }: {
   siteId: string;
   artistId: string;
+  artistEmail: string | null;
   initialCampaigns: CampaignSummary[];
   templates: MailTemplateSummary[];
 }) {
@@ -511,6 +515,8 @@ export default function CampaignsView({
             </p>
           </div>
         )}
+
+        {selected && draft && <CampaignAudience siteId={siteId} artistEmail={artistEmail} mail={draft} />}
       </aside>
 
       {setup && (

@@ -15,6 +15,7 @@ import {
   type FollowUpCondition,
 } from "@/lib/campaignMails";
 import {
+  MAIL_LANGUAGES,
   cleanMailContent,
   mailReferences,
   moveMailContent,
@@ -23,7 +24,9 @@ import {
   type MailContent,
   type MailLanguage,
 } from "@/lib/mailContent";
+import { Resend } from "resend";
 import { loadMailAssets } from "@/lib/mailAssets";
+import { CAMPAIGN_PUBLIC_URL, artistCampaignAddresses } from "@/lib/email";
 import { renderMailHtml } from "@/lib/mailHtml";
 
 // Marketing → Mail Campaigns (2026-10-08, step 3) — see Campaign and
@@ -402,6 +405,34 @@ export async function updateCampaignMail(
   return count === 1 ? { ok: true } : { error: "Mail not found." };
 }
 
+// A mail in one language, cleaned with the same rules the editor uses.
+// The Preview draws it with the app's own image addresses (baseUrl "");
+// a mail sent out needs full ones, on the campaign mails' address.
+async function renderCampaignMail(
+  siteId: string,
+  input: CampaignMailInput,
+  language: MailLanguage,
+  sending: { unsubscribeUrl: string } | null
+): Promise<{ html: string; subject: string } | { error: string }> {
+  const layout = normalizeMailTemplate(input.layout);
+  const content = cleanMailContent(input.content, layout);
+  const assets = await loadMailAssets(siteId, content, sending ? CAMPAIGN_PUBLIC_URL : "");
+  if (!assets) return { error: "Site not found." };
+  const subject = cleanSubjectLine(input.subject?.[language]) ?? "";
+  return {
+    subject,
+    html: renderMailHtml({
+      layout,
+      content,
+      language,
+      subject,
+      preview: cleanSubjectLine(input.preview?.[language]) ?? "",
+      assets,
+      unsubscribeUrl: sending?.unsubscribeUrl ?? "#",
+    }),
+  };
+}
+
 // The mail as it will be sent, in one language — drawn from what's being
 // edited (not what's saved), so the Preview follows every change.
 export async function renderCampaignMailPreview(
@@ -409,22 +440,62 @@ export async function renderCampaignMailPreview(
   input: CampaignMailInput,
   language: MailLanguage
 ): Promise<{ html: string } | { error: string }> {
-  const layout = normalizeMailTemplate(input.layout);
-  const content = cleanMailContent(input.content, layout);
-  const assets = await loadMailAssets(siteId, content, "");
-  if (!assets) return { error: "Site not found." };
-  return {
-    html: renderMailHtml({
-      layout,
-      content,
-      language,
-      subject: cleanSubjectLine(input.subject?.[language]) ?? "",
-      preview: cleanSubjectLine(input.preview?.[language]) ?? "",
-      assets,
-      // The real unsubscribe page comes with sending.
-      unsubscribeUrl: "#",
-    }),
-  };
+  const result = await renderCampaignMail(siteId, input, language, null);
+  return "error" in result ? result : { html: result.html };
+}
+
+const TEST_LANGUAGE_NAMES: Record<MailLanguage, string> = { en: "English", fr: "French" };
+
+// Test message (2026-10-08, Craig's choice): the mail being edited, sent
+// as it stands to one address typed in, in both languages as two emails
+// — from the artist's campaign address, with replies to their normal
+// one. A language with no subject isn't sent (as a French subscriber
+// wouldn't get it). The subject starts "[Test]". The unsubscribe link
+// goes to the unsubscribe page's test address.
+export async function sendCampaignTestMail(
+  siteId: string,
+  input: CampaignMailInput,
+  to: string
+): Promise<{ sent: string[]; skipped: string[] } | { error: string }> {
+  const address = to.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return { error: "Type the address to send the test to." };
+
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) return { error: "Email sending isn't configured yet — RESEND_API_KEY is missing in Netlify." };
+
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: { artist: { select: { name: true, emailSlug: true } } },
+  });
+  if (!site) return { error: "Site not found." };
+  const addresses = artistCampaignAddresses(site.artist);
+  if (!addresses.ok) return { error: addresses.error };
+
+  const resend = new Resend(apiKey);
+  const sent: string[] = [];
+  const skipped: string[] = [];
+  for (const { value: language } of MAIL_LANGUAGES) {
+    const name = TEST_LANGUAGE_NAMES[language];
+    const mail = await renderCampaignMail(siteId, input, language, {
+      unsubscribeUrl: `${CAMPAIGN_PUBLIC_URL}/unsubscribe/test`,
+    });
+    if ("error" in mail) return mail;
+    if (!mail.subject) {
+      skipped.push(name);
+      continue;
+    }
+    const { error } = await resend.emails.send({
+      from: addresses.from,
+      replyTo: addresses.replyTo,
+      to: address,
+      subject: `[Test] ${mail.subject}`,
+      html: mail.html,
+    });
+    if (error) return { error: `${name}: ${error.message || "Resend could not send the email."}` };
+    sent.push(name);
+  }
+  if (sent.length === 0) return { error: "Give the mail a subject first." };
+  return { sent, skipped };
 }
 
 // Small pictures for the mail editor: each picture and artwork the

@@ -9,7 +9,10 @@ export const dynamic = "force-dynamic";
 
 export default async function MailCampaignsPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const site = await db.site.findUnique({ where: { id }, select: { id: true, artistId: true } });
+  const site = await db.site.findUnique({
+    where: { id },
+    select: { id: true, artistId: true, artist: { select: { email: true } } },
+  });
   if (!site) notFound();
 
   const [campaigns, templates] = await Promise.all([listCampaigns(site.id), listMailTemplates()]);
@@ -18,6 +21,7 @@ export default async function MailCampaignsPage({ params }: { params: Promise<{ 
     <CampaignsView
       siteId={site.id}
       artistId={site.artistId}
+      artistEmail={site.artist.email}
       initialCampaigns={campaigns}
       templates={templates}
     />

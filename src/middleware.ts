@@ -12,6 +12,13 @@ const WEBSITE_HOST = "www.jetenvoieca.com";
 const WEBSITE_BARE_HOST = "jetenvoieca.com";
 const WEBSITE_ROUTE_PREFIX = "/public-website";
 
+// Campaign mails' own address, news.jevca.art (2026-10-08): it serves
+// only what a sent mail links to — its images (/api/media) and the
+// unsubscribe page (/unsubscribe/…), with no login. Everything else is a
+// 404 there.
+const NEWS_HOST = "news.jevca.art";
+const NEWS_PATH_PREFIXES = ["/api/media/", "/unsubscribe/"];
+
 // Paths that authenticate themselves separately, or need to be reachable
 // without the app's shared password:
 // - /api/hopper/*         — the iPhone Shortcut, authenticated by its own
@@ -75,6 +82,13 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     url.pathname = pathname === "/" ? WEBSITE_ROUTE_PREFIX : `${WEBSITE_ROUTE_PREFIX}${pathname}`;
     return NextResponse.rewrite(url);
+  }
+
+  // ---- Campaign mails' address ----
+  if (host === NEWS_HOST) {
+    return NEWS_PATH_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+      ? NextResponse.next()
+      : new NextResponse(null, { status: 404 });
   }
 
   // ---- The admin tool ----
