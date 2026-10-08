@@ -6,6 +6,7 @@ export type TopNavKey =
   | "clients"
   | "pageStyles"
   | "menuStyles"
+  | "mailTemplates"
   | "inbox"
   | "subscriptions"
   | "expenses"
@@ -77,8 +78,9 @@ export function buildAccountsSection(
 // "Templates" (2026-09-06) — the reusable, cross-site design library,
 // separate from any one Site. Sits above Sites, matching the ISYT design
 // mockups, rather than folded into the Administration group above:
-// "Page Styles" (layouts a site's pages can use, 2026-10-04) and
-// "Menus" (site menu designs, 2026-10-06). The old "Site Templates"
+// "Page Styles" (layouts a site's pages can use, 2026-10-04), "Menus"
+// (site menu designs, 2026-10-06) and "Mail Templates" (starting
+// layouts for campaign mails, 2026-10-08). The old "Site Templates"
 // library was removed 2026-10-07. Shared with the per-site menu
 // (siteNav.ts), same as buildAccountsSection.
 export function buildTemplatesSection(active: TopNavKey | null): AppShellNavEntry {
@@ -93,6 +95,7 @@ export function buildTemplatesSection(active: TopNavKey | null): AppShellNavEntr
         active: active === "pageStyles",
       },
       { label: "Menus", href: "/templates/menus", active: active === "menuStyles" },
+      { label: "Mail Templates", href: "/templates/mail", active: active === "mailTemplates" },
     ],
   };
 }

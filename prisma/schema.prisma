@@ -1196,6 +1196,22 @@ model PageStyle {
   updatedAt DateTime @updatedAt
 }
 
+// A Mail Template (2026-10-08, Marketing step 2) — a named starting
+// layout for a campaign's mails, shared by every site and managed under
+// Templates → Mail Templates, like Page Styles. Layout and look only,
+// no content: `layout` holds its components, rows, spacing, colours and
+// text look as JSON (see lib/mailTemplateLayout.ts). A mail copies it
+// and can then change it.
+model MailTemplate {
+  id   String @id @default(cuid())
+  name String @unique
+
+  layout Json @default("{}")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
 // A Menu Style (2026-10-06, from Craig's request) — a named site menu
 // design, shared by every site, managed under Templates → Menus. It sets
 // how the menu looks and behaves only: the menu's items and their order
