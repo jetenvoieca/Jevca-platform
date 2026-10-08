@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { getArtworksForArtist, quickCreateArtwork } from "@/lib/actions/media";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 
@@ -152,19 +153,22 @@ export default function ArtworkPicker({
   // button. See decisions-log.md, 2026-07-31. The "button" variant opts
   // out of that for contexts where a dashed "+ Add" tile would mislead
   // (see prop comment above).
-  if (!open) {
-    if (variant === "button") {
-      return (
-        <button
-          type="button"
-          onClick={handleOpen}
-          className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50"
-        >
-          {label}
-        </button>
-      );
-    }
-    return (
+  // The modal opens over the whole screen through a portal (2026-10-08),
+  // so it works wherever the picker sits — even inside a moved or scaled
+  // box, like a campaign mail's components. The trigger stays in place.
+  let trigger: ReactNode;
+  if (variant === "button") {
+    trigger = (
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
+      >
+        {label}
+      </button>
+    );
+  } else {
+    trigger = (
       <button
         type="button"
         onClick={handleOpen}
@@ -175,7 +179,7 @@ export default function ArtworkPicker({
     );
   }
 
-  return (
+  const modal = (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
       onClick={(e) => {
@@ -317,5 +321,12 @@ export default function ArtworkPicker({
         )}
       </div>
     </div>
+  );
+
+  return (
+    <>
+      {trigger}
+      {open && createPortal(modal, document.body)}
+    </>
   );
 }

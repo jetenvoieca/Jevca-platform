@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
 import VideoThumb from "@/components/VideoThumb";
@@ -64,6 +65,7 @@ export default function MediaPicker({
   previewUrl,
   previewKind = "image",
   previewClassName,
+  variant = "tile",
   onSelect,
 }: {
   artistId: string;
@@ -108,6 +110,9 @@ export default function MediaPicker({
   // Callers that don't pass this (Artist profile photo, Artwork main
   // image, etc.) keep the original aspect-[4/3]/aspect-square boxes.
   previewClassName?: string;
+  // "button" (2026-10-08, a campaign mail's picture slots): a plain
+  // button with `label` instead of the dashed tile, like ArtworkPicker's.
+  variant?: "tile" | "button";
   onSelect: (images: PickedImage[]) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -216,31 +221,44 @@ export default function MediaPicker({
   // applies but scaled up: the actual image fills the tile at a real
   // size instead of a small placeholder, with the same dashed-border
   // language shown as a hover overlay rather than the whole tile.
-  if (!open) {
-    if (previewUrl) {
-      return (
-        <button
-          type="button"
-          onClick={handleOpen}
-          className={`group relative block w-full overflow-hidden rounded-md ${
-            previewClassName ?? "aspect-[4/3]"
-          }`}
-        >
-          {previewKind === "video" ? (
-            <video src={previewUrl} muted playsInline className="h-full w-full object-cover" />
-          ) : (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={previewUrl} alt="" className="h-full w-full object-cover" />
-          )}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
-            <div className="hidden h-2/3 w-2/3 items-center justify-center border-2 border-dashed border-white group-hover:flex">
-              <span className="text-2xl leading-none text-white">+</span>
-            </div>
+  // The modal opens over the whole screen through a portal (2026-10-08),
+  // so it works wherever the picker sits — even inside a moved or scaled
+  // box, like a campaign mail's components. The trigger stays in place.
+  let trigger: ReactNode;
+  if (variant === "button") {
+    trigger = (
+      <button
+        type="button"
+        onClick={handleOpen}
+        className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+      >
+        {label}
+      </button>
+    );
+  } else if (previewUrl) {
+    trigger = (
+      <button
+        type="button"
+        onClick={handleOpen}
+        className={`group relative block w-full overflow-hidden rounded-md ${
+          previewClassName ?? "aspect-[4/3]"
+        }`}
+      >
+        {previewKind === "video" ? (
+          <video src={previewUrl} muted playsInline className="h-full w-full object-cover" />
+        ) : (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={previewUrl} alt="" className="h-full w-full object-cover" />
+        )}
+        <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
+          <div className="hidden h-2/3 w-2/3 items-center justify-center border-2 border-dashed border-white group-hover:flex">
+            <span className="text-2xl leading-none text-white">+</span>
           </div>
-        </button>
-      );
-    }
-    return (
+        </div>
+      </button>
+    );
+  } else {
+    trigger = (
       <button
         type="button"
         onClick={handleOpen}
@@ -253,7 +271,7 @@ export default function MediaPicker({
     );
   }
 
-  return (
+  const modal = (
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-6"
       onClick={(e) => {
@@ -532,5 +550,12 @@ export default function MediaPicker({
         />
       )}
     </div>
+  );
+
+  return (
+    <>
+      {trigger}
+      {open && createPortal(modal, document.body)}
+    </>
   );
 }
