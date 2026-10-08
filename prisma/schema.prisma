@@ -1009,6 +1009,9 @@ model Subscriber {
 
   lists MailListMember[]
 
+  // The campaign mails sent (or to be sent) to this subscriber.
+  campaignRecipients CampaignRecipient[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1028,6 +1031,9 @@ model MailList {
   name String
 
   members MailListMember[]
+
+  // The campaigns sent (or to be sent) to this list.
+  campaigns CampaignList[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1906,10 +1912,85 @@ model Campaign {
 
   mails CampaignMail[]
 
+  // Sending (2026-10-08): DRAFT until Send now / Send at, SCHEDULED
+  // until `scheduledAt` (Paris time chosen, stored in UTC), SENDING while
+  // the batches go out (see lib/campaignSending.ts), then SENT. Once
+  // sending starts, the principal and alternative mails can't change.
+  // `sendError`: why a scheduled campaign couldn't start (it goes back to
+  // DRAFT).
+  status      CampaignStatus @default(DRAFT)
+  scheduledAt DateTime?
+  startedAt   DateTime?
+  sentAt      DateTime?
+  sendError   String?
+
+  // The mail lists it goes to (anyone on several gets one copy).
+  lists      CampaignList[]
+  recipients CampaignRecipient[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@unique([siteId, name])
+  @@index([status, scheduledAt])
+}
+
+enum CampaignStatus {
+  DRAFT
+  SCHEDULED
+  SENDING
+  SENT
+}
+
+// A mail list a campaign goes to (2026-10-08).
+model CampaignList {
+  campaignId String
+  campaign   Campaign @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  listId     String
+  list       MailList @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@id([campaignId, listId])
+  @@index([listId])
+}
+
+// One person a campaign goes to (2026-10-08), made when sending starts:
+// which of the campaign's mails they get (by the mails' shares), in
+// which language, and how it went. SKIPPED: unsubscribed before their
+// turn, or French with no French subject on their mail. `claimedAt`:
+// taken by a sending run, so two runs never send the same person.
+// `resendEmailId` matches Resend's open/click events back to them later.
+model CampaignRecipient {
+  id           String       @id @default(cuid())
+  campaignId   String
+  campaign     Campaign     @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+  mailId       String
+  mail         CampaignMail @relation(fields: [mailId], references: [id], onDelete: Cascade)
+  subscriberId String?
+  subscriber   Subscriber?  @relation(fields: [subscriberId], references: [id], onDelete: SetNull)
+
+  email    String
+  language String
+
+  status        CampaignRecipientStatus @default(PENDING)
+  resendEmailId String?
+  error         String?
+  claimedAt     DateTime?
+  sentAt        DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@unique([campaignId, subscriberId])
+  @@index([campaignId, status])
+  @@index([mailId])
+  @@index([subscriberId])
+  @@index([resendEmailId])
+}
+
+enum CampaignRecipientStatus {
+  PENDING
+  SENT
+  SKIPPED
+  FAILED
 }
 
 // Which of a campaign's mails this is (2026-10-08): the principal mail,
@@ -1953,6 +2034,8 @@ model CampaignMail {
 
   layout  Json @default("{}")
   content Json @default("{}")
+
+  recipients CampaignRecipient[]
 
   subjectEn String?
   subjectFr String?

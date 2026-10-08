@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { listCampaigns } from "@/lib/actions/campaigns";
 import { listMailTemplates } from "@/lib/actions/mailTemplates";
+import { listMailLists } from "@/lib/actions/subscribers";
 import CampaignsView from "@/components/CampaignsView";
 
 // Marketing → Mail Campaigns (2026-10-08) — see CampaignsView.
@@ -15,7 +16,11 @@ export default async function MailCampaignsPage({ params }: { params: Promise<{ 
   });
   if (!site) notFound();
 
-  const [campaigns, templates] = await Promise.all([listCampaigns(site.id), listMailTemplates()]);
+  const [campaigns, templates, lists] = await Promise.all([
+    listCampaigns(site.id),
+    listMailTemplates(),
+    listMailLists(site.artistId),
+  ]);
 
   return (
     <CampaignsView
@@ -24,6 +29,7 @@ export default async function MailCampaignsPage({ params }: { params: Promise<{ 
       artistEmail={site.artist.email}
       initialCampaigns={campaigns}
       templates={templates}
+      lists={lists}
     />
   );
 }

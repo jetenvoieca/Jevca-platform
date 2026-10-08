@@ -5,6 +5,7 @@ import {
   deleteCampaign,
   describeMailPictures,
   duplicateCampaign,
+  getCampaign,
   renderCampaignMailPreview,
   setAlternativeShare,
   setFollowUp,
@@ -15,6 +16,7 @@ import {
   type MailPictureThumb,
 } from "@/lib/actions/campaigns";
 import type { MailTemplateSummary } from "@/lib/actions/mailTemplates";
+import type { MailListSummary } from "@/lib/actions/subscribers";
 import { translateMailToFrench } from "@/lib/actions/translateMail";
 import { applyFrench, frenchGaps, hasNoFrench } from "@/lib/mailTranslation";
 import { campaignMailLabel, type FollowUpCondition } from "@/lib/campaignMails";
@@ -89,12 +91,14 @@ export default function CampaignsView({
   artistEmail,
   initialCampaigns,
   templates,
+  lists,
 }: {
   siteId: string;
   artistId: string;
   artistEmail: string | null;
   initialCampaigns: CampaignSummary[];
   templates: MailTemplateSummary[];
+  lists: MailListSummary[];
 }) {
   const [campaigns, setCampaigns] = useState(initialCampaigns);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -253,9 +257,14 @@ export default function CampaignsView({
     if (!selected) return;
     const id = selected.id;
     setConfirmingDelete(false);
+    setError(null);
     startTransition(async () => {
       await autoSave.flush();
-      await deleteCampaign(id, siteId);
+      const result = await deleteCampaign(id, siteId);
+      if ("error" in result) {
+        setError(result.error);
+        return;
+      }
       setCampaigns((prev) => prev.filter((c) => c.id !== id));
       setSelectedId(null);
       setMailId(null);
@@ -341,6 +350,44 @@ export default function CampaignsView({
     }
   };
 
+  // A campaign's sending status changed (lists, Send, Cancel, or how
+  // sending is going): only those parts are taken — the mails as being
+  // edited here stay as they are.
+  const updateSending = (next: CampaignSummary) =>
+    setCampaigns((prev) =>
+      prev.map((c) =>
+        c.id === next.id
+          ? {
+              ...c,
+              status: next.status,
+              scheduledAt: next.scheduledAt,
+              sentAt: next.sentAt,
+              sendError: next.sendError,
+              listIds: next.listIds,
+              progress: next.progress,
+            }
+          : c
+      )
+    );
+
+  // While the selected campaign is waiting to start or sending, its
+  // status is checked every 10 seconds.
+  const watchedId =
+    selected && (selected.status === "SCHEDULED" || selected.status === "SENDING") ? selected.id : null;
+  useEffect(() => {
+    if (!watchedId) return;
+    const timer = setInterval(async () => {
+      const latest = await getCampaign(watchedId, siteId);
+      if (latest) updateSending(latest);
+    }, 10_000);
+    return () => clearInterval(timer);
+  }, [watchedId, siteId]);
+
+  // Once sending starts, the principal and alternative mails can't be
+  // changed (the follow-up can, until it goes).
+  const started = !!selected && (selected.status === "SENDING" || selected.status === "SENT");
+  const mailLocked = started && mail?.kind !== "FOLLOW_UP";
+
   const busy = !!setup || isPending;
 
   return (
@@ -380,58 +427,69 @@ export default function CampaignsView({
                 ))}
               </div>
             </div>
-            <div className="mb-3 grid grid-cols-2 gap-2">
-              <input
-                type="text"
-                value={draft.subject[language]}
-                onChange={(e) => setLine("subject", e.target.value)}
-                placeholder="Subject"
-                aria-label="Subject"
-                className={inputClass}
-              />
-              <input
-                type="text"
-                value={draft.preview[language]}
-                onChange={(e) => setLine("preview", e.target.value)}
-                placeholder="Preview text (shown after the subject)"
-                aria-label="Preview text"
-                className={inputClass}
-              />
-            </div>
-            {language === "fr" && frenchGaps(draft).length > 0 && (
-              <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2">
-                <p className="text-sm text-neutral-700">
-                  {hasNoFrench(draft)
-                    ? "No French version yet — translate from the English, or type it directly below."
-                    : "Some parts have no French yet — translate them from the English, or type them below."}
+            {mailLocked ? (
+              <div className="flex flex-1 items-center justify-center">
+                <p className="max-w-sm text-center text-sm text-neutral-500">
+                  This mail has been sent, so it can&apos;t be changed — the Preview shows it as sent. Duplicate
+                  the campaign to send something similar.
                 </p>
-                <button
-                  type="button"
-                  onClick={handleTranslate}
-                  disabled={translating}
-                  className="shrink-0 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-                >
-                  {translating ? "Translating…" : "Translate now"}
-                </button>
               </div>
+            ) : (
+              <>
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  <input
+                    type="text"
+                    value={draft.subject[language]}
+                    onChange={(e) => setLine("subject", e.target.value)}
+                    placeholder="Subject"
+                    aria-label="Subject"
+                    className={inputClass}
+                  />
+                  <input
+                    type="text"
+                    value={draft.preview[language]}
+                    onChange={(e) => setLine("preview", e.target.value)}
+                    placeholder="Preview text (shown after the subject)"
+                    aria-label="Preview text"
+                    className={inputClass}
+                  />
+                </div>
+                {language === "fr" && frenchGaps(draft).length > 0 && (
+                  <div className="mb-3 flex items-center justify-between gap-3 rounded-md border border-rose-200 bg-rose-50 px-3 py-2">
+                    <p className="text-sm text-neutral-700">
+                      {hasNoFrench(draft)
+                        ? "No French version yet — translate from the English, or type it directly below."
+                        : "Some parts have no French yet — translate them from the English, or type them below."}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleTranslate}
+                      disabled={translating}
+                      className="shrink-0 rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                    >
+                      {translating ? "Translating…" : "Translate now"}
+                    </button>
+                  </div>
+                )}
+                {language === "fr" && translateError && (
+                  <p className="mb-3 text-xs text-red-600">{translateError}</p>
+                )}
+                {language === "fr" && !draft.subject.fr.trim() && (
+                  <p className="mb-3 text-xs text-neutral-500">
+                    With no French subject, French subscribers don&apos;t get this campaign.
+                  </p>
+                )}
+                <div className="flex min-h-0 flex-1 flex-col">
+                  <MailLayoutEditor
+                    layout={draft.layout}
+                    onChange={changeLayout}
+                    renderBlock={renderBlock}
+                    settingsPanel={settingsPanel}
+                    fluid
+                  />
+                </div>
+              </>
             )}
-            {language === "fr" && translateError && (
-              <p className="mb-3 text-xs text-red-600">{translateError}</p>
-            )}
-            {language === "fr" && !draft.subject.fr.trim() && (
-              <p className="mb-3 text-xs text-neutral-500">
-                With no French subject, French subscribers don&apos;t get this campaign.
-              </p>
-            )}
-            <div className="flex min-h-0 flex-1 flex-col">
-              <MailLayoutEditor
-                layout={draft.layout}
-                onChange={changeLayout}
-                renderBlock={renderBlock}
-                settingsPanel={settingsPanel}
-                fluid
-              />
-            </div>
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center">
@@ -453,7 +511,7 @@ export default function CampaignsView({
           <button
             type="button"
             onClick={() => selected && openSetup(selected)}
-            disabled={busy || !selected}
+            disabled={busy || !selected || started}
             className={buttonClass}
           >
             Edit
@@ -491,6 +549,7 @@ export default function CampaignsView({
                 className={listButtonClass(c.id === selectedId)}
               >
                 <span className="truncate">{c.name}</span>
+                <StatusTag campaign={c} />
               </button>
             ))}
             {campaigns.length === 0 && (
@@ -516,7 +575,17 @@ export default function CampaignsView({
           </div>
         )}
 
-        {selected && draft && <CampaignAudience siteId={siteId} artistEmail={artistEmail} mail={draft} />}
+        {selected && draft && (
+          <CampaignAudience
+            siteId={siteId}
+            artistEmail={artistEmail}
+            campaign={selected}
+            lists={lists}
+            mail={draft}
+            beforeSend={() => autoSave.flush()}
+            onCampaign={updateSending}
+          />
+        )}
       </aside>
 
       {setup && (
@@ -540,4 +609,21 @@ export default function CampaignsView({
       />
     </div>
   );
+}
+
+// A campaign's sending status beside its name in the list.
+function StatusTag({ campaign }: { campaign: CampaignSummary }) {
+  if (campaign.status === "DRAFT") return null;
+  const label = {
+    SCHEDULED: "Scheduled",
+    SENDING: "Sending",
+    SENT: "Sent",
+  }[campaign.status];
+  const colour =
+    campaign.status === "SENT"
+      ? "bg-green-50 text-green-700"
+      : campaign.status === "SENDING"
+        ? "bg-amber-50 text-amber-700"
+        : "bg-blue-50 text-blue-700";
+  return <span className={`shrink-0 rounded px-1.5 py-0.5 text-xs ${colour}`}>{label}</span>;
 }

@@ -26,9 +26,15 @@ import {
 } from "@/lib/mailContent";
 import { Resend } from "resend";
 import { loadMailAssets } from "@/lib/mailAssets";
-import { CAMPAIGN_PUBLIC_URL, artistCampaignAddresses } from "@/lib/email";
+import { artistCampaignAddresses } from "@/lib/email";
+import { planCampaign, wakeCampaignSending, type SendCounts } from "@/lib/campaignSending";
+import { parisToDate } from "@/lib/parisTime";
+import {
+  cleanSubjectLine,
+  renderCampaignMail,
+  type CampaignMailSource,
+} from "@/lib/campaignMailRender";
 import { TEST_UNSUBSCRIBE_TOKEN, unsubscribeHeaders, unsubscribePageUrl } from "@/lib/unsubscribe";
-import { renderMailHtml } from "@/lib/mailHtml";
 
 // Marketing → Mail Campaigns (2026-10-08, step 3) — see Campaign and
 // CampaignMail in schema.prisma, and lib/campaignMails.ts for how a
@@ -51,7 +57,30 @@ export type CampaignMailData = {
   preview: Localized<string>;
 };
 
-export type CampaignSummary = { id: string; name: string; mails: CampaignMailData[] };
+export type CampaignStatus = "DRAFT" | "SCHEDULED" | "SENDING" | "SENT";
+
+// How a campaign's sending is going (once it has started).
+export type CampaignProgress = { sent: number; skipped: number; failed: number; waiting: number };
+
+export type CampaignSummary = {
+  id: string;
+  name: string;
+  mails: CampaignMailData[];
+  status: CampaignStatus;
+  // When it's set to send, and when it finished (ISO).
+  scheduledAt: string | null;
+  sentAt: string | null;
+  // Why a scheduled campaign couldn't start.
+  sendError: string | null;
+  // The mail lists it goes to.
+  listIds: string[];
+  progress: CampaignProgress | null;
+};
+
+// A campaign's mails can be changed until sending starts (Craig's
+// choice: locked once sent); the follow-up stays editable until it goes.
+const EDITABLE: CampaignStatus[] = ["DRAFT", "SCHEDULED"];
+const SENT_MESSAGE = "This campaign has been sent, so it can't change — duplicate it to send something similar.";
 
 // The Add / Edit window: the campaign's name, and its mails with the
 // template each starts from. `id` is null for a mail being added; a
@@ -60,26 +89,13 @@ export type CampaignSummary = { id: string; name: string; mails: CampaignMailDat
 export type CampaignMailSetup = { id: string | null; kind: CampaignMailKind; templateId: string | null };
 export type CampaignSetup = { name: string; mails: CampaignMailSetup[] };
 
-// What the mail editor saves.
-export type CampaignMailInput = {
-  layout: unknown;
-  content: unknown;
-  subject: Localized<string>;
-  preview: Localized<string>;
-};
+// What the mail editor saves (and the Preview and Test message draw).
+export type CampaignMailInput = CampaignMailSource;
 
 type Result = { ok: true } | { error: string };
 
-const MAX_SUBJECT = 200;
-
 function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
-}
-
-function cleanSubjectLine(value: unknown): string | null {
-  if (typeof value !== "string") return null;
-  const line = value.replace(/\s+/g, " ").trim().slice(0, MAX_SUBJECT);
-  return line || null;
 }
 
 const MAIL_SELECT = {
@@ -98,7 +114,27 @@ const MAIL_SELECT = {
   previewFr: true,
 } as const;
 
-const CAMPAIGN_SELECT = { id: true, name: true, mails: { select: MAIL_SELECT } } as const;
+const CAMPAIGN_SELECT = {
+  id: true,
+  name: true,
+  status: true,
+  scheduledAt: true,
+  sentAt: true,
+  sendError: true,
+  lists: { select: { listId: true } },
+  mails: { select: MAIL_SELECT },
+} as const;
+
+type CampaignRow = {
+  id: string;
+  name: string;
+  status: CampaignStatus;
+  scheduledAt: Date | null;
+  sentAt: Date | null;
+  sendError: string | null;
+  lists: { listId: string }[];
+  mails: MailRow[];
+};
 
 type MailRow = {
   id: string;
@@ -138,11 +174,49 @@ function toMailData(row: MailRow): CampaignMailData {
   };
 }
 
-function toSummary(row: { id: string; name: string; mails: MailRow[] }): CampaignSummary {
+// Each campaign's recipients counted by how their mail went, for the
+// campaigns that have started sending.
+async function progressOf(rows: CampaignRow[]): Promise<Map<string, CampaignProgress>> {
+  const started = rows.filter((r) => r.status === "SENDING" || r.status === "SENT").map((r) => r.id);
+  const progress = new Map<string, CampaignProgress>();
+  if (started.length === 0) return progress;
+  const groups = await db.campaignRecipient.groupBy({
+    by: ["campaignId", "status"],
+    where: { campaignId: { in: started } },
+    _count: { _all: true },
+  });
+  for (const id of started) progress.set(id, { sent: 0, skipped: 0, failed: 0, waiting: 0 });
+  for (const g of groups) {
+    const p = progress.get(g.campaignId)!;
+    const n = g._count._all;
+    if (g.status === "SENT") p.sent += n;
+    else if (g.status === "SKIPPED") p.skipped += n;
+    else if (g.status === "FAILED") p.failed += n;
+    else p.waiting += n;
+  }
+  return progress;
+}
+
+function toSummary(row: CampaignRow, progress: Map<string, CampaignProgress>): CampaignSummary {
   const mails = row.mails
     .map(toMailData)
     .sort((a, b) => campaignMailOrder(a) - campaignMailOrder(b));
-  return { id: row.id, name: row.name, mails };
+  return {
+    id: row.id,
+    name: row.name,
+    mails,
+    status: row.status,
+    scheduledAt: row.scheduledAt?.toISOString() ?? null,
+    sentAt: row.sentAt?.toISOString() ?? null,
+    sendError: row.sendError,
+    listIds: row.lists.map((l) => l.listId),
+    progress: progress.get(row.id) ?? null,
+  };
+}
+
+async function summaryOf(id: string, siteId: string): Promise<CampaignSummary | null> {
+  const row = await db.campaign.findFirst({ where: { id, siteId }, select: CAMPAIGN_SELECT });
+  return row ? toSummary(row, await progressOf([row])) : null;
 }
 
 // Newest first, as campaigns are made one after another.
@@ -152,7 +226,14 @@ export async function listCampaigns(siteId: string): Promise<CampaignSummary[]> 
     orderBy: { createdAt: "desc" },
     select: CAMPAIGN_SELECT,
   });
-  return rows.map(toSummary);
+  const progress = await progressOf(rows);
+  return rows.map((r) => toSummary(r, progress));
+}
+
+// One campaign as it stands now — the page asks again every few seconds
+// while it's sending.
+export async function getCampaign(id: string, siteId: string): Promise<CampaignSummary | null> {
+  return summaryOf(id, siteId);
 }
 
 // Whether the window's mails make a valid campaign: one principal mail,
@@ -198,10 +279,14 @@ export async function saveCampaign(
   const existing = id
     ? await db.campaign.findFirst({
         where: { id, siteId },
-        select: { mails: { select: { id: true, kind: true, templateId: true, layout: true, content: true } } },
+        select: {
+          status: true,
+          mails: { select: { id: true, kind: true, templateId: true, layout: true, content: true } },
+        },
       })
     : null;
   if (id && !existing) return { error: "Campaign not found." };
+  if (existing && !EDITABLE.includes(existing.status)) return { error: SENT_MESSAGE };
   const current = new Map((existing?.mails ?? []).map((m) => [m.id, m]));
   for (const m of setup.mails) {
     const found = m.id ? current.get(m.id) : null;
@@ -277,8 +362,8 @@ export async function saveCampaign(
       return campaign.id;
     });
 
-    const saved = await db.campaign.findUnique({ where: { id: campaignId }, select: CAMPAIGN_SELECT });
-    return saved ? { campaign: toSummary(saved) } : { error: "Campaign not found." };
+    const saved = await summaryOf(campaignId, siteId);
+    return saved ? { campaign: saved } : { error: "Campaign not found." };
   } catch (err) {
     if (isUniqueViolation(err)) return { error: "A campaign with that name already exists." };
     throw err;
@@ -293,7 +378,7 @@ export async function duplicateCampaign(
 ): Promise<{ campaign: CampaignSummary } | { error: string }> {
   const source = await db.campaign.findFirst({
     where: { id, siteId },
-    select: { name: true, mails: { select: MAIL_SELECT } },
+    select: { name: true, lists: { select: { listId: true } }, mails: { select: MAIL_SELECT } },
   });
   if (!source) return { error: "Campaign not found." };
 
@@ -311,6 +396,7 @@ export async function duplicateCampaign(
       data: {
         siteId,
         name,
+        lists: { create: source.lists.map((l) => ({ listId: l.listId })) },
         mails: {
           create: source.mails.map((m) => ({
             kind: m.kind,
@@ -330,15 +416,18 @@ export async function duplicateCampaign(
       },
       select: CAMPAIGN_SELECT,
     });
-    return { campaign: toSummary(campaign) };
+    return { campaign: toSummary(campaign, new Map()) };
   } catch (err) {
     if (isUniqueViolation(err)) return { error: "Couldn't duplicate — try again." };
     throw err;
   }
 }
 
-export async function deleteCampaign(id: string, siteId: string): Promise<void> {
-  await db.campaign.deleteMany({ where: { id, siteId } });
+// Not while it's sending — once it has finished, it (and its record of
+// who got it) can go.
+export async function deleteCampaign(id: string, siteId: string): Promise<Result> {
+  const { count } = await db.campaign.deleteMany({ where: { id, siteId, status: { not: "SENDING" } } });
+  return count === 1 ? { ok: true } : { error: "A campaign can't be deleted while it's sending." };
 }
 
 // An alternative's share of the audience. The alternatives together
@@ -354,9 +443,10 @@ export async function setAlternativeShare(
   }
   const mail = await db.campaignMail.findFirst({
     where: { id: mailId, kind: "ALTERNATIVE", campaign: { siteId } },
-    select: { campaignId: true },
+    select: { campaignId: true, campaign: { select: { status: true } } },
   });
   if (!mail) return { error: "Mail not found." };
+  if (!EDITABLE.includes(mail.campaign.status)) return { error: SENT_MESSAGE };
   const others = await db.campaignMail.findMany({
     where: { campaignId: mail.campaignId, kind: "ALTERNATIVE", id: { not: mailId } },
     select: { sharePercent: true },
@@ -393,7 +483,11 @@ export async function updateCampaignMail(
 ): Promise<Result> {
   const layout = normalizeMailTemplate(input.layout);
   const { count } = await db.campaignMail.updateMany({
-    where: { id: mailId, campaign: { siteId } },
+    where: {
+      id: mailId,
+      campaign: { siteId },
+      OR: [{ kind: "FOLLOW_UP" }, { campaign: { status: { in: EDITABLE } } }],
+    },
     data: {
       layout,
       content: cleanMailContent(input.content, layout),
@@ -403,35 +497,83 @@ export async function updateCampaignMail(
       previewFr: cleanSubjectLine(input.preview?.fr),
     },
   });
-  return count === 1 ? { ok: true } : { error: "Mail not found." };
+  return count === 1 ? { ok: true } : { error: SENT_MESSAGE };
 }
 
-// A mail in one language, cleaned with the same rules the editor uses.
-// The Preview draws it with the app's own image addresses (baseUrl "");
-// a mail sent out needs full ones, on the campaign mails' address.
-async function renderCampaignMail(
+// ---- Audience and sending ----
+
+// The mail lists the campaign goes to (only the artist's own).
+export async function setCampaignLists(id: string, siteId: string, listIds: string[]): Promise<Result> {
+  const campaign = await db.campaign.findFirst({
+    where: { id, siteId },
+    select: { status: true, site: { select: { artistId: true } } },
+  });
+  if (!campaign) return { error: "Campaign not found." };
+  if (!EDITABLE.includes(campaign.status)) return { error: SENT_MESSAGE };
+  const lists = await db.mailList.findMany({
+    where: { id: { in: listIds }, artistId: campaign.site.artistId },
+    select: { id: true },
+  });
+  await db.$transaction([
+    db.campaignList.deleteMany({ where: { campaignId: id } }),
+    db.campaignList.createMany({ data: lists.map((l) => ({ campaignId: id, listId: l.id })) }),
+  ]);
+  return { ok: true };
+}
+
+// What sending would do, for the confirmation: how many get it, in each
+// language, and how many French subscribers are skipped (no French
+// subject) — or why it can't go.
+export async function getCampaignSendCounts(
+  id: string,
+  siteId: string
+): Promise<{ counts: SendCounts } | { error: string }> {
+  const campaign = await db.campaign.findFirst({ where: { id, siteId }, select: { id: true } });
+  if (!campaign) return { error: "Campaign not found." };
+  const plan = await planCampaign(id);
+  return "problem" in plan ? { error: plan.problem } : { counts: plan.counts };
+}
+
+// Send now (`at` null) or Send at a Paris date and time. The campaign is
+// SCHEDULED; the sending runs start it when its time comes (Send now
+// wakes them straight away). It can still be changed or cancelled until
+// then.
+export async function scheduleCampaignSend(
+  id: string,
   siteId: string,
-  input: CampaignMailInput,
-  language: MailLanguage,
-  sending: { unsubscribeUrl: string } | null
-): Promise<{ html: string; subject: string } | { error: string }> {
-  const layout = normalizeMailTemplate(input.layout);
-  const content = cleanMailContent(input.content, layout);
-  const assets = await loadMailAssets(siteId, content, sending ? CAMPAIGN_PUBLIC_URL : "");
-  if (!assets) return { error: "Site not found." };
-  const subject = cleanSubjectLine(input.subject?.[language]) ?? "";
-  return {
-    subject,
-    html: renderMailHtml({
-      layout,
-      content,
-      language,
-      subject,
-      preview: cleanSubjectLine(input.preview?.[language]) ?? "",
-      assets,
-      unsubscribeUrl: sending?.unsubscribeUrl ?? "#",
-    }),
-  };
+  at: { date: string; time: string } | null
+): Promise<{ campaign: CampaignSummary } | { error: string }> {
+  const when = at ? parisToDate(at.date, at.time) : new Date();
+  if (!when) return { error: "Choose a date and time." };
+  if (at && when.getTime() < Date.now() - 60_000) return { error: "That time has already passed." };
+
+  const campaign = await db.campaign.findFirst({ where: { id, siteId }, select: { status: true } });
+  if (!campaign) return { error: "Campaign not found." };
+  if (!EDITABLE.includes(campaign.status)) return { error: SENT_MESSAGE };
+  const plan = await planCampaign(id);
+  if ("problem" in plan) return { error: plan.problem };
+
+  await db.campaign.update({
+    where: { id },
+    data: { status: "SCHEDULED", scheduledAt: when, sendError: null },
+  });
+  if (!at) await wakeCampaignSending();
+  const saved = await summaryOf(id, siteId);
+  return saved ? { campaign: saved } : { error: "Campaign not found." };
+}
+
+// Takes a scheduled campaign back to a draft (only before it starts).
+export async function cancelCampaignSend(
+  id: string,
+  siteId: string
+): Promise<{ campaign: CampaignSummary } | { error: string }> {
+  const { count } = await db.campaign.updateMany({
+    where: { id, siteId, status: "SCHEDULED" },
+    data: { status: "DRAFT", scheduledAt: null },
+  });
+  if (count !== 1) return { error: "It has already started sending." };
+  const saved = await summaryOf(id, siteId);
+  return saved ? { campaign: saved } : { error: "Campaign not found." };
 }
 
 // The mail as it will be sent, in one language — drawn from what's being

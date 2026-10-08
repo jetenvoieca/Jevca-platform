@@ -55,6 +55,9 @@ const NEWS_PATH_PREFIXES = ["/api/media/", "/unsubscribe/"];
 //   failed delivery and keeps retrying) instead of ever reaching the
 //   route, so no reply was ever actually processed despite Resend
 //   showing "email.received" firing correctly on its side.
+// - /api/campaigns/send-due — the campaign sending runs, called by the
+//   Netlify background function; authenticated by CAMPAIGN_SEND_SECRET
+//   in the route itself (2026-10-08)
 // - /login                — has to be reachable before you're logged in
 const PUBLIC_PATH_PREFIXES = [
   "/api/hopper",
@@ -65,6 +68,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/shotstack/render-webhook",
   "/api/media",
   "/api/webhooks/resend-inbound",
+  "/api/campaigns/send-due",
   "/login",
 ];
 
