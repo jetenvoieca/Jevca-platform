@@ -1,9 +1,25 @@
-// Placeholder (2026-10-08) — Marketing → Mail Campaigns is planned but not built yet.
-export default function MailCampaignsPage() {
+import { notFound } from "next/navigation";
+import { db } from "@/lib/db";
+import { listCampaigns } from "@/lib/actions/campaigns";
+import { listMailTemplates } from "@/lib/actions/mailTemplates";
+import CampaignsView from "@/components/CampaignsView";
+
+// Marketing → Mail Campaigns (2026-10-08) — see CampaignsView.
+export const dynamic = "force-dynamic";
+
+export default async function MailCampaignsPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const site = await db.site.findUnique({ where: { id }, select: { id: true, artistId: true } });
+  if (!site) notFound();
+
+  const [campaigns, templates] = await Promise.all([listCampaigns(site.id), listMailTemplates()]);
+
   return (
-    <div className="p-6">
-      <h1 className="mb-2 text-2xl font-semibold text-neutral-900">Mail Campaigns</h1>
-      <p className="text-sm text-neutral-400">Not built yet.</p>
-    </div>
+    <CampaignsView
+      siteId={site.id}
+      artistId={site.artistId}
+      initialCampaigns={campaigns}
+      templates={templates}
+    />
   );
 }
