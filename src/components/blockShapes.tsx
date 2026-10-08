@@ -71,6 +71,14 @@ export function BlockShape({
         </div>
       );
     }
+    case "logo":
+      return (
+        <div className="flex justify-center">
+          <div className="flex h-14 w-40 items-center justify-center rounded bg-neutral-200 text-[10px] uppercase tracking-wide text-neutral-400">
+            Logo
+          </div>
+        </div>
+      );
     case "button":
       return (
         <div className="flex justify-center">

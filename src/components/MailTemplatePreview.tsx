@@ -6,10 +6,9 @@ import { BlockShape, Labelled } from "@/components/blockShapes";
 
 // Draws a Mail Template's layout as grey placeholders (2026-10-08) — what
 // goes where in the mail, with no content: the mail at email width on
-// its surround colour, the Logo when shown, its components in their
-// rows and the footer every mail ends with. Used by the Mail Templates
-// page's Preview panel; the visual editor (MailLayoutEditor) shows the
-// same Logo and footer.
+// its surround colour, its components in their rows and the footer
+// every mail ends with. Used by the Mail Templates page's Preview panel;
+// the visual editor (MailLayoutEditor) shows the same footer.
 export default function MailTemplatePreview({ layout }: { layout: MailTemplateLayout }) {
   const rows = groupBlocksByRow(layout.blocks);
   return (
@@ -25,7 +24,6 @@ export default function MailTemplatePreview({ layout }: { layout: MailTemplateLa
           backgroundColor: layout.backgroundColor ?? undefined,
         }}
       >
-        {layout.showLogo && <MailLogoPlaceholder />}
         {rows.length === 0 && (
           <p className="py-10 text-center text-sm text-neutral-400">
             No components yet. Use Edit to add some.
@@ -52,17 +50,6 @@ export default function MailTemplatePreview({ layout }: { layout: MailTemplateLa
           );
         })}
         <MailFooterPlaceholder />
-      </div>
-    </div>
-  );
-}
-
-// The artist's Logo (Settings → Invoicing), at the top of the mail.
-export function MailLogoPlaceholder() {
-  return (
-    <div className="mb-6 flex justify-center">
-      <div className="flex h-14 w-40 items-center justify-center rounded bg-neutral-200 text-[10px] uppercase tracking-wide text-neutral-400">
-        Logo
       </div>
     </div>
   );

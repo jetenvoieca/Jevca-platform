@@ -9,7 +9,7 @@ import {
   updateMailTemplate,
   type MailTemplateSummary,
 } from "@/lib/actions/mailTemplates";
-import { EMPTY_MAIL_TEMPLATE } from "@/lib/mailTemplateLayout";
+import { newMailTemplateLayout } from "@/lib/mailTemplateLayout";
 import MailTemplateEditor, { type MailTemplateDraft } from "@/components/MailTemplateEditor";
 import MailTemplatePreview from "@/components/MailTemplatePreview";
 import MailLayoutEditor from "@/components/MailLayoutEditor";
@@ -62,7 +62,7 @@ export default function MailTemplatesManager({
     setDraft(
       mode === "edit" && selected
         ? { name: selected.name, layout: selected.layout }
-        : { name: "", layout: EMPTY_MAIL_TEMPLATE }
+        : { name: "", layout: newMailTemplateLayout() }
     );
   };
 

@@ -11,11 +11,11 @@ export type MailTemplateDraft = { name: string; layout: MailTemplateLayout };
 
 // Templates → Mail Templates' Add / Edit panel (2026-10-08): sits in the
 // right-hand column, beside the visual editor (MailLayoutEditor), and
-// stays open until Close. Name, whether the artist's Logo sits at the
-// top, the surround and mail background colours, then Fine-tune
-// (closed by default) with the exact margins, the grid spacing and how
-// the text in its Header, Text and Text grid components looks, from the
-// email-safe font list. Saving is automatic (see useAutoSave).
+// stays open until Close. Name, the surround and mail background
+// colours, then Fine-tune (closed by default) with the exact margins,
+// the grid spacing and how the text in its Header, Text and Text grid
+// components looks, from the email-safe font list. Saving is automatic
+// (see useAutoSave).
 export default function MailTemplateEditor({
   draft,
   onChange,
@@ -42,15 +42,6 @@ export default function MailTemplateEditor({
           autoFocus
           className="w-full rounded-md border border-neutral-300 px-3 py-2 text-center text-base text-neutral-900"
         />
-
-        <label className="mt-2 flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-700">
-          <input
-            type="checkbox"
-            checked={layout.showLogo}
-            onChange={(e) => setLayout({ ...layout, showLogo: e.target.checked })}
-          />
-          Show the artist&apos;s logo at the top
-        </label>
 
         <ColourControl
           label="Surround colour"

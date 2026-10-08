@@ -24,18 +24,19 @@ import { cleanTextStyles, type TextStyle, type TextStyles } from "@/lib/textStyl
 // lib/rowLayout.ts). Plain module, not "use server".
 //
 // Every mail is the standard email width on desktop; on a phone its
-// components stack, each full width. The artist's Logo (Settings →
-// Invoicing) can sit at the top, and every mail ends with a footer: the
+// components stack, each full width. Every mail ends with a footer: the
 // artist's name and address, a link to their website and the
 // unsubscribe link.
 
 export const MAIL_WIDTH = 600;
 
 // The components a mail is built from (Craig's choice: the Page Styles
-// components minus Video and Sliding doors, plus Button and Signature).
-// A Button's text, link and colours are set in each mail; the
-// Signature is the artist's signature image (Settings → Invoicing).
+// components minus Video and Sliding doors, plus Logo, Button and
+// Signature). A Button's text, link and colours are set in each mail;
+// the Logo and Signature are the artist's own images (Settings →
+// Invoicing), placed anywhere in the mail like any other component.
 export const MAIL_BLOCK_TYPES = [
+  { value: "logo", label: "Logo" },
   { value: "header", label: "Header" },
   { value: "text", label: "Text" },
   { value: "image", label: "Single Image" },
@@ -61,8 +62,6 @@ export type MailBlock = RowBlock<MailBlockType>;
 export type MailTextStyle = TextStyle<MailFontId>;
 
 export type MailTemplateLayout = RowLayout<MailBlock> & {
-  // Whether the artist's Logo sits at the top of the mail.
-  showLogo: boolean;
   // The colour around the mail, and the mail's own background; null =
   // the email app's own (usually white).
   surroundColor: string | null;
@@ -82,16 +81,19 @@ const DEFAULT_MAIL_MARGINS: PageMargins = {
 
 const DEFAULT_TEXT_STYLE: MailTextStyle = { font: null, size: null, look: null, colour: null };
 
-export const EMPTY_MAIL_TEMPLATE: MailTemplateLayout = {
-  showLogo: true,
-  surroundColor: null,
-  backgroundColor: null,
-  gridSpacing: DEFAULT_GRID_SPACING,
-  margins: DEFAULT_MAIL_MARGINS,
-  textStyles: { header: DEFAULT_TEXT_STYLE, text: DEFAULT_TEXT_STYLE, textgrid: DEFAULT_TEXT_STYLE },
-  rows: {},
-  blocks: [],
-};
+// A new template starts with the Logo at the top, which can then be
+// moved or removed like any other component.
+export function newMailTemplateLayout(): MailTemplateLayout {
+  return {
+    surroundColor: null,
+    backgroundColor: null,
+    gridSpacing: DEFAULT_GRID_SPACING,
+    margins: DEFAULT_MAIL_MARGINS,
+    textStyles: { header: DEFAULT_TEXT_STYLE, text: DEFAULT_TEXT_STYLE, textgrid: DEFAULT_TEXT_STYLE },
+    rows: {},
+    blocks: [newMailBlock("logo")],
+  };
+}
 
 // Turns whatever is stored (or sent from the browser) into a valid
 // layout — anything unknown or malformed is dropped, so a bad value can
@@ -107,7 +109,6 @@ export function normalizeMailTemplate(raw: unknown): MailTemplateLayout {
       : []
   );
   return {
-    showLogo: value.showLogo !== false,
     surroundColor: cleanColour(value.surroundColor),
     backgroundColor: cleanColour(value.backgroundColor),
     gridSpacing: cleanGridSpacing(value.gridSpacing),

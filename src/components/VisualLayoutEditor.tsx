@@ -70,9 +70,8 @@ import {
 // - Fine-tune: the bar's Fine-tune button shows the exact numbers for
 //   the component's width and the gaps around its row; a component with
 //   settings of its own (e.g. Sliding doors) has a button for those.
-// `header` and `footer` are fixed parts drawn above and below the
-// components (a mail's logo and footer). Every change goes straight to
-// `onChange`, which saves it.
+// `footer` is a fixed part drawn below the components (a mail's
+// footer). Every change goes straight to `onChange`, which saves it.
 
 // A component offered in the tray.
 export type EditorComponent<T extends string> = { value: T; label: string };
@@ -102,7 +101,6 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   backgroundColor,
   backgroundImage = false,
   surroundColor = null,
-  header,
   footer,
 }: {
   layout: L;
@@ -117,7 +115,6 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   backgroundColor: string | null;
   backgroundImage?: boolean;
   surroundColor?: string | null;
-  header?: ReactNode;
   footer?: ReactNode;
 }) {
   const [device, setDevice] = useState<PreviewDevice>("desktop");
@@ -245,7 +242,6 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
               onMargins={(margins) => onChange({ ...layout, margins })}
               onDeselect={deselect}
             >
-              {header}
               {rows.map((row, i) => {
                 const key = rowKey(row);
                 const settings = rowSettingsOf(layout, key);
