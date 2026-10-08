@@ -16,20 +16,18 @@ import {
 import { clearPageComponent, setPageComponent } from "@/lib/actions/pageComponents";
 import { curationSectionLabel, type CurationSectionData } from "@/lib/curationSections";
 import { contentFits, type ContentKind } from "@/lib/pageComponents";
+import { blockTypeLabel, type BlockBuildLayout, type LayoutBlock } from "@/lib/pageStyleLayout";
 import {
-  blockTypeLabel,
   blockWidthOf,
   groupBlocksByRow,
   rowKey,
   rowSettingsOf,
-  type BlockBuildLayout,
   type GridSpacing,
-  type LayoutBlock,
-} from "@/lib/pageStyleLayout";
+} from "@/lib/rowLayout";
 import { useSiteData } from "@/lib/siteData";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
-import { BlockShape, Labelled } from "@/components/PageStylePreview";
-import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
+import { BlockShape, Labelled } from "@/components/blockShapes";
+import { PAGE_DESKTOP_WIDTH, PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 
 // Arrange for a Block Build page (2026-10-07, from Craig's mockup)
 // — shown in the Pages page's Preview panel. On the left, the page's
@@ -188,7 +186,7 @@ export default function PageSectionsArranger({
           {error && (
             <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
           )}
-          <ScaledFrame device="desktop">
+          <ScaledFrame device="desktop" desktopWidth={PAGE_DESKTOP_WIDTH}>
             <PageFrame
               margins={layout.margins}
               device="desktop"
@@ -344,7 +342,7 @@ function Slot({
   return (
     <div ref={setNodeRef} className={`relative rounded-md ${highlight}`}>
       <Labelled label={blockTypeLabel(block.type)}>
-        <BlockShape block={block} spacing={gridSpacing} />
+        <BlockShape type={block.type} doors={block.doors} spacing={gridSpacing} />
       </Labelled>
       {content && (
         <div className="absolute inset-0 flex items-center justify-center rounded-md bg-white/85 p-3">

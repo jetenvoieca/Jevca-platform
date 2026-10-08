@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createMenuStyle,
@@ -13,10 +13,7 @@ import { DEFAULT_MENU_STYLE, MENU_KINDS } from "@/lib/menuStyleLayout";
 import MenuStyleEditor, { type MenuStyleDraft } from "@/components/MenuStyleEditor";
 import MenuStylePreview from "@/components/MenuStylePreview";
 import ConfirmDialog from "@/components/ConfirmDialog";
-
-type Status = { text: string; isError: boolean };
-
-const IDLE: Status = { text: "", isError: false };
+import { useAutoSave } from "@/components/useAutoSave";
 
 // Templates → Menus (2026-10-06, from Craig's request): the shared
 // library of site menu designs, laid out like Page Styles — the Preview
@@ -27,73 +24,34 @@ const IDLE: Status = { text: "", isError: false };
 // Add and Edit swap the list for the editor panel (MenuStyleEditor),
 // which stays open until Close. Every change shows in the Preview at
 // once and saves itself shortly after (a new menu is created the first
-// time it has a name). Saves run one at a time, in order, so a quick run
-// of changes can never create a menu twice.
+// time it has a name — see useAutoSave).
 export default function MenuStylesManager({ styles }: { styles: MenuStyleSummary[] }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<MenuStyleDraft | null>(null);
-  const [status, setStatus] = useState<Status>(IDLE);
   const [listError, setListError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // The menu being edited — null while a new one hasn't been saved yet.
-  const editingIdRef = useRef<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingRef = useRef<MenuStyleDraft | null>(null);
-  const queueRef = useRef<Promise<void>>(Promise.resolve());
-
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+  const autoSave = useAutoSave<MenuStyleDraft>({
+    create: createMenuStyle,
+    update: updateMenuStyle,
+    cannotSave: (d) => (!d.name.trim() ? "Needs a name to save." : null),
+    onSaved: (id) => {
+      setSelectedId(id);
+      router.refresh();
     },
-    []
-  );
+  });
 
   const selected = styles.find((s) => s.id === selectedId) ?? null;
 
-  const save = (d: MenuStyleDraft) => {
-    queueRef.current = queueRef.current.then(async () => {
-      setStatus({ text: "Saving…", isError: false });
-      try {
-        const id = editingIdRef.current;
-        const result = id ? await updateMenuStyle(id, d) : await createMenuStyle(d);
-        if ("error" in result) {
-          setStatus({ text: result.error, isError: true });
-          return;
-        }
-        if ("id" in result) {
-          editingIdRef.current = result.id;
-          setSelectedId(result.id);
-        }
-        setStatus({ text: "Saved", isError: false });
-        router.refresh();
-      } catch {
-        setStatus({ text: "Couldn't save — try again.", isError: true });
-      }
-    });
-    return queueRef.current;
-  };
-
   const handleChange = (next: MenuStyleDraft) => {
     setDraft(next);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (!next.name.trim()) {
-      pendingRef.current = null;
-      setStatus({ text: "Needs a name to save.", isError: false });
-      return;
-    }
-    pendingRef.current = next;
-    timerRef.current = setTimeout(() => {
-      pendingRef.current = null;
-      save(next);
-    }, 600);
+    autoSave.schedule(next);
   };
 
   const openEditor = (mode: "add" | "edit") => {
-    editingIdRef.current = mode === "edit" && selected ? selected.id : null;
-    setStatus(IDLE);
+    autoSave.begin(mode === "edit" && selected ? selected.id : null);
     setListError(null);
     setDraft(
       mode === "edit" && selected
@@ -104,13 +62,9 @@ export default function MenuStylesManager({ styles }: { styles: MenuStyleSummary
 
   // Saves anything still waiting before closing, so nothing is lost.
   const closeEditor = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const pending = pendingRef.current;
-    pendingRef.current = null;
     startTransition(async () => {
-      await (pending ? save(pending) : queueRef.current);
+      await autoSave.flush();
       setDraft(null);
-      setStatus(IDLE);
     });
   };
 
@@ -204,7 +158,7 @@ export default function MenuStylesManager({ styles }: { styles: MenuStyleSummary
           <MenuStyleEditor
             draft={draft}
             onChange={handleChange}
-            status={isPending ? { text: "Saving…", isError: false } : status}
+            status={isPending ? { text: "Saving…", isError: false } : autoSave.status}
             onClose={closeEditor}
           />
         ) : (

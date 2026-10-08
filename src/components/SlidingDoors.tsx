@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CurationWork } from "@/lib/actions/curations";
-import type { DoorsHeight, PageMargins } from "@/lib/pageStyleLayout";
+import type { DoorsHeight } from "@/lib/pageStyleLayout";
+import type { PageMargins } from "@/lib/rowLayout";
 
 // Phones are narrower than this (Tailwind's md), as for the page margin.
 const PHONE_WIDTH = 768;

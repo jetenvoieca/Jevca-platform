@@ -22,18 +22,19 @@ import {
   type PageMargin,
   type PageMargins,
   type VerticalAlign,
-} from "@/lib/pageStyleLayout";
+} from "@/lib/rowLayout";
 import { rowBlockClass, rowBlockStyle, type PreviewDevice } from "@/components/pageRows";
 
-// The pieces of the Page Styles visual editor (VisualLayoutEditor,
-// 2026-10-07) — the frame also shared with the Pages page's Arrange for
-// a Block Build page (PageSectionsArranger). The page is drawn at a
-// desktop's (1280px) or a phone's (390px) width, shrunk to fit the
-// panel; its margins, gaps and components' edges are dragged by hand,
-// and a selected component has a bar for alignment and its other
+// The pieces of the visual editor (VisualLayoutEditor, 2026-10-07) —
+// the frame also shared with the Pages page's Arrange for a Block Build
+// page (PageSectionsArranger). The layout is drawn at its desktop width
+// (1280px for a page, 600px for a mail) or a phone's (390px), shrunk to
+// fit the panel; its margins, gaps and components' edges are dragged by
+// hand, and a selected component has a bar for alignment and its other
 // actions.
 
-const FRAME_WIDTH: Record<PreviewDevice, number> = { desktop: 1280, phone: 390 };
+export const PAGE_DESKTOP_WIDTH = 1280;
+const PHONE_WIDTH = 390;
 
 // How much the page is shrunk to fit — pointer movements on screen are
 // divided by it to get page pixels, and the editor's own controls are
@@ -73,10 +74,22 @@ export function DeviceSwitch({
   );
 }
 
-// Draws the page at its real width, shrunk to fit the space available,
-// in a scrolling area with room above for the first component's bar.
-export function ScaledFrame({ device, children }: { device: PreviewDevice; children: ReactNode }) {
-  const width = FRAME_WIDTH[device];
+// Draws the layout at its real width — `desktopWidth` on desktop —
+// shrunk to fit the space available, in a scrolling area with room
+// above for the first component's bar. `surroundColor` fills the space
+// around it (a mail's surround).
+export function ScaledFrame({
+  device,
+  desktopWidth,
+  surroundColor = null,
+  children,
+}: {
+  device: PreviewDevice;
+  desktopWidth: number;
+  surroundColor?: string | null;
+  children: ReactNode;
+}) {
+  const width = device === "desktop" ? desktopWidth : PHONE_WIDTH;
   const outerRef = useRef<HTMLDivElement>(null);
   const innerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
@@ -98,7 +111,10 @@ export function ScaledFrame({ device, children }: { device: PreviewDevice; child
   }, [width]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-y-auto pt-12">
+    <div
+      className="min-h-0 flex-1 overflow-y-auto pt-12"
+      style={{ backgroundColor: surroundColor ?? undefined }}
+    >
       {/* inline-size containment: the page's own width never stretches
           the panel it sits in, so it's always measured and shrunk to it. */}
       <div ref={outerRef} className="w-full" style={{ contain: "inline-size" }}>
@@ -166,10 +182,11 @@ export function PageFrame({
   );
 }
 
-// The width of the page's contents on a desktop: what a component's
-// width (a % of it) is measured against when its edge is dragged.
-export function desktopContentWidth(margins: PageMargins): number {
-  return FRAME_WIDTH.desktop - 2 * margins.desktop.horizontal;
+// The width of the contents on a desktop, inside the margin: what a
+// component's width (a % of it) is measured against when its edge is
+// dragged.
+export function desktopContentWidth(margins: PageMargins, desktopWidth: number): number {
+  return desktopWidth - 2 * margins.desktop.horizontal;
 }
 
 // Starts a pointer drag on a handle: `onDrag` gets how far the pointer

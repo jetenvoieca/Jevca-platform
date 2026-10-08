@@ -5,18 +5,18 @@ import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
 import type { ComponentContent } from "@/lib/pageComponents";
+import type { LayoutBlock } from "@/lib/pageStyleLayout";
 import {
   blockWidthOf,
   groupBlocksByRow,
-  isTextComponent,
   rowKey,
   rowSettingsOf,
   type GridSpacing,
   type HorizontalAlign,
-  type LayoutBlock,
   type PageMargins,
   type VerticalAlign,
-} from "@/lib/pageStyleLayout";
+} from "@/lib/rowLayout";
+import { isTextComponent } from "@/lib/textStyle";
 import { useSiteData } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";

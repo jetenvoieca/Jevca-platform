@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createPageStyle,
@@ -16,12 +16,9 @@ import PageStyleEditor, {
   type PageStyleDraft,
 } from "@/components/PageStyleEditor";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { useAutoSave } from "@/components/useAutoSave";
 import PageStylePreview from "@/components/PageStylePreview";
-import VisualLayoutEditor from "@/components/VisualLayoutEditor";
-
-type Status = { text: string; isError: boolean };
-
-const IDLE: Status = { text: "", isError: false };
+import PageStyleLayoutEditor from "@/components/PageStyleLayoutEditor";
 
 // Templates → Page Styles (2026-10-04, from Craig's mockups): the Preview
 // panel on the left; on the right, Add / Edit / Duplicate / Delete above
@@ -31,91 +28,52 @@ const IDLE: Status = { text: "", isError: false };
 // Add and Edit swap the list for the editor panel (PageStyleEditor),
 // which stays open until Close. While a Block Build style is being
 // edited, the Preview panel becomes its visual editor
-// (VisualLayoutEditor, 2026-10-07), where its components are added,
+// (PageStyleLayoutEditor, 2026-10-07), where its components are added,
 // moved, sized, spaced and aligned by hand. Every change shows at once
 // and saves itself shortly after (a new style is created the first
-// time it has both a name and a type). Saves run one at a time, in
-// order, so a quick run of changes can never create a style twice.
+// time it has both a name and a type — see useAutoSave).
 // Duplicate makes a copy and selects it, ready to Edit.
 export default function PageStylesManager({ styles }: { styles: PageStyleSummary[] }) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PageStyleDraft | null>(null);
-  const [status, setStatus] = useState<Status>(IDLE);
   const [listError, setListError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
 
-  // The style being edited — null while a new one hasn't been saved yet.
-  const editingIdRef = useRef<string | null>(null);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingRef = useRef<PageStyleDraft | null>(null);
-  const queueRef = useRef<Promise<void>>(Promise.resolve());
-
-  useEffect(
-    () => () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
+  const toInput = (d: PageStyleDraft) => ({
+    name: d.name,
+    type: d.type,
+    layout: draftLayout(d)?.layout ?? {},
+  });
+  const autoSave = useAutoSave<PageStyleDraft>({
+    create: (d) => createPageStyle(toInput(d)),
+    update: (id, d) => updatePageStyle(id, toInput(d)),
+    cannotSave: (d) => (!d.name.trim() || !d.type ? "Needs a name and a Style Type to save." : null),
+    onSaved: (id) => {
+      setSelectedId(id);
+      router.refresh();
     },
-    []
-  );
+  });
 
   const selected = styles.find((s) => s.id === selectedId) ?? null;
 
-  const save = (d: PageStyleDraft) => {
-    queueRef.current = queueRef.current.then(async () => {
-      setStatus({ text: "Saving…", isError: false });
-      const input = { name: d.name, type: d.type, layout: draftLayout(d)?.layout ?? {} };
-      try {
-        const id = editingIdRef.current;
-        const result = id ? await updatePageStyle(id, input) : await createPageStyle(input);
-        if ("error" in result) {
-          setStatus({ text: result.error, isError: true });
-          return;
-        }
-        if ("id" in result) {
-          editingIdRef.current = result.id;
-          setSelectedId(result.id);
-        }
-        setStatus({ text: "Saved", isError: false });
-        router.refresh();
-      } catch {
-        setStatus({ text: "Couldn't save — try again.", isError: true });
-      }
-    });
-    return queueRef.current;
-  };
-
   const handleChange = (next: PageStyleDraft) => {
     setDraft(next);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (!next.name.trim() || !next.type) {
-      pendingRef.current = null;
-      setStatus({ text: "Needs a name and a Style Type to save.", isError: false });
-      return;
-    }
-    pendingRef.current = next;
-    timerRef.current = setTimeout(() => {
-      pendingRef.current = null;
-      save(next);
-    }, 600);
+    autoSave.schedule(next);
   };
 
   const openEditor = (mode: "add" | "edit") => {
-    editingIdRef.current = mode === "edit" && selected ? selected.id : null;
-    setStatus(IDLE);
+    autoSave.begin(mode === "edit" && selected ? selected.id : null);
     setListError(null);
     setDraft(mode === "edit" && selected ? draftFrom(selected.name, selected) : draftFrom("", null));
   };
 
   // Saves anything still waiting before closing, so nothing is lost.
   const closeEditor = () => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    const pending = pendingRef.current;
-    pendingRef.current = null;
     startTransition(async () => {
-      await (pending ? save(pending) : queueRef.current);
+      await autoSave.flush();
       setDraft(null);
-      setStatus(IDLE);
     });
   };
 
@@ -162,7 +120,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
           <div className="flex min-h-0 flex-1 flex-col">
             <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{previewName}</h3>
             {draft?.type === "BLOCK_BUILD" ? (
-              <VisualLayoutEditor
+              <PageStyleLayoutEditor
                 layout={draft.blockBuild}
                 onChange={(blockBuild) => handleChange({ ...draft, blockBuild })}
               />
@@ -225,7 +183,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
           <PageStyleEditor
             draft={draft}
             onChange={handleChange}
-            status={isPending ? { text: "Saving…", isError: false } : status}
+            status={isPending ? { text: "Saving…", isError: false } : autoSave.status}
             onClose={closeEditor}
           />
         ) : (

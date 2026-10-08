@@ -1,5 +1,5 @@
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
-import type { TextStyle } from "@/lib/pageStyleLayout";
+import type { PageTextStyle } from "@/lib/pageStyleLayout";
 import { bodyTextCss, headingTextCss } from "@/components/textStyleCss";
 
 // One curation section as visitors see it (2026-10-06; shared
@@ -14,7 +14,7 @@ export default function CurationSectionView({
   textStyle,
 }: {
   section: CurationSectionData;
-  textStyle?: TextStyle;
+  textStyle?: PageTextStyle;
 }) {
   if (sectionIsEmpty(section)) return null;
   const body = textStyle ? bodyTextCss(textStyle) : undefined;
