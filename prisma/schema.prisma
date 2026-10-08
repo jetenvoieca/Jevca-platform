@@ -125,6 +125,24 @@ enum CurationSectionType {
   IMAGES
 }
 
+// Whether a subscriber receives campaign mail (2026-10-08). An
+// unsubscribed person is kept on record, never deleted automatically,
+// so a later import can never subscribe them again — see Subscriber.
+enum SubscriberStatus {
+  SUBSCRIBED
+  UNSUBSCRIBED
+}
+
+// How a subscriber was added (2026-10-08): typed in by hand, from a CSV
+// import, from one of the artist's Customers, or (later) the sign-up
+// form on the artist's own website.
+enum SubscriberSource {
+  MANUAL
+  IMPORT
+  CUSTOMER
+  WEBSITE
+}
+
 model Artist {
   id        String       @id @default(cuid())
   name      String
@@ -281,6 +299,10 @@ model Artist {
   // The artist's own Stripe account, linked through Stripe Connect
   // (2026-09-25) — at most one per mode. See StripeConnection below.
   stripeConnections StripeConnection[]
+  // Marketing (2026-10-08) — the artist's mailing-list subscribers and
+  // their named mail lists. See Subscriber and MailList below.
+  subscribers Subscriber[]
+  mailLists   MailList[]
 }
 
 // An artist's own Stripe account, linked to the platform (Jetenvoieca)
@@ -498,6 +520,10 @@ model Customer {
   // for every "GALLERY" and "OWN" kind Customer, null for a plain
   // "INDIVIDUAL" buyer. See Location below.
   location Location?
+
+  // Subscribers added from this customer (2026-10-08) — see
+  // Subscriber.customerId.
+  subscribers Subscriber[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -935,6 +961,83 @@ model TaskNote {
   updatedAt DateTime @updatedAt
 
   @@index([taskId])
+}
+
+// ---------------------------------------------------------------------
+// Marketing (2026-10-08, from Craig's mockup) — each artist's own
+// mailing list, kept entirely separate from Customer (a buyer is not
+// automatically a subscriber; one can be added from Customers, with
+// consent). Edited under the site's Marketing → Subscribers.
+// ---------------------------------------------------------------------
+
+// One person on an artist's mailing list. `email` is stored trimmed and
+// lowercased and is unique per artist, which is what stops a duplicate
+// and what an import matches against: anyone already on file — whether
+// Subscribed or Unsubscribed — keeps their details and status untouched.
+// `consentAt` is when they agreed to receive mail (confirmed by whoever
+// added them). `language` is "EN" or "FR", or null for the artist's own
+// default, same as Customer.language. `customerId` links a subscriber
+// added from Customers; cleared, not the subscriber deleted, if that
+// customer is deleted.
+model Subscriber {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  email     String
+  firstName String?
+  lastName  String?
+  language  String?
+
+  status         SubscriberStatus @default(SUBSCRIBED)
+  source         SubscriberSource
+  consentAt      DateTime?
+  unsubscribedAt DateTime?
+
+  customerId String?
+  customer   Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+
+  lists MailListMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([artistId, email])
+  @@index([artistId, status])
+  @@index([customerId])
+}
+
+// A named group of an artist's subscribers (2026-10-08) — e.g.
+// "Collectors". A subscriber can be in any number of lists; deleting a
+// list never deletes its subscribers.
+model MailList {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  name String
+
+  members MailListMember[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([artistId, name])
+  @@index([artistId])
+}
+
+// One subscriber's place in one mail list (2026-10-08). Removed with
+// either.
+model MailListMember {
+  listId       String
+  list         MailList   @relation(fields: [listId], references: [id], onDelete: Cascade)
+  subscriberId String
+  subscriber   Subscriber @relation(fields: [subscriberId], references: [id], onDelete: Cascade)
+
+  addedAt DateTime @default(now())
+
+  @@id([listId, subscriberId])
+  @@index([subscriberId])
 }
 
 model Site {
