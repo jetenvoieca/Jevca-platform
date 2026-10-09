@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { forwardEmail, type ComposeRecipient, type ForwardSource } from "@/lib/actions/adminEmail";
+import type { ComposeRecipient } from "@/lib/actions/adminEmail";
 import { capitaliseParagraphs } from "@/lib/text";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 import PopupWindow from "@/components/PopupWindow";
@@ -9,12 +9,12 @@ import PopupWindow from "@/components/PopupWindow";
 // The Forward window (2026-09-28, direct request), opened from a received
 // or sent email in the Inbox: who to send it to — typed, or picked from
 // the same artists and contacts list as New message — and an optional
-// note to go above it. The email itself, its formatting and (for a
-// received email) its stored attachments are added by forwardEmail, which
-// also decides the from-address: the shared address of the email's own
-// mailbox, shown here so there are no surprises.
+// note to go above it. `onForward` does the sending — forwardEmail for
+// the Art and Business mailboxes, or the Personal tab's Gmail forward
+// (2026-10-09) — and decides the from-address, shown here so there are
+// no surprises.
 export default function ForwardEmailPopup({
-  source,
+  onForward,
   subject,
   attachmentCount,
   fromAddress,
@@ -22,7 +22,7 @@ export default function ForwardEmailPopup({
   onSent,
   onClose,
 }: {
-  source: ForwardSource;
+  onForward: (to: string, note: string) => Promise<{ ok: true } | { ok: false; error: string }>;
   subject: string | null;
   attachmentCount: number;
   fromAddress: string;
@@ -46,11 +46,8 @@ export default function ForwardEmailPopup({
 
   const handleSend = () => {
     setError(null);
-    const fd = new FormData();
-    fd.set("to", to.trim());
-    fd.set("note", capitaliseParagraphs(note));
     startTransition(async () => {
-      const res = await forwardEmail(source, fd);
+      const res = await onForward(to.trim(), capitaliseParagraphs(note));
       if (!res.ok) {
         setError(res.error);
         return;

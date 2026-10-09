@@ -10,6 +10,7 @@ import {
   type PersonalMailItem,
   type PersonalMailMessage,
 } from "@/lib/gmailMessages";
+import { replyToPersonalThread, forwardPersonalMessage, personalSendingAddress } from "@/lib/gmailSend";
 
 // The Inbox's Personal tab — Craig's own Gmail (2026-10-09).
 
@@ -37,6 +38,36 @@ export async function getPersonalThread(threadId: string): Promise<Result<Person
     return { ok: true, data: await openPersonalThread(threadId) };
   } catch (err) {
     return failure(err);
+  }
+}
+
+// Reply / forward, from the Gmail's own default sending address (step 3).
+export async function replyPersonal(threadId: string, body: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    return await replyToPersonalThread(threadId, body);
+  } catch (err) {
+    return failure(err);
+  }
+}
+
+export async function forwardPersonal(
+  messageId: string,
+  to: string,
+  note: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    return await forwardPersonalMessage(messageId, to, note);
+  } catch (err) {
+    return failure(err);
+  }
+}
+
+// The address replies and forwards go out from, shown in the tab.
+export async function getPersonalSendingAddress(): Promise<string | null> {
+  try {
+    return await personalSendingAddress();
+  } catch {
+    return null;
   }
 }
 

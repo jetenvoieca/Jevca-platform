@@ -14,7 +14,7 @@ import {
   type InboxThreadItem,
   type SentSummaryItem,
 } from "@/lib/actions/inboundEmail";
-import { sendAdminEmail, type ComposeRecipient, type ForwardSource } from "@/lib/actions/adminEmail";
+import { sendAdminEmail, forwardEmail, type ComposeRecipient, type ForwardSource } from "@/lib/actions/adminEmail";
 import {
   getCompletedTasks,
   saveTask,
@@ -1360,7 +1360,12 @@ export default function AdminInboxPanel({
       {forwarding && (
         <ForwardEmailPopup
           key={`${forwarding.source.kind}-${forwarding.source.id}`}
-          source={forwarding.source}
+          onForward={(to, note) => {
+            const fd = new FormData();
+            fd.set("to", to);
+            fd.set("note", note);
+            return forwardEmail(forwarding.source, fd);
+          }}
           subject={forwarding.subject}
           attachmentCount={forwarding.attachmentCount}
           fromAddress={modeMailbox ? mailboxAddresses[modeMailbox] : ""}

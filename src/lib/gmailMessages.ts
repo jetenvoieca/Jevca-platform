@@ -29,13 +29,15 @@ const LIST_LIMIT = 50;
 const FETCH_CHUNK = 10;
 const FETCH_BUDGET_MS = 6000;
 
-// One request to Gmail. If Gmail asks to slow down (429) or has a
-// passing fault (5xx), it's tried once more a second later.
+// One request to Gmail — `path` is under the account's API address, or a
+// full https:// address (the upload one, for sending). If Gmail asks to
+// slow down (429) or has a passing fault (5xx), it's tried once more a
+// second later.
 export async function gmailFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getGmailAccessToken();
   if (!token) throw new GmailNotConnectedError();
   const send = () =>
-    fetch(`${GMAIL_API}${path}`, {
+    fetch(path.startsWith("https://") ? path : `${GMAIL_API}${path}`, {
       ...init,
       headers: { ...init?.headers, Authorization: `Bearer ${token}` },
       cache: "no-store",
@@ -51,7 +53,7 @@ export async function gmailFetch<T>(path: string, init?: RequestInit): Promise<T
 }
 
 type Header = { name: string; value: string };
-type Part = {
+export type Part = {
   partId?: string;
   mimeType?: string;
   filename?: string;
@@ -59,7 +61,7 @@ type Part = {
   body?: { size?: number; data?: string; attachmentId?: string };
   parts?: Part[];
 };
-type GmailMessage = {
+export type GmailMessage = {
   id: string;
   threadId: string;
   labelIds?: string[];
@@ -67,15 +69,15 @@ type GmailMessage = {
   internalDate?: string;
   payload?: Part;
 };
-type GmailThread = { id: string; messages?: GmailMessage[] };
+export type GmailThread = { id: string; messages?: GmailMessage[] };
 
-function header(part: Part | undefined, name: string): string {
+export function header(part: Part | undefined, name: string): string {
   const lower = name.toLowerCase();
   return part?.headers?.find((h) => h.name.toLowerCase() === lower)?.value ?? "";
 }
 
 // "Jane Smith <jane@x.com>" → name and address.
-function parseAddress(raw: string): { name: string | null; address: string } {
+export function parseAddress(raw: string): { name: string | null; address: string } {
   const m = raw.match(/^\s*"?([^"<]*?)"?\s*<([^>]+)>/);
   if (m) return { name: m[1].trim() || null, address: m[2].trim() };
   return { name: null, address: raw.trim() };
@@ -186,7 +188,7 @@ function decodeBody(part: Part): string {
   }
 }
 
-function readMessage(message: GmailMessage): PersonalMailMessage {
+export function readMessage(message: GmailMessage): PersonalMailMessage {
   let html: string | null = null;
   let text: string | null = null;
   const attachments: PersonalMailAttachment[] = [];

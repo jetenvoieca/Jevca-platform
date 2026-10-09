@@ -2,18 +2,29 @@
 
 import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { disconnectGmail, getPersonalMail, getPersonalThread } from "@/lib/actions/gmail";
+import {
+  disconnectGmail,
+  forwardPersonal,
+  getPersonalMail,
+  getPersonalSendingAddress,
+  getPersonalThread,
+  replyPersonal,
+} from "@/lib/actions/gmail";
 import type { PersonalBox, PersonalMailItem, PersonalMailMessage } from "@/lib/gmailMessages";
 import { personalAttachmentUrl } from "@/lib/gmailAttachmentUrl";
 import EmailBody, { formatFileSize } from "@/components/EmailBody";
 import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
+import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
+import { capitaliseParagraphs } from "@/lib/text";
 
 // The Inbox's Personal tab (2026-10-09): Craig's own Gmail, read live
 // from Google (see lib/gmailMessages.ts). Laid out like the other tabs —
 // the inbox on the left, Sent on the right, each its latest 50 emails
 // only (older mail is looked up in Gmail itself), and a conversation
-// opens in the same kind of window (marking it read in Gmail). Until
+// opens in the same kind of window (marking it read in Gmail), with Reply
+// and Forward (step 3) sent through Gmail from its own sending address
+// (craig@isendyouthis.com), so they show in Gmail's Sent too. Until
 // Gmail is connected, it shows Connect Gmail instead (see
 // /api/gmail/connect).
 
@@ -134,13 +145,21 @@ export default function PersonalMailPanel({
   const [thread, setThread] = useState<PersonalMailMessage[] | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [textShownId, setTextShownId] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState("");
+  const [replyError, setReplyError] = useState<string | null>(null);
+  const [forwarding, setForwarding] = useState<PersonalMailMessage | null>(null);
 
-  const openThread = (item: PersonalMailItem) => {
-    setOpen(item);
-    setThread(null);
-    setThreadError(null);
-    setTextShownId(null);
-    getPersonalThread(item.threadId)
+  // The address replies and forwards go out from, shown so there are no
+  // surprises.
+  const [sendingAddress, setSendingAddress] = useState<string | null>(null);
+  useEffect(() => {
+    getPersonalSendingAddress()
+      .then(setSendingAddress)
+      .catch(() => setSendingAddress(null));
+  }, []);
+
+  const loadThread = (threadId: string) =>
+    getPersonalThread(threadId)
       .then((res) => {
         if (!res.ok) {
           if (res.reconnect) handleReconnect();
@@ -150,13 +169,40 @@ export default function PersonalMailPanel({
         setThread(res.data);
       })
       .catch(() => setThreadError("Gmail took too long to answer. Please try again."));
+
+  const openThread = (item: PersonalMailItem) => {
+    setOpen(item);
+    setThread(null);
+    setThreadError(null);
+    setTextShownId(null);
+    setReplyBody("");
+    setReplyError(null);
+    loadThread(item.threadId);
   };
 
+  // Closing checks first if a reply has been typed but not sent.
   const closeThread = () => {
+    if (isPending) return;
+    if (replyBody.trim() && !confirm("Close without sending your reply?")) return;
     // Opening a conversation marks it read in Gmail, so the lists catch up.
     if (open?.unread) setRefreshKey((k) => k + 1);
     setOpen(null);
     setThread(null);
+  };
+
+  const handleSendReply = () => {
+    if (!open) return;
+    setReplyError(null);
+    startTransition(async () => {
+      const res = await replyPersonal(open.threadId, capitaliseParagraphs(replyBody));
+      if (!res.ok) {
+        setReplyError(res.error);
+        return;
+      }
+      setReplyBody("");
+      setRefreshKey((k) => k + 1);
+      await loadThread(open.threadId); // The reply shows in the conversation.
+    });
   };
 
   const handleDisconnect = () => {
@@ -285,13 +331,14 @@ export default function PersonalMailPanel({
                             {m.subject}
                           </p>
                         </div>
-                        {m.htmlBody && (
-                          <MiniActionBar>
+                        <MiniActionBar>
+                          {m.htmlBody && (
                             <MiniActionButton onClick={() => setTextShownId(textShownId === m.id ? null : m.id)}>
                               {textShownId === m.id ? "Show HTML" : "Show text"}
                             </MiniActionButton>
-                          </MiniActionBar>
-                        )}
+                          )}
+                          <MiniActionButton onClick={() => setForwarding(m)}>Forward</MiniActionButton>
+                        </MiniActionBar>
                       </div>
                       <div className="p-3">
                         <EmailBody htmlBody={m.htmlBody} textBody={m.textBody} showText={textShownId === m.id} />
@@ -315,11 +362,51 @@ export default function PersonalMailPanel({
                       </div>
                     </div>
                   ))}
+
+                  <div className="border-t border-neutral-200 pt-3">
+                    <label className="mb-1 block text-xs text-neutral-500">
+                      Reply{sendingAddress && ` — from ${sendingAddress}`}
+                    </label>
+                    <textarea
+                      value={replyBody}
+                      onChange={(e) => setReplyBody(e.target.value)}
+                      rows={6}
+                      className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+                    />
+                    {replyError && <p className="mt-1 text-sm text-red-600">{replyError}</p>}
+                    <div className="mt-2 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={handleSendReply}
+                        disabled={isPending || !replyBody.trim()}
+                        className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                      >
+                        {isPending ? "Sending…" : "Send reply"}
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
           </div>
         </div>
+      )}
+
+      {/* ---- Forward, over the open conversation ---- */}
+      {forwarding && (
+        <ForwardEmailPopup
+          key={forwarding.id}
+          onForward={(to, note) => forwardPersonal(forwarding.id, to, note)}
+          subject={forwarding.subject}
+          attachmentCount={forwarding.attachments.length}
+          fromAddress={sendingAddress ?? ""}
+          composeRecipients={[]}
+          onSent={() => {
+            setForwarding(null);
+            setRefreshKey((k) => k + 1);
+          }}
+          onClose={() => setForwarding(null)}
+        />
       )}
     </div>
   );
