@@ -12,9 +12,10 @@ export async function deleteImageFiles(image: {
   key: string;
   thumbnailKey: string | null;
   displayKey: string | null;
+  squareKey: string | null;
 }) {
   await Promise.all(
-    [image.key, image.thumbnailKey, image.displayKey]
+    [image.key, image.thumbnailKey, image.displayKey, image.squareKey]
       .filter((key): key is string => !!key)
       .map((key) => deleteFromR2(key).catch(() => {}))
   );
@@ -43,7 +44,7 @@ export async function deleteImagePermanently(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const image = await db.image.findUnique({
     where: { id },
-    select: { key: true, thumbnailKey: true, displayKey: true },
+    select: { key: true, thumbnailKey: true, displayKey: true, squareKey: true },
   });
   if (!image) return { ok: true }; // Already gone — nothing to do.
 
@@ -90,7 +91,7 @@ export async function deleteArtworkMainImage(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const image = await db.image.findUnique({
     where: { id: imageId },
-    select: { key: true, thumbnailKey: true, displayKey: true },
+    select: { key: true, thumbnailKey: true, displayKey: true, squareKey: true },
   });
   if (!image) return { ok: true }; // Already gone — nothing to do.
 

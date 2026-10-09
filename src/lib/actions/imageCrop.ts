@@ -67,6 +67,7 @@ export async function cropImage(
       key: true,
       thumbnailKey: true,
       displayKey: true,
+      squareKey: true,
       kind: true,
       mimeType: true,
     },
@@ -136,6 +137,9 @@ export async function cropImage(
         url: `/api/media/${newKey}`,
         thumbnailKey: newThumbnailKey,
         displayKey: newDisplayKey,
+        // The square version is made again from the new crop when next
+        // needed; the old one goes with the other old files below.
+        squareKey: null,
         mimeType: format.contentType,
       },
     });

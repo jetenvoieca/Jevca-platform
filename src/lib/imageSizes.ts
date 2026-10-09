@@ -41,3 +41,16 @@ export async function generateImageSizes(
 
   return { thumbnail, display, contentType: "image/jpeg" };
 }
+
+// A square version (2026-10-09), cropped from the centre, for campaign
+// mail galleries set to Regularise. Big enough for a one-picture
+// gallery across a whole 600px mail on a sharp (2×) screen.
+const SQUARE_SIZE = 1200;
+
+export async function generateSquare(source: Buffer): Promise<Buffer> {
+  return sharp(source)
+    .rotate()
+    .resize({ width: SQUARE_SIZE, height: SQUARE_SIZE, fit: "cover", position: "centre", withoutEnlargement: true })
+    .jpeg({ quality: JPEG_QUALITY })
+    .toBuffer();
+}

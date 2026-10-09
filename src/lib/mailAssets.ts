@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
+import { squareKeysFor } from "@/lib/imageSquares";
 import { artworkDetailLines } from "@/lib/artworkDetails";
 import { mailReferences, pictureKey, type MailContent } from "@/lib/mailContent";
 import type { MailArtwork, MailAssets, MailImage } from "@/lib/mailHtml";
@@ -16,6 +17,10 @@ import type { MailArtwork, MailAssets, MailImage } from "@/lib/mailHtml";
 // full addresses, so sending passes the public address to put in front.
 
 type ImageRow = {
+  id: string;
+  artistId: string;
+  key: string;
+  squareKey: string | null;
   url: string;
   displayKey: string | null;
   kind: string;
@@ -23,10 +28,26 @@ type ImageRow = {
   caption: string | null;
 };
 
-const IMAGE_SELECT = { url: true, displayKey: true, kind: true, altText: true, caption: true } as const;
+const IMAGE_SELECT = {
+  id: true,
+  artistId: true,
+  key: true,
+  squareKey: true,
+  url: true,
+  displayKey: true,
+  kind: true,
+  altText: true,
+  caption: true,
+} as const;
 
 function absolute(url: string, baseUrl: string): string {
   return /^https?:\/\//i.test(url) ? url : `${baseUrl}${url}`;
+}
+
+// A stored file's address: straight from storage when it can be,
+// otherwise through the app.
+function fileUrl(key: string, baseUrl: string): string {
+  return publicMediaUrl(key) ?? absolute(`/api/media/${key}`, baseUrl);
 }
 
 // The display-size version when there is one (served straight from
@@ -65,7 +86,7 @@ export async function loadMailAssets(
   if (!site) return null;
   const { artist, artistId } = site;
 
-  const { pictures, artworkIds } = mailReferences(content);
+  const { pictures, artworkIds, squarePictureKeys } = mailReferences(content);
   const mediaIds = pictures.filter((p) => p.kind === "media").map((p) => p.id);
   const pictureArtworkIds = pictures.filter((p) => p.kind === "artwork").map((p) => p.id);
 
@@ -73,7 +94,7 @@ export async function loadMailAssets(
     mediaIds.length > 0
       ? db.image.findMany({
           where: { id: { in: mediaIds }, artistId },
-          select: { id: true, ...IMAGE_SELECT },
+          select: IMAGE_SELECT,
         })
       : [],
     artworkIds.length + pictureArtworkIds.length > 0
@@ -95,15 +116,25 @@ export async function loadMailAssets(
   ]);
 
   const pictureMap: Record<string, MailImage> = {};
+  // The photo behind each picture, for those shown square.
+  const squareSources = new Map<string, ImageRow>();
   for (const row of mediaRows) {
+    const key = pictureKey({ kind: "media", id: row.id });
     const image = toMailImage(row, baseUrl, "");
-    if (image) pictureMap[pictureKey({ kind: "media", id: row.id })] = image;
+    if (!image) continue;
+    pictureMap[key] = image;
+    if (squarePictureKeys.has(key)) squareSources.set(key, row);
   }
 
   const artworks: Record<string, MailArtwork> = {};
   for (const row of artworkRows) {
-    const image = toMailImage(row.mainImage ?? row.images[0] ?? null, baseUrl, row.catalogueName);
-    if (image) pictureMap[pictureKey({ kind: "artwork", id: row.id })] = image;
+    const key = pictureKey({ kind: "artwork", id: row.id });
+    const photo = row.mainImage ?? row.images[0] ?? null;
+    const image = toMailImage(photo, baseUrl, row.catalogueName);
+    if (image && photo) {
+      pictureMap[key] = image;
+      if (squarePictureKeys.has(key)) squareSources.set(key, photo);
+    }
     artworks[row.id] = {
       image,
       title: row.catalogueName,
@@ -115,6 +146,16 @@ export async function loadMailAssets(
       // The artwork's own page on the website — not available yet.
       url: null,
     };
+  }
+
+  if (squareSources.size > 0) {
+    const photos = new Map<string, ImageRow>();
+    for (const row of squareSources.values()) photos.set(row.id, row);
+    const squares = await squareKeysFor([...photos.values()]);
+    for (const [key, row] of squareSources) {
+      const squareKey = squares.get(row.id);
+      if (squareKey) pictureMap[key] = { ...pictureMap[key], square: fileUrl(squareKey, baseUrl) };
+    }
   }
 
   const placeLine = [artist.postcode, artist.city].filter(Boolean).join(" ");

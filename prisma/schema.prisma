@@ -1613,6 +1613,10 @@ model Image {
   // meantime, it's just not sped up yet.
   thumbnailKey String?
   displayKey   String?
+  // A square version, cropped from the centre (2026-10-09), for campaign
+  // mail galleries set to Regularise. Made the first time it's needed
+  // (lib/imageSquares.ts), not at upload.
+  squareKey    String?
   posterUrl String?
   kind      ImageKind   @default(PHOTO)
   mimeType  String

@@ -337,6 +337,18 @@ export default function CampaignsView({
     };
   };
 
+  // A Gallery's Regularise, from its bar: every picture the same square
+  // in the mail (as the editor shows them), or each in its own shape.
+  const blockToggle = (block: MailBlock) => {
+    if (!draft || block.type !== "gallery") return null;
+    const content = contentOf(draft.content, block as MailBlock & { type: "gallery" });
+    return {
+      label: "Regularise",
+      on: content.regular,
+      onToggle: () => changeBlockContent(block.id, { ...content, regular: !content.regular }),
+    };
+  };
+
   // Translate now: the French of every part that has English but no
   // French yet, from the artist's own voice (Settings → Writing voice).
   const handleTranslate = async () => {
@@ -520,6 +532,7 @@ export default function CampaignsView({
                     onChange={changeLayout}
                     renderBlock={renderBlock}
                     settingsPanel={settingsPanel}
+                    blockToggle={blockToggle}
                     fluid
                   />
                 </div>

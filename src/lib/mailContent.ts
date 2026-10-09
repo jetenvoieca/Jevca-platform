@@ -39,7 +39,9 @@ export type HeaderContent = { type: "header"; text: Localized<string> };
 export type TextContent = { type: "text"; text: Localized<RichText> };
 export type TextGridContent = { type: "textgrid"; cells: Localized<RichText>[] };
 export type ImageContent = { type: "image"; picture: MailPicture | null };
-export type GalleryContent = { type: "gallery"; pictures: MailPicture[] };
+// `regular` (Regularise, 2026-10-09): every picture shown as the same
+// square, cropped from its centre; off, each keeps its own shape.
+export type GalleryContent = { type: "gallery"; pictures: MailPicture[]; regular: boolean };
 export type ArtworkContent = { type: "artwork"; artworkId: string | null };
 export type ButtonContent = {
   type: "button";
@@ -95,7 +97,7 @@ export function emptyContent(type: ContentBlockType): BlockContent {
     case "image":
       return { type, picture: null };
     case "gallery":
-      return { type, pictures: [] };
+      return { type, pictures: [], regular: false };
     case "artwork":
       return { type, artworkId: null };
     case "button":
@@ -130,7 +132,7 @@ function cleanBlockContent(type: ContentBlockType, raw: unknown): BlockContent {
             return clean ? [clean] : [];
           })
         : [];
-      return { type, pictures: pictures.slice(0, MAX_GALLERY_PICTURES) };
+      return { type, pictures: pictures.slice(0, MAX_GALLERY_PICTURES), regular: value.regular === true };
     }
     case "artwork":
       return {
@@ -173,19 +175,25 @@ export function contentOf<T extends ContentBlockType>(
 }
 
 // Every picture and artwork the mail shows, so they can be looked up in
-// one go.
+// one go — and which pictures are shown square (in a regularised
+// gallery), so their square versions are made.
 export function mailReferences(content: MailContent): {
   pictures: MailPicture[];
   artworkIds: string[];
+  squarePictureKeys: Set<string>;
 } {
   const pictures: MailPicture[] = [];
   const artworkIds: string[] = [];
+  const squarePictureKeys = new Set<string>();
   for (const c of Object.values(content)) {
     if (c.type === "image" && c.picture) pictures.push(c.picture);
-    if (c.type === "gallery") pictures.push(...c.pictures);
+    if (c.type === "gallery") {
+      pictures.push(...c.pictures);
+      if (c.regular) c.pictures.forEach((p) => squarePictureKeys.add(pictureKey(p)));
+    }
     if (c.type === "artwork" && c.artworkId) artworkIds.push(c.artworkId);
   }
-  return { pictures, artworkIds: [...new Set(artworkIds)] };
+  return { pictures, artworkIds: [...new Set(artworkIds)], squarePictureKeys };
 }
 
 // Whether a component's content has nothing in it yet, in either

@@ -86,6 +86,10 @@ export type EditorComponent<T extends string> = { value: T; label: string };
 // the panel's title and its contents.
 export type BlockSettingsPanel = { button: string; title: string; content: ReactNode };
 
+// An on / off switch on a component's bar, after Remove (e.g. a mail
+// gallery's Regularise, 2026-10-09): shown highlighted while on.
+export type BlockToggle = { label: string; on: boolean; onToggle: () => void };
+
 // A component being moved.
 type DragItem<B extends RowBlock> = { block: B };
 
@@ -99,6 +103,7 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   newBlock,
   renderBlock,
   settingsPanel,
+  blockToggle,
   desktopWidth,
   backgroundColor,
   backgroundImage = false,
@@ -114,6 +119,8 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   renderBlock: (block: B) => ReactNode;
   // A component's own settings, if it has any; `onBlock` saves them.
   settingsPanel?: (block: B, onBlock: (block: B) => void) => BlockSettingsPanel | null;
+  // A component's on / off switch, if it has one.
+  blockToggle?: (block: B) => BlockToggle | null;
   desktopWidth: number;
   backgroundColor: string | null;
   backgroundImage?: boolean;
@@ -289,6 +296,7 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
                           ownSettings={settingsPanel?.(b, (next) =>
                             onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
                           )}
+                          toggle={blockToggle?.(b)}
                           onSelect={() => setSelectedId(b.id)}
                           onWidth={(width) =>
                             onChange({
@@ -407,6 +415,7 @@ function BlockItem<B extends RowBlock>({
   faded,
   dropSide,
   ownSettings,
+  toggle,
   onSelect,
   onWidth,
   onRow,
@@ -425,6 +434,7 @@ function BlockItem<B extends RowBlock>({
   faded: boolean;
   dropSide: "left" | "right" | null;
   ownSettings: BlockSettingsPanel | null | undefined;
+  toggle: BlockToggle | null | undefined;
   onSelect: () => void;
   onWidth: (width: number) => void;
   onRow: (patch: Partial<RowSettings>) => void;
@@ -483,6 +493,14 @@ function BlockItem<B extends RowBlock>({
           <BarButton danger onClick={onRemove}>
             Remove
           </BarButton>
+          {toggle && (
+            <>
+              <BarDivider />
+              <BarButton active={toggle.on} onClick={toggle.onToggle}>
+                {toggle.label}
+              </BarButton>
+            </>
+          )}
         </SelectionBar>
       }
       panel={

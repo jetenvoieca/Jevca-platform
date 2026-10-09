@@ -19,7 +19,9 @@ import { escapeHtml, isRichTextEmpty, richTextToHtml, type RichText } from "@/li
 // A component with nothing in it shows nothing. Plain module, not
 // "use server".
 
-export type MailImage = { src: string; alt: string };
+// `square`: its square version, for a gallery set to Regularise (only
+// looked up for pictures in such a gallery).
+export type MailImage = { src: string; alt: string; square?: string };
 
 export type MailArtwork = {
   image: MailImage | null;
@@ -161,9 +163,13 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
       return image ? imageHtml(image, width) : "";
     }
     case "gallery": {
-      const images = contentOf(content, { ...block, type: "gallery" })
-        .pictures.map((p) => assets.pictures[pictureKey(p)])
-        .filter((i): i is MailImage => Boolean(i));
+      const gallery = contentOf(content, { ...block, type: "gallery" });
+      // Regularised: every picture the same square (one whose square
+      // couldn't be made keeps its own shape).
+      const images = gallery.pictures
+        .map((p) => assets.pictures[pictureKey(p)])
+        .filter((i): i is MailImage => Boolean(i))
+        .map((i) => (gallery.regular && i.square ? { src: i.square, alt: i.alt } : i));
       if (images.length === 0) return "";
       const gap = layout.gridSpacing.horizontal;
       const widths = equalWidths(width, images.length, gap);
