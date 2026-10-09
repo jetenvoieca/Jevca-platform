@@ -60,6 +60,18 @@ export function formatParis(at: Date): string {
   }).format(at);
 }
 
+// "14/11/2026" and "14/11/2026 11:15" (Paris), for campaign results
+// and history — campaigns always work in Paris time.
+export function formatParisDate(at: Date | string): string {
+  const { date } = dateToParis(new Date(at));
+  return date.split("-").reverse().join("/");
+}
+
+export function formatParisDateTime(at: Date | string): string {
+  const { date, time } = dateToParis(new Date(at));
+  return `${date.split("-").reverse().join("/")} ${time}`;
+}
+
 // Today's date in Paris ("2026-11-14").
 export function parisToday(): string {
   return dateToParis(new Date()).date;

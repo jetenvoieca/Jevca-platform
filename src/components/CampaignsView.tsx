@@ -37,6 +37,7 @@ import MailPreviewFrame from "@/components/MailPreviewFrame";
 import CampaignSetupModal from "@/components/CampaignSetupModal";
 import CampaignMailList from "@/components/CampaignMailList";
 import CampaignAudience from "@/components/CampaignAudience";
+import CampaignResults from "@/components/CampaignResults";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAutoSave } from "@/components/useAutoSave";
 
@@ -51,9 +52,10 @@ import { useAutoSave } from "@/components/useAutoSave";
 // Edit open the campaign's window: its name, and its mails with their
 // templates), the Campaigns list, and the selected campaign's mails
 // with their shares and the follow-up's condition, then the Audience
-// box (Test message for now). Every change shows
-// in the Preview and saves itself shortly after. The audience and
-// sending come in a later step.
+// box (lists, Test message, Send). Every change shows in the Preview and
+// saves itself shortly after. Once a campaign has started sending, the
+// middle column opens on its Results (step 4b), with a Results | Mail
+// switch; picking one of its mails shows that mail.
 
 type MailDraft = {
   layout: MailTemplateLayout;
@@ -116,6 +118,8 @@ export default function CampaignsView({
   const [revision, setRevision] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // For a campaign that has started sending: its mail instead of Results.
+  const [showMail, setShowMail] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   const selected = campaigns.find((c) => c.id === selectedId) ?? null;
@@ -153,6 +157,9 @@ export default function CampaignsView({
   const openMail = (campaign: CampaignSummary | null, next: CampaignMailData | null) => {
     startTransition(async () => {
       await autoSave.flush();
+      // Another campaign opens on its Results; another of its mails, on
+      // that mail.
+      setShowMail(!!campaign && campaign.id === selectedId);
       setSelectedId(campaign?.id ?? null);
       setMailId(next?.id ?? null);
       setDraft(next ? toDraft(next) : null);
@@ -408,7 +415,35 @@ export default function CampaignsView({
       </section>
 
       <section className="flex min-h-0 flex-col rounded-lg border border-neutral-300 bg-white p-4">
-        {draft && mail ? (
+        {selected && started && (
+          <div className="mb-3 flex justify-center">
+            <div className="flex rounded-md border border-neutral-300 p-0.5">
+              {[
+                { label: "Results", mail: false },
+                { label: "Mail", mail: true },
+              ].map((tab) => (
+                <button
+                  key={tab.label}
+                  type="button"
+                  onClick={() => setShowMail(tab.mail)}
+                  className={`rounded px-3 py-1 text-sm ${
+                    showMail === tab.mail ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-100"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        {selected && started && !showMail ? (
+          <CampaignResults
+            siteId={siteId}
+            campaignId={selected.id}
+            campaignName={selected.name}
+            sending={selected.status === "SENDING"}
+          />
+        ) : draft && mail ? (
           <>
             <div className="mb-3 flex items-center justify-between gap-3">
               <h2 className="text-base text-neutral-800">{campaignMailLabel(mail.kind, mail.position)}</h2>

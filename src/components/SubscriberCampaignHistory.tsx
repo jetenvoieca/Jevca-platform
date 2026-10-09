@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { getSubscriberCampaigns, type SubscriberCampaignRow } from "@/lib/actions/subscribers";
-import { formatDate } from "@/lib/formatDate";
+import { formatParisDate } from "@/lib/parisTime";
 
 // A subscriber's campaigns (2026-10-09, Marketing step 4a), in their
 // details panel: each campaign mail they were sent, which version, and
@@ -52,7 +52,7 @@ export default function SubscriberCampaignHistory({
             <li key={r.id} className="rounded-md border border-neutral-200 px-2 py-1.5">
               <div className="flex items-baseline justify-between gap-2">
                 <span className="truncate text-sm text-neutral-900">{r.campaignName}</span>
-                {r.sentAt && <span className="shrink-0 text-xs text-neutral-400">{formatDate(r.sentAt)}</span>}
+                {r.sentAt && <span className="shrink-0 text-xs text-neutral-400">{formatParisDate(r.sentAt)}</span>}
               </div>
               <p className="text-xs text-neutral-500">
                 {r.mailLabel} · {r.language}
@@ -87,17 +87,17 @@ function Outcome({ row }: { row: SubscriberCampaignRow }) {
             }`}
           >
             {s.label}
-            {s.at ? ` ${formatDate(s.at)}` : ""}
+            {s.at ? ` ${formatParisDate(s.at)}` : ""}
           </span>
         ))}
       </div>
       {row.bouncedAt && (
         <p className="text-xs text-red-600">
-          {row.hardBounce ? "Bounced" : "Temporary bounce"} {formatDate(row.bouncedAt)}
+          {row.hardBounce ? "Bounced" : "Temporary bounce"} {formatParisDate(row.bouncedAt)}
           {row.error ? `: ${row.error}` : ""}
         </p>
       )}
-      {row.complainedAt && <p className="text-xs text-red-600">Marked as spam {formatDate(row.complainedAt)}</p>}
+      {row.complainedAt && <p className="text-xs text-red-600">Marked as spam {formatParisDate(row.complainedAt)}</p>}
     </div>
   );
 }
