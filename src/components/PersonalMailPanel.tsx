@@ -431,8 +431,10 @@ export default function PersonalMailPanel({
                 <p className="pt-5 text-sm text-neutral-400">Loading…</p>
               ) : (
                 <div className="mx-auto max-w-xl space-y-4 pt-5">
+                  {/* Pinned at the top while open, so the emails scroll
+                      underneath it and can be read while replying. */}
                   {replyTo && (
-                    <div className="rounded-md border border-neutral-300 bg-neutral-50 p-3">
+                    <div className="sticky top-0 z-20 rounded-md border border-neutral-300 bg-neutral-50 p-3 shadow-md">
                       <label className="mb-1 block text-xs text-neutral-500">
                         Reply to {replyTo.sentByMe ? replyTo.to : replyTo.fromName || replyTo.fromAddress}
                         {sendingAddress && ` — from ${sendingAddress}`}
@@ -467,7 +469,12 @@ export default function PersonalMailPanel({
                   )}
                   {thread.map((m) => (
                     <div key={m.id} className="rounded-md border border-neutral-200 bg-white">
-                      <div className={`${emailHeadCls} sticky top-0 z-10 rounded-t-md border-b border-neutral-200`}>
+                      {/* Each email's header stays in view while its body
+                          scrolls — except while replying, when the reply
+                          box holds the top. */}
+                      <div
+                        className={`${emailHeadCls} ${replyTo ? "" : "sticky top-0 z-10"} rounded-t-md border-b border-neutral-200`}
+                      >
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-3 text-xs text-neutral-500">
                             <span className="min-w-0 truncate font-medium text-neutral-700">
