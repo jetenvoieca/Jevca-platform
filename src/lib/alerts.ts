@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/formatDate";
 import { netOwed, saleTitle } from "@/lib/saleMath";
 import type { SaleModalTarget } from "@/components/SaleModal";
+import { MANUAL_SUBSCRIPTION_METHODS } from "@/lib/subscriptionMethods";
 
 // 2026-08-13 decision: manual (PayPal/DD) artists are expected roughly
 // monthly, flagged overdue 14 days after that's due — i.e. 44 days since
@@ -61,7 +62,7 @@ function daysSince(date: Date, now = Date.now()): number {
 // clearing an alert whose underlying problem is still there.
 export async function isArtistSubscriptionOverdue(artistId: string): Promise<boolean> {
   const artist = await db.artist.findFirst({
-    where: { id: artistId, paymentMethod: { in: ["PayPal", "DD"] } },
+    where: { id: artistId, paymentMethod: { in: MANUAL_SUBSCRIPTION_METHODS } },
     select: { subscriptionPayments: { orderBy: { paidAt: "desc" }, take: 1, select: { paidAt: true } } },
   });
   const last = artist?.subscriptionPayments[0];
@@ -205,7 +206,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       }),
       db.artist.findMany({
         where: {
-          paymentMethod: { in: ["PayPal", "DD"] },
+          paymentMethod: { in: MANUAL_SUBSCRIPTION_METHODS },
           sites: { some: { status: { not: "ARCHIVED" } } },
         },
         select: {

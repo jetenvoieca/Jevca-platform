@@ -1,5 +1,6 @@
 "use client";
 
+import { subscriptionMethodLabel } from "@/lib/subscriptionMethods";
 import { useMemo, useState } from "react";
 
 type MonthGroup = {
@@ -146,11 +147,7 @@ export default function AccountsPeriodView({
                           {r.currency} {r.amount.toFixed(2)}
                         </td>
                         <td className="px-4 py-1.5 text-neutral-400">
-                          {r.source === "STRIPE"
-                            ? "Stripe"
-                            : r.paymentMethod === "DD"
-                              ? "Direct Debit"
-                              : r.paymentMethod || "Manual"}
+                          {r.source === "STRIPE" ? "Stripe" : subscriptionMethodLabel(r.paymentMethod) || "Manual"}
                         </td>
                       </tr>
                     ))}

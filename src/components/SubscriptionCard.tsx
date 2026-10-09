@@ -11,6 +11,11 @@ import {
   deleteManualSubscriptionPayment,
 } from "@/lib/actions/subscriptions";
 import { formatDate } from "@/lib/formatDate";
+import {
+  SUBSCRIPTION_METHODS,
+  MANUAL_SUBSCRIPTION_METHODS,
+  type SubscriptionMethod,
+} from "@/lib/subscriptionMethods";
 
 const labelCls = "mb-1 block text-xs text-neutral-500";
 const inputCls =
@@ -65,7 +70,7 @@ export default function SubscriptionCard({
     });
   };
 
-  const handlePaymentMethodChange = (value: "" | "Stripe" | "PayPal" | "DD") => {
+  const handlePaymentMethodChange = (value: SubscriptionMethod | "") => {
     startTransition(async () => {
       await updateArtistPaymentMethod(artist.id, siteId, value);
       router.refresh();
@@ -124,14 +129,16 @@ export default function SubscriptionCard({
       <select
         key={`owner-payment-${artist.id}`}
         defaultValue={artist.paymentMethod || ""}
-        onChange={(e) => handlePaymentMethodChange(e.target.value as "" | "Stripe" | "PayPal" | "DD")}
+        onChange={(e) => handlePaymentMethodChange(e.target.value as SubscriptionMethod | "")}
         disabled={isPending}
         className={`${inputCls} mb-3`}
       >
         <option value="">—</option>
-        <option value="Stripe">Stripe</option>
-        <option value="PayPal">PayPal</option>
-        <option value="DD">Direct Debit</option>
+        {SUBSCRIPTION_METHODS.map((m) => (
+          <option key={m.value} value={m.value}>
+            {m.label}
+          </option>
+        ))}
       </select>
       {(savedField === "subscriptionAmount" || savedField === "stripeId") && (
         <p className="mb-3 text-xs text-green-600">Saved</p>
@@ -166,12 +173,14 @@ export default function SubscriptionCard({
         </div>
       )}
 
-      {artist.paymentMethod === "Stripe" ? (
+      {artist.paymentMethod === "FOC" ? (
+        <p className="mb-2 text-xs text-neutral-400">Free of charge — no payments expected.</p>
+      ) : artist.paymentMethod === "Stripe" ? (
         <p className="mb-2 text-xs text-neutral-400">
           Payments sync here automatically from Stripe once webhook syncing is switched on.
         </p>
       ) : (
-        (artist.paymentMethod === "PayPal" || artist.paymentMethod === "DD") && (
+        MANUAL_SUBSCRIPTION_METHODS.includes(artist.paymentMethod as SubscriptionMethod) && (
           <div className="mb-2">
             {addingPayment ? (
               <form
@@ -228,7 +237,7 @@ export default function SubscriptionCard({
         )
       )}
 
-      {artist.paymentMethod && (
+      {artist.paymentMethod && (artist.paymentMethod !== "FOC" || subscriptionPayments.length > 0) && (
         <div className="overflow-hidden rounded-md border border-neutral-200">
           <table className="w-full text-xs">
             <thead className="bg-neutral-50 text-left text-neutral-400">

@@ -3,8 +3,9 @@
 import { db } from "@/lib/db";
 import { revalidatePath, updateTag } from "next/cache";
 import { OPEN_ALERTS_TAG } from "@/lib/alerts";
+import { isSubscriptionMethod, type SubscriptionMethod } from "@/lib/subscriptionMethods";
 
-// ---- Payment method (Stripe / PayPal / DD) — either/or, decided once ----
+// ---- Payment method (Stripe / PayPal / DD / FOC) — see lib/subscriptionMethods.ts ----
 // Reuses Artist.paymentMethod (already existed). Kept here rather than in
 // the general updateArtist action because switching it changes which UI
 // (linked Stripe Customer vs manual entry grid) the Subscription panel
@@ -12,12 +13,15 @@ import { OPEN_ALERTS_TAG } from "@/lib/alerts";
 export async function updateArtistPaymentMethod(
   artistId: string,
   siteId: string,
-  paymentMethod: "" | "Stripe" | "PayPal" | "DD"
+  paymentMethod: SubscriptionMethod | ""
 ) {
+  if (paymentMethod && !isSubscriptionMethod(paymentMethod)) return;
   await db.artist.update({
     where: { id: artistId },
     data: { paymentMethod: paymentMethod || null },
   });
+  // Changes which alerts apply (no payment method / overdue).
+  updateTag(OPEN_ALERTS_TAG);
   revalidatePath(`/sites/${siteId}`);
 }
 
