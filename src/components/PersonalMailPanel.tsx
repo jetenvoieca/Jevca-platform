@@ -11,7 +11,7 @@ import { formatDate, formatDateTime } from "@/lib/formatDate";
 
 // The Inbox's Personal tab (2026-10-09): Craig's own Gmail, read live
 // from Google (see lib/gmailMessages.ts). Laid out like the other tabs —
-// the inbox on the left, Sent on the right, each the last 7 days
+// the inbox on the left, Sent on the right, each its latest 50 emails
 // only (older mail is looked up in Gmail itself), and a conversation
 // opens in the same kind of window (marking it read in Gmail). Until
 // Gmail is connected, it shows Connect Gmail instead (see
@@ -218,7 +218,7 @@ export default function PersonalMailPanel({
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           <MailList
             state={inbox}
-            emptyText="Nothing in your inbox in the last 7 days."
+            emptyText="Nothing in your inbox."
             openId={open?.threadId ?? null}
             onOpen={openThread}
           />
@@ -237,7 +237,7 @@ export default function PersonalMailPanel({
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           <MailList
             state={sent}
-            emptyText="Nothing sent in the last 7 days."
+            emptyText="Nothing sent yet."
             openId={open?.threadId ?? null}
             onOpen={openThread}
           />
