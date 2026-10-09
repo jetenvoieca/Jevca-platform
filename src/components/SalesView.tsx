@@ -6,6 +6,7 @@ import { formatDate } from "@/lib/formatDate";
 import { SaleStatusBadge } from "@/components/GallerySaleCard";
 import SaleModal, { type SaleModalTarget } from "@/components/SaleModal";
 import type { SaleRow } from "@/lib/actions/sales";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 const STATUS_FILTERS = ["ALL", "ACTIVE", "COMPLETED", "ABANDONED"] as const;
 
@@ -26,6 +27,7 @@ export default function SalesView({
   artistId: string;
   sales: SaleRow[];
 }) {
+  const words = useClientWords();
   const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("ALL");
   const [target, setTarget] = useState<SaleModalTarget | null>(null);
   const router = useRouter();
@@ -81,7 +83,7 @@ export default function SalesView({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
-              <th className="px-3 py-2 font-normal">Artwork</th>
+              <th className="px-3 py-2 font-normal">{words.item}</th>
               <th className="px-3 py-2 font-normal">Buyer</th>
               <th className="px-3 py-2 font-normal">Type</th>
               <th className="px-3 py-2 font-normal">Amount</th>

@@ -12,6 +12,8 @@ import GallerySaleCard from "@/components/GallerySaleCard";
 import SaleHeader from "@/components/SaleHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useBackdropClose } from "@/lib/useBackdropClose";
+import ClientWordsProvider from "@/components/ClientWordsProvider";
+import type { ClientKind } from "@/lib/clientKind";
 
 // Which sale to show — just enough to look it up.
 export type SaleModalTarget = {
@@ -49,6 +51,9 @@ export default function SaleModal({
 
   const [selectedDetail, setSelectedDetail] = useState<ArtworkDetail | null>(null);
   const [paymentMethods, setPaymentMethods] = useState<string[]>([]);
+  // The sale's own client type: this window also opens from lists that
+  // cover every client, so it sets its own wording (ClientWordsProvider).
+  const [clientKind, setClientKind] = useState<ClientKind | null>(null);
   const [loading, setLoading] = useState(true);
   // Which of the sale and its framing/delivery charges has its panel
   // open (null = the summary) — see GallerySaleCard.
@@ -77,6 +82,7 @@ export default function SaleModal({
       );
       setFocusedSaleId(openedCharge ? target.purchaseId : null);
       setPaymentMethods(settings.paymentMethods);
+      setClientKind(settings.clientKind);
       setLoading(false);
     });
     return () => {
@@ -160,10 +166,10 @@ export default function SaleModal({
     <>
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" {...backdrop}>
         <div className="flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
-          {loading || !selectedDetail ? (
+          {loading || !selectedDetail || !clientKind ? (
             <p className="py-8 text-center text-sm text-neutral-400">Loading…</p>
           ) : (
-            <>
+            <ClientWordsProvider kind={clientKind}>
               <div className="shrink-0">
                 <SaleHeader
                   artwork={selectedDetail}
@@ -179,7 +185,7 @@ export default function SaleModal({
                 {!selectedPurchase || !target.siteId ? (
                   <p className="text-sm text-neutral-400">
                     {!target.siteId
-                      ? "This artist has no active site to manage the sale from."
+                      ? "There's no active site to manage the sale from."
                       : "This sale couldn't be found — it may have changed since the list loaded."}
                   </p>
                 ) : selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "ABANDONED" ? (
@@ -225,7 +231,7 @@ export default function SaleModal({
                   />
                 )}
               </div>
-            </>
+            </ClientWordsProvider>
           )}
         </div>
       </div>

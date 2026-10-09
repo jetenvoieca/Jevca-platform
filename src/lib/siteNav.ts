@@ -1,6 +1,7 @@
 import type { AppShellNavEntry, AppShellNavItem } from "@/components/SidebarNav";
 import { buildAccountsSection, buildSitesSection, buildTemplatesSection } from "@/lib/topNav";
 import type { RecentSite } from "@/lib/recentSites";
+import type { ClientWords } from "@/lib/clientKind";
 
 // Colour for every section that's specific to the site you're currently
 // inside (Artworks, Media, Website, Financial, Marketing) — distinct from the
@@ -63,6 +64,7 @@ export function buildSiteNavEntries({
   mediaNeedsReviewCount,
   salesEnabled,
   recentSites,
+  words,
 }: {
   siteId: string;
   active: SiteNavKey | null;
@@ -73,6 +75,8 @@ export function buildSiteNavEntries({
   salesEnabled: boolean;
   // This site first, then the one opened before it — see the site layout.
   recentSites: RecentSite[];
+  // Artwork or product wording for this site's client — lib/clientKind.ts.
+  words: ClientWords;
 }): AppShellNavEntry[] {
   const base = `/sites/${siteId}`;
 
@@ -166,7 +170,7 @@ export function buildSiteNavEntries({
     buildTemplatesSection(null),
     buildSitesSection(recentSites, { currentSiteId: siteId }),
     {
-      label: "Artworks",
+      label: words.items,
       section: true,
       key: "artworks",
       color: SITE_SECTION_COLOR,

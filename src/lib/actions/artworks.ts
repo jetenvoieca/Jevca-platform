@@ -641,7 +641,7 @@ export async function updateArtworkPrice(
     where: { id: artworkId, artistId },
     data: { offeredPrice, presentationPrice: offeredPrice, priceCurrency: currency },
   });
-  if (count === 0) return { error: "Artwork not found." };
+  if (count === 0) return { error: "Not found — it may have been deleted." };
   return { ok: true, offeredPrice };
 }
 
@@ -662,7 +662,7 @@ export async function updateArtworkName(
     where: { id: artworkId, artistId },
     select: { catalogueName: true },
   });
-  if (!current) return { error: "Artwork not found." };
+  if (!current) return { error: "Not found — it may have been deleted." };
   if (current.catalogueName === catalogueName) return { ok: true, catalogueName };
 
   await db.artwork.update({ where: { id: artworkId }, data: { catalogueName } });

@@ -130,7 +130,7 @@ export default function AccountsPeriodView({
                 <table className="w-full table-fixed border-t border-neutral-100 text-xs">
                   <thead className="bg-neutral-50 text-left text-neutral-400">
                     <tr>
-                      <th className="w-[38%] px-4 py-1.5 font-medium">Artist</th>
+                      <th className="w-[38%] px-4 py-1.5 font-medium">Owner</th>
                       <th className="w-[20%] px-4 py-1.5 font-medium">Date</th>
                       <th className="w-[22%] px-4 py-1.5 font-medium">Amount</th>
                       <th className="w-[20%] px-4 py-1.5 font-medium">Source</th>

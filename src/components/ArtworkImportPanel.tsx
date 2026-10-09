@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/artworkImport";
 import { withTimeout } from "@/lib/importHelpers";
 import { useBackdropClose } from "@/lib/useBackdropClose";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 type Failure = { row: NormalizedArtworkRow; error: string };
 
@@ -23,6 +24,8 @@ export default function ArtworkImportPanel({
   siteId: string;
   onClose: () => void;
 }) {
+  const words = useClientWords();
+  const items = words.items.toLowerCase();
   const [rows, setRows] = useState<NormalizedArtworkRow[] | null>(null);
   const [parseErrors, setParseErrors] = useState<string[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
@@ -46,13 +49,13 @@ export default function ArtworkImportPanel({
     try {
       const ids = await getCsvImportedArtworkIds(artistId);
       if (ids.length === 0) {
-        alert("No CSV-imported artworks found — nothing to delete.");
+        alert(`No CSV-imported ${items} found — nothing to delete.`);
         return;
       }
       const confirmed = confirm(
-        `Permanently delete all ${ids.length} artworks previously brought in by this CSV import ` +
+        `Permanently delete all ${ids.length} ${items} previously brought in by this CSV import ` +
           `(including their images)?\n\n` +
-          `This only ever touches artworks this import feature created — nothing added any ` +
+          `This only ever touches ${items} this import feature created — nothing added any ` +
           `other way is affected. Use this to clear out duplicates from repeated import attempts ` +
           `before importing fresh.\n\nThis cannot be undone.`
       );
@@ -65,7 +68,7 @@ export default function ArtworkImportPanel({
             `already linked to a real sale) — left in place rather than risk removing something real.`
         );
       } else {
-        alert(`Deleted ${result.deleted} artworks. Ready for a fresh import.`);
+        alert(`Deleted ${result.deleted} ${items}. Ready for a fresh import.`);
       }
     } finally {
       setCleaningUp(false);
@@ -166,7 +169,7 @@ export default function ArtworkImportPanel({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...backdrop}>
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-4 flex items-start justify-between">
-          <h2 className="text-lg font-semibold text-neutral-900">Import Artworks from CSV</h2>
+          <h2 className="text-lg font-semibold text-neutral-900">Import {words.items} from CSV</h2>
           {!importing && (
             <button
               type="button"
@@ -199,9 +202,9 @@ export default function ArtworkImportPanel({
                 Danger Zone
               </p>
               <p className="mb-2 text-xs text-neutral-500">
-                Had a repeated or restarted import leave duplicates behind? This deletes every
-                artwork this import feature has ever created for this artist, so you can re-run
-                the CSV fresh. Never touches artworks added any other way.
+                Had a repeated or restarted import leave duplicates behind? This deletes every{" "}
+                {words.item.toLowerCase()} this import feature has ever created, so you can re-run
+                the CSV fresh. Never touches {items} added any other way.
               </p>
               <button
                 type="button"
@@ -209,7 +212,7 @@ export default function ArtworkImportPanel({
                 disabled={cleaningUp}
                 className="rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
-                {cleaningUp ? "Checking…" : "Delete all CSV-imported artworks…"}
+                {cleaningUp ? "Checking…" : `Delete all CSV-imported ${items}…`}
               </button>
             </div>
           </div>
@@ -245,8 +248,8 @@ export default function ArtworkImportPanel({
               {rows.length > 8 && <p>…and {rows.length - 8} more</p>}
             </div>
             <p className="mb-4 text-xs text-neutral-400">
-              This fetches each artwork's image individually and can take a few minutes for a
-              large catalogue — keep this tab open until it finishes.
+              This fetches each {words.item.toLowerCase()}&apos;s image individually and can take a
+              few minutes for a large catalogue — keep this tab open until it finishes.
             </p>
             <div className="flex gap-2">
               <button

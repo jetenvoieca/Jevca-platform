@@ -61,7 +61,7 @@ export async function deleteImagePermanently(
     return {
       ok: false,
       error:
-        "Couldn't delete — this image is still linked elsewhere (e.g. an artwork's main image, or a rendered video's result). Remove that link first.",
+        "Couldn't delete — this image is still linked elsewhere (e.g. a catalogue entry's main image, or a rendered video's result). Remove that link first.",
     };
   }
 

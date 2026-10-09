@@ -8,6 +8,7 @@ import { getOpenAlerts } from "@/lib/alerts";
 import { getRecentSites, recordSiteVisit } from "@/lib/recentSites";
 import SiteShell from "@/components/SiteShell";
 import SiteNameField from "@/components/SiteNameField";
+import ClientWordsProvider from "@/components/ClientWordsProvider";
 
 // Without this, Next can treat this layout as static-cacheable (it uses
 // no dynamic APIs like cookies()/headers(), just plain db reads) and
@@ -52,42 +53,46 @@ export default async function SiteLayout({
   ]);
   const recentSites = [{ id, label: site.artist.name }, ...previousSites];
 
+  // Everything inside the site words itself for the client's type
+  // (Artwork / Product, Gallery / Store…) — see ClientWordsProvider.
   return (
-    <SiteShell
-      siteId={id}
-      salesEnabled={site.salesEnabled}
-      hopperCount={hopperCount}
-      artworkNeedsReviewCount={artworkNeedsReviewCount}
-      mediaNeedsReviewCount={mediaNeedsReviewCount}
-      alertCount={openAlerts.length}
-      lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
-      recentSites={recentSites}
-      header={
-        <div className="flex items-start justify-between gap-4">
-          <SiteNameField
-            site={{
-              id: site.id,
-              name: site.name,
-              domain: site.domain,
-              defaultCurrency: site.defaultCurrency,
-              domainStatus: site.domainStatus,
-              domainRenewalDate: site.domainRenewalDate,
-            }}
-            ownerName={site.artist.name}
-          />
-          {/* The site as last published (2026-10-06), in a new tab. */}
-          <a
-            href={`/site-preview/${site.id}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
-          >
-            View published site ↗
-          </a>
-        </div>
-      }
-    >
-      {children}
-    </SiteShell>
+    <ClientWordsProvider kind={site.artist.kind}>
+      <SiteShell
+        siteId={id}
+        salesEnabled={site.salesEnabled}
+        hopperCount={hopperCount}
+        artworkNeedsReviewCount={artworkNeedsReviewCount}
+        mediaNeedsReviewCount={mediaNeedsReviewCount}
+        alertCount={openAlerts.length}
+        lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
+        recentSites={recentSites}
+        header={
+          <div className="flex items-start justify-between gap-4">
+            <SiteNameField
+              site={{
+                id: site.id,
+                name: site.name,
+                domain: site.domain,
+                defaultCurrency: site.defaultCurrency,
+                domainStatus: site.domainStatus,
+                domainRenewalDate: site.domainRenewalDate,
+              }}
+              ownerName={site.artist.name}
+            />
+            {/* The site as last published (2026-10-06), in a new tab. */}
+            <a
+              href={`/site-preview/${site.id}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+            >
+              View published site ↗
+            </a>
+          </div>
+        }
+      >
+        {children}
+      </SiteShell>
+    </ClientWordsProvider>
   );
 }

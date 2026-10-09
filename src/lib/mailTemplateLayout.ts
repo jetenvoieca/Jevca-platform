@@ -41,7 +41,7 @@ export const MAIL_BLOCK_TYPES = [
   { value: "text", label: "Text" },
   { value: "image", label: "Single Image" },
   { value: "gallery", label: "Gallery" },
-  { value: "artwork", label: "Artwork Feature" },
+  { value: "artwork", label: "Feature" },
   { value: "textgrid", label: "Text Grid" },
   { value: "button", label: "Button" },
   { value: "signature", label: "Signature" },

@@ -309,7 +309,7 @@ export async function deleteArtworksByIds(
       // rather than failing the whole batch.
       failed.push({
         id,
-        error: err instanceof Error ? err.message : "Could not delete this artwork.",
+        error: err instanceof Error ? err.message : "Could not delete it.",
       });
     }
   }

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { buildPreviewNavEntries, type PreviewNavKey } from "@/lib/previewNav";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 // The evaluation-only reduced-menu shell (2026-09-12) — see
 // previewSites.ts / previewNav.ts. Deliberately much simpler than
@@ -33,7 +34,8 @@ export default function PreviewShell({
 }) {
   const pathname = usePathname();
   const active = resolveActiveKey(pathname, basePath);
-  const navItems = buildPreviewNavEntries({ basePath, active, hopperCount });
+  const words = useClientWords();
+  const navItems = buildPreviewNavEntries({ basePath, active, hopperCount, words });
 
   return (
     <AppShell

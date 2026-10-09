@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import { createPortal } from "react-dom";
 import { getArtworksForArtist, quickCreateArtwork } from "@/lib/actions/media";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 type PickedArtwork = {
   id: string;
@@ -16,7 +17,7 @@ type PickedArtwork = {
 export default function ArtworkPicker({
   artistId,
   mode = "single",
-  label = "Add Artwork",
+  label,
   variant = "tile",
   allowCreate = true,
   excludeIds = [],
@@ -24,6 +25,7 @@ export default function ArtworkPicker({
 }: {
   artistId: string;
   mode?: "single" | "multi";
+  // Defaults to "Add Artwork" / "Add Product".
   label?: string;
   // "tile": the universal dashed-tile trigger used everywhere media/
   // artworks get ADDED to a grid (default, unchanged).
@@ -41,6 +43,8 @@ export default function ArtworkPicker({
   excludeIds?: string[];
   onSelect: (artworks: PickedArtwork[]) => void;
 }) {
+  const words = useClientWords();
+  const triggerLabel = label ?? `Add ${words.item}`;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   // Location and Type filters (2026-10-04) — the same lists the Artwork
@@ -164,7 +168,7 @@ export default function ArtworkPicker({
         onClick={handleOpen}
         className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
       >
-        {label}
+        {triggerLabel}
       </button>
     );
   } else {
@@ -174,7 +178,7 @@ export default function ArtworkPicker({
         onClick={handleOpen}
         className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
       >
-        + {label}
+        + {triggerLabel}
       </button>
     );
   }
@@ -233,7 +237,7 @@ export default function ArtworkPicker({
                 type="text"
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="Or type a new artwork name…"
+                placeholder={`Or type a new ${words.item.toLowerCase()} name…`}
                 className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
               />
               <button
@@ -298,10 +302,10 @@ export default function ArtworkPicker({
           {visibleArtworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
               {query || location || type
-                ? "No artworks match these filters."
+                ? `No ${words.items.toLowerCase()} match these filters.`
                 : allowCreate
-                  ? "No artworks yet — type a name above to create one."
-                  : "No artworks to add."}
+                  ? `No ${words.items.toLowerCase()} yet — type a name above to create one.`
+                  : `No ${words.items.toLowerCase()} to add.`}
             </p>
           )}
         </div>

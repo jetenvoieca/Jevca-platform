@@ -4,6 +4,7 @@ import { useState } from "react";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 import { formatDate } from "@/lib/formatDate";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
@@ -51,6 +52,7 @@ export default function SaleDetailCard({
   // (2026-08-13, added for cleaning up test/erroneous completed sales).
   onForceDelete?: () => void;
 }) {
+  const words = useClientWords();
   // Certificate of Authenticity (2026-09-10, direct request — "add to
   // all sales, completed or not") — available here for any non-
   // abandoned purchase this card shows (completed Stripe, or an
@@ -160,7 +162,7 @@ export default function SaleDetailCard({
           <Field label="Sale source" value={purchase.source} />
         </div>
         <div className="col-span-2">
-          <Field label="Sold via" value={purchase.channel === "GALLERY" ? "Gallery" : "Stripe"} />
+          <Field label="Sold via" value={purchase.channel === "GALLERY" ? words.location : "Stripe"} />
         </div>
       </dl>
 

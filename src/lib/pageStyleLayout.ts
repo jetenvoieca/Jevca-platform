@@ -31,7 +31,7 @@ export const LAYOUT_BLOCK_TYPES = [
   { value: "text", label: "Text" },
   { value: "image", label: "Single Image" },
   { value: "gallery", label: "Gallery" },
-  { value: "artwork", label: "Artwork Feature" },
+  { value: "artwork", label: "Feature" },
   { value: "video", label: "Video" },
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },

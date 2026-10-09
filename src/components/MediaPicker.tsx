@@ -6,6 +6,7 @@ import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
 import VideoThumb from "@/components/VideoThumb";
 import UploadNewImageModal from "@/components/UploadNewImageModal";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 type PickedImage = {
   id: string;
@@ -115,6 +116,7 @@ export default function MediaPicker({
   variant?: "tile" | "button";
   onSelect: (images: PickedImage[]) => void;
 }) {
+  const words = useClientWords();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [purpose, setPurpose] = useState<"marketing" | "related">("marketing");
@@ -377,7 +379,7 @@ export default function MediaPicker({
           {images.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
               {linkedArtworkId && purpose === "related"
-                ? "No images related to this artwork yet."
+                ? `No images related to this ${words.item.toLowerCase()} yet.`
                 : "No matches. Try Upload new."}
             </p>
           )}

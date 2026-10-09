@@ -15,6 +15,7 @@ import {
   type CurationDetail,
   type CurationSummary,
 } from "@/lib/actions/curations";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 // Whole amounts show without pence ("£400"), as in the mockup.
 function formatPrice(amount: string | null, currency: string): string | null {
@@ -66,6 +67,7 @@ export default function CurationsView({
   curations: CurationSummary[];
   initialSelected: CurationDetail | null;
 }) {
+  const words = useClientWords();
   const [curations, setCurations] = useState<CurationSummary[]>(initialCurations);
   const [selected, setSelected] = useState<CurationDetail | null>(initialSelected);
   const [titleDraft, setTitleDraft] = useState(initialSelected?.name ?? "");
@@ -162,7 +164,7 @@ export default function CurationsView({
   const handleDelete = () => {
     if (!selected) return;
     if (
-      !confirm(`Delete the curation "${selected.name}"? The artworks themselves are not affected.`)
+      !confirm(`Delete the curation "${selected.name}"? The ${words.items.toLowerCase()} themselves are not affected.`)
     ) {
       return;
     }
@@ -369,7 +371,7 @@ export default function CurationsView({
                   <ArtworkPicker
                     artistId={artistId}
                     mode="multi"
-                    label="Add Works"
+                    label={`Add ${words.items}`}
                     allowCreate={false}
                     excludeIds={selected.works.map((w) => w.artworkId)}
                     onSelect={handleAddWorks}

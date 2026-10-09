@@ -23,6 +23,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
 import SaleHeader from "@/components/SaleHeader";
 import { useBackdropClose } from "@/lib/useBackdropClose";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 type DetailTab = "details" | "sales";
 
@@ -47,13 +48,14 @@ function formatMoney(amount: string, currency: string) {
 // LocationsCard.tsx's own badge, reused here so a Location's Type reads
 // consistently wherever it shows up.
 function LocationTypeBadge({ type }: { type: LocationType }) {
+  const words = useClientWords();
   return (
     <span
       className={`shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide ${
         type === "GALLERY" ? "bg-blue-100 text-blue-700" : "bg-neutral-200 text-neutral-600"
       }`}
     >
-      {type === "GALLERY" ? "Gallery" : "Own"}
+      {type === "GALLERY" ? words.location : "Own"}
     </span>
   );
 }
@@ -77,6 +79,7 @@ export default function GalleriesView({
   // card on the Artwork Catalogue's Settings screen manages.
   paymentMethods: string[];
 }) {
+  const words = useClientWords();
   const [q, setQ] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<GalleryDetail | null>(null);
@@ -670,7 +673,7 @@ export default function GalleriesView({
                     </colgroup>
                     <thead>
                       <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
-                        <th className="px-3 py-2 font-normal">Artwork</th>
+                        <th className="px-3 py-2 font-normal">{words.item}</th>
                         <th className="px-3 py-2 font-normal">Status</th>
                         <th className="px-3 py-2 font-normal">Amount</th>
                         <th className="px-3 py-2 font-normal">Net</th>
@@ -733,7 +736,7 @@ export default function GalleriesView({
             ) : (
               <div className="space-y-3">
                 <div>
-                  <label className={labelCls}>{selectedLocationType === "OWN" ? "Location name" : "Gallery name"}</label>
+                  <label className={labelCls}>{selectedLocationType === "OWN" ? "Location name" : `${words.location} name`}</label>
                   <input
                     key={`name-${selectedDetail.id}`}
                     type="text"
@@ -931,7 +934,7 @@ export default function GalleriesView({
               onChange={(e) => setNewLocationType(e.target.value as LocationType)}
               className="w-full rounded-md border border-neutral-300 px-2 py-1 text-xs"
             >
-              <option value="GALLERY">Gallery (third-party)</option>
+              <option value="GALLERY">{words.location} (third-party)</option>
               <option value="OWN">Own (e.g. your studio)</option>
             </select>
             {addError && <p className="text-xs text-red-600">{addError}</p>}
@@ -1017,8 +1020,8 @@ export default function GalleriesView({
                       />
                     ) : (
                       <p className="text-sm text-neutral-500">
-                        This artwork already has an unpaid Studio sale in progress — manage
-                        it from the Sales page.
+                        This {words.item.toLowerCase()} already has an unpaid Studio sale in
+                        progress — manage it from the Sales page.
                       </p>
                     )
                   ) : completedGallerySale ? (
@@ -1115,7 +1118,9 @@ export default function GalleriesView({
                             value={saleBuyerName}
                             onChange={(e) => setSaleBuyerName(e.target.value)}
                             placeholder={
-                              selectedLocationType === "OWN" ? "Buyer's name" : "Defaults to gallery name"
+                              selectedLocationType === "OWN"
+                                ? "Buyer's name"
+                                : `Defaults to ${words.location.toLowerCase()} name`
                             }
                             className={inputCls}
                           />
@@ -1127,7 +1132,9 @@ export default function GalleriesView({
                             value={saleBuyerEmail}
                             onChange={(e) => setSaleBuyerEmail(e.target.value)}
                             placeholder={
-                              selectedLocationType === "OWN" ? "Buyer's email" : "Defaults to gallery email"
+                              selectedLocationType === "OWN"
+                                ? "Buyer's email"
+                                : `Defaults to ${words.location.toLowerCase()} email`
                             }
                             className={inputCls}
                           />

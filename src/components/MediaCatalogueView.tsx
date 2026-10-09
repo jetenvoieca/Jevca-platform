@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { listMedia, getMediaDetail } from "@/lib/actions/mediaCatalogue";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import VideoThumb from "@/components/VideoThumb";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 type MediaRow = {
   id: string;
@@ -64,6 +65,7 @@ export default function MediaCatalogueView({
   artistArtworks: { id: string; catalogueName: string }[];
   initialSelected: MediaDetail | null;
 }) {
+  const words = useClientWords();
   const router = useRouter();
   const [view, setView] = useState<"tile" | "list">("tile");
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
@@ -395,7 +397,7 @@ export default function MediaCatalogueView({
                 onChange={(e) => applyFilters({ artworkId: e.target.value })}
                 className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
               >
-                <option value="">All artworks</option>
+                <option value="">All {words.items.toLowerCase()}</option>
                 {artistArtworks.map((a) => (
                   <option key={a.id} value={a.id}>
                     {a.catalogueName}
@@ -470,7 +472,7 @@ export default function MediaCatalogueView({
                 <th className="py-2 font-medium"></th>
                 <th className="py-2 font-medium">Caption</th>
                 <th className="py-2 font-medium">Kind</th>
-                <th className="py-2 font-medium">Related Artwork</th>
+                <th className="py-2 font-medium">Related {words.item}</th>
               </tr>
             </thead>
             <tbody>

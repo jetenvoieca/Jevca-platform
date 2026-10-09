@@ -179,7 +179,7 @@ async function assertArtworkAvailableForSale(artworkId: string): Promise<string 
     select: { availability: true },
   });
   if (artwork?.availability === "SOLD" || artwork?.availability === "RESERVED") {
-    return "This artwork already has a sale in progress or completed — manage it from the Sales page first.";
+    return "This already has a sale in progress or completed — manage it from the Sales page first.";
   }
   return null;
 }
@@ -229,7 +229,7 @@ async function seedSaleTerms(
     where: { id: artworkId },
     select: { offeredPrice: true, artistId: true },
   });
-  if (!artwork) return { ok: false, error: "Artwork not found." };
+  if (!artwork) return { ok: false, error: "Not found — it may have been deleted." };
 
   const priceRaw =
     (formData.get("price") as string)?.trim() || artwork.offeredPrice?.toString();
@@ -311,7 +311,7 @@ async function startPurchase(
     where: { artworkId, status: "ACTIVE", parentPurchaseId: null },
   });
   if (existingActive) {
-    return { ok: false, error: "There's already an active sale in progress for this artwork." };
+    return { ok: false, error: "There's already an active sale in progress." };
   }
 
   const buyerName = (formData.get("buyerName") as string)?.trim() || null;
@@ -481,13 +481,13 @@ export async function startGallerySale(
     where: { artworkId, status: "ACTIVE", parentPurchaseId: null },
   });
   if (existingActive) {
-    return { ok: false, error: "There's already an active sale in progress for this artwork." };
+    return { ok: false, error: "There's already an active sale in progress." };
   }
 
   const customer = await db.customer.findUnique({ where: { id: customerId } });
   if (!customer) return { ok: false, error: "Location not found." };
   const artwork = await db.artwork.findUnique({ where: { id: artworkId }, select: { artistId: true } });
-  if (!artwork) return { ok: false, error: "Artwork not found." };
+  if (!artwork) return { ok: false, error: "Not found — it may have been deleted." };
 
   const totalAmount = (formData.get("totalAmount") as string)?.trim();
   const currencyRaw = (formData.get("currency") as string)?.trim().toUpperCase();
@@ -789,7 +789,7 @@ export async function saveSaleExtra(
   if (!purchase) return { ok: false, error: "Sale not found." };
   if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
   if (purchase.parentPurchaseId) {
-    return { ok: false, error: "Framing and delivery are arranged on the artwork's own sale." };
+    return { ok: false, error: "Framing and delivery are arranged on the main sale." };
   }
   if (purchase.status === "ABANDONED") return { ok: false, error: "This sale was cancelled." };
 
@@ -928,7 +928,7 @@ export async function recordPastSale(
   if (existingActive) {
     return {
       ok: false,
-      error: "There's an active sale in progress for this artwork — resolve that first.",
+      error: "There's an active sale in progress — resolve that first.",
     };
   }
 
@@ -951,7 +951,7 @@ export async function recordPastSale(
   // email, so a second record was silently created every time.
   const customerId = (formData.get("customerId") as string)?.trim() || null;
 
-  if (!buyerName) return { ok: false, error: "The buyer/gallery name is required." };
+  if (!buyerName) return { ok: false, error: "The customer name is required." };
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
   if (!saleDateRaw) return { ok: false, error: "The date it actually sold is required." };
   const saleDate = new Date(saleDateRaw);

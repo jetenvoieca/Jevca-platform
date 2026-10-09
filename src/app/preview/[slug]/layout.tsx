@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { countHopper } from "@/lib/actions/hopper";
 import { resolvePreviewSiteId } from "@/lib/previewSites";
 import PreviewShell from "@/components/PreviewShell";
+import ClientWordsProvider from "@/components/ClientWordsProvider";
 
 // Same reasoning as the real /sites/[id] layout — this reads straight
 // from the db on every request, so it must never be served from the
@@ -29,12 +30,14 @@ export default async function PreviewLayout({
   const hopperCount = await countHopper(site.artistId);
 
   return (
-    <PreviewShell
-      basePath={`/preview/${slug}`}
-      siteLabel={site.name.trim() || site.artist.name}
-      hopperCount={hopperCount}
-    >
-      {children}
-    </PreviewShell>
+    <ClientWordsProvider kind={site.artist.kind}>
+      <PreviewShell
+        basePath={`/preview/${slug}`}
+        siteLabel={site.name.trim() || site.artist.name}
+        hopperCount={hopperCount}
+      >
+        {children}
+      </PreviewShell>
+    </ClientWordsProvider>
   );
 }

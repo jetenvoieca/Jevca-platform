@@ -26,6 +26,7 @@ import { disconnectStripeAccount } from "@/lib/actions/stripeConnect";
 import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
 import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
 import type { CertificateTemplateRow } from "@/lib/actions/certificateSettings";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 type SiteData = {
   id: string;
@@ -120,6 +121,8 @@ export default function SiteSettingsPanel({
   // /api/stripe/connect/callback.
   stripeConnectNotice: StripeConnectNotice | null;
 }) {
+  const words = useClientWords();
+  const client = words.client.toLowerCase();
   const [isPending, startTransition] = useTransition();
   const [savedField, setSavedField] = useState<string | null>(null);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -196,7 +199,7 @@ export default function SiteSettingsPanel({
     if (mode === "LIVE") {
       const confirmed = confirm(
         `Switch ${artist.name} to LIVE Stripe payments?\n\n` +
-          `Every sale taken for this artist from now on will charge a real card. ` +
+          `Every sale taken for this ${client} from now on will charge a real card. ` +
           `Make sure you've already cleared out any test sales data first.`
       );
       if (!confirmed) return;
@@ -241,7 +244,7 @@ export default function SiteSettingsPanel({
           `• ${preview.purchaseCount} purchase${preview.purchaseCount === 1 ? "" : "s"}\n` +
           `• ${preview.paymentCount} payment${preview.paymentCount === 1 ? "" : "s"}\n` +
           `• ${preview.saleTermsCount} sale terms (pricing) record${preview.saleTermsCount === 1 ? "" : "s"}\n` +
-          `• ${preview.artworksToResetCount} artwork${preview.artworksToResetCount === 1 ? "" : "s"} reset to Available\n\n` +
+          `• ${preview.artworksToResetCount} ${preview.artworksToResetCount === 1 ? words.item.toLowerCase() : words.items.toLowerCase()} reset to Available\n\n` +
           `This cannot be undone. Real sales made after this point are unaffected.`
       );
       if (!confirmed) return;
@@ -388,7 +391,7 @@ export default function SiteSettingsPanel({
                 onBlur={(e) => handleProfileTextSave("story", e.target.value)}
                 disabled={isPending}
                 rows={10}
-                placeholder="This artist's story…"
+                placeholder={`This ${client}'s story…`}
                 className={inputCls}
               />
               {savedField === "story" && <p className="mt-1 text-xs text-green-600">Saved</p>}
@@ -400,11 +403,11 @@ export default function SiteSettingsPanel({
                 onBlur={(e) => handleProfileTextSave("writingVoice", e.target.value)}
                 disabled={isPending}
                 rows={4}
-                placeholder="How this artist writes — e.g. warm, first-person, playful…"
+                placeholder={`How this ${client} writes — e.g. warm, first-person, playful…`}
                 className={inputCls}
               />
               <p className="mt-1 text-xs text-neutral-400">
-                Used when a campaign mail is translated into French, so it reads in this artist&apos;s voice.
+                Used when a campaign mail is translated into French, so it reads in this {client}&apos;s voice.
               </p>
               {savedField === "writingVoice" && <p className="mt-1 text-xs text-green-600">Saved</p>}
             </div>
@@ -450,7 +453,7 @@ export default function SiteSettingsPanel({
                   <>
                     <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
                       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-600">
-                        Stripe Mode (this artist's buyers)
+                        Stripe Mode (this {client}&apos;s buyers)
                       </p>
                       <select
                         value={artist.stripeMode}
@@ -463,7 +466,7 @@ export default function SiteSettingsPanel({
                       </select>
                       {artist.stripeMode === "LIVE" && (
                         <p className="mt-2 text-xs font-medium text-amber-700">
-                          ⚠ This artist is live. Real cards will be charged.
+                          ⚠ This {client} is live. Real cards will be charged.
                         </p>
                       )}
 
@@ -594,7 +597,7 @@ export default function SiteSettingsPanel({
                       other documents can pull just the piece they need
                       (e.g. the Certificate of Authenticity's signature
                       block needs only Postcode + Country). */}
-                  <label className={labelCls}>Artist address (for invoices)</label>
+                  <label className={labelCls}>{words.client} address (for invoices)</label>
                   <textarea
                     key={`owner-address-line1-${artist.id}`}
                     defaultValue={artist.addressLine1 || ""}

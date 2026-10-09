@@ -104,13 +104,13 @@ export async function getInvoiceEmailDraft(
   if (!purchase) return { error: "Sale not found." };
 
   const isGallery = isGalleryLocationSale(purchase);
-  if (isGallery && !purchase.customer) return { error: "No gallery is linked to this sale." };
+  if (isGallery && !purchase.customer) return { error: "No location is linked to this sale." };
 
   const recipient = recipientForPurchase(purchase);
   if (!recipient) {
     return {
       error: isGallery
-        ? "This gallery has no email address on file — add one on the Details tab first."
+        ? "This location has no email address on file — add one on the Details tab first."
         : "This sale has no buyer email on file.",
     };
   }
@@ -177,7 +177,7 @@ export async function sendInvoiceEmail(
 
   const isGallery = isGalleryLocationSale(purchase);
   if (isGallery && !purchase.customer) {
-    return { ok: false, error: "No gallery is linked to this sale." };
+    return { ok: false, error: "No location is linked to this sale." };
   }
 
   const recipient = recipientForPurchase(purchase);
@@ -185,7 +185,7 @@ export async function sendInvoiceEmail(
     return {
       ok: false,
       error: isGallery
-        ? "This gallery has no email address on file."
+        ? "This location has no email address on file."
         : "This sale has no buyer email on file.",
     };
   }

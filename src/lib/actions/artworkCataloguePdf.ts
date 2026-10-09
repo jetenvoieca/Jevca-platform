@@ -8,12 +8,14 @@ import {
   buildArtworkOrderBy,
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
+import { catalogueFileName, clientWords, type ClientKind } from "@/lib/clientKind";
 
 // The shared catalogue filters (lib/artworkFilters.ts — the same ones
 // the on-screen grid uses), plus this export's own header wording.
 export type CatalogueExportFilters = ArtworkFilterInput & {
   // Editable per-export, via ExportPdfDialog.tsx (2026-08-17) — default
-  // to the artist's real name / "Artwork Catalogue" when absent, so one
+  // to the client's real name / "Artwork Catalogue" (or "Product
+  // Catalogue" for a brand) when absent, so one
   // export flow covers whatever this particular PDF is for instead of
   // needing several near-identical hard-coded templates.
   headerTitle?: string;
@@ -87,7 +89,7 @@ function layoutTextLines(
 // for the true original.
 export async function generateArtworkCataloguePdf(
   artistId: string,
-  artistName: string,
+  artist: { name: string; kind: ClientKind },
   filters: CatalogueExportFilters
 ): Promise<{ bytes: Uint8Array; filename: string }> {
   const where = buildArtworkWhere(artistId, filters);
@@ -140,8 +142,9 @@ export async function generateArtworkCataloguePdf(
   let page!: PDFPage;
   let y = 0;
 
-  const headerTitle = filters.headerTitle?.trim() || artistName;
-  const headerSubtitle = filters.headerSubtitle ?? "Artwork Catalogue";
+  const words = clientWords(artist.kind);
+  const headerTitle = filters.headerTitle?.trim() || artist.name;
+  const headerSubtitle = filters.headerSubtitle ?? words.catalogue;
   const filterSummary = describeFilters(filters, curation?.name ?? null);
 
   const drawHeader = () => {
@@ -277,7 +280,7 @@ export async function generateArtworkCataloguePdf(
   }
 
   if (artworks.length === 0) {
-    page.drawText("No artworks match the current filters.", {
+    page.drawText(`No ${words.items.toLowerCase()} match the current filters.`, {
       x: margin,
       y,
       size: 11,
@@ -287,8 +290,7 @@ export async function generateArtworkCataloguePdf(
   }
 
   const bytes = await doc.save();
-  const dateStamp = new Date().toISOString().slice(0, 10);
-  return { bytes, filename: `artwork-catalogue-${dateStamp}.pdf` };
+  return { bytes, filename: catalogueFileName(artist.kind, "pdf") };
 }
 
 function buildTextLines(a: {

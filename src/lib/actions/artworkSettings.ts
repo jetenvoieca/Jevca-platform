@@ -39,6 +39,7 @@ export async function getArtworkSettings(artistId: string) {
     db.artist.findUnique({
       where: { id: artistId },
       select: {
+        kind: true,
         mediumPresets: true,
         sizePresets: true,
         saleSources: true,
@@ -49,8 +50,11 @@ export async function getArtworkSettings(artistId: string) {
     db.artworkType.findMany({ where: { artistId }, orderBy: { name: "asc" } }),
     listLocations(artistId),
   ]);
+  if (!artist) throw new Error("Artist not found.");
 
   return {
+    // Artist or brand — decides the wording (lib/clientKind.ts).
+    clientKind: artist.kind,
     artworkTypes: artworkTypeRows.map((t) => t.name),
     artworkTypeRecords: artworkTypeRows.map((t) => ({
       id: t.id,
@@ -58,11 +62,11 @@ export async function getArtworkSettings(artistId: string) {
       refValue: t.refValue.toString(),
     })),
     locations: locations as LocationSummary[],
-    mediumPresets: artist?.mediumPresets ?? [],
-    sizePresets: artist?.sizePresets ?? [],
-    saleSources: artist?.saleSources ?? [],
-    paymentMethods: artist?.paymentMethods ?? [],
-    defaultInstalmentCount: artist?.defaultInstalmentCount ?? 5,
+    mediumPresets: artist.mediumPresets,
+    sizePresets: artist.sizePresets,
+    saleSources: artist.saleSources,
+    paymentMethods: artist.paymentMethods,
+    defaultInstalmentCount: artist.defaultInstalmentCount,
   };
 }
 

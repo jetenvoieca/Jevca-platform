@@ -20,6 +20,7 @@ import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
 import HopperCropEditor from "@/components/HopperCropEditor";
 import { computeReferencePrice } from "@/lib/pricing";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 export type HopperItem = {
   id: string;
@@ -104,6 +105,7 @@ export default function HopperView({
   // artwork" — see the note by that button in SortingCard.
   artworkSettings: ArtworkSettings;
 }) {
+  const words = useClientWords();
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -403,7 +405,7 @@ export default function HopperView({
     }
     setAddError(null);
     const finalTitle = ((fields.get("catalogueName") as string) || "").trim() || "Untitled";
-    logProcessed(item, `New artwork: ${finalTitle}`, `${resolvedBasePath}/artworks?selected=${result.artwork.id}`);
+    logProcessed(item, `New ${words.item.toLowerCase()}: ${finalTitle}`, `${resolvedBasePath}/artworks?selected=${result.artwork.id}`);
     advanceAfterAction();
     return true;
   };
@@ -926,6 +928,7 @@ function SortingCard({
   // the page re-fetches the item's new image URLs.
   onImageChanged: () => void;
 }) {
+  const words = useClientWords();
   const [showCropEditor, setShowCropEditor] = useState(false);
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
@@ -1022,7 +1025,7 @@ function SortingCard({
             disabled={isPending || showManageForm}
             className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
           >
-            Manage Artwork
+            Manage {words.item}
           </button>
           <button
             type="button"
@@ -1033,7 +1036,7 @@ function SortingCard({
             disabled={isPending || showQuickForm}
             className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
           >
-            Create new artwork
+            Create new {words.item.toLowerCase()}
           </button>
           {item.kind === "PHOTO" && (
             <button
@@ -1100,6 +1103,7 @@ function ManageArtworkPanel({
     relatedName: string
   ) => void;
 }) {
+  const words = useClientWords();
   const [selected, setSelected] = useState<{ id: string; catalogueName: string } | null>(
     null
   );
@@ -1109,7 +1113,7 @@ function ManageArtworkPanel({
   return (
     <div className="mt-4 space-y-4 rounded-md border border-neutral-300 p-4">
       <div>
-        <label className="mb-1 block text-sm font-medium text-neutral-700">Name of artwork</label>
+        <label className="mb-1 block text-sm font-medium text-neutral-700">Name of {words.item.toLowerCase()}</label>
         {selected ? (
           <button
             type="button"
@@ -1124,7 +1128,7 @@ function ManageArtworkPanel({
             artistId={artistId}
             mode="single"
             variant="button"
-            label="Choose artwork…"
+            label={`Choose ${words.item.toLowerCase()}…`}
             onSelect={(artworks) => {
               if (artworks[0]) {
                 setSelected({ id: artworks[0].id, catalogueName: artworks[0].catalogueName });

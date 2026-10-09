@@ -72,7 +72,7 @@ export default function MailTemplateEditor({
         </FineTuneSection>
 
         <p className="text-xs text-neutral-400">
-          Every mail ends with the artist&apos;s name and address, a link to their website and
+          Every mail ends with the artist&apos;s or brand&apos;s name and address, a link to their website and
           an unsubscribe link. A Button&apos;s text, link and colours, and all content, are set
           in each mail.
         </p>

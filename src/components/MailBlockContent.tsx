@@ -18,6 +18,7 @@ import RichTextField from "@/components/RichTextField";
 import MediaPicker from "@/components/MediaPicker";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import { ColourControl } from "@/components/layoutControls";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 // A campaign mail component's content, typed straight into the
 // component in the mail's editor (2026-10-08, from Craig's mockup: the
@@ -272,6 +273,7 @@ function PictureSlot({
   onPick: (picture: MailPicture) => void;
   onRemove: () => void;
 }) {
+  const words = useClientWords();
   if (picture) {
     return (
       <Filled
@@ -300,7 +302,7 @@ function PictureSlot({
       <ArtworkPicker
         artistId={pickers.artistId}
         variant="button"
-        label="Artwork"
+        label={words.item}
         allowCreate={false}
         onSelect={(artworks) => {
           const a = artworks[0];
@@ -314,7 +316,7 @@ function PictureSlot({
   );
 }
 
-// The Artwork Feature's artwork: its picture and name with ✕, or an
+// The Feature's artwork or product: its picture and name with ✕, or an
 // empty slot to choose one.
 function ArtworkSlot({
   artworkId,
@@ -325,13 +327,14 @@ function ArtworkSlot({
   pickers: PickerContext;
   onChange: (artworkId: string | null) => void;
 }) {
+  const words = useClientWords();
   if (artworkId) {
     const thumb = pickers.thumbs[pictureKey({ kind: "artwork", id: artworkId })];
     return (
       <div className="flex items-center gap-3">
         <Filled thumb={thumb} className="aspect-square w-1/3" onRemove={() => onChange(null)} />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm text-neutral-800">{thumb?.label || "Artwork"}</p>
+          <p className="truncate text-sm text-neutral-800">{thumb?.label || words.item}</p>
           <p className="text-xs text-neutral-400">
             Shows its image, name, type, size, medium and price.
           </p>
@@ -344,7 +347,7 @@ function ArtworkSlot({
       <ArtworkPicker
         artistId={pickers.artistId}
         variant="button"
-        label="Choose an artwork"
+        label={`Choose the ${words.item.toLowerCase()}`}
         allowCreate={false}
         onSelect={(artworks) => {
           const a = artworks[0];

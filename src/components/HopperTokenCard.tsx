@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { regenerateHopperToken } from "@/lib/actions";
+import { clientWords, type ClientKind } from "@/lib/clientKind";
 
 // The Hopper token box — split out of the old SiteSettingsPanel
 // (2026-09-12), same reasoning as the other cards. Fully self-contained
@@ -10,10 +11,12 @@ import { regenerateHopperToken } from "@/lib/actions";
 // simplest of the four.
 export default function HopperTokenCard({
   artistId,
+  kind,
   hopperToken,
   className = "",
 }: {
   artistId: string;
+  kind: ClientKind;
   hopperToken: string;
   className?: string;
 }) {
@@ -21,6 +24,7 @@ export default function HopperTokenCard({
   const [regeneratingToken, setRegeneratingToken] = useState(false);
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
+  const client = clientWords(kind).client.toLowerCase();
 
   const handleCopyToken = async (token: string) => {
     await navigator.clipboard.writeText(token);
@@ -31,7 +35,7 @@ export default function HopperTokenCard({
   const handleRegenerateToken = () => {
     if (
       !confirm(
-        "Regenerate this artist's Hopper token? Any copy of their iPhone Shortcut still using the old token will stop working until it's updated with the new one."
+        `Regenerate this ${client}'s Hopper token? Any copy of their iPhone Shortcut still using the old token will stop working until it's updated with the new one.`
       )
     ) {
       return;
@@ -50,7 +54,7 @@ export default function HopperTokenCard({
         Hopper Token
       </p>
       <p className="mb-2 text-xs text-neutral-400">
-        Paste this into this artist&apos;s copy of the iPhone Shortcut, so photos and video they
+        Paste this into this {client}&apos;s copy of the iPhone Shortcut, so photos and video they
         share land in their Hopper.
       </p>
       <div className="flex items-center gap-2">

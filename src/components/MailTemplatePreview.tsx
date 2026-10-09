@@ -55,12 +55,12 @@ export default function MailTemplatePreview({ layout }: { layout: MailTemplateLa
   );
 }
 
-// The footer every mail ends with: the artist's name and address, their
+// The footer every mail ends with: the artist's or brand's name and address, their
 // website and the unsubscribe link.
 export function MailFooterPlaceholder() {
   return (
     <div className="mt-8 border-t border-neutral-200 pt-4 text-center text-xs leading-5 text-neutral-400">
-      <p>Artist name · Address</p>
+      <p>Name · Address</p>
       <p className="underline">Website</p>
       <p className="underline">Unsubscribe</p>
     </div>

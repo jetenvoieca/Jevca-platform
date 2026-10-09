@@ -3,6 +3,7 @@ import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SettingsListCard from "@/components/SettingsListCard";
 import ArtworkTypesCard from "@/components/ArtworkTypesCard";
 import LocationsCard from "@/components/LocationsCard";
+import { clientWords } from "@/lib/clientKind";
 
 export default async function ArtworkSettingsPage({
   params,
@@ -13,13 +14,14 @@ export default async function ArtworkSettingsPage({
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
   const settings = await getArtworkSettings(artistId);
+  const words = clientWords(settings.clientKind);
 
   return (
     <div className="p-6">
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Settings</h1>
       <p className="mb-6 text-sm text-neutral-500">
-        Manage the Type, Location, Medium and Size options offered across the Artwork
-        Catalogue. Shared across all of this artist&apos;s sites.
+        Manage the Type, Location, Medium and Size options offered across the {words.catalogue}.
+        Shared across all of this {words.client.toLowerCase()}&apos;s sites.
       </p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -61,7 +63,7 @@ export default async function ArtworkSettingsPage({
           siteId={id}
           field="paymentMethods"
           title="Payment Methods"
-          description="Offered in the Method dropdown when marking a gallery sale as paid."
+          description={`Offered in the Method dropdown when marking a ${words.location.toLowerCase()} sale as paid.`}
           options={settings.paymentMethods}
           placeholder="e.g. Bank transfer, Cash…"
         />

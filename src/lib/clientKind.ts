@@ -42,6 +42,12 @@ export function clientWords(kind: ClientKind): ClientWords {
   return WORDS[kind];
 }
 
+// e.g. "product-catalogue-2026-10-09.pdf" — for catalogue exports.
+export function catalogueFileName(kind: ClientKind, extension: string): string {
+  const stamp = new Date().toISOString().slice(0, 10);
+  return `${WORDS[kind].catalogue.toLowerCase().replace(/ /g, "-")}-${stamp}.${extension}`;
+}
+
 // For values arriving from a form — anything unrecognised is null, never
 // silently treated as one kind or the other.
 export function parseClientKind(value: unknown): ClientKind | null {

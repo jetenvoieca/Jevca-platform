@@ -9,6 +9,7 @@ import {
   type LocationSummary,
   type LocationType,
 } from "@/lib/actions/locations";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 // Same card shape/styling as SettingsListCard and ArtworkTypesCard, but
 // each row also carries a Type (2026-09-22) — Gallery (third-party) or
@@ -33,6 +34,7 @@ export default function LocationsCard({
   siteId: string;
   locations: LocationSummary[];
 }) {
+  const words = useClientWords();
   const [isPending, startTransition] = useTransition();
   const formRef = useRef<HTMLFormElement>(null);
   const [newType, setNewType] = useState<LocationType>("GALLERY");
@@ -75,9 +77,10 @@ export default function LocationsCard({
         Locations
       </h3>
       <p className="mb-3 text-xs text-neutral-500">
-        Offered in the Location dropdown, and where "Sold" routes to. Gallery = a third-party
-        gallery (its own contact details, commission, consigned works). Own = anywhere you keep
-        your own stock (studio, storage, framer) — no commission. Change the Type here any time —
+        Offered in the Location dropdown, and where "Sold" routes to. {words.location} = a
+        third-party {words.location.toLowerCase()} (its own contact details, commission, consigned{" "}
+        {words.items.toLowerCase()}). Own = anywhere you keep your own stock (studio, storage,
+        framer) — no commission. Change the Type here any time —
         it isn't locked in once a Location is created.
       </p>
 
@@ -104,7 +107,7 @@ export default function LocationsCard({
                   : "bg-neutral-200 text-neutral-600"
               }`}
             >
-              <option value="GALLERY">Gallery</option>
+              <option value="GALLERY">{words.location}</option>
               <option value="OWN">Own</option>
             </select>
             <button
@@ -148,7 +151,7 @@ export default function LocationsCard({
           onChange={(e) => setNewType(e.target.value as LocationType)}
           className="rounded-md border border-neutral-300 bg-white px-2 py-2 text-sm"
         >
-          <option value="GALLERY">Gallery</option>
+          <option value="GALLERY">{words.location}</option>
           <option value="OWN">Own</option>
         </select>
         <button

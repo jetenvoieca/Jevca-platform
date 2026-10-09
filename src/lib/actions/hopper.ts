@@ -250,7 +250,7 @@ export async function createArtworkFromHopperQuick(
       needsReview: true,
     });
   } catch {
-    return { ok: false, error: "Couldn't create the artwork. Try again." };
+    return { ok: false, error: "Couldn't create the catalogue entry. Try again." };
   }
 
   await db.$transaction(async (tx) => {

@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateArtist } from "@/lib/actions";
 import { toArtistFormFields, buildArtistFormData, type ArtistRecord } from "@/lib/clientPanelTypes";
+import { clientWords } from "@/lib/clientKind";
 import {
   updateArtistPaymentMethod,
   updateStripeSubscriptionCustomerId,
@@ -56,6 +57,7 @@ export default function SubscriptionCard({
   const [addingPayment, setAddingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
   const router = useRouter();
+  const client = clientWords(artist.kind).client.toLowerCase();
 
   const flash = (field: "subscriptionAmount" | "stripeId") => {
     setSavedField(field);
@@ -182,8 +184,8 @@ export default function SubscriptionCard({
             className={`${inputCls} font-mono`}
           />
           <p className="mt-1 text-xs text-neutral-400">
-            From the platform Stripe account (separate from this artist&apos;s own Stripe Mode) —
-            paste it in once to link this artist to their subscription.
+            From the platform Stripe account (separate from this {client}&apos;s own Stripe Mode)
+            — paste it in once to link this {client} to their subscription.
           </p>
           {artist.stripeSubscriptionStatus && (
             <p className="mt-2 text-xs">

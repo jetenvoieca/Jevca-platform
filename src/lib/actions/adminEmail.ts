@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { clientWords } from "@/lib/clientKind";
 import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import type { Mailbox } from "@/lib/email";
@@ -46,7 +47,7 @@ export async function getComposeRecipients(): Promise<ComposeRecipient[]> {
   const [artists, customers] = await Promise.all([
     db.artist.findMany({
       where: { email: { not: null }, status: { not: "ARCHIVED" } },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, kind: true, email: true },
       orderBy: { name: "asc" },
     }),
     db.customer.findMany({
@@ -66,7 +67,7 @@ export async function getComposeRecipients(): Promise<ComposeRecipient[]> {
 
   const artistRecipients: ComposeRecipient[] = artists
     .filter((a): a is typeof a & { email: string } => !!a.email)
-    .map((a) => ({ label: `${a.name} (artist)`, email: a.email, artistId: a.id, customerId: null }));
+    .map((a) => ({ label: `${a.name} (${clientWords(a.kind).client.toLowerCase()})`, email: a.email, artistId: a.id, customerId: null }));
 
   // flatMap rather than map+filter(Boolean) (2026-09-05 build fix) —
   // returning [] to skip a customer with no email keeps every element

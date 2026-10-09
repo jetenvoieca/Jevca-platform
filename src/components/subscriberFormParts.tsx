@@ -6,6 +6,7 @@ import type {
   SubscriberSource,
   SubscriberStatus,
 } from "@/lib/actions/subscribers";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 // Shared pieces of the Subscribers page (2026-10-08) — its three windows
 // (Add subscriber, Import CSV, Add from Customers) and its details panel.
@@ -35,7 +36,7 @@ export const SOURCE_LABEL: Record<SubscriberSource, string> = {
   WEBSITE: "Website sign-up",
 };
 
-// "" in the select = the artist's own default language.
+// "" in the select = the artist's or brand's own default language.
 export function LanguageSelect({
   value,
   onChange,
@@ -45,6 +46,7 @@ export function LanguageSelect({
   onChange: (value: SubscriberLanguage | null) => void;
   disabled?: boolean;
 }) {
+  const words = useClientWords();
   return (
     <select
       value={value ?? ""}
@@ -52,7 +54,7 @@ export function LanguageSelect({
       disabled={disabled}
       className={inputCls}
     >
-      <option value="">Artist default</option>
+      <option value="">{words.client} default</option>
       <option value="EN">English</option>
       <option value="FR">French</option>
     </select>

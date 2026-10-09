@@ -18,6 +18,7 @@ import {
 import { computeReferencePrice } from "@/lib/pricing";
 import { CURRENCIES } from "@/lib/currencies";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
+import { useClientWords } from "@/components/ClientWordsProvider";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 
@@ -137,6 +138,7 @@ export default function ArtworkDetailPanel({
   // thing showing and closing it is the only way back.
   showCloseButton?: boolean;
 }) {
+  const words = useClientWords();
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   // Live state for Type/Size (2026-08-28) — needed for the Reference
@@ -197,13 +199,13 @@ export default function ArtworkDetailPanel({
           .prompt(
             currentName
               ? `"${currentName}" isn't a saved Location yet. Name it:`
-              : "Where is this piece going? (a gallery, or your own studio/storage):",
+              : `Where is this piece going? (a ${words.location.toLowerCase()}, or your own studio/storage):`,
             currentName
           )
           ?.trim();
         if (!name) return;
         const isGallery = window.confirm(
-          `Is "${name}" a Gallery you consign to?\n\nOK = Gallery\nCancel = Own (e.g. your studio)`
+          `Is "${name}" a ${words.location} you consign to?\n\nOK = ${words.location}\nCancel = Own (e.g. your studio)`
         );
         const result = await createLocation(artistId, siteId, name, isGallery ? "GALLERY" : "OWN");
         if ("error" in result) {
@@ -315,7 +317,7 @@ export default function ArtworkDetailPanel({
   // created at all.
   const handleAddLocation = async (name: string) => {
     const isGallery = window.confirm(
-      `Is "${name}" a Gallery you consign to?\n\nOK = Gallery\nCancel = Own (e.g. your studio)`
+      `Is "${name}" a ${words.location} you consign to?\n\nOK = ${words.location}\nCancel = Own (e.g. your studio)`
     );
     const type = isGallery ? "GALLERY" : "OWN";
     setLocationTypes((prev) => new Map(prev).set(name, type));

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { updatePaymentDefaults } from "@/lib/actions/artworkSettings";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 export default function PaymentDefaultsCard({
   artistId,
@@ -16,6 +17,7 @@ export default function PaymentDefaultsCard({
   defaultReleaseMessage: string;
   defaultReleaseTriggerCount: number;
 }) {
+  const words = useClientWords();
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
 
@@ -23,8 +25,8 @@ export default function PaymentDefaultsCard({
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
       <h3 className="mb-1 text-sm font-medium text-neutral-900">Payments defaults</h3>
       <p className="mb-4 text-xs text-neutral-500">
-        Starting point for every new Payment plan — each artwork can still override these
-        individually.
+        Starting point for every new Payment plan — each {words.item.toLowerCase()} can still
+        override these individually.
       </p>
       <form
         action={(formData) => {

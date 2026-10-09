@@ -190,7 +190,7 @@ export default function PlatformExpensesView({
       </div>
       <p className="mb-4 text-sm text-neutral-500">
         Your own costs running the platform — hosting, domains, software. Separate from what
-        each artist spends (that lives on their own Purchases page).
+        each artist or brand spends (that lives on their own Purchases page).
       </p>
 
       {importing && (

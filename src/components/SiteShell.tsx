@@ -6,6 +6,7 @@ import AppShell from "@/components/AppShell";
 import { publishSite } from "@/lib/actions/siteSnapshot";
 import { buildSiteNavEntries, type SiteNavKey } from "@/lib/siteNav";
 import type { RecentSite } from "@/lib/recentSites";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 // Works out which nav item should be highlighted/open purely from the
 // current path — this shell is rendered once from the shared site
@@ -69,6 +70,7 @@ export default function SiteShell({
   children: ReactNode;
 }) {
   const pathname = usePathname();
+  const words = useClientWords();
 
   const navItems = buildSiteNavEntries({
     siteId,
@@ -79,6 +81,7 @@ export default function SiteShell({
     mediaNeedsReviewCount,
     salesEnabled,
     recentSites,
+    words,
   });
 
   return (

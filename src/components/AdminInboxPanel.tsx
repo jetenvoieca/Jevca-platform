@@ -1067,7 +1067,7 @@ export default function AdminInboxPanel({
             onChange={(e) => handleLeftFilterChange(e.target.value)}
             className={`${inputCls} min-w-0 flex-1`}
           >
-            <option value="">All artists</option>
+            <option value="">All owners</option>
             {artistOptions.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}
@@ -1257,7 +1257,7 @@ export default function AdminInboxPanel({
           onChange={(e) => handleRightFilterChange(e.target.value)}
           className={`${inputCls} mb-3`}
         >
-          <option value="">All artists</option>
+          <option value="">All owners</option>
           {artistOptions.map((a) => (
             <option key={a.id} value={a.id}>
               {a.name}

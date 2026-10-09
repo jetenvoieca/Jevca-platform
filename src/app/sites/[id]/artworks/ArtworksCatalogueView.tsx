@@ -17,6 +17,7 @@ import ArtworkDetailPanel, {
 import { artworkMatchesFilters } from "@/lib/artworkFilters";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import { useBackdropClose } from "@/lib/useBackdropClose";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 // Every filter the catalogue offers, in one shape — what the URL, the
 // grid fetches and the PDF/CSV exports all read from.
@@ -122,6 +123,7 @@ export default function ArtworksCatalogueView({
   // so the single "CSV" button opens a small choice popover instead of
   // going straight into the importer (2026-09-11, direct request).
   const [showCsvChoice, setShowCsvChoice] = useState(false);
+  const words = useClientWords();
   const [artworks, setArtworks] = useState<ArtworkListRow[]>(initialArtworks);
   const [total, setTotal] = useState(initialTotal);
   const [soldCount, setSoldCount] = useState(initialSoldCount);
@@ -507,7 +509,7 @@ export default function ArtworksCatalogueView({
             (2026-09-24) — see SOLD_AVAILABILITIES in
             lib/artworkFilters.ts. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold text-neutral-900">Artwork Catalogue</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900">{words.catalogue}</h1>
 
             <div className="flex items-center gap-3">
               <div className="flex gap-2">
@@ -886,7 +888,7 @@ export default function ArtworksCatalogueView({
       <ExportPdfDialog
         open={showExportDialog}
         defaultTitle={artistName}
-        defaultSubtitle="Artwork Catalogue"
+        defaultSubtitle={words.catalogue}
         onCancel={() => setShowExportDialog(false)}
         onExport={(headerTitle, headerSubtitle) => {
           setShowExportDialog(false);

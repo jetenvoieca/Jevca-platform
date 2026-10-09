@@ -20,7 +20,7 @@ export type ContentKind = CurationSectionType | "WORKS";
 const TEXT_KINDS: readonly ContentKind[] = ["TAGLINE", "DESCRIPTION", "TEXT"];
 
 // Which content each component takes (Craig's choice, 2026-10-07: match
-// by kind). Artwork Feature takes nothing yet.
+// by kind). Feature takes nothing yet.
 const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   header: TEXT_KINDS,
   text: TEXT_KINDS,

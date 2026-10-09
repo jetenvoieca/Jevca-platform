@@ -3,7 +3,7 @@ import "./globals.css";
 
 export const metadata: Metadata = {
   title: "JEVCA Studio",
-  description: "Artist website management platform",
+  description: "Artist and brand website management platform",
 };
 
 export default function RootLayout({

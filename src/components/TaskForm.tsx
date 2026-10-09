@@ -97,13 +97,13 @@ export default function TaskForm({
           </select>
         </div>
         <div>
-          <label className={labelCls}>Artist</label>
+          <label className={labelCls}>Owner</label>
           <select
             value={form.artistId}
             onChange={(e) => onChange({ artistId: e.target.value })}
             className={inputCls}
           >
-            <option value="">General (no artist)</option>
+            <option value="">General (no owner)</option>
             {artistOptions.map((a) => (
               <option key={a.id} value={a.id}>
                 {a.name}

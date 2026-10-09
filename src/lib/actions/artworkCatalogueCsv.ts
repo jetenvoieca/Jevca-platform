@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import Papa from "papaparse";
 import { publicMediaUrl } from "@/lib/r2";
 import { buildArtworkWhere, buildArtworkOrderBy, type ArtworkFilterInput } from "@/lib/artworkFilters";
+import { catalogueFileName } from "@/lib/clientKind";
 
 // CSV export (2026-09-11, direct request) — the counterpart to the
 // existing CSV import (artworkImport.ts). Deliberately the exact same
@@ -79,6 +80,6 @@ export async function generateArtworkCatalogueCsv(
     ],
   });
 
-  const dateStamp = new Date().toISOString().slice(0, 10);
-  return { csv, filename: `artwork-catalogue-${dateStamp}.csv` };
+  const artist = await db.artist.findUniqueOrThrow({ where: { id: artistId }, select: { kind: true } });
+  return { csv, filename: catalogueFileName(artist.kind, "csv") };
 }

@@ -1,5 +1,6 @@
 import type { AppShellNavEntry } from "@/components/SidebarNav";
 import { SITE_SECTION_COLOR } from "@/lib/siteNav";
+import type { ClientWords } from "@/lib/clientKind";
 
 export type PreviewNavKey = "artworks" | "hopper" | "galleries" | "sales" | "guides";
 
@@ -15,14 +16,16 @@ export function buildPreviewNavEntries({
   basePath,
   active,
   hopperCount,
+  words,
 }: {
   basePath: string;
   active: PreviewNavKey | null;
   hopperCount: number;
+  words: ClientWords;
 }): AppShellNavEntry[] {
   return [
     {
-      label: "Artworks",
+      label: words.items,
       section: true,
       key: "artworks",
       color: SITE_SECTION_COLOR,

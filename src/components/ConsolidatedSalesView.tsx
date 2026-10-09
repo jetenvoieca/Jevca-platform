@@ -70,8 +70,8 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
                       Artist/Artwork/Buyer/Date/Amount are each tightened
                       a little (also px-3 not px-4) and that room goes to
                       Status. */}
-                  <th className="w-[15%] px-3 py-1.5 font-medium">Artist</th>
-                  <th className="w-[20%] px-3 py-1.5 font-medium">Artwork</th>
+                  <th className="w-[15%] px-3 py-1.5 font-medium">Owner</th>
+                  <th className="w-[20%] px-3 py-1.5 font-medium">Artwork / Product</th>
                   <th className="w-[15%] px-3 py-1.5 font-medium">Buyer</th>
                   <th className="w-[12%] px-3 py-1.5 font-medium">Date</th>
                   <th className="w-[14%] px-3 py-1.5 font-medium">Amount</th>

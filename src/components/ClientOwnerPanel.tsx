@@ -43,7 +43,7 @@ export default function ClientOwnerPanel({
             defaultCurrency={site.defaultCurrency}
             subscriptionPayments={subscriptionPayments}
           />
-          <HopperTokenCard artistId={artist.id} hopperToken={artist.hopperToken} />
+          <HopperTokenCard artistId={artist.id} kind={artist.kind} hopperToken={artist.hopperToken} />
         </div>
       </div>
     </div>

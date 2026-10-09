@@ -92,10 +92,10 @@ export default async function AccountsPage() {
             </Link>
           </div>
           <p className="mb-6 text-sm text-neutral-500">
-            Subscription revenue by month — artists paying us. Stripe and manually-entered
+            Subscription revenue by month — artists and brands paying us. Stripe and manually-entered
             payments together. Totals are kept separate per currency rather than combined, since
-            converting between them isn&apos;t something to do silently. For artists&apos; own
-            sales to their buyers, see Consolidated Sales — for your own business costs, see
+            converting between them isn&apos;t something to do silently. For artists&apos; and
+            brands&apos; own sales to their buyers, see Consolidated Sales — for your own business costs, see
             Expenses.
           </p>
 

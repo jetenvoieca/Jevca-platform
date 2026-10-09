@@ -13,6 +13,7 @@ import {
 import { formatDate } from "@/lib/formatDate";
 import CustomerImportPanel from "@/components/CustomerImportPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 const STATUS_LABEL: Record<string, string> = {
   ACTIVE: "Active",
@@ -33,6 +34,7 @@ export default function CustomersView({
   artistId: string;
   customers: (CustomerSummary & { saleCount: number })[];
 }) {
+  const words = useClientWords();
   const [q, setQ] = useState("");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<CustomerDetail | null>(null);
@@ -321,7 +323,7 @@ export default function CustomersView({
                   disabled={isPending}
                   className={inputCls}
                 >
-                  <option value="">Use artist default</option>
+                  <option value="">Use {words.client.toLowerCase()} default</option>
                   <option value="EN">English</option>
                   <option value="FR">French</option>
                 </select>

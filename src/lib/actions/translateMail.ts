@@ -12,6 +12,7 @@ import {
 } from "@/lib/mailTranslation";
 import type { RichText } from "@/lib/richText";
 import type { CampaignMailInput } from "@/lib/actions/campaigns";
+import type { ClientKind } from "@/lib/clientKind";
 
 // A campaign mail's "Translate now" (2026-10-08): translates the English
 // of every part whose French is still empty (see lib/mailTranslation.ts)
@@ -33,9 +34,13 @@ const PIECE_NAMES: Record<string, string> = {
   cell: "a column of text",
 };
 
-// When an artist has no Writing voice of their own yet.
-const DEFAULT_VOICE =
-  "An artist writing to the people who follow their work: warm, personal and natural — never corporate or generic marketing-speak.";
+// When an artist or brand has no Writing voice of their own yet.
+const DEFAULT_VOICE: Record<ClientKind, string> = {
+  ARTIST:
+    "An artist writing to the people who follow their work: warm, personal and natural — never corporate or generic marketing-speak.",
+  BRAND:
+    "A brand writing to the people who follow it: warm, personal and natural — never corporate or generic marketing-speak.",
+};
 
 export async function translateMailToFrench(
   siteId: string,
@@ -46,7 +51,7 @@ export async function translateMailToFrench(
 
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { artist: { select: { name: true, writingVoice: true } } },
+    select: { artist: { select: { name: true, kind: true, writingVoice: true } } },
   });
   if (!site) return { error: "Site not found." };
 
@@ -58,7 +63,7 @@ export async function translateMailToFrench(
   });
   if (pieces.length === 0) return { error: "Everything with English already has French." };
 
-  const voice = site.artist.writingVoice?.trim() || DEFAULT_VOICE;
+  const voice = site.artist.writingVoice?.trim() || DEFAULT_VOICE[site.artist.kind];
   const system =
     `You translate ${site.artist.name}'s emails to their subscribers from English into French. ` +
     `Their voice: ${voice}\n\n` +

@@ -7,19 +7,18 @@ export async function GET(req: NextRequest) {
   const artistId = params.get("artistId");
   if (!artistId) return new Response("Missing artistId", { status: 400 });
 
-  const artist = await db.artist.findUnique({ where: { id: artistId }, select: { name: true } });
+  const artist = await db.artist.findUnique({ where: { id: artistId }, select: { name: true, kind: true } });
   if (!artist) return new Response("Artist not found", { status: 404 });
 
   try {
-    const { bytes, filename } = await generateArtworkCataloguePdf(artistId, artist.name, {
+    const { bytes, filename } = await generateArtworkCataloguePdf(artistId, artist, {
       q: params.get("q") || undefined,
       availability: params.get("availability") || undefined,
       location: params.get("location") || undefined,
       type: params.get("type") || undefined,
       curation: params.get("curation") || undefined,
       // Editable per-export override (2026-08-17) — defaults to the
-      // artist's real name / "Artwork Catalogue" when absent, same as
-      // before this existed.
+      // client's real name / catalogue name when absent.
       headerTitle: params.get("headerTitle") || undefined,
       headerSubtitle: params.get("headerSubtitle") || undefined,
     });
