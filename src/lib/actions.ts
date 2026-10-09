@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { randomUUID } from "crypto";
 import { generateUniqueEmailSlug } from "@/lib/emailSlug";
+import { parseClientKind } from "@/lib/clientKind";
 
 // ---- Reading data for the "Add New Site" picker ----
 
@@ -12,11 +13,11 @@ export async function getArtistsForPicker() {
   return db.artist.findMany({
     where: { status: { not: "ARCHIVED" } },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, kind: true },
   });
 }
 
-// ---- Create a new Site (and, if needed, a new Artist) ----
+// ---- Create a new Site (and, if needed, a new Artist or Brand) ----
 
 export type CreateSiteState = { error?: string };
 
@@ -27,15 +28,19 @@ export async function createSite(
   const siteName = (formData.get("siteName") as string)?.trim();
   const existingArtistId = (formData.get("artistId") as string) || "";
   const newArtistName = (formData.get("newArtistName") as string)?.trim() || "";
+  const newClientKind = parseClientKind(formData.get("newClientKind"));
 
   if (!siteName) {
     return { error: "Site name is required." };
   }
   if (existingArtistId && newArtistName) {
-    return { error: "Choose an existing artist OR type a new one — not both." };
+    return { error: "Choose an existing artist or brand OR type a new one — not both." };
   }
   if (!existingArtistId && !newArtistName) {
-    return { error: "Choose an existing artist, or type a new artist name to create one." };
+    return { error: "Choose an existing artist or brand, or type a new name to create one." };
+  }
+  if (newArtistName && !newClientKind) {
+    return { error: "Choose whether the new client is an Artist or a Brand." };
   }
 
   let artistId = existingArtistId;
@@ -46,7 +51,7 @@ export async function createSite(
     // Settings. See lib/emailSlug.ts for the sanitise/dedupe rules.
     const emailSlug = await generateUniqueEmailSlug(newArtistName);
     const newArtist = await db.artist.create({
-      data: { name: newArtistName, emailSlug },
+      data: { name: newArtistName, kind: newClientKind!, emailSlug },
     });
     artistId = newArtist.id;
   }

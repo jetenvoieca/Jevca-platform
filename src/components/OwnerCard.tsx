@@ -10,6 +10,7 @@ import {
   type ArtistRecord,
 } from "@/lib/clientPanelTypes";
 import { EMAIL_DOMAIN } from "@/lib/email";
+import { clientWords } from "@/lib/clientKind";
 
 const labelCls = "mb-1 block text-xs text-neutral-500";
 const inputCls =
@@ -75,6 +76,11 @@ export default function OwnerCard({
       <p className={cardTitleCls}>Owner</p>
 
       <div className="space-y-2">
+        {/* Artist or brand — chosen when the client was created, fixed after. */}
+        <div>
+          <label className={labelCls}>Type</label>
+          <p className="px-0.5 py-1.5 text-sm text-neutral-900">{clientWords(artist.kind).client}</p>
+        </div>
         <div>
           <label className={labelCls}>Name</label>
           <input

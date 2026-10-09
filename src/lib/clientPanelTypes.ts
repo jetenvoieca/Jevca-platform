@@ -6,6 +6,8 @@
 // — Turbopack rejected them from actions.ts with "Server Actions must be
 // async functions").
 
+import type { ClientKind } from "@/lib/clientKind";
+
 export type ArtistFormFields = {
   name: string;
   firstName: string;
@@ -81,6 +83,7 @@ export function buildSiteFormData(base: SiteFormFields, changes: Partial<SiteFor
 // nullable shape the database/Prisma actually returns.
 export type ArtistRecord = {
   id: string;
+  kind: ClientKind;
   name: string;
   firstName: string | null;
   email: string | null;

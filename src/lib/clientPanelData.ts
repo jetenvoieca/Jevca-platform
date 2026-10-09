@@ -43,6 +43,7 @@ export async function getClientPanelData(siteId: string): Promise<ClientPanelDat
     },
     artist: {
       id: site.artist.id,
+      kind: site.artist.kind,
       name: site.artist.name,
       firstName: site.artist.firstName,
       email: site.artist.email,

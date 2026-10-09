@@ -14,6 +14,14 @@ enum ArtistStatus {
   ARCHIVED
 }
 
+// Whether a client is an artist or a brand (2026-10-09). Chosen when the
+// client is created and fixed after. The wording the admin shows for
+// each (Artwork / Product, Gallery / Store…) is in lib/clientKind.ts.
+enum ClientKind {
+  ARTIST
+  BRAND
+}
+
 enum StripeMode {
   TEST
   LIVE
@@ -150,6 +158,8 @@ enum SubscriberSource {
 
 model Artist {
   id        String       @id @default(cuid())
+  // Artist or brand (2026-10-09) — see ClientKind.
+  kind      ClientKind   @default(ARTIST)
   name      String
   firstName String?
   email     String?
