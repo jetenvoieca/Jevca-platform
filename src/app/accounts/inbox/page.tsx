@@ -6,6 +6,7 @@ import { getOpenAlerts, overdueAlertArtistId } from "@/lib/alerts";
 import { getInboxList, getArtistFilterOptions } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
 import { getOpenTasks } from "@/lib/actions/tasks";
+import { parisToday } from "@/lib/parisTime";
 import { getPlatformTaskCategories } from "@/lib/actions/platformTaskSettings";
 import { getClientPanelDataForArtist } from "@/lib/clientPanelData";
 import type { Mailbox } from "@/lib/email";
@@ -73,6 +74,7 @@ export default async function InboxPage({
           initialList={list}
           showArchived={showArchived}
           initialTasks={tasks}
+          initialToday={parisToday()}
           initialAlerts={alerts.filter((a) => !artistId || a.artistId === artistId)}
           selectedAlertId={alertId || null}
           clientPanel={clientPanel}

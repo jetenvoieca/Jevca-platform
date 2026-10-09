@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { readableEmailText } from "@/lib/emailText";
+import { parisToday } from "@/lib/parisTime";
 
 // Tasks on the admin Inbox's Task view (2026-09-19, CRM Phase 2). An
 // open task has completedAt null; completing it sets completedAt, which
@@ -13,6 +14,10 @@ import { readableEmailText } from "@/lib/emailText";
 // adminEmail.ts) with the task's id; getTaskActivity below lists what was
 // sent and the replies that came back (see lib/emailThreading.ts), along
 // with the task's notes of what was done (2026-09-28, see TaskNote).
+//
+// Today (2026-10-09, direct request): a task can be marked Today, which
+// puts it in a tinted panel at the top of the open list until midnight
+// Paris time — see Task.todayOn and setTaskToday.
 
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -26,6 +31,7 @@ export type TaskItem = {
   artistId: string | null;
   artistName: string | null;
   completedAt: string | null; // ISO
+  todayOn: string | null; // "YYYY-MM-DD", Paris — in the Today panel only while it's today
 };
 
 // What the task form submits — every field a plain string (empty string
@@ -49,6 +55,7 @@ function toTaskItem(r: {
   category: string | null;
   artistId: string | null;
   completedAt: Date | null;
+  todayOn: Date | null;
   artist: { name: string } | null;
 }): TaskItem {
   return {
@@ -61,6 +68,7 @@ function toTaskItem(r: {
     artistId: r.artistId,
     artistName: r.artist?.name || null,
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
+    todayOn: r.todayOn ? r.todayOn.toISOString().slice(0, 10) : null,
   };
 }
 
@@ -129,6 +137,16 @@ export async function saveTask(
   const created = await db.task.create({ data, select: { id: true } });
   revalidatePath("/accounts/inbox");
   return { ok: true, id: created.id };
+}
+
+// Marks an open task Today (for today's date in Paris), or takes it off
+// with today = false.
+export async function setTaskToday(id: string, today: boolean): Promise<void> {
+  await db.task.updateMany({
+    where: { id, completedAt: null },
+    data: { todayOn: today ? new Date(`${parisToday()}T00:00:00.000Z`) : null },
+  });
+  revalidatePath("/accounts/inbox");
 }
 
 // Reinstates a completed task (2026-09-28, direct request — for one

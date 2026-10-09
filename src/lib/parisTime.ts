@@ -1,7 +1,7 @@
 // Campaign send times are always Paris time (Craig's choice, 2026-10-08),
-// whatever the computer's own clock is set to. These turn a Paris date
-// and time into the moment it stands for (stored in UTC), and back.
-// Plain module.
+// whatever the computer's own clock is set to, and so is the day a task is
+// marked Today for (2026-10-09). These turn a Paris date and time into the
+// moment it stands for (stored in UTC), and back. Plain module.
 
 const ZONE = "Europe/Paris";
 
@@ -58,4 +58,17 @@ export function formatParis(at: Date): string {
     minute: "2-digit",
     hourCycle: "h23",
   }).format(at);
+}
+
+// Today's date in Paris ("2026-11-14").
+export function parisToday(): string {
+  return dateToParis(new Date()).date;
+}
+
+// Milliseconds from now until the next midnight in Paris.
+export function msUntilParisMidnight(): number {
+  const [year, month, day] = parisToday().split("-").map(Number);
+  const tomorrow = new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+  const midnight = parisToDate(tomorrow, "00:00");
+  return midnight ? Math.max(0, midnight.getTime() - Date.now()) : 60_000;
 }

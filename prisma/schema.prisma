@@ -931,6 +931,11 @@ model Task {
   // never drift by a day across timezones.
   targetDate  DateTime? @db.Date
   category    String?
+  // The Paris date the task was marked Today for (2026-10-09). It sits in
+  // the tinted Today panel at the top of the list only while this is
+  // today's date, so the panel empties itself at midnight; null = never
+  // marked, or taken off with Not today.
+  todayOn     DateTime? @db.Date
 
   completedAt DateTime?
 

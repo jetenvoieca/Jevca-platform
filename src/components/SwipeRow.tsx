@@ -22,6 +22,10 @@ import { useRef, useState, type MouseEvent, type PointerEvent, type ReactNode } 
 // tap on a phone never flashes it. The row keeps touch-action: pan-y, so
 // scrolling the list still works normally; a gesture only becomes a
 // swipe once it's clearly sideways.
+//
+// `background` is the row's own colour (a Tailwind class) — it has to be
+// solid, as it covers the swipe buttons underneath; white unless the list
+// tints its rows (the Inbox's Today panel, 2026-10-09).
 
 export type SwipeAction = {
   label: string;
@@ -52,12 +56,14 @@ export default function SwipeRow({
   open,
   onOpenChange,
   busy = false,
+  background = "bg-white",
   children,
 }: {
   actions: SwipeAction[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   busy?: boolean;
+  background?: string;
   children: ReactNode;
 }) {
   const rowRef = useRef<HTMLDivElement>(null);
@@ -166,7 +172,7 @@ export default function SwipeRow({
       </div>
 
       <div
-        className={`relative touch-pan-y bg-white ${dragX === null ? "transition-transform duration-200" : ""}`}
+        className={`relative touch-pan-y ${background} ${dragX === null ? "transition-transform duration-200" : ""}`}
         style={{ transform: committed ? "translateX(-100%)" : `translateX(${x}px)` }}
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
