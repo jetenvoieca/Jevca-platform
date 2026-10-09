@@ -1,8 +1,10 @@
 import { createHash, randomInt } from "crypto";
 import { Resend } from "resend";
 import { db } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { artistCampaignAddresses } from "@/lib/email";
 import { renderCampaignMail } from "@/lib/campaignMailRender";
+import { DEFAULT_FOLLOW_UP, followUpDueAt, type FollowUpCondition } from "@/lib/campaignMails";
 import { unsubscribeHeaders, unsubscribePageUrl } from "@/lib/unsubscribe";
 import type { MailLanguage } from "@/lib/mailContent";
 
@@ -12,7 +14,9 @@ import type { MailLanguage } from "@/lib/mailContent";
 // start each one when its time comes — working out who gets which mail
 // — and then send it in batches through Resend until everyone has had
 // theirs. Each run works for a few seconds and stops; the next carries
-// on where it left off, so nothing depends on one long request.
+// on where it left off, so nothing depends on one long request. A
+// campaign's follow-up (step 4c) is started the same way when its day
+// comes, and sent in the same batches.
 // Server-only plain module.
 
 // Emails per Resend batch call (Resend allows up to 100; fewer keeps
@@ -185,17 +189,115 @@ async function startDueCampaigns(): Promise<void> {
   }
 }
 
-// Takes the next batch of one sending campaign's recipients for this run
-// (never one another run is working on).
+// ---------------------------------------------------------------------
+// Follow-ups (2026-10-09, step 4c)
+// ---------------------------------------------------------------------
+
+// Who a follow-up goes to, from what happened to the campaign's mail.
+// Anyone whose mail bounced or who marked it as spam is never included.
+const FOLLOW_UP_WHO: Record<FollowUpCondition, Prisma.CampaignRecipientWhereInput> = {
+  NOT_OPENED: { openedAt: null },
+  OPENED: { openedAt: { not: null } },
+  CLICKED: { clickedAt: { not: null } },
+  NOT_CLICKED: { clickedAt: null },
+};
+
+// Starts every follow-up whose day has come: chooses its recipients
+// (each in the language they got the campaign in; French ones skipped
+// if the follow-up has no French subject) in one step with marking it
+// started, so it's done once. One that can't go yet (no English
+// subject) says why, and goes once that's fixed.
+async function startDueFollowUps(): Promise<void> {
+  const waiting = await db.campaignMail.findMany({
+    where: { kind: "FOLLOW_UP", followUpStartedAt: null, campaign: { status: "SENT", sentAt: { not: null } } },
+    select: {
+      id: true,
+      campaignId: true,
+      followUpCondition: true,
+      followUpDays: true,
+      subjectEn: true,
+      subjectFr: true,
+      followUpError: true,
+      campaign: { select: { sentAt: true } },
+    },
+  });
+  const now = Date.now();
+  for (const mail of waiting) {
+    const days = mail.followUpDays ?? DEFAULT_FOLLOW_UP.days;
+    if (followUpDueAt(mail.campaign.sentAt!, days).getTime() > now) continue;
+
+    if (!mail.subjectEn?.trim()) {
+      const problem = "The follow-up mail has no English subject.";
+      if (mail.followUpError !== problem) {
+        await db.campaignMail.update({ where: { id: mail.id }, data: { followUpError: problem } });
+      }
+      continue;
+    }
+
+    const condition = mail.followUpCondition ?? DEFAULT_FOLLOW_UP.condition;
+    const chosen = await db.campaignRecipient.findMany({
+      where: {
+        campaignId: mail.campaignId,
+        status: "SENT",
+        mail: { kind: { in: ["PRINCIPAL", "ALTERNATIVE"] } },
+        bouncedAt: null,
+        complainedAt: null,
+        subscriber: { status: "SUBSCRIBED" },
+        ...FOLLOW_UP_WHO[condition],
+      },
+      select: { subscriberId: true, email: true, language: true },
+    });
+    const hasFrench = !!mail.subjectFr?.trim();
+
+    await db.$transaction(async (tx) => {
+      const { count } = await tx.campaignMail.updateMany({
+        where: { id: mail.id, followUpStartedAt: null },
+        data: { followUpStartedAt: new Date(), followUpError: null },
+      });
+      if (count !== 1) return;
+      for (let i = 0; i < chosen.length; i += 1000) {
+        await tx.campaignRecipient.createMany({
+          data: chosen.slice(i, i + 1000).map((r) => {
+            const skipped = languageOf(r.language) === "FR" && !hasFrench;
+            return {
+              campaignId: mail.campaignId,
+              mailId: mail.id,
+              subscriberId: r.subscriberId,
+              email: r.email,
+              language: r.language,
+              status: skipped ? "SKIPPED" : "PENDING",
+              error: skipped ? "No French subject" : null,
+            };
+          }),
+          skipDuplicates: true,
+        });
+      }
+    });
+  }
+}
+
+// ---------------------------------------------------------------------
+// Batches
+// ---------------------------------------------------------------------
+
+// Recipients waiting to be sent: those of a campaign that's sending, and
+// those of a follow-up that has started (its rows only exist once it
+// has).
+const SENDABLE: Prisma.CampaignRecipientWhereInput = {
+  status: "PENDING",
+  OR: [{ campaign: { status: "SENDING" } }, { mail: { kind: "FOLLOW_UP" } }],
+};
+
+// Takes the next batch of one campaign's waiting recipients for this run
+// (never one another run is working on), all for the same mail stage —
+// the campaign's own mails, or its follow-up.
 async function claimBatch(): Promise<{ campaignId: string; ids: string[] } | null> {
   const stale = new Date(Date.now() - CLAIM_MINUTES * 60_000);
   // (Both times are passed in, like every other date here, so the
   // database's own clock and time zone never come into it.)
   const next = await db.campaignRecipient.findFirst({
     where: {
-      status: "PENDING",
-      campaign: { status: "SENDING" },
-      OR: [{ claimedAt: null }, { claimedAt: { lt: stale } }],
+      AND: [SENDABLE, { OR: [{ claimedAt: null }, { claimedAt: { lt: stale } }] }],
     },
     orderBy: { createdAt: "asc" },
     select: { campaignId: true },
@@ -327,13 +429,24 @@ async function sendBatch(resend: Resend, batch: { campaignId: string; ids: strin
   );
 }
 
-// A sending campaign with no one left waiting is SENT.
+// A sending campaign with no one left waiting is SENT; so is a started
+// follow-up.
 async function finishCampaigns(): Promise<void> {
   const sending = await db.campaign.findMany({ where: { status: "SENDING" }, select: { id: true } });
   for (const { id } of sending) {
     const waiting = await db.campaignRecipient.count({ where: { campaignId: id, status: "PENDING" } });
     if (waiting === 0) {
       await db.campaign.updateMany({ where: { id, status: "SENDING" }, data: { status: "SENT", sentAt: new Date() } });
+    }
+  }
+  const followUps = await db.campaignMail.findMany({
+    where: { kind: "FOLLOW_UP", followUpStartedAt: { not: null }, followUpSentAt: null },
+    select: { id: true },
+  });
+  for (const { id } of followUps) {
+    const waiting = await db.campaignRecipient.count({ where: { mailId: id, status: "PENDING" } });
+    if (waiting === 0) {
+      await db.campaignMail.updateMany({ where: { id, followUpSentAt: null }, data: { followUpSentAt: new Date() } });
     }
   }
 }
@@ -350,6 +463,7 @@ export async function runCampaignSending(budgetMs: number): Promise<{ more: bool
   let error: string | undefined;
 
   await startDueCampaigns();
+  await startDueFollowUps();
   while (Date.now() < until) {
     const batch = await claimBatch();
     if (!batch) break;
@@ -364,7 +478,7 @@ export async function runCampaignSending(budgetMs: number): Promise<{ more: bool
   await finishCampaigns();
 
   const more =
-    (await db.campaignRecipient.count({ where: { status: "PENDING", campaign: { status: "SENDING" } } })) > 0 ||
+    (await db.campaignRecipient.count({ where: SENDABLE })) > 0 ||
     (await db.campaign.count({ where: { status: "SCHEDULED", scheduledAt: { lte: new Date() } } })) > 0;
   return { more, ...(error ? { error } : {}) };
 }

@@ -8,6 +8,7 @@ import {
   campaignMailOrder,
   cleanFollowUpDays,
   defaultShares,
+  followUpDueAt,
   isFollowUpCondition,
   principalShare,
   MAX_ALTERNATIVES,
@@ -51,10 +52,22 @@ export type CampaignMailData = {
   sharePercent: number | null;
   // The follow-up's condition and days (null for the other mails).
   followUp: { condition: FollowUpCondition; days: number } | null;
+  // How the follow-up's sending stands (null for the other mails), ISO
+  // times: when it's due (once the campaign has been sent), started,
+  // finished, and why it couldn't start yet. It can't change once
+  // started.
+  followUpSending: FollowUpSending | null;
   layout: MailTemplateLayout;
   content: MailContent;
   subject: Localized<string>;
   preview: Localized<string>;
+};
+
+export type FollowUpSending = {
+  dueAt: string | null;
+  startedAt: string | null;
+  sentAt: string | null;
+  error: string | null;
 };
 
 export type CampaignStatus = "DRAFT" | "SCHEDULED" | "SENDING" | "SENT";
@@ -106,6 +119,9 @@ const MAIL_SELECT = {
   sharePercent: true,
   followUpCondition: true,
   followUpDays: true,
+  followUpStartedAt: true,
+  followUpSentAt: true,
+  followUpError: true,
   layout: true,
   content: true,
   subjectEn: true,
@@ -144,6 +160,9 @@ type MailRow = {
   sharePercent: number | null;
   followUpCondition: FollowUpCondition | null;
   followUpDays: number | null;
+  followUpStartedAt: Date | null;
+  followUpSentAt: Date | null;
+  followUpError: string | null;
   layout: unknown;
   content: unknown;
   subjectEn: string | null;
@@ -152,8 +171,11 @@ type MailRow = {
   previewFr: string | null;
 };
 
-function toMailData(row: MailRow): CampaignMailData {
+// `campaignSentAt`: when the campaign finished sending, from which the
+// follow-up's day is counted.
+function toMailData(row: MailRow, campaignSentAt: Date | null): CampaignMailData {
   const layout = normalizeMailTemplate(row.layout);
+  const days = row.followUpDays ?? DEFAULT_FOLLOW_UP.days;
   return {
     id: row.id,
     kind: row.kind,
@@ -164,7 +186,16 @@ function toMailData(row: MailRow): CampaignMailData {
       row.kind === "FOLLOW_UP"
         ? {
             condition: row.followUpCondition ?? DEFAULT_FOLLOW_UP.condition,
-            days: row.followUpDays ?? DEFAULT_FOLLOW_UP.days,
+            days,
+          }
+        : null,
+    followUpSending:
+      row.kind === "FOLLOW_UP"
+        ? {
+            dueAt: campaignSentAt ? followUpDueAt(campaignSentAt, days).toISOString() : null,
+            startedAt: row.followUpStartedAt?.toISOString() ?? null,
+            sentAt: row.followUpSentAt?.toISOString() ?? null,
+            error: row.followUpError,
           }
         : null,
     layout,
@@ -175,14 +206,15 @@ function toMailData(row: MailRow): CampaignMailData {
 }
 
 // Each campaign's recipients counted by how their mail went, for the
-// campaigns that have started sending.
+// campaigns that have started sending (the follow-up's aren't counted:
+// this is the campaign's own sending).
 async function progressOf(rows: CampaignRow[]): Promise<Map<string, CampaignProgress>> {
   const started = rows.filter((r) => r.status === "SENDING" || r.status === "SENT").map((r) => r.id);
   const progress = new Map<string, CampaignProgress>();
   if (started.length === 0) return progress;
   const groups = await db.campaignRecipient.groupBy({
     by: ["campaignId", "status"],
-    where: { campaignId: { in: started } },
+    where: { campaignId: { in: started }, mail: { kind: { not: "FOLLOW_UP" } } },
     _count: { _all: true },
   });
   for (const id of started) progress.set(id, { sent: 0, skipped: 0, failed: 0, waiting: 0 });
@@ -199,7 +231,7 @@ async function progressOf(rows: CampaignRow[]): Promise<Map<string, CampaignProg
 
 function toSummary(row: CampaignRow, progress: Map<string, CampaignProgress>): CampaignSummary {
   const mails = row.mails
-    .map(toMailData)
+    .map((m) => toMailData(m, row.sentAt))
     .sort((a, b) => campaignMailOrder(a) - campaignMailOrder(b));
   return {
     id: row.id,
@@ -459,7 +491,10 @@ export async function setAlternativeShare(
   return { ok: true };
 }
 
-// Who the follow-up mail goes to, and how many days after the campaign.
+const FOLLOW_UP_SENT_MESSAGE = "The follow-up has been sent, so it can't change.";
+
+// Who the follow-up mail goes to, and how many days after the campaign —
+// until it starts sending.
 export async function setFollowUp(
   mailId: string,
   siteId: string,
@@ -467,10 +502,10 @@ export async function setFollowUp(
 ): Promise<Result> {
   if (!isFollowUpCondition(input.condition)) return { error: "Choose who the follow-up goes to." };
   const { count } = await db.campaignMail.updateMany({
-    where: { id: mailId, kind: "FOLLOW_UP", campaign: { siteId } },
+    where: { id: mailId, kind: "FOLLOW_UP", campaign: { siteId }, followUpStartedAt: null },
     data: { followUpCondition: input.condition, followUpDays: cleanFollowUpDays(input.days) },
   });
-  return count === 1 ? { ok: true } : { error: "Mail not found." };
+  return count === 1 ? { ok: true } : { error: FOLLOW_UP_SENT_MESSAGE };
 }
 
 // Saves a mail's layout, content, subject and preview text — each
@@ -486,7 +521,7 @@ export async function updateCampaignMail(
     where: {
       id: mailId,
       campaign: { siteId },
-      OR: [{ kind: "FOLLOW_UP" }, { campaign: { status: { in: EDITABLE } } }],
+      OR: [{ kind: "FOLLOW_UP", followUpStartedAt: null }, { campaign: { status: { in: EDITABLE } } }],
     },
     data: {
       layout,

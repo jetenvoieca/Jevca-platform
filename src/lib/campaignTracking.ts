@@ -34,7 +34,7 @@ export async function recordCampaignEvent(event: CampaignEvent): Promise<void> {
   const campaignId = event.tags.campaign;
   if (!campaignId) return;
 
-  const recipient = await findRecipient(event.emailId, campaignId, event.to[0]);
+  const recipient = await findRecipient(event.emailId, campaignId, event.tags.mail, event.to[0]);
   if (!recipient) return;
 
   const at = parseDate(event.type === "email.clicked" ? event.clickedAt : undefined) ?? parseDate(event.createdAt) ?? new Date();
@@ -93,16 +93,17 @@ export async function recordCampaignEvent(event: CampaignEvent): Promise<void> {
 
 // By Resend's id for the mail. Should Resend's event arrive before that
 // id is saved (it's saved just after the batch is accepted), by the
-// campaign and address instead — a campaign mails each address once.
-async function findRecipient(emailId: string, campaignId: string, to: string | undefined) {
+// mail and address instead — each mail goes to an address once (the
+// campaign's mail and its follow-up are two mails).
+async function findRecipient(emailId: string, campaignId: string, mailId: string | undefined, to: string | undefined) {
   const select = { id: true, subscriberId: true, resendEmailId: true } as const;
   const byId = emailId
     ? await db.campaignRecipient.findFirst({ where: { resendEmailId: emailId, campaignId }, select })
     : null;
   if (byId) return byId;
   const email = to?.trim().toLowerCase();
-  if (!email) return null;
-  const byAddress = await db.campaignRecipient.findFirst({ where: { campaignId, email }, select });
+  if (!email || !mailId) return null;
+  const byAddress = await db.campaignRecipient.findFirst({ where: { campaignId, mailId, email }, select });
   if (byAddress && !byAddress.resendEmailId && emailId) {
     await db.campaignRecipient.update({ where: { id: byAddress.id }, data: { resendEmailId: emailId } });
   }

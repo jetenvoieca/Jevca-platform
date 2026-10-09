@@ -6,6 +6,7 @@ import {
   getCampaignPeople,
   getCampaignResults,
   type CampaignResults as Results,
+  type FollowUpResults,
 } from "@/lib/actions/campaignResults";
 import {
   VERSION_COLOURS,
@@ -23,7 +24,9 @@ import { formatParisDate, formatParisDateTime } from "@/lib/parisTime";
 // Opened and Clicked, stacked by version with the count in each part and
 // the total below; then a row per version with its colour, Open, Click
 // and Conversion. Below that, the people who clicked and those who
-// opened but didn't click, by version, with a CSV download.
+// opened but didn't click, by version, with a CSV download. The
+// follow-up (step 4c) has its own row under the versions once it has
+// gone.
 
 type Stage = { key: "delivered" | "opened" | "clicked"; label: string };
 const STAGES: Stage[] = [
@@ -108,6 +111,7 @@ export default function CampaignResults({
         <>
           <StackedBars versions={versions} totals={totals} />
           <VersionRows versions={versions} />
+          {results.followUp && results.followUp.sent > 0 && <FollowUpRow followUp={results.followUp} />}
           <PeopleLists
             siteId={siteId}
             campaignId={campaignId}
@@ -200,6 +204,27 @@ function VersionRows({ versions }: { versions: VersionCounts[] }) {
       <p className="max-w-xl text-center text-xs text-neutral-400">
         Open = opened ÷ delivered · Click = clicked ÷ opened · Conversion = clicked ÷ sent. Opens read high
         (Apple Mail opens every mail), so compare versions on Conversion.
+      </p>
+    </div>
+  );
+}
+
+// The follow-up's own numbers (it isn't one of the versions compared).
+function FollowUpRow({ followUp }: { followUp: FollowUpResults }) {
+  const rates = versionRates(followUp);
+  return (
+    <div className="flex flex-col items-center gap-1 border-t border-neutral-200 pt-4">
+      <div className="flex flex-wrap items-center gap-2">
+        <div className={`${boxClass} w-52 gap-2 px-2 py-1`}>
+          <span className="h-5 w-8 shrink-0 rounded bg-neutral-400" />
+          <span className="flex-1 truncate text-right text-neutral-800">{followUp.label}</span>
+        </div>
+        <Rate label="Open" value={rates.open} />
+        <Rate label="Click" value={rates.click} />
+        <Rate label="Conversion" value={rates.conversion} />
+      </div>
+      <p className="text-xs text-neutral-500">
+        To: {followUp.who} · {followUp.sent} sent · {followUp.bounced} bounced · {followUp.complained} marked as spam
       </p>
     </div>
   );

@@ -1,17 +1,27 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { campaignMailLabel, campaignMailOrder } from "@/lib/campaignMails";
+import {
+  DEFAULT_FOLLOW_UP,
+  FOLLOW_UP_CONDITIONS,
+  campaignMailLabel,
+  campaignMailOrder,
+  type CampaignMailKind,
+} from "@/lib/campaignMails";
 import type { PeopleList, ResultPerson, VersionCounts } from "@/lib/campaignResults";
 
 // Marketing → Mail Campaigns → Results (2026-10-09, step 4b): the
 // numbers behind the chart, and the two people lists. Counted in the
 // database, so the size of a campaign doesn't matter. Scoped by site.
-// The follow-up isn't one of the versions compared, so it's left out.
+// The follow-up isn't one of the versions compared: its numbers are
+// given on their own (step 4c), with who it went to.
+
+export type FollowUpResults = VersionCounts & { who: string };
 
 export type CampaignResults = {
   sentAt: string | null;
   versions: VersionCounts[];
+  followUp: FollowUpResults | null;
 };
 
 export async function getCampaignResults(campaignId: string, siteId: string): Promise<CampaignResults | null> {
@@ -20,39 +30,49 @@ export async function getCampaignResults(campaignId: string, siteId: string): Pr
     select: {
       sentAt: true,
       startedAt: true,
-      mails: {
-        where: { kind: { in: ["PRINCIPAL", "ALTERNATIVE"] } },
-        select: { id: true, kind: true, position: true },
-      },
+      mails: { select: { id: true, kind: true, position: true, followUpCondition: true, followUpDays: true } },
     },
   });
   if (!campaign) return null;
 
   const counts = await db.campaignRecipient.groupBy({
     by: ["mailId"],
-    where: { campaignId, status: "SENT", mailId: { in: campaign.mails.map((m) => m.id) } },
+    where: { campaignId, status: "SENT" },
     _count: { _all: true, deliveredAt: true, openedAt: true, clickedAt: true, bouncedAt: true, complainedAt: true },
   });
   const byMail = new Map(counts.map((c) => [c.mailId, c._count]));
 
-  const versions = [...campaign.mails]
+  const countsOf = (m: { id: string; kind: CampaignMailKind; position: number }): VersionCounts => {
+    const c = byMail.get(m.id);
+    return {
+      mailId: m.id,
+      label: campaignMailLabel(m.kind, m.position),
+      sent: c?._all ?? 0,
+      delivered: c?.deliveredAt ?? 0,
+      opened: c?.openedAt ?? 0,
+      clicked: c?.clickedAt ?? 0,
+      bounced: c?.bouncedAt ?? 0,
+      complained: c?.complainedAt ?? 0,
+    };
+  };
+
+  const versions = campaign.mails
+    .filter((m) => m.kind !== "FOLLOW_UP")
     .sort((a, b) => campaignMailOrder(a) - campaignMailOrder(b))
-    .map((m) => {
-      const c = byMail.get(m.id);
-      return {
-        mailId: m.id,
-        label: campaignMailLabel(m.kind, m.position),
-        sent: c?._all ?? 0,
-        delivered: c?.deliveredAt ?? 0,
-        opened: c?.openedAt ?? 0,
-        clicked: c?.clickedAt ?? 0,
-        bounced: c?.bouncedAt ?? 0,
-        complained: c?.complainedAt ?? 0,
-      };
-    });
+    .map(countsOf);
+  const followUpMail = campaign.mails.find((m) => m.kind === "FOLLOW_UP");
+  const followUp = followUpMail
+    ? {
+        ...countsOf(followUpMail),
+        who: `${
+          FOLLOW_UP_CONDITIONS.find((c) => c.value === (followUpMail.followUpCondition ?? DEFAULT_FOLLOW_UP.condition))
+            ?.label
+        }, after ${followUpMail.followUpDays ?? DEFAULT_FOLLOW_UP.days} days`,
+      }
+    : null;
 
   const sentAt = campaign.sentAt ?? campaign.startedAt;
-  return { sentAt: sentAt ? sentAt.toISOString() : null, versions };
+  return { sentAt: sentAt ? sentAt.toISOString() : null, versions, followUp };
 }
 
 // Who clicked, or who opened but didn't click, newest first.

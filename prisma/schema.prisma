@@ -1965,7 +1965,8 @@ model CampaignList {
 
 // One person a campaign goes to (2026-10-08), made when sending starts:
 // which of the campaign's mails they get (by the mails' shares), in
-// which language, and how it went. SKIPPED: unsubscribed before their
+// which language, and how it went. Those the follow-up goes to get a
+// second row, for the follow-up mail, when it starts (2026-10-09). SKIPPED: unsubscribed before their
 // turn, or French with no French subject on their mail. `claimedAt`:
 // taken by a sending run, so two runs never send the same person.
 // `resendEmailId` matches Resend's events back to them.
@@ -2000,7 +2001,8 @@ model CampaignRecipient {
 
   createdAt DateTime @default(now())
 
-  @@unique([campaignId, subscriberId])
+  @@unique([mailId, subscriberId])
+  @@index([campaignId])
   @@index([campaignId, status])
   @@index([mailId])
   @@index([subscriberId])
@@ -2052,6 +2054,15 @@ model CampaignMail {
   sharePercent      Int?
   followUpCondition FollowUpCondition?
   followUpDays      Int?
+
+  // The follow-up's sending (2026-10-09, step 4c): it goes
+  // `followUpDays` after the campaign's `sentAt`. Started when its
+  // recipients are chosen (after which it can't change), sent when all
+  // have had it. `followUpError`: why it couldn't start yet (e.g. no
+  // English subject) — it starts once that's fixed.
+  followUpStartedAt DateTime?
+  followUpSentAt    DateTime?
+  followUpError     String?
 
   layout  Json @default("{}")
   content Json @default("{}")

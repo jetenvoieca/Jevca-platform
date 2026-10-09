@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { CampaignMailData } from "@/lib/actions/campaigns";
+import type { CampaignMailData, FollowUpSending } from "@/lib/actions/campaigns";
+import { formatParis } from "@/lib/parisTime";
 import {
   FOLLOW_UP_CONDITIONS,
   FOLLOW_UP_DAY_LIMITS,
@@ -15,7 +16,8 @@ import {
 // (2026-10-08, from Craig's mockup): click one to edit it. The principal
 // mail shows the share it gets (whatever the alternatives leave); each
 // alternative's share is typed beside it; the follow-up has who it goes
-// to and after how many days.
+// to and after how many days, then when it goes (once the campaign is
+// sent) — fixed once it starts sending (2026-10-09).
 
 const smallInput =
   "w-14 rounded-md border border-neutral-300 px-1.5 py-1 text-right text-sm text-neutral-900";
@@ -68,6 +70,7 @@ export default function CampaignMailList({
             <div className="flex w-full items-center gap-1.5 text-sm text-neutral-500">
               <select
                 value={m.followUp.condition}
+                disabled={!!m.followUpSending?.startedAt}
                 onChange={(e) =>
                   onFollowUp(m.id, {
                     ...m.followUp!,
@@ -75,7 +78,7 @@ export default function CampaignMailList({
                   })
                 }
                 aria-label="Who the follow-up goes to"
-                className="min-w-0 flex-1 rounded-md border border-neutral-300 px-1.5 py-1 text-sm text-neutral-900"
+                className="min-w-0 flex-1 rounded-md border border-neutral-300 px-1.5 py-1 text-sm text-neutral-900 disabled:opacity-60"
               >
                 {FOLLOW_UP_CONDITIONS.map((c) => (
                   <option key={c.value} value={c.value}>
@@ -88,14 +91,30 @@ export default function CampaignMailList({
                 value={m.followUp.days}
                 limits={FOLLOW_UP_DAY_LIMITS}
                 label="Days after the campaign"
+                disabled={!!m.followUpSending?.startedAt}
                 onCommit={(days) => onFollowUp(m.id, { ...m.followUp!, days })}
               />
               days
             </div>
           )}
+          {m.followUpSending && <FollowUpStatus sending={m.followUpSending} />}
         </div>
       ))}
     </div>
+  );
+}
+
+// Where the follow-up's sending stands.
+function FollowUpStatus({ sending }: { sending: FollowUpSending }) {
+  if (sending.sentAt) return <p className="w-full text-xs text-green-700">Sent {formatParis(new Date(sending.sentAt))}</p>;
+  if (sending.startedAt) return <p className="w-full text-xs text-amber-700">Sending…</p>;
+  return (
+    <>
+      {sending.error && <p className="w-full text-xs text-red-600">{sending.error}</p>}
+      {sending.dueAt && (
+        <p className="w-full text-xs text-neutral-500">Goes {formatParis(new Date(sending.dueAt))}</p>
+      )}
+    </>
   );
 }
 
@@ -105,11 +124,13 @@ function NumberBox({
   value,
   limits,
   label,
+  disabled,
   onCommit,
 }: {
   value: number;
   limits: { min: number; max: number };
   label: string;
+  disabled?: boolean;
   onCommit: (value: number) => void;
 }) {
   const [text, setText] = useState(String(value));
@@ -135,7 +156,8 @@ function NumberBox({
         if (e.key === "Enter") e.currentTarget.blur();
       }}
       aria-label={label}
-      className={smallInput}
+      disabled={disabled}
+      className={`${smallInput} disabled:opacity-60`}
     />
   );
 }

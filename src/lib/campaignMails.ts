@@ -25,6 +25,12 @@ export function isFollowUpCondition(value: unknown): value is FollowUpCondition 
 export const FOLLOW_UP_DAY_LIMITS = { min: 1, max: 60 } as const;
 export const DEFAULT_FOLLOW_UP = { condition: "NOT_OPENED", days: 3 } as const;
 
+// When the follow-up goes: its days after the campaign finished sending
+// (picked up by the sending runs within 5 minutes of it).
+export function followUpDueAt(campaignSentAt: Date, days: number): Date {
+  return new Date(campaignSentAt.getTime() + days * 24 * 60 * 60 * 1000);
+}
+
 // An alternative's share: at least 1%, and together the alternatives
 // leave at least 1% for the principal mail.
 export const SHARE_LIMITS = { min: 1, max: 99 } as const;

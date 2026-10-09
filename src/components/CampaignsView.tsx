@@ -393,7 +393,7 @@ export default function CampaignsView({
   // Once sending starts, the principal and alternative mails can't be
   // changed (the follow-up can, until it goes).
   const started = !!selected && (selected.status === "SENDING" || selected.status === "SENT");
-  const mailLocked = started && mail?.kind !== "FOLLOW_UP";
+  const mailLocked = mail?.kind === "FOLLOW_UP" ? !!mail.followUpSending?.startedAt : started;
 
   const busy = !!setup || isPending;
 
