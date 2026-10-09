@@ -7,19 +7,24 @@ import SubscriptionCard from "@/components/SubscriptionCard";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 import { markSubscriptionUpToDate, cancelSubscription } from "@/lib/actions/clientAlerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
+import type { ClientAlertType } from "@/lib/clientAlertIds";
 
-// The centre panel for a payment-overdue alert (2026-09-19, CRM Phase 3):
+// The centre panel for a payment-overdue or no-payment-method alert
+// (2026-09-19, CRM Phase 3; no payment method added 2026-10-09):
 // the same Owner / Domain / Subscription cards as Administration →
 // Clients, so the missing payment can be recorded right here, followed by
 // the action panel. "Up to date" records the client in the Alert view's
-// processed list once the payment has been added (it refuses until then).
+// processed list once the payment has been added, or a payment method
+// chosen (it refuses until then).
 // Cancel subscription (2026-10-09) is for a client who has left — see
 // cancelSubscription. Cancel Domain / Email Client are placeholders for
 // now.
 export default function AlertClientPanel({
+  alertType,
   data,
   onDone,
 }: {
+  alertType: ClientAlertType;
   data: ClientPanelData;
   onDone: () => void;
 }) {
@@ -66,7 +71,7 @@ export default function AlertClientPanel({
         <ActionPanel
           align="start"
           footer={
-            <ActionButton onClick={() => run(markSubscriptionUpToDate)} disabled={isPending}>
+            <ActionButton onClick={() => run((artistId) => markSubscriptionUpToDate(artistId, alertType))} disabled={isPending}>
               {isPending ? "Working…" : "Up to date"}
             </ActionButton>
           }

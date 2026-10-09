@@ -4,6 +4,7 @@ import { formatDate } from "@/lib/formatDate";
 import { netOwed, saleTitle } from "@/lib/saleMath";
 import type { SaleModalTarget } from "@/components/SaleModal";
 import { MANUAL_SUBSCRIPTION_METHODS } from "@/lib/subscriptionMethods";
+import { clientAlertId } from "@/lib/clientAlertIds";
 
 // 2026-08-13 decision: manual (PayPal/DD) artists are expected roughly
 // monthly, flagged overdue 14 days after that's due — i.e. 44 days since
@@ -37,22 +38,6 @@ const SALE_ALERT_TYPES = [SALE_RECORDED_ALERT_TYPE, SALE_LINK_ALERT_TYPE];
 // Inbox's Alert list and the nav badge update straight away rather than
 // up to a minute later.
 export const OPEN_ALERTS_TAG = "open-alerts";
-
-// The overdue-payment alert is computed rather than stored, and its id
-// deliberately embeds the artist's id (2026-09-19, CRM Phase 3) — so the
-// Inbox can open that client's panel from the alert's id alone, even
-// after the alert itself has cleared (e.g. once a payment is recorded).
-const OVERDUE_ALERT_ID_PREFIX = "manual-overdue-";
-
-export function overdueAlertId(artistId: string): string {
-  return `${OVERDUE_ALERT_ID_PREFIX}${artistId}`;
-}
-
-// The artist id inside an overdue-payment alert's id, or null if this
-// isn't an overdue-payment alert id.
-export function overdueAlertArtistId(alertId: string): string | null {
-  return alertId.startsWith(OVERDUE_ALERT_ID_PREFIX) ? alertId.slice(OVERDUE_ALERT_ID_PREFIX.length) : null;
-}
 
 function daysSince(date: Date, now = Date.now()): number {
   return Math.floor((now - date.getTime()) / (1000 * 60 * 60 * 24));
@@ -348,7 +333,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     if (days > MANUAL_OVERDUE_DAYS) {
       const siteId = artist.sites[0]?.id || null;
       overdueItems.push({
-        id: overdueAlertId(artist.id),
+        id: clientAlertId("SUBSCRIPTION_PAYMENT_OVERDUE", artist.id),
         type: "SUBSCRIPTION_PAYMENT_OVERDUE",
         severity: "WARNING",
         message: `${artist.name}: no subscription payment recorded in ${days} days (last: ${formatDate(last.paidAt)}).`,
@@ -366,7 +351,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
   const noPaymentMethodItems: AlertItem[] = noPaymentMethodArtists.map((artist) => {
     const siteId = artist.sites[0]?.id || null;
     return {
-      id: `no-payment-method-${artist.id}`,
+      id: clientAlertId("SUBSCRIPTION_METHOD_MISSING", artist.id),
       type: "SUBSCRIPTION_METHOD_MISSING",
       severity: "WARNING",
       message: `${artist.name}: no subscription payment method set.`,

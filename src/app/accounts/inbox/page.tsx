@@ -2,7 +2,8 @@ import AppShell from "@/components/AppShell";
 import AdminInboxPanel from "@/components/AdminInboxPanel";
 import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
-import { getOpenAlerts, overdueAlertArtistId } from "@/lib/alerts";
+import { getOpenAlerts } from "@/lib/alerts";
+import { parseClientAlertId } from "@/lib/clientAlertIds";
 import { getInboxList, getArtistFilterOptions } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
 import { getOpenTasks } from "@/lib/actions/tasks";
@@ -61,8 +62,10 @@ export default async function InboxPage({
   // Derived from the alert id rather than looked up in `alerts`, so the
   // panel stays open after the alert itself clears (e.g. once the missing
   // payment has been recorded) until "Up to date" is pressed.
-  const panelArtistId = alertId ? overdueAlertArtistId(alertId) : null;
-  const clientPanel = panelArtistId ? await getClientPanelDataForArtist(panelArtistId) : null;
+  const clientAlert = alertId ? parseClientAlertId(alertId) : null;
+  const clientPanelData = clientAlert ? await getClientPanelDataForArtist(clientAlert.artistId) : null;
+  const clientPanel =
+    clientAlert && clientPanelData ? { alertType: clientAlert.type, data: clientPanelData } : null;
 
   return (
     <AppShell

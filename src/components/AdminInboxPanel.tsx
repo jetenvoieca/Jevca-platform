@@ -34,6 +34,7 @@ import {
 } from "@/lib/actions/clientAlerts";
 import type { AlertItem } from "@/lib/alerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
+import type { ClientAlertType } from "@/lib/clientAlertIds";
 import type { Mailbox } from "@/lib/email";
 import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
@@ -86,7 +87,7 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 //     old standalone Alerts page), modal = the selected alert, right =
 //     processed alerts — the ones dealt with (2026-09-28, direct request;
 //     it used to show the task Done list; see getProcessedAlerts). A
-//     payment-overdue alert opens the client's Owner/Domain/Subscription
+//     payment-overdue or no-payment-method alert opens the client's Owner/Domain/Subscription
 //     cards with an action panel (see AlertClientPanel); an
 //     overdue-invoice alert opens the same sale
 //     modal as Consolidated Sales (see SaleModal), as does a sale alert
@@ -300,7 +301,8 @@ export default function AdminInboxPanel({
   initialToday: string; // "YYYY-MM-DD", Paris
   initialAlerts: AlertItem[];
   selectedAlertId: string | null;
-  clientPanel: ClientPanelData | null;
+  // The client cards for a payment-overdue or no-payment-method alert.
+  clientPanel: { alertType: ClientAlertType; data: ClientPanelData } | null;
   taskCategories: string[];
   artistOptions: { id: string; name: string }[];
   selectedArtistId: string | null;
@@ -1408,7 +1410,12 @@ export default function AdminInboxPanel({
             <div className={`flex-1 overflow-y-auto px-5 pb-5 ${threadOpen ? "" : "pt-5"}`}>
               {mode === "alert" ? (
                 clientPanel ? (
-                  <AlertClientPanel key={clientPanel.artist.id} data={clientPanel} onDone={handleUpToDateDone} />
+                  <AlertClientPanel
+                    key={clientPanel.data.artist.id}
+                    alertType={clientPanel.alertType}
+                    data={clientPanel.data}
+                    onDone={handleUpToDateDone}
+                  />
                 ) : (
                   selectedAlert && (
                     <AlertDetail

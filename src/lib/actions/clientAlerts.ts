@@ -3,12 +3,10 @@
 import { db } from "@/lib/db";
 import { revalidatePath, updateTag } from "next/cache";
 import { OPEN_ALERTS_TAG, isArtistSubscriptionOverdue } from "@/lib/alerts";
+import type { ClientAlertType } from "@/lib/clientAlertIds";
 
 // Server actions for the Inbox's Alert view.
 
-// The type an "Up to date" record is filed under — the overdue-payment
-// alert it deals with.
-const OVERDUE_ALERT_TYPE = "SUBSCRIPTION_PAYMENT_OVERDUE";
 const CANCELLED_ALERT_TYPE = "SUBSCRIPTION_CANCELLED";
 
 // "Up to date" on a payment-overdue alert (2026-09-19, CRM Phase 3).
@@ -19,13 +17,23 @@ const CANCELLED_ALERT_TYPE = "SUBSCRIPTION_CANCELLED";
 // as a processed alert (2026-09-28 — until then it was logged as a
 // completed Task, in the task Done list), so it shows in the Alert view's
 // processed list; see getProcessedAlerts.
+//
+// The same on a no-payment-method alert (2026-10-09): it refuses until a
+// payment method has been chosen on the Subscription card.
 export async function markSubscriptionUpToDate(
-  artistId: string
+  artistId: string,
+  alertType: ClientAlertType
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const artist = await db.artist.findUnique({ where: { id: artistId }, select: { name: true } });
+  const artist = await db.artist.findUnique({
+    where: { id: artistId },
+    select: { name: true, paymentMethod: true },
+  });
   if (!artist) return { ok: false, error: "Client not found." };
 
-  if (await isArtistSubscriptionOverdue(artistId)) {
+  if (alertType === "SUBSCRIPTION_METHOD_MISSING" && !artist.paymentMethod) {
+    return { ok: false, error: "Choose a payment method first, on the Subscription card." };
+  }
+  if (alertType === "SUBSCRIPTION_PAYMENT_OVERDUE" && (await isArtistSubscriptionOverdue(artistId))) {
     return {
       ok: false,
       error: "Add the payment first — this alert only clears once a recent subscription payment is recorded.",
@@ -35,9 +43,12 @@ export async function markSubscriptionUpToDate(
   await db.alertEvent.create({
     data: {
       artistId,
-      type: OVERDUE_ALERT_TYPE,
+      type: alertType,
       severity: "WARNING",
-      message: `${artist.name}: subscription payments updated.`,
+      message:
+        alertType === "SUBSCRIPTION_METHOD_MISSING"
+          ? `${artist.name}: payment method set.`
+          : `${artist.name}: subscription payments updated.`,
       resolvedAt: new Date(),
     },
   });
