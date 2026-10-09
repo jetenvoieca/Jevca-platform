@@ -20,20 +20,30 @@ const BOX_QUERY: Record<PersonalBox, string> = {
   INBOX: "in:inbox newer_than:7d",
   SENT: "in:sent newer_than:7d",
 };
-// At most this many conversations per list, so it stays quick.
+// At most this many emails per list, fetched this many at a time (Gmail
+// allows each account so many requests a second), and for no longer than
+// this — a slow Gmail returns the emails fetched so far rather than
+// running into the server's own time limit.
 const LIST_LIMIT = 50;
-// Gmail allows each account so many requests a second, so a page of
-// conversations is fetched this many at a time rather than all at once.
-const FETCH_CHUNK = 8;
+const FETCH_CHUNK = 10;
+const FETCH_BUDGET_MS = 6000;
 
+// One request to Gmail. If Gmail asks to slow down (429) or has a
+// passing fault (5xx), it's tried once more a second later.
 export async function gmailFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getGmailAccessToken();
   if (!token) throw new GmailNotConnectedError();
-  const res = await fetch(`${GMAIL_API}${path}`, {
-    ...init,
-    headers: { ...init?.headers, Authorization: `Bearer ${token}` },
-    cache: "no-store",
-  });
+  const send = () =>
+    fetch(`${GMAIL_API}${path}`, {
+      ...init,
+      headers: { ...init?.headers, Authorization: `Bearer ${token}` },
+      cache: "no-store",
+    });
+  let res = await send();
+  if (res.status === 429 || res.status >= 500) {
+    await new Promise((r) => setTimeout(r, 1000));
+    res = await send();
+  }
   if (res.status === 401) throw new GmailNotConnectedError();
   if (!res.ok) throw new Error(`Gmail didn't respond (${res.status}). Please try again.`);
   return (await res.json()) as T;
@@ -93,38 +103,51 @@ export type PersonalMailItem = {
   count: number; // messages in the conversation
 };
 
-// The list's conversations, newest first.
+// The list's conversations, newest first — built from its emails' headers
+// only (one light request per email), grouped by conversation.
 export async function listPersonalMail(box: PersonalBox): Promise<PersonalMailItem[]> {
+  const started = Date.now();
   const params = new URLSearchParams({ q: BOX_QUERY[box], maxResults: String(LIST_LIMIT) });
-  const list = await gmailFetch<{ threads?: { id: string }[] }>(`/threads?${params}`);
+  const list = await gmailFetch<{ messages?: { id: string }[] }>(`/messages?${params}`);
 
-  const ids = (list.threads ?? []).map((t) => t.id);
-  const threads: GmailThread[] = [];
-  const metadata = "format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject";
-  for (let i = 0; i < ids.length; i += FETCH_CHUNK) {
-    threads.push(
+  const ids = (list.messages ?? []).map((m) => m.id);
+  const query =
+    "format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject" +
+    "&fields=id,threadId,labelIds,snippet,internalDate,payload/headers";
+  const messages: GmailMessage[] = [];
+  for (let i = 0; i < ids.length && Date.now() - started < FETCH_BUDGET_MS; i += FETCH_CHUNK) {
+    messages.push(
       ...(await Promise.all(
-        ids.slice(i, i + FETCH_CHUNK).map((id) => gmailFetch<GmailThread>(`/threads/${id}?${metadata}`))
+        ids.slice(i, i + FETCH_CHUNK).map((id) => gmailFetch<GmailMessage>(`/messages/${id}?${query}`))
       ))
     );
   }
 
-  return threads.map((thread): PersonalMailItem => {
-    const messages = thread.messages ?? [];
-    // The latest message of the conversation that belongs to this list —
-    // the latest received one for the Inbox, the latest sent one for Sent.
-    const inBox = messages.filter((m) => (box === "SENT" ? m.labelIds?.includes("SENT") : !m.labelIds?.includes("SENT")));
-    const shown = inBox[inBox.length - 1] ?? messages[messages.length - 1];
-    const party = parseAddress(header(shown?.payload, box === "SENT" ? "To" : "From"));
+  // Newest first, so the first email seen of each conversation is its
+  // latest one in this list.
+  const byThread = new Map<string, { latest: GmailMessage; count: number; unread: boolean }>();
+  for (const m of messages) {
+    const entry = byThread.get(m.threadId);
+    const unread = !!m.labelIds?.includes("UNREAD");
+    if (entry) {
+      entry.count += 1;
+      entry.unread ||= unread;
+    } else {
+      byThread.set(m.threadId, { latest: m, count: 1, unread });
+    }
+  }
+
+  return [...byThread.entries()].map(([threadId, { latest, count, unread }]): PersonalMailItem => {
+    const party = parseAddress(header(latest.payload, box === "SENT" ? "To" : "From"));
     return {
-      threadId: thread.id,
+      threadId,
       name: party.name,
       address: party.address,
-      subject: header(messages[0]?.payload, "Subject"),
-      snippet: decodeEntities(shown?.snippet ?? ""),
-      at: new Date(Number(shown?.internalDate ?? 0)).toISOString(),
-      unread: messages.some((m) => m.labelIds?.includes("UNREAD")),
-      count: messages.length,
+      subject: header(latest.payload, "Subject"),
+      snippet: decodeEntities(latest.snippet ?? ""),
+      at: new Date(Number(latest.internalDate ?? 0)).toISOString(),
+      unread,
+      count,
     };
   });
 }

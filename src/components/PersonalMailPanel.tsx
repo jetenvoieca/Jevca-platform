@@ -37,15 +37,20 @@ function useMailList(box: PersonalBox, refreshKey: number, onReconnect: () => vo
   useEffect(() => {
     let cancelled = false;
     setState((s) => ({ ...s, loading: true, error: null }));
-    getPersonalMail(box).then((res) => {
-      if (cancelled) return;
-      if (!res.ok) {
-        if (res.reconnect) onReconnect();
-        setState((s) => ({ ...s, loading: false, error: res.error }));
-        return;
-      }
-      setState({ items: res.data, loading: false, error: null });
-    });
+    getPersonalMail(box)
+      .then((res) => {
+        if (cancelled) return;
+        if (!res.ok) {
+          if (res.reconnect) onReconnect();
+          setState((s) => ({ ...s, loading: false, error: res.error }));
+          return;
+        }
+        setState({ items: res.data, loading: false, error: null });
+      })
+      // The server itself didn't answer (too slow, or offline).
+      .catch(() => {
+        if (!cancelled) setState((s) => ({ ...s, loading: false, error: "Gmail took too long to answer. Press Refresh." }));
+      });
     return () => {
       cancelled = true;
     };
@@ -135,14 +140,16 @@ export default function PersonalMailPanel({
     setThread(null);
     setThreadError(null);
     setTextShownId(null);
-    getPersonalThread(item.threadId).then((res) => {
-      if (!res.ok) {
-        if (res.reconnect) handleReconnect();
-        setThreadError(res.error);
-        return;
-      }
-      setThread(res.data);
-    });
+    getPersonalThread(item.threadId)
+      .then((res) => {
+        if (!res.ok) {
+          if (res.reconnect) handleReconnect();
+          setThreadError(res.error);
+          return;
+        }
+        setThread(res.data);
+      })
+      .catch(() => setThreadError("Gmail took too long to answer. Please try again."));
   };
 
   const closeThread = () => {
