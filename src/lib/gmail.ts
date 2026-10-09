@@ -6,11 +6,13 @@ import { encryptSecret, decryptSecret } from "@/lib/secretBox";
 // Google directly over its REST endpoints — no Google SDK, which would
 // add a large package for a handful of calls.
 //
-// Google setup (one-off, Craig's Workspace): a Google Cloud project with
-// the Gmail API switched on, an OAuth consent screen set to Internal (so
-// only isendyouthis.com accounts can use it, and it never needs Google's
-// review), and a Web OAuth client whose redirect URI is GMAIL_REDIRECT_URI
-// below. Its ID and secret are GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in
+// Google setup (one-off, done 2026-10-09): the Google Cloud project
+// "JEVCAStudio" with the Gmail API switched on; its consent screen is
+// External and published (In production — in Testing, Google would cut
+// the connection every 7 days), with /privacy as its privacy page, so
+// connecting shows Google's "unverified app" warning, which is expected;
+// and a Web OAuth client whose redirect URI is GMAIL_REDIRECT_URI below.
+// Its ID and secret are GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET in
 // Netlify. Server-only.
 
 export const GMAIL_REDIRECT_URI = `${APP_URL}/api/gmail/callback`;
