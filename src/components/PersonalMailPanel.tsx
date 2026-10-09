@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
+  archivePersonal,
   deletePersonal,
   disconnectGmail,
   forwardPersonal,
@@ -28,7 +29,8 @@ import { capitaliseParagraphs } from "@/lib/text";
 // opens in the same kind of window (marking it read in Gmail). Each email
 // there has Reply (the reply box opens at the top of the window) and
 // Forward, sent through Gmail from its own sending address
-// (craig@isendyouthis.com) so they show in Gmail's Sent too, and Delete;
+// (craig@isendyouthis.com) so they show in Gmail's Sent too, Archive
+// (the whole conversation out of the inbox, as in Gmail), and Delete;
 // a whole conversation can be deleted from the list (swipe, or the hover
 // icon), as on the other tabs. Delete is Gmail's own — to its Bin, where
 // it can be recovered for 30 days. Until
@@ -270,6 +272,25 @@ export default function PersonalMailPanel({
     return true;
   };
 
+  // Archives the open conversation and closes it.
+  const handleArchive = () => {
+    if (!open) return;
+    if (replyBody.trim() && !confirm("Archive without sending your reply?")) return;
+    const threadId = open.threadId;
+    setBusyId(threadId);
+    startTransition(async () => {
+      const res = await archivePersonal(threadId);
+      setBusyId(null);
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      setOpen(null);
+      setThread(null);
+      setRefreshKey((k) => k + 1);
+    });
+  };
+
   // Deletes one email of the open conversation — closing it if that was
   // its only email.
   const handleDeleteEmail = (m: PersonalMailMessage) => {
@@ -470,6 +491,9 @@ export default function PersonalMailPanel({
                           )}
                           <MiniActionButton onClick={() => startReply(m)}>Reply</MiniActionButton>
                           <MiniActionButton onClick={() => setForwarding(m)}>Forward</MiniActionButton>
+                          <MiniActionButton onClick={handleArchive} disabled={busyId === open.threadId || isPending}>
+                            {busyId === open.threadId ? "Archiving…" : "Archive"}
+                          </MiniActionButton>
                           <MiniActionButton onClick={() => handleDeleteEmail(m)} disabled={busyId === m.id || isPending}>
                             {busyId === m.id ? "Deleting…" : "Delete"}
                           </MiniActionButton>

@@ -251,6 +251,16 @@ export async function openPersonalThread(threadId: string): Promise<PersonalMail
   return messages.map(readMessage);
 }
 
+// Archive, as in Gmail: takes a whole conversation out of the inbox; it
+// stays in Gmail (All Mail).
+export async function archivePersonalThread(threadId: string): Promise<void> {
+  await gmailFetch(`/threads/${encodeURIComponent(threadId)}/modify`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ removeLabelIds: ["INBOX"] }),
+  });
+}
+
 // Delete, as in Gmail: moves a whole conversation, or one email of it, to
 // Gmail's Bin, where it can still be recovered for 30 days.
 export async function trashPersonalThread(threadId: string): Promise<void> {

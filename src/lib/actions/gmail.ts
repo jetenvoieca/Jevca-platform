@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { removeGmailConnection } from "@/lib/gmail";
 import {
   listPersonalMail,
+  archivePersonalThread,
   trashPersonalThread,
   trashPersonalMessage,
   openPersonalThread,
@@ -59,6 +60,16 @@ export async function forwardPersonal(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     return await forwardPersonalMessage(messageId, to, note);
+  } catch (err) {
+    return failure(err);
+  }
+}
+
+// Archive — the whole conversation out of the inbox, as in Gmail.
+export async function archivePersonal(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    await archivePersonalThread(threadId);
+    return { ok: true };
   } catch (err) {
     return failure(err);
   }
