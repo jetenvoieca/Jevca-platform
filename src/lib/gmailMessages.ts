@@ -106,9 +106,15 @@ export type PersonalMailItem = {
 
 // The list's conversations, newest first — built from its emails' headers
 // only (one light request per email), grouped by conversation.
+// TEMPORARY (2026-10-09): what Gmail answered, shown under an empty list
+// while finding out why the lists come back empty. Remove once found.
+export let lastListDiagnostic = "";
+
 export async function listPersonalMail(box: PersonalBox): Promise<PersonalMailItem[]> {
   const params = new URLSearchParams({ q: BOX_QUERY[box], maxResults: String(LIST_LIMIT) });
-  const list = await gmailFetch<{ messages?: { id: string }[] }>(`/messages?${params}`);
+  const list = await gmailFetch<{ messages?: { id: string }[]; resultSizeEstimate?: number }>(
+    `/messages?${params}`
+  );
   const started = Date.now();
 
   const ids = (list.messages ?? []).map((m) => m.id);
@@ -123,6 +129,8 @@ export async function listPersonalMail(box: PersonalBox): Promise<PersonalMailIt
       ))
     );
   }
+
+  lastListDiagnostic = `query "${BOX_QUERY[box]}": Gmail estimate ${list.resultSizeEstimate ?? "none"}, listed ${ids.length}, fetched ${messages.length}, keys ${Object.keys(list).join("/") || "none"}`;
 
   // Newest first, so the first email seen of each conversation is its
   // latest one in this list.

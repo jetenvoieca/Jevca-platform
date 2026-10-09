@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { removeGmailConnection } from "@/lib/gmail";
 import {
   listPersonalMail,
+  lastListDiagnostic,
   openPersonalThread,
   GmailNotConnectedError,
   type PersonalBox,
@@ -25,7 +26,10 @@ function failure(err: unknown): { ok: false; error: string; reconnect: boolean }
 
 export async function getPersonalMail(box: PersonalBox): Promise<Result<PersonalMailItem[]>> {
   try {
-    return { ok: true, data: await listPersonalMail(box) };
+    const items = await listPersonalMail(box);
+    // TEMPORARY — see lastListDiagnostic.
+    if (items.length === 0) return { ok: false, error: `Empty. ${lastListDiagnostic}`, reconnect: false };
+    return { ok: true, data: items };
   } catch (err) {
     return failure(err);
   }
