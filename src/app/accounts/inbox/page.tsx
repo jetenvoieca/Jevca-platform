@@ -1,3 +1,4 @@
+import type { Metadata } from "next";
 import AppShell from "@/components/AppShell";
 import AdminInboxPanel from "@/components/AdminInboxPanel";
 import { buildTopNavItems } from "@/lib/topNav";
@@ -13,6 +14,16 @@ import { getClientPanelDataForArtist } from "@/lib/clientPanelData";
 import type { Mailbox } from "@/lib/email";
 
 export const dynamic = "force-dynamic";
+
+// Saved to the iPad's Home Screen, the Inbox opens as its own app,
+// "JEVCAStudio" (2026-10-09, direct request) — full screen, straight to
+// the Inbox. The manifest and icons are in public/inbox-app/. Only this
+// page links them, so the artists' Studio app keeps its own.
+export const metadata: Metadata = {
+  manifest: "/inbox-app/manifest.webmanifest",
+  icons: { apple: "/inbox-app/apple-touch-icon.png" },
+  appleWebApp: { capable: true, title: "JEVCAStudio", statusBarStyle: "default" },
+};
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter", direct decision. The artist filter lives in the URL

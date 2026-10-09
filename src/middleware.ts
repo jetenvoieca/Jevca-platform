@@ -61,6 +61,9 @@ const NEWS_PATH_PREFIXES = ["/api/media/", "/unsubscribe/"];
 //   Netlify background function; authenticated by CAMPAIGN_SEND_SECRET
 //   in the route itself (2026-10-08)
 // - /login                — has to be reachable before you're logged in
+// - /inbox-app/           — the Inbox's home-screen app manifest and icons
+//   (2026-10-09); the iPad fetches them without the login cookie, and
+//   there's nothing private in them
 const PUBLIC_PATH_PREFIXES = [
   "/api/hopper",
   "/studio/",
@@ -73,6 +76,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/webhooks/resend-campaigns",
   "/api/campaigns/send-due",
   "/login",
+  "/inbox-app/",
 ];
 
 export async function middleware(request: NextRequest) {
