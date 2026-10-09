@@ -13,13 +13,15 @@ export class GmailNotConnectedError extends Error {
 }
 
 // Which list: Craig's choice — the Primary inbox only (no Promotions,
-// Social or Updates), and the Sent folder.
+// Social or Updates), and the Sent folder. Both only the last 7 days
+// (Craig's choice, 2026-10-09 — live issues only; older mail is in Gmail).
 export type PersonalBox = "INBOX" | "SENT";
 const BOX_QUERY: Record<PersonalBox, string> = {
-  INBOX: "in:inbox category:primary",
-  SENT: "in:sent",
+  INBOX: "in:inbox category:primary newer_than:7d",
+  SENT: "in:sent newer_than:7d",
 };
-const PAGE_SIZE = 20;
+// At most this many conversations per list, so it stays quick.
+const LIST_LIMIT = 50;
 // Gmail allows each account so many requests a second, so a page of
 // conversations is fetched this many at a time rather than all at once.
 const FETCH_CHUNK = 8;
@@ -91,15 +93,10 @@ export type PersonalMailItem = {
   count: number; // messages in the conversation
 };
 
-// One page of conversations, newest first. `nextPageToken` fetches the
-// next page; null when there are no more.
-export async function listPersonalMail(
-  box: PersonalBox,
-  pageToken: string | null
-): Promise<{ items: PersonalMailItem[]; nextPageToken: string | null }> {
-  const params = new URLSearchParams({ q: BOX_QUERY[box], maxResults: String(PAGE_SIZE) });
-  if (pageToken) params.set("pageToken", pageToken);
-  const list = await gmailFetch<{ threads?: { id: string }[]; nextPageToken?: string }>(`/threads?${params}`);
+// The list's conversations, newest first.
+export async function listPersonalMail(box: PersonalBox): Promise<PersonalMailItem[]> {
+  const params = new URLSearchParams({ q: BOX_QUERY[box], maxResults: String(LIST_LIMIT) });
+  const list = await gmailFetch<{ threads?: { id: string }[] }>(`/threads?${params}`);
 
   const ids = (list.threads ?? []).map((t) => t.id);
   const threads: GmailThread[] = [];
@@ -112,7 +109,7 @@ export async function listPersonalMail(
     );
   }
 
-  const items = threads.map((thread): PersonalMailItem => {
+  return threads.map((thread): PersonalMailItem => {
     const messages = thread.messages ?? [];
     // The latest message of the conversation that belongs to this list —
     // the latest received one for the Inbox, the latest sent one for Sent.
@@ -130,7 +127,6 @@ export async function listPersonalMail(
       count: messages.length,
     };
   });
-  return { items, nextPageToken: list.nextPageToken ?? null };
 }
 
 export type PersonalMailAttachment = {

@@ -23,12 +23,9 @@ function failure(err: unknown): { ok: false; error: string; reconnect: boolean }
   };
 }
 
-export async function getPersonalMail(
-  box: PersonalBox,
-  pageToken: string | null
-): Promise<Result<{ items: PersonalMailItem[]; nextPageToken: string | null }>> {
+export async function getPersonalMail(box: PersonalBox): Promise<Result<PersonalMailItem[]>> {
   try {
-    return { ok: true, data: await listPersonalMail(box, pageToken) };
+    return { ok: true, data: await listPersonalMail(box) };
   } catch (err) {
     return failure(err);
   }

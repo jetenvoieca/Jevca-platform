@@ -11,7 +11,8 @@ import { formatDate, formatDateTime } from "@/lib/formatDate";
 
 // The Inbox's Personal tab (2026-10-09): Craig's own Gmail, read live
 // from Google (see lib/gmailMessages.ts). Laid out like the other tabs —
-// the Primary inbox on the left, Sent on the right, and a conversation
+// the Primary inbox on the left, Sent on the right, each the last 7 days
+// only (older mail is looked up in Gmail itself), and a conversation
 // opens in the same kind of window (marking it read in Gmail). Until
 // Gmail is connected, it shows Connect Gmail instead (see
 // /api/gmail/connect).
@@ -25,41 +26,32 @@ const linkBtnCls = "text-xs text-neutral-500 underline hover:text-neutral-800 di
 
 type ListState = {
   items: PersonalMailItem[];
-  nextPageToken: string | null;
   loading: boolean;
   error: string | null;
 };
 
-const EMPTY_LIST: ListState = { items: [], nextPageToken: null, loading: true, error: null };
+// One of the two lists, fetched again whenever refreshKey changes.
+function useMailList(box: PersonalBox, refreshKey: number, onReconnect: () => void): ListState {
+  const [state, setState] = useState<ListState>({ items: [], loading: true, error: null });
 
-// One of the two lists, with Load more and a refresh key.
-function useMailList(box: PersonalBox, refreshKey: number, onReconnect: () => void) {
-  const [state, setState] = useState<ListState>(EMPTY_LIST);
-
-  const load = useCallback(
-    async (pageToken: string | null) => {
-      setState((s) => ({ ...s, loading: true, error: null }));
-      const res = await getPersonalMail(box, pageToken);
+  useEffect(() => {
+    let cancelled = false;
+    setState((s) => ({ ...s, loading: true, error: null }));
+    getPersonalMail(box).then((res) => {
+      if (cancelled) return;
       if (!res.ok) {
         if (res.reconnect) onReconnect();
         setState((s) => ({ ...s, loading: false, error: res.error }));
         return;
       }
-      setState((s) => ({
-        items: pageToken ? [...s.items, ...res.data.items] : res.data.items,
-        nextPageToken: res.data.nextPageToken,
-        loading: false,
-        error: null,
-      }));
-    },
-    [box, onReconnect]
-  );
+      setState({ items: res.data, loading: false, error: null });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [box, refreshKey, onReconnect]);
 
-  useEffect(() => {
-    load(null);
-  }, [load, refreshKey]);
-
-  return { state, loadMore: () => load(state.nextPageToken) };
+  return state;
 }
 
 function MailList({
@@ -67,13 +59,11 @@ function MailList({
   emptyText,
   openId,
   onOpen,
-  onLoadMore,
 }: {
   state: ListState;
   emptyText: string;
   openId: string | null;
   onOpen: (item: PersonalMailItem) => void;
-  onLoadMore: () => void;
 }) {
   if (state.error && state.items.length === 0) {
     return <p className="p-4 text-center text-sm text-red-600">{state.error}</p>;
@@ -112,13 +102,6 @@ function MailList({
         ))}
       </ul>
       {state.error && <p className="px-3 pb-2 text-center text-xs text-red-600">{state.error}</p>}
-      {state.nextPageToken && (
-        <div className="border-t border-neutral-100 p-2 text-center">
-          <button type="button" onClick={onLoadMore} disabled={state.loading} className={linkBtnCls}>
-            {state.loading ? "Loading…" : "Load more"}
-          </button>
-        </div>
-      )}
     </>
   );
 }
@@ -227,11 +210,10 @@ export default function PersonalMailPanel({
         </div>
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           <MailList
-            state={inbox.state}
-            emptyText="Nothing in your Primary inbox."
+            state={inbox}
+            emptyText="Nothing in your Primary inbox in the last 7 days."
             openId={open?.threadId ?? null}
             onOpen={openThread}
-            onLoadMore={inbox.loadMore}
           />
         </div>
       </div>
@@ -247,11 +229,10 @@ export default function PersonalMailPanel({
         <div className="mb-3 h-[34px]" />
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           <MailList
-            state={sent.state}
-            emptyText="Nothing sent yet."
+            state={sent}
+            emptyText="Nothing sent in the last 7 days."
             openId={open?.threadId ?? null}
             onOpen={openThread}
-            onLoadMore={sent.loadMore}
           />
         </div>
       </div>
