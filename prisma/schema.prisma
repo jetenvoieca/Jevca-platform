@@ -128,9 +128,14 @@ enum CurationSectionType {
 // Whether a subscriber receives campaign mail (2026-10-08). An
 // unsubscribed person is kept on record, never deleted automatically,
 // so a later import can never subscribe them again — see Subscriber.
+// BOUNCED / COMPLAINED (2026-10-09): set from Resend's webhook when a
+// campaign mail hard-bounces or is marked as spam. Like UNSUBSCRIBED,
+// they're never sent campaigns again (until set back by hand).
 enum SubscriberStatus {
   SUBSCRIBED
   UNSUBSCRIBED
+  BOUNCED
+  COMPLAINED
 }
 
 // How a subscriber was added (2026-10-08): typed in by hand, from a CSV
@@ -1963,7 +1968,11 @@ model CampaignList {
 // which language, and how it went. SKIPPED: unsubscribed before their
 // turn, or French with no French subject on their mail. `claimedAt`:
 // taken by a sending run, so two runs never send the same person.
-// `resendEmailId` matches Resend's open/click events back to them later.
+// `resendEmailId` matches Resend's events back to them.
+// Tracking (2026-10-09), from Resend's webhook (see lib/campaignTracking.ts):
+// the first time each thing happened. A click counts as an open too
+// (images may be blocked). `bounceType`: Resend's own (Permanent =
+// hard bounce; the reason goes in `error`).
 model CampaignRecipient {
   id           String       @id @default(cuid())
   campaignId   String
@@ -1981,6 +1990,13 @@ model CampaignRecipient {
   error         String?
   claimedAt     DateTime?
   sentAt        DateTime?
+
+  deliveredAt  DateTime?
+  openedAt     DateTime?
+  clickedAt    DateTime?
+  bouncedAt    DateTime?
+  bounceType   String?
+  complainedAt DateTime?
 
   createdAt DateTime @default(now())
 

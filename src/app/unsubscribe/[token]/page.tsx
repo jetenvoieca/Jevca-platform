@@ -68,7 +68,8 @@ export default async function UnsubscribePage({ params }: { params: Promise<{ to
   const text = TEXT[languageOf(subscriber.language ?? subscriber.artist.invoiceLanguage)];
   const artist = subscriber.artist.name;
 
-  if (subscriber.status === "UNSUBSCRIBED") {
+  // (Bounced or marked as spam: already gets no mail.)
+  if (subscriber.status !== "SUBSCRIBED") {
     return (
       <Card>
         <p>{text.done(artist)}</p>

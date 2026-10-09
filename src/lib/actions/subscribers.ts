@@ -2,6 +2,7 @@
 
 import Papa from "papaparse";
 import { db } from "@/lib/db";
+import { campaignMailLabel } from "@/lib/campaignMails";
 
 // Marketing → Subscribers (2026-10-08) — each artist's mailing list and
 // its named mail lists. See Subscriber and MailList in schema.prisma.
@@ -14,7 +15,8 @@ import { db } from "@/lib/db";
 export type SubscriberLanguage = "EN" | "FR";
 // Same values as the SubscriberStatus / SubscriberSource enums in
 // schema.prisma.
-export type SubscriberStatus = "SUBSCRIBED" | "UNSUBSCRIBED";
+// BOUNCED / COMPLAINED are set by campaign tracking, never chosen here.
+export type SubscriberStatus = "SUBSCRIBED" | "UNSUBSCRIBED" | "BOUNCED" | "COMPLAINED";
 export type SubscriberSource = "MANUAL" | "IMPORT" | "CUSTOMER" | "WEBSITE";
 
 // How many subscribers each list holds is counted on the page from the
@@ -295,11 +297,14 @@ export async function updateSubscriber(
 }
 
 // Subscribed ⇄ Unsubscribed, set by hand (e.g. someone asks by email).
+// Also how a bounced or spam-marked subscriber is put back (e.g. after
+// their address is corrected).
 export async function setSubscriberStatus(
   subscriberId: string,
   artistId: string,
-  status: SubscriberStatus
+  status: "SUBSCRIBED" | "UNSUBSCRIBED"
 ): Promise<Result<SubscriberRow>> {
+  if (status !== "SUBSCRIBED" && status !== "UNSUBSCRIBED") return { error: "Unknown status." };
   const { count } = await db.subscriber.updateMany({
     where: { id: subscriberId, artistId },
     data: {
@@ -535,4 +540,67 @@ export async function subscribeCustomers(
     "CUSTOMER",
     listId
   );
+}
+
+// ---------------------------------------------------------------------
+// Campaign history (2026-10-09, Marketing step 4a)
+// ---------------------------------------------------------------------
+
+export type SubscriberCampaignRow = {
+  id: string;
+  campaignName: string;
+  mailLabel: string;
+  language: string;
+  status: "PENDING" | "SENT" | "SKIPPED" | "FAILED";
+  sentAt: string | null;
+  deliveredAt: string | null;
+  openedAt: string | null;
+  clickedAt: string | null;
+  bouncedAt: string | null;
+  hardBounce: boolean;
+  complainedAt: string | null;
+  error: string | null;
+};
+
+// Every campaign mail this subscriber was sent (or skipped for), newest
+// first, with what happened to it. Loaded when their details open.
+export async function getSubscriberCampaigns(
+  subscriberId: string,
+  artistId: string
+): Promise<SubscriberCampaignRow[]> {
+  const rows = await db.campaignRecipient.findMany({
+    where: { subscriberId, subscriber: { artistId } },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      language: true,
+      status: true,
+      error: true,
+      sentAt: true,
+      deliveredAt: true,
+      openedAt: true,
+      clickedAt: true,
+      bouncedAt: true,
+      bounceType: true,
+      complainedAt: true,
+      campaign: { select: { name: true } },
+      mail: { select: { kind: true, position: true } },
+    },
+  });
+  const iso = (d: Date | null) => (d ? d.toISOString() : null);
+  return rows.map((r) => ({
+    id: r.id,
+    campaignName: r.campaign.name,
+    mailLabel: campaignMailLabel(r.mail.kind, r.mail.position),
+    language: r.language,
+    status: r.status,
+    sentAt: iso(r.sentAt),
+    deliveredAt: iso(r.deliveredAt),
+    openedAt: iso(r.openedAt),
+    clickedAt: iso(r.clickedAt),
+    bouncedAt: iso(r.bouncedAt),
+    hardBounce: r.bounceType === "Permanent" || r.bounceType === "Suppressed",
+    complainedAt: iso(r.complainedAt),
+    error: r.error,
+  }));
 }

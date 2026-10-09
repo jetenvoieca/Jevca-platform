@@ -9,13 +9,14 @@ import {
   type MailListSummary,
   type SubscriberInput,
   type SubscriberRow,
-  type SubscriberStatus,
 } from "@/lib/actions/subscribers";
 import { formatDate } from "@/lib/formatDate";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import SubscriberCampaignHistory from "@/components/SubscriberCampaignHistory";
 import {
   LanguageSelect,
   SOURCE_LABEL,
+  STATUS_LABEL,
   inputCls,
   labelCls,
 } from "@/components/subscriberFormParts";
@@ -155,15 +156,35 @@ export default function SubscriberDetailPanel({
             value={subscriber.status}
             onChange={(e) =>
               run(() =>
-                setSubscriberStatus(subscriber.id, artistId, e.target.value as SubscriberStatus)
+                setSubscriberStatus(
+                  subscriber.id,
+                  artistId,
+                  e.target.value === "SUBSCRIBED" ? "SUBSCRIBED" : "UNSUBSCRIBED"
+                )
               )
             }
             disabled={isPending}
             className={inputCls}
           >
-            <option value="SUBSCRIBED">Subscribed</option>
-            <option value="UNSUBSCRIBED">Unsubscribed</option>
+            <option value="SUBSCRIBED">{STATUS_LABEL.SUBSCRIBED}</option>
+            <option value="UNSUBSCRIBED">{STATUS_LABEL.UNSUBSCRIBED}</option>
+            {(subscriber.status === "BOUNCED" || subscriber.status === "COMPLAINED") && (
+              <option value={subscriber.status} disabled>
+                {STATUS_LABEL[subscriber.status]}
+              </option>
+            )}
           </select>
+          {subscriber.status === "BOUNCED" && (
+            <p className="mt-1 text-xs text-neutral-500">
+              A campaign mail couldn&apos;t be delivered to this address, so no more are sent. Correct the
+              email and set Subscribed to start again.
+            </p>
+          )}
+          {subscriber.status === "COMPLAINED" && (
+            <p className="mt-1 text-xs text-neutral-500">
+              They marked a campaign mail as spam, so no more are sent. Only set Subscribed if they ask.
+            </p>
+          )}
         </div>
         <div>
           <label className={labelCls}>Mail lists</label>
@@ -206,6 +227,8 @@ export default function SubscriberDetailPanel({
             </div>
           )}
         </dl>
+
+        <SubscriberCampaignHistory subscriberId={subscriber.id} artistId={artistId} />
 
         {error && <p className="text-xs text-red-600">{error}</p>}
         {saved && <p className="text-xs text-green-600">Saved</p>}

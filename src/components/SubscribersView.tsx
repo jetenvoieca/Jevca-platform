@@ -16,6 +16,7 @@ import SubscriberAddModal from "@/components/SubscriberAddModal";
 import SubscriberDetailPanel from "@/components/SubscriberDetailPanel";
 import SubscriberImportPanel from "@/components/SubscriberImportPanel";
 import SubscribeCustomersPanel from "@/components/SubscribeCustomersPanel";
+import { STATUS_LABEL } from "@/components/subscriberFormParts";
 
 type OpenWindow = "add" | "import" | "customers" | null;
 type ListForm = { mode: "add" | "edit"; name: string } | null;
@@ -68,7 +69,7 @@ export default function SubscribersView({
     });
   }, [subscribers, listId, q]);
 
-  const unsubscribedShown = shown.filter((s) => s.status === "UNSUBSCRIBED").length;
+  const notMailedShown = shown.filter((s) => s.status !== "SUBSCRIBED").length;
   const listNames = new Map(lists.map((l) => [l.id, l.name]));
 
   const reload = () => {
@@ -161,7 +162,7 @@ export default function SubscribersView({
               <h1 className="text-xl text-neutral-900">{selectedList?.name ?? "All subscribers"}</h1>
               <p className="text-xs text-neutral-400">
                 {shown.length} subscriber{shown.length === 1 ? "" : "s"}
-                {unsubscribedShown > 0 && ` · ${unsubscribedShown} unsubscribed`}
+                {notMailedShown > 0 && ` · ${notMailedShown} not mailed`}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -227,10 +228,10 @@ export default function SubscribersView({
                         </td>
                         <td
                           className={`py-2 text-xs ${
-                            s.status === "UNSUBSCRIBED" ? "text-red-600" : "text-neutral-500"
+                            s.status === "SUBSCRIBED" ? "text-neutral-500" : "text-red-600"
                           }`}
                         >
-                          {s.status === "UNSUBSCRIBED" ? "Unsubscribed" : "Subscribed"}
+                          {STATUS_LABEL[s.status]}
                         </td>
                       </tr>
                     );

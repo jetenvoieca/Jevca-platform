@@ -4,6 +4,7 @@ import type {
   MailListSummary,
   SubscriberLanguage,
   SubscriberSource,
+  SubscriberStatus,
 } from "@/lib/actions/subscribers";
 
 // Shared pieces of the Subscribers page (2026-10-08) — its three windows
@@ -16,6 +17,16 @@ export const primaryButtonCls =
   "rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40";
 export const secondaryButtonCls =
   "rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-40";
+
+// Bounced: a campaign mail couldn't be delivered (the address doesn't
+// exist). Marked as spam: they reported a campaign mail as spam. Neither
+// is sent campaigns again unless set back to Subscribed by hand.
+export const STATUS_LABEL: Record<SubscriberStatus, string> = {
+  SUBSCRIBED: "Subscribed",
+  UNSUBSCRIBED: "Unsubscribed",
+  BOUNCED: "Bounced",
+  COMPLAINED: "Marked as spam",
+};
 
 export const SOURCE_LABEL: Record<SubscriberSource, string> = {
   MANUAL: "Added by hand",
