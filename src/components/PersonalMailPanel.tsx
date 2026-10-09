@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
+  deletePersonal,
   disconnectGmail,
   forwardPersonal,
   getPersonalMail,
@@ -15,6 +16,8 @@ import { personalAttachmentUrl } from "@/lib/gmailAttachmentUrl";
 import EmailBody, { formatFileSize } from "@/components/EmailBody";
 import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
+import SwipeRow from "@/components/SwipeRow";
+import { TrashIcon } from "@/components/ActionIcons";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 
@@ -22,9 +25,13 @@ import { capitaliseParagraphs } from "@/lib/text";
 // from Google (see lib/gmailMessages.ts). Laid out like the other tabs —
 // the inbox on the left, Sent on the right, each its latest 50 emails
 // only (older mail is looked up in Gmail itself), and a conversation
-// opens in the same kind of window (marking it read in Gmail), with Reply
-// and Forward (step 3) sent through Gmail from its own sending address
-// (craig@isendyouthis.com), so they show in Gmail's Sent too. Until
+// opens in the same kind of window (marking it read in Gmail). Each email
+// there has Reply (the reply box opens at the top of the window) and
+// Forward, sent through Gmail from its own sending address
+// (craig@isendyouthis.com) so they show in Gmail's Sent too, and Delete;
+// a whole conversation can be deleted from the list (swipe, or the hover
+// icon), as on the other tabs. Delete is Gmail's own — to its Bin, where
+// it can be recovered for 30 days. Until
 // Gmail is connected, it shows Connect Gmail instead (see
 // /api/gmail/connect).
 
@@ -75,11 +82,19 @@ function MailList({
   emptyText,
   openId,
   onOpen,
+  swipedId,
+  onSwipe,
+  busyId,
+  onDelete,
 }: {
   state: ListState;
   emptyText: string;
   openId: string | null;
   onOpen: (item: PersonalMailItem) => void;
+  swipedId: string | null;
+  onSwipe: (threadId: string | null) => void;
+  busyId: string | null;
+  onDelete: (item: PersonalMailItem) => boolean;
 }) {
   if (state.error && state.items.length === 0) {
     return <p className="p-4 text-center text-sm text-red-600">{state.error}</p>;
@@ -95,25 +110,32 @@ function MailList({
       <ul className="divide-y divide-neutral-100">
         {state.items.map((m) => (
           <li key={m.threadId}>
-            <button
-              type="button"
-              onClick={() => onOpen(m)}
-              className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
-                openId === m.threadId ? "bg-neutral-100" : ""
-              }`}
+            <SwipeRow
+              open={swipedId === m.threadId}
+              onOpenChange={(isOpen) => onSwipe(isOpen ? m.threadId : null)}
+              busy={busyId === m.threadId}
+              actions={[{ label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => onDelete(m) }]}
             >
-              <div className={itemHeadCls}>
-                <span className={`truncate text-sm ${m.unread ? "font-semibold text-neutral-900" : "text-neutral-600"}`}>
-                  {m.name || m.address}
-                  {m.count > 1 && <span className="ml-1 text-xs font-normal text-neutral-400">{m.count}</span>}
-                </span>
-                <span className="shrink-0 text-[10px] text-neutral-400">{formatDate(m.at)}</span>
-              </div>
-              <p className={`truncate text-xs ${m.unread ? "text-neutral-800" : "text-neutral-500"}`}>
-                {m.subject || "(no subject)"}
-              </p>
-              <p className="mt-0.5 truncate text-xs text-neutral-400">{m.snippet}</p>
-            </button>
+              <button
+                type="button"
+                onClick={() => onOpen(m)}
+                className={`block w-full px-3 py-2.5 text-left hover:bg-neutral-50 ${
+                  openId === m.threadId ? "bg-neutral-100" : ""
+                }`}
+              >
+                <div className={itemHeadCls}>
+                  <span className={`truncate text-sm ${m.unread ? "font-semibold text-neutral-900" : "text-neutral-600"}`}>
+                    {m.name || m.address}
+                    {m.count > 1 && <span className="ml-1 text-xs font-normal text-neutral-400">{m.count}</span>}
+                  </span>
+                  <span className="shrink-0 text-[10px] text-neutral-400">{formatDate(m.at)}</span>
+                </div>
+                <p className={`truncate text-xs ${m.unread ? "text-neutral-800" : "text-neutral-500"}`}>
+                  {m.subject || "(no subject)"}
+                </p>
+                <p className="mt-0.5 truncate text-xs text-neutral-400">{m.snippet}</p>
+              </button>
+            </SwipeRow>
           </li>
         ))}
       </ul>
@@ -145,9 +167,15 @@ export default function PersonalMailPanel({
   const [thread, setThread] = useState<PersonalMailMessage[] | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [textShownId, setTextShownId] = useState<string | null>(null);
+  // The email being replied to — the reply box shows at the top while set.
+  const [replyTo, setReplyTo] = useState<PersonalMailMessage | null>(null);
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [forwarding, setForwarding] = useState<PersonalMailMessage | null>(null);
+  // The list row that's swiped open, and the conversation or email being
+  // deleted.
+  const [swipedId, setSwipedId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
 
   // The address replies and forwards go out from, shown so there are no
   // surprises.
@@ -175,9 +203,24 @@ export default function PersonalMailPanel({
     setThread(null);
     setThreadError(null);
     setTextShownId(null);
+    setReplyTo(null);
     setReplyBody("");
     setReplyError(null);
     loadThread(item.threadId);
+  };
+
+  const startReply = (m: PersonalMailMessage) => {
+    if (replyTo && replyTo.id !== m.id && replyBody.trim() && !confirm("Discard the reply you've started?")) return;
+    if (replyTo?.id !== m.id) setReplyBody("");
+    setReplyTo(m);
+    setReplyError(null);
+  };
+
+  const cancelReply = () => {
+    if (replyBody.trim() && !confirm("Discard your reply?")) return;
+    setReplyTo(null);
+    setReplyBody("");
+    setReplyError(null);
   };
 
   // Closing checks first if a reply has been typed but not sent.
@@ -191,17 +234,63 @@ export default function PersonalMailPanel({
   };
 
   const handleSendReply = () => {
-    if (!open) return;
+    if (!open || !replyTo) return;
     setReplyError(null);
     startTransition(async () => {
-      const res = await replyPersonal(open.threadId, capitaliseParagraphs(replyBody));
+      const res = await replyPersonal(replyTo.id, capitaliseParagraphs(replyBody));
       if (!res.ok) {
         setReplyError(res.error);
         return;
       }
+      setReplyTo(null);
       setReplyBody("");
       setRefreshKey((k) => k + 1);
       await loadThread(open.threadId); // The reply shows in the conversation.
+    });
+  };
+
+  // Deletes a whole conversation from the list. Returns false if the
+  // confirm was cancelled, so a full swipe puts the row back.
+  const handleDeleteConversation = (item: PersonalMailItem): boolean => {
+    if (!confirm("Delete this conversation? It goes to Gmail's Bin, where it can be recovered for 30 days.")) {
+      return false;
+    }
+    setSwipedId(null);
+    setBusyId(item.threadId);
+    startTransition(async () => {
+      const res = await deletePersonal({ threadId: item.threadId });
+      setBusyId(null);
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      if (open?.threadId === item.threadId) setOpen(null);
+      setRefreshKey((k) => k + 1);
+    });
+    return true;
+  };
+
+  // Deletes one email of the open conversation — closing it if that was
+  // its only email.
+  const handleDeleteEmail = (m: PersonalMailMessage) => {
+    if (!open || !thread) return;
+    if (!confirm("Delete this email? It goes to Gmail's Bin, where it can be recovered for 30 days.")) return;
+    setBusyId(m.id);
+    startTransition(async () => {
+      const res = await deletePersonal({ messageId: m.id });
+      setBusyId(null);
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      if (replyTo?.id === m.id) setReplyTo(null);
+      setRefreshKey((k) => k + 1);
+      if (thread.length <= 1) {
+        setOpen(null);
+        setThread(null);
+      } else {
+        await loadThread(open.threadId);
+      }
     });
   };
 
@@ -267,6 +356,10 @@ export default function PersonalMailPanel({
             emptyText="Nothing in your inbox."
             openId={open?.threadId ?? null}
             onOpen={openThread}
+            swipedId={swipedId}
+            onSwipe={setSwipedId}
+            busyId={busyId}
+            onDelete={handleDeleteConversation}
           />
         </div>
       </div>
@@ -286,6 +379,10 @@ export default function PersonalMailPanel({
             emptyText="Nothing sent yet."
             openId={open?.threadId ?? null}
             onOpen={openThread}
+            swipedId={swipedId}
+            onSwipe={setSwipedId}
+            busyId={busyId}
+            onDelete={handleDeleteConversation}
           />
         </div>
       </div>
@@ -313,6 +410,40 @@ export default function PersonalMailPanel({
                 <p className="pt-5 text-sm text-neutral-400">Loading…</p>
               ) : (
                 <div className="mx-auto max-w-xl space-y-4 pt-5">
+                  {replyTo && (
+                    <div className="rounded-md border border-neutral-300 bg-neutral-50 p-3">
+                      <label className="mb-1 block text-xs text-neutral-500">
+                        Reply to {replyTo.sentByMe ? replyTo.to : replyTo.fromName || replyTo.fromAddress}
+                        {sendingAddress && ` — from ${sendingAddress}`}
+                      </label>
+                      <textarea
+                        value={replyBody}
+                        onChange={(e) => setReplyBody(e.target.value)}
+                        rows={6}
+                        autoFocus
+                        className="w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm"
+                      />
+                      {replyError && <p className="mt-1 text-sm text-red-600">{replyError}</p>}
+                      <div className="mt-2 flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={cancelReply}
+                          disabled={isPending}
+                          className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                        >
+                          Cancel
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleSendReply}
+                          disabled={isPending || !replyBody.trim()}
+                          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                        >
+                          {isPending ? "Sending…" : "Send reply"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
                   {thread.map((m) => (
                     <div key={m.id} className="rounded-md border border-neutral-200 bg-white">
                       <div className={`${emailHeadCls} sticky top-0 z-10 rounded-t-md border-b border-neutral-200`}>
@@ -337,7 +468,11 @@ export default function PersonalMailPanel({
                               {textShownId === m.id ? "Show HTML" : "Show text"}
                             </MiniActionButton>
                           )}
+                          <MiniActionButton onClick={() => startReply(m)}>Reply</MiniActionButton>
                           <MiniActionButton onClick={() => setForwarding(m)}>Forward</MiniActionButton>
+                          <MiniActionButton onClick={() => handleDeleteEmail(m)} disabled={busyId === m.id || isPending}>
+                            {busyId === m.id ? "Deleting…" : "Delete"}
+                          </MiniActionButton>
                         </MiniActionBar>
                       </div>
                       <div className="p-3">
@@ -363,28 +498,6 @@ export default function PersonalMailPanel({
                     </div>
                   ))}
 
-                  <div className="border-t border-neutral-200 pt-3">
-                    <label className="mb-1 block text-xs text-neutral-500">
-                      Reply{sendingAddress && ` — from ${sendingAddress}`}
-                    </label>
-                    <textarea
-                      value={replyBody}
-                      onChange={(e) => setReplyBody(e.target.value)}
-                      rows={6}
-                      className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-                    />
-                    {replyError && <p className="mt-1 text-sm text-red-600">{replyError}</p>}
-                    <div className="mt-2 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={handleSendReply}
-                        disabled={isPending || !replyBody.trim()}
-                        className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-                      >
-                        {isPending ? "Sending…" : "Send reply"}
-                      </button>
-                    </div>
-                  </div>
                 </div>
               )}
             </div>

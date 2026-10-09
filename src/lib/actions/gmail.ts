@@ -4,13 +4,15 @@ import { revalidatePath } from "next/cache";
 import { removeGmailConnection } from "@/lib/gmail";
 import {
   listPersonalMail,
+  trashPersonalThread,
+  trashPersonalMessage,
   openPersonalThread,
   GmailNotConnectedError,
   type PersonalBox,
   type PersonalMailItem,
   type PersonalMailMessage,
 } from "@/lib/gmailMessages";
-import { replyToPersonalThread, forwardPersonalMessage, personalSendingAddress } from "@/lib/gmailSend";
+import { replyToPersonalMessage, forwardPersonalMessage, personalSendingAddress } from "@/lib/gmailSend";
 
 // The Inbox's Personal tab — Craig's own Gmail (2026-10-09).
 
@@ -42,9 +44,9 @@ export async function getPersonalThread(threadId: string): Promise<Result<Person
 }
 
 // Reply / forward, from the Gmail's own default sending address (step 3).
-export async function replyPersonal(threadId: string, body: string): Promise<{ ok: true } | { ok: false; error: string }> {
+export async function replyPersonal(messageId: string, body: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
-    return await replyToPersonalThread(threadId, body);
+    return await replyToPersonalMessage(messageId, body);
   } catch (err) {
     return failure(err);
   }
@@ -57,6 +59,20 @@ export async function forwardPersonal(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     return await forwardPersonalMessage(messageId, to, note);
+  } catch (err) {
+    return failure(err);
+  }
+}
+
+// Delete — to Gmail's Bin: a whole conversation from the list, or one
+// email from an open conversation.
+export async function deletePersonal(
+  target: { threadId: string } | { messageId: string }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    if ("threadId" in target) await trashPersonalThread(target.threadId);
+    else await trashPersonalMessage(target.messageId);
+    return { ok: true };
   } catch (err) {
     return failure(err);
   }

@@ -5,7 +5,6 @@ import {
   readMessage,
   getPersonalAttachment,
   type GmailMessage,
-  type GmailThread,
 } from "@/lib/gmailMessages";
 import { formatDateTime } from "@/lib/formatDate";
 
@@ -115,37 +114,35 @@ function withPrefix(prefix: string, subject: string): string {
   return new RegExp(`^${prefix}:`, "i").test(subject.trim()) ? subject.trim() : `${prefix}: ${subject.trim()}`;
 }
 
-// Replies to the latest email in a conversation — to whoever sent it (its
-// Reply-To if it has one), or, if Craig sent the latest one, to the same
-// people again — quoting it underneath, as Gmail does.
-export async function replyToPersonalThread(threadId: string, body: string): Promise<SendResult> {
+// Replies to one email, in its conversation — to whoever sent it (its
+// Reply-To if it has one), or, if Craig sent it, to the same people
+// again — quoting it underneath, as Gmail does.
+export async function replyToPersonalMessage(messageId: string, body: string): Promise<SendResult> {
   const text = body.trim();
   if (!text) return { ok: false, error: "Write your reply first." };
 
-  const thread = await gmailFetch<GmailThread>(`/threads/${encodeURIComponent(threadId)}?format=full`);
-  const messages = thread.messages ?? [];
-  const last = messages[messages.length - 1];
-  if (!last) return { ok: false, error: "This conversation couldn't be found in Gmail." };
-
-  const sentByMe = !!last.labelIds?.includes("SENT");
-  const to = sentByMe ? header(last.payload, "To") : header(last.payload, "Reply-To") || header(last.payload, "From");
+  const message = await gmailFetch<GmailMessage>(`/messages/${encodeURIComponent(messageId)}?format=full`);
+  const sentByMe = !!message.labelIds?.includes("SENT");
+  const to = sentByMe
+    ? header(message.payload, "To")
+    : header(message.payload, "Reply-To") || header(message.payload, "From");
   if (!to) return { ok: false, error: "This email has no address to reply to." };
 
-  const read = readMessage(last);
-  const messageId = header(last.payload, "Message-ID");
-  const references = [header(last.payload, "References"), messageId].filter(Boolean).join(" ");
+  const read = readMessage(message);
+  const id = header(message.payload, "Message-ID");
+  const references = [header(message.payload, "References"), id].filter(Boolean).join(" ");
   const sender = read.fromName ? `${read.fromName} <${read.fromAddress}>` : read.fromAddress;
   const raw = buildEmail(
     {
       From: await fromAddress(),
       To: to,
-      Subject: encodeWord(withPrefix("Re", header(last.payload, "Subject"))),
-      "In-Reply-To": messageId,
+      Subject: encodeWord(withPrefix("Re", header(message.payload, "Subject"))),
+      "In-Reply-To": id,
       References: references,
     },
     `${text}\n\nOn ${formatDateTime(read.at)}, ${sender} wrote:\n${quote(read.textBody)}\n`
   );
-  await send(raw, threadId);
+  await send(raw, message.threadId);
   return { ok: true };
 }
 

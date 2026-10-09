@@ -251,6 +251,16 @@ export async function openPersonalThread(threadId: string): Promise<PersonalMail
   return messages.map(readMessage);
 }
 
+// Delete, as in Gmail: moves a whole conversation, or one email of it, to
+// Gmail's Bin, where it can still be recovered for 30 days.
+export async function trashPersonalThread(threadId: string): Promise<void> {
+  await gmailFetch(`/threads/${encodeURIComponent(threadId)}/trash`, { method: "POST" });
+}
+
+export async function trashPersonalMessage(messageId: string): Promise<void> {
+  await gmailFetch(`/messages/${encodeURIComponent(messageId)}/trash`, { method: "POST" });
+}
+
 // One attachment's file.
 export async function getPersonalAttachment(messageId: string, attachmentId: string): Promise<Buffer> {
   const res = await gmailFetch<{ data?: string }>(
