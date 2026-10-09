@@ -44,6 +44,7 @@ import TaskActivityPanel, { type TaskPopup } from "@/components/TaskActivityPane
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
 import PersonalMailPanel from "@/components/PersonalMailPanel";
+import EmailBody, { formatFileSize } from "@/components/EmailBody";
 import SaleModal from "@/components/SaleModal";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
@@ -232,36 +233,6 @@ function mailboxOf(mode: Mode): Mailbox | null {
 // worked out live and can't be dismissed, so `dismissable` rules them out.
 function isInformationalSaleAlert(alert: AlertItem): boolean {
   return alert.dismissable && alert.type.startsWith("SALE_");
-}
-
-// "1.2 MB" / "340 KB" — attachment sizes in an open email.
-function formatFileSize(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  return `${Math.max(1, Math.round(bytes / 1024))} KB`;
-}
-
-// Fits an email's original HTML (shown by default) to the width of
-// its frame (2026-09-24). Most HTML email is laid out at a fixed width
-// (often 600px+), wider than the modal, which used to leave it
-// scrolling sideways. Once the frame has loaded, the content is scaled
-// down to fit if it's wider than the frame, and the frame is resized to
-// the content's full height so the modal has one scroll bar, not two.
-// This reads the frame's document, which is why the frame is sandboxed
-// with allow-same-origin — still with no allow-scripts, so nothing in
-// the email itself can ever run.
-function fitHtmlFrame(frame: HTMLIFrameElement) {
-  const doc = frame.contentDocument;
-  if (!doc?.body) return;
-  const root = doc.documentElement;
-  const contentWidth = root.scrollWidth;
-  const contentHeight = root.scrollHeight;
-  const scale = contentWidth > frame.clientWidth ? frame.clientWidth / contentWidth : 1;
-  root.style.overflow = "hidden";
-  if (scale < 1) {
-    doc.body.style.transformOrigin = "0 0";
-    doc.body.style.transform = `scale(${scale})`;
-  }
-  frame.style.height = `${Math.ceil(contentHeight * scale) + 2}px`;
 }
 
 type InboxUrlParams = {
@@ -1029,15 +1000,7 @@ export default function AdminInboxPanel({
   );
 
   if (mode === "personal") {
-    return (
-      <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-6 py-6">
-        <div className="mb-3 flex h-[30px] items-center">
-          <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
-        </div>
-        <div className="mb-3">{modeBar}</div>
-        <PersonalMailPanel gmail={gmail} error={gmailError} />
-      </div>
-    );
+    return <PersonalMailPanel modeBar={modeBar} gmail={gmail} error={gmailError} />;
   }
 
   return (
@@ -1642,29 +1605,11 @@ export default function AdminInboxPanel({
                       </div>
 
                       <div className="p-3">
-                        {item.htmlBody && textShownId !== item.id ? (
-                          // The sender's original formatting (2026-09-24),
-                          // shown by default since 2026-09-28. No
-                          // allow-scripts, so nothing in the email can run
-                          // (allow-same-origin only lets fitHtmlFrame measure
-                          // and fit it); <base target="_blank"> makes its
-                          // links open in a new tab rather than inside the
-                          // frame. Its images do load from the sender's
-                          // server, as in any mail app.
-                          <iframe
-                            title="Original email"
-                            sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-                            srcDoc={`<base target="_blank">${item.htmlBody}`}
-                            onLoad={(e) => fitHtmlFrame(e.currentTarget)}
-                            className="h-[60vh] w-full bg-white"
-                          />
-                        ) : (
-                          // Long unbroken text (tracking links, mostly) wraps
-                          // instead of pushing the modal sideways.
-                          <p className="whitespace-pre-wrap text-sm text-neutral-700 [overflow-wrap:anywhere]">
-                            {item.textBody}
-                          </p>
-                        )}
+                        <EmailBody
+                          htmlBody={item.htmlBody}
+                          textBody={item.textBody}
+                          showText={textShownId === item.id}
+                        />
                         {item.attachments.length > 0 && (
                           <ul className="mt-3 space-y-1 border-t border-neutral-200 pt-2">
                             {item.attachments.map((a) => (
