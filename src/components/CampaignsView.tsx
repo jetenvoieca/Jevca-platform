@@ -42,8 +42,8 @@ import { useAutoSave } from "@/components/useAutoSave";
 
 // Marketing → Mail Campaigns (2026-10-08, step 3a; reworked the same day
 // from Craig's annotated mockup), laid out like it: on the left, the
-// Preview of the finished mail; in the middle, the Components tray and
-// the selected mail — its template's layout as a form, with each
+// Preview of the finished mail; in the middle, the selected mail (with
+// "+ Add component" above it) — its template's layout as a form, with each
 // component's content typed straight into it, and the EN | FR switch
 // (which language is typed, and previewed) above it with the subject and
 // preview text — in French, "Translate now" fills whatever has English

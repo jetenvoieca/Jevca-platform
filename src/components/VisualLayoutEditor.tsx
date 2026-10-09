@@ -33,6 +33,7 @@ import {
 import { rowClass, type PreviewDevice } from "@/components/pageRows";
 import { Labelled } from "@/components/blockShapes";
 import NumberField from "@/components/NumberField";
+import FormModal from "@/components/FormModal";
 import {
   BarButton,
   BarDivider,
@@ -52,12 +53,13 @@ import {
 // pieces in visualEditorParts. What the components are, how each is
 // drawn and any settings of its own come from the caller
 // (PageStyleLayoutEditor, MailLayoutEditor).
-// - Add: drag a component from the tray onto the layout (or click it to
-//   add it at the end). A blue line shows where it will land: above or
-//   below a row, or beside a component (desktop only).
-// - Move: drag a component the same way.
-// - Remove: drag a component back onto the tray, which turns red while
-//   it's over it — or select it and use its bar's Remove (or Delete).
+// - Add: "+ Add component" above the page opens a window listing the
+//   components (2026-10-09, replacing the tray to keep the screen clean —
+//   Craig's choice); the one chosen goes in a row of its own below the
+//   selected component, or at the end when none is selected.
+// - Move: drag a component. A blue line shows where it will land: above
+//   or below a row, or beside a component (desktop only).
+// - Remove: select it and use its bar's Remove (or Delete).
 // - Size: select a component and drag its edge (desktop only — on a
 //   phone every component is full width).
 // - Spacing: drag the shaded strips — the gaps between rows, between
@@ -77,22 +79,18 @@ import {
 // `footer` is a fixed part drawn below the components (a mail's
 // footer). Every change goes straight to `onChange`, which saves it.
 
-// A component offered in the tray.
+// A component offered in the Add component window.
 export type EditorComponent<T extends string> = { value: T; label: string };
 
 // A component's own settings, opened from its bar: the button's label,
 // the panel's title and its contents.
 export type BlockSettingsPanel = { button: string; title: string; content: ReactNode };
 
-type DragItem<B extends RowBlock> =
-  | { kind: "new"; type: B["type"] }
-  | { kind: "move"; block: B };
+// A component being moved.
+type DragItem<B extends RowBlock> = { block: B };
 
 // What a component's drop zone knows about where it is.
 type DropData = { blockId: string; rowIndex: number };
-
-// The tray's drop zone id: a component dropped here is removed.
-const TRAY_ID = "tray";
 
 export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayout<B>>({
   layout,
@@ -127,8 +125,7 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragItem<B> | null>(null);
   const [dropTarget, setDropTarget] = useState<BlockDropTarget | null>(null);
-  // A component being moved is over the tray, so dropping removes it.
-  const [overTray, setOverTray] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = groupBlocksByRow(layout.blocks);
@@ -156,21 +153,18 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   const handleDragStart = (e: DragStartEvent) => {
     setDragging((e.active.data.current as DragItem<B> | undefined) ?? null);
     setDropTarget(null);
-    setOverTray(false);
   };
 
   // Works out the landing place from the pointer's position over a
   // component: its top or bottom quarter = a row of its own above or
   // below that row; otherwise beside it, on the side the pointer is on.
-  // On a phone components stack, so it's always above or below. Over
-  // the tray, a component being moved is marked for removal instead.
+  // On a phone components stack, so it's always above or below.
   const handleDragMove = (e: DragMoveEvent) => {
     const item = e.active.data.current as DragItem<B> | undefined;
     const start = e.activatorEvent as PointerEvent;
     const over = e.over;
-    const onTray = item?.kind === "move" && over?.id === TRAY_ID;
     let target: BlockDropTarget | null = null;
-    if (item && over && over.id !== TRAY_ID) {
+    if (item && over) {
       if (over.id === "end") {
         target = { kind: "row", index: rows.length };
       } else {
@@ -185,44 +179,36 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
           target = { kind: "beside", blockId, side: x < r.left + r.width / 2 ? "left" : "right" };
         }
       }
-      if (target && item.kind === "move" && changesNothing(rows, item.block.id, target)) {
+      if (target && changesNothing(rows, item.block.id, target)) {
         target = null;
       }
     }
-    setOverTray(onTray);
     setDropTarget((current) =>
       JSON.stringify(current) === JSON.stringify(target) ? current : target
     );
   };
 
   const handleDragEnd = () => {
-    if (dragging?.kind === "move" && overTray) {
-      remove(dragging.block.id);
-    } else if (dragging && dropTarget) {
-      if (dragging.kind === "new") {
-        const block = newBlock(dragging.type);
-        place(block, dropTarget);
-        setSelectedId(block.id);
-      } else {
-        place(dragging.block, dropTarget);
-      }
-    }
+    if (dragging && dropTarget) place(dragging.block, dropTarget);
     handleDragCancel();
   };
 
   const handleDragCancel = () => {
     setDragging(null);
     setDropTarget(null);
-    setOverTray(false);
   };
 
-  const addAtEnd = (type: B["type"]) => {
+  // The chosen component goes in a row of its own below the selected
+  // component's row, or at the end, and is selected.
+  const add = (type: B["type"]) => {
+    const selectedRow = rows.findIndex((r) => r.some((b) => b.id === selectedId));
     const block = newBlock(type);
-    place(block, { kind: "row", index: rows.length });
+    place(block, { kind: "row", index: selectedRow >= 0 ? selectedRow + 1 : rows.length });
     setSelectedId(block.id);
+    setAdding(false);
   };
 
-  const draggingId = dragging?.kind === "move" ? dragging.block.id : null;
+  const draggingId = dragging?.block.id ?? null;
 
   return (
     <DndContext
@@ -233,111 +219,135 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
       onDragEnd={handleDragEnd}
       onDragCancel={handleDragCancel}
     >
-      <div className="flex min-h-0 flex-1 gap-3">
-        <Tray components={components} moving={!!draggingId} over={overTray} onAdd={addAtEnd} />
-
-        <div className="flex min-w-0 flex-1 flex-col">
-          <DeviceSwitch device={device} onDevice={setDevice} />
-          <ScaledFrame
-            device={device}
-            desktopWidth={desktopWidth}
-            surroundColor={surroundColor}
-            fluid={fluid}
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50"
           >
-            <PageFrame
-              margins={layout.margins}
-              device={device}
-              backgroundColor={backgroundColor}
-              backgroundImage={backgroundImage}
-              onMargins={(margins) => onChange({ ...layout, margins })}
-              onDeselect={deselect}
-            >
-              {rows.map((row, i) => {
-                const key = rowKey(row);
-                const settings = rowSettingsOf(layout, key);
-                const setRow = (patch: Partial<RowSettings>) =>
-                  onChange(updateRowSettings(layout, key, patch));
-                return (
-                  <div key={key}>
-                    {i > 0 && (
-                      <SpacingHandle
-                        direction="vertical"
-                        value={rowSettingsOf(layout, rowKey(rows[i - 1])).below}
-                        onChange={(below) =>
-                          onChange(updateRowSettings(layout, rowKey(rows[i - 1]), { below }))
-                        }
-                      />
-                    )}
-                    <DropLine show={dropTarget?.kind === "row" && dropTarget.index === i} />
-                    <div className={rowClass(settings.horizontal, settings.vertical, device)}>
-                      {row.map((b, j) => (
-                        <BlockWithGap
-                          key={b.id}
-                          first={j === 0}
-                          between={settings.between}
-                          device={device}
-                          onBetween={(between) => setRow({ between })}
-                        >
-                          <BlockItem
-                            block={b}
-                            label={labelOf(b.type)}
-                            rowIndex={i}
-                            rowSize={row.length}
-                            lastRow={i === rows.length - 1}
-                            device={device}
-                            settings={settings}
-                            horizontalMargin={layout.margins.desktop.horizontal}
-                            selected={b.id === selectedId}
-                            faded={b.id === draggingId}
-                            dropSide={
-                              dropTarget?.kind === "beside" && dropTarget.blockId === b.id
-                                ? dropTarget.side
-                                : null
-                            }
-                            ownSettings={settingsPanel?.(b, (next) =>
-                              onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
-                            )}
-                            onSelect={() => setSelectedId(b.id)}
-                            onWidth={(width) =>
-                              onChange({
-                                ...layout,
-                                blocks: updateBlockWidth(layout.blocks, b.id, width),
-                              })
-                            }
-                            onRow={setRow}
-                            onRemove={() => remove(b.id)}
-                          >
-                            {renderBlock(b)}
-                          </BlockItem>
-                        </BlockWithGap>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })}
-
-              <EndZone
-                empty={rows.length === 0}
-                showLine={dropTarget?.kind === "row" && dropTarget.index === rows.length}
-              />
-              {footer}
-            </PageFrame>
-          </ScaledFrame>
+            + Add component
+          </button>
+          <DeviceSwitch device={device} onDevice={setDevice} />
         </div>
+        <ScaledFrame
+          device={device}
+          desktopWidth={desktopWidth}
+          surroundColor={surroundColor}
+          fluid={fluid}
+        >
+          <PageFrame
+            margins={layout.margins}
+            device={device}
+            backgroundColor={backgroundColor}
+            backgroundImage={backgroundImage}
+            onMargins={(margins) => onChange({ ...layout, margins })}
+            onDeselect={deselect}
+          >
+            {rows.map((row, i) => {
+              const key = rowKey(row);
+              const settings = rowSettingsOf(layout, key);
+              const setRow = (patch: Partial<RowSettings>) =>
+                onChange(updateRowSettings(layout, key, patch));
+              return (
+                <div key={key}>
+                  {i > 0 && (
+                    <SpacingHandle
+                      direction="vertical"
+                      value={rowSettingsOf(layout, rowKey(rows[i - 1])).below}
+                      onChange={(below) =>
+                        onChange(updateRowSettings(layout, rowKey(rows[i - 1]), { below }))
+                      }
+                    />
+                  )}
+                  <DropLine show={dropTarget?.kind === "row" && dropTarget.index === i} />
+                  <div className={rowClass(settings.horizontal, settings.vertical, device)}>
+                    {row.map((b, j) => (
+                      <BlockWithGap
+                        key={b.id}
+                        first={j === 0}
+                        between={settings.between}
+                        device={device}
+                        onBetween={(between) => setRow({ between })}
+                      >
+                        <BlockItem
+                          block={b}
+                          label={labelOf(b.type)}
+                          rowIndex={i}
+                          rowSize={row.length}
+                          lastRow={i === rows.length - 1}
+                          device={device}
+                          settings={settings}
+                          horizontalMargin={layout.margins.desktop.horizontal}
+                          selected={b.id === selectedId}
+                          faded={b.id === draggingId}
+                          dropSide={
+                            dropTarget?.kind === "beside" && dropTarget.blockId === b.id
+                              ? dropTarget.side
+                              : null
+                          }
+                          ownSettings={settingsPanel?.(b, (next) =>
+                            onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
+                          )}
+                          onSelect={() => setSelectedId(b.id)}
+                          onWidth={(width) =>
+                            onChange({
+                              ...layout,
+                              blocks: updateBlockWidth(layout.blocks, b.id, width),
+                            })
+                          }
+                          onRow={setRow}
+                          onRemove={() => remove(b.id)}
+                        >
+                          {renderBlock(b)}
+                        </BlockItem>
+                      </BlockWithGap>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+
+            <EndZone
+              empty={rows.length === 0}
+              showLine={dropTarget?.kind === "row" && dropTarget.index === rows.length}
+              onAdd={() => setAdding(true)}
+            />
+            {footer}
+          </PageFrame>
+        </ScaledFrame>
       </div>
 
       <DragOverlay dropAnimation={null}>
         {dragging && (
-          <div
-            className={`rounded-md border bg-white px-3 py-2 text-sm shadow-md ${
-              overTray ? "border-red-500 text-red-700" : "border-blue-500 text-neutral-800"
-            }`}
-          >
-            {overTray ? "Remove " : ""}
-            {labelOf(dragging.kind === "new" ? dragging.type : dragging.block.type)}
+          <div className="rounded-md border border-blue-500 bg-white px-3 py-2 text-sm text-neutral-800 shadow-md">
+            {labelOf(dragging.block.type)}
           </div>
         )}
       </DragOverlay>
+
+      {adding && (
+        <FormModal title="Add component" busy={false} onClose={() => setAdding(false)}>
+          <div className="grid grid-cols-2 gap-2">
+            {components.map((c) => (
+              <button
+                key={c.value}
+                type="button"
+                onClick={() => add(c.value)}
+                className="rounded-md border border-neutral-300 px-3 py-2.5 text-left text-sm text-neutral-800 hover:border-neutral-400 hover:bg-neutral-50"
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+          <p className="text-xs text-neutral-400">
+            {selectedId
+              ? "It goes below the selected component."
+              : "It goes at the end. Select a component first to add below it."}{" "}
+            Drag it to move it.
+          </p>
+        </FormModal>
+      )}
     </DndContext>
   );
 }
@@ -348,69 +358,6 @@ function changesNothing(rows: RowBlock[][], blockId: string, target: BlockDropTa
   if (target.kind === "beside") return target.blockId === blockId;
   const index = rows.findIndex((r) => r.some((b) => b.id === blockId));
   return rows[index]?.length === 1 && (target.index === index || target.index === index + 1);
-}
-
-// The Components tray: components to drag onto the layout, and — while
-// a component on it is being dragged — the place to drop it to remove it
-// (outlined in red, filled red when it's over it).
-function Tray<T extends string>({
-  components,
-  moving,
-  over,
-  onAdd,
-}: {
-  components: readonly EditorComponent<T>[];
-  moving: boolean;
-  over: boolean;
-  onAdd: (type: T) => void;
-}) {
-  const { setNodeRef } = useDroppable({ id: TRAY_ID });
-  const outline = !moving
-    ? "border-transparent"
-    : over
-      ? "border-red-500 bg-red-50"
-      : "border-dashed border-red-300";
-  return (
-    <aside
-      ref={setNodeRef}
-      className={`flex w-40 shrink-0 flex-col gap-1.5 rounded-lg border-2 p-1.5 ${outline}`}
-    >
-      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Components</p>
-      {components.map((c) => (
-        <TrayItem key={c.value} type={c.value} label={c.label} onAdd={onAdd} />
-      ))}
-      <p className={`mt-1 text-xs ${moving ? "text-red-600" : "text-neutral-400"}`}>
-        {moving
-          ? "Drop here to remove."
-          : "Drag onto the layout, or click to add at the end. Drag back here to remove."}
-      </p>
-    </aside>
-  );
-}
-
-function TrayItem<T extends string>({
-  type,
-  label,
-  onAdd,
-}: {
-  type: T;
-  label: string;
-  onAdd: (type: T) => void;
-}) {
-  const item = { kind: "new", type };
-  const { setNodeRef, attributes, listeners } = useDraggable({ id: `new:${type}`, data: item });
-  return (
-    <button
-      ref={setNodeRef}
-      type="button"
-      onClick={() => onAdd(type)}
-      {...attributes}
-      {...listeners}
-      className="cursor-grab rounded-md border border-neutral-300 bg-white px-2.5 py-1.5 text-left text-sm text-neutral-800 hover:border-neutral-400 hover:bg-neutral-50 active:cursor-grabbing"
-    >
-      {label}
-    </button>
-  );
 }
 
 // A component in its row, with the draggable gap before it when it
@@ -484,7 +431,7 @@ function BlockItem<B extends RowBlock>({
   onRemove: () => void;
   children: ReactNode;
 }) {
-  const item: DragItem<B> = { kind: "move", block };
+  const item: DragItem<B> = { block };
   const drop: DropData = { blockId: block.id, rowIndex };
   const drag = useDraggable({ id: `block:${block.id}`, data: item });
   const zone = useDroppable({ id: `drop:${block.id}`, data: drop });
@@ -596,19 +543,29 @@ function DropLine({ show }: { show: boolean }) {
   );
 }
 
-// Below the last row: drop here to add at the end.
-function EndZone({ empty, showLine }: { empty: boolean; showLine: boolean }) {
+// Below the last row: drop a component here to move it to the end. With
+// no components yet, a big "Add a component" instead.
+function EndZone({ empty, showLine, onAdd }: { empty: boolean; showLine: boolean; onAdd: () => void }) {
   const { setNodeRef } = useDroppable({ id: "end" });
   return (
     <div ref={setNodeRef} className={`relative ${empty ? "pt-0" : "pt-4"}`}>
       <DropLine show={showLine} />
-      <div
-        className={`flex items-center justify-center rounded-md border-2 border-dashed border-neutral-200 text-sm text-neutral-400 ${
-          empty ? "h-60" : "h-20"
-        }`}
-      >
-        {empty ? "Drag components here from the left" : "Drop here to add at the end"}
-      </div>
+      {empty ? (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onAdd();
+          }}
+          className="flex h-60 w-full items-center justify-center rounded-md border-2 border-dashed border-neutral-200 text-sm text-neutral-400 hover:border-neutral-300 hover:text-neutral-600"
+        >
+          + Add a component
+        </button>
+      ) : (
+        <div className="flex h-12 items-center justify-center rounded-md border-2 border-dashed border-neutral-200 text-xs text-neutral-400">
+          Drop here to move a component to the end
+        </div>
+      )}
     </div>
   );
 }

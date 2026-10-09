@@ -46,7 +46,8 @@ const ScaleContext = createContext(1);
 // is dragged.
 const FrameWidthContext = createContext(PAGE_DESKTOP_WIDTH);
 
-// The Desktop / Phone switch, with a hint for each, above the page.
+// The Desktop / Phone switch above the page (its hint text dropped
+// 2026-10-09 to keep the screen clean, Craig's choice).
 export function DeviceSwitch({
   device,
   onDevice,
@@ -55,26 +56,19 @@ export function DeviceSwitch({
   onDevice: (device: PreviewDevice) => void;
 }) {
   return (
-    <div className="mb-3 flex items-center justify-between gap-3">
-      <div className="flex rounded-md border border-neutral-300 p-0.5">
-        {(["desktop", "phone"] as const).map((d) => (
-          <button
-            key={d}
-            type="button"
-            onClick={() => onDevice(d)}
-            className={`rounded px-3 py-1 text-sm ${
-              device === d ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50"
-            }`}
-          >
-            {d === "desktop" ? "Desktop" : "Phone"}
-          </button>
-        ))}
-      </div>
-      <p className="text-right text-xs text-neutral-400">
-        {device === "desktop"
-          ? "Drag the shaded strips to change spacing and margins."
-          : "On a phone every component is full width, stacked. Widths and alignment are set in Desktop."}
-      </p>
+    <div className="flex rounded-md border border-neutral-300 p-0.5">
+      {(["desktop", "phone"] as const).map((d) => (
+        <button
+          key={d}
+          type="button"
+          onClick={() => onDevice(d)}
+          className={`rounded px-3 py-1 text-sm ${
+            device === d ? "bg-neutral-900 text-white" : "text-neutral-600 hover:bg-neutral-50"
+          }`}
+        >
+          {d === "desktop" ? "Desktop" : "Phone"}
+        </button>
+      ))}
     </div>
   );
 }
