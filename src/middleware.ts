@@ -64,6 +64,8 @@ const NEWS_PATH_PREFIXES = ["/api/media/", "/unsubscribe/"];
 // - /inbox-app/           — the Inbox's home-screen app manifest and icons
 //   (2026-10-09); the iPad fetches them without the login cookie, and
 //   there's nothing private in them
+// - /privacy              — the tool's privacy statement, which Google
+//   needs to be public for the Gmail connection (2026-10-09)
 const PUBLIC_PATH_PREFIXES = [
   "/api/hopper",
   "/studio/",
@@ -77,6 +79,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/campaigns/send-due",
   "/login",
   "/inbox-app/",
+  "/privacy",
 ];
 
 export async function middleware(request: NextRequest) {
