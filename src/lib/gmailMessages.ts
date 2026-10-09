@@ -21,9 +21,10 @@ const BOX_QUERY: Record<PersonalBox, string> = {
   SENT: "in:sent newer_than:7d",
 };
 // At most this many emails per list, fetched this many at a time (Gmail
-// allows each account so many requests a second), and for no longer than
-// this — a slow Gmail returns the emails fetched so far rather than
-// running into the server's own time limit.
+// allows each account so many requests a second). Once Gmail has listed
+// them, fetching their details stops after this long — a slow Gmail
+// returns the emails fetched so far (always at least the first batch)
+// rather than running into the server's own time limit.
 const LIST_LIMIT = 50;
 const FETCH_CHUNK = 10;
 const FETCH_BUDGET_MS = 6000;
@@ -106,16 +107,16 @@ export type PersonalMailItem = {
 // The list's conversations, newest first — built from its emails' headers
 // only (one light request per email), grouped by conversation.
 export async function listPersonalMail(box: PersonalBox): Promise<PersonalMailItem[]> {
-  const started = Date.now();
   const params = new URLSearchParams({ q: BOX_QUERY[box], maxResults: String(LIST_LIMIT) });
   const list = await gmailFetch<{ messages?: { id: string }[] }>(`/messages?${params}`);
+  const started = Date.now();
 
   const ids = (list.messages ?? []).map((m) => m.id);
   const query =
     "format=metadata&metadataHeaders=From&metadataHeaders=To&metadataHeaders=Subject" +
     "&fields=id,threadId,labelIds,snippet,internalDate,payload/headers";
   const messages: GmailMessage[] = [];
-  for (let i = 0; i < ids.length && Date.now() - started < FETCH_BUDGET_MS; i += FETCH_CHUNK) {
+  for (let i = 0; i < ids.length && (i === 0 || Date.now() - started < FETCH_BUDGET_MS); i += FETCH_CHUNK) {
     messages.push(
       ...(await Promise.all(
         ids.slice(i, i + FETCH_CHUNK).map((id) => gmailFetch<GmailMessage>(`/messages/${id}?${query}`))
