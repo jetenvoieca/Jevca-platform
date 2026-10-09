@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { APP_URL } from "@/lib/stripe";
+import { APP_URL } from "@/lib/appUrl";
 import type { GuideStep } from "@/lib/actions/guides";
 
 // Guide PDF (2026-09-04) — same pdf-lib approach as invoice.ts/

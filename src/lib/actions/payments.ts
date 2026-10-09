@@ -22,9 +22,9 @@ import {
   getPublishableKey,
   toMinorUnits,
   fromMinorUnits,
-  APP_URL,
   type SaleStripeFields,
 } from "@/lib/stripe";
+import { APP_URL } from "@/lib/appUrl";
 
 // No revalidatePath(`/sites/${siteId}/artworks`) calls in this file
 // (2026-08-15 removal) — that route is force-dynamic (never statically

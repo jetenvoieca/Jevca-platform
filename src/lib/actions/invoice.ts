@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-import { APP_URL } from "@/lib/stripe";
+import { APP_URL } from "@/lib/appUrl";
 import { saleBreakdown, saleTitle } from "@/lib/saleMath";
 
 // Assigned once, lazily, the first time an invoice is actually generated

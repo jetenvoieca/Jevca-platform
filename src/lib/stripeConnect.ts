@@ -1,4 +1,5 @@
-import { APP_URL, type StripeMode } from "@/lib/stripe";
+import { type StripeMode } from "@/lib/stripe";
+import { APP_URL } from "@/lib/appUrl";
 
 // Stripe Connect OAuth (2026-09-25) — how an artist links their own
 // existing Stripe account, so their sales are paid straight into it (see

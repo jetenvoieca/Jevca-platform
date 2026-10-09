@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { APP_URL } from "@/lib/stripe";
+import { APP_URL } from "@/lib/appUrl";
 
 // Certificate of Authenticity PDF (2026-09-03) — its own generator file,
 // deliberately separate from invoice.ts: this is a different document

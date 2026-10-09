@@ -2098,3 +2098,16 @@ model CampaignMail {
   @@index([campaignId])
   @@index([templateId])
 }
+
+// Craig's own Gmail (craig@isendyouthis.com, Google Workspace), shown in
+// the Inbox's Personal tab (2026-10-09, direct request — "save going to
+// Gmail all the time"). Only ever one row. Mail is read live from Gmail
+// and never copied here; all that's kept is the long-lived permission
+// Google gave when Connect Gmail was approved, encrypted (see
+// lib/secretBox.ts and lib/gmail.ts).
+model GmailConnection {
+  id                    String   @id @default(cuid())
+  email                 String   @unique
+  refreshTokenEncrypted String
+  connectedAt           DateTime @default(now())
+}

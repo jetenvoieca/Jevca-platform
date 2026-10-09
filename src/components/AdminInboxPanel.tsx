@@ -43,6 +43,7 @@ import TaskForm from "@/components/TaskForm";
 import TaskActivityPanel, { type TaskPopup } from "@/components/TaskActivityPanel";
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
+import PersonalMailPanel from "@/components/PersonalMailPanel";
 import SaleModal from "@/components/SaleModal";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
@@ -94,6 +95,8 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 //     raised by the Studio app — which, being only for information, can
 //     also be deleted straight from the list; every other alert shows its
 //     message with a link and, where allowed, Dismiss (see AlertDetail).
+//   - Personal mode (2026-10-09): Craig's own Gmail, in a panel of its
+//     own — see PersonalMailPanel.
 //
 // The left column has two filters side by side: the artist filter (all
 // modes) and a second one that depends on the mode — Inbox or Archived
@@ -195,13 +198,14 @@ const KIND_LABELS: Record<string, string> = {
 const DELETE_MESSAGE_CONFIRM =
   "Delete this message? Any replies to it will stay in the Sent list, just no longer linked to it. This can't be undone.";
 
-type Mode = "art" | "business" | "task" | "alert";
+type Mode = "art" | "business" | "task" | "alert" | "personal";
 
 const MODES: { mode: Mode; label: string }[] = [
   { mode: "art", label: "Art" },
   { mode: "business", label: "Business" },
   { mode: "task", label: "Task" },
   { mode: "alert", label: "Alert" },
+  { mode: "personal", label: "Personal" },
 ];
 
 const EMPTY_TASK_FORM: TaskInput = {
@@ -293,6 +297,9 @@ export default function AdminInboxPanel({
   selectedArtistId,
   composeRecipients,
   mailboxAddresses,
+  gmail,
+  gmailError,
+  openPersonal,
 }: {
   mailbox: Mailbox;
   initialList: InboxSummaryItem[];
@@ -308,6 +315,11 @@ export default function AdminInboxPanel({
   selectedArtistId: string | null;
   composeRecipients: ComposeRecipient[];
   mailboxAddresses: Record<Mailbox, string>;
+  // Craig's own Gmail, for the Personal tab (2026-10-09) — see
+  // PersonalMailPanel. `openPersonal` = arrived back from connecting it.
+  gmail: { email: string } | null;
+  gmailError: string | null;
+  openPersonal: boolean;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -315,7 +327,7 @@ export default function AdminInboxPanel({
   // Opens straight into Alert mode if the address already names an alert
   // (e.g. after a page reload), otherwise into the address's mailbox.
   const [mode, setMode] = useState<Mode>(
-    selectedAlertId ? "alert" : mailbox === "BUSINESS" ? "business" : "art"
+    openPersonal ? "personal" : selectedAlertId ? "alert" : mailbox === "BUSINESS" ? "business" : "art"
   );
   const modeMailbox = mailboxOf(mode);
   const isMailMode = modeMailbox !== null;
@@ -1006,6 +1018,28 @@ export default function AdminInboxPanel({
     refreshOpenAlerts().then(() => router.refresh());
   };
 
+  const modeBar = (
+    <div className={pillWrapCls}>
+      {MODES.map((m) => (
+        <button key={m.mode} type="button" onClick={() => switchMode(m.mode)} className={pillCls(mode === m.mode)}>
+          {m.label}
+        </button>
+      ))}
+    </div>
+  );
+
+  if (mode === "personal") {
+    return (
+      <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-6 py-6">
+        <div className="mb-3 flex h-[30px] items-center">
+          <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
+        </div>
+        <div className="mb-3">{modeBar}</div>
+        <PersonalMailPanel gmail={gmail} error={gmailError} />
+      </div>
+    );
+  }
+
   return (
     <div className="mx-auto flex h-full w-full max-w-5xl gap-6 px-6 py-6">
       {/* ---- LEFT: Art / Business / Task / Alert list + filters ---- */}
@@ -1015,18 +1049,7 @@ export default function AdminInboxPanel({
         </div>
 
         <div className="mb-3 flex items-center justify-between gap-2">
-          <div className={pillWrapCls}>
-            {MODES.map((m) => (
-              <button
-                key={m.mode}
-                type="button"
-                onClick={() => switchMode(m.mode)}
-                className={pillCls(mode === m.mode)}
-              >
-                {m.label}
-              </button>
-            ))}
-          </div>
+          {modeBar}
           {mode !== "alert" && (
             <button
               type="button"

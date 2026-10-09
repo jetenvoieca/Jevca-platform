@@ -8,6 +8,7 @@ import { parseClientAlertId } from "@/lib/clientAlertIds";
 import { getInboxList, getArtistFilterOptions } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
 import { getOpenTasks } from "@/lib/actions/tasks";
+import { getGmailConnection } from "@/lib/gmail";
 import { parisToday } from "@/lib/parisTime";
 import { getPlatformTaskCategories } from "@/lib/actions/platformTaskSettings";
 import { getClientPanelDataForArtist } from "@/lib/clientPanelData";
@@ -37,6 +38,9 @@ export const metadata: Metadata = {
 // it's the Inbox or the Archived messages (?archived=1) are in the URL
 // too (2026-09-27), for the same reason.
 //
+// ?personal=1 opens the Personal tab (Craig's own Gmail, 2026-10-09) —
+// where Connect Gmail comes back to, with ?gmailError=... if it failed.
+//
 // The selected alert is in the URL too (?alert=...): a payment-overdue
 // alert opens the client's Owner/Domain/Subscription cards, whose data
 // has to come from the server so their own router.refresh() after a save
@@ -44,9 +48,23 @@ export const metadata: Metadata = {
 export default async function InboxPage({
   searchParams,
 }: {
-  searchParams: Promise<{ artistId?: string; alert?: string; archived?: string; mailbox?: string }>;
+  searchParams: Promise<{
+    artistId?: string;
+    alert?: string;
+    archived?: string;
+    mailbox?: string;
+    personal?: string;
+    gmailError?: string;
+  }>;
 }) {
-  const { artistId, alert: alertId, archived, mailbox: mailboxParam } = await searchParams;
+  const {
+    artistId,
+    alert: alertId,
+    archived,
+    mailbox: mailboxParam,
+    personal,
+    gmailError,
+  } = await searchParams;
   const showArchived = archived === "1";
   const mailbox: Mailbox = mailboxParam === "business" ? "BUSINESS" : "ART";
 
@@ -59,6 +77,7 @@ export default async function InboxPage({
     tasks,
     taskCategories,
     recentSites,
+    gmail,
   ] = await Promise.all([
     getOpenAlerts(),
     getInboxList(mailbox, artistId || undefined, showArchived),
@@ -68,6 +87,7 @@ export default async function InboxPage({
     getOpenTasks(artistId || undefined),
     getPlatformTaskCategories(),
     getRecentSites(),
+    getGmailConnection(),
   ]);
 
   // Derived from the alert id rather than looked up in `alerts`, so the
@@ -97,6 +117,9 @@ export default async function InboxPage({
           selectedArtistId={artistId || null}
           composeRecipients={composeRecipients}
           mailboxAddresses={mailboxAddresses}
+          gmail={gmail}
+          gmailError={gmailError || null}
+          openPersonal={personal === "1"}
         />
       }
     />
