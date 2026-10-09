@@ -19,9 +19,11 @@ const GMAIL_SCOPE = "https://www.googleapis.com/auth/gmail.modify";
 const TOKEN_URL = "https://oauth2.googleapis.com/token";
 export const GMAIL_API = "https://gmail.googleapis.com/gmail/v1/users/me";
 
-// The one-off nonce the connect route hands Google, checked on return.
-export const GMAIL_STATE_COOKIE = "gmail_connect_state";
-export const GMAIL_COOKIE_PATH = "/api/gmail";
+// The purpose the connect route's signed `state` is made for, checked by
+// the callback (see createSignedState in lib/auth.ts), and how long a
+// sign-in at Google may take.
+export const GMAIL_STATE_PURPOSE = "gmail-connect";
+export const GMAIL_STATE_LIFETIME_MS = 15 * 60 * 1000;
 
 function clientCredentials(): { clientId: string; clientSecret: string } {
   const clientId = process.env.GOOGLE_CLIENT_ID;
@@ -34,7 +36,7 @@ function clientCredentials(): { clientId: string; clientSecret: string } {
 
 // Google's sign-in page. `prompt=consent` makes Google hand back a fresh
 // long-lived permission every time, even on a reconnect.
-export function gmailAuthorizeUrl(nonce: string): string {
+export function gmailAuthorizeUrl(state: string): string {
   const { clientId } = clientCredentials();
   const params = new URLSearchParams({
     client_id: clientId,
@@ -43,7 +45,7 @@ export function gmailAuthorizeUrl(nonce: string): string {
     scope: GMAIL_SCOPE,
     access_type: "offline",
     prompt: "consent",
-    state: nonce,
+    state,
   });
   return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }

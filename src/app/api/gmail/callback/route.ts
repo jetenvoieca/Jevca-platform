@@ -1,23 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { completeGmailConnection, GMAIL_COOKIE_PATH, GMAIL_STATE_COOKIE } from "@/lib/gmail";
+import { isValidSignedState } from "@/lib/auth";
+import { completeGmailConnection, GMAIL_STATE_PURPOSE } from "@/lib/gmail";
 
 // Where Google returns after Connect Gmail is approved (or cancelled).
-// Checks the nonce, saves the connection, and goes back to the Inbox's
-// Personal tab either way, with a message if it didn't work.
+// Checks the signed `state` the connect route sent (so only a sign-in
+// this app started, in the last few minutes, is accepted — and this route
+// is behind the admin login too), saves the connection, and goes back to
+// the Inbox's Personal tab either way, with a message if it didn't work.
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
-  const nonce = request.cookies.get(GMAIL_STATE_COOKIE)?.value;
 
   const back = (error: string | null) => {
     const url = new URL("/accounts/inbox", request.url);
     url.searchParams.set("personal", "1");
     if (error) url.searchParams.set("gmailError", error);
-    const response = NextResponse.redirect(url);
-    response.cookies.set(GMAIL_STATE_COOKIE, "", { path: GMAIL_COOKIE_PATH, maxAge: 0 });
-    return response;
+    return NextResponse.redirect(url);
   };
 
-  if (!nonce || params.get("state") !== nonce) {
+  if (!(await isValidSignedState(GMAIL_STATE_PURPOSE, params.get("state")))) {
     return back("The Gmail connection couldn't be verified. Please try again.");
   }
   if (params.get("error")) return back("The Gmail connection was cancelled.");

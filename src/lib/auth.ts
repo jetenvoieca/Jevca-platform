@@ -66,3 +66,25 @@ export async function isValidSessionToken(
   const expected = await hmac(secret, expiresAtRaw);
   return safeEqual(expected, signature);
 }
+
+// A short-lived signed value for one purpose (2026-10-09, first used as
+// the Gmail connection's OAuth `state`): "<expiry>.<signature>", signed
+// over the purpose too, so it can never be mistaken for a session token
+// or for another purpose's value. Needs nothing stored and no cookie, so
+// it still checks out when the sign-in comes back in a different window
+// (the iPad's home-screen app) or after Connect was pressed twice.
+export async function createSignedState(purpose: string, lifetimeMs: number): Promise<string> {
+  const secret = process.env.AUTH_SECRET;
+  if (!secret) throw new Error("AUTH_SECRET is not configured.");
+  const expiresAt = String(Date.now() + lifetimeMs);
+  return `${expiresAt}.${await hmac(secret, `${purpose}:${expiresAt}`)}`;
+}
+
+export async function isValidSignedState(purpose: string, state: string | null): Promise<boolean> {
+  const secret = process.env.AUTH_SECRET;
+  if (!state || !secret) return false;
+  const [expiresAtRaw, signature] = state.split(".");
+  const expiresAt = Number(expiresAtRaw);
+  if (!expiresAtRaw || !signature || Number.isNaN(expiresAt) || Date.now() > expiresAt) return false;
+  return safeEqual(await hmac(secret, `${purpose}:${expiresAtRaw}`), signature);
+}
