@@ -9,7 +9,8 @@ import { MANUAL_SUBSCRIPTION_METHODS } from "@/lib/subscriptionMethods";
 // monthly, flagged overdue 14 days after that's due — i.e. 44 days since
 // their last recorded payment. Artists with no payment history at all are
 // deliberately not flagged (nothing to measure from — likely still
-// onboarding).
+// onboarding), and neither are clients whose subscription has been
+// cancelled (2026-10-09, see cancelSubscription).
 const MANUAL_OVERDUE_DAYS = 30 + 14;
 
 // 2026-09-19 decision: a sale whose invoice has been emailed but has had
@@ -62,7 +63,7 @@ function daysSince(date: Date, now = Date.now()): number {
 // clearing an alert whose underlying problem is still there.
 export async function isArtistSubscriptionOverdue(artistId: string): Promise<boolean> {
   const artist = await db.artist.findFirst({
-    where: { id: artistId, paymentMethod: { in: MANUAL_SUBSCRIPTION_METHODS } },
+    where: { id: artistId, paymentMethod: { in: MANUAL_SUBSCRIPTION_METHODS }, subscriptionCancelledAt: null },
     select: { subscriptionPayments: { orderBy: { paidAt: "desc" }, take: 1, select: { paidAt: true } } },
   });
   const last = artist?.subscriptionPayments[0];
@@ -207,6 +208,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       db.artist.findMany({
         where: {
           paymentMethod: { in: MANUAL_SUBSCRIPTION_METHODS },
+          subscriptionCancelledAt: null,
           sites: { some: { status: { not: "ARCHIVED" } } },
         },
         select: {
@@ -222,6 +224,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       db.artist.findMany({
         where: {
           OR: [{ paymentMethod: null }, { paymentMethod: "" }],
+          subscriptionCancelledAt: null,
           sites: { some: { status: { not: "ARCHIVED" } } },
         },
         select: {

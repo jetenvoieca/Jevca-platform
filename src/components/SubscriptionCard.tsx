@@ -10,6 +10,7 @@ import {
   addManualSubscriptionPayment,
   deleteManualSubscriptionPayment,
 } from "@/lib/actions/subscriptions";
+import { reinstateSubscription } from "@/lib/actions/clientAlerts";
 import { formatDate } from "@/lib/formatDate";
 import {
   SUBSCRIPTION_METHODS,
@@ -104,11 +105,35 @@ export default function SubscriptionCard({
     });
   };
 
+  const handleReinstate = () => {
+    startTransition(async () => {
+      await reinstateSubscription(artist.id, siteId);
+      router.refresh();
+    });
+  };
+
   const subscriptionTotal = subscriptionPayments.reduce((sum, p) => sum + parseFloat(p.amount), 0);
 
   return (
     <div className={`${cardCls} ${className}`}>
       <p className={cardTitleCls}>Subscription</p>
+
+      {artist.subscriptionCancelledAt && (
+        <div className="mb-3 flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 p-2.5">
+          <div className="text-xs text-amber-800">
+            <p className="font-medium">Cancelled on {formatDate(artist.subscriptionCancelledAt)}</p>
+            <p>To put the site back, change its status on the Domain card.</p>
+          </div>
+          <button
+            type="button"
+            onClick={handleReinstate}
+            disabled={isPending}
+            className="shrink-0 rounded-md border border-neutral-300 bg-white px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Reinstate
+          </button>
+        </div>
+      )}
 
       <label className={labelCls}>Current rate (informational)</label>
       <div className="mb-3 flex items-center gap-1">

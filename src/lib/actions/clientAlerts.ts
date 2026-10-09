@@ -9,6 +9,7 @@ import { OPEN_ALERTS_TAG, isArtistSubscriptionOverdue } from "@/lib/alerts";
 // The type an "Up to date" record is filed under — the overdue-payment
 // alert it deals with.
 const OVERDUE_ALERT_TYPE = "SUBSCRIPTION_PAYMENT_OVERDUE";
+const CANCELLED_ALERT_TYPE = "SUBSCRIPTION_CANCELLED";
 
 // "Up to date" on a payment-overdue alert (2026-09-19, CRM Phase 3).
 // The overdue alert is computed from the payment records rather than
@@ -43,6 +44,52 @@ export async function markSubscriptionUpToDate(
   updateTag(OPEN_ALERTS_TAG);
   revalidatePath("/accounts/inbox");
   return { ok: true };
+}
+
+// Cancel subscription on a payment-overdue alert (2026-10-09, direct
+// request — the client has left, so it shouldn't keep coming back as
+// overdue). Marks the subscription cancelled and archives the client's
+// sites (Craig's choice), then records it in the Alert view's processed
+// list. Undone with reinstateSubscription; the sites' status is then set
+// back by hand, on the Domain card.
+export async function cancelSubscription(
+  artistId: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const artist = await db.artist.findUnique({
+    where: { id: artistId },
+    select: { name: true, subscriptionCancelledAt: true },
+  });
+  if (!artist) return { ok: false, error: "Client not found." };
+  if (artist.subscriptionCancelledAt) return { ok: false, error: "This subscription is already cancelled." };
+
+  const now = new Date();
+  await db.$transaction([
+    db.artist.update({ where: { id: artistId }, data: { subscriptionCancelledAt: now } }),
+    db.site.updateMany({ where: { artistId, status: { not: "ARCHIVED" } }, data: { status: "ARCHIVED" } }),
+    db.alertEvent.create({
+      data: {
+        artistId,
+        type: CANCELLED_ALERT_TYPE,
+        severity: "WARNING",
+        message: `${artist.name}: subscription cancelled and site archived.`,
+        resolvedAt: now,
+      },
+    }),
+  ]);
+  updateTag(OPEN_ALERTS_TAG);
+  revalidatePath("/");
+  revalidatePath("/accounts/inbox");
+  return { ok: true };
+}
+
+// Reinstate on the Subscription card of a cancelled client.
+export async function reinstateSubscription(artistId: string, siteId: string): Promise<void> {
+  await db.artist.updateMany({
+    where: { id: artistId, subscriptionCancelledAt: { not: null } },
+    data: { subscriptionCancelledAt: null },
+  });
+  updateTag(OPEN_ALERTS_TAG);
+  revalidatePath(`/sites/${siteId}`);
 }
 
 // Expires the cached open-alerts scan (see OPEN_ALERTS_TAG) — called

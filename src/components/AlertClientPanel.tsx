@@ -5,7 +5,7 @@ import OwnerCard from "@/components/OwnerCard";
 import DomainCard from "@/components/DomainCard";
 import SubscriptionCard from "@/components/SubscriptionCard";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
-import { markSubscriptionUpToDate } from "@/lib/actions/clientAlerts";
+import { markSubscriptionUpToDate, cancelSubscription } from "@/lib/actions/clientAlerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
 
 // The centre panel for a payment-overdue alert (2026-09-19, CRM Phase 3):
@@ -13,7 +13,8 @@ import type { ClientPanelData } from "@/lib/clientPanelData";
 // Clients, so the missing payment can be recorded right here, followed by
 // the action panel. "Up to date" records the client in the Alert view's
 // processed list once the payment has been added (it refuses until then).
-// Cancel subscription / Cancel Domain / Email Client are placeholders for
+// Cancel subscription (2026-10-09) is for a client who has left — see
+// cancelSubscription. Cancel Domain / Email Client are placeholders for
 // now.
 export default function AlertClientPanel({
   data,
@@ -25,16 +26,26 @@ export default function AlertClientPanel({
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  const handleUpToDate = () => {
+  const run = (action: (artistId: string) => Promise<{ ok: true } | { ok: false; error: string }>) => {
     setError(null);
     startTransition(async () => {
-      const res = await markSubscriptionUpToDate(data.artist.id);
+      const res = await action(data.artist.id);
       if (!res.ok) {
         setError(res.error);
         return;
       }
       onDone();
     });
+  };
+
+  const handleCancelSubscription = () => {
+    if (
+      !confirm(
+        `Cancel ${data.artist.name}'s subscription? Their site will be archived and no more payment alerts raised. This can be reinstated later from their Subscription card.`
+      )
+    )
+      return;
+    run(cancelSubscription);
   };
 
   return (
@@ -55,12 +66,12 @@ export default function AlertClientPanel({
         <ActionPanel
           align="start"
           footer={
-            <ActionButton onClick={handleUpToDate} disabled={isPending}>
-              {isPending ? "Checking…" : "Up to date"}
+            <ActionButton onClick={() => run(markSubscriptionUpToDate)} disabled={isPending}>
+              {isPending ? "Working…" : "Up to date"}
             </ActionButton>
           }
         >
-          <ActionButton onClick={() => {}} disabled title="Not built yet">
+          <ActionButton onClick={handleCancelSubscription} disabled={isPending}>
             Cancel subscription
           </ActionButton>
           <ActionButton onClick={() => {}} disabled title="Not built yet">

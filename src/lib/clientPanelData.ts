@@ -62,6 +62,7 @@ export async function getClientPanelData(siteId: string): Promise<ClientPanelDat
       hopperToken: site.artist.hopperToken,
       stripeSubscriptionCustomerId: site.artist.stripeSubscriptionCustomerId,
       stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
+      subscriptionCancelledAt: site.artist.subscriptionCancelledAt?.toISOString() ?? null,
     },
     subscriptionPayments: payments.map((p) => ({
       id: p.id,

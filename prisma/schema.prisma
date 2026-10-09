@@ -286,6 +286,10 @@ model Artist {
   // not auto-matched by email.
   stripeSubscriptionCustomerId String? @unique
   stripeSubscriptionStatus     String?
+  // Set by Cancel subscription (2026-10-09, direct request — the client
+  // has left): their sites are archived at the same time, and no
+  // subscription alerts are raised for them. Cleared by Reinstate.
+  subscriptionCancelledAt      DateTime?
 
   images Image[]
   // Picked via MediaPicker from this same artist's Media Catalogue — see

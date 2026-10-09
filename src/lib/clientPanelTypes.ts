@@ -100,9 +100,31 @@ export type ArtistRecord = {
   hopperToken: string;
   stripeSubscriptionCustomerId: string | null;
   stripeSubscriptionStatus: string | null;
+  subscriptionCancelledAt: string | null; // ISO
 };
 
-export function toArtistFormFields(artist: ArtistRecord): ArtistFormFields {
+// Only the fields the form resubmits — so any artist record that has
+// them (the client cards' ArtistRecord, Site Settings' own) can be passed.
+type ArtistFormSource = Pick<
+  ArtistRecord,
+  | "name"
+  | "firstName"
+  | "email"
+  | "phone"
+  | "notes"
+  | "subscriptionAmount"
+  | "paymentMethod"
+  | "addressLine1"
+  | "city"
+  | "postcode"
+  | "country"
+  | "vatNumber"
+  | "vatRate"
+  | "invoiceFooterText"
+  | "invoiceLanguage"
+>;
+
+export function toArtistFormFields(artist: ArtistFormSource): ArtistFormFields {
   return {
     name: artist.name,
     firstName: artist.firstName || "",
