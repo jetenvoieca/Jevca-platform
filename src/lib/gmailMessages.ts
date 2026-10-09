@@ -12,12 +12,12 @@ export class GmailNotConnectedError extends Error {
   }
 }
 
-// Which list: Craig's choice — the Primary inbox only (no Promotions,
-// Social or Updates), and the Sent folder. Both only the last 7 days
+// Which list: the whole inbox (Craig's Gmail has no Primary/Promotions
+// tabs, just one list) and the Sent folder. Both only the last 7 days
 // (Craig's choice, 2026-10-09 — live issues only; older mail is in Gmail).
 export type PersonalBox = "INBOX" | "SENT";
 const BOX_QUERY: Record<PersonalBox, string> = {
-  INBOX: "in:inbox category:primary newer_than:7d",
+  INBOX: "in:inbox newer_than:7d",
   SENT: "in:sent newer_than:7d",
 };
 // At most this many conversations per list, so it stays quick.
