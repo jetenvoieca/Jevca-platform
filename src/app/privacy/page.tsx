@@ -12,8 +12,8 @@ export default function PrivacyPage() {
         <h1 className="mb-6 text-xl font-semibold text-neutral-900">JEVCA Studio — Privacy</h1>
 
         <p className="mb-4">
-          JEVCA Studio is a private administration tool used by Je T&apos;envoie ÇA to manage its clients&apos;
-          websites. It is not offered to the public, and only its owner can sign in.
+          JEVCA Studio is a private administration tool for managing artists&apos; websites. It is not offered to
+          the public, and only its owner can sign in.
         </p>
 
         <h2 className="mb-2 mt-6 font-semibold text-neutral-900">Gmail</h2>
