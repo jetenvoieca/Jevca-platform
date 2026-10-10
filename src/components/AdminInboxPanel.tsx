@@ -45,6 +45,7 @@ import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
 import PersonalMailPanel from "@/components/PersonalMailPanel";
 import EmailBody, { formatFileSize } from "@/components/EmailBody";
+import { useEmailTranslation } from "@/components/useEmailTranslation";
 import SaleModal from "@/components/SaleModal";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
@@ -352,6 +353,8 @@ export default function AdminInboxPanel({
   // long emails were unreadable as plain text); this is the one switched
   // to plain text with its "Show text" button, if any.
   const [textShownId, setTextShownId] = useState<string | null>(null);
+  // Translate / Show original on an opened email (2026-10-09).
+  const translation = useEmailTranslation();
   const [replySending, setReplySending] = useState(false);
   const [replyError, setReplyError] = useState<string | null>(null);
 
@@ -517,6 +520,7 @@ export default function AdminInboxPanel({
   };
 
   const openThread = (id: string) => {
+    translation.reset();
     setOpenId(id);
     setSelectedSentId(null);
     setComposing(false);
@@ -540,6 +544,7 @@ export default function AdminInboxPanel({
   };
 
   const openSent = (id: string) => {
+    translation.reset();
     setSelectedSentId(id);
     setOpenId(null);
     setThread(null);
@@ -1511,7 +1516,7 @@ export default function AdminInboxPanel({
                         {KIND_LABELS[selectedSent.kind] || selectedSent.kind}
                       </span>
                       <p className="text-sm font-medium text-neutral-800 [overflow-wrap:anywhere]">
-                        {selectedSent.subject || "(no subject)"}
+                        {translation.shown(selectedSent.id)?.subject ?? (selectedSent.subject || "(no subject)")}
                       </p>
                       <p className="truncate text-xs text-neutral-400">
                         {selectedSent.fromAddress} → {selectedSent.toAddress}
@@ -1543,10 +1548,21 @@ export default function AdminInboxPanel({
                       >
                         Forward
                       </MiniActionButton>
+                      <MiniActionButton
+                        onClick={() =>
+                          translation.toggle(selectedSent.id, selectedSent.subject || "", selectedSent.body || "")
+                        }
+                        disabled={translation.busy(selectedSent.id)}
+                      >
+                        {translation.label(selectedSent.id)}
+                      </MiniActionButton>
                     </MiniActionBar>
                   </div>
+                  {translation.error(selectedSent.id) && (
+                    <p className="text-sm text-red-600">{translation.error(selectedSent.id)}</p>
+                  )}
                   <div className="whitespace-pre-wrap rounded-md border border-neutral-200 bg-neutral-50 p-3 text-sm text-neutral-700">
-                    {selectedSent.body || "(empty)"}
+                    {translation.shown(selectedSent.id)?.body ?? (selectedSent.body || "(empty)")}
                   </div>
                 </div>
               ) : threadError ? (
@@ -1575,7 +1591,7 @@ export default function AdminInboxPanel({
                             </p>
                           )}
                           <p className="mt-0.5 text-sm font-medium text-neutral-800 [overflow-wrap:anywhere]">
-                            {item.subject}
+                            {translation.shown(item.id)?.subject ?? item.subject}
                           </p>
                         </div>
                         <MiniActionBar>
@@ -1601,6 +1617,12 @@ export default function AdminInboxPanel({
                           >
                             Forward
                           </MiniActionButton>
+                          <MiniActionButton
+                            onClick={() => translation.toggle(item.id, item.subject || "", item.textBody)}
+                            disabled={translation.busy(item.id)}
+                          >
+                            {translation.label(item.id)}
+                          </MiniActionButton>
                           {item.direction === "IN" && (
                             <MiniActionButton onClick={() => handleMakeTask(item.id)} disabled={isPending}>
                               {openListItem?.taskId ? "Open task" : "Make task"}
@@ -1610,10 +1632,13 @@ export default function AdminInboxPanel({
                       </div>
 
                       <div className="p-3">
+                        {translation.error(item.id) && (
+                          <p className="mb-2 text-sm text-red-600">{translation.error(item.id)}</p>
+                        )}
                         <EmailBody
                           htmlBody={item.htmlBody}
-                          textBody={item.textBody}
-                          showText={textShownId === item.id}
+                          textBody={translation.shown(item.id)?.body ?? item.textBody}
+                          showText={textShownId === item.id || !!translation.shown(item.id)}
                         />
                         {item.attachments.length > 0 && (
                           <ul className="mt-3 space-y-1 border-t border-neutral-200 pt-2">

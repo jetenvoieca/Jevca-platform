@@ -17,6 +17,7 @@ import { personalAttachmentUrl } from "@/lib/gmailAttachmentUrl";
 import EmailBody, { formatFileSize } from "@/components/EmailBody";
 import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
+import { useEmailTranslation } from "@/components/useEmailTranslation";
 import SwipeRow from "@/components/SwipeRow";
 import { TrashIcon } from "@/components/ActionIcons";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
@@ -169,6 +170,8 @@ export default function PersonalMailPanel({
   const [thread, setThread] = useState<PersonalMailMessage[] | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [textShownId, setTextShownId] = useState<string | null>(null);
+  // Translate / Show original on an opened email (2026-10-09).
+  const translation = useEmailTranslation();
   // The email being replied to — the reply box shows at the top while set.
   const [replyTo, setReplyTo] = useState<PersonalMailMessage | null>(null);
   const [replyBody, setReplyBody] = useState("");
@@ -205,6 +208,7 @@ export default function PersonalMailPanel({
     setThread(null);
     setThreadError(null);
     setTextShownId(null);
+    translation.reset();
     setReplyTo(null);
     setReplyBody("");
     setReplyError(null);
@@ -487,7 +491,7 @@ export default function PersonalMailPanel({
                             {m.cc && `, cc ${m.cc}`}
                           </p>
                           <p className="mt-0.5 text-sm font-medium text-neutral-800 [overflow-wrap:anywhere]">
-                            {m.subject}
+                            {translation.shown(m.id)?.subject ?? m.subject}
                           </p>
                         </div>
                         <MiniActionBar>
@@ -498,6 +502,12 @@ export default function PersonalMailPanel({
                           )}
                           <MiniActionButton onClick={() => startReply(m)}>Reply</MiniActionButton>
                           <MiniActionButton onClick={() => setForwarding(m)}>Forward</MiniActionButton>
+                          <MiniActionButton
+                            onClick={() => translation.toggle(m.id, m.subject, m.textBody)}
+                            disabled={translation.busy(m.id)}
+                          >
+                            {translation.label(m.id)}
+                          </MiniActionButton>
                           <MiniActionButton onClick={handleArchive} disabled={busyId === open.threadId || isPending}>
                             {busyId === open.threadId ? "Archiving…" : "Archive"}
                           </MiniActionButton>
@@ -507,7 +517,12 @@ export default function PersonalMailPanel({
                         </MiniActionBar>
                       </div>
                       <div className="p-3">
-                        <EmailBody htmlBody={m.htmlBody} textBody={m.textBody} showText={textShownId === m.id} />
+                        {translation.error(m.id) && <p className="mb-2 text-sm text-red-600">{translation.error(m.id)}</p>}
+                        <EmailBody
+                          htmlBody={m.htmlBody}
+                          textBody={translation.shown(m.id)?.body ?? m.textBody}
+                          showText={textShownId === m.id || !!translation.shown(m.id)}
+                        />
                         {m.attachments.length > 0 && (
                           <ul className="mt-3 space-y-1 border-t border-neutral-200 pt-2">
                             {m.attachments.map((a) => (
