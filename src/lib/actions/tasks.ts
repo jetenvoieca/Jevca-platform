@@ -160,6 +160,16 @@ export async function setTaskThisWeek(id: string, thisWeek: boolean): Promise<vo
   revalidatePath("/accounts/inbox");
 }
 
+// Moves a task from Today to This week (2026-10-10, direct request) —
+// off Today's panel and into This week's, in one step.
+export async function moveTaskToThisWeek(id: string): Promise<void> {
+  await db.task.updateMany({
+    where: { id, completedAt: null },
+    data: { todayOn: null, weekOf: new Date(`${parisWeekStart(parisToday())}T00:00:00.000Z`) },
+  });
+  revalidatePath("/accounts/inbox");
+}
+
 // Reinstates a completed task (2026-09-28, direct request — for one
 // completed by mistake): it moves from the Done list back to the open
 // list, with its details, emails and notes untouched.

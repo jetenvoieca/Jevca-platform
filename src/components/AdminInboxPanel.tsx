@@ -22,6 +22,7 @@ import {
   reopenTask,
   setTaskToday,
   setTaskThisWeek,
+  moveTaskToThisWeek,
   createTaskFromEmail,
   type TaskItem,
   type TaskInput,
@@ -660,7 +661,8 @@ export default function AdminInboxPanel({
 
   // One row of the open task list, in the Today panel, the This week
   // panel, or neither — each with its own tint (PANEL_STYLES) and buttons
-  // (Not today / Not this week).
+  // (Not today / Not this week). A Today task can also go straight to This
+  // week (2026-10-10).
   const textAction = (label: string, onClick: () => void, primary = false) => ({
     label,
     icon: <span className="px-1.5 text-xs uppercase">{label}</span>,
@@ -674,7 +676,10 @@ export default function AdminInboxPanel({
     const markWeek = (on: boolean) => () => runRowAction(t.id, (id) => setTaskThisWeek(id, on));
     const actions =
       panel === "today"
-        ? [textAction("Not today", markToday(false), true)]
+        ? [
+            textAction("Not today", markToday(false), true),
+            textAction("This week", () => runRowAction(t.id, moveTaskToThisWeek)),
+          ]
         : panel === "week"
           ? [textAction("Today", markToday(true), true), textAction("Not this week", markWeek(false))]
           : [textAction("Today", markToday(true), true), textAction("This week", markWeek(true))];
