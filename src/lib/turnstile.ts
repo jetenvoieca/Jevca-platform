@@ -16,7 +16,8 @@ import { decryptSecret, encryptSecret } from "@/lib/secretBox";
 // schema.prisma. Runs when a site's domain is saved and when a site is
 // published.
 //
-// Set in Netlify: CLOUDFLARE_ACCOUNT_ID, and CLOUDFLARE_TURNSTILE_API_TOKEN
+// Uses the Cloudflare account already set in Netlify for media storage
+// (R2_ACCOUNT_ID — the same account), plus CLOUDFLARE_TURNSTILE_API_TOKEN
 // (a Cloudflare API token with Account → Turnstile → Edit). The widgets'
 // secrets are encrypted with TOKEN_ENCRYPTION_KEY (lib/secretBox.ts).
 
@@ -34,7 +35,7 @@ const SYNC_LOCK = 52_710_016;
 export type TurnstileSyncResult = { ok: true } | { error: string };
 
 function cloudflareConfig(): { accountId: string; token: string } | null {
-  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
+  const accountId = process.env.R2_ACCOUNT_ID;
   const token = process.env.CLOUDFLARE_TURNSTILE_API_TOKEN;
   return accountId && token ? { accountId, token } : null;
 }
@@ -109,7 +110,7 @@ export async function syncTurnstileDomains(): Promise<TurnstileSyncResult> {
   if (!cloudflareConfig()) {
     return {
       error:
-        "Sign-up forms need Cloudflare: add CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_TURNSTILE_API_TOKEN in Netlify.",
+        "Sign-up forms need Cloudflare: add CLOUDFLARE_TURNSTILE_API_TOKEN in Netlify.",
     };
   }
   try {
