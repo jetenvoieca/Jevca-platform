@@ -14,8 +14,10 @@ import { escapeHtml, isRichTextEmpty, richTextToHtml, type RichText } from "@/li
 // A campaign mail as the email itself (2026-10-08, Marketing step 3) —
 // the one HTML used both for the Preview and for sending, so what's
 // previewed is exactly what's sent. Built the way email apps need it:
-// tables for layout, styles written on each element, 600px wide, and on
-// a phone (below 620px) side-by-side components stack, each full width.
+// tables for layout, styles written on each element, 600px wide. In a
+// narrower window (a reading pane, 2026-10-10) it shrinks to fit with
+// side-by-side components kept side by side; on a phone (below 480px)
+// they stack, each full width.
 // A component with nothing in it shows nothing. Plain module, not
 // "use server".
 
@@ -56,7 +58,7 @@ export type MailHtmlInput = {
   unsubscribeUrl: string;
 };
 
-const PHONE_BREAKPOINT = 620;
+const PHONE_BREAKPOINT = 480;
 const LOGO_WIDTH = 200;
 const SIGNATURE_WIDTH = 180;
 const ARTWORK_GAP = 16;
@@ -94,8 +96,11 @@ function textCss(layout: MailTemplateLayout, kind: TextKind, extraSize = 0): str
   ].join(";");
 }
 
-function imageHtml(image: MailImage, width: number, href: string | null = null): string {
-  const img = `<img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt)}" width="${width}" class="fluid" style="display:block;width:${width}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">`;
+// A picture `width` pixels wide, never wider than its space. `fluid`
+// (pictures, galleries, artworks): fills its space on a phone; the Logo
+// and Signature keep their own size there.
+function imageHtml(image: MailImage, width: number, href: string | null = null, fluid = true): string {
+  const img = `<img src="${escapeHtml(image.src)}" alt="${escapeHtml(image.alt)}" width="${width}"${fluid ? ' class="fluid"' : ""} style="display:block;width:${width}px;max-width:100%;height:auto;border:0;outline:none;text-decoration:none;">`;
   return href ? `<a href="${escapeHtml(href)}" target="_blank">${img}</a>` : img;
 }
 
@@ -107,16 +112,24 @@ function alignedHtml(html: string, align: string): string {
   return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${align}"><tr><td>${html}</td></tr></table>`;
 }
 
-// Side-by-side cells that stack on a phone.
-function columnsHtml(cells: { width: number; html: string; valign?: string }[], gap: number): string {
+// Side-by-side cells, `container` pixels wide at full size, that stack
+// on a phone. Widths are given as shares (%), so in a narrower window
+// they shrink together and stay side by side.
+function columnsHtml(
+  cells: { width: number; html: string; valign?: string }[],
+  gap: number,
+  container: number
+): string {
+  const total = cells.reduce((sum, c) => sum + c.width, 0) + gap * (cells.length - 1);
+  const share = (px: number) => `${((px / total) * 100).toFixed(2)}%`;
   const parts = cells.map((c, i) => {
-    const cell = `<td class="col" width="${c.width}" valign="${c.valign ?? "top"}" style="width:${c.width}px;">${c.html}</td>`;
+    const cell = `<td class="col" width="${share(c.width)}" valign="${c.valign ?? "top"}" style="width:${share(c.width)};">${c.html}</td>`;
     return i === 0
       ? cell
-      : `<td class="gap" width="${gap}" style="width:${gap}px;height:${gap}px;font-size:0;line-height:0;">&nbsp;</td>${cell}`;
+      : `<td class="gap" width="${share(gap)}" style="width:${share(gap)};height:${gap}px;font-size:0;line-height:0;">&nbsp;</td>${cell}`;
   });
-  const total = cells.reduce((sum, c) => sum + c.width, 0) + gap * (cells.length - 1);
-  return `<table role="presentation" class="row" cellpadding="0" cellspacing="0" border="0" width="${total}" style="width:${total}px;"><tr>${parts.join("")}</tr></table>`;
+  const width = `${Math.min(100, (total / container) * 100).toFixed(2)}%`;
+  return `<table role="presentation" class="row" cellpadding="0" cellspacing="0" border="0" width="${width}" style="width:${width};"><tr>${parts.join("")}</tr></table>`;
 }
 
 // Splits `width` into `count` equal parts with `gap` between them.
@@ -142,10 +155,10 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
   const { layout, content, language, assets } = input;
   switch (block.type) {
     case "logo":
-      return assets.logo ? alignedHtml(imageHtml(assets.logo, Math.min(LOGO_WIDTH, width)), align) : "";
+      return assets.logo ? alignedHtml(imageHtml(assets.logo, Math.min(LOGO_WIDTH, width), null, false), align) : "";
     case "signature":
       return assets.signature
-        ? alignedHtml(imageHtml(assets.signature, Math.min(SIGNATURE_WIDTH, width)), align)
+        ? alignedHtml(imageHtml(assets.signature, Math.min(SIGNATURE_WIDTH, width), null, false), align)
         : "";
     case "header": {
       const text = contentOf(content, { ...block, type: "header" }).text[language];
@@ -164,7 +177,8 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
       const widths = equalWidths(width, cells.length, gap);
       return columnsHtml(
         cells.map((c, i) => ({ width: widths[i], html: richHtml(layout, "textgrid", c[language]) })),
-        gap
+        gap,
+        width
       );
     }
     case "image": {
@@ -211,7 +225,8 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
           { width: imageWidth, html: imageHtml(artwork.image, imageWidth, artwork.url) },
           { width: width - imageWidth - ARTWORK_GAP, html: lines },
         ],
-        ARTWORK_GAP
+        ARTWORK_GAP,
+        width
       );
     }
     case "button": {
@@ -250,7 +265,7 @@ function rowHtml(input: MailHtmlInput, row: MailBlock[], settings: RowSettings, 
       html: `<div align="${align}" style="text-align:${align};">${html}</div>`,
     };
   });
-  return columnsHtml(cells, gap);
+  return columnsHtml(cells, gap, innerWidth);
 }
 
 export function renderMailHtml(input: MailHtmlInput): string {
@@ -299,7 +314,6 @@ body{margin:0;padding:0;}
 table{border-collapse:collapse;}
 img{-ms-interpolation-mode:bicubic;}
 @media only screen and (max-width:${PHONE_BREAKPOINT}px){
-.mail{width:100%!important;}
 .mail-pad{padding:${phone.vertical}px ${phone.horizontal}px!important;}
 .row{width:100%!important;}
 .col{display:block!important;width:100%!important;}
@@ -312,7 +326,9 @@ img{-ms-interpolation-mode:bicubic;}
 ${preheader}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="${surround}" style="width:100%;background-color:${surround};">
 <tr><td align="center" style="padding:24px 0;">
-<table role="presentation" class="mail" cellpadding="0" cellspacing="0" border="0" width="${MAIL_WIDTH}" bgcolor="${background}" style="width:${MAIL_WIDTH}px;max-width:100%;background-color:${background};">
+<!--[if mso]><table role="presentation" cellpadding="0" cellspacing="0" border="0" width="${MAIL_WIDTH}" align="center"><tr><td><![endif]-->
+<div style="max-width:${MAIL_WIDTH}px;margin:0 auto;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" bgcolor="${background}" style="width:100%;background-color:${background};">
 <tr><td class="mail-pad" style="padding:${desktop.vertical}px ${desktop.horizontal}px;">
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="width:100%;">
 ${body.join("\n")}
@@ -324,6 +340,8 @@ ${body.join("\n")}
 </table>
 </td></tr>
 </table>
+</div>
+<!--[if mso]></td></tr></table><![endif]-->
 </td></tr>
 </table>
 </body>
