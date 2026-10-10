@@ -5,6 +5,7 @@ import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
 import type { ComponentContent } from "@/lib/pageComponents";
+import type { SignupFormContent } from "@/lib/signupForms";
 import type { LayoutBlock } from "@/lib/pageStyleLayout";
 import {
   blockWidthOf,
@@ -22,6 +23,7 @@ import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 import CurationSectionView from "@/components/CurationSectionView";
 import CurationWorkView from "@/components/CurationWorkView";
+import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
 import CanvasPlayer from "@/components/CanvasPlayer";
 
@@ -39,7 +41,9 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 //   grid, in the style's font, size, style and colour for that
 //   component type), a video, an Images section (one image in a Single
 //   Image, a grid in a Gallery), or the curation's works (a grid in a
-//   Gallery, square panels in Sliding doors — see SlidingDoors).
+//   Gallery, square panels in Sliding doors — see SlidingDoors). A
+//   Sign-up form (2026-10-10) shows once it's set up in Arrange — see
+//   SignupForm.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page) and its
@@ -92,9 +96,10 @@ export default function PagePreview({
         ? siteData.listSections(curationId)
         : Promise.resolve<CurationSectionData[]>([]),
       blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
-    ]).then(([curation, sections, components]) => {
+      blockBuild ? siteData.getSignupForms(pageId) : Promise.resolve<SignupFormContent[]>([]),
+    ]).then(([curation, sections, components, signupForms]) => {
       if (!current) return;
-      setContent({ curation, sections, components });
+      setContent({ curation, sections, components, signupForms });
       setLoading(false);
     });
     return () => {
@@ -117,10 +122,12 @@ export default function PagePreview({
   } else if (style?.type === "BLOCK_BUILD") {
     body = (
       <BlockBuildPage
+        pageId={pageId}
         style={style}
         curation={curation}
         sections={content.sections}
         components={content.components}
+        signupForms={content.signupForms}
         onOpen={setViewingId}
       />
     );
@@ -149,12 +156,13 @@ export default function PagePreview({
   );
 }
 
-// What a page shows, loaded together. Sections and components are only
-// loaded for a Block Build page.
+// What a page shows, loaded together. Sections, components and sign-up
+// forms are only loaded for a Block Build page.
 type PageContent = {
   curation: CurationDetail | null;
   sections: CurationSectionData[];
   components: ComponentContent[];
+  signupForms: SignupFormContent[];
 };
 
 // One row of the page as shown: its blocks' contents and widths, the
@@ -170,21 +178,26 @@ type Row = {
 
 // A Block Build page — see the note at the top.
 function BlockBuildPage({
+  pageId,
   style,
   curation,
   sections,
   components,
+  signupForms,
   onOpen,
 }: {
+  pageId: string;
   style: Extract<PageStyleSummary, { type: "BLOCK_BUILD" }>;
   curation: CurationDetail;
   sections: CurationSectionData[];
   components: ComponentContent[];
+  signupForms: SignupFormContent[];
   onOpen: (artworkId: string) => void;
 }) {
   const { layout } = style;
   const sectionById = new Map(sections.map((s) => [s.id, s]));
   const contentByBlock = new Map(components.map((c) => [c.blockId, c.sectionId]));
+  const formByBlock = new Map(signupForms.map((f) => [f.blockId, f]));
 
   const works = (block: LayoutBlock): ReactNode => {
     if (block.type === "gallery" && curation.works.length > 0) {
@@ -210,6 +223,11 @@ function BlockBuildPage({
   };
 
   const fill = (block: LayoutBlock): ReactNode => {
+    if (block.type === "signup") {
+      const form = formByBlock.get(block.id);
+      if (!form || !block.signup) return null;
+      return <SignupForm pageId={pageId} form={form} look={block.signup} textStyle={layout.textStyles.text} />;
+    }
     if (!contentByBlock.has(block.id)) return null;
     const sectionId = contentByBlock.get(block.id) ?? null;
     if (sectionId === null) return works(block);

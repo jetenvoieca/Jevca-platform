@@ -122,7 +122,8 @@ export async function createPage(
 // see PageComponentContent) belongs to its Display Style's components
 // and its curation's sections, so it goes when they change: all of it
 // with a new style, and the sections (not the works) with a new
-// curation.
+// curation. Its sign-up forms (2026-10-10) belong to the style's
+// components, so they go with a new style.
 export async function updatePageDetails(
   siteId: string,
   pageId: string,
@@ -143,12 +144,12 @@ export async function updatePageDetails(
     existingMenuStyleId(input.menuStyleId),
   ]);
 
-  const clearComponents =
-    current.pageStyleId !== pageStyleId
-      ? db.pageComponentContent.deleteMany({ where: { pageId } })
-      : current.curationId !== curationId
-        ? db.pageComponentContent.deleteMany({ where: { pageId, sectionId: { not: null } } })
-        : null;
+  const styleChanged = current.pageStyleId !== pageStyleId;
+  const clearComponents = styleChanged
+    ? db.pageComponentContent.deleteMany({ where: { pageId } })
+    : current.curationId !== curationId
+      ? db.pageComponentContent.deleteMany({ where: { pageId, sectionId: { not: null } } })
+      : null;
 
   await db.$transaction([
     db.page.update({
@@ -156,6 +157,7 @@ export async function updatePageDetails(
       data: { title, curationId, pageStyleId, menuStyleId },
     }),
     ...(clearComponents ? [clearComponents] : []),
+    ...(styleChanged ? [db.pageSignupForm.deleteMany({ where: { pageId } })] : []),
   ]);
   return { ok: true };
 }

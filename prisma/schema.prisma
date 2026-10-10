@@ -1059,6 +1059,9 @@ model MailList {
   // The campaigns sent (or to be sent) to this list.
   campaigns CampaignList[]
 
+  // The website sign-up forms that add to this list (2026-10-10).
+  signupForms PageSignupForm[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1168,6 +1171,10 @@ model Page {
   // Display Style is a Block Build. See PageComponentContent.
   componentContents PageComponentContent[]
 
+  // This page's sign-up forms' list and wording (2026-10-10) — see
+  // PageSignupForm.
+  signupForms PageSignupForm[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -1218,6 +1225,32 @@ model PageComponentContent {
 
   @@unique([pageId, blockId])
   @@index([sectionId])
+}
+
+// A sign-up form on a Block Build page (2026-10-10, Marketing step 5):
+// one of its Display Style's "Sign-up form" components, set up in the
+// page's Arrange — the mail list sign-ups join (Craig's choice: per
+// page) and the form's wording. The form's colours are in the style.
+// A form not set up yet shows nothing. Cleared with the page's other
+// component content when its Display Style changes. The list is kept
+// as null, not the form deleted, if the list is deleted.
+model PageSignupForm {
+  id      String    @id @default(cuid())
+  pageId  String
+  page    Page      @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  blockId String
+  listId  String?
+  list    MailList? @relation(fields: [listId], references: [id], onDelete: SetNull)
+
+  placeholder String
+  buttonLabel String
+  consentText String
+  thanksText  String
+
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageId, blockId])
+  @@index([listId])
 }
 
 // A Page Style (2026-10-04) — a named page layout, shared by every site,
@@ -2110,4 +2143,20 @@ model GmailConnection {
   email                 String   @unique
   refreshTokenEncrypted String
   connectedAt           DateTime @default(now())
+}
+
+// A Cloudflare Turnstile widget (2026-10-10) — the check that a website
+// sign-up comes from a person, not a robot. Each widget covers up to 10
+// domains (and their subdomains); the app creates and fills them itself
+// through Cloudflare's API (lib/turnstile.ts) from the sites' domains
+// and the admin's own address, so nothing is set up by hand. Free plan:
+// at most 20 widgets, so 200 domains. The secret is encrypted
+// (lib/secretBox.ts).
+model TurnstileWidget {
+  sitekey         String   @id
+  name            String
+  secretEncrypted String
+  domains         String[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
 }

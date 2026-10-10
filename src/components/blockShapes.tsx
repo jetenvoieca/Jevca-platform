@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import type { LayoutBlockType, SlidingDoorsSettings } from "@/lib/pageStyleLayout";
+import type { LayoutBlockType, SignupLook, SlidingDoorsSettings } from "@/lib/pageStyleLayout";
 import type { MailBlockType } from "@/lib/mailTemplateLayout";
 import type { GridSpacing } from "@/lib/rowLayout";
 
@@ -13,10 +13,12 @@ export function BlockShape({
   type,
   spacing,
   doors,
+  signup,
 }: {
   type: LayoutBlockType | MailBlockType;
   spacing: GridSpacing;
   doors?: SlidingDoorsSettings;
+  signup?: SignupLook;
 }) {
   switch (type) {
     case "header":
@@ -71,6 +73,19 @@ export function BlockShape({
         </div>
       );
     }
+    case "signup":
+      // An email box and its button, in the style's button colours.
+      return (
+        <div className="flex gap-2">
+          <div className="h-10 flex-1 rounded-md border border-neutral-300 bg-white" />
+          <div
+            className="flex h-10 w-32 items-center justify-center rounded-md text-xs"
+            style={{ backgroundColor: signup?.buttonColour, color: signup?.buttonTextColour }}
+          >
+            Subscribe
+          </div>
+        </div>
+      );
     case "logo":
       return (
         <div className="flex justify-center">

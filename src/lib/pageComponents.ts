@@ -20,7 +20,9 @@ export type ContentKind = CurationSectionType | "WORKS";
 const TEXT_KINDS: readonly ContentKind[] = ["TAGLINE", "DESCRIPTION", "TEXT"];
 
 // Which content each component takes (Craig's choice, 2026-10-07: match
-// by kind). Feature takes nothing yet.
+// by kind). Feature takes nothing yet. A Sign-up form (2026-10-10)
+// takes no section: it's set up on its own in Arrange (see
+// lib/signupForms.ts).
 const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   header: TEXT_KINDS,
   text: TEXT_KINDS,
@@ -30,6 +32,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   gallery: ["IMAGES", "WORKS"],
   slidingdoors: ["WORKS"],
   artwork: [],
+  signup: [],
 };
 
 export function contentFits(block: LayoutBlockType, kind: ContentKind): boolean {

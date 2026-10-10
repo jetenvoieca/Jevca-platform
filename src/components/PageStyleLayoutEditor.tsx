@@ -3,10 +3,12 @@
 import {
   LAYOUT_BLOCK_TYPES,
   SLIDING_DOORS_LIMITS,
+  cleanSignupLook,
   cleanSlidingDoors,
   newLayoutBlock,
   type BlockBuildLayout,
   type LayoutBlock,
+  type SignupLook,
   type SlidingDoorsSettings,
 } from "@/lib/pageStyleLayout";
 import { BlockShape } from "@/components/blockShapes";
@@ -18,7 +20,8 @@ import { PAGE_DESKTOP_WIDTH } from "@/components/visualEditorParts";
 // The visual editor for a Block Build Page Style (2026-10-07; split out
 // of VisualLayoutEditor 2026-10-08, which is now shared with Mail
 // Templates): the page's components, drawn as outlines at a desktop's
-// width, and a Sliding doors component's own settings on its bar.
+// width, and a Sliding doors or Sign-up form (2026-10-10) component's
+// own settings on its bar.
 // A Header, Text or Text grid component's own Text style (2026-10-10),
 // in the website fonts.
 const SITE_TEXT_STYLE_FONTS: TextStyleFonts = { fonts: SITE_FONTS, kinds: SITE_FONT_KINDS, isFont: isSiteFontId };
@@ -36,21 +39,36 @@ export default function PageStyleLayoutEditor({
       onChange={onChange}
       components={LAYOUT_BLOCK_TYPES}
       newBlock={newLayoutBlock}
-      renderBlock={(b) => <BlockShape type={b.type} doors={b.doors} spacing={layout.gridSpacing} />}
-      settingsPanel={(b, onBlock) =>
-        b.doors
-          ? {
-              button: "Settings",
-              title: "Sliding doors",
-              content: (
-                <DoorsSettings
-                  doors={b.doors}
-                  onChange={(doors) => onBlock({ ...b, doors: cleanSlidingDoors(doors) })}
-                />
-              ),
-            }
-          : null
-      }
+      renderBlock={(b) => (
+        <BlockShape type={b.type} doors={b.doors} signup={b.signup} spacing={layout.gridSpacing} />
+      )}
+      settingsPanel={(b, onBlock) => {
+        if (b.doors) {
+          return {
+            button: "Settings",
+            title: "Sliding doors",
+            content: (
+              <DoorsSettings
+                doors={b.doors}
+                onChange={(doors) => onBlock({ ...b, doors: cleanSlidingDoors(doors) })}
+              />
+            ),
+          };
+        }
+        if (b.signup) {
+          return {
+            button: "Settings",
+            title: "Sign-up form",
+            content: (
+              <SignupSettings
+                look={b.signup}
+                onChange={(signup) => onBlock({ ...b, signup: cleanSignupLook(signup) })}
+              />
+            ),
+          };
+        }
+        return null;
+      }}
       textStyleFonts={SITE_TEXT_STYLE_FONTS}
       desktopWidth={PAGE_DESKTOP_WIDTH}
       backgroundColor={layout.backgroundColor}
@@ -126,5 +144,52 @@ function DoorsSettings({
         wide
       />
     </>
+  );
+}
+
+// A Sign-up form component's settings (2026-10-10): its button's colour
+// and the colour of the button's text. Its words use the style's Text
+// look; the list and the wording are set on each page, in Arrange.
+function SignupSettings({ look, onChange }: { look: SignupLook; onChange: (look: SignupLook) => void }) {
+  return (
+    <>
+      <ColourRow
+        label="Button colour"
+        value={look.buttonColour}
+        onChange={(buttonColour) => onChange({ ...look, buttonColour })}
+      />
+      <ColourRow
+        label="Button text colour"
+        value={look.buttonTextColour}
+        onChange={(buttonTextColour) => onChange({ ...look, buttonTextColour })}
+      />
+      <p className="text-xs text-neutral-500">
+        The form&apos;s words use this style&apos;s Text look. The list and the wording are set on
+        each page, in Arrange.
+      </p>
+    </>
+  );
+}
+
+function ColourRow({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <label className="flex items-center gap-2 text-sm text-neutral-700">
+      <span className="flex-1">{label}</span>
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+      />
+      <span className="w-16 text-xs text-neutral-400">{value}</span>
+    </label>
   );
 }

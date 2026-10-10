@@ -8,6 +8,7 @@ import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
 import type { CurationSectionData } from "@/lib/curationSections";
 import type { ComponentContent } from "@/lib/pageComponents";
+import type { SignupFormContent } from "@/lib/signupForms";
 
 // A published site (2026-10-06) — everything its pages show, saved when
 // "Publish to live site" is pressed (see SitePublication in
@@ -27,6 +28,9 @@ export const SNAPSHOT_VERSION = 2;
 // else the site's; null = no menu. Its settings are in `menus`.
 // `components` (2026-10-07) is what fills a Block Build page's
 // components; a site published before it existed reads it as empty.
+// `signupForms` (2026-10-10) is the wording of its Sign-up form
+// components (never their list — see lib/actions/websiteSignup.ts); read
+// as empty for a site published before it existed.
 export type SnapshotPage = {
   id: string;
   title: string;
@@ -35,6 +39,7 @@ export type SnapshotPage = {
   style: PageStyleSummary | null;
   canvas: CanvasPlacement[];
   components: ComponentContent[];
+  signupForms: SignupFormContent[];
   menuStyleId: string | null;
 };
 
@@ -59,5 +64,7 @@ export type SiteSnapshot = {
 };
 
 // What "Publish to live site" reports back (2026-10-06): when the site
-// was published (ISO date), or what went wrong.
-export type PublishResult = { publishedAt: string } | { error: string };
+// was published (ISO date), or what went wrong. `warning` (2026-10-10):
+// published, but something on it won't work yet (its sign-up forms'
+// robot check — see lib/turnstile.ts).
+export type PublishResult = { publishedAt: string; warning?: string } | { error: string };

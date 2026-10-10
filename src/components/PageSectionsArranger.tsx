@@ -28,6 +28,7 @@ import { useSiteData } from "@/lib/siteData";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 import { BlockShape, Labelled } from "@/components/blockShapes";
 import { PAGE_DESKTOP_WIDTH, PageFrame, ScaledFrame } from "@/components/visualEditorParts";
+import SignupFormSetup from "@/components/SignupFormSetup";
 
 // Arrange for a Block Build page (2026-10-07, from Craig's mockup)
 // — shown in the Pages page's Preview panel. On the left, the page's
@@ -39,6 +40,9 @@ import { PAGE_DESKTOP_WIDTH, PageFrame, ScaledFrame } from "@/components/visualE
 // component's content to another component to move it, or back onto
 // the list (which turns red), or press its ✕, to empty the component.
 // Every change saves straight away. The style itself isn't changed here.
+// A Sign-up form component (2026-10-10) takes no section: its Set up
+// button opens its list and wording (SignupFormSetup); until then the
+// page shows nothing there.
 
 const TRAY_ID = "tray";
 
@@ -97,18 +101,24 @@ export default function PageSectionsArranger({
   const [filled, setFilled] = useState<Map<string, string | null>>(new Map());
   const [dragging, setDragging] = useState<DragData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // The Sign-up forms set up (by block id), and the one being set up.
+  const [signupsSetUp, setSignupsSetUp] = useState<Set<string>>(new Set());
+  const [settingUp, setSettingUp] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = groupBlocksByRow(layout.blocks);
 
   const load = useCallback(
     () =>
-      Promise.all([siteData.listSections(curationId), siteData.getComponents(pageId)]).then(
-        ([loadedSections, components]) => {
-          setSections(loadedSections);
-          setFilled(new Map(components.map((c) => [c.blockId, c.sectionId])));
-        }
-      ),
+      Promise.all([
+        siteData.listSections(curationId),
+        siteData.getComponents(pageId),
+        siteData.getSignupForms(pageId),
+      ]).then(([loadedSections, components, signupForms]) => {
+        setSections(loadedSections);
+        setFilled(new Map(components.map((c) => [c.blockId, c.sectionId])));
+        setSignupsSetUp(new Set(signupForms.map((f) => f.blockId)));
+      }),
     [siteData, curationId, pageId]
   );
 
@@ -221,6 +231,8 @@ export default function PageSectionsArranger({
                             content={filled.has(b.id) ? contentOf(filled.get(b.id) ?? null) : null}
                             dragging={dragging}
                             onEmpty={() => save(() => empty(b.id))}
+                            signupSetUp={signupsSetUp.has(b.id)}
+                            onSetUp={() => setSettingUp(b.id)}
                           />
                         </div>
                       ))}
@@ -232,6 +244,23 @@ export default function PageSectionsArranger({
           </ScaledFrame>
         </div>
       </div>
+
+      {settingUp && (
+        <SignupFormSetup
+          siteId={siteId}
+          pageId={pageId}
+          blockId={settingUp}
+          onClose={() => setSettingUp(null)}
+          onSaved={(setUp) =>
+            setSignupsSetUp((prev) => {
+              const next = new Set(prev);
+              if (setUp) next.add(settingUp);
+              else next.delete(settingUp);
+              return next;
+            })
+          }
+        />
+      )}
 
       <DragOverlay dropAnimation={null}>
         {dragging && (
@@ -314,21 +343,26 @@ function TrayItem({ content }: { content: Content }) {
   );
 }
 
-// One component on the page: its outline, and what it holds over it.
-// While something is dragged it's outlined in blue if that fits it, or
-// faded if not.
+// One component on the page: its outline, and what it holds over it
+// (a Sign-up form: whether it's set up, and its Set up button). While
+// something is dragged it's outlined in blue if that fits it, or faded
+// if not.
 function Slot({
   block,
   gridSpacing,
   content,
   dragging,
   onEmpty,
+  signupSetUp,
+  onSetUp,
 }: {
   block: LayoutBlock;
   gridSpacing: GridSpacing;
   content: Content | null;
   dragging: DragData | null;
   onEmpty: () => void;
+  signupSetUp: boolean;
+  onSetUp: () => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: `block:${block.id}`, data: { block } });
   const fits = dragging ? contentFits(block.type, dragging.content.kind) : false;
@@ -342,8 +376,27 @@ function Slot({
   return (
     <div ref={setNodeRef} className={`relative rounded-md ${highlight}`}>
       <Labelled label={blockTypeLabel(block.type)}>
-        <BlockShape type={block.type} doors={block.doors} spacing={gridSpacing} />
+        <BlockShape type={block.type} doors={block.doors} signup={block.signup} spacing={gridSpacing} />
       </Labelled>
+      {block.type === "signup" && (
+        <div className="absolute inset-0 flex items-center justify-center rounded-md bg-white/85 p-3">
+          <div className="flex items-center gap-4 rounded-md border border-neutral-300 bg-white px-4 py-3 shadow-sm">
+            <div>
+              <p className="text-sm font-medium text-neutral-900">Sign-up form</p>
+              <p className="text-xs text-neutral-500">
+                {signupSetUp ? "Set up" : "Not set up — the page shows nothing here yet"}
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={onSetUp}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50"
+            >
+              {signupSetUp ? "Edit" : "Set up"}
+            </button>
+          </div>
+        </div>
+      )}
       {content && (
         <div className="absolute inset-0 flex items-center justify-center rounded-md bg-white/85 p-3">
           <Filled blockId={block.id} content={content} onEmpty={onEmpty} />

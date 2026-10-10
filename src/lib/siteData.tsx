@@ -12,8 +12,10 @@ import {
 import { listCurationSections } from "@/lib/actions/curationSections";
 import { getPageCanvas, type CanvasPlacement } from "@/lib/actions/pageCanvas";
 import { getPageComponents } from "@/lib/actions/pageComponents";
+import { getPageSignupForms } from "@/lib/actions/signupForms";
 import type { CurationSectionData } from "@/lib/curationSections";
 import type { ComponentContent } from "@/lib/pageComponents";
+import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteSnapshot } from "@/lib/siteSnapshot";
 
 // Where the page components (PagePreview, CanvasPlayer, CurationPanel,
@@ -29,7 +31,15 @@ export type SiteData = {
   getCanvas(pageId: string): Promise<CanvasPlacement[]>;
   // What fills a Block Build page's components (2026-10-07).
   getComponents(pageId: string): Promise<ComponentContent[]>;
+  // A Block Build page's sign-up forms' wording (2026-10-10).
+  getSignupForms(pageId: string): Promise<SignupFormContent[]>;
   listCovers(): Promise<CurationCover[]>;
+  // Whether sign-up forms can be used (2026-10-10): only on the
+  // published site, for its site, with the robot check's public key for
+  // the address it's shown on (null = no check set up for it yet, so
+  // signing up says it isn't available). Null in the admin preview,
+  // where forms are only shown.
+  signup: { siteId: string; siteKey: string | null } | null;
 };
 
 const SiteDataContext = createContext<SiteData | null>(null);
@@ -58,18 +68,25 @@ export function LiveSiteData({
         getCurationWorkPresentation(curationId, artistId, artworkId),
       getCanvas: (pageId) => getPageCanvas(siteId, pageId),
       getComponents: (pageId) => getPageComponents(siteId, pageId),
+      getSignupForms: (pageId) => getPageSignupForms(siteId, pageId),
       listCovers: () => listCurationCovers(artistId),
+      signup: null,
     }),
     [siteId, artistId]
   );
   return <SiteDataContext.Provider value={data}>{children}</SiteDataContext.Provider>;
 }
 
-// The site as last published — for the site's own pages.
+// The site as last published — for the site's own pages. `siteKey` is
+// the robot check's public key for the address the site is shown on.
 export function SnapshotSiteData({
+  siteId,
+  siteKey,
   snapshot,
   children,
 }: {
+  siteId: string;
+  siteKey: string | null;
   snapshot: SiteSnapshot;
   children: ReactNode;
 }) {
@@ -82,9 +99,12 @@ export function SnapshotSiteData({
       getCanvas: async (pageId) => snapshot.pages.find((p) => p.id === pageId)?.canvas ?? [],
       getComponents: async (pageId) =>
         snapshot.pages.find((p) => p.id === pageId)?.components ?? [],
+      getSignupForms: async (pageId) =>
+        snapshot.pages.find((p) => p.id === pageId)?.signupForms ?? [],
       listCovers: async () => snapshot.covers,
+      signup: { siteId, siteKey },
     }),
-    [snapshot]
+    [snapshot, siteId, siteKey]
   );
   return <SiteDataContext.Provider value={data}>{children}</SiteDataContext.Provider>;
 }

@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
+import { turnstileSiteKeyForHost } from "@/lib/turnstile";
 import { loadPublishedSite } from "../published";
 import PublishedSiteView from "@/components/PublishedSiteView";
 
@@ -51,5 +53,11 @@ export default async function SitePreviewPage({ params }: { params: Params }) {
     );
   }
 
-  return <PublishedSiteView snapshot={snapshot} pageId={page.id} />;
+  // The robot check for the page's sign-up forms (2026-10-10), on the
+  // address the page is shown on — see lib/turnstile.ts.
+  const hasSignupForm = page.signupForms.length > 0;
+  const host = ((await headers()).get("host") ?? "").toLowerCase().split(":")[0];
+  const siteKey = hasSignupForm ? await turnstileSiteKeyForHost(host) : null;
+
+  return <PublishedSiteView siteId={siteId} siteKey={siteKey} snapshot={snapshot} pageId={page.id} />;
 }

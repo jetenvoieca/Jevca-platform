@@ -3,6 +3,7 @@
 import Papa from "papaparse";
 import { db } from "@/lib/db";
 import { campaignMailLabel } from "@/lib/campaignMails";
+import { isValidEmail, normalizeEmail } from "@/lib/emailAddress";
 
 // Marketing → Subscribers (2026-10-08) — each artist's mailing list and
 // its named mail lists. See Subscriber and MailList in schema.prisma.
@@ -55,16 +56,6 @@ export type SubscriberInput = {
 // so a large file never makes one oversized request.
 // (The import panel sends 250 at a time.)
 const IMPORT_CHUNK_LIMIT = 500;
-
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
-function normalizeEmail(raw: string): string {
-  return raw.trim().toLowerCase();
-}
-
-function isValidEmail(email: string): boolean {
-  return EMAIL_PATTERN.test(email);
-}
 
 function cleanLanguage(raw: unknown): SubscriberLanguage | null {
   return raw === "EN" || raw === "FR" ? raw : null;

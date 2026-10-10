@@ -35,6 +35,7 @@ export const LAYOUT_BLOCK_TYPES = [
   { value: "video", label: "Video" },
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },
+  { value: "signup", label: "Sign-up form" },
 ] as const;
 
 export type LayoutBlockType = (typeof LAYOUT_BLOCK_TYPES)[number]["value"];
@@ -100,6 +101,23 @@ export function cleanSlidingDoors(raw: unknown): SlidingDoorsSettings {
   };
 }
 
+// A Sign-up form's look (2026-10-10, Marketing step 5): its button's
+// colour and the colour of the button's text. Set in the style (Craig's
+// choice), so every page using it looks the same; the form's words use
+// the style's Text look. The list it adds to and its wording are set
+// per page, in Arrange (see PageSignupForm in schema.prisma).
+export type SignupLook = { buttonColour: string; buttonTextColour: string };
+
+export const DEFAULT_SIGNUP_LOOK: SignupLook = { buttonColour: "#171717", buttonTextColour: "#ffffff" };
+
+export function cleanSignupLook(raw: unknown): SignupLook {
+  const value = (raw ?? {}) as Partial<Record<keyof SignupLook, unknown>>;
+  return {
+    buttonColour: cleanColour(value.buttonColour) ?? DEFAULT_SIGNUP_LOOK.buttonColour,
+    buttonTextColour: cleanColour(value.buttonTextColour) ?? DEFAULT_SIGNUP_LOOK.buttonTextColour,
+  };
+}
+
 // The text styles a Page Style holds use the site fonts.
 export type PageTextStyle = TextStyle<SiteFontId>;
 
@@ -111,11 +129,13 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
   textgrid: DEFAULT_TEXT_STYLE,
 };
 
-// A Block Build component. `doors` is set on Sliding doors blocks only;
-// `textStyle` is a Header, Text or Text grid component's own look.
+// A Block Build component. `doors` is set on Sliding doors blocks only,
+// `signup` on Sign-up form blocks only; `textStyle` is a Header, Text or
+// Text grid component's own look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
   StyledBlock<SiteFontId> & {
     doors?: SlidingDoorsSettings;
+    signup?: SignupLook;
   };
 
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {
@@ -214,6 +234,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "slidingdoors") {
             clean.doors = cleanSlidingDoors((b as Partial<LayoutBlock>).doors);
           }
+          if (clean.type === "signup") {
+            clean.signup = cleanSignupLook((b as Partial<LayoutBlock>).signup);
+          }
           const textStyle = cleanBlockTextStyle(clean.type, (b as Partial<LayoutBlock>).textStyle, isSiteFontId);
           if (textStyle) clean.textStyle = textStyle;
           return [clean];
@@ -236,7 +259,8 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
 }
 
 export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
-  return type === "slidingdoors"
-    ? { id: crypto.randomUUID(), type, doors: DEFAULT_SLIDING_DOORS }
-    : { id: crypto.randomUUID(), type };
+  const id = crypto.randomUUID();
+  if (type === "slidingdoors") return { id, type, doors: DEFAULT_SLIDING_DOORS };
+  if (type === "signup") return { id, type, signup: DEFAULT_SIGNUP_LOOK };
+  return { id, type };
 }

@@ -23,6 +23,8 @@ export default function PublishButton({
   // Set by a publish in this visit; otherwise the date from the server.
   const [publishedNow, setPublishedNow] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Published, but something on the site won't work yet (2026-10-10).
+  const [warning, setWarning] = useState<string | null>(null);
   // Dates are shown in the viewer's own time zone, so only once in the
   // browser — the server doesn't know it.
   const [mounted, setMounted] = useState(false);
@@ -31,11 +33,15 @@ export default function PublishButton({
   const publish = () => {
     if (!action) return;
     setError(null);
+    setWarning(null);
     startTransition(async () => {
       try {
         const result = await action();
         if ("error" in result) setError(result.error);
-        else setPublishedNow(result.publishedAt);
+        else {
+          setPublishedNow(result.publishedAt);
+          setWarning(result.warning ?? null);
+        }
       } catch {
         setError("Publishing failed — please try again.");
       }
@@ -73,6 +79,7 @@ export default function PublishButton({
           </p>
         )
       )}
+      {warning && !pending && <p className="text-center text-xs text-amber-700">{warning}</p>}
     </div>
   );
 }

@@ -8,10 +8,16 @@ import PagePreview from "@/components/PagePreview";
 // snapshot with the same components as the admin preview (PagePreview).
 // The site's menu is drawn around it by the site's layout (see
 // PublishedSiteMenu), so it stays in place from page to page.
+// `siteKey` (2026-10-10): the robot check's public key for this
+// address, for the page's sign-up forms.
 export default function PublishedSiteView({
+  siteId,
+  siteKey,
   snapshot,
   pageId,
 }: {
+  siteId: string;
+  siteKey: string | null;
   snapshot: SiteSnapshot;
   pageId: string;
 }) {
@@ -19,7 +25,7 @@ export default function PublishedSiteView({
   const isCanvas = page.style?.type === "CANVAS";
 
   return (
-    <SnapshotSiteData snapshot={snapshot}>
+    <SnapshotSiteData siteId={siteId} siteKey={siteKey} snapshot={snapshot}>
       <main className={isCanvas ? "" : "min-h-[100dvh]"}>
         <PagePreview
           key={page.id}

@@ -6,6 +6,7 @@ import { redirect } from "next/navigation";
 import { randomUUID } from "crypto";
 import { generateUniqueEmailSlug } from "@/lib/emailSlug";
 import { parseClientKind } from "@/lib/clientKind";
+import { syncTurnstileDomains } from "@/lib/turnstile";
 
 // ---- Reading data for the "Add New Site" picker ----
 
@@ -84,6 +85,7 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
     : null;
   if (!name) return;
 
+  const before = await db.site.findUnique({ where: { id }, select: { domain: true } });
   await db.site.update({
     where: { id },
     data: {
@@ -94,6 +96,13 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
       domainRenewalDate,
     },
   });
+  // A new or changed domain is listed on Cloudflare's robot check for
+  // sign-up forms (2026-10-10, lib/turnstile.ts); a failure is logged
+  // and put right by the next publish.
+  if (before?.domain !== domain) {
+    const sync = await syncTurnstileDomains();
+    if ("error" in sync) console.error("updateSite: Turnstile", sync.error);
+  }
   revalidatePath("/");
   revalidatePath(`/sites/${id}`);
   revalidatePath(`/clients/${id}`);

@@ -10,10 +10,12 @@ import {
 import { listCurationSections } from "@/lib/actions/curationSections";
 import { getPageCanvas } from "@/lib/actions/pageCanvas";
 import { getPageComponents } from "@/lib/actions/pageComponents";
+import { getPageSignupForms } from "@/lib/actions/signupForms";
 import { listPageStyles } from "@/lib/actions/pageStyles";
 import { normalizeLayout } from "@/lib/pageStyleLayout";
 import { isPageStyleType } from "@/lib/pageStyleTypes";
 import { normalizeMenuStyle, type MenuStyleLayout } from "@/lib/menuStyleLayout";
+import { syncTurnstileDomains } from "@/lib/turnstile";
 import {
   SNAPSHOT_VERSION,
   type PublishResult,
@@ -65,6 +67,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
         style,
         canvas: isCanvas ? await getPageCanvas(siteId, p.id) : [],
         components: style?.type === "BLOCK_BUILD" ? await getPageComponents(siteId, p.id) : [],
+        signupForms: style?.type === "BLOCK_BUILD" ? await getPageSignupForms(siteId, p.id) : [],
         menuStyleId: p.menuStyleId ?? site.menuStyleId,
       };
     })
@@ -108,7 +111,10 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
 
 // "Publish to live site" — replaces the site's published snapshot and
 // reports back when it was published, or what went wrong (2026-10-06),
-// so the button can say so.
+// so the button can say so. A site with a sign-up form (2026-10-10)
+// also brings Cloudflare's robot check up to date for its domain and the
+// preview (lib/turnstile.ts); if that fails the site is still published,
+// with a warning.
 export async function publishSite(siteId: string): Promise<PublishResult> {
   try {
     const snapshot = await buildSiteSnapshot(siteId);
@@ -119,7 +125,12 @@ export async function publishSite(siteId: string): Promise<PublishResult> {
       create: { siteId, data: snapshot as object, publishedAt },
       update: { data: snapshot as object, publishedAt },
     });
-    return { publishedAt: publishedAt.toISOString() };
+    const hasSignupForm = snapshot.pages.some((p) => p.signupForms.length > 0);
+    const sync = hasSignupForm ? await syncTurnstileDomains() : null;
+    return {
+      publishedAt: publishedAt.toISOString(),
+      ...(sync && "error" in sync ? { warning: sync.error } : {}),
+    };
   } catch (err) {
     console.error("publishSite failed", siteId, err);
     return { error: "Publishing failed — please try again." };
@@ -146,7 +157,7 @@ export async function getLastPublishedAt(siteId: string): Promise<Date | null> {
 // (2026-10-06) the same. A site published before menus existed shows
 // none until it's published again, and one published before
 // components' content existed (2026-10-07) shows its Block Build pages
-// empty until then.
+// empty until then; the same for sign-up forms (2026-10-10).
 // Changes to a style's own settings still need a publish to show.
 export async function getPublishedSite(
   siteId: string
@@ -164,6 +175,7 @@ export async function getPublishedSite(
         ? { id: p.style.id, name: p.style.name, ...normalizeLayout(p.style.type, p.style.layout) }
         : null,
     components: p.components ?? [],
+    signupForms: p.signupForms ?? [],
     menuStyleId: p.menuStyleId ?? null,
   }));
   const menus: Record<string, MenuStyleLayout> = {};

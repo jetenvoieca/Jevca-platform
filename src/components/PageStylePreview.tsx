@@ -55,7 +55,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
             {row.map((b) => (
               <div key={b.id} className={rowBlockClass()} style={rowBlockStyle(blockWidthOf(b))}>
                 <Labelled label={blockLabel(b)}>
-                  <BlockShape type={b.type} doors={b.doors} spacing={layout.gridSpacing} />
+                  <BlockShape type={b.type} doors={b.doors} signup={b.signup} spacing={layout.gridSpacing} />
                 </Labelled>
               </div>
             ))}
