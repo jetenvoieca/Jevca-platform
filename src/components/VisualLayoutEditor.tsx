@@ -34,6 +34,15 @@ import { rowClass, type PreviewDevice } from "@/components/pageRows";
 import { Labelled } from "@/components/blockShapes";
 import NumberField from "@/components/NumberField";
 import FormModal from "@/components/FormModal";
+import { TextStyleBox } from "@/components/layoutControls";
+import {
+  isTextComponent,
+  isTextStyleEmpty,
+  type FontChoice,
+  type StyledBlock,
+  type TextStyle,
+  withTextStyle,
+} from "@/lib/textStyle";
 import {
   BarButton,
   BarDivider,
@@ -86,6 +95,16 @@ export type EditorComponent<T extends string> = { value: T; label: string };
 // the panel's title and its contents.
 export type BlockSettingsPanel = { button: string; title: string; content: ReactNode };
 
+// The fonts a layout offers, for a text component's own Text style
+// (2026-10-10).
+export type TextStyleFonts = {
+  fonts: readonly FontChoice[];
+  kinds: readonly string[];
+  isFont: (value: unknown) => value is string;
+};
+
+const NO_TEXT_STYLE: TextStyle = { font: null, size: null, look: null, colour: null };
+
 // An on / off switch on a component's bar, after Remove (e.g. a mail
 // gallery's Regularise, 2026-10-09): shown highlighted while on.
 export type BlockToggle = { label: string; on: boolean; onToggle: () => void };
@@ -96,7 +115,7 @@ type DragItem<B extends RowBlock> = { block: B };
 // What a component's drop zone knows about where it is.
 type DropData = { blockId: string; rowIndex: number };
 
-export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayout<B>>({
+export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L extends RowLayout<B>>({
   layout,
   onChange,
   components,
@@ -104,6 +123,7 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   renderBlock,
   settingsPanel,
   blockToggle,
+  textStyleFonts,
   desktopWidth,
   backgroundColor,
   backgroundImage = false,
@@ -121,6 +141,9 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
   settingsPanel?: (block: B, onBlock: (block: B) => void) => BlockSettingsPanel | null;
   // A component's on / off switch, if it has one.
   blockToggle?: (block: B) => BlockToggle | null;
+  // Header, Text and Text grid components get a Text style button for
+  // their own look, in these fonts.
+  textStyleFonts?: TextStyleFonts;
   desktopWidth: number;
   backgroundColor: string | null;
   backgroundImage?: boolean;
@@ -297,6 +320,19 @@ export default function VisualLayoutEditor<B extends RowBlock, L extends RowLayo
                             onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
                           )}
                           toggle={blockToggle?.(b)}
+                          textStyle={
+                            textStyleFonts && isTextComponent(b.type)
+                              ? {
+                                  fonts: textStyleFonts,
+                                  value: b.textStyle ?? NO_TEXT_STYLE,
+                                  onChange: (style) =>
+                                    onChange({
+                                      ...layout,
+                                      blocks: replaceBlock(layout.blocks, withTextStyle(b, style)),
+                                    }),
+                                }
+                              : null
+                          }
                           onSelect={() => setSelectedId(b.id)}
                           onWidth={(width) =>
                             onChange({
@@ -400,7 +436,14 @@ function BlockWithGap({
 
 // The panel a selected component's bar opens: its exact numbers, or its
 // own settings.
-type Panel = "fine" | "own";
+type Panel = "fine" | "own" | "text";
+
+// A text component's own look, edited from its bar.
+type BlockTextStyle = {
+  fonts: TextStyleFonts;
+  value: TextStyle;
+  onChange: (style: TextStyle) => void;
+};
 
 function BlockItem<B extends RowBlock>({
   block,
@@ -416,6 +459,7 @@ function BlockItem<B extends RowBlock>({
   dropSide,
   ownSettings,
   toggle,
+  textStyle,
   onSelect,
   onWidth,
   onRow,
@@ -435,6 +479,7 @@ function BlockItem<B extends RowBlock>({
   dropSide: "left" | "right" | null;
   ownSettings: BlockSettingsPanel | null | undefined;
   toggle: BlockToggle | null | undefined;
+  textStyle: BlockTextStyle | null;
   onSelect: () => void;
   onWidth: (width: number) => void;
   onRow: (patch: Partial<RowSettings>) => void;
@@ -489,6 +534,14 @@ function BlockItem<B extends RowBlock>({
           <BarButton active={panel === "fine"} onClick={() => togglePanel("fine")}>
             Fine-tune
           </BarButton>
+          {textStyle && (
+            <BarButton
+              active={panel === "text" || !isTextStyleEmpty(textStyle.value)}
+              onClick={() => togglePanel("text")}
+            >
+              Text style
+            </BarButton>
+          )}
           <BarDivider />
           <BarButton danger onClick={onRemove}>
             Remove
@@ -538,6 +591,20 @@ function BlockItem<B extends RowBlock>({
               />
             )}
             <p className="text-xs text-neutral-400">On a phone every component is full width.</p>
+          </PanelBox>
+        ) : panel === "text" && textStyle ? (
+          <PanelBox title="Text style" onClose={() => setPanel(null)}>
+            <TextStyleBox
+              label={label}
+              value={textStyle.value}
+              fonts={textStyle.fonts.fonts}
+              kinds={textStyle.fonts.kinds}
+              isFont={textStyle.fonts.isFont}
+              onChange={textStyle.onChange}
+            />
+            <p className="text-xs text-neutral-400">
+              For this {label} only. Anything left blank follows the style set for every {label}.
+            </p>
           </PanelBox>
         ) : panel === "own" && ownSettings ? (
           <PanelBox title={ownSettings.title} onClose={() => setPanel(null)}>

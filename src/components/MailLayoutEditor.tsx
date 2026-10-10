@@ -9,7 +9,12 @@ import {
   type MailTemplateLayout,
 } from "@/lib/mailTemplateLayout";
 import { BlockShape } from "@/components/blockShapes";
-import VisualLayoutEditor, { type BlockSettingsPanel, type BlockToggle } from "@/components/VisualLayoutEditor";
+import VisualLayoutEditor, {
+  type BlockSettingsPanel,
+  type BlockToggle,
+  type TextStyleFonts,
+} from "@/components/VisualLayoutEditor";
+import { MAIL_FONTS, MAIL_FONT_KINDS, isMailFontId } from "@/lib/mailFonts";
 import { MailFooterPlaceholder } from "@/components/MailTemplatePreview";
 
 // The visual editor for a mail's layout (2026-10-08) — a Mail Template's,
@@ -21,6 +26,10 @@ import { MailFooterPlaceholder } from "@/components/MailTemplatePreview";
 // Button's link and colours) and `blockToggle` (a Gallery's
 // Regularise), and is drawn `fluid` so the boxes to type into stay full
 // size.
+// A Header, Text or Text grid component's own Text style (2026-10-10),
+// in the mail fonts.
+const MAIL_TEXT_STYLE_FONTS: TextStyleFonts = { fonts: MAIL_FONTS, kinds: MAIL_FONT_KINDS, isFont: isMailFontId };
+
 export default function MailLayoutEditor({
   layout,
   onChange,
@@ -45,6 +54,7 @@ export default function MailLayoutEditor({
       renderBlock={renderBlock ?? ((b) => <MailBlockShape block={b} layout={layout} />)}
       settingsPanel={settingsPanel}
       blockToggle={blockToggle}
+      textStyleFonts={MAIL_TEXT_STYLE_FONTS}
       desktopWidth={MAIL_WIDTH}
       backgroundColor={layout.backgroundColor}
       surroundColor={layout.surroundColor}

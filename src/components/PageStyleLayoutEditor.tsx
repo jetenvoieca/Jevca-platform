@@ -11,13 +11,18 @@ import {
 } from "@/lib/pageStyleLayout";
 import { BlockShape } from "@/components/blockShapes";
 import NumberField from "@/components/NumberField";
-import VisualLayoutEditor from "@/components/VisualLayoutEditor";
+import VisualLayoutEditor, { type TextStyleFonts } from "@/components/VisualLayoutEditor";
+import { SITE_FONTS, SITE_FONT_KINDS, isSiteFontId } from "@/lib/siteFonts";
 import { PAGE_DESKTOP_WIDTH } from "@/components/visualEditorParts";
 
 // The visual editor for a Block Build Page Style (2026-10-07; split out
 // of VisualLayoutEditor 2026-10-08, which is now shared with Mail
 // Templates): the page's components, drawn as outlines at a desktop's
 // width, and a Sliding doors component's own settings on its bar.
+// A Header, Text or Text grid component's own Text style (2026-10-10),
+// in the website fonts.
+const SITE_TEXT_STYLE_FONTS: TextStyleFonts = { fonts: SITE_FONTS, kinds: SITE_FONT_KINDS, isFont: isSiteFontId };
+
 export default function PageStyleLayoutEditor({
   layout,
   onChange,
@@ -46,6 +51,7 @@ export default function PageStyleLayoutEditor({
             }
           : null
       }
+      textStyleFonts={SITE_TEXT_STYLE_FONTS}
       desktopWidth={PAGE_DESKTOP_WIDTH}
       backgroundColor={layout.backgroundColor}
       backgroundImage={layout.backgroundImage}

@@ -14,7 +14,7 @@ import {
   type RowBlock,
   type RowLayout,
 } from "@/lib/rowLayout";
-import { cleanTextStyles, type TextStyle, type TextStyles } from "@/lib/textStyle";
+import { cleanBlockTextStyle, cleanTextStyles, type StyledBlock, type TextStyle, type TextStyles } from "@/lib/textStyle";
 
 // The layout a Page Style holds (2026-10-04) — the arrangement of
 // components only, never content. Saved in PageStyle.layout (JSON).
@@ -111,10 +111,12 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
   textgrid: DEFAULT_TEXT_STYLE,
 };
 
-// A Block Build component. `doors` is set on Sliding doors blocks only.
-export type LayoutBlock = RowBlock<LayoutBlockType> & {
-  doors?: SlidingDoorsSettings;
-};
+// A Block Build component. `doors` is set on Sliding doors blocks only;
+// `textStyle` is a Header, Text or Text grid component's own look.
+export type LayoutBlock = RowBlock<LayoutBlockType> &
+  StyledBlock<SiteFontId> & {
+    doors?: SlidingDoorsSettings;
+  };
 
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {
   // A colour is styling, so the style keeps it; null = none.
@@ -212,6 +214,8 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "slidingdoors") {
             clean.doors = cleanSlidingDoors((b as Partial<LayoutBlock>).doors);
           }
+          const textStyle = cleanBlockTextStyle(clean.type, (b as Partial<LayoutBlock>).textStyle, isSiteFontId);
+          if (textStyle) clean.textStyle = textStyle;
           return [clean];
         })
       : []

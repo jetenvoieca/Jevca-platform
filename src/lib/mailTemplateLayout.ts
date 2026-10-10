@@ -12,7 +12,7 @@ import {
   type RowBlock,
   type RowLayout,
 } from "@/lib/rowLayout";
-import { cleanTextStyles, type TextStyle, type TextStyles } from "@/lib/textStyle";
+import { cleanBlockTextStyle, cleanTextStyles, type StyledBlock, type TextStyle, type TextStyles } from "@/lib/textStyle";
 
 // The layout a Mail Template holds (2026-10-08, Marketing step 2) — a
 // starting point for a campaign's mails: its components, rows, widths,
@@ -57,7 +57,8 @@ export function mailBlockTypeLabel(type: MailBlockType): string {
   return MAIL_BLOCK_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
-export type MailBlock = RowBlock<MailBlockType>;
+// `textStyle`: a Header, Text or Text grid component's own look.
+export type MailBlock = RowBlock<MailBlockType> & StyledBlock<MailFontId>;
 
 export type MailTextStyle = TextStyle<MailFontId>;
 
@@ -103,8 +104,11 @@ export function normalizeMailTemplate(raw: unknown): MailTemplateLayout {
   const blocks = clearLoneRows(
     Array.isArray(value.blocks)
       ? value.blocks.flatMap((b) => {
-          const clean = cleanRowBlock(b, isMailBlockType);
-          return clean ? [clean] : [];
+          const clean: MailBlock | null = cleanRowBlock(b, isMailBlockType);
+          if (!clean) return [];
+          const textStyle = cleanBlockTextStyle(clean.type, (b as Partial<MailBlock>).textStyle, isMailFontId);
+          if (textStyle) clean.textStyle = textStyle;
+          return [clean];
         })
       : []
   );

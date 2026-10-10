@@ -10,6 +10,7 @@ import {
 import { MAIL_WIDTH, type MailBlock, type MailTemplateLayout, type MailTextStyle } from "@/lib/mailTemplateLayout";
 import { blockWidthOf, groupBlocksByRow, rowKey, rowSettingsOf, type RowSettings } from "@/lib/rowLayout";
 import { escapeHtml, isRichTextEmpty, richTextToHtml, type RichText } from "@/lib/richText";
+import { mergeTextStyle } from "@/lib/textStyle";
 
 // A campaign mail as the email itself (2026-10-08, Marketing step 3) —
 // the one HTML used both for the Preview and for sending, so what's
@@ -81,8 +82,13 @@ const DEFAULT_TEXT_COLOUR = "#222222";
 
 type TextKind = keyof typeof TEXT_DEFAULTS;
 
-function textCss(layout: MailTemplateLayout, kind: TextKind, extraSize = 0): string {
-  const style: MailTextStyle = layout.textStyles[kind];
+// A text component's look: its own (from its bar's Text style), then the
+// template's for its kind, then the defaults above.
+function styleOf(layout: MailTemplateLayout, kind: TextKind, block?: MailBlock): MailTextStyle {
+  return mergeTextStyle(layout.textStyles[kind], block?.textStyle);
+}
+
+function textCss(style: MailTextStyle, kind: TextKind, extraSize = 0): string {
   const defaults = TEXT_DEFAULTS[kind];
   const look = style.look ?? defaults.look;
   const size = (style.size ?? defaults.size) + extraSize;
@@ -138,8 +144,8 @@ function equalWidths(width: number, count: number, gap: number): number[] {
   return Array.from({ length: count }, () => each);
 }
 
-function richHtml(layout: MailTemplateLayout, kind: TextKind, doc: RichText): string {
-  return richTextToHtml(doc, textCss(layout, kind), Math.round(TEXT_DEFAULTS[kind].size * 0.8));
+function richHtml(style: MailTextStyle, kind: TextKind, doc: RichText): string {
+  return richTextToHtml(doc, textCss(style, kind), Math.round(TEXT_DEFAULTS[kind].size * 0.8));
 }
 
 function formatPrice(price: { amount: number; currency: string }, language: MailLanguage): string {
@@ -162,11 +168,11 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
         : "";
     case "header": {
       const text = contentOf(content, { ...block, type: "header" }).text[language];
-      return text ? `<h1 style="margin:0;${textCss(layout, "header")}">${escapeHtml(text)}</h1>` : "";
+      return text ? `<h1 style="margin:0;${textCss(styleOf(layout, "header", block), "header")}">${escapeHtml(text)}</h1>` : "";
     }
     case "text": {
       const doc = contentOf(content, { ...block, type: "text" }).text[language];
-      return isRichTextEmpty(doc) ? "" : richHtml(layout, "text", doc);
+      return isRichTextEmpty(doc) ? "" : richHtml(styleOf(layout, "text", block), "text", doc);
     }
     case "textgrid": {
       const cells = contentOf(content, { ...block, type: "textgrid" }).cells.filter(
@@ -175,8 +181,9 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
       if (cells.length === 0) return "";
       const gap = layout.gridSpacing.horizontal;
       const widths = equalWidths(width, cells.length, gap);
+      const style = styleOf(layout, "textgrid", block);
       return columnsHtml(
-        cells.map((c, i) => ({ width: widths[i], html: richHtml(layout, "textgrid", c[language]) })),
+        cells.map((c, i) => ({ width: widths[i], html: richHtml(style, "textgrid", c[language]) })),
         gap,
         width
       );
@@ -210,12 +217,12 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
       const artwork = artworkId ? assets.artworks[artworkId] : null;
       if (!artwork) return "";
       const lines = [
-        `<p style="margin:0 0 6px 0;${textCss(layout, "text", 2)};font-weight:bold;">${escapeHtml(artwork.title)}</p>`,
+        `<p style="margin:0 0 6px 0;${textCss(layout.textStyles.text, "text", 2)};font-weight:bold;">${escapeHtml(artwork.title)}</p>`,
         ...artwork.details.map(
-          (d) => `<p style="margin:0;${textCss(layout, "text", -1)}">${escapeHtml(d)}</p>`
+          (d) => `<p style="margin:0;${textCss(layout.textStyles.text, "text", -1)}">${escapeHtml(d)}</p>`
         ),
         artwork.price
-          ? `<p style="margin:10px 0 0 0;${textCss(layout, "text")}">${escapeHtml(formatPrice(artwork.price, language))}</p>`
+          ? `<p style="margin:10px 0 0 0;${textCss(layout.textStyles.text, "text")}">${escapeHtml(formatPrice(artwork.price, language))}</p>`
           : "",
       ].join("");
       if (!artwork.image) return lines;

@@ -16,7 +16,7 @@ import {
   type PageMargins,
   type VerticalAlign,
 } from "@/lib/rowLayout";
-import { isTextComponent } from "@/lib/textStyle";
+import { isTextComponent, mergeTextStyle } from "@/lib/textStyle";
 import { useSiteData } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
@@ -229,7 +229,7 @@ function BlockBuildPage({
     return (
       <CurationSectionView
         section={section}
-        textStyle={isTextComponent(block.type) ? layout.textStyles[block.type] : undefined}
+        textStyle={isTextComponent(block.type) ? mergeTextStyle(layout.textStyles[block.type], block.textStyle) : undefined}
       />
     );
   };

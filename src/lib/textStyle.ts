@@ -76,3 +76,45 @@ export function cleanTextStyles<F extends string>(
     textgrid: cleanTextStyle(value.textgrid, isFont),
   };
 }
+
+// A text component's own look (2026-10-10, Craig's request): set from
+// the Text style button on its bar, in Mail Templates, campaign mails
+// and Page Styles. Anything left blank follows the layout's style for
+// that kind of component (above).
+export type StyledBlock<F extends string = string> = { textStyle?: TextStyle<F> };
+
+export function isTextStyleEmpty(style: TextStyle): boolean {
+  return !style.font && style.size === null && !style.look && !style.colour;
+}
+
+// What a text component is drawn with: its own settings, and the
+// layout's for anything it leaves blank.
+export function mergeTextStyle<F extends string>(base: TextStyle<F>, own: TextStyle<F> | undefined): TextStyle<F> {
+  if (!own) return base;
+  return {
+    font: own.font ?? base.font,
+    size: own.size ?? base.size,
+    look: own.look ?? base.look,
+    colour: own.colour ?? base.colour,
+  };
+}
+
+// A component's own look, cleaned: only text components have one, and
+// one with nothing set isn't kept.
+export function cleanBlockTextStyle<F extends string>(
+  type: string,
+  raw: unknown,
+  isFont: (value: unknown) => value is F
+): TextStyle<F> | undefined {
+  if (!isTextComponent(type) || raw === undefined || raw === null) return undefined;
+  const style = cleanTextStyle(raw, isFont);
+  return isTextStyleEmpty(style) ? undefined : style;
+}
+
+// The component with its own look set to `style` — or removed, when
+// nothing in it is set.
+export function withTextStyle<B extends StyledBlock>(block: B, style: TextStyle): B {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { textStyle, ...rest } = block;
+  return (isTextStyleEmpty(style) ? rest : { ...rest, textStyle: style }) as B;
+}

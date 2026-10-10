@@ -203,9 +203,9 @@ export function TextStylesControl<F extends string>({
   );
 }
 
-// One component type's Font and Size, then Style and Colour. Anything
-// left blank keeps the text's own look.
-function TextStyleBox<F extends string>({
+// One component type's (or one component's) Font and Size, then Style
+// and Colour. Anything left blank keeps the text's own look.
+export function TextStyleBox<F extends string>({
   label,
   value,
   fonts,
