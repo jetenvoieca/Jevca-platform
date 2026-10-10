@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useState, type CSSProperties, type ReactNode } from "react";
 import {
   BUTTON_DEFAULT_COLOUR,
   BUTTON_DEFAULT_TEXT_COLOUR,
@@ -28,7 +28,8 @@ import { useClientWords } from "@/components/ClientWordsProvider";
 // (the component is moved by its label strip). Every change goes
 // straight to `onChange`; the mail saves itself. `revision` changes when
 // the content is replaced from outside (Translate now), so the text
-// boxes start again from it.
+// boxes start again from it. `look` (2026-10-10): a Header's, Text's or
+// Text grid's font, size and colour, so it's typed as it will look.
 
 export type PictureThumbs = Record<string, MailPictureThumb>;
 
@@ -51,6 +52,7 @@ export default function MailBlockContent({
   content,
   language,
   revision,
+  look,
   onChange,
   pickers,
 }: {
@@ -58,6 +60,7 @@ export default function MailBlockContent({
   content: BlockContent;
   language: MailLanguage;
   revision: number;
+  look?: CSSProperties;
   onChange: (content: BlockContent) => void;
   pickers: PickerContext;
 }) {
@@ -73,6 +76,7 @@ export default function MailBlockContent({
           }
           placeholder="Type header in here"
           aria-label={`Header in ${inLanguage}`}
+          style={look}
           className={`${inputClass} text-center text-base`}
         />
       )}
@@ -82,6 +86,7 @@ export default function MailBlockContent({
           key={`${blockId}:${language}:${revision}`}
           label={`Text · ${inLanguage}`}
           value={content.text[language]}
+          look={look}
           onChange={(doc) => onChange({ ...content, text: { ...content.text, [language]: doc } })}
         />
       )}
@@ -98,6 +103,7 @@ export default function MailBlockContent({
                   key={`${blockId}:${i}:${content.cells.length}:${language}:${revision}`}
                   label={`Column ${i + 1}`}
                   value={cell[language]}
+                  look={look}
                   onChange={(doc) =>
                     onChange({
                       ...content,

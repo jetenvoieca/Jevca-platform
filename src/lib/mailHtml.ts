@@ -80,25 +80,48 @@ const TEXT_DEFAULTS = {
 
 const DEFAULT_TEXT_COLOUR = "#222222";
 
-type TextKind = keyof typeof TEXT_DEFAULTS;
+export type TextKind = keyof typeof TEXT_DEFAULTS;
 
 // A text component's look: its own (from its bar's Text style), then the
 // template's for its kind, then the defaults above.
-function styleOf(layout: MailTemplateLayout, kind: TextKind, block?: MailBlock): MailTextStyle {
+export function styleOf(layout: MailTemplateLayout, kind: TextKind, block?: MailBlock): MailTextStyle {
   return mergeTextStyle(layout.textStyles[kind], block?.textStyle);
 }
 
-function textCss(style: MailTextStyle, kind: TextKind, extraSize = 0): string {
+// How a text component's text looks, with the defaults filled in — the
+// one definition used by the mail itself and by the campaign editor's
+// typing boxes (2026-10-10), so they always match.
+export type MailTextLook = {
+  fontFamily: string;
+  fontSize: number;
+  lineHeight: number;
+  color: string;
+  fontWeight: "bold" | "normal";
+  fontStyle: "italic" | "normal";
+};
+
+export function mailTextLook(style: MailTextStyle, kind: TextKind, extraSize = 0): MailTextLook {
   const defaults = TEXT_DEFAULTS[kind];
   const look = style.look ?? defaults.look;
-  const size = (style.size ?? defaults.size) + extraSize;
+  return {
+    fontFamily: mailFontStack(style.font ?? "arial"),
+    fontSize: (style.size ?? defaults.size) + extraSize,
+    lineHeight: defaults.lineHeight,
+    color: style.colour ?? DEFAULT_TEXT_COLOUR,
+    fontWeight: look === "bold" ? "bold" : "normal",
+    fontStyle: look === "italic" ? "italic" : "normal",
+  };
+}
+
+function textCss(style: MailTextStyle, kind: TextKind, extraSize = 0): string {
+  const look = mailTextLook(style, kind, extraSize);
   return [
-    `font-family:${mailFontStack(style.font ?? "arial")}`,
-    `font-size:${size}px`,
-    `line-height:${defaults.lineHeight}`,
-    `color:${style.colour ?? DEFAULT_TEXT_COLOUR}`,
-    `font-weight:${look === "bold" ? "bold" : "normal"}`,
-    `font-style:${look === "italic" ? "italic" : "normal"}`,
+    `font-family:${look.fontFamily}`,
+    `font-size:${look.fontSize}px`,
+    `line-height:${look.lineHeight}`,
+    `color:${look.color}`,
+    `font-weight:${look.fontWeight}`,
+    `font-style:${look.fontStyle}`,
   ].join(";");
 }
 

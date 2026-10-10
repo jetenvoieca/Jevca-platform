@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { normalizeMailTemplate, type MailTemplateLayout } from "@/lib/mailTemplateLayout";
+import { normalizeMailTemplate, withTemplateLook, type MailTemplateLayout } from "@/lib/mailTemplateLayout";
 
 // Mail Templates (2026-10-08) — see the note on MailTemplate in
 // schema.prisma. Shared by every site, so nothing here is scoped to a
@@ -57,10 +57,36 @@ export async function updateMailTemplate(id: string, input: MailTemplateInput): 
   if ("error" in valid) return valid;
   try {
     await db.mailTemplate.update({ where: { id }, data: valid.data });
-    return { ok: true };
   } catch (err) {
     if (isUniqueViolation(err)) return { error: "A template with that name already exists." };
     throw err;
+  }
+  await applyLookToUnsentMails(id, valid.data.layout);
+  return { ok: true };
+}
+
+// Campaign mails not yet sent follow their template's look (2026-10-10,
+// Craig's choice): its colours, spacing, margins and text styles are
+// copied into each — their own components, content and per-component
+// Text styles stay. A campaign's principal and alternative mails are
+// unsent until the campaign starts sending; its follow-up until the
+// follow-up starts.
+async function applyLookToUnsentMails(templateId: string, template: MailTemplateLayout): Promise<void> {
+  const mails = await db.campaignMail.findMany({
+    where: {
+      templateId,
+      OR: [
+        { kind: { in: ["PRINCIPAL", "ALTERNATIVE"] }, campaign: { status: { in: ["DRAFT", "SCHEDULED"] } } },
+        { kind: "FOLLOW_UP", followUpStartedAt: null },
+      ],
+    },
+    select: { id: true, layout: true },
+  });
+  for (const mail of mails) {
+    await db.campaignMail.update({
+      where: { id: mail.id },
+      data: { layout: withTemplateLook(normalizeMailTemplate(mail.layout), template) },
+    });
   }
 }
 

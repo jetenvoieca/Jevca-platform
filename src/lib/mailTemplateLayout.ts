@@ -123,6 +123,21 @@ export function normalizeMailTemplate(raw: unknown): MailTemplateLayout {
   };
 }
 
+// A campaign mail's layout with its template's look (2026-10-10, Craig's
+// choice: an unsent mail follows its template): the template's colours,
+// spacing, margins and text styles; the mail keeps its own components,
+// rows and each component's own Text style.
+export function withTemplateLook(mail: MailTemplateLayout, template: MailTemplateLayout): MailTemplateLayout {
+  return {
+    ...mail,
+    surroundColor: template.surroundColor,
+    backgroundColor: template.backgroundColor,
+    gridSpacing: template.gridSpacing,
+    margins: template.margins,
+    textStyles: template.textStyles,
+  };
+}
+
 export function newMailBlock(type: MailBlockType): MailBlock {
   return { id: crypto.randomUUID(), type };
 }

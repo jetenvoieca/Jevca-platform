@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, type CSSProperties } from "react";
 import { EditorContent, useEditor, useEditorState } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import { cleanLinkUrl, cleanRichText, type RichText } from "@/lib/richText";
@@ -10,14 +10,18 @@ import { cleanLinkUrl, cleanRichText, type RichText } from "@/lib/richText";
 // switched off, and anything pasted in is reduced to plain paragraphs
 // with those three. What's typed goes to `onChange` already cleaned (see
 // lib/richText.ts). Give it a `key` that changes when it should show a
-// different text — it reads `value` only when it first opens.
+// different text — it reads `value` only when it first opens. `look`
+// (2026-10-10): the font, size and colour the text is shown in, as it
+// will be in the mail.
 export default function RichTextField({
   label,
   value,
+  look,
   onChange,
 }: {
   label: string;
   value: RichText;
+  look?: CSSProperties;
   onChange: (value: RichText) => void;
 }) {
   const [linkDraft, setLinkDraft] = useState<string | null>(null);
@@ -48,7 +52,9 @@ export default function RichTextField({
       attributes: {
         "aria-label": label,
         class:
-          "min-h-[72px] px-3 py-2 text-sm text-neutral-900 focus:outline-none [&_a]:underline [&_p]:mb-2 [&_p:last-child]:mb-0",
+          `min-h-[72px] px-3 py-2 focus:outline-none [&_a]:underline [&_p]:mb-2 [&_p:last-child]:mb-0 ${
+            look ? "" : "text-sm text-neutral-900"
+          }`,
       },
     },
   });
@@ -153,7 +159,9 @@ export default function RichTextField({
           )}
         </div>
       )}
-      <EditorContent editor={editor} />
+      <div style={look}>
+        <EditorContent editor={editor} />
+      </div>
     </div>
   );
 }

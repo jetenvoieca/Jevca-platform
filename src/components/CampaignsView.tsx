@@ -40,6 +40,8 @@ import CampaignAudience from "@/components/CampaignAudience";
 import CampaignResults from "@/components/CampaignResults";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAutoSave } from "@/components/useAutoSave";
+import { mailTextLook, styleOf } from "@/lib/mailHtml";
+import { isTextComponent } from "@/lib/textStyle";
 
 // Marketing → Mail Campaigns (2026-10-08, step 3a; reworked the same day
 // from Craig's annotated mockup), laid out like it: on the left, the
@@ -314,6 +316,7 @@ export default function CampaignsView({
         content={contentOf(draft.content, block as MailBlock & { type: BlockContent["type"] })}
         language={language}
         revision={revision}
+        look={isTextComponent(block.type) ? mailTextLook(styleOf(draft.layout, block.type, block), block.type) : undefined}
         onChange={(next) => changeBlockContent(block.id, next)}
         pickers={pickers}
       />

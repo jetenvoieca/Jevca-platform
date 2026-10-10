@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { normalizeMailTemplate, type MailTemplateLayout } from "@/lib/mailTemplateLayout";
+import { normalizeMailTemplate, withTemplateLook, type MailTemplateLayout } from "@/lib/mailTemplateLayout";
 import {
   DEFAULT_FOLLOW_UP,
   SHARE_LIMITS,
@@ -510,19 +510,28 @@ export async function setFollowUp(
 
 // Saves a mail's layout, content, subject and preview text — each
 // cleaned with the same rules the editor uses, so whatever is saved is
-// always valid. Content for removed components is dropped.
+// always valid. Content for removed components is dropped. The look
+// (colours, spacing, margins, text styles) is always its template's, so
+// a page opened before the template changed can't put the old look back.
 export async function updateCampaignMail(
   mailId: string,
   siteId: string,
   input: CampaignMailInput
 ): Promise<Result> {
-  const layout = normalizeMailTemplate(input.layout);
+  const editable = {
+    id: mailId,
+    campaign: { siteId },
+    OR: [{ kind: "FOLLOW_UP" as const, followUpStartedAt: null }, { campaign: { status: { in: EDITABLE } } }],
+  };
+  const mail = await db.campaignMail.findFirst({
+    where: editable,
+    select: { template: { select: { layout: true } } },
+  });
+  if (!mail) return { error: SENT_MESSAGE };
+  const own = normalizeMailTemplate(input.layout);
+  const layout = mail.template ? withTemplateLook(own, normalizeMailTemplate(mail.template.layout)) : own;
   const { count } = await db.campaignMail.updateMany({
-    where: {
-      id: mailId,
-      campaign: { siteId },
-      OR: [{ kind: "FOLLOW_UP", followUpStartedAt: null }, { campaign: { status: { in: EDITABLE } } }],
-    },
+    where: editable,
     data: {
       layout,
       content: cleanMailContent(input.content, layout),
