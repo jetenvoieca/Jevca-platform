@@ -21,7 +21,7 @@ import PersonalComposePopup from "@/components/PersonalComposePopup";
 import type { ComposeRecipient } from "@/lib/actions/adminEmail";
 import { useEmailTranslation } from "@/components/useEmailTranslation";
 import SwipeRow from "@/components/SwipeRow";
-import { TrashIcon } from "@/components/ActionIcons";
+import { TaskIcon, TrashIcon } from "@/components/ActionIcons";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 
@@ -36,7 +36,10 @@ import { capitaliseParagraphs } from "@/lib/text";
 // new email from Compose (2026-10-10, beside Processed) — Archive
 // (the whole conversation out of the inbox, as in Gmail), and Delete;
 // a whole conversation can be deleted from the list (swipe, or the hover
-// icon), as on the other tabs. Delete is Gmail's own — to its Bin, where
+// icon), as on the other tabs. Make task (2026-10-10), on the list and in
+// each email's bar, makes a task to deal with the conversation later —
+// see createTaskFromGmail; that task's Open email comes back here with
+// the conversation open (`openThreadId`). Delete is Gmail's own — to its Bin, where
 // it can be recovered for 30 days. Until
 // Gmail is connected, it shows Connect Gmail instead (see
 // /api/gmail/connect). Sits under the Inbox's mode pills (AdminInboxPanel).
@@ -104,6 +107,7 @@ function MailList({
   onSwipe,
   busyId,
   onDelete,
+  onMakeTask,
 }: {
   state: ListState;
   emptyText: string;
@@ -113,6 +117,7 @@ function MailList({
   onSwipe: (threadId: string | null) => void;
   busyId: string | null;
   onDelete: (item: PersonalMailItem) => boolean;
+  onMakeTask: (item: PersonalMailItem) => void;
 }) {
   if (state.error && state.items.length === 0) {
     return <p className="p-4 text-center text-sm text-red-600">{state.error}</p>;
@@ -132,7 +137,10 @@ function MailList({
               open={swipedId === m.threadId}
               onOpenChange={(isOpen) => onSwipe(isOpen ? m.threadId : null)}
               busy={busyId === m.threadId}
-              actions={[{ label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => onDelete(m) }]}
+              actions={[
+                { label: "Make task", icon: <TaskIcon />, onClick: () => onMakeTask(m) },
+                { label: "Delete", icon: <TrashIcon />, danger: true, primary: true, onClick: () => onDelete(m) },
+              ]}
             >
               <button
                 type="button"
@@ -167,6 +175,9 @@ export default function PersonalMailPanel({
   error,
   composeRecipients,
   onChanged,
+  onMakeTask,
+  openThreadId,
+  onThreadOpened,
 }: {
   gmail: { email: string } | null;
   error: string | null;
@@ -175,6 +186,12 @@ export default function PersonalMailPanel({
   // Something changed what's unread in the inbox — the Personal pill's
   // count is asked for again.
   onChanged: () => void;
+  // Make task — AdminInboxPanel makes it and switches to the Task tab.
+  onMakeTask: (item: PersonalMailItem) => void;
+  // A conversation to open on arrival (a task's Open email), cleared with
+  // onThreadOpened once it's open.
+  openThreadId: string | null;
+  onThreadOpened: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -248,6 +265,39 @@ export default function PersonalMailPanel({
     setReplyBody("");
     setReplyError(null);
     loadThread(item.threadId);
+  };
+
+  // A task's Open email: opens its conversation as soon as the tab shows.
+  useEffect(() => {
+    if (!openThreadId) return;
+    openThread({
+      threadId: openThreadId,
+      name: null,
+      address: "",
+      subject: "",
+      snippet: "",
+      at: "",
+      unread: false,
+      count: 0,
+    });
+    onThreadOpened();
+  }, [openThreadId]);
+
+  // The open conversation as Make task needs it: its row in either list,
+  // or (opened from a task, so not in a list) made from its first email.
+  const openConversation = (): PersonalMailItem | null => {
+    if (!open) return null;
+    const listed = [...inbox.state.items, ...sent.state.items].find((i) => i.threadId === open.threadId);
+    if (listed) return listed;
+    const first = thread?.[0];
+    if (!first) return null;
+    return {
+      ...open,
+      name: first.fromName,
+      address: first.fromAddress,
+      subject: first.subject,
+      snippet: first.textBody.replace(/\s+/g, " ").trim().slice(0, 200),
+    };
   };
 
   const startReply = (m: PersonalMailMessage) => {
@@ -431,6 +481,7 @@ export default function PersonalMailPanel({
             onSwipe={setSwipedId}
             busyId={busyId}
             onDelete={handleDeleteConversation}
+            onMakeTask={onMakeTask}
           />
         </div>
       </div>
@@ -457,6 +508,7 @@ export default function PersonalMailPanel({
             onSwipe={setSwipedId}
             busyId={busyId}
             onDelete={handleDeleteConversation}
+            onMakeTask={onMakeTask}
           />
         </div>
       </div>
@@ -551,6 +603,15 @@ export default function PersonalMailPanel({
                           )}
                           <MiniActionButton onClick={() => startReply(m)}>Reply</MiniActionButton>
                           <MiniActionButton onClick={() => setForwarding(m)}>Forward</MiniActionButton>
+                          <MiniActionButton
+                            onClick={() => {
+                              const item = openConversation();
+                              if (item) onMakeTask(item);
+                            }}
+                            disabled={isPending}
+                          >
+                            Make task
+                          </MiniActionButton>
                           <MiniActionButton
                             onClick={() => translation.toggle(m.id, m.subject, m.textBody)}
                             disabled={translation.busy(m.id)}

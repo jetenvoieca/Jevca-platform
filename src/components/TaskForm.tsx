@@ -24,6 +24,10 @@ import LinkifiedText from "@/components/LinkifiedText";
 // its web addresses clickable; tapping anywhere else on it (or into an
 // empty one) turns it into the box to type in, and it goes back to the
 // text view once you click away.
+//
+// Open email (2026-10-10): a task made from a Personal (Gmail) email has
+// a link under its description that reopens that conversation in the
+// Personal tab (`onOpenEmail`, null for any other task).
 export default function TaskForm({
   form,
   categories,
@@ -32,6 +36,7 @@ export default function TaskForm({
   error,
   activity,
   onChange,
+  onOpenEmail,
   onEmail,
   onActivity,
   onComplete,
@@ -43,6 +48,7 @@ export default function TaskForm({
   error: string | null;
   activity: ReactNode;
   onChange: (patch: Partial<TaskInput>) => void;
+  onOpenEmail: (() => void) | null;
   onEmail: () => void;
   onActivity: () => void;
   onComplete: () => void;
@@ -138,6 +144,17 @@ export default function TaskForm({
         >
           <LinkifiedText text={form.description} />
         </div>
+      )}
+
+      {onOpenEmail && (
+        <button
+          type="button"
+          onClick={onOpenEmail}
+          disabled={saving}
+          className="text-sm text-blue-700 underline hover:text-blue-900 disabled:opacity-50"
+        >
+          Open email in Personal
+        </button>
       )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}

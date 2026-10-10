@@ -24,6 +24,7 @@ import {
   setTaskThisWeek,
   moveTaskToThisWeek,
   createTaskFromEmail,
+  createTaskFromGmail,
   type TaskItem,
   type TaskInput,
 } from "@/lib/actions/tasks";
@@ -37,6 +38,7 @@ import {
 import type { AlertItem } from "@/lib/alerts";
 import type { ClientPanelData } from "@/lib/clientPanelData";
 import type { ClientAlertType } from "@/lib/clientAlertIds";
+import type { PersonalMailItem } from "@/lib/gmailMessages";
 import type { Mailbox } from "@/lib/email";
 import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
@@ -102,7 +104,9 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 //     also be deleted straight from the list; every other alert shows its
 //     message with a link and, where allowed, Dismiss (see AlertDetail).
 //   - Personal mode (2026-10-09): Craig's own Gmail, in a panel of its
-//     own — see PersonalMailPanel.
+//     own — see PersonalMailPanel. Its Make task (2026-10-10) makes a task
+//     that remembers the conversation, and that task's Open email comes
+//     back here with the conversation open.
 //
 // The left column has one filter, beside the Inbox heading, depending on
 // the mode — Inbox or Archived in the mail modes (2026-09-27), task
@@ -409,6 +413,10 @@ export default function AdminInboxPanel({
   // The address the task's Email window starts with (not on the form —
   // see TaskForm).
   const [taskEmail, setTaskEmail] = useState("");
+  // The Personal (Gmail) conversation the open task was made from, if any
+  // — for its Open email — and the one Personal opens on arrival.
+  const [taskGmailThreadId, setTaskGmailThreadId] = useState<string | null>(null);
+  const [personalThreadId, setPersonalThreadId] = useState<string | null>(null);
   const [taskDirty, setTaskDirty] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
   // Which of the task's own windows is open, if any — email or note (see
@@ -644,6 +652,43 @@ export default function AdminInboxPanel({
       resetModal();
       openTask(res.task);
       router.refresh();
+    });
+  };
+
+  // Makes a task from a Personal (Gmail) conversation (or finds the one
+  // already made) and switches to Task mode with it open.
+  const handleMakeTaskFromGmail = (item: PersonalMailItem) => {
+    startTransition(async () => {
+      const res = await createTaskFromGmail({
+        threadId: item.threadId,
+        subject: item.subject,
+        summary: item.snippet,
+        name: item.name,
+        address: item.address,
+      });
+      if (!res.ok) {
+        alert(res.error);
+        return;
+      }
+      setMode("task");
+      setTypeFilter("");
+      resetModal();
+      openTask(res.task);
+      router.refresh();
+    });
+  };
+
+  // A task's Open email: saves the task if it changed, then opens its
+  // Gmail conversation in the Personal tab.
+  const handleOpenTaskEmail = () => {
+    const threadId = taskGmailThreadId;
+    if (!threadId) return;
+    startTransition(async () => {
+      if (taskDirty && !(await persistTask(false))) return;
+      resetModal();
+      setPersonalThreadId(threadId);
+      setMode("personal");
+      setTypeFilter("");
     });
   };
 
@@ -899,6 +944,7 @@ export default function AdminInboxPanel({
       artistId: t.artistId ?? "",
     });
     setTaskEmail(t.email ?? "");
+    setTaskGmailThreadId(t.gmailThreadId);
     setTaskDirty(false);
     setTaskError(null);
     setTaskPopup(null);
@@ -907,6 +953,7 @@ export default function AdminInboxPanel({
   const startTask = () => {
     setTaskForm(EMPTY_TASK_FORM);
     setTaskEmail("");
+    setTaskGmailThreadId(null);
     setTaskDirty(false);
     setTaskError(null);
     setTaskPopup(null);
@@ -1095,6 +1142,9 @@ export default function AdminInboxPanel({
           error={gmailError}
           composeRecipients={composeRecipients}
           onChanged={refreshPersonalUnread}
+          onMakeTask={handleMakeTaskFromGmail}
+          openThreadId={personalThreadId}
+          onThreadOpened={() => setPersonalThreadId(null)}
         />
       ) : (
       <div className="flex min-h-0 flex-1 gap-6">
@@ -1505,6 +1555,7 @@ export default function AdminInboxPanel({
                       )
                     }
                     onChange={handleTaskChange}
+                    onOpenEmail={taskGmailThreadId ? handleOpenTaskEmail : null}
                     onEmail={() => openTaskPopup("email")}
                     onActivity={() => openTaskPopup("note")}
                     onComplete={handleTaskComplete}

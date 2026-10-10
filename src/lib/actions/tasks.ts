@@ -33,6 +33,7 @@ export type TaskItem = {
   completedAt: string | null; // ISO
   todayOn: string | null; // "YYYY-MM-DD", Paris — in the Today panel only while it's today
   weekOf: string | null; // "YYYY-MM-DD", a Monday — in the This week panel only during that week
+  gmailThreadId: string | null; // the Personal (Gmail) conversation it was made from
 };
 
 // What the task form submits — every field a plain string (empty string
@@ -60,6 +61,7 @@ function toTaskItem(r: {
   completedAt: Date | null;
   todayOn: Date | null;
   weekOf: Date | null;
+  gmailThreadId: string | null;
   artist: { name: string } | null;
 }): TaskItem {
   return {
@@ -74,6 +76,7 @@ function toTaskItem(r: {
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
     todayOn: r.todayOn ? r.todayOn.toISOString().slice(0, 10) : null,
     weekOf: r.weekOf ? r.weekOf.toISOString().slice(0, 10) : null,
+    gmailThreadId: r.gmailThreadId,
   };
 }
 
@@ -329,6 +332,38 @@ export async function createTaskFromEmail(
     include: { artist: { select: { name: true } } },
   });
   await db.inboundEmail.update({ where: { id: inboundEmailId }, data: { taskId: task.id } });
+  revalidatePath("/accounts/inbox");
+  return { ok: true, task: toTaskItem(task) };
+}
+
+// Makes a task from a Personal (Gmail) conversation (2026-10-10, direct
+// request — "to deal with the email later"): named after its subject, its
+// summary line as the description (for notes to go under), the other
+// party's address for the task's Email window, and the conversation
+// remembered so the task's Open email reopens it in the Personal tab. The
+// email stays in Gmail; nothing of it is stored beyond that. A
+// conversation already made into a task returns that task instead.
+export async function createTaskFromGmail(input: {
+  threadId: string;
+  subject: string;
+  summary: string;
+  name: string | null;
+  address: string;
+}): Promise<{ ok: true; task: TaskItem } | { ok: false; error: string }> {
+  if (!input.threadId) return { ok: false, error: "Email not found." };
+  const include = { artist: { select: { name: true } } };
+  const existing = await db.task.findUnique({ where: { gmailThreadId: input.threadId }, include });
+  if (existing) return { ok: true, task: toTaskItem(existing) };
+
+  const task = await db.task.create({
+    data: {
+      name: input.subject.trim() || `Email from ${input.name || input.address}`,
+      description: input.summary.trim() || null,
+      email: input.address.trim() || null,
+      gmailThreadId: input.threadId,
+    },
+    include,
+  });
   revalidatePath("/accounts/inbox");
   return { ok: true, task: toTaskItem(task) };
 }

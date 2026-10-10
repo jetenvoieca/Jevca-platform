@@ -960,6 +960,10 @@ model Task {
   // while that's the current week — so the panel empties at midnight on
   // Sunday — and not while it's also marked Today.
   weekOf      DateTime? @db.Date
+  // The Gmail conversation (Inbox → Personal) the task was made from
+  // (2026-10-10) — the task's Open email reopens it there. Gmail's own
+  // conversation id; the email itself stays in Gmail.
+  gmailThreadId String? @unique
 
   completedAt DateTime?
 
