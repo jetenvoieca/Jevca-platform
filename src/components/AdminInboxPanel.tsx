@@ -137,7 +137,8 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 // moves on by itself at midnight, so a page left open clears too.
 //
 // This week (2026-10-10, direct request) works the same way: a second
-// tinted panel under Today's, emptying at midnight on Sunday (weekOf is
+// tinted panel (both tints lightened the same day to sit with the top
+// band) under Today's, emptying at midnight on Sunday (weekOf is
 // the week's Monday). A task marked Today shows only in Today's panel; if
 // it's marked for the week too, it's back in This week's the next day.
 //
@@ -247,17 +248,17 @@ function isInformationalSaleAlert(alert: AlertItem): boolean {
 // week panel (2026-10-10), or neither.
 const PANEL_STYLES = {
   today: {
-    bg: "bg-[#F8E8CA]",
-    open: "bg-[#F0DAB0]",
-    hover: "hover:bg-[#F4E0BC]",
+    bg: "bg-[#FAF0DC]",
+    open: "bg-[#F3E3C2]",
+    hover: "hover:bg-[#F7EACF]",
     title: "text-[#4A3A22]",
     text: "text-[#7A6648]",
     faint: "text-[#A8977A]",
   },
   week: {
-    bg: "bg-[#DEDEF4]",
-    open: "bg-[#CDCDEB]",
-    hover: "hover:bg-[#D5D5F0]",
+    bg: "bg-[#EAEAF7]",
+    open: "bg-[#DCDCF0]",
+    hover: "hover:bg-[#E2E2F4]",
     title: "text-[#2E2E4A]",
     text: "text-[#55557A]",
     faint: "text-[#8585A8]",
@@ -1215,12 +1216,12 @@ export default function AdminInboxPanel({
             ) : (
               <>
                 {todayTasks.length > 0 && (
-                  <ul className="divide-y divide-[#EEDCBA] overflow-hidden rounded-lg bg-[#F8E8CA] shadow-sm">
+                  <ul className="divide-y divide-[#F1E3C6] overflow-hidden rounded-lg bg-[#FAF0DC] shadow-sm">
                     {todayTasks.map((t) => renderOpenTask(t, "today"))}
                   </ul>
                 )}
                 {weekTasks.length > 0 && (
-                  <ul className="divide-y divide-[#CFCFEA] overflow-hidden rounded-lg bg-[#DEDEF4] shadow-sm">
+                  <ul className="divide-y divide-[#DDDDF0] overflow-hidden rounded-lg bg-[#EAEAF7] shadow-sm">
                     {weekTasks.map((t) => renderOpenTask(t, "week"))}
                   </ul>
                 )}
