@@ -92,7 +92,7 @@ async function cloudflare(
   } | null;
   if (!res.ok || !json?.success) {
     const reason = json?.errors?.map((e) => e.message).join("; ") || `HTTP ${res.status}`;
-    throw new Error(`Cloudflare ${method} widgets${path}: ${reason}`);
+    throw new Error(`Cloudflare said: ${reason} (HTTP ${res.status})`);
   }
   return json.result ?? null;
 }
@@ -172,17 +172,23 @@ export async function syncTurnstileDomains(): Promise<TurnstileSyncResult> {
             count++;
           }
         } catch (err) {
-          console.error("syncTurnstileDomains", err);
-          return { error: "Couldn't update Cloudflare's robot check for sign-up forms — please try again later." };
+          return syncFailed(err);
         }
         return { ok: true };
       },
       { timeout: 60_000, maxWait: 15_000 }
     );
   } catch (err) {
-    console.error("syncTurnstileDomains", err);
-    return { error: "Couldn't update Cloudflare's robot check for sign-up forms — please try again later." };
+    return syncFailed(err);
   }
+}
+
+// What a failed update reports (2026-10-10): the reason Cloudflare (or
+// the database) gave, so it can be put right without reading the logs.
+function syncFailed(err: unknown): TurnstileSyncResult {
+  console.error("syncTurnstileDomains", err);
+  const reason = err instanceof Error ? err.message : String(err);
+  return { error: `Couldn't update Cloudflare's robot check for sign-up forms — ${reason.slice(0, 300)}` };
 }
 
 // The widget covering a web address (host), if any.
