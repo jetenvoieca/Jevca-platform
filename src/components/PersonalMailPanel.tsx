@@ -51,8 +51,17 @@ type ListState = {
   error: string | null;
 };
 
-// One of the two lists, fetched again whenever refreshKey changes.
-function useMailList(box: PersonalBox, refreshKey: number, onReconnect: () => void): ListState {
+// One of the two lists, fetched from Gmail again only when its
+// refreshKey changes. Each fetch costs Gmail about 50 requests and Gmail
+// limits requests per minute (2026-10-10 — reloading both lists on every
+// close ran into that limit), so anything the screen already knows the
+// outcome of (read, deleted, archived) is changed here with `update`
+// instead of fetched again.
+function useMailList(
+  box: PersonalBox,
+  refreshKey: number,
+  onReconnect: () => void
+): { state: ListState; update: (change: (items: PersonalMailItem[]) => PersonalMailItem[]) => void } {
   const [state, setState] = useState<ListState>({ items: [], loading: true, error: null });
 
   useEffect(() => {
@@ -77,7 +86,12 @@ function useMailList(box: PersonalBox, refreshKey: number, onReconnect: () => vo
     };
   }, [box, refreshKey, onReconnect]);
 
-  return state;
+  const update = useCallback(
+    (change: (items: PersonalMailItem[]) => PersonalMailItem[]) =>
+      setState((s) => ({ ...s, items: change(s.items) })),
+    []
+  );
+  return { state, update };
 }
 
 function MailList({
@@ -158,13 +172,27 @@ export default function PersonalMailPanel({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [refreshKey, setRefreshKey] = useState(0);
+  const [inboxKey, setInboxKey] = useState(0);
+  const [sentKey, setSentKey] = useState(0);
+  const refreshInbox = () => setInboxKey((k) => k + 1);
+  const refreshSent = () => setSentKey((k) => k + 1);
   // Gmail turned out not to be connected any more (access withdrawn) —
   // the server is asked again, which then shows Connect Gmail.
   const handleReconnect = useCallback(() => router.refresh(), [router]);
 
-  const inbox = useMailList("INBOX", refreshKey, handleReconnect);
-  const sent = useMailList("SENT", refreshKey, handleReconnect);
+  const inbox = useMailList("INBOX", inboxKey, handleReconnect);
+  const sent = useMailList("SENT", sentKey, handleReconnect);
+  // Changes a conversation's row in both lists, or removes it (null).
+  const updateBoth = (threadId: string, change: (item: PersonalMailItem) => PersonalMailItem | null) => {
+    const apply = (items: PersonalMailItem[]) =>
+      items.flatMap((i) => {
+        if (i.threadId !== threadId) return [i];
+        const next = change(i);
+        return next ? [next] : [];
+      });
+    inbox.update(apply);
+    sent.update(apply);
+  };
 
   const [open, setOpen] = useState<PersonalMailItem | null>(null);
   const [thread, setThread] = useState<PersonalMailMessage[] | null>(null);
@@ -233,8 +261,8 @@ export default function PersonalMailPanel({
   const closeThread = () => {
     if (isPending) return;
     if (replyBody.trim() && !confirm("Close without sending your reply?")) return;
-    // Opening a conversation marks it read in Gmail, so the lists catch up.
-    if (open?.unread) setRefreshKey((k) => k + 1);
+    // Opening a conversation marks it read in Gmail — shown in the lists.
+    if (open?.unread) updateBoth(open.threadId, (i) => ({ ...i, unread: false }));
     setOpen(null);
     setThread(null);
   };
@@ -250,7 +278,7 @@ export default function PersonalMailPanel({
       }
       setReplyTo(null);
       setReplyBody("");
-      setRefreshKey((k) => k + 1);
+      refreshSent();
       await loadThread(open.threadId); // The reply shows in the conversation.
     });
   };
@@ -271,7 +299,7 @@ export default function PersonalMailPanel({
         return;
       }
       if (open?.threadId === item.threadId) setOpen(null);
-      setRefreshKey((k) => k + 1);
+      updateBoth(item.threadId, () => null);
     });
     return true;
   };
@@ -291,7 +319,7 @@ export default function PersonalMailPanel({
       }
       setOpen(null);
       setThread(null);
-      setRefreshKey((k) => k + 1);
+      inbox.update((items) => items.filter((i) => i.threadId !== threadId));
     });
   };
 
@@ -309,11 +337,14 @@ export default function PersonalMailPanel({
         return;
       }
       if (replyTo?.id === m.id) setReplyTo(null);
-      setRefreshKey((k) => k + 1);
       if (thread.length <= 1) {
+        updateBoth(open.threadId, () => null);
         setOpen(null);
         setThread(null);
       } else {
+        // Only the list the email was shown in changes.
+        if (m.sentByMe) refreshSent();
+        else refreshInbox();
         await loadThread(open.threadId);
       }
     });
@@ -367,7 +398,14 @@ export default function PersonalMailPanel({
         <div className="mb-3 flex h-[34px] items-center justify-between gap-2 text-xs text-neutral-500">
           <span className="truncate">{gmail.email}</span>
           <span className="flex shrink-0 gap-3">
-            <button type="button" onClick={() => setRefreshKey((k) => k + 1)} className={linkBtnCls}>
+            <button
+              type="button"
+              onClick={() => {
+                refreshInbox();
+                refreshSent();
+              }}
+              className={linkBtnCls}
+            >
               Refresh
             </button>
             <button type="button" onClick={handleDisconnect} disabled={isPending} className={linkBtnCls}>
@@ -377,7 +415,7 @@ export default function PersonalMailPanel({
         </div>
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           <MailList
-            state={inbox}
+            state={inbox.state}
             emptyText="Nothing in your inbox."
             openId={open?.threadId ?? null}
             onOpen={openThread}
@@ -400,7 +438,7 @@ export default function PersonalMailPanel({
         <div className="mb-3 h-[34px]" />
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           <MailList
-            state={sent}
+            state={sent.state}
             emptyText="Nothing sent yet."
             openId={open?.threadId ?? null}
             onOpen={openThread}
@@ -562,7 +600,7 @@ export default function PersonalMailPanel({
           composeRecipients={[]}
           onSent={() => {
             setForwarding(null);
-            setRefreshKey((k) => k + 1);
+            refreshSent();
           }}
           onClose={() => setForwarding(null)}
         />

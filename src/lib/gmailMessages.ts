@@ -68,6 +68,9 @@ export async function gmailFetch<T>(path: string, init?: RequestInit): Promise<T
   }
 
   if (res.status === 401) throw new GmailNotConnectedError();
+  if (res.status === 429 || RATE_LIMIT_REASONS.includes(error?.reason ?? "")) {
+    throw new Error("Gmail is busy — too many requests in the last minute. Wait a minute and try again.");
+  }
   if (!res.ok) {
     const detail = [error?.message, error?.reason && `(${error.reason})`].filter(Boolean).join(" ");
     throw new Error(`Gmail refused (${res.status})${detail ? `: ${detail}` : ""}. Please try again.`);
