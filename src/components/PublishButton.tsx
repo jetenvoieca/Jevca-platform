@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import type { PublishResult } from "@/lib/siteSnapshot";
+import { formatDateTime } from "@/lib/formatDate";
 
 // "Publish to live site" (2026-10-06): shows "Publishing…" while it
 // runs, then when the site was published, or what went wrong. Below the
@@ -45,7 +46,7 @@ export default function PublishButton({
   let status: string | null = null;
   if (action && mounted) {
     if (pending) status = "Saving the whole site…";
-    else if (shown) status = `${publishedNow ? "Published" : "Last published"} ${formatDate(shown)}`;
+    else if (shown) status = `${publishedNow ? "Published" : "Last published"} ${formatDateTime(shown)}`;
     else status = "Not published yet";
   }
 
@@ -74,13 +75,4 @@ export default function PublishButton({
       )}
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }

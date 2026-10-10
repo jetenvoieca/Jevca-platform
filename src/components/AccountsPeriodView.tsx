@@ -1,6 +1,7 @@
 "use client";
 
 import { subscriptionMethodLabel } from "@/lib/subscriptionMethods";
+import { formatDate } from "@/lib/formatDate";
 import { useMemo, useState } from "react";
 
 type MonthGroup = {
@@ -141,7 +142,7 @@ export default function AccountsPeriodView({
                       <tr key={i} className="border-t border-neutral-100">
                         <td className="truncate px-4 py-1.5">{r.artistName}</td>
                         <td className="px-4 py-1.5">
-                          {new Date(r.paidAt).toLocaleDateString("en-GB")}
+                          {formatDate(r.paidAt)}
                         </td>
                         <td className="px-4 py-1.5">
                           {r.currency} {r.amount.toFixed(2)}

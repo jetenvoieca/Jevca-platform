@@ -10,6 +10,7 @@ import {
   type ExpenseRow,
 } from "@/lib/actions/expenses";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { formatDate } from "@/lib/formatDate";
 
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
@@ -298,7 +299,7 @@ export default function ExpensesView({
                   </tr>
                 ) : (
                   <tr key={e.id} className="hover:bg-neutral-50">
-                    <td className="whitespace-nowrap px-3 py-2 text-neutral-700">{e.date}</td>
+                    <td className="whitespace-nowrap px-3 py-2 text-neutral-700">{formatDate(e.date)}</td>
                     <td className="px-3 py-2 text-neutral-900">{e.payeeName}</td>
                     <td className="px-3 py-2 text-neutral-600">{e.category}</td>
                     <td className="max-w-xs truncate px-3 py-2 text-neutral-500">
