@@ -1046,7 +1046,12 @@ export default function AdminInboxPanel({
       <div className="mb-4 flex justify-center overflow-x-auto rounded-xl bg-[#E8F1F0] px-4 py-3">{modeBar}</div>
 
       {mode === "personal" ? (
-        <PersonalMailPanel gmail={gmail} error={gmailError} onChanged={refreshPersonalUnread} />
+        <PersonalMailPanel
+          gmail={gmail}
+          error={gmailError}
+          composeRecipients={composeRecipients}
+          onChanged={refreshPersonalUnread}
+        />
       ) : (
       <div className="flex min-h-0 flex-1 gap-6">
       {/* ---- LEFT: what needs attention ---- */}

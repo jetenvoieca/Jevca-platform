@@ -146,16 +146,37 @@ export async function replyToPersonalMessage(messageId: string, body: string): P
   return { ok: true };
 }
 
-// Forwards one email, with its attachments, to one or more addresses
-// (separated by commas), with an optional note above it.
-export async function forwardPersonalMessage(messageId: string, toRaw: string, note: string): Promise<SendResult> {
-  const recipients = toRaw
+// One or more addresses, separated by commas (or semicolons) — or why
+// they won't do.
+function parseRecipients(toRaw: string): { ok: true; list: string[] } | { ok: false; error: string } {
+  const list = toRaw
     .split(/[,;]/)
     .map((a) => a.trim())
     .filter(Boolean);
-  if (recipients.length === 0) return { ok: false, error: "Enter an address to forward to." };
-  const wrong = recipients.find((a) => !EMAIL_PATTERN.test(a));
+  if (list.length === 0) return { ok: false, error: "Enter who to send it to." };
+  const wrong = list.find((a) => !EMAIL_PATTERN.test(a));
   if (wrong) return { ok: false, error: `"${wrong}" doesn't look like an email address.` };
+  return { ok: true, list };
+}
+
+// A new email (Compose, 2026-10-10, direct request), to one or more
+// addresses separated by commas.
+export async function sendNewPersonalEmail(toRaw: string, subject: string, body: string): Promise<SendResult> {
+  const to = parseRecipients(toRaw);
+  if (!to.ok) return to;
+  if (!subject.trim() || !body.trim()) return { ok: false, error: "Subject and message are both needed." };
+  await send(
+    buildEmail({ From: await fromAddress(), To: to.list.join(", "), Subject: encodeWord(subject.trim()) }, `${body.trim()}\n`)
+  );
+  return { ok: true };
+}
+
+// Forwards one email, with its attachments, to one or more addresses
+// (separated by commas), with an optional note above it.
+export async function forwardPersonalMessage(messageId: string, toRaw: string, note: string): Promise<SendResult> {
+  const parsed = parseRecipients(toRaw);
+  if (!parsed.ok) return parsed;
+  const recipients = parsed.list;
 
   const message = await gmailFetch<GmailMessage>(`/messages/${encodeURIComponent(messageId)}?format=full`);
   const read = readMessage(message);

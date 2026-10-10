@@ -14,7 +14,12 @@ import {
   type PersonalMailItem,
   type PersonalMailMessage,
 } from "@/lib/gmailMessages";
-import { replyToPersonalMessage, forwardPersonalMessage, personalSendingAddress } from "@/lib/gmailSend";
+import {
+  replyToPersonalMessage,
+  forwardPersonalMessage,
+  sendNewPersonalEmail,
+  personalSendingAddress,
+} from "@/lib/gmailSend";
 
 // The Inbox's Personal tab — Craig's own Gmail (2026-10-09).
 
@@ -49,6 +54,18 @@ export async function getPersonalThread(threadId: string): Promise<Result<Person
 export async function replyPersonal(messageId: string, body: string): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     return await replyToPersonalMessage(messageId, body);
+  } catch (err) {
+    return failure(err);
+  }
+}
+
+export async function composePersonal(
+  to: string,
+  subject: string,
+  body: string
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    return await sendNewPersonalEmail(to, subject, body);
   } catch (err) {
     return failure(err);
   }

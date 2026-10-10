@@ -17,6 +17,8 @@ import { personalAttachmentUrl } from "@/lib/gmailAttachmentUrl";
 import EmailBody, { formatFileSize } from "@/components/EmailBody";
 import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
+import PersonalComposePopup from "@/components/PersonalComposePopup";
+import type { ComposeRecipient } from "@/lib/actions/adminEmail";
 import { useEmailTranslation } from "@/components/useEmailTranslation";
 import SwipeRow from "@/components/SwipeRow";
 import { TrashIcon } from "@/components/ActionIcons";
@@ -30,7 +32,8 @@ import { capitaliseParagraphs } from "@/lib/text";
 // opens in the same kind of window (marking it read in Gmail). Each email
 // there has Reply (the reply box opens at the top of the window) and
 // Forward, sent through Gmail from its own sending address
-// (craig@isendyouthis.com) so they show in Gmail's Sent too, Archive
+// (craig@isendyouthis.com) so they show in Gmail's Sent too — as does a
+// new email from Compose (2026-10-10, beside Processed) — Archive
 // (the whole conversation out of the inbox, as in Gmail), and Delete;
 // a whole conversation can be deleted from the list (swipe, or the hover
 // icon), as on the other tabs. Delete is Gmail's own — to its Bin, where
@@ -162,10 +165,13 @@ function MailList({
 export default function PersonalMailPanel({
   gmail,
   error,
+  composeRecipients,
   onChanged,
 }: {
   gmail: { email: string } | null;
   error: string | null;
+  // The artists and contacts offered in To (Compose and Forward).
+  composeRecipients: ComposeRecipient[];
   // Something changed what's unread in the inbox — the Personal pill's
   // count is asked for again.
   onChanged: () => void;
@@ -205,6 +211,7 @@ export default function PersonalMailPanel({
   const [replyBody, setReplyBody] = useState("");
   const [replyError, setReplyError] = useState<string | null>(null);
   const [forwarding, setForwarding] = useState<PersonalMailMessage | null>(null);
+  const [composing, setComposing] = useState(false);
   // The list row that's swiped open, and the conversation or email being
   // deleted.
   const [swipedId, setSwipedId] = useState<string | null>(null);
@@ -432,6 +439,13 @@ export default function PersonalMailPanel({
       <div className="flex min-w-0 flex-1 flex-col">
         <div className={headRowCls}>
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
+          <button
+            type="button"
+            onClick={() => setComposing(true)}
+            className="ml-auto shrink-0 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
+          >
+            Compose
+          </button>
         </div>
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           <MailList
@@ -586,6 +600,19 @@ export default function PersonalMailPanel({
         </div>
       )}
 
+      {/* ---- Compose a new email ---- */}
+      {composing && (
+        <PersonalComposePopup
+          fromAddress={sendingAddress}
+          composeRecipients={composeRecipients}
+          onSent={() => {
+            setComposing(false);
+            refreshSent();
+          }}
+          onClose={() => setComposing(false)}
+        />
+      )}
+
       {/* ---- Forward, over the open conversation ---- */}
       {forwarding && (
         <ForwardEmailPopup
@@ -594,7 +621,7 @@ export default function PersonalMailPanel({
           subject={forwarding.subject}
           attachmentCount={forwarding.attachments.length}
           fromAddress={sendingAddress ?? ""}
-          composeRecipients={[]}
+          composeRecipients={composeRecipients}
           onSent={() => {
             setForwarding(null);
             refreshSent();
