@@ -161,6 +161,9 @@ export async function sendAdminEmail(
     select: { id: true },
   });
   if (task && data?.id) await recordSentMessageId(resend, sent.id, data.id);
+  // The task's Email window starts with this address next time
+  // (2026-10-10 — the address is no longer on the task form).
+  if (task) await db.task.update({ where: { id: task.id }, data: { email: to } });
 
   revalidatePath("/accounts/inbox");
   return { ok: true };

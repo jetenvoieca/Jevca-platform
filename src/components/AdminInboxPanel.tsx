@@ -214,7 +214,6 @@ const EMPTY_TASK_FORM: TaskInput = {
   id: null,
   name: "",
   description: "",
-  email: "",
   targetDate: "",
   category: "",
   artistId: "",
@@ -371,6 +370,9 @@ export default function AdminInboxPanel({
   // `null` = no task open. `taskDirty` = something has changed since it
   // was opened or last saved (so closing it needs to save).
   const [taskForm, setTaskForm] = useState<TaskInput | null>(null);
+  // The address the task's Email window starts with (not on the form —
+  // see TaskForm).
+  const [taskEmail, setTaskEmail] = useState("");
   const [taskDirty, setTaskDirty] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
   // Which of the task's own windows is open, if any — email or note (see
@@ -844,11 +846,11 @@ export default function AdminInboxPanel({
       id: t.id,
       name: t.name,
       description: t.description ?? "",
-      email: t.email ?? "",
       targetDate: t.targetDate ?? "",
       category: t.category ?? "",
       artistId: t.artistId ?? "",
     });
+    setTaskEmail(t.email ?? "");
     setTaskDirty(false);
     setTaskError(null);
     setTaskPopup(null);
@@ -856,6 +858,7 @@ export default function AdminInboxPanel({
 
   const startTask = () => {
     setTaskForm(EMPTY_TASK_FORM);
+    setTaskEmail("");
     setTaskDirty(false);
     setTaskError(null);
     setTaskPopup(null);
@@ -1424,30 +1427,31 @@ export default function AdminInboxPanel({
                 )
               ) : mode === "task" ? (
                 taskForm && (
-                  <>
-                    <TaskForm
-                      form={taskForm}
-                      categories={taskCategories}
-                      artistOptions={artistOptions}
-                      composeRecipients={composeRecipients}
-                      saving={isPending}
-                      error={taskError}
-                      onChange={handleTaskChange}
-                      onEmail={() => openTaskPopup("email")}
-                      onActivity={() => openTaskPopup("note")}
-                      onComplete={handleTaskComplete}
-                    />
-                    {taskForm.id && (
-                      <TaskActivityPanel
-                        key={taskForm.id}
-                        taskId={taskForm.id}
-                        defaultTo={taskForm.email}
-                        mailboxAddresses={mailboxAddresses}
-                        popup={taskPopup}
-                        onPopupClose={() => setTaskPopup(null)}
-                      />
-                    )}
-                  </>
+                  <TaskForm
+                    form={taskForm}
+                    categories={taskCategories}
+                    artistOptions={artistOptions}
+                    saving={isPending}
+                    error={taskError}
+                    activity={
+                      taskForm.id && (
+                        <TaskActivityPanel
+                          key={taskForm.id}
+                          taskId={taskForm.id}
+                          defaultTo={taskEmail}
+                          composeRecipients={composeRecipients}
+                          mailboxAddresses={mailboxAddresses}
+                          popup={taskPopup}
+                          onPopupClose={() => setTaskPopup(null)}
+                          onEmailSent={setTaskEmail}
+                        />
+                      )
+                    }
+                    onChange={handleTaskChange}
+                    onEmail={() => openTaskPopup("email")}
+                    onActivity={() => openTaskPopup("note")}
+                    onComplete={handleTaskComplete}
+                  />
                 )
               ) : composing ? (
                 <div className="mx-auto max-w-xl space-y-3">

@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { getTaskActivity, saveTaskNote, deleteTaskNote, type TaskActivityItem } from "@/lib/actions/tasks";
-import { sendAdminEmail } from "@/lib/actions/adminEmail";
+import { sendAdminEmail, type ComposeRecipient } from "@/lib/actions/adminEmail";
 import type { Mailbox } from "@/lib/email";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
@@ -12,7 +12,8 @@ import PopupWindow from "@/components/PopupWindow";
 import { EditIcon, TrashIcon } from "@/components/ActionIcons";
 
 // A task's Activity (2026-09-27, direct request — "moving into managing
-// tasks, not just recording them"), shown under the task form once the
+// tasks, not just recording them"), shown inside the task form, above its
+// action buttons, once the
 // task exists: every email sent from the task, every reply linked back to
 // it, and notes of what was done (2026-09-28), newest first, each opening
 // in place to read. A note can be edited or deleted with a swipe (touch)
@@ -22,7 +23,11 @@ import { EditIcon, TrashIcon } from "@/components/ActionIcons";
 // of the task (`popup`, owned by AdminInboxPanel alongside the rest of the
 // task modal):
 //   - Email (2026-09-28, moved out of line — it made the task too long):
-//     starts with the task's email address, and asks which address to
+//     starts with the task's email address — the last one emailed from
+//     it, or the sender of the email it was made from — typed or picked
+//     from the same artists and contacts list as New message (the address
+//     used to be on the task form; moved here 2026-10-10), and asks which
+//     address to
 //     send from — Art or Business — each time. It goes through the same
 //     sendAdminEmail as the Inbox's New message, with the task's id, so it
 //     also appears in that mailbox's Sent list.
@@ -56,15 +61,20 @@ function today(): string {
 export default function TaskActivityPanel({
   taskId,
   defaultTo,
+  composeRecipients,
   mailboxAddresses,
   popup,
   onPopupClose,
+  onEmailSent,
 }: {
   taskId: string;
   defaultTo: string;
+  composeRecipients: ComposeRecipient[];
   mailboxAddresses: Record<Mailbox, string>;
   popup: TaskPopup | null;
   onPopupClose: () => void;
+  // The address just emailed — the task's address from now on.
+  onEmailSent: (to: string) => void;
 }) {
   const [isPending, startTransition] = useTransition();
   const [activity, setActivity] = useState<TaskActivityItem[] | null>(null);
@@ -156,8 +166,12 @@ export default function TaskActivityPanel({
         <TaskEmailCompose
           taskId={taskId}
           defaultTo={defaultTo}
+          composeRecipients={composeRecipients}
           mailboxAddresses={mailboxAddresses}
-          onSent={handlePopupDone}
+          onSent={(to) => {
+            onEmailSent(to);
+            handlePopupDone();
+          }}
           onCancel={onPopupClose}
         />
       )}
@@ -225,14 +239,16 @@ export default function TaskActivityPanel({
 function TaskEmailCompose({
   taskId,
   defaultTo,
+  composeRecipients,
   mailboxAddresses,
   onSent,
   onCancel,
 }: {
   taskId: string;
   defaultTo: string;
+  composeRecipients: ComposeRecipient[];
   mailboxAddresses: Record<Mailbox, string>;
-  onSent: () => void;
+  onSent: (to: string) => void;
   onCancel: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -273,7 +289,7 @@ function TaskEmailCompose({
         setError(res.error);
         return;
       }
-      onSent();
+      onSent(to.trim());
     });
   };
 
@@ -302,8 +318,16 @@ function TaskEmailCompose({
           type="email"
           value={to}
           onChange={(e) => setTo(e.target.value)}
+          placeholder="Type an address, or pick from the list"
           className={inputCls}
         />
+        <datalist id="task-email-recipients">
+          {composeRecipients.map((r) => (
+            <option key={`${r.artistId || "c"}-${r.email}`} value={r.email}>
+              {r.label}
+            </option>
+          ))}
+        </datalist>
       </div>
       <div>
         <label className={labelCls}>Subject</label>

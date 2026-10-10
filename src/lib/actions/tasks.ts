@@ -19,8 +19,6 @@ import { parisToday } from "@/lib/parisTime";
 // puts it in a tinted panel at the top of the open list until midnight
 // Paris time — see Task.todayOn and setTaskToday.
 
-const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-
 export type TaskItem = {
   id: string;
   name: string;
@@ -36,11 +34,13 @@ export type TaskItem = {
 
 // What the task form submits — every field a plain string (empty string
 // = not set), so the form's own state can be passed straight through.
+// The task's email address isn't on the form (2026-10-10, direct
+// request): it's set when a task is made from an email, and from then on
+// by sending from the task's Email window (see sendAdminEmail).
 export type TaskInput = {
   id: string | null; // null = a new task
   name: string;
   description: string;
-  email: string;
   targetDate: string; // "YYYY-MM-DD" or ""
   category: string;
   artistId: string;
@@ -107,8 +107,6 @@ export async function saveTask(
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Task name can't be empty." };
-  const email = input.email.trim();
-  if (email && !EMAIL_PATTERN.test(email)) return { ok: false, error: "That email address doesn't look right." };
 
   let targetDate: Date | null = null;
   if (input.targetDate) {
@@ -119,7 +117,6 @@ export async function saveTask(
   const data = {
     name,
     description: input.description.trim() || null,
-    email: email || null,
     targetDate,
     category: input.category.trim() || null,
     artistId: input.artistId || null,

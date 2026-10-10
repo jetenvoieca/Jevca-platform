@@ -1,7 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { TaskInput } from "@/lib/actions/tasks";
-import type { ComposeRecipient } from "@/lib/actions/adminEmail";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 
 // The task form shown in the Inbox's modal (2026-09-19, CRM Phase 2) —
@@ -13,16 +13,18 @@ import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 // email or note window (see TaskActivityPanel), Completed (right)
 // completes it and closes it.
 //
-// The Email field (2026-09-27) is the address that email window starts
-// with — typed, or picked from the same artists and contacts list as the
-// Inbox's New message.
+// Layout (2026-10-10, direct request — see mock-up): Target date,
+// Category and Owner sit small in the title row; then the name and
+// description; then the task's Activity (`activity`, passed in once the
+// task exists); and the action buttons last. The email address isn't on
+// the form any more — it's typed in the Email window itself.
 export default function TaskForm({
   form,
   categories,
   artistOptions,
-  composeRecipients,
   saving,
   error,
+  activity,
   onChange,
   onEmail,
   onActivity,
@@ -31,16 +33,17 @@ export default function TaskForm({
   form: TaskInput;
   categories: string[];
   artistOptions: { id: string; name: string }[];
-  composeRecipients: ComposeRecipient[];
   saving: boolean;
   error: string | null;
+  activity: ReactNode;
   onChange: (patch: Partial<TaskInput>) => void;
   onEmail: () => void;
   onActivity: () => void;
   onComplete: () => void;
 }) {
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
-  const labelCls = "mb-1 block text-xs text-neutral-500";
+  const smallInputCls = "w-full rounded-md border border-neutral-300 px-1.5 py-1 text-xs";
+  const smallLabelCls = "mb-0.5 block text-[10px] text-neutral-500";
 
   // A category removed in Settings after a task was saved with it still
   // shows (rather than silently blanking) until the task is changed.
@@ -49,9 +52,54 @@ export default function TaskForm({
 
   return (
     <div className="mx-auto max-w-xl space-y-3">
-      <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
-        {form.id ? "Edit task" : "New task"}
-      </p>
+      {/* Title, with Target date, Category and Owner beside it (under it on
+          a phone). */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
+        <p className="shrink-0 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 sm:w-24">
+          {form.id ? "Edit task" : "New task"}
+        </p>
+        <div className="grid flex-1 grid-cols-[7.5rem_1fr] gap-2 sm:grid-cols-[7.5rem_7rem_1fr]">
+          <div>
+            <label className={smallLabelCls}>Target date</label>
+            <input
+              type="date"
+              value={form.targetDate}
+              onChange={(e) => onChange({ targetDate: e.target.value })}
+              className={smallInputCls}
+            />
+          </div>
+          <div>
+            <label className={smallLabelCls}>Category</label>
+            <select
+              value={form.category}
+              onChange={(e) => onChange({ category: e.target.value })}
+              className={smallInputCls}
+            >
+              <option value="">— None —</option>
+              {categoryOptions.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="col-span-2 sm:col-span-1">
+            <label className={smallLabelCls}>Owner</label>
+            <select
+              value={form.artistId}
+              onChange={(e) => onChange({ artistId: e.target.value })}
+              className={smallInputCls}
+            >
+              <option value="">General (no owner)</option>
+              {artistOptions.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
+      </div>
 
       <input
         type="text"
@@ -69,84 +117,25 @@ export default function TaskForm({
         className={inputCls}
       />
 
-      {/* Target date, Category and Artist share one row (2026-09-28, direct
-          request — see mock-up), stacking on a phone. */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-[10rem_1fr_2fr]">
-        <div>
-          <label className={labelCls}>Target date</label>
-          <input
-            type="date"
-            value={form.targetDate}
-            onChange={(e) => onChange({ targetDate: e.target.value })}
-            className={inputCls}
-          />
-        </div>
-        <div>
-          <label className={labelCls}>Category</label>
-          <select
-            value={form.category}
-            onChange={(e) => onChange({ category: e.target.value })}
-            className={inputCls}
-          >
-            <option value="">— None —</option>
-            {categoryOptions.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className={labelCls}>Owner</label>
-          <select
-            value={form.artistId}
-            onChange={(e) => onChange({ artistId: e.target.value })}
-            className={inputCls}
-          >
-            <option value="">General (no owner)</option>
-            {artistOptions.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      <div>
-        <label className={labelCls}>Email</label>
-        <input
-          list="task-email-recipients"
-          type="email"
-          value={form.email}
-          onChange={(e) => onChange({ email: e.target.value })}
-          placeholder="Type an address, or pick from the list"
-          className={inputCls}
-        />
-        <datalist id="task-email-recipients">
-          {composeRecipients.map((r) => (
-            <option key={`${r.artistId || "c"}-${r.email}`} value={r.email}>
-              {r.label}
-            </option>
-          ))}
-        </datalist>
-      </div>
-
       {error && <p className="text-sm text-red-600">{error}</p>}
 
-      <ActionPanel>
-        <div className="flex w-full flex-wrap justify-between gap-3">
-          <ActionButton onClick={onEmail} disabled={saving}>
-            Email
-          </ActionButton>
-          <ActionButton onClick={onActivity} disabled={saving}>
-            Activity
-          </ActionButton>
-          <ActionButton onClick={onComplete} disabled={saving}>
-            Completed
-          </ActionButton>
-        </div>
-      </ActionPanel>
+      {activity}
+
+      <div className="pt-3">
+        <ActionPanel>
+          <div className="flex w-full flex-wrap justify-between gap-3">
+            <ActionButton onClick={onEmail} disabled={saving}>
+              Email
+            </ActionButton>
+            <ActionButton onClick={onActivity} disabled={saving}>
+              Activity
+            </ActionButton>
+            <ActionButton onClick={onComplete} disabled={saving}>
+              Completed
+            </ActionButton>
+          </div>
+        </ActionPanel>
+      </div>
     </div>
   );
 }
