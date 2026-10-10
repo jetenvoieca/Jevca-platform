@@ -93,9 +93,49 @@ async function cloudflare(
   } | null;
   if (!res.ok || !json?.success) {
     const reason = json?.errors?.map((e) => e.message).join("; ") || `HTTP ${res.status}`;
-    throw new Error(`Cloudflare said: ${reason} (HTTP ${res.status})`);
+    throw new CloudflareError(`Cloudflare said: ${reason} (HTTP ${res.status})`, res.status);
   }
   return json.result ?? null;
+}
+
+class CloudflareError extends Error {
+  constructor(
+    message: string,
+    readonly status: number
+  ) {
+    super(message);
+  }
+}
+
+// Whether a read with the token succeeds.
+async function cloudflareAccepts(path: string): Promise<boolean> {
+  const cf = cloudflareConfig()!;
+  try {
+    const res = await fetch(`${API}${path}`, { headers: { Authorization: `Bearer ${cf.token}` } });
+    const json = (await res.json().catch(() => null)) as { success?: boolean } | null;
+    return res.ok && json?.success === true;
+  } catch {
+    return false;
+  }
+}
+
+// When Cloudflare refuses the token (2026-10-10), works out why, in
+// words that say what to change: the token isn't recognised at all; it
+// is, but can't use Turnstile on the account in R2_ACCOUNT_ID; or it can
+// read Turnstile but not change it.
+async function diagnoseToken(): Promise<string> {
+  const cf = cloudflareConfig()!;
+  const known =
+    (await cloudflareAccepts("/user/tokens/verify")) ||
+    (await cloudflareAccepts(`/accounts/${cf.accountId}/tokens/verify`));
+  if (!known) {
+    return "Cloudflare doesn't recognise CLOUDFLARE_TURNSTILE_API_TOKEN. It may be the token's ID, an R2 key or the Global API Key instead of the token itself (shown once, when the token is created).";
+  }
+  const account = `…${cf.accountId.slice(-4)}`;
+  if (!(await cloudflareAccepts(`/accounts/${cf.accountId}/challenges/widgets`))) {
+    return `The token is valid but can't use Turnstile on account ${account} (R2_ACCOUNT_ID). Check its permission is Account → Turnstile → Edit and its Account Resources include that account.`;
+  }
+  return "The token can read Turnstile but not change it. Set its Turnstile permission to Edit.";
 }
 
 function sameDomains(a: string[], b: string[]): boolean {
@@ -173,22 +213,24 @@ export async function syncTurnstileDomains(): Promise<TurnstileSyncResult> {
             count++;
           }
         } catch (err) {
-          return syncFailed(err);
+          return await syncFailed(err);
         }
         return { ok: true };
       },
       { timeout: 60_000, maxWait: 15_000 }
     );
   } catch (err) {
-    return syncFailed(err);
+    return await syncFailed(err);
   }
 }
 
 // What a failed update reports (2026-10-10): the reason Cloudflare (or
 // the database) gave, so it can be put right without reading the logs.
-function syncFailed(err: unknown): TurnstileSyncResult {
+// A refused token (400 / 401 / 403) is explained by diagnoseToken.
+async function syncFailed(err: unknown): Promise<TurnstileSyncResult> {
   console.error("syncTurnstileDomains", err);
-  const reason = err instanceof Error ? err.message : String(err);
+  const refused = err instanceof CloudflareError && [400, 401, 403].includes(err.status);
+  const reason = refused ? await diagnoseToken() : err instanceof Error ? err.message : String(err);
   return { error: `Couldn't update Cloudflare's robot check for sign-up forms — ${reason.slice(0, 300)}` };
 }
 
