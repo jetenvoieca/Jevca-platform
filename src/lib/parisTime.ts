@@ -77,6 +77,15 @@ export function parisToday(): string {
   return dateToParis(new Date()).date;
 }
 
+// The Monday of the week a Paris date ("2026-11-14") falls in — weeks run
+// Monday to Sunday.
+export function parisWeekStart(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const d = new Date(Date.UTC(year, month - 1, day));
+  d.setUTCDate(d.getUTCDate() - ((d.getUTCDay() + 6) % 7));
+  return d.toISOString().slice(0, 10);
+}
+
 // Milliseconds from now until the next midnight in Paris.
 export function msUntilParisMidnight(): number {
   const [year, month, day] = parisToday().split("-").map(Number);

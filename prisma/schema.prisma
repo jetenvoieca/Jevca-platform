@@ -955,6 +955,11 @@ model Task {
   // today's date, so the panel empties itself at midnight; null = never
   // marked, or taken off with Not today.
   todayOn     DateTime? @db.Date
+  // The Monday (Paris date) of the week the task was marked This week for
+  // (2026-10-10). It sits in the This week panel, under Today's, only
+  // while that's the current week — so the panel empties at midnight on
+  // Sunday — and not while it's also marked Today.
+  weekOf      DateTime? @db.Date
 
   completedAt DateTime?
 

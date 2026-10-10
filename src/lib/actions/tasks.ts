@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { readableEmailText } from "@/lib/emailText";
-import { parisToday } from "@/lib/parisTime";
+import { parisToday, parisWeekStart } from "@/lib/parisTime";
 
 // Tasks on the admin Inbox's Task view (2026-09-19, CRM Phase 2). An
 // open task has completedAt null; completing it sets completedAt, which
@@ -17,7 +17,9 @@ import { parisToday } from "@/lib/parisTime";
 //
 // Today (2026-10-09, direct request): a task can be marked Today, which
 // puts it in a tinted panel at the top of the open list until midnight
-// Paris time — see Task.todayOn and setTaskToday.
+// Paris time — see Task.todayOn and setTaskToday. This week (2026-10-10)
+// works the same way, in a second panel under it, until midnight on
+// Sunday — see Task.weekOf and setTaskThisWeek.
 
 export type TaskItem = {
   id: string;
@@ -30,6 +32,7 @@ export type TaskItem = {
   artistName: string | null;
   completedAt: string | null; // ISO
   todayOn: string | null; // "YYYY-MM-DD", Paris — in the Today panel only while it's today
+  weekOf: string | null; // "YYYY-MM-DD", a Monday — in the This week panel only during that week
 };
 
 // What the task form submits — every field a plain string (empty string
@@ -56,6 +59,7 @@ function toTaskItem(r: {
   artistId: string | null;
   completedAt: Date | null;
   todayOn: Date | null;
+  weekOf: Date | null;
   artist: { name: string } | null;
 }): TaskItem {
   return {
@@ -69,6 +73,7 @@ function toTaskItem(r: {
     artistName: r.artist?.name || null,
     completedAt: r.completedAt ? r.completedAt.toISOString() : null,
     todayOn: r.todayOn ? r.todayOn.toISOString().slice(0, 10) : null,
+    weekOf: r.weekOf ? r.weekOf.toISOString().slice(0, 10) : null,
   };
 }
 
@@ -141,6 +146,16 @@ export async function setTaskToday(id: string, today: boolean): Promise<void> {
   await db.task.updateMany({
     where: { id, completedAt: null },
     data: { todayOn: today ? new Date(`${parisToday()}T00:00:00.000Z`) : null },
+  });
+  revalidatePath("/accounts/inbox");
+}
+
+// Marks an open task This week (the current Paris week), or takes it off
+// with thisWeek = false.
+export async function setTaskThisWeek(id: string, thisWeek: boolean): Promise<void> {
+  await db.task.updateMany({
+    where: { id, completedAt: null },
+    data: { weekOf: thisWeek ? new Date(`${parisWeekStart(parisToday())}T00:00:00.000Z`) : null },
   });
   revalidatePath("/accounts/inbox");
 }

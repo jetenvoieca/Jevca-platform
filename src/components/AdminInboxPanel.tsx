@@ -21,6 +21,7 @@ import {
   deleteTask,
   reopenTask,
   setTaskToday,
+  setTaskThisWeek,
   createTaskFromEmail,
   type TaskItem,
   type TaskInput,
@@ -50,7 +51,7 @@ import { useEmailTranslation } from "@/components/useEmailTranslation";
 import SaleModal from "@/components/SaleModal";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
-import { parisToday, msUntilParisMidnight } from "@/lib/parisTime";
+import { parisToday, parisWeekStart, msUntilParisMidnight } from "@/lib/parisTime";
 import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
 import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "@/components/ActionIcons";
 
@@ -133,6 +134,11 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 // reads Not today. The panel empties at midnight Paris time — a task only
 // counts as Today while its todayOn is today's date, and `today` below
 // moves on by itself at midnight, so a page left open clears too.
+//
+// This week (2026-10-10, direct request) works the same way: a second
+// tinted panel under Today's, emptying at midnight on Sunday (weekOf is
+// the week's Monday). A task marked Today shows only in Today's panel; if
+// it's marked for the week too, it's back in This week's the next day.
 //
 // Reinstate (2026-10-01, direct request) — a Done task can be put back
 // on the open list (see reopenTask), for one completed by mistake: the
@@ -235,6 +241,35 @@ function mailboxOf(mode: Mode): Mailbox | null {
 function isInformationalSaleAlert(alert: AlertItem): boolean {
   return alert.dismissable && alert.type.startsWith("SALE_");
 }
+
+// The open task rows' tints and text colours: the Today panel, the This
+// week panel (2026-10-10), or neither.
+const PANEL_STYLES = {
+  today: {
+    bg: "bg-[#F8E8CA]",
+    open: "bg-[#F0DAB0]",
+    hover: "hover:bg-[#F4E0BC]",
+    title: "text-[#4A3A22]",
+    text: "text-[#7A6648]",
+    faint: "text-[#A8977A]",
+  },
+  week: {
+    bg: "bg-[#DEDEF4]",
+    open: "bg-[#CDCDEB]",
+    hover: "hover:bg-[#D5D5F0]",
+    title: "text-[#2E2E4A]",
+    text: "text-[#55557A]",
+    faint: "text-[#8585A8]",
+  },
+  none: {
+    bg: "bg-white",
+    open: "bg-neutral-100",
+    hover: "hover:bg-neutral-50",
+    title: "text-neutral-900",
+    text: "text-neutral-500",
+    faint: "text-neutral-400",
+  },
+} as const;
 
 type InboxUrlParams = {
   mailbox: Mailbox;
@@ -412,8 +447,10 @@ export default function AdminInboxPanel({
 
   // The left column's lists, after the type filter.
   const visibleTasks = typeFilter ? initialTasks.filter((t) => t.category === typeFilter) : initialTasks;
+  const weekStart = parisWeekStart(today);
   const todayTasks = visibleTasks.filter((t) => t.todayOn === today);
-  const otherTasks = visibleTasks.filter((t) => t.todayOn !== today);
+  const weekTasks = visibleTasks.filter((t) => t.todayOn !== today && t.weekOf === weekStart);
+  const otherTasks = visibleTasks.filter((t) => t.todayOn !== today && t.weekOf !== weekStart);
   const visibleAlerts = typeFilter ? initialAlerts.filter((a) => a.type === typeFilter) : initialAlerts;
   const typeOptions =
     mode === "task"
@@ -621,56 +658,57 @@ export default function AdminInboxPanel({
     return true;
   };
 
-  // One row of the open task list — tinted in the Today panel, where its
-  // Today button reads Not today.
-  const renderOpenTask = (t: TaskItem, isToday: boolean) => (
-    <li key={t.id}>
-      <SwipeRow
-        open={swipedId === t.id}
-        onOpenChange={(open) => setSwipedId(open ? t.id : null)}
-        busy={isPending && rowBusyId === t.id}
-        background={isToday ? "bg-[#F8E8CA]" : "bg-white"}
-        actions={[
-          {
-            label: isToday ? "Not today" : "Today",
-            icon: <span className="px-1.5 text-xs uppercase">{isToday ? "Not today" : "Today"}</span>,
-            primary: true,
-            onClick: () => runRowAction(t.id, (id) => setTaskToday(id, !isToday)),
-          },
-          { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteOpenTask(t.id) },
-        ]}
-      >
-        <button
-          type="button"
-          onClick={() => openTask(t)}
-          className={`block w-full px-3 py-2.5 text-left ${
-            isToday
-              ? taskForm?.id === t.id
-                ? "bg-[#F0DAB0]"
-                : "hover:bg-[#F4E0BC]"
-              : taskForm?.id === t.id
-                ? "bg-neutral-100"
-                : "hover:bg-neutral-50"
-          }`}
+  // One row of the open task list, in the Today panel, the This week
+  // panel, or neither — each with its own tint (PANEL_STYLES) and buttons
+  // (Not today / Not this week).
+  const textAction = (label: string, onClick: () => void, primary = false) => ({
+    label,
+    icon: <span className="px-1.5 text-xs uppercase">{label}</span>,
+    primary,
+    onClick,
+  });
+
+  const renderOpenTask = (t: TaskItem, panel: "today" | "week" | "none") => {
+    const style = PANEL_STYLES[panel];
+    const markToday = (on: boolean) => () => runRowAction(t.id, (id) => setTaskToday(id, on));
+    const markWeek = (on: boolean) => () => runRowAction(t.id, (id) => setTaskThisWeek(id, on));
+    const actions =
+      panel === "today"
+        ? [textAction("Not today", markToday(false), true)]
+        : panel === "week"
+          ? [textAction("Today", markToday(true), true), textAction("Not this week", markWeek(false))]
+          : [textAction("Today", markToday(true), true), textAction("This week", markWeek(true))];
+    return (
+      <li key={t.id}>
+        <SwipeRow
+          open={swipedId === t.id}
+          onOpenChange={(open) => setSwipedId(open ? t.id : null)}
+          busy={isPending && rowBusyId === t.id}
+          background={style.bg}
+          actions={[
+            ...actions,
+            { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteOpenTask(t.id) },
+          ]}
         >
-          <div className={itemHeadCls}>
-            <span className={`truncate text-sm font-semibold ${isToday ? "text-[#4A3A22]" : "text-neutral-900"}`}>
-              {capitaliseParagraphs(t.name)}
-            </span>
-            <span className={`shrink-0 text-[10px] ${isToday ? "text-[#A8977A]" : "text-neutral-400"}`}>
-              {t.targetDate ? formatDate(t.targetDate) : ""}
-            </span>
-          </div>
-          <p className={`truncate text-xs ${isToday ? "text-[#7A6648]" : "text-neutral-500"}`}>
-            {t.category || "No category"}
-          </p>
-          <p className={`mt-0.5 truncate text-xs ${isToday ? "text-[#A8977A]" : "text-neutral-400"}`}>
-            {t.artistName || "General"}
-          </p>
-        </button>
-      </SwipeRow>
-    </li>
-  );
+          <button
+            type="button"
+            onClick={() => openTask(t)}
+            className={`block w-full px-3 py-2.5 text-left ${taskForm?.id === t.id ? style.open : style.hover}`}
+          >
+            <div className={itemHeadCls}>
+              <span className={`truncate text-sm font-semibold ${style.title}`}>{capitaliseParagraphs(t.name)}</span>
+              <span className={`shrink-0 text-[10px] ${style.faint}`}>
+                {t.targetDate ? formatDate(t.targetDate) : ""}
+              </span>
+            </div>
+            <p className={`truncate text-xs ${style.text}`}>{t.category || "No category"}</p>
+            <p className={`mt-0.5 truncate text-xs ${style.faint}`}>{t.artistName || "General"}</p>
+          </button>
+        </SwipeRow>
+      </li>
+    );
+  };
+
 
   const handleSendReply = () => {
     if (!openId) return;
@@ -1173,11 +1211,16 @@ export default function AdminInboxPanel({
               <>
                 {todayTasks.length > 0 && (
                   <ul className="divide-y divide-[#EEDCBA] overflow-hidden rounded-lg bg-[#F8E8CA] shadow-sm">
-                    {todayTasks.map((t) => renderOpenTask(t, true))}
+                    {todayTasks.map((t) => renderOpenTask(t, "today"))}
+                  </ul>
+                )}
+                {weekTasks.length > 0 && (
+                  <ul className="divide-y divide-[#CFCFEA] overflow-hidden rounded-lg bg-[#DEDEF4] shadow-sm">
+                    {weekTasks.map((t) => renderOpenTask(t, "week"))}
                   </ul>
                 )}
                 {otherTasks.length > 0 && (
-                  <ul className="divide-y divide-neutral-100">{otherTasks.map((t) => renderOpenTask(t, false))}</ul>
+                  <ul className="divide-y divide-neutral-100">{otherTasks.map((t) => renderOpenTask(t, "none"))}</ul>
                 )}
               </>
             )
