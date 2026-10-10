@@ -35,8 +35,9 @@ const SYNC_LOCK = 52_710_016;
 export type TurnstileSyncResult = { ok: true } | { error: string };
 
 function cloudflareConfig(): { accountId: string; token: string } | null {
-  const accountId = process.env.R2_ACCOUNT_ID;
-  const token = process.env.CLOUDFLARE_TURNSTILE_API_TOKEN;
+  // Trimmed, so a space or line break pasted with the value doesn't break it.
+  const accountId = process.env.R2_ACCOUNT_ID?.trim();
+  const token = process.env.CLOUDFLARE_TURNSTILE_API_TOKEN?.trim();
   return accountId && token ? { accountId, token } : null;
 }
 
