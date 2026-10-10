@@ -1435,6 +1435,7 @@ export default function AdminInboxPanel({
               ) : mode === "task" ? (
                 taskForm && (
                   <TaskForm
+                    key={taskForm.id ?? "new"}
                     form={taskForm}
                     categories={taskCategories}
                     artistOptions={artistOptions}

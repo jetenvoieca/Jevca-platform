@@ -1,8 +1,9 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import type { TaskInput } from "@/lib/actions/tasks";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
+import LinkifiedText from "@/components/LinkifiedText";
 
 // The task form shown in the Inbox's modal (2026-09-19, CRM Phase 2) —
 // purely presentational: the parent (AdminInboxPanel) owns the form state
@@ -18,6 +19,11 @@ import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 // description; then the task's Activity (`activity`, passed in once the
 // task exists); and the action buttons last. The email address isn't on
 // the form any more — it's typed in the Email window itself.
+//
+// Links (2026-10-10, direct request): the description shows as text with
+// its web addresses clickable; tapping anywhere else on it (or into an
+// empty one) turns it into the box to type in, and it goes back to the
+// text view once you click away.
 export default function TaskForm({
   form,
   categories,
@@ -42,6 +48,7 @@ export default function TaskForm({
   onComplete: () => void;
 }) {
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
+  const [editingDescription, setEditingDescription] = useState(!form.description.trim());
   const smallInputCls = "w-full rounded-md border border-neutral-300 px-1.5 py-1 text-xs";
   const smallLabelCls = "mb-0.5 block text-[10px] text-neutral-500";
 
@@ -109,13 +116,29 @@ export default function TaskForm({
         className={inputCls}
       />
 
-      <textarea
-        value={form.description}
-        onChange={(e) => onChange({ description: e.target.value })}
-        placeholder="Task description"
-        rows={8}
-        className={inputCls}
-      />
+      {editingDescription ? (
+        <textarea
+          value={form.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          onBlur={() => setEditingDescription(!form.description.trim())}
+          autoFocus={!!form.description.trim()}
+          placeholder="Task description"
+          rows={8}
+          className={inputCls}
+        />
+      ) : (
+        <div
+          role="textbox"
+          tabIndex={0}
+          onClick={() => setEditingDescription(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") setEditingDescription(true);
+          }}
+          className={`${inputCls} min-h-[11.5rem] cursor-text whitespace-pre-wrap [overflow-wrap:anywhere]`}
+        >
+          <LinkifiedText text={form.description} />
+        </div>
+      )}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 
