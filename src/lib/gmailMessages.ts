@@ -29,10 +29,24 @@ const LIST_LIMIT = 50;
 const FETCH_CHUNK = 10;
 const FETCH_BUDGET_MS = 6000;
 
+// Gmail's own explanation of a refused request: its message and reason
+// (e.g. "rateLimitExceeded", "insufficientPermissions").
+async function gmailError(res: Response): Promise<{ message: string; reason: string }> {
+  try {
+    const body = (await res.json()) as { error?: { message?: string; errors?: { reason?: string }[] } };
+    return { message: body.error?.message ?? "", reason: body.error?.errors?.[0]?.reason ?? "" };
+  } catch {
+    return { message: "", reason: "" };
+  }
+}
+
+// Gmail's "slow down" answers — 429, or 403 with one of these reasons.
+const RATE_LIMIT_REASONS = ["rateLimitExceeded", "userRateLimitExceeded"];
+
 // One request to Gmail — `path` is under the account's API address, or a
 // full https:// address (the upload one, for sending). If Gmail asks to
-// slow down (429) or has a passing fault (5xx), it's tried once more a
-// second later.
+// slow down or has a passing fault (5xx), it's tried once more a second
+// later. A refusal shows Gmail's own explanation.
 export async function gmailFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getGmailAccessToken();
   if (!token) throw new GmailNotConnectedError();
@@ -42,13 +56,22 @@ export async function gmailFetch<T>(path: string, init?: RequestInit): Promise<T
       headers: { ...init?.headers, Authorization: `Bearer ${token}` },
       cache: "no-store",
     });
+
   let res = await send();
-  if (res.status === 429 || res.status >= 500) {
+  let error = res.ok ? null : await gmailError(res);
+  const passing =
+    res.status === 429 || res.status >= 500 || (res.status === 403 && RATE_LIMIT_REASONS.includes(error?.reason ?? ""));
+  if (passing) {
     await new Promise((r) => setTimeout(r, 1000));
     res = await send();
+    error = res.ok ? null : await gmailError(res);
   }
+
   if (res.status === 401) throw new GmailNotConnectedError();
-  if (!res.ok) throw new Error(`Gmail didn't respond (${res.status}). Please try again.`);
+  if (!res.ok) {
+    const detail = [error?.message, error?.reason && `(${error.reason})`].filter(Boolean).join(" ");
+    throw new Error(`Gmail refused (${res.status})${detail ? `: ${detail}` : ""}. Please try again.`);
+  }
   return (await res.json()) as T;
 }
 
