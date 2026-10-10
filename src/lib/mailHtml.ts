@@ -99,6 +99,14 @@ function imageHtml(image: MailImage, width: number, href: string | null = null):
   return href ? `<a href="${escapeHtml(href)}" target="_blank">${img}</a>` : img;
 }
 
+// Something narrower than its space (the Logo, the Signature) placed
+// left, centre or right in it. A table with `align` does this in every
+// email app — the picture itself is drawn as a block, which the space's
+// own text alignment doesn't move.
+function alignedHtml(html: string, align: string): string {
+  return `<table role="presentation" cellpadding="0" cellspacing="0" border="0" align="${align}"><tr><td>${html}</td></tr></table>`;
+}
+
 // Side-by-side cells that stack on a phone.
 function columnsHtml(cells: { width: number; html: string; valign?: string }[], gap: number): string {
   const parts = cells.map((c, i) => {
@@ -134,9 +142,11 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
   const { layout, content, language, assets } = input;
   switch (block.type) {
     case "logo":
-      return assets.logo ? imageHtml(assets.logo, Math.min(LOGO_WIDTH, width)) : "";
+      return assets.logo ? alignedHtml(imageHtml(assets.logo, Math.min(LOGO_WIDTH, width)), align) : "";
     case "signature":
-      return assets.signature ? imageHtml(assets.signature, Math.min(SIGNATURE_WIDTH, width)) : "";
+      return assets.signature
+        ? alignedHtml(imageHtml(assets.signature, Math.min(SIGNATURE_WIDTH, width)), align)
+        : "";
     case "header": {
       const text = contentOf(content, { ...block, type: "header" }).text[language];
       return text ? `<h1 style="margin:0;${textCss(layout, "header")}">${escapeHtml(text)}</h1>` : "";
