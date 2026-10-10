@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useCallback, useState, useTransition, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   getThread,
@@ -44,6 +44,7 @@ import TaskActivityPanel, { type TaskPopup } from "@/components/TaskActivityPane
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
 import PersonalMailPanel from "@/components/PersonalMailPanel";
+import { getPersonalUnreadCount } from "@/lib/actions/gmail";
 import EmailBody, { formatFileSize } from "@/components/EmailBody";
 import { useEmailTranslation } from "@/components/useEmailTranslation";
 import SaleModal from "@/components/SaleModal";
@@ -68,10 +69,11 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 // modal over both columns rather than a third column, so the two lists
 // always have room to breathe and the screen works on an iPad.
 //
-// A pill toggle at the top of the left column (Art | Business | Task |
-// Alert) switches the whole screen between four modes, and the right
-// column follows it. The New message / New Task button sits on the same
-// line as the pills (2026-09-27), not in the heading row:
+// A pill toggle in a band across the top (Art | Business | Personal |
+// Alert | Task, each with its count — unread emails, open alerts, open
+// tasks; layout 2026-10-10, direct request — see mock-up) switches the
+// whole screen between its modes, and both columns follow it. The New
+// message / New Task button sits on the Inbox heading's line:
 //   - Art and Business (2026-09-27, replacing the single Inbox mode) are
 //     the two mailboxes (see lib/email.ts): left = received messages,
 //     right = Sent list (every OutboundEmail from that mailbox — in Art
@@ -100,14 +102,13 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 //   - Personal mode (2026-10-09): Craig's own Gmail, in a panel of its
 //     own — see PersonalMailPanel.
 //
-// The left column has two filters side by side: the artist filter (all
-// modes) and a second one that depends on the mode — Inbox or Archived
-// in the mail modes (2026-09-27), task category or alert type in the
-// other two (2026-09-20). The type filter is plain client state applied
-// to the lists already loaded; the artist filter and Inbox/Archived live
-// in the URL (so links can land already filtered) and are applied on the
-// server. The right column has its own artist filter, independent of the
-// left, also plain client state. The selected alert also lives in the
+// The left column has one filter, beside the Inbox heading, depending on
+// the mode — Inbox or Archived in the mail modes (2026-09-27), task
+// category or alert type in the other two (2026-09-20). The type filter
+// is plain client state applied to the lists already loaded;
+// Inbox/Archived lives in the URL and is applied on the server. (The
+// artist filters, left and right, were removed 2026-10-10, direct
+// request — each row shows its artist anyway.) The selected alert also lives in the
 // URL (?alert=...) — see the note on InboxPage — so closing the modal on
 // an alert has to clear it from the address too. (The exception is a
 // sale alert, which is plain client state: the sale modal loads its own
@@ -205,9 +206,9 @@ type Mode = "art" | "business" | "task" | "alert" | "personal";
 const MODES: { mode: Mode; label: string }[] = [
   { mode: "art", label: "Art" },
   { mode: "business", label: "Business" },
-  { mode: "task", label: "Task" },
-  { mode: "alert", label: "Alert" },
   { mode: "personal", label: "Personal" },
+  { mode: "alert", label: "Alert" },
+  { mode: "task", label: "Task" },
 ];
 
 const EMPTY_TASK_FORM: TaskInput = {
@@ -236,17 +237,15 @@ function isInformationalSaleAlert(alert: AlertItem): boolean {
 }
 
 type InboxUrlParams = {
-  artistId: string | null;
   mailbox: Mailbox;
   archived: boolean;
   alertId?: string;
 };
 
-// The Inbox's address, with the left-hand artist filter, the mailbox,
-// Inbox/Archived and (optionally) the selected alert in the query string.
-function inboxUrl({ artistId, mailbox, archived, alertId }: InboxUrlParams): string {
+// The Inbox's address, with the mailbox, Inbox/Archived and (optionally)
+// the selected alert in the query string.
+function inboxUrl({ mailbox, archived, alertId }: InboxUrlParams): string {
   const params = new URLSearchParams();
-  if (artistId) params.set("artistId", artistId);
   if (mailbox === "BUSINESS") params.set("mailbox", "business");
   if (archived) params.set("archived", "1");
   if (alertId) params.set("alert", alertId);
@@ -265,7 +264,7 @@ export default function AdminInboxPanel({
   clientPanel,
   taskCategories,
   artistOptions,
-  selectedArtistId,
+  unreadCounts,
   composeRecipients,
   mailboxAddresses,
   gmail,
@@ -282,8 +281,10 @@ export default function AdminInboxPanel({
   // The client cards for a payment-overdue or no-payment-method alert.
   clientPanel: { alertType: ClientAlertType; data: ClientPanelData } | null;
   taskCategories: string[];
+  // The task form's Owner options.
   artistOptions: { id: string; name: string }[];
-  selectedArtistId: string | null;
+  // Unread received messages in each mailbox's Inbox, for the pills.
+  unreadCounts: Record<Mailbox, number>;
   composeRecipients: ComposeRecipient[];
   mailboxAddresses: Record<Mailbox, string>;
   // Craig's own Gmail, for the Personal tab (2026-10-09) — see
@@ -311,12 +312,10 @@ export default function AdminInboxPanel({
   const [typeFilter, setTypeFilter] = useState("");
 
   // Right-hand column: Sent list (mail modes), Done list (Task mode) or
-  // processed alerts (Alert mode). `null` means "still loading". One
-  // artist filter serves all three.
+  // processed alerts (Alert mode). `null` means "still loading".
   const [sentList, setSentList] = useState<SentSummaryItem[] | null>(null);
   const [doneList, setDoneList] = useState<TaskItem[] | null>(null);
   const [processedAlerts, setProcessedAlerts] = useState<ProcessedAlertItem[] | null>(null);
-  const [rightArtistId, setRightArtistId] = useState<string | null>(null);
   const [rightRefreshKey, setRightRefreshKey] = useState(0);
   const [selectedSentId, setSelectedSentId] = useState<string | null>(null);
   // The item being deleted (from the right-hand column or an open thread)
@@ -443,33 +442,47 @@ export default function AdminInboxPanel({
 
   // The Inbox's address with the current filters, changed as given.
   const currentUrl = (changes: Partial<InboxUrlParams> = {}) =>
-    inboxUrl({ artistId: selectedArtistId, mailbox, archived: showArchived, ...changes });
+    inboxUrl({ mailbox, archived: showArchived, ...changes });
 
   const refreshRight = () => setRightRefreshKey((k) => k + 1);
 
   // Loads whichever list the right-hand column is currently showing —
-  // on first render, when the mode or the right-hand artist filter
-  // changes, and after something is sent/completed from this screen.
+  // on first render, when the mode changes, and after something is
+  // sent/completed from this screen. (Personal loads its own.)
   useEffect(() => {
     let cancelled = false;
     const sentMailbox = mailboxOf(mode);
     if (sentMailbox) {
-      getSentList(sentMailbox, rightArtistId || undefined).then((rows) => {
+      getSentList(sentMailbox).then((rows) => {
         if (!cancelled) setSentList(rows);
       });
     } else if (mode === "task") {
-      getCompletedTasks(rightArtistId || undefined).then((rows) => {
+      getCompletedTasks().then((rows) => {
         if (!cancelled) setDoneList(rows);
       });
-    } else {
-      getProcessedAlerts(rightArtistId || undefined).then((rows) => {
+    } else if (mode === "alert") {
+      getProcessedAlerts().then((rows) => {
         if (!cancelled) setProcessedAlerts(rows);
       });
     }
     return () => {
       cancelled = true;
     };
-  }, [mode, rightArtistId, rightRefreshKey]);
+  }, [mode, rightRefreshKey]);
+
+  // The Personal pill's count — Gmail's own unread count, asked for once
+  // here and again whenever the Personal tab changes something.
+  const [personalUnread, setPersonalUnread] = useState<number | null>(null);
+  const gmailEmail = gmail?.email ?? null;
+  const refreshPersonalUnread = useCallback(() => {
+    if (!gmailEmail) return;
+    getPersonalUnreadCount()
+      .then(setPersonalUnread)
+      .catch(() => setPersonalUnread(null));
+  }, [gmailEmail]);
+  useEffect(() => {
+    refreshPersonalUnread();
+  }, [refreshPersonalUnread]);
 
   // Clears whatever the modal is showing.
   const resetModal = () => {
@@ -553,18 +566,9 @@ export default function AdminInboxPanel({
     setComposing(false);
   };
 
-  const handleLeftFilterChange = (value: string) => {
-    router.push(currentUrl({ artistId: value || null }));
-  };
-
   const handleArchivedViewChange = (value: string) => {
     setSwipedId(null);
     router.push(currentUrl({ archived: value === "archived" }));
-  };
-
-  const handleRightFilterChange = (value: string) => {
-    setRightArtistId(value || null);
-    setSelectedSentId(null);
   };
 
   // Archive, Move to Inbox, or Delete, straight from the left-hand list
@@ -997,59 +1001,63 @@ export default function AdminInboxPanel({
     refreshOpenAlerts().then(() => router.refresh());
   };
 
+  // Each pill's count: unread emails (Art, Business, Personal), open
+  // alerts and open tasks. Nothing shows for zero, or while Personal's
+  // is unknown.
+  const modeCounts: Record<Mode, number | null> = {
+    art: unreadCounts.ART,
+    business: unreadCounts.BUSINESS,
+    personal: personalUnread,
+    alert: initialAlerts.length,
+    task: initialTasks.length,
+  };
+
   const modeBar = (
     <div className={pillWrapCls}>
-      {MODES.map((m) => (
-        <button key={m.mode} type="button" onClick={() => switchMode(m.mode)} className={pillCls(mode === m.mode)}>
-          {m.label}
-        </button>
-      ))}
+      {MODES.map((m) => {
+        const count = modeCounts[m.mode];
+        return (
+          <button
+            key={m.mode}
+            type="button"
+            onClick={() => switchMode(m.mode)}
+            className={`${pillCls(mode === m.mode)} inline-flex items-center gap-1.5`}
+          >
+            {m.label}
+            {!!count && (
+              <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-neutral-400 px-1 text-[10px] leading-none text-neutral-600">
+                {count}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 
-  if (mode === "personal") {
-    return <PersonalMailPanel modeBar={modeBar} gmail={gmail} error={gmailError} />;
-  }
+  // The heading row above each column — the same height on both sides,
+  // so the two lists line up.
+  const headRowCls = "mb-3 flex h-9 items-center gap-3";
+  const filterCls = "min-w-0 max-w-[14rem] flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-5xl gap-6 px-6 py-6">
-      {/* ---- LEFT: Art / Business / Task / Alert list + filters ---- */}
+    <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-6 py-6">
+      {/* ---- The mode pills, in a band across the top ---- */}
+      <div className="mb-4 flex justify-center overflow-x-auto rounded-xl bg-[#E8F1F0] px-4 py-3">{modeBar}</div>
+
+      {mode === "personal" ? (
+        <PersonalMailPanel gmail={gmail} error={gmailError} onChanged={refreshPersonalUnread} />
+      ) : (
+      <div className="flex min-h-0 flex-1 gap-6">
+      {/* ---- LEFT: what needs attention ---- */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mb-3 flex h-[30px] items-center">
+        <div className={headRowCls}>
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
-        </div>
-
-        <div className="mb-3 flex items-center justify-between gap-2">
-          {modeBar}
-          {mode !== "alert" && (
-            <button
-              type="button"
-              onClick={isMailMode ? startCompose : startTask}
-              className="shrink-0 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
-            >
-              {isMailMode ? "New message" : "New Task"}
-            </button>
-          )}
-        </div>
-
-        <div className="mb-3 flex gap-2">
-          <select
-            value={selectedArtistId || ""}
-            onChange={(e) => handleLeftFilterChange(e.target.value)}
-            className={`${inputCls} min-w-0 flex-1`}
-          >
-            <option value="">All owners</option>
-            {artistOptions.map((a) => (
-              <option key={a.id} value={a.id}>
-                {a.name}
-              </option>
-            ))}
-          </select>
           {isMailMode ? (
             <select
               value={showArchived ? "archived" : "inbox"}
               onChange={(e) => handleArchivedViewChange(e.target.value)}
-              className={`${inputCls} min-w-0 flex-1`}
+              className={filterCls}
             >
               <option value="inbox">Inbox</option>
               <option value="archived">Archived</option>
@@ -1058,7 +1066,7 @@ export default function AdminInboxPanel({
             <select
               value={typeFilter}
               onChange={(e) => setTypeFilter(e.target.value)}
-              className={`${inputCls} min-w-0 flex-1`}
+              className={filterCls}
             >
               <option value="">All types</option>
               {typeOptions.map((o) => (
@@ -1067,6 +1075,15 @@ export default function AdminInboxPanel({
                 </option>
               ))}
             </select>
+          )}
+          {mode !== "alert" && (
+            <button
+              type="button"
+              onClick={isMailMode ? startCompose : startTask}
+              className="ml-auto shrink-0 rounded-md bg-neutral-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-neutral-700"
+            >
+              {isMailMode ? "New message" : "New Task"}
+            </button>
           )}
         </div>
 
@@ -1213,28 +1230,11 @@ export default function AdminInboxPanel({
         </div>
       </div>
 
-      {/* ---- RIGHT: Processed (Sent list or Done list, own filter) ---- */}
+      {/* ---- RIGHT: Processed (Sent, Done or processed alerts) ---- */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mb-3 flex h-[30px] items-center">
+        <div className={headRowCls}>
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
         </div>
-
-        <div className={`mb-3 ${pillWrapCls}`}>
-          <span className={pillCls(true)}>{isMailMode ? "Sent" : "Done"}</span>
-        </div>
-
-        <select
-          value={rightArtistId || ""}
-          onChange={(e) => handleRightFilterChange(e.target.value)}
-          className={`${inputCls} mb-3`}
-        >
-          <option value="">All owners</option>
-          {artistOptions.map((a) => (
-            <option key={a.id} value={a.id}>
-              {a.name}
-            </option>
-          ))}
-        </select>
 
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           {isMailMode ? (
@@ -1353,6 +1353,8 @@ export default function AdminInboxPanel({
           )}
         </div>
       </div>
+      </div>
+      )}
 
       {/* ---- SALE MODAL: an overdue-invoice alert (same as Consolidated Sales) ---- */}
       {saleAlert?.sale && (

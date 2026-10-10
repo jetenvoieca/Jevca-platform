@@ -146,17 +146,8 @@ export async function resolveAlertsOfType(artistId: string, type: string): Promi
 // Where a stored alert's link goes and what it says: the Inbox for an
 // email reply, the site's Sales page for a sale, otherwise the site's
 // Settings page.
-function storedAlertLink(
-  type: string,
-  artistId: string | null,
-  siteId: string | null
-): { href: string | null; label: string } {
-  if (type === EMAIL_ALERT_TYPE) {
-    return {
-      href: `/accounts/inbox${artistId ? `?artistId=${artistId}` : ""}`,
-      label: "View inbox",
-    };
-  }
+function storedAlertLink(type: string, siteId: string | null): { href: string | null; label: string } {
+  if (type === EMAIL_ALERT_TYPE) return { href: "/accounts/inbox", label: "View inbox" };
   if (SALE_ALERT_TYPES.includes(type)) {
     return { href: siteId ? `/sites/${siteId}/sales` : null, label: "View sales" };
   }
@@ -299,7 +290,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
 
   const storedItems: AlertItem[] = stored.map((a) => {
     const siteId = a.artist?.sites[0]?.id || null;
-    const link = storedAlertLink(a.type, a.artistId, siteId);
+    const link = storedAlertLink(a.type, siteId);
     return {
       id: a.id,
       type: a.type,

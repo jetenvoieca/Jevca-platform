@@ -243,24 +243,16 @@ export type InboxSummaryItem = {
 };
 
 // The inbox list — one mailbox's InboundEmail (Art or Business), newest
-// first, optionally filtered to one artist ("one box with a filter",
-// 2026-09-05 decision). Either the Inbox itself (not archived) or the
+// first (the artist filter was removed 2026-10-10, direct request — each
+// row still shows its artist). Either the Inbox itself (not archived) or the
 // Archived view (2026-09-27), never both mixed together. OutboundEmail
 // rows only ever show up inside an opened thread (getThread below), not
 // in this list — keeps the main list to "things you might need to act
 // on", not a mix of sent-and-received. See getSentList below for the
 // separate Sent view.
-export async function getInboxList(
-  mailbox: Mailbox,
-  artistId?: string,
-  archived = false
-): Promise<InboxSummaryItem[]> {
+export async function getInboxList(mailbox: Mailbox, archived = false): Promise<InboxSummaryItem[]> {
   const rows = await db.inboundEmail.findMany({
-    where: {
-      mailbox,
-      artistId: artistId || undefined,
-      archivedAt: archived ? { not: null } : null,
-    },
+    where: { mailbox, archivedAt: archived ? { not: null } : null },
     orderBy: { receivedAt: "desc" },
     take: 200,
     include: {
@@ -284,11 +276,23 @@ export async function getInboxList(
   }));
 }
 
-// Every artist with a sending address set — the filter dropdown's
-// options, shared by both the Inbox and Sent views. An artist with no
-// emailSlug yet can't have received or sent anything, so it's correctly
-// left out.
-export async function getArtistFilterOptions(): Promise<{ id: string; name: string }[]> {
+// The unread count on the Art and Business pills (2026-10-10): received
+// messages in each mailbox's Inbox (not archived) not yet opened.
+export async function getUnreadCounts(): Promise<Record<Mailbox, number>> {
+  const rows = await db.inboundEmail.groupBy({
+    by: ["mailbox"],
+    where: { isRead: false, archivedAt: null },
+    _count: { _all: true },
+  });
+  const counts: Record<Mailbox, number> = { ART: 0, BUSINESS: 0 };
+  for (const r of rows) counts[r.mailbox as Mailbox] = r._count._all;
+  return counts;
+}
+
+// Every artist with a sending address set — the task form's Owner
+// options. An artist with no emailSlug yet can't have received or sent
+// anything, so it's correctly left out.
+export async function getArtistOptions(): Promise<{ id: string; name: string }[]> {
   return db.artist.findMany({
     where: { emailSlug: { not: null }, status: { not: "ARCHIVED" } },
     orderBy: { name: "asc" },
@@ -319,11 +323,10 @@ export type SentSummaryItem = {
 // The unified Sent view (2026-09-05, second Email Integration request) —
 // one mailbox's OutboundEmail regardless of kind: ad hoc Compose sends,
 // inbox replies, and (Art only) invoice/receipt/certificate sends too
-// (see the note on OutboundEmail in schema.prisma). Optionally filtered
-// to one artist, same as getInboxList above.
-export async function getSentList(mailbox: Mailbox, artistId?: string): Promise<SentSummaryItem[]> {
+// (see the note on OutboundEmail in schema.prisma).
+export async function getSentList(mailbox: Mailbox): Promise<SentSummaryItem[]> {
   const rows = await db.outboundEmail.findMany({
-    where: { mailbox, artistId: artistId || undefined },
+    where: { mailbox },
     orderBy: { sentAt: "desc" },
     take: 200,
     include: {

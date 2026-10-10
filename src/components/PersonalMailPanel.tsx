@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   archivePersonal,
@@ -36,11 +36,9 @@ import { capitaliseParagraphs } from "@/lib/text";
 // icon), as on the other tabs. Delete is Gmail's own — to its Bin, where
 // it can be recovered for 30 days. Until
 // Gmail is connected, it shows Connect Gmail instead (see
-// /api/gmail/connect).
+// /api/gmail/connect). Sits under the Inbox's mode pills (AdminInboxPanel).
 
 const cardCls = "rounded-lg border border-neutral-200 bg-white";
-const pillWrapCls = "inline-flex w-fit rounded-full border border-neutral-300 bg-white p-1";
-const pillActiveCls = "rounded-full bg-neutral-200 px-3 py-1 text-xs font-medium text-neutral-900";
 const itemHeadCls = "flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-2";
 const emailHeadCls = "flex flex-col gap-2 bg-neutral-50 px-3 py-2 sm:flex-row sm:items-stretch";
 const linkBtnCls = "text-xs text-neutral-500 underline hover:text-neutral-800 disabled:opacity-50";
@@ -162,13 +160,15 @@ function MailList({
 }
 
 export default function PersonalMailPanel({
-  modeBar,
   gmail,
   error,
+  onChanged,
 }: {
-  modeBar: ReactNode;
   gmail: { email: string } | null;
   error: string | null;
+  // Something changed what's unread in the inbox — the Personal pill's
+  // count is asked for again.
+  onChanged: () => void;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -262,7 +262,10 @@ export default function PersonalMailPanel({
     if (isPending) return;
     if (replyBody.trim() && !confirm("Close without sending your reply?")) return;
     // Opening a conversation marks it read in Gmail — shown in the lists.
-    if (open?.unread) updateBoth(open.threadId, (i) => ({ ...i, unread: false }));
+    if (open?.unread) {
+      updateBoth(open.threadId, (i) => ({ ...i, unread: false }));
+      onChanged();
+    }
     setOpen(null);
     setThread(null);
   };
@@ -300,6 +303,7 @@ export default function PersonalMailPanel({
       }
       if (open?.threadId === item.threadId) setOpen(null);
       updateBoth(item.threadId, () => null);
+      onChanged();
     });
     return true;
   };
@@ -320,6 +324,7 @@ export default function PersonalMailPanel({
       setOpen(null);
       setThread(null);
       inbox.update((items) => items.filter((i) => i.threadId !== threadId));
+      onChanged();
     });
   };
 
@@ -337,6 +342,7 @@ export default function PersonalMailPanel({
         return;
       }
       if (replyTo?.id === m.id) setReplyTo(null);
+      onChanged();
       if (thread.length <= 1) {
         updateBoth(open.threadId, () => null);
         setOpen(null);
@@ -360,19 +366,9 @@ export default function PersonalMailPanel({
     });
   };
 
-  const heading = (
-    <>
-      <div className="mb-3 flex h-[30px] items-center">
-        <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
-      </div>
-      <div className="mb-3">{modeBar}</div>
-    </>
-  );
-
   if (!gmail) {
     return (
-      <div className="mx-auto flex h-full w-full max-w-5xl flex-col px-6 py-6">
-        {heading}
+      <div>
         <div className={`${cardCls} p-5`}>
           {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
           <div className="flex flex-col items-start gap-3">
@@ -390,19 +386,24 @@ export default function PersonalMailPanel({
     );
   }
 
+  // The heading row above each column — the same height on both sides,
+  // as on the other tabs, so the two lists line up.
+  const headRowCls = "mb-3 flex h-9 items-center gap-3";
+
   return (
-    <div className="mx-auto flex h-full w-full max-w-5xl gap-6 px-6 py-6">
+    <div className="flex min-h-0 flex-1 gap-6">
       {/* ---- LEFT: the inbox ---- */}
       <div className="flex min-w-0 flex-1 flex-col">
-        {heading}
-        <div className="mb-3 flex h-[34px] items-center justify-between gap-2 text-xs text-neutral-500">
-          <span className="truncate">{gmail.email}</span>
-          <span className="flex shrink-0 gap-3">
+        <div className={headRowCls}>
+          <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
+          <span className="min-w-0 truncate text-xs text-neutral-500">{gmail.email}</span>
+          <span className="ml-auto flex shrink-0 gap-3">
             <button
               type="button"
               onClick={() => {
                 refreshInbox();
                 refreshSent();
+                onChanged();
               }}
               className={linkBtnCls}
             >
@@ -429,13 +430,9 @@ export default function PersonalMailPanel({
 
       {/* ---- RIGHT: Sent ---- */}
       <div className="flex min-w-0 flex-1 flex-col">
-        <div className="mb-3 flex h-[30px] items-center">
+        <div className={headRowCls}>
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
         </div>
-        <div className={`mb-3 ${pillWrapCls}`}>
-          <span className={pillActiveCls}>Sent</span>
-        </div>
-        <div className="mb-3 h-[34px]" />
         <div className={`${cardCls} flex-1 overflow-y-auto`}>
           <MailList
             state={sent.state}

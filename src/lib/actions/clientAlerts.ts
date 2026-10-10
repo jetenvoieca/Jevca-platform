@@ -125,13 +125,13 @@ export type ProcessedAlertItem = {
 // to show the task Done list, which was confusing): every stored alert
 // that's been dealt with — dismissed, cleared by opening it (an email
 // reply), or a client marked Up to date — most recently dealt with
-// first, optionally for one artist. Fetched on demand, like the Sent and
+// first. Fetched on demand, like the Sent and
 // Done lists. Alerts worked out live (an overdue invoice, say) aren't
 // stored, so they simply stop appearing once dealt with and have nothing
 // to list here.
-export async function getProcessedAlerts(artistId?: string): Promise<ProcessedAlertItem[]> {
+export async function getProcessedAlerts(): Promise<ProcessedAlertItem[]> {
   const rows = await db.alertEvent.findMany({
-    where: { resolvedAt: { not: null }, ...(artistId ? { artistId } : {}) },
+    where: { resolvedAt: { not: null } },
     orderBy: { resolvedAt: "desc" },
     take: 200,
     include: { artist: { select: { name: true } } },

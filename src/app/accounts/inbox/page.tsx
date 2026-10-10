@@ -5,7 +5,7 @@ import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
 import { getOpenAlerts } from "@/lib/alerts";
 import { parseClientAlertId } from "@/lib/clientAlertIds";
-import { getInboxList, getArtistFilterOptions } from "@/lib/actions/inboundEmail";
+import { getInboxList, getArtistOptions, getUnreadCounts } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
 import { getOpenTasks } from "@/lib/actions/tasks";
 import { getGmailConnection } from "@/lib/gmail";
@@ -26,17 +26,11 @@ export const metadata: Metadata = {
   appleWebApp: { capable: true, title: "JEVCAStudio", statusBarStyle: "default" },
 };
 
-// The unified admin inbox (2026-09-05, Email Integration) — "one box
-// with a filter", direct decision. The artist filter lives in the URL
-// (?artistId=...) rather than client state, so a link straight to a
-// specific artist's messages (see lib/alerts.ts) works with a plain
-// <a>/redirect, no client-side wiring needed to land already filtered.
-// The same filter applies to the open Tasks and Alerts lists
-// (2026-09-19, CRM Phase 2/3), which share the left-hand column.
-//
-// Which mailbox is showing (?mailbox=business, else Art) and whether
-// it's the Inbox or the Archived messages (?archived=1) are in the URL
-// too (2026-09-27), for the same reason.
+// The unified admin inbox (2026-09-05, Email Integration). Which mailbox
+// is showing (?mailbox=business, else Art) and whether it's the Inbox or
+// the Archived messages (?archived=1) are in the URL (2026-09-27), so a
+// link can land on them. (The artist filter that used to be here too,
+// ?artistId=, was removed 2026-10-10, direct request.)
 //
 // ?personal=1 opens the Personal tab (Craig's own Gmail, 2026-10-09) —
 // where Connect Gmail comes back to, with ?gmailError=... if it failed.
@@ -49,7 +43,6 @@ export default async function InboxPage({
   searchParams,
 }: {
   searchParams: Promise<{
-    artistId?: string;
     alert?: string;
     archived?: string;
     mailbox?: string;
@@ -58,7 +51,6 @@ export default async function InboxPage({
   }>;
 }) {
   const {
-    artistId,
     alert: alertId,
     archived,
     mailbox: mailboxParam,
@@ -78,16 +70,18 @@ export default async function InboxPage({
     taskCategories,
     recentSites,
     gmail,
+    unreadCounts,
   ] = await Promise.all([
     getOpenAlerts(),
-    getInboxList(mailbox, artistId || undefined, showArchived),
-    getArtistFilterOptions(),
+    getInboxList(mailbox, showArchived),
+    getArtistOptions(),
     getComposeRecipients(),
     getMailboxAddresses(),
-    getOpenTasks(artistId || undefined),
+    getOpenTasks(),
     getPlatformTaskCategories(),
     getRecentSites(),
     getGmailConnection(),
+    getUnreadCounts(),
   ]);
 
   // Derived from the alert id rather than looked up in `alerts`, so the
@@ -109,12 +103,12 @@ export default async function InboxPage({
           showArchived={showArchived}
           initialTasks={tasks}
           initialToday={parisToday()}
-          initialAlerts={alerts.filter((a) => !artistId || a.artistId === artistId)}
+          initialAlerts={alerts}
           selectedAlertId={alertId || null}
           clientPanel={clientPanel}
           taskCategories={taskCategories}
           artistOptions={artistOptions}
-          selectedArtistId={artistId || null}
+          unreadCounts={unreadCounts}
           composeRecipients={composeRecipients}
           mailboxAddresses={mailboxAddresses}
           gmail={gmail}

@@ -277,6 +277,13 @@ export async function openPersonalThread(threadId: string): Promise<PersonalMail
   return messages.map(readMessage);
 }
 
+// The unread count on the Personal pill (2026-10-10): Gmail's own count
+// of unread emails in the inbox — one light request.
+export async function personalUnreadCount(): Promise<number> {
+  const label = await gmailFetch<{ messagesUnread?: number }>("/labels/INBOX");
+  return label.messagesUnread ?? 0;
+}
+
 // Archive, as in Gmail: takes a whole conversation out of the inbox; it
 // stays in Gmail (All Mail).
 export async function archivePersonalThread(threadId: string): Promise<void> {

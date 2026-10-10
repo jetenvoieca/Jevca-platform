@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { removeGmailConnection } from "@/lib/gmail";
 import {
   listPersonalMail,
+  personalUnreadCount,
   archivePersonalThread,
   trashPersonalThread,
   trashPersonalMessage,
@@ -86,6 +87,16 @@ export async function deletePersonal(
     return { ok: true };
   } catch (err) {
     return failure(err);
+  }
+}
+
+// The Personal pill's unread count; null if Gmail isn't connected or
+// can't be reached (the pill then shows no number).
+export async function getPersonalUnreadCount(): Promise<number | null> {
+  try {
+    return await personalUnreadCount();
+  } catch {
+    return null;
   }
 }
 

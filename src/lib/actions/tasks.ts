@@ -73,11 +73,10 @@ function toTaskItem(r: {
 }
 
 // Open tasks, soonest target date first (tasks with no date last), then
-// oldest first — optionally filtered to one artist, same as the Inbox
-// list beside it.
-export async function getOpenTasks(artistId?: string): Promise<TaskItem[]> {
+// oldest first.
+export async function getOpenTasks(): Promise<TaskItem[]> {
   const rows = await db.task.findMany({
-    where: { completedAt: null, ...(artistId ? { artistId } : {}) },
+    where: { completedAt: null },
     orderBy: [{ targetDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
     take: 200,
     include: { artist: { select: { name: true } } },
@@ -88,9 +87,9 @@ export async function getOpenTasks(artistId?: string): Promise<TaskItem[]> {
 // Completed tasks, most recently completed first — the Done list in the
 // right-hand column. Fetched on demand from the client, same as the Sent
 // list.
-export async function getCompletedTasks(artistId?: string): Promise<TaskItem[]> {
+export async function getCompletedTasks(): Promise<TaskItem[]> {
   const rows = await db.task.findMany({
-    where: { completedAt: { not: null }, ...(artistId ? { artistId } : {}) },
+    where: { completedAt: { not: null } },
     orderBy: { completedAt: "desc" },
     take: 200,
     include: { artist: { select: { name: true } } },
