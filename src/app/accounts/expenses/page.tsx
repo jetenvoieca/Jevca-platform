@@ -5,6 +5,7 @@ import { getRecentSites } from "@/lib/recentSites";
 import PlatformExpensesView from "@/components/PlatformExpensesView";
 import { listPlatformExpenses } from "@/lib/actions/platformExpenses";
 import { getPlatformExpenseCategories } from "@/lib/actions/platformExpenseSettings";
+import { parisToday } from "@/lib/parisTime";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +31,7 @@ export default async function AccountsExpensesPage() {
             expenses={expenses}
             categories={categories}
             currentYear={new Date().getFullYear()}
+            today={parisToday()}
           />
         </div>
       }

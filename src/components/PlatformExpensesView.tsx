@@ -13,6 +13,7 @@ import {
   type CsvImportResult,
 } from "@/lib/actions/platformExpenses";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ExpenseBudgetPanel from "@/components/ExpenseBudgetPanel";
 import { formatDate } from "@/lib/formatDate";
 
 const inputCls =
@@ -42,10 +43,12 @@ export default function PlatformExpensesView({
   expenses,
   categories,
   currentYear,
+  today,
 }: {
   expenses: PlatformExpenseRow[];
   categories: string[];
   currentYear: number;
+  today: string; // "YYYY-MM-DD", Paris — for the Budget panel
 }) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -63,6 +66,7 @@ export default function PlatformExpensesView({
   const [categoryFilter, setCategoryFilter] = useState<string>("all");
   const [confirmingClearAll, setConfirmingClearAll] = useState(false);
   const [clearingAll, setClearingAll] = useState(false);
+  const [showBudget, setShowBudget] = useState(false);
 
   const periods: { value: Period; label: string }[] = [
     { value: "all", label: "All time" },
@@ -166,6 +170,15 @@ export default function PlatformExpensesView({
           >
             Expense categories →
           </Link>
+          <button
+            type="button"
+            onClick={() => setShowBudget((v) => !v)}
+            className={`rounded-md border px-3 py-1.5 text-sm ${
+              showBudget ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 hover:bg-neutral-50"
+            }`}
+          >
+            Budget
+          </button>
           {!adding && (
             <button
               type="button"
@@ -193,6 +206,8 @@ export default function PlatformExpensesView({
         Your own costs running the platform — hosting, domains, software. Separate from what
         each artist or brand spends (that lives on their own Purchases page).
       </p>
+
+      {showBudget && <ExpenseBudgetPanel expenses={expenses} today={today} />}
 
       {importing && (
         <form
