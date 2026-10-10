@@ -470,7 +470,7 @@ export default function AdminInboxPanel({
     };
   }, [mode, rightRefreshKey]);
 
-  // The Personal pill's count — Gmail's own unread count, asked for once
+  // The Personal pill's count — unread conversations among those its list shows, asked for once
   // here and again whenever the Personal tab changes something.
   const [personalUnread, setPersonalUnread] = useState<number | null>(null);
   const gmailEmail = gmail?.email ?? null;

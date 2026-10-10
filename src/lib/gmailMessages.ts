@@ -277,11 +277,17 @@ export async function openPersonalThread(threadId: string): Promise<PersonalMail
   return messages.map(readMessage);
 }
 
-// The unread count on the Personal pill (2026-10-10): Gmail's own count
-// of unread emails in the inbox — one light request.
+// The unread count on the Personal pill (2026-10-10, Craig's choice):
+// unread conversations among the ones the inbox list shows — its latest
+// LIST_LIMIT emails — not every unread email ever. Two light list
+// requests (ids only), no email fetched.
 export async function personalUnreadCount(): Promise<number> {
-  const label = await gmailFetch<{ messagesUnread?: number }>("/labels/INBOX");
-  return label.messagesUnread ?? 0;
+  type Ids = { messages?: { id: string; threadId: string }[] };
+  const list = (q: string) =>
+    gmailFetch<Ids>(`/messages?${new URLSearchParams({ q, maxResults: String(LIST_LIMIT) })}`);
+  const [latest, unread] = await Promise.all([list(BOX_QUERY.INBOX), list(`${BOX_QUERY.INBOX} is:unread`)]);
+  const shown = new Set((latest.messages ?? []).map((m) => m.id));
+  return new Set((unread.messages ?? []).filter((m) => shown.has(m.id)).map((m) => m.threadId)).size;
 }
 
 // Archive, as in Gmail: takes a whole conversation out of the inbox; it
