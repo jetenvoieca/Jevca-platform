@@ -23,6 +23,18 @@ function Icon({ children }: { children: ReactNode }) {
   );
 }
 
+// A clipboard with a cross — Remove task (2026-10-11).
+export function TaskRemoveIcon() {
+  return (
+    <Icon>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 4V3h6v1" />
+      <path d="M8.5 9h7M8.5 12.5h4" />
+      <path d="m13.5 15 3.5 3.5M17 15l-3.5 3.5" />
+    </Icon>
+  );
+}
+
 // A clipboard with a list and a tick — Make task / Open task.
 export function TaskIcon() {
   return (

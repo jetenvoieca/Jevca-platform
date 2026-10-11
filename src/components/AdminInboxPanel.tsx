@@ -25,6 +25,7 @@ import {
   moveTaskToThisWeek,
   createTaskFromEmail,
   createTaskFromGmail,
+  getTask,
   type TaskItem,
   type TaskInput,
 } from "@/lib/actions/tasks";
@@ -56,7 +57,7 @@ import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
 import { parisToday, parisWeekStart, msUntilParisMidnight } from "@/lib/parisTime";
 import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
-import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "@/components/ActionIcons";
+import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "@/components/ActionIcons";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every message received in one list,
@@ -166,7 +167,9 @@ import { TaskIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "
 // Make task (2026-09-28, direct request) — on a received message, in the
 // list's swipe/hover actions and in the opened message: makes a task from
 // it (see createTaskFromEmail) and switches straight to Task mode with the
-// new task open. A message already made into a task offers Open task
+// new task open. A message already made into a task offers Remove task
+// beside it (2026-10-11, direct request — deletes the task, after a
+// confirm; the email stays). It offers Open task
 // instead.
 //
 // Tapping outside the modal closes it. If a message has something typed
@@ -306,6 +309,7 @@ export default function AdminInboxPanel({
   taskCategories,
   artistOptions,
   unreadCounts,
+  gmailTaskIds,
   composeRecipients,
   mailboxAddresses,
   gmail,
@@ -326,6 +330,8 @@ export default function AdminInboxPanel({
   artistOptions: { id: string; name: string }[];
   // Unread received messages in each mailbox's Inbox, for the pills.
   unreadCounts: Record<Mailbox, number>;
+  // Personal (Gmail) conversations that already have a task: id → task id.
+  gmailTaskIds: Record<string, string>;
   composeRecipients: ComposeRecipient[];
   mailboxAddresses: Record<Mailbox, string>;
   // Craig's own Gmail, for the Personal tab (2026-10-09) — see
@@ -674,6 +680,32 @@ export default function AdminInboxPanel({
       setTypeFilter("");
       resetModal();
       openTask(res.task);
+      router.refresh();
+    });
+  };
+
+  // Open task / Remove task on an email that already has one (2026-10-11):
+  // opens that task in the Task tab, or deletes it (the email stays).
+  const handleOpenTaskById = (taskId: string) => {
+    startTransition(async () => {
+      const task = await getTask(taskId);
+      if (!task) {
+        alert("Task not found — it may have been deleted.");
+        router.refresh();
+        return;
+      }
+      setMode("task");
+      setTypeFilter("");
+      resetModal();
+      openTask(task);
+    });
+  };
+
+  const handleRemoveTask = (taskId: string) => {
+    if (!confirm("Remove this task? It's deleted with its notes; the email stays.")) return;
+    setSwipedId(null);
+    startTransition(async () => {
+      await deleteTask(taskId);
       router.refresh();
     });
   };
@@ -1143,6 +1175,9 @@ export default function AdminInboxPanel({
           composeRecipients={composeRecipients}
           onChanged={refreshPersonalUnread}
           onMakeTask={handleMakeTaskFromGmail}
+          gmailTaskIds={gmailTaskIds}
+          onOpenTask={handleOpenTaskById}
+          onRemoveTask={handleRemoveTask}
           openThreadId={personalThreadId}
           onThreadOpened={() => setPersonalThreadId(null)}
         />
@@ -1208,6 +1243,15 @@ export default function AdminInboxPanel({
                           icon: <TaskIcon />,
                           onClick: () => handleMakeTask(m.id),
                         },
+                        ...(m.taskId
+                          ? [
+                              {
+                                label: "Remove task",
+                                icon: <TaskRemoveIcon />,
+                                onClick: () => handleRemoveTask(m.taskId as string),
+                              },
+                            ]
+                          : []),
                         showArchived
                           ? {
                               label: "Move to Inbox",
@@ -1738,6 +1782,14 @@ export default function AdminInboxPanel({
                           {item.direction === "IN" && (
                             <MiniActionButton onClick={() => handleMakeTask(item.id)} disabled={isPending}>
                               {openListItem?.taskId ? "Open task" : "Make task"}
+                            </MiniActionButton>
+                          )}
+                          {item.direction === "IN" && openListItem?.taskId && (
+                            <MiniActionButton
+                              onClick={() => handleRemoveTask(openListItem.taskId as string)}
+                              disabled={isPending}
+                            >
+                              Remove task
                             </MiniActionButton>
                           )}
                         </MiniActionBar>

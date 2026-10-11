@@ -367,3 +367,20 @@ export async function createTaskFromGmail(input: {
   revalidatePath("/accounts/inbox");
   return { ok: true, task: toTaskItem(task) };
 }
+
+// One task, open or completed — for an email's Open task (2026-10-11).
+export async function getTask(id: string): Promise<TaskItem | null> {
+  const row = await db.task.findUnique({ where: { id }, include: { artist: { select: { name: true } } } });
+  return row ? toTaskItem(row) : null;
+}
+
+// Which Personal (Gmail) conversations already have a task, as
+// conversation id → task id (2026-10-11) — so the Personal tab offers
+// Open task / Remove task on them instead of Make task.
+export async function getGmailTaskLinks(): Promise<Record<string, string>> {
+  const rows = await db.task.findMany({
+    where: { gmailThreadId: { not: null } },
+    select: { id: true, gmailThreadId: true },
+  });
+  return Object.fromEntries(rows.map((r) => [r.gmailThreadId as string, r.id]));
+}

@@ -7,7 +7,7 @@ import { getOpenAlerts } from "@/lib/alerts";
 import { parseClientAlertId } from "@/lib/clientAlertIds";
 import { getInboxList, getArtistOptions, getUnreadCounts } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
-import { getOpenTasks } from "@/lib/actions/tasks";
+import { getOpenTasks, getGmailTaskLinks } from "@/lib/actions/tasks";
 import { getGmailConnection } from "@/lib/gmail";
 import { parisToday } from "@/lib/parisTime";
 import { getPlatformTaskCategories } from "@/lib/actions/platformTaskSettings";
@@ -71,6 +71,7 @@ export default async function InboxPage({
     recentSites,
     gmail,
     unreadCounts,
+    gmailTaskIds,
   ] = await Promise.all([
     getOpenAlerts(),
     getInboxList(mailbox, showArchived),
@@ -82,6 +83,7 @@ export default async function InboxPage({
     getRecentSites(),
     getGmailConnection(),
     getUnreadCounts(),
+    getGmailTaskLinks(),
   ]);
 
   // Derived from the alert id rather than looked up in `alerts`, so the
@@ -109,6 +111,7 @@ export default async function InboxPage({
           taskCategories={taskCategories}
           artistOptions={artistOptions}
           unreadCounts={unreadCounts}
+          gmailTaskIds={gmailTaskIds}
           composeRecipients={composeRecipients}
           mailboxAddresses={mailboxAddresses}
           gmail={gmail}

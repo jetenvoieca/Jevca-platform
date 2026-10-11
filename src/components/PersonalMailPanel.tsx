@@ -21,7 +21,7 @@ import PersonalComposePopup from "@/components/PersonalComposePopup";
 import type { ComposeRecipient } from "@/lib/actions/adminEmail";
 import { useEmailTranslation } from "@/components/useEmailTranslation";
 import SwipeRow from "@/components/SwipeRow";
-import { TaskIcon, TrashIcon } from "@/components/ActionIcons";
+import { TaskIcon, TaskRemoveIcon, TrashIcon } from "@/components/ActionIcons";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 
@@ -39,7 +39,8 @@ import { capitaliseParagraphs } from "@/lib/text";
 // icon), as on the other tabs. Make task (2026-10-10), on the list and in
 // each email's bar, makes a task to deal with the conversation later —
 // see createTaskFromGmail; that task's Open email comes back here with
-// the conversation open (`openThreadId`). Delete is Gmail's own — to its Bin, where
+// the conversation open (`openThreadId`). A conversation that already
+// has a task offers Open task and Remove task instead (2026-10-11). Delete is Gmail's own — to its Bin, where
 // it can be recovered for 30 days. Until
 // Gmail is connected, it shows Connect Gmail instead (see
 // /api/gmail/connect). Sits under the Inbox's mode pills (AdminInboxPanel).
@@ -108,6 +109,9 @@ function MailList({
   busyId,
   onDelete,
   onMakeTask,
+  gmailTaskIds,
+  onOpenTask,
+  onRemoveTask,
 }: {
   state: ListState;
   emptyText: string;
@@ -118,6 +122,9 @@ function MailList({
   busyId: string | null;
   onDelete: (item: PersonalMailItem) => boolean;
   onMakeTask: (item: PersonalMailItem) => void;
+  gmailTaskIds: Record<string, string>;
+  onOpenTask: (taskId: string) => void;
+  onRemoveTask: (taskId: string) => void;
 }) {
   if (state.error && state.items.length === 0) {
     return <p className="p-4 text-center text-sm text-red-600">{state.error}</p>;
@@ -138,7 +145,16 @@ function MailList({
               onOpenChange={(isOpen) => onSwipe(isOpen ? m.threadId : null)}
               busy={busyId === m.threadId}
               actions={[
-                { label: "Make task", icon: <TaskIcon />, onClick: () => onMakeTask(m) },
+                ...(gmailTaskIds[m.threadId]
+                  ? [
+                      { label: "Open task", icon: <TaskIcon />, onClick: () => onOpenTask(gmailTaskIds[m.threadId]) },
+                      {
+                        label: "Remove task",
+                        icon: <TaskRemoveIcon />,
+                        onClick: () => onRemoveTask(gmailTaskIds[m.threadId]),
+                      },
+                    ]
+                  : [{ label: "Make task", icon: <TaskIcon />, onClick: () => onMakeTask(m) }]),
                 { label: "Delete", icon: <TrashIcon />, danger: true, primary: true, onClick: () => onDelete(m) },
               ]}
             >
@@ -176,6 +192,9 @@ export default function PersonalMailPanel({
   composeRecipients,
   onChanged,
   onMakeTask,
+  gmailTaskIds,
+  onOpenTask,
+  onRemoveTask,
   openThreadId,
   onThreadOpened,
 }: {
@@ -188,6 +207,11 @@ export default function PersonalMailPanel({
   onChanged: () => void;
   // Make task — AdminInboxPanel makes it and switches to the Task tab.
   onMakeTask: (item: PersonalMailItem) => void;
+  // Conversations that already have a task (id → task id), and that
+  // task's Open task / Remove task — both handled by AdminInboxPanel.
+  gmailTaskIds: Record<string, string>;
+  onOpenTask: (taskId: string) => void;
+  onRemoveTask: (taskId: string) => void;
   // A conversation to open on arrival (a task's Open email), cleared with
   // onThreadOpened once it's open.
   openThreadId: string | null;
@@ -482,6 +506,9 @@ export default function PersonalMailPanel({
             busyId={busyId}
             onDelete={handleDeleteConversation}
             onMakeTask={onMakeTask}
+            gmailTaskIds={gmailTaskIds}
+            onOpenTask={onOpenTask}
+            onRemoveTask={onRemoveTask}
           />
         </div>
       </div>
@@ -509,6 +536,9 @@ export default function PersonalMailPanel({
             busyId={busyId}
             onDelete={handleDeleteConversation}
             onMakeTask={onMakeTask}
+            gmailTaskIds={gmailTaskIds}
+            onOpenTask={onOpenTask}
+            onRemoveTask={onRemoveTask}
           />
         </div>
       </div>
@@ -603,15 +633,26 @@ export default function PersonalMailPanel({
                           )}
                           <MiniActionButton onClick={() => startReply(m)}>Reply</MiniActionButton>
                           <MiniActionButton onClick={() => setForwarding(m)}>Forward</MiniActionButton>
-                          <MiniActionButton
-                            onClick={() => {
-                              const item = openConversation();
-                              if (item) onMakeTask(item);
-                            }}
-                            disabled={isPending}
-                          >
-                            Make task
-                          </MiniActionButton>
+                          {gmailTaskIds[open.threadId] ? (
+                            <>
+                              <MiniActionButton onClick={() => onOpenTask(gmailTaskIds[open.threadId])}>
+                                Open task
+                              </MiniActionButton>
+                              <MiniActionButton onClick={() => onRemoveTask(gmailTaskIds[open.threadId])}>
+                                Remove task
+                              </MiniActionButton>
+                            </>
+                          ) : (
+                            <MiniActionButton
+                              onClick={() => {
+                                const item = openConversation();
+                                if (item) onMakeTask(item);
+                              }}
+                              disabled={isPending}
+                            >
+                              Make task
+                            </MiniActionButton>
+                          )}
                           <MiniActionButton
                             onClick={() => translation.toggle(m.id, m.subject, m.textBody)}
                             disabled={translation.busy(m.id)}
