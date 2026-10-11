@@ -86,6 +86,12 @@ export function parisWeekStart(date: string): string {
   return d.toISOString().slice(0, 10);
 }
 
+// The day after a Paris date ("2026-11-14" → "2026-11-15").
+export function parisNextDay(date: string): string {
+  const [year, month, day] = date.split("-").map(Number);
+  return new Date(Date.UTC(year, month - 1, day + 1)).toISOString().slice(0, 10);
+}
+
 // Milliseconds from now until the next midnight in Paris.
 export function msUntilParisMidnight(): number {
   const [year, month, day] = parisToday().split("-").map(Number);

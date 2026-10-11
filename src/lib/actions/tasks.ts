@@ -154,11 +154,14 @@ export async function setTaskToday(id: string, today: boolean): Promise<void> {
 }
 
 // Marks an open task This week (the current Paris week), or takes it off
-// with thisWeek = false.
+// with thisWeek = false — which also clears a past Today, since an
+// unfinished Today task shows in This week (see AdminInboxPanel).
 export async function setTaskThisWeek(id: string, thisWeek: boolean): Promise<void> {
   await db.task.updateMany({
     where: { id, completedAt: null },
-    data: { weekOf: thisWeek ? new Date(`${parisWeekStart(parisToday())}T00:00:00.000Z`) : null },
+    data: thisWeek
+      ? { weekOf: new Date(`${parisWeekStart(parisToday())}T00:00:00.000Z`) }
+      : { weekOf: null, todayOn: null },
   });
   revalidatePath("/accounts/inbox");
 }
