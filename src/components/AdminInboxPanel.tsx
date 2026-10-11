@@ -55,7 +55,7 @@ import { useEmailTranslation } from "@/components/useEmailTranslation";
 import SaleModal from "@/components/SaleModal";
 import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
-import { parisToday, parisWeekStart, msUntilParisMidnight } from "@/lib/parisTime";
+import { parisToday, parisWeekStart, parisNextDay, msUntilParisMidnight } from "@/lib/parisTime";
 import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
 import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "@/components/ActionIcons";
 
@@ -146,6 +146,10 @@ import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, Reinst
 // band) under Today's, emptying at midnight on Sunday (weekOf is
 // the week's Monday). A task marked Today shows only in Today's panel; if
 // it's marked for the week too, it's back in This week's the next day.
+// A Today task not completed by midnight moves into This week too
+// (2026-10-11, direct request — "so it does not get lost") — the week of
+// the day after, so Sunday's carries into the new week — and clears with
+// that week like any other.
 //
 // Reinstate (2026-10-01, direct request) — a Done task can be put back
 // on the open list (see reopenTask), for one completed by mistake: the
@@ -465,8 +469,12 @@ export default function AdminInboxPanel({
   const visibleTasks = typeFilter ? initialTasks.filter((t) => t.category === typeFilter) : initialTasks;
   const weekStart = parisWeekStart(today);
   const todayTasks = visibleTasks.filter((t) => t.todayOn === today);
-  const weekTasks = visibleTasks.filter((t) => t.todayOn !== today && t.weekOf === weekStart);
-  const otherTasks = visibleTasks.filter((t) => t.todayOn !== today && t.weekOf !== weekStart);
+  const inThisWeek = (t: TaskItem) =>
+    t.todayOn !== today &&
+    (t.weekOf === weekStart ||
+      (!!t.todayOn && t.todayOn < today && parisWeekStart(parisNextDay(t.todayOn)) === weekStart));
+  const weekTasks = visibleTasks.filter(inThisWeek);
+  const otherTasks = visibleTasks.filter((t) => t.todayOn !== today && !inThisWeek(t));
   const visibleAlerts = typeFilter ? initialAlerts.filter((a) => a.type === typeFilter) : initialAlerts;
   const typeOptions =
     mode === "task"
