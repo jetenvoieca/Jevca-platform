@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { randomUUID } from "crypto";
 import { getPresignedUploadUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
+import { sanitizeFilename } from "@/lib/sanitizeFilename";
 
 // The business's own website, jetenvoieca.com (2026-09-29) — platform-
 // level, not tied to any Artist or Site. Edits go live on save (no
@@ -84,13 +85,6 @@ async function uniqueSlug(name: string): Promise<string> {
     n += 1;
   }
   return candidate;
-}
-
-function sanitizeFilename(name: string) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9.]+/g, "-")
-    .replace(/-+/g, "-");
 }
 
 // ---- Content pages ------------------------------------------------

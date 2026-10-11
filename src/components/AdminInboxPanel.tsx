@@ -45,6 +45,7 @@ import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 import TaskForm from "@/components/TaskForm";
+import TaskFilesPanel from "@/components/TaskFilesPanel";
 import TaskActivityPanel, { type TaskPopup } from "@/components/TaskActivityPanel";
 import AlertDetail from "@/components/AlertDetail";
 import AlertClientPanel from "@/components/AlertClientPanel";
@@ -420,6 +421,10 @@ export default function AdminInboxPanel({
   // `null` = no task open. `taskDirty` = something has changed since it
   // was opened or last saved (so closing it needs to save).
   const [taskForm, setTaskForm] = useState<TaskInput | null>(null);
+  // Bumped each time a task is opened or started, so the form starts
+  // afresh for it — but not when a new task gets its id on first save,
+  // which would cut short an upload in its Files section.
+  const [taskFormKey, setTaskFormKey] = useState(0);
   // The address the task's Email window starts with (not on the form —
   // see TaskForm).
   const [taskEmail, setTaskEmail] = useState("");
@@ -985,6 +990,7 @@ export default function AdminInboxPanel({
     });
     setTaskEmail(t.email ?? "");
     setTaskGmailThreadId(t.gmailThreadId);
+    setTaskFormKey((k) => k + 1);
     setTaskDirty(false);
     setTaskError(null);
     setTaskPopup(null);
@@ -994,6 +1000,7 @@ export default function AdminInboxPanel({
     setTaskForm(EMPTY_TASK_FORM);
     setTaskEmail("");
     setTaskGmailThreadId(null);
+    setTaskFormKey((k) => k + 1);
     setTaskDirty(false);
     setTaskError(null);
     setTaskPopup(null);
@@ -1040,6 +1047,15 @@ export default function AdminInboxPanel({
         closeModal();
       }
     });
+  };
+
+  // A new or changed task saved first — for its Files section's Add
+  // files. The task's id, or null if it can't be saved yet.
+  const ensureTaskSaved = async (): Promise<string | null> => {
+    if (taskForm?.id && !taskDirty) return taskForm.id;
+    const id = await persistTask(false);
+    if (id) setTaskForm((f) => (f ? { ...f, id } : f));
+    return id;
   };
 
   // Email / Activity: a new or changed task is saved first, so the email
@@ -1586,12 +1602,13 @@ export default function AdminInboxPanel({
               ) : mode === "task" ? (
                 taskForm && (
                   <TaskForm
-                    key={taskForm.id ?? "new"}
+                    key={taskFormKey}
                     form={taskForm}
                     categories={taskCategories}
                     artistOptions={artistOptions}
                     saving={isPending}
                     error={taskError}
+                    files={<TaskFilesPanel taskId={taskForm.id} ensureTaskId={ensureTaskSaved} />}
                     activity={
                       taskForm.id && (
                         <TaskActivityPanel

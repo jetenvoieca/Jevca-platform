@@ -6,13 +6,7 @@ import { generateImageSizes } from "@/lib/imageSizes";
 import { randomUUID } from "crypto";
 import { createArtworkWithRetry } from "./artworks";
 import { buildArtworkWhere, type ArtworkFilterInput } from "@/lib/artworkFilters";
-
-function sanitizeFilename(name: string) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9.]+/g, "-")
-    .replace(/-+/g, "-");
-}
+import { sanitizeFilename } from "@/lib/sanitizeFilename";
 
 // Step 1 of 2 for uploading: this only ever handles a filename and content
 // type — never the file itself — so it stays a tiny request regardless of

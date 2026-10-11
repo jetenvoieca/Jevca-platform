@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { readableEmailText } from "@/lib/emailText";
+import { deleteFromR2 } from "@/lib/r2";
 import { parisToday, parisWeekStart } from "@/lib/parisTime";
 
 // Tasks on the admin Inbox's Task view (2026-09-19, CRM Phase 2). An
@@ -187,7 +188,11 @@ export async function reopenTask(id: string): Promise<void> {
 // Deletes a task, open or completed — from the open Task list (2026-09-27,
 // direct request: "need to be able to delete, not just say done") or the
 // Done list.
+// Its files (2026-10-11) are removed from storage first; their rows go
+// with the task.
 export async function deleteTask(id: string): Promise<void> {
+  const files = await db.taskFile.findMany({ where: { taskId: id }, select: { r2Key: true } });
+  await Promise.all(files.map((f) => deleteFromR2(f.r2Key)));
   await db.task.deleteMany({ where: { id } });
   revalidatePath("/accounts/inbox");
 }

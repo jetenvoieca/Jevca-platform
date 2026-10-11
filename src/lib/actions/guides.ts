@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { randomUUID } from "crypto";
 import { getPresignedUploadUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
+import { sanitizeFilename } from "@/lib/sanitizeFilename";
 
 // Step-by-step Guides (2026-09-04) — platform-wide admin documentation,
 // shown in the Administration menu. See the Guide model in schema.prisma
@@ -26,13 +27,6 @@ export type GuideWithSteps = {
   createdAt: Date;
   updatedAt: Date;
 };
-
-function sanitizeFilename(name: string) {
-  return name
-    .toLowerCase()
-    .replace(/[^a-z0-9.]+/g, "-")
-    .replace(/-+/g, "-");
-}
 
 // Returns every guide, both categories — the Guides page filters to the
 // active tab client-side rather than re-fetching per tab switch, since

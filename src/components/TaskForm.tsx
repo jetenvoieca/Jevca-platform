@@ -28,12 +28,16 @@ import LinkifiedText from "@/components/LinkifiedText";
 // Open email (2026-10-10): a task made from a Personal (Gmail) email has
 // a link under its description that reopens that conversation in the
 // Personal tab (`onOpenEmail`, null for any other task).
+//
+// Files (2026-10-11): the task's Files section (`files`, see
+// TaskFilesPanel) sits under the description.
 export default function TaskForm({
   form,
   categories,
   artistOptions,
   saving,
   error,
+  files,
   activity,
   onChange,
   onOpenEmail,
@@ -46,6 +50,7 @@ export default function TaskForm({
   artistOptions: { id: string; name: string }[];
   saving: boolean;
   error: string | null;
+  files: ReactNode;
   activity: ReactNode;
   onChange: (patch: Partial<TaskInput>) => void;
   onOpenEmail: (() => void) | null;
@@ -156,6 +161,8 @@ export default function TaskForm({
           Open email in Personal
         </button>
       )}
+
+      {files}
 
       {error && <p className="text-sm text-red-600">{error}</p>}
 

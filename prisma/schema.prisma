@@ -973,12 +973,32 @@ model Task {
   outboundEmails OutboundEmail[]
   inboundEmails  InboundEmail[]
   notes          TaskNote[]
+  files          TaskFile[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([artistId])
   @@index([completedAt])
+}
+
+// A file or image added to a task (2026-10-11, direct request) — shown
+// in the task's Files section. Stored privately in R2 under tasks/<task
+// id>/ and only ever served to a logged-in admin (/api/task-file/<id>);
+// deleted from R2 with its row (see deleteTaskFile / deleteTask).
+model TaskFile {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  filename    String
+  contentType String
+  size        Int
+  r2Key       String @unique
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId])
 }
 
 // A note of something done for a task (2026-09-28, direct request — "take
