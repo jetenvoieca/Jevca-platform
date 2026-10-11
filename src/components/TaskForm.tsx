@@ -60,7 +60,11 @@ export default function TaskForm({
 }) {
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const [editingDescription, setEditingDescription] = useState(!form.description.trim());
-  const smallInputCls = "w-full rounded-md border border-neutral-300 px-1.5 py-1 text-xs";
+  // One height for all three, and min-w-0 so none can push past its
+  // column. The date box also drops Safari's own look (appearance-none),
+  // which on an iPad made it wider and taller than its column (2026-10-11).
+  const smallInputCls = "h-8 w-full min-w-0 rounded-md border border-neutral-300 bg-white px-1.5 text-xs";
+  const dateInputCls = `${smallInputCls} appearance-none text-left [&::-webkit-date-and-time-value]:text-left`;
   const smallLabelCls = "mb-0.5 block text-[10px] text-neutral-500";
 
   // A category removed in Settings after a task was saved with it still
@@ -76,14 +80,14 @@ export default function TaskForm({
         <p className="shrink-0 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 sm:w-24">
           {form.id ? "Edit task" : "New task"}
         </p>
-        <div className="grid flex-1 grid-cols-[7.5rem_1fr] gap-2 sm:grid-cols-[7.5rem_7rem_1fr]">
+        <div className="grid flex-1 grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,8rem)_minmax(0,8rem)_minmax(0,1fr)]">
           <div>
             <label className={smallLabelCls}>Target date</label>
             <input
               type="date"
               value={form.targetDate}
               onChange={(e) => onChange({ targetDate: e.target.value })}
-              className={smallInputCls}
+              className={dateInputCls}
             />
           </div>
           <div>
