@@ -26,7 +26,8 @@ import { formatParisDate, formatParisDateTime } from "@/lib/parisTime";
 // and Conversion. Below that, the people who clicked and those who
 // opened but didn't click, by version, with a CSV download. The
 // follow-up (step 4c) has its own row under the versions once it has
-// gone.
+// gone. Clicking a version's (or the follow-up's) colour and name shows
+// that mail in the Preview; the one shown is outlined (2026-10-13).
 
 type Stage = { key: "delivered" | "opened" | "clicked"; label: string };
 const STAGES: Stage[] = [
@@ -51,11 +52,15 @@ export default function CampaignResults({
   campaignId,
   campaignName,
   sending,
+  previewMailId,
+  onPreviewMail,
 }: {
   siteId: string;
   campaignId: string;
   campaignName: string;
   sending: boolean;
+  previewMailId: string | null;
+  onPreviewMail: (mailId: string) => void;
 }) {
   const [results, setResults] = useState<Results | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -110,8 +115,14 @@ export default function CampaignResults({
       ) : (
         <>
           <StackedBars versions={versions} totals={totals} />
-          <VersionRows versions={versions} />
-          {results.followUp && results.followUp.sent > 0 && <FollowUpRow followUp={results.followUp} />}
+          <VersionRows versions={versions} previewMailId={previewMailId} onPreviewMail={onPreviewMail} />
+          {results.followUp && results.followUp.sent > 0 && (
+            <FollowUpRow
+              followUp={results.followUp}
+              previewMailId={previewMailId}
+              onPreviewMail={onPreviewMail}
+            />
+          )}
           <PeopleLists
             siteId={siteId}
             campaignId={campaignId}
@@ -176,7 +187,15 @@ function StackedBars({
 // A row per version
 // ---------------------------------------------------------------------
 
-function VersionRows({ versions }: { versions: VersionCounts[] }) {
+function VersionRows({
+  versions,
+  previewMailId,
+  onPreviewMail,
+}: {
+  versions: VersionCounts[];
+  previewMailId: string | null;
+  onPreviewMail: (mailId: string) => void;
+}) {
   const leader = leadingVersion(versions);
   return (
     <div className="flex flex-col items-center gap-2">
@@ -185,10 +204,12 @@ function VersionRows({ versions }: { versions: VersionCounts[] }) {
         const leading = leader && "mailId" in leader && leader.mailId === v.mailId;
         return (
           <div key={v.mailId} className="flex flex-wrap items-center gap-2">
-            <div className={`${boxClass} w-52 gap-2 px-2 py-1`}>
-              <span className="h-5 w-8 shrink-0 rounded" style={{ background: VERSION_COLOURS[i] }} />
-              <span className="flex-1 truncate text-right text-neutral-800">{v.label}</span>
-            </div>
+            <VersionLabel
+              label={v.label}
+              colour={VERSION_COLOURS[i]}
+              shown={v.mailId === previewMailId}
+              onClick={() => onPreviewMail(v.mailId)}
+            />
             <Rate label="Open" value={rates.open} />
             <Rate label="Click" value={rates.click} />
             <Rate label="Conversion" value={rates.conversion} strong={!!leading} />
@@ -210,15 +231,25 @@ function VersionRows({ versions }: { versions: VersionCounts[] }) {
 }
 
 // The follow-up's own numbers (it isn't one of the versions compared).
-function FollowUpRow({ followUp }: { followUp: FollowUpResults }) {
+function FollowUpRow({
+  followUp,
+  previewMailId,
+  onPreviewMail,
+}: {
+  followUp: FollowUpResults;
+  previewMailId: string | null;
+  onPreviewMail: (mailId: string) => void;
+}) {
   const rates = versionRates(followUp);
   return (
     <div className="flex flex-col items-center gap-1 border-t border-neutral-200 pt-4">
       <div className="flex flex-wrap items-center gap-2">
-        <div className={`${boxClass} w-52 gap-2 px-2 py-1`}>
-          <span className="h-5 w-8 shrink-0 rounded bg-neutral-400" />
-          <span className="flex-1 truncate text-right text-neutral-800">{followUp.label}</span>
-        </div>
+        <VersionLabel
+          label={followUp.label}
+          colour={FOLLOW_UP_COLOUR}
+          shown={followUp.mailId === previewMailId}
+          onClick={() => onPreviewMail(followUp.mailId)}
+        />
         <Rate label="Open" value={rates.open} />
         <Rate label="Click" value={rates.click} />
         <Rate label="Conversion" value={rates.conversion} />
@@ -227,6 +258,36 @@ function FollowUpRow({ followUp }: { followUp: FollowUpResults }) {
         To: {followUp.who} · {followUp.sent} sent · {followUp.bounced} bounced · {followUp.complained} marked as spam
       </p>
     </div>
+  );
+}
+
+const FOLLOW_UP_COLOUR = "#a3a3a3";
+
+// A row's colour and name: shows that mail in the Preview.
+function VersionLabel({
+  label,
+  colour,
+  shown,
+  onClick,
+}: {
+  label: string;
+  colour: string;
+  shown: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title="Show this mail in the Preview"
+      aria-pressed={shown}
+      className={`${boxClass} w-52 gap-2 px-2 py-1 ${
+        shown ? "border-neutral-900 bg-neutral-100" : "hover:bg-neutral-50"
+      }`}
+    >
+      <span className="h-5 w-8 shrink-0 rounded" style={{ background: colour }} />
+      <span className="flex-1 truncate text-right text-neutral-800">{label}</span>
+    </button>
   );
 }
 

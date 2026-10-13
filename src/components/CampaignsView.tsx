@@ -57,7 +57,9 @@ import { isTextComponent } from "@/lib/textStyle";
 // box (lists, Test message, Send). Every change shows in the Preview and
 // saves itself shortly after. Once a campaign has started sending, the
 // middle column opens on its Results (step 4b), with a Results | Mail
-// switch; picking one of its mails shows that mail.
+// switch; picking one of its mails shows that mail. Clicking a version's
+// colour in the Results shows that mail in the Preview and keeps the
+// Results open (2026-10-13).
 
 type MailDraft = {
   layout: MailTemplateLayout;
@@ -156,12 +158,17 @@ export default function CampaignsView({
   };
 
   // Opens a mail for editing, saving anything still waiting on the last.
-  const openMail = (campaign: CampaignSummary | null, next: CampaignMailData | null) => {
+  // `onResults`: picked from the Results, which stay open.
+  const openMail = (
+    campaign: CampaignSummary | null,
+    next: CampaignMailData | null,
+    onResults = false
+  ) => {
     startTransition(async () => {
       await autoSave.flush();
       // Another campaign opens on its Results; another of its mails, on
-      // that mail.
-      setShowMail(!!campaign && campaign.id === selectedId);
+      // that mail (unless picked from the Results).
+      setShowMail(!onResults && !!campaign && campaign.id === selectedId);
       setSelectedId(campaign?.id ?? null);
       setMailId(next?.id ?? null);
       setDraft(next ? toDraft(next) : null);
@@ -457,6 +464,11 @@ export default function CampaignsView({
             campaignId={selected.id}
             campaignName={selected.name}
             sending={selected.status === "SENDING"}
+            previewMailId={mailId}
+            onPreviewMail={(id) => {
+              const picked = selected.mails.find((m) => m.id === id);
+              if (picked) openMail(selected, picked, true);
+            }}
           />
         ) : draft && mail ? (
           <>
