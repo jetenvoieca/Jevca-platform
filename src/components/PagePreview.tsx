@@ -339,7 +339,10 @@ function BlockBuildPage({
 }
 
 // The page's background and margin around its rows, then the site's
-// footer. Unfilled blocks are dropped, and so is any row left empty.
+// footer. Unfilled blocks are dropped, and so is any row left empty. It
+// grows to fill the space it's in (the whole window on the published
+// site), so the background reaches the bottom however short the page,
+// as it does in the admin preview.
 function StyledFrame({
   margins,
   backgroundColor,
@@ -359,7 +362,7 @@ function StyledFrame({
 
   return (
     <div
-      className={`flex min-h-full flex-col rounded-md ${PAGE_MARGIN_CLASS}`}
+      className={`flex min-h-full grow flex-col ${PAGE_MARGIN_CLASS}`}
       style={{ ...pageMarginStyle(margins), backgroundColor: backgroundColor ?? undefined }}
     >
       {rows.length === 0 ? (

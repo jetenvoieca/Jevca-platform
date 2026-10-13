@@ -26,7 +26,9 @@ export default function PublishedSiteView({
 
   return (
     <SnapshotSiteData siteId={siteId} siteKey={siteKey} snapshot={snapshot}>
-      <main className={isCanvas ? "" : "min-h-[100dvh]"}>
+      {/* A flex column so the page's background fills the whole window,
+          however short the page (2026-10-13 fix). */}
+      <main className={isCanvas ? "" : "flex min-h-[100dvh] flex-col"}>
         <PagePreview
           key={page.id}
           pageId={page.id}
