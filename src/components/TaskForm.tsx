@@ -4,6 +4,7 @@ import { useState, type ReactNode } from "react";
 import type { TaskInput } from "@/lib/actions/tasks";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 import LinkifiedText from "@/components/LinkifiedText";
+import { formatDate } from "@/lib/formatDate";
 
 // The task form shown in the Inbox's modal (2026-09-19, CRM Phase 2) —
 // purely presentational: the parent (AdminInboxPanel) owns the form state
@@ -31,8 +32,16 @@ import LinkifiedText from "@/components/LinkifiedText";
 //
 // Files (2026-10-11): the task's Files section (`files`, see
 // TaskFilesPanel) sits under the description.
+//
+// Insights (2026-10-13, direct request): the same form shows an Insight
+// (`dateAdded` set — the day Keep this was pressed). An insight has Date
+// added (read only) and Category in the title row — no Target date or
+// Owner — and its buttons are Email, Activity and Make task (back to the
+// Task list). A task's buttons are Email, Activity, Keep this (makes it an
+// Insight) and Completed.
 export default function TaskForm({
   form,
+  dateAdded,
   categories,
   artistOptions,
   saving,
@@ -43,9 +52,12 @@ export default function TaskForm({
   onOpenEmail,
   onEmail,
   onActivity,
+  onKeep,
+  onMakeTask,
   onComplete,
 }: {
   form: TaskInput;
+  dateAdded: string | null; // "YYYY-MM-DD" — set for an Insight
   categories: string[];
   artistOptions: { id: string; name: string }[];
   saving: boolean;
@@ -56,8 +68,11 @@ export default function TaskForm({
   onOpenEmail: (() => void) | null;
   onEmail: () => void;
   onActivity: () => void;
+  onKeep: () => void;
+  onMakeTask: () => void;
   onComplete: () => void;
 }) {
+  const isInsight = dateAdded !== null;
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const [editingDescription, setEditingDescription] = useState(!form.description.trim());
   // One height for all three, and min-w-0 so none can push past its
@@ -74,22 +89,31 @@ export default function TaskForm({
 
   return (
     <div className="mx-auto max-w-xl space-y-3">
-      {/* Title, with Target date, Category and Owner beside it (under it on
-          a phone). */}
+      {/* Title, with Target date (an insight: Date added), Category and
+          Owner (not on an insight) beside it — under it on a phone. */}
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:gap-3">
         <p className="shrink-0 pb-1 text-xs font-semibold uppercase tracking-wide text-neutral-500 sm:w-24">
-          {form.id ? "Edit task" : "New task"}
+          {isInsight ? "Insight" : form.id ? "Edit task" : "New task"}
         </p>
         <div className="grid flex-1 grid-cols-[minmax(0,8rem)_minmax(0,1fr)] gap-2 sm:grid-cols-[minmax(0,8rem)_minmax(0,8rem)_minmax(0,1fr)]">
-          <div>
-            <label className={smallLabelCls}>Target date</label>
-            <input
-              type="date"
-              value={form.targetDate}
-              onChange={(e) => onChange({ targetDate: e.target.value })}
-              className={dateInputCls}
-            />
-          </div>
+          {dateAdded !== null ? (
+            <div>
+              <label className={smallLabelCls}>Date added</label>
+              <p className={`${smallInputCls} flex items-center bg-neutral-50 text-neutral-600`}>
+                {formatDate(dateAdded)}
+              </p>
+            </div>
+          ) : (
+            <div>
+              <label className={smallLabelCls}>Target date</label>
+              <input
+                type="date"
+                value={form.targetDate}
+                onChange={(e) => onChange({ targetDate: e.target.value })}
+                className={dateInputCls}
+              />
+            </div>
+          )}
           <div>
             <label className={smallLabelCls}>Category</label>
             <select
@@ -105,21 +129,23 @@ export default function TaskForm({
               ))}
             </select>
           </div>
-          <div className="col-span-2 sm:col-span-1">
-            <label className={smallLabelCls}>Owner</label>
-            <select
-              value={form.artistId}
-              onChange={(e) => onChange({ artistId: e.target.value })}
-              className={smallInputCls}
-            >
-              <option value="">General (no owner)</option>
-              {artistOptions.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-            </select>
-          </div>
+          {!isInsight && (
+            <div className="col-span-2 sm:col-span-1">
+              <label className={smallLabelCls}>Owner</label>
+              <select
+                value={form.artistId}
+                onChange={(e) => onChange({ artistId: e.target.value })}
+                className={smallInputCls}
+              >
+                <option value="">General (no owner)</option>
+                {artistOptions.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -127,7 +153,7 @@ export default function TaskForm({
         type="text"
         value={form.name}
         onChange={(e) => onChange({ name: e.target.value })}
-        placeholder="Task name"
+        placeholder={isInsight ? "Insight name" : "Task name"}
         className={inputCls}
       />
 
@@ -137,7 +163,7 @@ export default function TaskForm({
           onChange={(e) => onChange({ description: e.target.value })}
           onBlur={() => setEditingDescription(!form.description.trim())}
           autoFocus={!!form.description.trim()}
-          placeholder="Task description"
+          placeholder={isInsight ? "Insight description" : "Task description"}
           rows={8}
           className={inputCls}
         />
@@ -181,9 +207,20 @@ export default function TaskForm({
             <ActionButton onClick={onActivity} disabled={saving}>
               Activity
             </ActionButton>
-            <ActionButton onClick={onComplete} disabled={saving}>
-              Completed
-            </ActionButton>
+            {isInsight ? (
+              <ActionButton onClick={onMakeTask} disabled={saving}>
+                Make task
+              </ActionButton>
+            ) : (
+              <>
+                <ActionButton onClick={onKeep} disabled={saving}>
+                  Keep this
+                </ActionButton>
+                <ActionButton onClick={onComplete} disabled={saving}>
+                  Completed
+                </ActionButton>
+              </>
+            )}
           </div>
         </ActionPanel>
       </div>

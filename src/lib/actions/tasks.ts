@@ -21,6 +21,12 @@ import { parisToday, parisWeekStart } from "@/lib/parisTime";
 // Paris time — see Task.todayOn and setTaskToday. This week (2026-10-10)
 // works the same way, in a second panel under it, until midnight on
 // Sunday — see Task.weekOf and setTaskThisWeek.
+//
+// Insights (2026-10-13, direct request): "Keep this" turns a task into an
+// Insight — the same record, with its files and Activity, kept for its
+// information in the Inbox's Insight pill rather than cluttering the Task
+// list. See Task.keptOn, keepTask and makeTaskFromInsight. Every list and
+// Today / This week action here leaves insights out.
 
 export type TaskItem = {
   id: string;
@@ -35,6 +41,7 @@ export type TaskItem = {
   todayOn: string | null; // "YYYY-MM-DD", Paris — in the Today panel only while it's today
   weekOf: string | null; // "YYYY-MM-DD", a Monday — in the This week panel only during that week
   gmailThreadId: string | null; // the Personal (Gmail) conversation it was made from
+  keptOn: string | null; // "YYYY-MM-DD", Paris — set = an Insight (its Date added)
 };
 
 // What the task form submits — every field a plain string (empty string
@@ -63,6 +70,7 @@ function toTaskItem(r: {
   todayOn: Date | null;
   weekOf: Date | null;
   gmailThreadId: string | null;
+  keptOn: Date | null;
   artist: { name: string } | null;
 }): TaskItem {
   return {
@@ -78,6 +86,7 @@ function toTaskItem(r: {
     todayOn: r.todayOn ? r.todayOn.toISOString().slice(0, 10) : null,
     weekOf: r.weekOf ? r.weekOf.toISOString().slice(0, 10) : null,
     gmailThreadId: r.gmailThreadId,
+    keptOn: r.keptOn ? r.keptOn.toISOString().slice(0, 10) : null,
   };
 }
 
@@ -85,7 +94,7 @@ function toTaskItem(r: {
 // oldest first.
 export async function getOpenTasks(): Promise<TaskItem[]> {
   const rows = await db.task.findMany({
-    where: { completedAt: null },
+    where: { completedAt: null, keptOn: null },
     orderBy: [{ targetDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
     take: 200,
     include: { artist: { select: { name: true } } },
@@ -98,9 +107,20 @@ export async function getOpenTasks(): Promise<TaskItem[]> {
 // list.
 export async function getCompletedTasks(): Promise<TaskItem[]> {
   const rows = await db.task.findMany({
-    where: { completedAt: { not: null } },
+    where: { completedAt: { not: null }, keptOn: null },
     orderBy: { completedAt: "desc" },
     take: 200,
+    include: { artist: { select: { name: true } } },
+  });
+  return rows.map(toTaskItem);
+}
+
+// Insights, newest added first — the Insight pill's list.
+export async function getInsights(): Promise<TaskItem[]> {
+  const rows = await db.task.findMany({
+    where: { keptOn: { not: null } },
+    orderBy: [{ keptOn: "desc" }, { updatedAt: "desc" }],
+    take: 500,
     include: { artist: { select: { name: true } } },
   });
   return rows.map(toTaskItem);
@@ -148,7 +168,7 @@ export async function saveTask(
 // with today = false.
 export async function setTaskToday(id: string, today: boolean): Promise<void> {
   await db.task.updateMany({
-    where: { id, completedAt: null },
+    where: { id, completedAt: null, keptOn: null },
     data: { todayOn: today ? new Date(`${parisToday()}T00:00:00.000Z`) : null },
   });
   revalidatePath("/accounts/inbox");
@@ -159,7 +179,7 @@ export async function setTaskToday(id: string, today: boolean): Promise<void> {
 // unfinished Today task shows in This week (see AdminInboxPanel).
 export async function setTaskThisWeek(id: string, thisWeek: boolean): Promise<void> {
   await db.task.updateMany({
-    where: { id, completedAt: null },
+    where: { id, completedAt: null, keptOn: null },
     data: thisWeek
       ? { weekOf: new Date(`${parisWeekStart(parisToday())}T00:00:00.000Z`) }
       : { weekOf: null, todayOn: null },
@@ -171,9 +191,34 @@ export async function setTaskThisWeek(id: string, thisWeek: boolean): Promise<vo
 // off Today's panel and into This week's, in one step.
 export async function moveTaskToThisWeek(id: string): Promise<void> {
   await db.task.updateMany({
-    where: { id, completedAt: null },
+    where: { id, completedAt: null, keptOn: null },
     data: { todayOn: null, weekOf: new Date(`${parisWeekStart(parisToday())}T00:00:00.000Z`) },
   });
+  revalidatePath("/accounts/inbox");
+}
+
+// Keep this (2026-10-13): makes a task, open or completed, an Insight
+// dated today (Paris). An insight has no owner, target date, Today / This
+// week or completion, so those are cleared; its name, description,
+// category, email address, files and Activity stay.
+export async function keepTask(id: string): Promise<void> {
+  await db.task.updateMany({
+    where: { id, keptOn: null },
+    data: {
+      keptOn: new Date(`${parisToday()}T00:00:00.000Z`),
+      artistId: null,
+      targetDate: null,
+      todayOn: null,
+      weekOf: null,
+      completedAt: null,
+    },
+  });
+  revalidatePath("/accounts/inbox");
+}
+
+// Make task (2026-10-13): puts an Insight back on the open Task list.
+export async function makeTaskFromInsight(id: string): Promise<void> {
+  await db.task.updateMany({ where: { id, keptOn: { not: null } }, data: { keptOn: null } });
   revalidatePath("/accounts/inbox");
 }
 
@@ -186,8 +231,8 @@ export async function reopenTask(id: string): Promise<void> {
 }
 
 // Deletes a task, open or completed — from the open Task list (2026-09-27,
-// direct request: "need to be able to delete, not just say done") or the
-// Done list.
+// direct request: "need to be able to delete, not just say done"), the
+// Done list or the Insight list.
 // Its files (2026-10-11) are removed from storage first; their rows go
 // with the task.
 export async function deleteTask(id: string): Promise<void> {
@@ -376,7 +421,8 @@ export async function createTaskFromGmail(input: {
   return { ok: true, task: toTaskItem(task) };
 }
 
-// One task, open or completed — for an email's Open task (2026-10-11).
+// One task, open, completed or an Insight — for an email's Open task
+// (2026-10-11).
 export async function getTask(id: string): Promise<TaskItem | null> {
   const row = await db.task.findUnique({ where: { id }, include: { artist: { select: { name: true } } } });
   return row ? toTaskItem(row) : null;

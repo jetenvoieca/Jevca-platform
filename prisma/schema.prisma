@@ -964,6 +964,11 @@ model Task {
   // (2026-10-10) — the task's Open email reopens it there. Gmail's own
   // conversation id; the email itself stays in Gmail.
   gmailThreadId String? @unique
+  // The Paris date "Keep this" was pressed (2026-10-13, direct request):
+  // set = the task is an Insight — kept for its information, shown in the
+  // Inbox's Insight pill instead of the Task list, with no owner, target
+  // date, Today / This week or completion. "Make task" clears it again.
+  keptOn      DateTime? @db.Date
 
   completedAt DateTime?
 
@@ -980,6 +985,7 @@ model Task {
 
   @@index([artistId])
   @@index([completedAt])
+  @@index([keptOn])
 }
 
 // A file or image added to a task (2026-10-11, direct request) — shown

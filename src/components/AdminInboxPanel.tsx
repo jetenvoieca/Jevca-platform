@@ -23,6 +23,8 @@ import {
   setTaskToday,
   setTaskThisWeek,
   moveTaskToThisWeek,
+  keepTask,
+  makeTaskFromInsight,
   createTaskFromEmail,
   createTaskFromGmail,
   getTask,
@@ -76,8 +78,9 @@ import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, Reinst
 // always have room to breathe and the screen works on an iPad.
 //
 // A pill toggle in a band across the top (Art | Business | Personal |
-// Alert | Task, each with its count — unread emails, open alerts, open
-// tasks; layout 2026-10-10, direct request — see mock-up) switches the
+// Alert | Task | Insight, each with its count — unread emails, open
+// alerts, open tasks, insights; layout 2026-10-10, direct request — see
+// mock-up) switches the
 // whole screen between its modes, and both columns follow it. The New
 // message / New Task button sits on the Inbox heading's line:
 //   - Art and Business (2026-09-27, replacing the single Inbox mode) are
@@ -94,6 +97,13 @@ import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, Reinst
 //     as usual too, marked Task. There's no Save button (2026-09-28,
 //     direct request): a task saves itself when it's closed, before Email
 //     or Activity opens its window, and on Completed.
+//   - Insight mode (2026-10-13, direct request): tasks kept for their
+//     information (Keep this on a task — see keepTask), so they stop
+//     cluttering the Task list. One full-width list, newest added first,
+//     no Processed column and no New button (an insight is only ever made
+//     from a task). An insight opens in the same task form (see TaskForm),
+//     with Date added instead of Target date and Owner, and Make task to
+//     put it back on the Task list.
 //   - Alert mode (CRM Phase 3): left = open alerts (this replaced the
 //     old standalone Alerts page), modal = the selected alert, right =
 //     processed alerts — the ones dealt with (2026-09-28, direct request;
@@ -112,7 +122,7 @@ import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, Reinst
 //
 // The left column has one filter, beside the Inbox heading, depending on
 // the mode — Inbox or Archived in the mail modes (2026-09-27), task
-// category or alert type in the other two (2026-09-20). The type filter
+// category (Task and Insight) or alert type (2026-09-20). The type filter
 // is plain client state applied to the lists already loaded;
 // Inbox/Archived lives in the URL and is applied on the server. (The
 // artist filters, left and right, were removed 2026-10-10, direct
@@ -172,7 +182,7 @@ import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, Reinst
 // Make task (2026-09-28, direct request) — on a received message, in the
 // list's swipe/hover actions and in the opened message: makes a task from
 // it (see createTaskFromEmail) and switches straight to Task mode with the
-// new task open. A message already made into a task offers Remove task
+// new task open (Insight mode, if it has since been kept as one). A message already made into a task offers Remove task
 // beside it (2026-10-11, direct request — deletes the task, after a
 // confirm; the email stays). It offers Open task
 // instead.
@@ -221,7 +231,7 @@ const KIND_LABELS: Record<string, string> = {
 const DELETE_MESSAGE_CONFIRM =
   "Delete this message? Any replies to it will stay in the Sent list, just no longer linked to it. This can't be undone.";
 
-type Mode = "art" | "business" | "task" | "alert" | "personal";
+type Mode = "art" | "business" | "task" | "insight" | "alert" | "personal";
 
 const MODES: { mode: Mode; label: string }[] = [
   { mode: "art", label: "Art" },
@@ -229,6 +239,7 @@ const MODES: { mode: Mode; label: string }[] = [
   { mode: "personal", label: "Personal" },
   { mode: "alert", label: "Alert" },
   { mode: "task", label: "Task" },
+  { mode: "insight", label: "Insight" },
 ];
 
 const EMPTY_TASK_FORM: TaskInput = {
@@ -240,7 +251,7 @@ const EMPTY_TASK_FORM: TaskInput = {
   artistId: "",
 };
 
-// The mailbox a mail mode shows; null for Task and Alert.
+// The mailbox a mail mode shows; null for Task, Insight and Alert.
 function mailboxOf(mode: Mode): Mailbox | null {
   if (mode === "art") return "ART";
   if (mode === "business") return "BUSINESS";
@@ -307,6 +318,7 @@ export default function AdminInboxPanel({
   initialList,
   showArchived,
   initialTasks,
+  initialInsights,
   initialToday,
   initialAlerts,
   selectedAlertId,
@@ -325,6 +337,7 @@ export default function AdminInboxPanel({
   initialList: InboxSummaryItem[];
   showArchived: boolean;
   initialTasks: TaskItem[];
+  initialInsights: TaskItem[];
   initialToday: string; // "YYYY-MM-DD", Paris
   initialAlerts: AlertItem[];
   selectedAlertId: string | null;
@@ -358,9 +371,11 @@ export default function AdminInboxPanel({
   // Just after switching between Art and Business, until the server has
   // sent the other mailbox's list.
   const listLoading = isMailMode && modeMailbox !== mailbox;
+  // Task and Insight share the task form (an insight is a kept task).
+  const isTaskMode = mode === "task" || mode === "insight";
 
-  // The left column's type filter: a task category in Task mode, an alert
-  // type in Alert mode. "" = all. Cleared whenever the mode changes.
+  // The left column's type filter: a task category in Task and Insight
+  // mode, an alert type in Alert mode. "" = all. Cleared whenever the mode changes.
   const [typeFilter, setTypeFilter] = useState("");
 
   // Right-hand column: Sent list (mail modes), Done list (Task mode) or
@@ -431,6 +446,8 @@ export default function AdminInboxPanel({
   // The Personal (Gmail) conversation the open task was made from, if any
   // — for its Open email — and the one Personal opens on arrival.
   const [taskGmailThreadId, setTaskGmailThreadId] = useState<string | null>(null);
+  // The open form's Date added ("YYYY-MM-DD") when it's an Insight, else null.
+  const [taskKeptOn, setTaskKeptOn] = useState<string | null>(null);
   const [personalThreadId, setPersonalThreadId] = useState<string | null>(null);
   const [taskDirty, setTaskDirty] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
@@ -480,9 +497,12 @@ export default function AdminInboxPanel({
       (!!t.todayOn && t.todayOn < today && parisWeekStart(parisNextDay(t.todayOn)) === weekStart));
   const weekTasks = visibleTasks.filter(inThisWeek);
   const otherTasks = visibleTasks.filter((t) => t.todayOn !== today && !inThisWeek(t));
+  const visibleInsights = typeFilter
+    ? initialInsights.filter((t) => t.category === typeFilter)
+    : initialInsights;
   const visibleAlerts = typeFilter ? initialAlerts.filter((a) => a.type === typeFilter) : initialAlerts;
   const typeOptions =
-    mode === "task"
+    isTaskMode
       ? taskCategories.map((c) => ({ value: c, label: c }))
       : Object.entries(ALERT_TYPE_LABELS).map(([value, label]) => ({ value, label }));
 
@@ -492,7 +512,7 @@ export default function AdminInboxPanel({
   const modalOpen =
     mode === "alert"
       ? !!(clientPanel || selectedAlert)
-      : mode === "task"
+      : isTaskMode
         ? taskForm !== null
         : composing || selectedSent !== null || openId !== null;
   const hasUnsavedInput =
@@ -574,7 +594,7 @@ export default function AdminInboxPanel({
   // first (see closeTask); otherwise it checks first if there's unsent
   // typing that would be lost.
   const handleBackdropClick = () => {
-    if (mode === "task") {
+    if (isTaskMode) {
       closeTask();
       return;
     }
@@ -654,6 +674,15 @@ export default function AdminInboxPanel({
     runRowAction(id, deleteInboundEmail);
   };
 
+  // Switches to Task mode — or Insight mode, for one kept as an insight —
+  // with the task open.
+  const showTask = (t: TaskItem) => {
+    setMode(t.keptOn ? "insight" : "task");
+    setTypeFilter("");
+    resetModal();
+    openTask(t);
+  };
+
   // Makes a task from a received message (or finds the one already made)
   // and switches to Task mode with it open.
   const handleMakeTask = (id: string) => {
@@ -665,11 +694,8 @@ export default function AdminInboxPanel({
         alert(res.error);
         return;
       }
-      setMode("task");
-      setTypeFilter("");
       setSentList(null);
-      resetModal();
-      openTask(res.task);
+      showTask(res.task);
       router.refresh();
     });
   };
@@ -689,16 +715,14 @@ export default function AdminInboxPanel({
         alert(res.error);
         return;
       }
-      setMode("task");
-      setTypeFilter("");
-      resetModal();
-      openTask(res.task);
+      showTask(res.task);
       router.refresh();
     });
   };
 
   // Open task / Remove task on an email that already has one (2026-10-11):
-  // opens that task in the Task tab, or deletes it (the email stays).
+  // opens that task in the Task (or Insight) tab, or deletes it (the email
+  // stays).
   const handleOpenTaskById = (taskId: string) => {
     startTransition(async () => {
       const task = await getTask(taskId);
@@ -707,10 +731,7 @@ export default function AdminInboxPanel({
         router.refresh();
         return;
       }
-      setMode("task");
-      setTypeFilter("");
-      resetModal();
-      openTask(task);
+      showTask(task);
     });
   };
 
@@ -804,6 +825,40 @@ export default function AdminInboxPanel({
       </li>
     );
   };
+
+  // Deletes an insight straight from its list (swipe/hover). Returns false
+  // if the confirm was cancelled, so a full swipe puts the row back.
+  const handleDeleteInsight = (id: string): boolean => {
+    if (!confirm("Delete this insight? This can't be undone.")) return false;
+    runRowAction(id, deleteTask);
+    return true;
+  };
+
+  // One row of the Insight list: name and Date added, then category.
+  const renderInsight = (t: TaskItem) => (
+    <li key={t.id}>
+      <SwipeRow
+        open={swipedId === t.id}
+        onOpenChange={(open) => setSwipedId(open ? t.id : null)}
+        busy={isPending && rowBusyId === t.id}
+        actions={[{ label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteInsight(t.id) }]}
+      >
+        <button
+          type="button"
+          onClick={() => openTask(t)}
+          className={`block w-full px-3 py-2.5 text-left ${
+            taskForm?.id === t.id ? "bg-neutral-100" : "hover:bg-neutral-50"
+          }`}
+        >
+          <div className={itemHeadCls}>
+            <span className="truncate text-sm font-semibold text-neutral-900">{capitaliseParagraphs(t.name)}</span>
+            <span className="shrink-0 text-[10px] text-neutral-400">{t.keptOn ? formatDate(t.keptOn) : ""}</span>
+          </div>
+          <p className="truncate text-xs text-neutral-500">{t.category || "No category"}</p>
+        </button>
+      </SwipeRow>
+    </li>
+  );
 
 
   const handleSendReply = () => {
@@ -990,6 +1045,7 @@ export default function AdminInboxPanel({
     });
     setTaskEmail(t.email ?? "");
     setTaskGmailThreadId(t.gmailThreadId);
+    setTaskKeptOn(t.keptOn);
     setTaskFormKey((k) => k + 1);
     setTaskDirty(false);
     setTaskError(null);
@@ -1000,6 +1056,7 @@ export default function AdminInboxPanel({
     setTaskForm(EMPTY_TASK_FORM);
     setTaskEmail("");
     setTaskGmailThreadId(null);
+    setTaskKeptOn(null);
     setTaskFormKey((k) => k + 1);
     setTaskDirty(false);
     setTaskError(null);
@@ -1083,6 +1140,30 @@ export default function AdminInboxPanel({
     });
   };
 
+  // Keep this: saves the task, then makes it an Insight — it leaves the
+  // Task list (or Done) for the Insight list.
+  const handleTaskKeep = () => {
+    startTransition(async () => {
+      const id = await persistTask(false);
+      if (!id) return;
+      await keepTask(id);
+      closeModal();
+      refreshRight();
+      router.refresh();
+    });
+  };
+
+  // Make task: saves the insight, then puts it back on the Task list.
+  const handleInsightMakeTask = () => {
+    startTransition(async () => {
+      const id = await persistTask(false);
+      if (!id) return;
+      await makeTaskFromInsight(id);
+      closeModal();
+      router.refresh();
+    });
+  };
+
   // The forward has gone — close its window and show it in Sent.
   const handleForwarded = () => {
     setForwarding(null);
@@ -1149,7 +1230,7 @@ export default function AdminInboxPanel({
   };
 
   // Each pill's count: unread emails (Art, Business, Personal), open
-  // alerts and open tasks. Nothing shows for zero, or while Personal's
+  // alerts, open tasks and insights. Nothing shows for zero, or while Personal's
   // is unknown.
   const modeCounts: Record<Mode, number | null> = {
     art: unreadCounts.ART,
@@ -1157,6 +1238,7 @@ export default function AdminInboxPanel({
     personal: personalUnread,
     alert: initialAlerts.length,
     task: initialTasks.length,
+    insight: initialInsights.length,
   };
 
   const modeBar = (
@@ -1234,7 +1316,7 @@ export default function AdminInboxPanel({
               ))}
             </select>
           )}
-          {mode !== "alert" && (
+          {(isMailMode || mode === "task") && (
             <button
               type="button"
               onClick={isMailMode ? startCompose : startTask}
@@ -1326,6 +1408,14 @@ export default function AdminInboxPanel({
                 ))}
               </ul>
             )
+          ) : mode === "insight" ? (
+            visibleInsights.length === 0 ? (
+              <p className="p-4 text-center text-sm text-neutral-400">
+                {initialInsights.length === 0 ? "No insights yet." : "Nothing matches this filter."}
+              </p>
+            ) : (
+              <ul className="divide-y divide-neutral-100">{visibleInsights.map(renderInsight)}</ul>
+            )
           ) : mode === "task" ? (
             visibleTasks.length === 0 ? (
               <p className="p-4 text-center text-sm text-neutral-400">
@@ -1402,7 +1492,9 @@ export default function AdminInboxPanel({
         </div>
       </div>
 
-      {/* ---- RIGHT: Processed (Sent, Done or processed alerts) ---- */}
+      {/* ---- RIGHT: Processed (Sent, Done or processed alerts) — none for
+          Insight, whose list takes the full width ---- */}
+      {mode !== "insight" && (
       <div className="flex min-w-0 flex-1 flex-col">
         <div className={headRowCls}>
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
@@ -1525,6 +1617,7 @@ export default function AdminInboxPanel({
           )}
         </div>
       </div>
+      )}
       </div>
       )}
 
@@ -1572,8 +1665,8 @@ export default function AdminInboxPanel({
             <div className="flex shrink-0 justify-end border-b border-neutral-100 px-4 py-2">
               <button
                 type="button"
-                onClick={mode === "task" ? closeTask : closeModal}
-                disabled={mode === "task" && isPending}
+                onClick={isTaskMode ? closeTask : closeModal}
+                disabled={isTaskMode && isPending}
                 className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
               >
                 Close
@@ -1599,11 +1692,12 @@ export default function AdminInboxPanel({
                     />
                   )
                 )
-              ) : mode === "task" ? (
+              ) : isTaskMode ? (
                 taskForm && (
                   <TaskForm
                     key={taskFormKey}
                     form={taskForm}
+                    dateAdded={taskKeptOn}
                     categories={taskCategories}
                     artistOptions={artistOptions}
                     saving={isPending}
@@ -1627,6 +1721,8 @@ export default function AdminInboxPanel({
                     onOpenEmail={taskGmailThreadId ? handleOpenTaskEmail : null}
                     onEmail={() => openTaskPopup("email")}
                     onActivity={() => openTaskPopup("note")}
+                    onKeep={handleTaskKeep}
+                    onMakeTask={handleInsightMakeTask}
                     onComplete={handleTaskComplete}
                   />
                 )

@@ -7,7 +7,7 @@ import { getOpenAlerts } from "@/lib/alerts";
 import { parseClientAlertId } from "@/lib/clientAlertIds";
 import { getInboxList, getArtistOptions, getUnreadCounts } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
-import { getOpenTasks, getGmailTaskLinks } from "@/lib/actions/tasks";
+import { getOpenTasks, getInsights, getGmailTaskLinks } from "@/lib/actions/tasks";
 import { getGmailConnection } from "@/lib/gmail";
 import { parisToday } from "@/lib/parisTime";
 import { getPlatformTaskCategories } from "@/lib/actions/platformTaskSettings";
@@ -67,6 +67,7 @@ export default async function InboxPage({
     composeRecipients,
     mailboxAddresses,
     tasks,
+    insights,
     taskCategories,
     recentSites,
     gmail,
@@ -79,6 +80,7 @@ export default async function InboxPage({
     getComposeRecipients(),
     getMailboxAddresses(),
     getOpenTasks(),
+    getInsights(),
     getPlatformTaskCategories(),
     getRecentSites(),
     getGmailConnection(),
@@ -104,6 +106,7 @@ export default async function InboxPage({
           initialList={list}
           showArchived={showArchived}
           initialTasks={tasks}
+          initialInsights={insights}
           initialToday={parisToday()}
           initialAlerts={alerts}
           selectedAlertId={alertId || null}
