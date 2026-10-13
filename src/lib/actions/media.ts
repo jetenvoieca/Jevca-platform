@@ -182,6 +182,9 @@ export async function listImages(artistId: string, q?: string) {
 export type PickerArtwork = {
   id: string;
   catalogueName: string;
+  // Shown under the name, as in the Artwork Catalogue — several works can
+  // share a name but differ in type.
+  type: string | null;
   imageUrl: string | null;
   presentationPrice: string | null;
   availability: string;
@@ -208,6 +211,7 @@ export async function getArtworksForArtist(
       select: {
         id: true,
         catalogueName: true,
+        type: true,
         presentationPrice: true,
         availability: true,
         mainImage: { select: { url: true, thumbnailKey: true } },
