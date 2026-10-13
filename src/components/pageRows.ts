@@ -52,8 +52,10 @@ export function rowBlockStyle(width: number): CSSProperties {
 
 // A component with its own width on a phone (a Logo, 2026-10-13): placed
 // by its row's alignment and `phoneWidth` % of the screen on a phone,
-// full width of its component from md up. Without a `device` the
-// screen's width decides.
+// full width of its component from md up — and never wider than
+// `maxWidth` pixels, its size on the page as designed, so it doesn't
+// grow on a tablet or a wide screen. Without a `device` the screen's
+// width decides.
 const PHONE_JUSTIFY: Record<HorizontalAlign, string> = {
   left: "justify-start",
   center: "justify-center",
@@ -70,6 +72,6 @@ export function phoneSizedItemClass(device?: PreviewDevice): string {
   return "w-[var(--phone-width)] md:w-full";
 }
 
-export function phoneSizedStyle(phoneWidth: number): CSSProperties {
-  return { "--phone-width": `${phoneWidth}%` } as CSSProperties;
+export function phoneSizedStyle(phoneWidth: number, maxWidth: number): CSSProperties {
+  return { "--phone-width": `${phoneWidth}%`, maxWidth } as CSSProperties;
 }

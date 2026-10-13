@@ -31,6 +31,7 @@ import {
 } from "@/components/pageRows";
 import CurationSectionView from "@/components/CurationSectionView";
 import SiteFooter from "@/components/SiteFooter";
+import { PAGE_DESKTOP_WIDTH } from "@/components/visualEditorParts";
 import { bodyTextCss } from "@/components/textStyleCss";
 import CurationWorkView from "@/components/CurationWorkView";
 import SignupForm from "@/components/SignupForm";
@@ -56,8 +57,9 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 //   and images removed on this page are left out, in the order chosen
 //   here (2026-10-13). A Sign-up form (2026-10-10) shows once it's set
 //   up in Arrange — see SignupForm. A Logo (2026-10-13) is the artist's
-//   Logo from Settings, as wide as the component, linking to the site's
-//   home page on the published site.
+//   Logo from Settings, as wide as the component (its phone width on a
+//   phone), never bigger than on the page as designed, linking to the
+//   site's home page on the published site.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Every page but a Canvas ends with the site's footer (2026-10-13) — see
 // SiteFooter.
@@ -271,7 +273,10 @@ function BlockBuildPage({
         <div className={phoneSizedClass(horizontal)}>
           <div
             className={phoneSizedItemClass()}
-            style={phoneSizedStyle(block.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH)}
+            style={phoneSizedStyle(
+              block.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH,
+              designedWidth(block, layout.margins)
+            )}
           >
             {homeHref ? <a href={homeHref}>{logo}</a> : logo}
           </div>
@@ -357,6 +362,13 @@ function BlockBuildPage({
       }
     />
   );
+}
+
+// A component's width in pixels on the page as designed: its share of a
+// desktop page (PAGE_DESKTOP_WIDTH) inside the desktop margins.
+function designedWidth(block: LayoutBlock, margins: PageMargins): number {
+  const inner = PAGE_DESKTOP_WIDTH - 2 * margins.desktop.horizontal;
+  return Math.round((blockWidthOf(block) / 100) * inner);
 }
 
 // The page's background and margin around its rows, then the site's
