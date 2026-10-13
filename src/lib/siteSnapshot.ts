@@ -26,7 +26,8 @@ import type { SiteArtist } from "@/lib/siteArtist";
 // Description, works removed / reordered).
 // 4 (2026-10-13): the artist's Logo, for Logo components.
 // 5 (2026-10-13): the artist's Logo and footer together (`artist`).
-export const SNAPSHOT_VERSION = 5;
+// 6 (2026-10-13): the footer shows the town, not the full address.
+export const SNAPSHOT_VERSION = 6;
 
 // Where a published site's home page is (its first Live Page) — the
 // menu's first link and a Logo's link (2026-10-13). Private for now, at

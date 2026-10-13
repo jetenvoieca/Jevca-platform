@@ -5,8 +5,10 @@
 
 export type SiteFooter = {
   name: string;
-  // Street, postcode and town, country — whichever are set in Settings.
-  address: string[];
+  // Where the artist is — town, postcode and country (e.g. "Peyriac de
+  // Mer 11440 France"), never the street (Craig's choice, 2026-10-13);
+  // null if none is set in Settings.
+  town: string | null;
   // The artist's @jevca.art address (Craig's choice), so messages land in
   // the Inbox; null if they have none yet.
   email: string | null;
@@ -17,8 +19,22 @@ export type SiteArtist = {
   footer: SiteFooter;
 };
 
-// The artist's address as footer lines — shared with campaign mails'
-// footer (lib/mailAssets.ts).
+// The artist's town, postcode and country on one line, for the website
+// footer.
+export function artistTownLine(artist: {
+  postcode: string | null;
+  city: string | null;
+  country: string | null;
+}): string | null {
+  const line = [artist.city, artist.postcode, artist.country]
+    .map((part) => part?.trim())
+    .filter(Boolean)
+    .join(" ");
+  return line || null;
+}
+
+// The artist's full address as footer lines — campaign mails' footer
+// (lib/mailAssets.ts).
 export function artistAddressLines(artist: {
   addressLine1: string | null;
   postcode: string | null;
