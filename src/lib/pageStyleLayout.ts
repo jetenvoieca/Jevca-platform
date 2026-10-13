@@ -39,7 +39,8 @@ export const LAYOUT_BLOCK_TYPES = [
   { value: "slidingdoors", label: "Sliding doors" },
   { value: "signup", label: "Sign-up form" },
   // The artist's Logo from Settings (2026-10-13), as wide as the
-  // component, linking to the site's home page.
+  // component on desktop and `phoneWidth` % of the screen on a phone,
+  // linking to the site's home page.
   { value: "logo", label: "Logo" },
 ] as const;
 
@@ -123,6 +124,15 @@ export function cleanSignupLook(raw: unknown): SignupLook {
   };
 }
 
+// A Logo's width on a phone (2026-10-13, Craig's choice), as a % of the
+// screen — every other component is full width there. Set in Fine-tune.
+export const LOGO_PHONE_WIDTH_LIMITS = { min: 10, max: 100 } as const;
+export const DEFAULT_LOGO_PHONE_WIDTH = 50;
+
+export function cleanLogoPhoneWidth(raw: unknown): number {
+  return cleanNumber(raw, LOGO_PHONE_WIDTH_LIMITS, DEFAULT_LOGO_PHONE_WIDTH, 0);
+}
+
 // The text styles a Page Style holds use the site fonts.
 export type PageTextStyle = TextStyle<SiteFontId>;
 
@@ -136,12 +146,14 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 };
 
 // A Block Build component. `doors` is set on Sliding doors blocks only,
-// `signup` on Sign-up form blocks only; `textStyle` is a Header, Text or
-// Text grid component's own look.
+// `signup` on Sign-up form blocks only, `phoneWidth` on Logo blocks only;
+// `textStyle` is a Header, Byline, Text or Text grid component's own
+// look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
   StyledBlock<SiteFontId> & {
     doors?: SlidingDoorsSettings;
     signup?: SignupLook;
+    phoneWidth?: number;
   };
 
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {
@@ -243,6 +255,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "signup") {
             clean.signup = cleanSignupLook((b as Partial<LayoutBlock>).signup);
           }
+          if (clean.type === "logo") {
+            clean.phoneWidth = cleanLogoPhoneWidth((b as Partial<LayoutBlock>).phoneWidth);
+          }
           const textStyle = cleanBlockTextStyle(clean.type, (b as Partial<LayoutBlock>).textStyle, isSiteFontId);
           if (textStyle) clean.textStyle = textStyle;
           return [clean];
@@ -268,5 +283,6 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   const id = crypto.randomUUID();
   if (type === "slidingdoors") return { id, type, doors: DEFAULT_SLIDING_DOORS };
   if (type === "signup") return { id, type, signup: DEFAULT_SIGNUP_LOOK };
+  if (type === "logo") return { id, type, phoneWidth: DEFAULT_LOGO_PHONE_WIDTH };
   return { id, type };
 }

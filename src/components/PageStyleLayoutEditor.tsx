@@ -1,8 +1,11 @@
 "use client";
 
 import {
+  DEFAULT_LOGO_PHONE_WIDTH,
   LAYOUT_BLOCK_TYPES,
+  LOGO_PHONE_WIDTH_LIMITS,
   SLIDING_DOORS_LIMITS,
+  cleanLogoPhoneWidth,
   cleanSignupLook,
   cleanSlidingDoors,
   newLayoutBlock,
@@ -69,6 +72,15 @@ export default function PageStyleLayoutEditor({
         }
         return null;
       }}
+      phoneWidth={(b, onBlock) =>
+        b.type === "logo"
+          ? {
+              value: b.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH,
+              limits: LOGO_PHONE_WIDTH_LIMITS,
+              onCommit: (value) => onBlock({ ...b, phoneWidth: cleanLogoPhoneWidth(value) }),
+            }
+          : null
+      }
       textStyleFonts={SITE_TEXT_STYLE_FONTS}
       desktopWidth={PAGE_DESKTOP_WIDTH}
       backgroundColor={layout.backgroundColor}

@@ -49,3 +49,27 @@ export function rowBlockClass(device?: PreviewDevice): string {
 export function rowBlockStyle(width: number): CSSProperties {
   return { "--block-width": `${width}%` } as CSSProperties;
 }
+
+// A component with its own width on a phone (a Logo, 2026-10-13): placed
+// by its row's alignment and `phoneWidth` % of the screen on a phone,
+// full width of its component from md up. Without a `device` the
+// screen's width decides.
+const PHONE_JUSTIFY: Record<HorizontalAlign, string> = {
+  left: "justify-start",
+  center: "justify-center",
+  right: "justify-end",
+};
+
+export function phoneSizedClass(horizontal: HorizontalAlign): string {
+  return `flex ${PHONE_JUSTIFY[horizontal]}`;
+}
+
+export function phoneSizedItemClass(device?: PreviewDevice): string {
+  if (device === "phone") return "w-[var(--phone-width)]";
+  if (device === "desktop") return "w-full";
+  return "w-[var(--phone-width)] md:w-full";
+}
+
+export function phoneSizedStyle(phoneWidth: number): CSSProperties {
+  return { "--phone-width": `${phoneWidth}%` } as CSSProperties;
+}

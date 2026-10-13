@@ -7,7 +7,7 @@ import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections
 import { arrangeItems, contentFits, contentKindOf, type ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
-import type { LayoutBlock } from "@/lib/pageStyleLayout";
+import { DEFAULT_LOGO_PHONE_WIDTH, type LayoutBlock } from "@/lib/pageStyleLayout";
 import {
   blockWidthOf,
   groupBlocksByRow,
@@ -21,7 +21,14 @@ import {
 import { isTextComponent, mergeTextStyle } from "@/lib/textStyle";
 import { useSiteData } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
-import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
+import {
+  phoneSizedClass,
+  phoneSizedItemClass,
+  phoneSizedStyle,
+  rowBlockClass,
+  rowBlockStyle,
+  rowClass,
+} from "@/components/pageRows";
 import CurationSectionView from "@/components/CurationSectionView";
 import SiteFooter from "@/components/SiteFooter";
 import { bodyTextCss } from "@/components/textStyleCss";
@@ -256,11 +263,20 @@ function BlockBuildPage({
     return null;
   };
 
-  const fill = (block: LayoutBlock): ReactNode => {
+  const fill = (block: LayoutBlock, horizontal: HorizontalAlign): ReactNode => {
     if (block.type === "logo") {
       if (!artist?.logoUrl) return null;
       const logo = <img src={artist.logoUrl} alt="" className="block w-full" />;
-      return homeHref ? <a href={homeHref}>{logo}</a> : logo;
+      return (
+        <div className={phoneSizedClass(horizontal)}>
+          <div
+            className={phoneSizedItemClass()}
+            style={phoneSizedStyle(block.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH)}
+          >
+            {homeHref ? <a href={homeHref}>{logo}</a> : logo}
+          </div>
+        </div>
+      );
     }
     if (block.type === "signup") {
       const form = formByBlock.get(block.id);
@@ -313,10 +329,15 @@ function BlockBuildPage({
 
   const rows: Row[] = groupBlocksByRow(layout.blocks).map((row) => {
     const key = rowKey(row);
+    const settings = rowSettingsOf(layout, key);
     return {
       key,
-      cells: row.map((b) => ({ id: b.id, content: fill(b), width: blockWidthOf(b) })),
-      ...rowSettingsOf(layout, key),
+      cells: row.map((b) => ({
+        id: b.id,
+        content: fill(b, settings.horizontal),
+        width: blockWidthOf(b),
+      })),
+      ...settings,
     };
   });
 

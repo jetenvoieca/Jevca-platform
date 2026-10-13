@@ -105,6 +105,14 @@ export type TextStyleFonts = {
 
 const NO_TEXT_STYLE: TextStyle = { font: null, size: null, look: null, colour: null };
 
+// A component's own width on a phone, in Fine-tune (a Page Style's Logo,
+// 2026-10-13) — every other component is full width there.
+export type BlockPhoneWidth = {
+  value: number;
+  limits: { min: number; max: number };
+  onCommit: (value: number) => void;
+};
+
 // An on / off switch on a component's bar, after Remove (e.g. a mail
 // gallery's Regularise, 2026-10-09): shown highlighted while on.
 export type BlockToggle = { label: string; on: boolean; onToggle: () => void };
@@ -123,6 +131,7 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
   renderBlock,
   settingsPanel,
   blockToggle,
+  phoneWidth,
   textStyleFonts,
   desktopWidth,
   backgroundColor,
@@ -141,6 +150,8 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
   settingsPanel?: (block: B, onBlock: (block: B) => void) => BlockSettingsPanel | null;
   // A component's on / off switch, if it has one.
   blockToggle?: (block: B) => BlockToggle | null;
+  // A component's own width on a phone, if it has one; `onBlock` saves it.
+  phoneWidth?: (block: B, onBlock: (block: B) => void) => BlockPhoneWidth | null;
   // Header, Text and Text grid components get a Text style button for
   // their own look, in these fonts.
   textStyleFonts?: TextStyleFonts;
@@ -320,6 +331,9 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
                             onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
                           )}
                           toggle={blockToggle?.(b)}
+                          phoneWidth={phoneWidth?.(b, (next) =>
+                            onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
+                          )}
                           textStyle={
                             textStyleFonts && isTextComponent(b.type)
                               ? {
@@ -459,6 +473,7 @@ function BlockItem<B extends RowBlock>({
   dropSide,
   ownSettings,
   toggle,
+  phoneWidth,
   textStyle,
   onSelect,
   onWidth,
@@ -479,6 +494,7 @@ function BlockItem<B extends RowBlock>({
   dropSide: "left" | "right" | null;
   ownSettings: BlockSettingsPanel | null | undefined;
   toggle: BlockToggle | null | undefined;
+  phoneWidth: BlockPhoneWidth | null | undefined;
   textStyle: BlockTextStyle | null;
   onSelect: () => void;
   onWidth: (width: number) => void;
@@ -590,7 +606,19 @@ function BlockItem<B extends RowBlock>({
                 wide
               />
             )}
-            <p className="text-xs text-neutral-400">On a phone every component is full width.</p>
+            {phoneWidth ? (
+              <NumberField
+                label="Width, phone"
+                unit="%"
+                step={1}
+                value={phoneWidth.value}
+                limits={phoneWidth.limits}
+                onCommit={phoneWidth.onCommit}
+                wide
+              />
+            ) : (
+              <p className="text-xs text-neutral-400">On a phone every component is full width.</p>
+            )}
           </PanelBox>
         ) : panel === "text" && textStyle ? (
           <PanelBox title="Text style" onClose={() => setPanel(null)}>
