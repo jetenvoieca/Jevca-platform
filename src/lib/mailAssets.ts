@@ -50,6 +50,16 @@ function fileUrl(key: string, baseUrl: string): string {
   return publicMediaUrl(key) ?? absolute(`/api/media/${key}`, baseUrl);
 }
 
+// The artist's Logo and Signature are saved as the app's own address
+// (/api/media/<key>); in a mail they're loaded straight from storage,
+// like every other picture (2026-10-13 — through news.jevca.art they
+// didn't show in sent mails).
+const MEDIA_PATH = "/api/media/";
+
+function artistImageUrl(url: string, baseUrl: string): string {
+  return url.startsWith(MEDIA_PATH) ? fileUrl(url.slice(MEDIA_PATH.length), baseUrl) : absolute(url, baseUrl);
+}
+
 // The display-size version when there is one (served straight from
 // storage), otherwise the original. Videos aren't shown in mails.
 function toMailImage(image: ImageRow | null, baseUrl: string, fallbackAlt: string): MailImage | null {
@@ -160,9 +170,9 @@ export async function loadMailAssets(
 
   const placeLine = [artist.postcode, artist.city].filter(Boolean).join(" ");
   return {
-    logo: artist.logoUrl ? { src: absolute(artist.logoUrl, baseUrl), alt: artist.name } : null,
+    logo: artist.logoUrl ? { src: artistImageUrl(artist.logoUrl, baseUrl), alt: artist.name } : null,
     signature: artist.signatureUrl
-      ? { src: absolute(artist.signatureUrl, baseUrl), alt: artist.name }
+      ? { src: artistImageUrl(artist.signatureUrl, baseUrl), alt: artist.name }
       : null,
     pictures: pictureMap,
     artworks,
