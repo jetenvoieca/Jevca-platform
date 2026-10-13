@@ -21,10 +21,11 @@ export type VersionCounts = {
 
 export type VersionRates = { open: number | null; click: number | null; conversion: number | null };
 
-// One colour per version, in order (principal, alternative 1, 2): the
-// hues of Craig's mockup, made a little stronger so they stay apart for
-// colour-blind readers and on white (checked with a palette validator).
-export const VERSION_COLOURS = ["#D27A4C", "#4BA36F", "#6B82CC"];
+// One colour per version, in order (principal, alternative 1, 2), then
+// the follow-up's: Craig's soft palette (2026-10-13), replacing the
+// stronger hues first used. Numbers on them are dark text.
+export const VERSION_COLOURS = ["#F4DDDE", "#DEDEF4", "#F5E9CD"];
+export const FOLLOW_UP_COLOUR = "#EAF1F0";
 
 function ratio(part: number, whole: number): number | null {
   return whole > 0 ? part / whole : null;

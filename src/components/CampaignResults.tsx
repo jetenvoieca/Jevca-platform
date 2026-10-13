@@ -9,6 +9,7 @@ import {
   type FollowUpResults,
 } from "@/lib/actions/campaignResults";
 import {
+  FOLLOW_UP_COLOUR,
   VERSION_COLOURS,
   formatPercent,
   leadingVersion,
@@ -163,7 +164,7 @@ function StackedBars({
                 <div
                   key={v.mailId}
                   title={`${v.label}: ${count} ${stage.label.toLowerCase()}`}
-                  className="flex items-center justify-center rounded text-sm font-semibold text-white"
+                  className="flex items-center justify-center rounded text-sm font-semibold text-neutral-800"
                   style={{ height, background: VERSION_COLOURS[i] }}
                 >
                   {count}
@@ -260,8 +261,6 @@ function FollowUpRow({
     </div>
   );
 }
-
-const FOLLOW_UP_COLOUR = "#a3a3a3";
 
 // A row's colour and name: shows that mail in the Preview.
 function VersionLabel({
