@@ -144,19 +144,30 @@ export async function updatePageDetails(
     existingMenuStyleId(input.menuStyleId),
   ]);
 
+  // A new Display Style clears every component's content. A new
+  // curation (2026-10-13) clears its sections and resets its works'
+  // choices (removed, order — they were the old curation's works); typed
+  // Headers stay.
   const styleChanged = current.pageStyleId !== pageStyleId;
+  const curationChanged = current.curationId !== curationId;
   const clearComponents = styleChanged
-    ? db.pageComponentContent.deleteMany({ where: { pageId } })
-    : current.curationId !== curationId
-      ? db.pageComponentContent.deleteMany({ where: { pageId, sectionId: { not: null } } })
-      : null;
+    ? [db.pageComponentContent.deleteMany({ where: { pageId } })]
+    : curationChanged
+      ? [
+          db.pageComponentContent.deleteMany({ where: { pageId, source: "SECTION" } }),
+          db.pageComponentContent.updateMany({
+            where: { pageId, source: "WORKS" },
+            data: { hiddenIds: [], orderIds: [] },
+          }),
+        ]
+      : [];
 
   await db.$transaction([
     db.page.update({
       where: { id: pageId },
       data: { title, curationId, pageStyleId, menuStyleId },
     }),
-    ...(clearComponents ? [clearComponents] : []),
+    ...clearComponents,
     ...(styleChanged ? [db.pageSignupForm.deleteMany({ where: { pageId } })] : []),
   ]);
   return { ok: true };

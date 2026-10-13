@@ -125,6 +125,14 @@ enum Mailbox {
 
 // The kinds of section a curation's presentation can have (2026-10-06)
 // — see CurationSection.
+// Where a Block Build page component's content comes from (2026-10-13)
+// — see PageComponentContent.
+enum PageContentSource {
+  WORKS
+  SECTION
+  TYPED
+}
+
 // In display order (Postgres sorts an enum by its declared order).
 enum CurationSectionType {
   DESCRIPTION
@@ -1235,23 +1243,39 @@ model PageCanvasItem {
   @@index([curationId])
 }
 
-// What fills one component of a Block Build page (2026-10-07, from
-// Craig's mockup): one of the page's curation's sections, dragged onto
-// it in the page's Arrange, or — `sectionId` null — the curation's
-// works. One per component. `blockId` is the component's id in the
-// page's Display Style (PageStyle.layout, JSON), so it isn't a foreign
-// key: a row for a component later removed from the style is never
-// shown. Removed with its page or its section; cleared when the page's
-// Display Style changes, and its sections when the page's curation
-// changes (see updatePageDetails in lib/actions/pages.ts). See
-// lib/pageComponents.ts.
+// What fills one component of a Block Build page (2026-10-07; 2026-10-13
+// from Craig's mockup: Page Styles set the layout, curations the content,
+// and a page brings them together). One per component, set in the page's
+// Arrange. `source` says what it holds:
+// - WORKS: the page's curation's works (Gallery, Sliding doors).
+// - SECTION: one of the curation's sections (`sectionId`) — a
+//   Description (Text, Text grid), the Video, or Supporting Images
+//   (Single Image, Gallery). A Description can be edited for this page
+//   only: `text` is the page's own copy, null = the curation's.
+// - TYPED: text typed on the page (`text`) — a Header.
+// Works and Supporting Images can be removed on this page (`hiddenIds`)
+// and put in another order (`orderIds`): the ones in `orderIds` come
+// first, in that order, then any others (e.g. works added to the
+// curation later) in the curation's order. Both are ids of artworks
+// (WORKS) or images (Supporting Images).
+// `blockId` is the component's id in the page's Display Style
+// (PageStyle.layout, JSON), so it isn't a foreign key: a row for a
+// component later removed from the style is never shown. Removed with
+// its page or its section; cleared when the page's Display Style
+// changes; when the page's curation changes, its sections are cleared
+// and its works' choices reset (see updatePageDetails in
+// lib/actions/pages.ts). See lib/pageComponents.ts.
 model PageComponentContent {
-  id        String           @id @default(cuid())
+  id        String            @id @default(cuid())
   pageId    String
-  page      Page             @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  page      Page              @relation(fields: [pageId], references: [id], onDelete: Cascade)
   blockId   String
+  source    PageContentSource
   sectionId String?
-  section   CurationSection? @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  section   CurationSection?  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  text      String?
+  hiddenIds String[]          @default([])
+  orderIds  String[]          @default([])
 
   @@unique([pageId, blockId])
   @@index([sectionId])

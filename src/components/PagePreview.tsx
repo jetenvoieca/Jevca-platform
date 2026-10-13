@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
-import type { ComponentContent } from "@/lib/pageComponents";
+import { arrangeItems, contentFits, contentKindOf, type ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { LayoutBlock } from "@/lib/pageStyleLayout";
 import {
@@ -22,6 +22,7 @@ import { useSiteData } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 import CurationSectionView from "@/components/CurationSectionView";
+import { bodyTextCss } from "@/components/textStyleCss";
 import CurationWorkView from "@/components/CurationWorkView";
 import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
@@ -37,13 +38,15 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 // and phone — see components/pageMargins.ts).
 // - Block Build (2026-10-07, was Private / Custom): each component
 //   shows what was put in it in the page's Arrange (see
-//   lib/pageComponents.ts) — a text section (in a Header, Text or Text
-//   grid, in the style's font, size, style and colour for that
-//   component type), a video, an Images section (one image in a Single
-//   Image, a grid in a Gallery), or the curation's works (a grid in a
-//   Gallery, square panels in Sliding doors — see SlidingDoors). A
-//   Sign-up form (2026-10-10) shows once it's set up in Arrange — see
-//   SignupForm.
+//   lib/pageComponents.ts) — a Header typed on the page, the
+//   Description in a Text or Text grid (this page's own copy if edited
+//   here), both in the style's font, size, style and colour for that
+//   component; the Video; Supporting Images (the first in a Single
+//   Image, a grid in a Gallery); or the curation's works (a grid in a
+//   Gallery, square panels in Sliding doors — see SlidingDoors). Works
+//   and images removed on this page are left out, in the order chosen
+//   here (2026-10-13). A Sign-up form (2026-10-10) shows once it's set
+//   up in Arrange — see SignupForm.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page) and its
@@ -196,19 +199,30 @@ function BlockBuildPage({
 }) {
   const { layout } = style;
   const sectionById = new Map(sections.map((s) => [s.id, s]));
-  const contentByBlock = new Map(components.map((c) => [c.blockId, c.sectionId]));
+  const sectionTypes = new Map(sections.map((s) => [s.id, s.type]));
+  const contentByBlock = new Map(components.map((c) => [c.blockId, c]));
   const formByBlock = new Map(signupForms.map((f) => [f.blockId, f]));
 
-  const works = (block: LayoutBlock): ReactNode => {
-    if (block.type === "gallery" && curation.works.length > 0) {
+  const textStyleOf = (block: LayoutBlock) =>
+    isTextComponent(block.type)
+      ? mergeTextStyle(layout.textStyles[block.type], block.textStyle)
+      : undefined;
+
+  const works = (block: LayoutBlock, content: ComponentContent): ReactNode => {
+    const shown = arrangeItems(curation.works, (w) => w.artworkId, content);
+    if (block.type === "gallery" && shown.length > 0) {
       return (
-        <ImageGrid images={worksImages(curation)} spacing={layout.gridSpacing} onOpen={onOpen} />
+        <ImageGrid
+          images={shown.map((w) => ({ id: w.artworkId, url: w.imageUrl, title: w.catalogueName }))}
+          spacing={layout.gridSpacing}
+          onOpen={onOpen}
+        />
       );
     }
-    if (block.type === "slidingdoors" && block.doors && curation.works.some((w) => w.displayUrl)) {
+    if (block.type === "slidingdoors" && block.doors && shown.some((w) => w.displayUrl)) {
       return (
         <SlidingDoors
-          works={curation.works}
+          works={shown}
           duration={block.doors.duration}
           speed={block.doors.speed}
           gap={block.doors.gap}
@@ -228,11 +242,33 @@ function BlockBuildPage({
       if (!form || !block.signup) return null;
       return <SignupForm pageId={pageId} form={form} look={block.signup} textStyle={layout.textStyles.text} />;
     }
-    if (!contentByBlock.has(block.id)) return null;
-    const sectionId = contentByBlock.get(block.id) ?? null;
-    if (sectionId === null) return works(block);
-    const section = sectionById.get(sectionId);
-    if (!section || sectionIsEmpty(section)) return null;
+    const content = contentByBlock.get(block.id);
+    if (!content) return null;
+    const kind = contentKindOf(content, sectionTypes);
+    if (!kind || !contentFits(block.type, kind)) return null;
+    if (content.source === "WORKS") return works(block, content);
+    if (content.source === "TYPED") {
+      const style = textStyleOf(block);
+      return content.text ? (
+        <h2
+          className="whitespace-pre-line break-words text-2xl text-neutral-900"
+          style={style ? bodyTextCss(style) : undefined}
+        >
+          {content.text}
+        </h2>
+      ) : null;
+    }
+    const curated = content.sectionId ? sectionById.get(content.sectionId) : undefined;
+    if (!curated) return null;
+    // This page's own Description, or its Supporting Images as arranged
+    // here.
+    const section: CurationSectionData =
+      curated.type === "DESCRIPTION"
+        ? { ...curated, text: content.text ?? curated.text }
+        : curated.type === "IMAGES"
+          ? { ...curated, media: arrangeItems(curated.media, (m) => m.imageId, content) }
+          : curated;
+    if (sectionIsEmpty(section)) return null;
     if (section.type === "IMAGES" && block.type === "image") {
       return <img src={section.media[0].url} alt="" className="w-full rounded" />;
     }
@@ -244,12 +280,7 @@ function BlockBuildPage({
         />
       );
     }
-    return (
-      <CurationSectionView
-        section={section}
-        textStyle={isTextComponent(block.type) ? mergeTextStyle(layout.textStyles[block.type], block.textStyle) : undefined}
-      />
-    );
+    return <CurationSectionView section={section} textStyle={textStyleOf(block)} />;
   };
 
   const rows: Row[] = groupBlocksByRow(layout.blocks).map((row) => {
@@ -266,7 +297,7 @@ function BlockBuildPage({
       margins={layout.margins}
       backgroundColor={layout.backgroundColor}
       rows={rows}
-      empty="Nothing on this page yet — use Arrange to drag the curation's sections onto it."
+      empty="Nothing on this page yet — use Arrange to type its header and drag the curation's works and sections onto it."
     />
   );
 }
@@ -373,12 +404,8 @@ function PlainPage({
 }
 
 // One image in a grid: a work (clickable, opens its presentation) or an
-// image from an Images section (image only).
+// Supporting Image (image only).
 type GridImage = { id: string; url: string | null; title?: string };
-
-function worksImages(curation: CurationDetail): GridImage[] {
-  return curation.works.map((w) => ({ id: w.artworkId, url: w.imageUrl, title: w.catalogueName }));
-}
 
 // Images four across, in order, spaced as the style's grid spacing.
 // With `onOpen`, clicking one opens it.

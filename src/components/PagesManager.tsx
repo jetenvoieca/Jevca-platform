@@ -48,8 +48,10 @@ type ListKey = "live" | "hidden";
 // - Canvas (2026-10-05): opens the full-screen canvas editor
 //   (CanvasArranger).
 // - Block Build with a curation (2026-10-07, from Craig's mockup):
-//   the Preview panel becomes PageSectionsArranger — the curation's
-//   sections dragged onto the style's components — with a Close button
+//   the Preview panel becomes PageSectionsArranger — the Header typed
+//   in, the curation's works and sections dragged onto the style's
+//   components, works and images removed or reordered for this page
+//   (2026-10-13) — with a Close button
 //   under Hidden Pages. Choosing another page, Add or Edit closes it.
 // Closing either redraws the preview.
 //

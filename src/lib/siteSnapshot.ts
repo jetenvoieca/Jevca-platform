@@ -20,7 +20,10 @@ import type { SignupFormContent } from "@/lib/signupForms";
 // Bumped whenever the shape below changes; an older snapshot is treated
 // as not published until the site is published again. 2 (2026-10-07):
 // the Block Build Style Type is stored as BLOCK_BUILD (was PRIVATE).
-export const SNAPSHOT_VERSION = 2;
+// 3 (2026-10-13): curations have three fixed sections, and a page's
+// components say where their content comes from (typed Header, edited
+// Description, works removed / reordered).
+export const SNAPSHOT_VERSION = 3;
 
 // One live page, in menu order. `curationId` is the page's own curation
 // (not used with a Canvas style, whose curations are in `canvas`).
