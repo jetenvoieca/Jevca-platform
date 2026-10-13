@@ -18,8 +18,15 @@ export default async () => {
     const res = await fetch(`${APP_URL}/.netlify/functions/send-campaigns-background`, {
       method: "POST",
       headers: { "x-campaign-send-secret": secret },
+      // A redirect means it never reached the function — don't follow it.
+      redirect: "manual",
     });
-    console.log(`[send-campaigns] woke the sender: ${res.status}`);
+    // A background function answers 202 once it has started.
+    console.log(
+      res.status === 202
+        ? "[send-campaigns] woke the sender"
+        : `[send-campaigns] could not wake the sender: ${res.status}`
+    );
   } catch (err) {
     console.log("[send-campaigns] could not wake the sender:", err);
   }

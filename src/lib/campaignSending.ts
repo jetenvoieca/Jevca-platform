@@ -493,6 +493,8 @@ export async function wakeCampaignSending(): Promise<void> {
     await fetch(`${APP_URL}/.netlify/functions/send-campaigns-background`, {
       method: "POST",
       headers: { "x-campaign-send-secret": secret },
+      // A redirect means it never reached the function — don't follow it.
+      redirect: "manual",
     });
   } catch {
     // The scheduled check will start it.

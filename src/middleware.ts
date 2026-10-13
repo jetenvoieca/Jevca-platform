@@ -124,6 +124,9 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   // Everything except Next's own static/image assets — those carry
-  // nothing sensitive and gating them just adds needless redirects.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // nothing sensitive and gating them just adds needless redirects — and
+  // Netlify's own functions (/.netlify/…), which check their own secret:
+  // gated, the call that starts campaign sending was sent to /login
+  // instead, so it never ran (2026-10-13).
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|\\.netlify/).*)"],
 };
