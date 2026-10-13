@@ -1,18 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { getArtworksForArtist, quickCreateArtwork } from "@/lib/actions/media";
+import {
+  getArtworksForArtist,
+  quickCreateArtwork,
+  type PickerArtwork as PickedArtwork,
+} from "@/lib/actions/media";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { useClientWords } from "@/components/ClientWordsProvider";
-
-type PickedArtwork = {
-  id: string;
-  catalogueName: string;
-  imageUrl: string | null;
-  presentationPrice: string | null;
-  availability: string;
-};
 
 export default function ArtworkPicker({
   artistId,
@@ -56,35 +52,79 @@ export default function ArtworkPicker({
     locations: string[];
     types: string[];
   } | null>(null);
+  // The list loads a page at a time as you scroll (2026-10-13), like the
+  // Artwork Catalogue — it used to stop at the 60 newest.
   const [artworks, setArtworks] = useState<PickedArtwork[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [selected, setSelected] = useState<PickedArtwork[]>([]);
   const [newTitle, setNewTitle] = useState("");
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const sentinelRef = useRef<HTMLDivElement | null>(null);
+  // Each new search counts up, so an older search's answer arriving late
+  // (or a page loading for it) can't replace the newer results.
+  const requestRef = useRef(0);
+  const filtersRef = useRef({ q: "", location: "", type: "" });
 
-  const excluded = new Set(excludeIds);
-  const visibleArtworks =
-    excluded.size > 0 ? artworks.filter((a) => !excluded.has(a.id)) : artworks;
-
-  const load = (q: string, loc = location, t = type) => {
-    startTransition(async () => {
-      const results = await getArtworksForArtist(artistId, {
-        q: q || undefined,
-        location: loc || undefined,
-        type: t || undefined,
-      });
-      setArtworks(
-        results.map((a) => ({
-          id: a.id,
-          catalogueName: a.catalogueName,
-          imageUrl: a.images[0]?.url ?? null,
-          presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-          availability: a.availability,
-        }))
-      );
+  const fetchPage = (offset: number) => {
+    const f = filtersRef.current;
+    return getArtworksForArtist(artistId, {
+      q: f.q || undefined,
+      location: f.location || undefined,
+      type: f.type || undefined,
+      excludeIds,
+      offset,
     });
   };
+
+  const load = (q: string, loc = location, t = type) => {
+    filtersRef.current = { q, location: loc, type: t };
+    const request = ++requestRef.current;
+    startTransition(async () => {
+      const page = await fetchPage(0);
+      if (request !== requestRef.current) return;
+      setArtworks(page.rows);
+      setTotal(page.total);
+      scrollRef.current?.scrollTo({ top: 0 });
+    });
+  };
+
+  const hasMore = artworks.length < total;
+
+  const loadMore = useCallback(async () => {
+    if (loadingMore || isPending) return;
+    const request = requestRef.current;
+    setLoadingMore(true);
+    try {
+      const page = await fetchPage(artworks.length);
+      if (request !== requestRef.current) return;
+      setArtworks((prev) => {
+        const seen = new Set(prev.map((a) => a.id));
+        return [...prev, ...page.rows.filter((a) => !seen.has(a.id))];
+      });
+      setTotal(page.total);
+    } finally {
+      setLoadingMore(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [artworks.length, loadingMore, isPending]);
+
+  // The next page loads as the bottom of the list scrolls into view.
+  useEffect(() => {
+    const node = sentinelRef.current;
+    if (!open || !node || !hasMore) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) loadMore();
+      },
+      { root: scrollRef.current, rootMargin: "400px" }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [open, hasMore, loadMore]);
 
   const handleOpen = () => {
     setOpen(true);
@@ -147,6 +187,7 @@ export default function ArtworkPicker({
           availability: "AVAILABLE",
         };
         setArtworks((prev) => [a, ...prev]);
+        setTotal((n) => n + 1);
         setNewTitle("");
         handlePick(a);
       }
@@ -265,7 +306,7 @@ export default function ArtworkPicker({
           </p>
         )}
 
-        <div className="flex-1 overflow-y-auto p-4">
+        <div ref={scrollRef} className="flex-1 overflow-y-auto p-4">
           {/* Visible loading state (2026-08-31) — previously there was no
               indication a search was in flight at all, which is exactly
               what makes a picker feel unresponsive/broken rather than
@@ -274,7 +315,7 @@ export default function ArtworkPicker({
             <p className="pb-3 text-xs text-neutral-400">Searching…</p>
           )}
           <div className="grid grid-cols-8 gap-3">
-            {visibleArtworks.map((a) => {
+            {artworks.map((a) => {
               const isSelected = selected.some((s) => s.id === a.id);
               return (
                 <button
@@ -299,7 +340,12 @@ export default function ArtworkPicker({
               );
             })}
           </div>
-          {visibleArtworks.length === 0 && !isPending && (
+          {hasMore && (
+            <div ref={sentinelRef} className="flex h-8 items-center justify-center">
+              {loadingMore && <span className="text-xs text-neutral-400">Loading…</span>}
+            </div>
+          )}
+          {artworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
               {query || location || type
                 ? `No ${words.items.toLowerCase()} match these filters.`

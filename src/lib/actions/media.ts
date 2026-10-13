@@ -5,7 +5,7 @@ import { getPresignedUploadUrl, getFromR2, uploadToR2, publicMediaUrl } from "@/
 import { generateImageSizes } from "@/lib/imageSizes";
 import { randomUUID } from "crypto";
 import { createArtworkWithRetry } from "./artworks";
-import { buildArtworkWhere, type ArtworkFilterInput } from "@/lib/artworkFilters";
+import { buildArtworkWhere, buildArtworkOrderBy, type ArtworkFilterInput } from "@/lib/artworkFilters";
 import { sanitizeFilename } from "@/lib/sanitizeFilename";
 
 // Step 1 of 2 for uploading: this only ever handles a filename and content
@@ -171,30 +171,66 @@ export async function listImages(artistId: string, q?: string) {
   });
 }
 
-// ArtworkPicker's list (page editors, Hopper, Curations). Scoped to the
-// artist, not the site, since a page on any of that artist's sites can
-// feature any of their artworks. Search, Location and Type (2026-10-04)
-// mean exactly what they mean in the Artwork Catalogue — the same shared
-// buildArtworkWhere (lib/artworkFilters.ts) — so search also matches
-// catalogue number and medium, as the catalogue's does.
+// ArtworkPicker's list (Curations, campaign mails, Hopper). Scoped to the
+// artist, not the site, since any of that artist's sites can feature any
+// of their artworks. Search, Location and Type mean exactly what they mean
+// in the Artwork Catalogue — the same shared buildArtworkWhere and order
+// (lib/artworkFilters.ts). Returned a page at a time (2026-10-13): it used
+// to return only the 60 newest, so older works could never be picked.
+// Works to leave out (e.g. already in the curation) are excluded here, not
+// after loading, so they don't use up a page.
+export type PickerArtwork = {
+  id: string;
+  catalogueName: string;
+  imageUrl: string | null;
+  presentationPrice: string | null;
+  availability: string;
+};
+
+const PICKER_PAGE_SIZE = 60;
+
 export async function getArtworksForArtist(
   artistId: string,
-  filters: Pick<ArtworkFilterInput, "q" | "location" | "type"> = {}
-) {
-  const rows = await db.artwork.findMany({
-    where: buildArtworkWhere(artistId, filters),
-    include: { images: { take: 1 }, mainImage: true },
-    relationLoadStrategy: "query",
-    orderBy: { createdAt: "desc" },
-    take: 60,
-  });
-  // Folds mainImage into the same images[0] slot every consumer already
-  // reads (2026-08-16, same pattern as listArtworks) — an artwork with a
-  // chosen main image shows that one in the picker.
-  return rows.map(({ mainImage, images, ...rest }) => ({
-    ...rest,
-    images: mainImage ? [mainImage, ...images.filter((i) => i.id !== mainImage.id)] : images,
-  }));
+  filters: Pick<ArtworkFilterInput, "q" | "location" | "type"> & {
+    excludeIds?: string[];
+    offset?: number;
+  } = {}
+): Promise<{ rows: PickerArtwork[]; total: number }> {
+  const { excludeIds = [], offset = 0, ...rest } = filters;
+  const where = {
+    ...buildArtworkWhere(artistId, rest),
+    ...(excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+  };
+  const [rows, total] = await Promise.all([
+    db.artwork.findMany({
+      where,
+      orderBy: buildArtworkOrderBy(),
+      select: {
+        id: true,
+        catalogueName: true,
+        presentationPrice: true,
+        availability: true,
+        mainImage: { select: { url: true, thumbnailKey: true } },
+        images: { take: 1, select: { url: true, thumbnailKey: true } },
+      },
+      skip: offset,
+      take: PICKER_PAGE_SIZE,
+    }),
+    db.artwork.count({ where }),
+  ]);
+  // The chosen main image, else the first image; its small thumbnail
+  // where one exists — same as the Artwork Catalogue grid.
+  return {
+    rows: rows.map(({ mainImage, images, presentationPrice, ...a }) => {
+      const image = mainImage || images[0] || null;
+      return {
+        ...a,
+        presentationPrice: presentationPrice != null ? presentationPrice.toString() : null,
+        imageUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
+      };
+    }),
+    total,
+  };
 }
 
 // ArtworkPicker's own inline "create new" (used from other pickers, e.g.
