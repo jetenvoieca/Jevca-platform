@@ -17,7 +17,8 @@ import type { CurationSectionData } from "@/lib/curationSections";
 import type { ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import { publishedHomePath, type SiteSnapshot } from "@/lib/siteSnapshot";
-import { getArtistLogoUrl } from "@/lib/actions/artistLogo";
+import { getSiteArtist } from "@/lib/actions/siteArtist";
+import type { SiteArtist } from "@/lib/siteArtist";
 
 // Where the page components (PagePreview, CanvasPlayer, CurationPanel,
 // CurationWorkView, PageSectionsArranger) get their content from
@@ -35,8 +36,8 @@ export type SiteData = {
   // A Block Build page's sign-up forms' wording (2026-10-10).
   getSignupForms(pageId: string): Promise<SignupFormContent[]>;
   listCovers(): Promise<CurationCover[]>;
-  // The artist's Logo (2026-10-13), for Logo components — null if none.
-  getLogo(): Promise<string | null>;
+  // The artist's Logo and footer (2026-10-13) — see lib/siteArtist.ts.
+  getArtist(): Promise<SiteArtist | null>;
   // Where a Logo links: the site's home page on the published site; null
   // in the admin preview, where it isn't a link.
   homeHref: string | null;
@@ -76,7 +77,7 @@ export function LiveSiteData({
       getComponents: (pageId) => getPageComponents(siteId, pageId),
       getSignupForms: (pageId) => getPageSignupForms(siteId, pageId),
       listCovers: () => listCurationCovers(artistId),
-      getLogo: () => getArtistLogoUrl(artistId),
+      getArtist: () => getSiteArtist(artistId),
       homeHref: null,
       signup: null,
     }),
@@ -110,7 +111,7 @@ export function SnapshotSiteData({
       getSignupForms: async (pageId) =>
         snapshot.pages.find((p) => p.id === pageId)?.signupForms ?? [],
       listCovers: async () => snapshot.covers,
-      getLogo: async () => snapshot.logoUrl,
+      getArtist: async () => snapshot.artist,
       homeHref: publishedHomePath(siteId),
       signup: { siteId, siteKey },
     }),

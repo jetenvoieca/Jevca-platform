@@ -170,9 +170,9 @@ export default function PageSectionsArranger({
         siteData.listSections(curationId),
         siteData.getComponents(pageId),
         siteData.getSignupForms(pageId),
-        siteData.getLogo(),
-      ]).then(([loadedCuration, loadedSections, components, signupForms, logo]) => {
-        setLogoUrl(logo);
+        siteData.getArtist(),
+      ]).then(([loadedCuration, loadedSections, components, signupForms, artist]) => {
+        setLogoUrl(artist?.logoUrl ?? null);
         setCuration(loadedCuration);
         setSections(loadedSections);
         setContents(new Map(components.map((c) => [c.blockId, c])));

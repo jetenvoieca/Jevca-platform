@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { storedFileUrl } from "@/lib/r2";
+import { getSiteArtist } from "@/lib/actions/siteArtist";
 import {
   getCuration,
   getCurationWorkPresentation,
@@ -38,7 +38,6 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
     select: {
       name: true,
       artistId: true,
-      artist: { select: { logoUrl: true } },
       menuStyleId: true,
       pages: {
         where: { visible: true },
@@ -111,7 +110,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
   return {
     version: SNAPSHOT_VERSION,
     siteName: site.name,
-    logoUrl: site.artist.logoUrl ? storedFileUrl(site.artist.logoUrl) : null,
+    artist: await getSiteArtist(site.artistId),
     pages,
     curations,
     covers,

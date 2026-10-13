@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
 import { squareKeysFor } from "@/lib/imageSquares";
 import { artworkDetailLines } from "@/lib/artworkDetails";
+import { artistAddressLines } from "@/lib/siteArtist";
 import { mailReferences, pictureKey, type MailContent } from "@/lib/mailContent";
 import type { MailArtwork, MailAssets, MailImage } from "@/lib/mailHtml";
 
@@ -168,7 +169,6 @@ export async function loadMailAssets(
     }
   }
 
-  const placeLine = [artist.postcode, artist.city].filter(Boolean).join(" ");
   return {
     logo: artist.logoUrl ? { src: artistImageUrl(artist.logoUrl, baseUrl), alt: artist.name } : null,
     signature: artist.signatureUrl
@@ -178,9 +178,7 @@ export async function loadMailAssets(
     artworks,
     footer: {
       name: artist.name,
-      address: [artist.addressLine1, placeLine, artist.country].filter(
-        (l): l is string => Boolean(l?.trim())
-      ),
+      address: artistAddressLines(artist),
       website: site.domain ? { label: site.domain, url: `https://${site.domain}` } : null,
     },
   };

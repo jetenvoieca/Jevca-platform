@@ -6,6 +6,7 @@ import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
 import { arrangeItems, contentFits, contentKindOf, type ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
+import type { SiteArtist } from "@/lib/siteArtist";
 import type { LayoutBlock } from "@/lib/pageStyleLayout";
 import {
   blockWidthOf,
@@ -22,6 +23,7 @@ import { useSiteData } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 import CurationSectionView from "@/components/CurationSectionView";
+import SiteFooter from "@/components/SiteFooter";
 import { bodyTextCss } from "@/components/textStyleCss";
 import CurationWorkView from "@/components/CurationWorkView";
 import SignupForm from "@/components/SignupForm";
@@ -50,6 +52,8 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 //   Logo from Settings, as wide as the component, linking to the site's
 //   home page on the published site.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
+// Every page but a Canvas ends with the site's footer (2026-10-13) — see
+// SiteFooter.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page) and its
 // row's alignment (2026-10-07). On a phone a row's blocks stack, full
@@ -85,7 +89,6 @@ export default function PagePreview({
   const [loading, setLoading] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const blockBuild = style?.type === "BLOCK_BUILD";
-  const hasLogo = style?.type === "BLOCK_BUILD" && style.layout.blocks.some((b) => b.type === "logo");
 
   useEffect(() => {
     setViewingId(null);
@@ -103,16 +106,16 @@ export default function PagePreview({
         : Promise.resolve<CurationSectionData[]>([]),
       blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
       blockBuild ? siteData.getSignupForms(pageId) : Promise.resolve<SignupFormContent[]>([]),
-      hasLogo ? siteData.getLogo() : Promise.resolve(null),
-    ]).then(([curation, sections, components, signupForms, logoUrl]) => {
+      siteData.getArtist(),
+    ]).then(([curation, sections, components, signupForms, artist]) => {
       if (!current) return;
-      setContent({ curation, sections, components, signupForms, logoUrl });
+      setContent({ curation, sections, components, signupForms, artist });
       setLoading(false);
     });
     return () => {
       current = false;
     };
-  }, [siteData, curationId, pageId, blockBuild, hasLogo]);
+  }, [siteData, curationId, pageId, blockBuild]);
 
   const closeView = useCallback(() => setViewingId(null), []);
   const curation = content?.curation ?? null;
@@ -135,13 +138,18 @@ export default function PagePreview({
         sections={content.sections}
         components={content.components}
         signupForms={content.signupForms}
-        logoUrl={content.logoUrl}
+        artist={content.artist}
         homeHref={siteData.homeHref}
         onOpen={setViewingId}
       />
     );
   } else {
-    body = <PlainPage curation={curation} onOpen={setViewingId} />;
+    body = (
+      <>
+        <PlainPage curation={curation} onOpen={setViewingId} />
+        {content.artist && <SiteFooter footer={content.artist.footer} />}
+      </>
+    );
   }
 
   const viewer = curation && viewingId && (
@@ -172,8 +180,8 @@ type PageContent = {
   sections: CurationSectionData[];
   components: ComponentContent[];
   signupForms: SignupFormContent[];
-  // The artist's Logo, loaded only when the style has a Logo component.
-  logoUrl: string | null;
+  // The artist's Logo and footer.
+  artist: SiteArtist | null;
 };
 
 // One row of the page as shown: its blocks' contents and widths, the
@@ -195,7 +203,7 @@ function BlockBuildPage({
   sections,
   components,
   signupForms,
-  logoUrl,
+  artist,
   homeHref,
   onOpen,
 }: {
@@ -205,7 +213,7 @@ function BlockBuildPage({
   sections: CurationSectionData[];
   components: ComponentContent[];
   signupForms: SignupFormContent[];
-  logoUrl: string | null;
+  artist: SiteArtist | null;
   homeHref: string | null;
   onOpen: (artworkId: string) => void;
 }) {
@@ -250,8 +258,8 @@ function BlockBuildPage({
 
   const fill = (block: LayoutBlock): ReactNode => {
     if (block.type === "logo") {
-      if (!logoUrl) return null;
-      const logo = <img src={logoUrl} alt="" className="block w-full" />;
+      if (!artist?.logoUrl) return null;
+      const logo = <img src={artist.logoUrl} alt="" className="block w-full" />;
       return homeHref ? <a href={homeHref}>{logo}</a> : logo;
     }
     if (block.type === "signup") {
@@ -318,22 +326,32 @@ function BlockBuildPage({
       backgroundColor={layout.backgroundColor}
       rows={rows}
       empty="Nothing on this page yet — use Arrange to type its header and drag the curation's works and sections onto it."
+      footer={
+        artist && (
+          <SiteFooter
+            footer={artist.footer}
+            fontFamily={bodyTextCss(layout.textStyles.text).fontFamily}
+          />
+        )
+      }
     />
   );
 }
 
-// The page's background and margin around its rows. Unfilled blocks
-// are dropped, and so is any row left empty.
+// The page's background and margin around its rows, then the site's
+// footer. Unfilled blocks are dropped, and so is any row left empty.
 function StyledFrame({
   margins,
   backgroundColor,
   rows: allRows,
   empty,
+  footer,
 }: {
   margins: PageMargins;
   backgroundColor: string | null;
   rows: Row[];
   empty: string;
+  footer: ReactNode;
 }) {
   const rows = allRows
     .map((r) => ({ ...r, cells: r.cells.filter((c) => c.content) }))
@@ -361,6 +379,7 @@ function StyledFrame({
           </div>
         ))
       )}
+      {footer && <div className="mt-auto">{footer}</div>}
     </div>
   );
 }

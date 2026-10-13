@@ -9,6 +9,7 @@ import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
 import type { CurationSectionData } from "@/lib/curationSections";
 import type { ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
+import type { SiteArtist } from "@/lib/siteArtist";
 
 // A published site (2026-10-06) — everything its pages show, saved when
 // "Publish to live site" is pressed (see SitePublication in
@@ -24,7 +25,8 @@ import type { SignupFormContent } from "@/lib/signupForms";
 // components say where their content comes from (typed Header, edited
 // Description, works removed / reordered).
 // 4 (2026-10-13): the artist's Logo, for Logo components.
-export const SNAPSHOT_VERSION = 4;
+// 5 (2026-10-13): the artist's Logo and footer together (`artist`).
+export const SNAPSHOT_VERSION = 5;
 
 // Where a published site's home page is (its first Live Page) — the
 // menu's first link and a Logo's link (2026-10-13). Private for now, at
@@ -65,8 +67,8 @@ export type SnapshotCuration = {
 export type SiteSnapshot = {
   version: number;
   siteName: string;
-  // The artist's Logo (2026-10-13), for Logo components — null if none.
-  logoUrl: string | null;
+  // The artist's Logo and footer (2026-10-13) — see lib/siteArtist.ts.
+  artist: SiteArtist | null;
   // Live Pages, in order — the first is the home page.
   pages: SnapshotPage[];
   curations: Record<string, SnapshotCuration>;
