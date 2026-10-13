@@ -34,7 +34,7 @@ export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 // 2026-10-13: a Header is typed in, a Text or Text grid takes the
 // Description). Feature takes nothing yet. A Sign-up form (2026-10-10)
 // takes no content: it's set up on its own in Arrange (see
-// lib/signupForms.ts).
+// lib/signupForms.ts). A Logo (2026-10-13) is always the artist's own.
 const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   header: ["TYPED"],
   text: ["DESCRIPTION"],
@@ -45,6 +45,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   slidingdoors: ["WORKS"],
   artwork: [],
   signup: [],
+  logo: [],
 };
 
 export function contentFits(block: LayoutBlockType, kind: ContentKind): boolean {

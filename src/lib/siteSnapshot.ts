@@ -23,7 +23,15 @@ import type { SignupFormContent } from "@/lib/signupForms";
 // 3 (2026-10-13): curations have three fixed sections, and a page's
 // components say where their content comes from (typed Header, edited
 // Description, works removed / reordered).
-export const SNAPSHOT_VERSION = 3;
+// 4 (2026-10-13): the artist's Logo, for Logo components.
+export const SNAPSHOT_VERSION = 4;
+
+// Where a published site's home page is (its first Live Page) — the
+// menu's first link and a Logo's link (2026-10-13). Private for now, at
+// the app's own /site-preview address.
+export function publishedHomePath(siteId: string): string {
+  return `/site-preview/${siteId}`;
+}
 
 // One live page, in menu order. `curationId` is the page's own curation
 // (not used with a Canvas style, whose curations are in `canvas`).
@@ -57,6 +65,8 @@ export type SnapshotCuration = {
 export type SiteSnapshot = {
   version: number;
   siteName: string;
+  // The artist's Logo (2026-10-13), for Logo components — null if none.
+  logoUrl: string | null;
   // Live Pages, in order — the first is the home page.
   pages: SnapshotPage[];
   curations: Record<string, SnapshotCuration>;

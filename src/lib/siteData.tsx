@@ -16,7 +16,8 @@ import { getPageSignupForms } from "@/lib/actions/signupForms";
 import type { CurationSectionData } from "@/lib/curationSections";
 import type { ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
-import type { SiteSnapshot } from "@/lib/siteSnapshot";
+import { publishedHomePath, type SiteSnapshot } from "@/lib/siteSnapshot";
+import { getArtistLogoUrl } from "@/lib/actions/artistLogo";
 
 // Where the page components (PagePreview, CanvasPlayer, CurationPanel,
 // CurationWorkView, PageSectionsArranger) get their content from
@@ -34,6 +35,11 @@ export type SiteData = {
   // A Block Build page's sign-up forms' wording (2026-10-10).
   getSignupForms(pageId: string): Promise<SignupFormContent[]>;
   listCovers(): Promise<CurationCover[]>;
+  // The artist's Logo (2026-10-13), for Logo components — null if none.
+  getLogo(): Promise<string | null>;
+  // Where a Logo links: the site's home page on the published site; null
+  // in the admin preview, where it isn't a link.
+  homeHref: string | null;
   // Whether sign-up forms can be used (2026-10-10): only on the
   // published site, for its site, with the robot check's public key for
   // the address it's shown on (null = no check set up for it yet, so
@@ -70,6 +76,8 @@ export function LiveSiteData({
       getComponents: (pageId) => getPageComponents(siteId, pageId),
       getSignupForms: (pageId) => getPageSignupForms(siteId, pageId),
       listCovers: () => listCurationCovers(artistId),
+      getLogo: () => getArtistLogoUrl(artistId),
+      homeHref: null,
       signup: null,
     }),
     [siteId, artistId]
@@ -102,6 +110,8 @@ export function SnapshotSiteData({
       getSignupForms: async (pageId) =>
         snapshot.pages.find((p) => p.id === pageId)?.signupForms ?? [],
       listCovers: async () => snapshot.covers,
+      getLogo: async () => snapshot.logoUrl,
+      homeHref: publishedHomePath(siteId),
       signup: { siteId, siteKey },
     }),
     [snapshot, siteId, siteKey]

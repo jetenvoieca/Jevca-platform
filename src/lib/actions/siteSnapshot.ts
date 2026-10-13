@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { storedFileUrl } from "@/lib/r2";
 import {
   getCuration,
   getCurationWorkPresentation,
@@ -37,6 +38,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
     select: {
       name: true,
       artistId: true,
+      artist: { select: { logoUrl: true } },
       menuStyleId: true,
       pages: {
         where: { visible: true },
@@ -106,7 +108,15 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
 
   const covers = (await listCurationCovers(site.artistId)).filter((c) => curationIds.has(c.id));
 
-  return { version: SNAPSHOT_VERSION, siteName: site.name, pages, curations, covers, menus };
+  return {
+    version: SNAPSHOT_VERSION,
+    siteName: site.name,
+    logoUrl: site.artist.logoUrl ? storedFileUrl(site.artist.logoUrl) : null,
+    pages,
+    curations,
+    covers,
+    menus,
+  };
 }
 
 // "Publish to live site" — replaces the site's published snapshot and

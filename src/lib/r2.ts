@@ -63,3 +63,10 @@ export function publicMediaUrl(key: string | null | undefined): string | null {
   if (!base) return null;
   return `${base.replace(/\/$/, "")}/${key}`;
 }
+
+// A file saved as the app's own address (/api/media/<key>, e.g. the
+// artist's Logo), straight from storage when it can be (2026-10-13).
+export function storedFileUrl(url: string): string {
+  const prefix = "/api/media/";
+  return url.startsWith(prefix) ? (publicMediaUrl(url.slice(prefix.length)) ?? url) : url;
+}

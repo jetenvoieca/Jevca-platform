@@ -36,6 +36,9 @@ export const LAYOUT_BLOCK_TYPES = [
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },
   { value: "signup", label: "Sign-up form" },
+  // The artist's Logo from Settings (2026-10-13), as wide as the
+  // component, linking to the site's home page.
+  { value: "logo", label: "Logo" },
 ] as const;
 
 export type LayoutBlockType = (typeof LAYOUT_BLOCK_TYPES)[number]["value"];

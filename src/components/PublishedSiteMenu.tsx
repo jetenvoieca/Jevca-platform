@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
+import { publishedHomePath } from "@/lib/siteSnapshot";
 import MenuView from "@/components/MenuView";
 
 // What the menu needs of each Live Page, in order — the first is the
@@ -35,7 +36,7 @@ export default function PublishedSiteMenu({
   const pathname = usePathname();
   const phone = usePhone();
 
-  const base = `/site-preview/${siteId}`;
+  const base = publishedHomePath(siteId);
   const slug = pathname.startsWith(`${base}/`) ? decodeURIComponent(pathname.slice(base.length + 1)) : "";
   const current = slug ? pages.find((p) => p.slug === slug) : pages[0];
   const layout = current?.menuStyleId ? menus[current.menuStyleId] : undefined;

@@ -67,7 +67,8 @@ import SignupFormSetup from "@/components/SignupFormSetup";
 //   onto the list (which turns red), or press its ✕, to empty it.
 // Every change saves straight away. The style itself isn't changed here.
 // A Sign-up form component (2026-10-10) is set up with its own button
-// (SignupFormSetup); until then the page shows nothing there.
+// (SignupFormSetup); until then the page shows nothing there. A Logo
+// (2026-10-13) shows the artist's Logo from Settings.
 
 const TRAY_ID = "tray";
 
@@ -157,6 +158,7 @@ export default function PageSectionsArranger({
   // The Sign-up forms set up (by block id), and the one being set up.
   const [signupsSetUp, setSignupsSetUp] = useState<Set<string>>(new Set());
   const [settingUp, setSettingUp] = useState<string | null>(null);
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = groupBlocksByRow(layout.blocks);
@@ -168,7 +170,9 @@ export default function PageSectionsArranger({
         siteData.listSections(curationId),
         siteData.getComponents(pageId),
         siteData.getSignupForms(pageId),
-      ]).then(([loadedCuration, loadedSections, components, signupForms]) => {
+        siteData.getLogo(),
+      ]).then(([loadedCuration, loadedSections, components, signupForms, logo]) => {
+        setLogoUrl(logo);
         setCuration(loadedCuration);
         setSections(loadedSections);
         setContents(new Map(components.map((c) => [c.blockId, c])));
@@ -372,7 +376,17 @@ export default function PageSectionsArranger({
                             style={rowBlockStyle(blockWidthOf(b))}
                           >
                             <Slot block={b} dragging={dragging}>
-                              {b.type === "signup" ? (
+                              {b.type === "logo" ? (
+                                <Labelled label={blockTypeLabel(b.type)}>
+                                  {logoUrl ? (
+                                    <img src={logoUrl} alt="" className="block w-full" />
+                                  ) : (
+                                    <p className="py-4 text-center text-sm text-neutral-400">
+                                      No logo yet — upload one in Settings → Invoicing.
+                                    </p>
+                                  )}
+                                </Labelled>
+                              ) : b.type === "signup" ? (
                                 <SignupSlot
                                   block={b}
                                   gridSpacing={layout.gridSpacing}

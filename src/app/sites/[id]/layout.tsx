@@ -4,6 +4,7 @@ import { countHopper } from "@/lib/actions/hopper";
 import { countArtworksNeedingReview } from "@/lib/actions/artworks";
 import { countMediaNeedingReview } from "@/lib/actions/mediaCatalogue";
 import { getLastPublishedAt } from "@/lib/actions/siteSnapshot";
+import { publishedHomePath } from "@/lib/siteSnapshot";
 import { getOpenAlerts } from "@/lib/alerts";
 import { getRecentSites, recordSiteVisit } from "@/lib/recentSites";
 import SiteShell from "@/components/SiteShell";
@@ -81,7 +82,7 @@ export default async function SiteLayout({
             />
             {/* The site as last published (2026-10-06), in a new tab. */}
             <a
-              href={`/site-preview/${site.id}`}
+              href={publishedHomePath(site.id)}
               target="_blank"
               rel="noopener noreferrer"
               className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"

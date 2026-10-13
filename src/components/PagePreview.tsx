@@ -46,7 +46,9 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 //   Gallery, square panels in Sliding doors — see SlidingDoors). Works
 //   and images removed on this page are left out, in the order chosen
 //   here (2026-10-13). A Sign-up form (2026-10-10) shows once it's set
-//   up in Arrange — see SignupForm.
+//   up in Arrange — see SignupForm. A Logo (2026-10-13) is the artist's
+//   Logo from Settings, as wide as the component, linking to the site's
+//   home page on the published site.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Grids of images use the style's grid spacing, the gaps between blocks
 // its block spacing, and each block its width (% of the page) and its
@@ -83,6 +85,7 @@ export default function PagePreview({
   const [loading, setLoading] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const blockBuild = style?.type === "BLOCK_BUILD";
+  const hasLogo = style?.type === "BLOCK_BUILD" && style.layout.blocks.some((b) => b.type === "logo");
 
   useEffect(() => {
     setViewingId(null);
@@ -100,15 +103,16 @@ export default function PagePreview({
         : Promise.resolve<CurationSectionData[]>([]),
       blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
       blockBuild ? siteData.getSignupForms(pageId) : Promise.resolve<SignupFormContent[]>([]),
-    ]).then(([curation, sections, components, signupForms]) => {
+      hasLogo ? siteData.getLogo() : Promise.resolve(null),
+    ]).then(([curation, sections, components, signupForms, logoUrl]) => {
       if (!current) return;
-      setContent({ curation, sections, components, signupForms });
+      setContent({ curation, sections, components, signupForms, logoUrl });
       setLoading(false);
     });
     return () => {
       current = false;
     };
-  }, [siteData, curationId, pageId, blockBuild]);
+  }, [siteData, curationId, pageId, blockBuild, hasLogo]);
 
   const closeView = useCallback(() => setViewingId(null), []);
   const curation = content?.curation ?? null;
@@ -131,6 +135,8 @@ export default function PagePreview({
         sections={content.sections}
         components={content.components}
         signupForms={content.signupForms}
+        logoUrl={content.logoUrl}
+        homeHref={siteData.homeHref}
         onOpen={setViewingId}
       />
     );
@@ -166,6 +172,8 @@ type PageContent = {
   sections: CurationSectionData[];
   components: ComponentContent[];
   signupForms: SignupFormContent[];
+  // The artist's Logo, loaded only when the style has a Logo component.
+  logoUrl: string | null;
 };
 
 // One row of the page as shown: its blocks' contents and widths, the
@@ -187,6 +195,8 @@ function BlockBuildPage({
   sections,
   components,
   signupForms,
+  logoUrl,
+  homeHref,
   onOpen,
 }: {
   pageId: string;
@@ -195,6 +205,8 @@ function BlockBuildPage({
   sections: CurationSectionData[];
   components: ComponentContent[];
   signupForms: SignupFormContent[];
+  logoUrl: string | null;
+  homeHref: string | null;
   onOpen: (artworkId: string) => void;
 }) {
   const { layout } = style;
@@ -237,6 +249,11 @@ function BlockBuildPage({
   };
 
   const fill = (block: LayoutBlock): ReactNode => {
+    if (block.type === "logo") {
+      if (!logoUrl) return null;
+      const logo = <img src={logoUrl} alt="" className="block w-full" />;
+      return homeHref ? <a href={homeHref}>{logo}</a> : logo;
+    }
     if (block.type === "signup") {
       const form = formByBlock.get(block.id);
       if (!form || !block.signup) return null;
