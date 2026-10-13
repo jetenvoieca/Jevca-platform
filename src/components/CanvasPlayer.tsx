@@ -14,6 +14,7 @@ import type { CanvasPlacement } from "@/lib/actions/pageCanvas";
 import type { CanvasLayout } from "@/lib/pageStyleLayout";
 import { useSiteData } from "@/lib/siteData";
 import CurationPanel from "@/components/CurationPanel";
+import FadeImage from "@/components/FadeImage";
 
 // A Canvas page played (2026-10-05, from Craig's mockups): the page's
 // placed curations on a large canvas that scrolls in any direction —
@@ -349,7 +350,7 @@ export default function CanvasPlayer({
                       zIndex: isOpen ? 10 : 0,
                     })}
                   >
-                    <img
+                    <FadeImage
                       src={w.displayUrl!}
                       alt={w.catalogueName}
                       draggable={false}
@@ -370,7 +371,7 @@ export default function CanvasPlayer({
                   style={rectStyle(opened ? opened[0] : closed, main, { zIndex: isOpen ? 10 : 1 })}
                 >
                   {cover?.imageUrl && (
-                    <img
+                    <FadeImage
                       src={cover.imageUrl}
                       alt={cover.name}
                       draggable={false}

@@ -6,6 +6,7 @@ import type { CurationSectionData } from "@/lib/curationSections";
 import { useSiteData } from "@/lib/siteData";
 import CurationSectionView from "@/components/CurationSectionView";
 import CurationWorkView from "@/components/CurationWorkView";
+import FadeImage from "@/components/FadeImage";
 
 // How the grid's images fly in (2026-10-06): from this far below,
 // slightly smaller, over this long, each one in a row a little after the
@@ -111,7 +112,7 @@ export default function CurationPanel({
                 className="block"
               >
                 {work.displayUrl ? (
-                  <img
+                  <FadeImage
                     src={work.displayUrl}
                     alt={work.catalogueName}
                     className="max-h-[65vh] w-full rounded-md object-contain"
@@ -150,7 +151,7 @@ export default function CurationPanel({
                         className="block w-full overflow-hidden rounded hover:opacity-90"
                       >
                         {w.imageUrl ? (
-                          <img
+                          <FadeImage
                             src={w.imageUrl}
                             alt={w.catalogueName}
                             loading="lazy"

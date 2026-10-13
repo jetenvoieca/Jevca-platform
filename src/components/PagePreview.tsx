@@ -37,6 +37,7 @@ import CurationWorkView from "@/components/CurationWorkView";
 import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
 import CanvasPlayer from "@/components/CanvasPlayer";
+import FadeImage from "@/components/FadeImage";
 
 // A page, drawn in its Display Style (2026-10-04) — the Pages page's
 // Preview panel, and (2026-10-06) the site's own pages, full screen.
@@ -264,7 +265,7 @@ function BlockBuildPage({
   const fill = (block: LayoutBlock, horizontal: HorizontalAlign): ReactNode => {
     if (block.type === "logo") {
       if (!artist?.logoUrl) return null;
-      const logo = <img src={artist.logoUrl} alt="" className="block w-full" />;
+      const logo = <FadeImage src={artist.logoUrl} alt="" className="block w-full" />;
       return (
         <div className={phoneSizedClass(horizontal)}>
           <div
@@ -315,7 +316,7 @@ function BlockBuildPage({
           : curated;
     if (sectionIsEmpty(section)) return null;
     if (section.type === "IMAGES" && block.type === "image") {
-      return <img src={section.media[0].url} alt="" className="w-full rounded" />;
+      return <FadeImage src={section.media[0].url} alt="" className="w-full rounded" />;
     }
     if (section.type === "IMAGES" && block.type === "gallery") {
       return (
@@ -440,7 +441,7 @@ function PlainPage({
               >
                 <div className="aspect-square overflow-hidden rounded-md bg-neutral-100 hover:opacity-90">
                   {w.imageUrl ? (
-                    <img
+                    <FadeImage
                       src={w.imageUrl}
                       alt={w.catalogueName}
                       className="h-full w-full object-cover"
@@ -496,7 +497,7 @@ function ImageGrid({
     >
       {images.map((img) => {
         const picture = img.url ? (
-          <img src={img.url} alt={img.title ?? ""} className="aspect-square w-full object-cover" />
+          <FadeImage src={img.url} alt={img.title ?? ""} className="aspect-square w-full object-cover" />
         ) : (
           <div className="aspect-square w-full bg-neutral-100" />
         );

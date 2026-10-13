@@ -1,6 +1,7 @@
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
 import type { PageTextStyle } from "@/lib/pageStyleLayout";
 import { bodyTextCss } from "@/components/textStyleCss";
+import FadeImage from "@/components/FadeImage";
 
 // One curation section as visitors see it (2026-10-06; shared
 // 2026-10-07) — in the curation panel on a Canvas page (CurationPanel),
@@ -43,7 +44,7 @@ export default function CurationSectionView({
       return (
         <div className="flex flex-col gap-2">
           {section.media.map((m) => (
-            <img key={m.imageId} src={m.url} alt="" className="w-full rounded-md" />
+            <FadeImage key={m.imageId} src={m.url} alt="" className="w-full rounded-md" />
           ))}
         </div>
       );

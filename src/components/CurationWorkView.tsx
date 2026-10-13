@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import { useSiteData } from "@/lib/siteData";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
+import FadeImage from "@/components/FadeImage";
 
 // One work's presentation within a curation, read-only (2026-10-05, from
 // Craig's mockup) — its details panel, opened from a page. Shows just
@@ -96,7 +97,7 @@ export default function CurationWorkView({
               className="max-h-[60vh] w-full rounded-md bg-black object-contain"
             />
           ) : (
-            <img
+            <FadeImage
               src={viewed.displayUrl}
               alt={data.catalogueName}
               className="max-h-[60vh] w-full rounded-md object-contain"
@@ -114,7 +115,7 @@ export default function CurationWorkView({
                   i === viewIndex ? "border-neutral-900" : "border-transparent hover:border-neutral-300"
                 }`}
               >
-                <img
+                <FadeImage
                   src={img.kind === "VIDEO" ? (img.posterUrl ?? img.url) : img.url}
                   alt=""
                   className="aspect-square w-full object-cover"

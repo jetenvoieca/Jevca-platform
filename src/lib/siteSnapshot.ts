@@ -107,3 +107,34 @@ export type SiteSnapshot = {
 // published, but something on it won't work yet (its sign-up forms'
 // robot check — see lib/turnstile.ts).
 export type PublishResult = { publishedAt: string; warning?: string } | { error: string };
+
+// The pictures a page shows first (2026-10-13): its works' and Supporting
+// Images' pictures, the Video's poster, the Logo, and the curations'
+// covers on a Canvas. Fetched while a visitor hovers over a link to the
+// page (see PublishedSite), so they're ready when it opens.
+export function pageImageUrls(snapshot: SiteSnapshot, page: SnapshotPage): string[] {
+  const urls = new Set<string>();
+  const add = (url: string | null | undefined) => {
+    if (url) urls.add(url);
+  };
+  const style = page.style;
+  if (style?.type === "CANVAS") {
+    for (const placement of page.canvas) {
+      add(snapshot.covers.find((c) => c.id === placement.curationId)?.imageUrl);
+    }
+    return [...urls];
+  }
+  const blocks = style?.type === "BLOCK_BUILD" ? style.layout.blocks : [];
+  if (blocks.some((b) => b.type === "logo")) add(snapshot.artist?.logoUrl);
+  const curation = page.curationId ? snapshot.curations[page.curationId] : undefined;
+  if (!curation) return [...urls];
+  const doors = blocks.some((b) => b.type === "slidingdoors");
+  for (const work of curation.detail.works) {
+    add(work.imageUrl);
+    if (doors) add(work.displayUrl);
+  }
+  for (const section of curation.sections) {
+    for (const media of section.media) add(media.kind === "PHOTO" ? media.url : media.posterUrl);
+  }
+  return [...urls];
+}
