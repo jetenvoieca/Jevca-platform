@@ -1,5 +1,6 @@
 import { createHash, randomInt } from "crypto";
 import { Resend } from "resend";
+import { APP_URL } from "@/lib/appUrl";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { artistCampaignAddresses } from "@/lib/email";
@@ -486,11 +487,10 @@ export async function runCampaignSending(budgetMs: number): Promise<{ more: bool
 // Wakes the sending runs straight away (Send now) instead of waiting for
 // the next 5-minute check. If it can't, the check still picks it up.
 export async function wakeCampaignSending(): Promise<void> {
-  const base = process.env.URL;
   const secret = process.env.CAMPAIGN_SEND_SECRET;
-  if (!base || !secret) return;
+  if (!secret) return;
   try {
-    await fetch(`${base}/.netlify/functions/send-campaigns-background`, {
+    await fetch(`${APP_URL}/.netlify/functions/send-campaigns-background`, {
       method: "POST",
       headers: { "x-campaign-send-secret": secret },
     });

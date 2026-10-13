@@ -1,4 +1,5 @@
 import type { Config } from "@netlify/functions";
+import { APP_URL } from "../../src/lib/appUrl";
 
 // Keeps the app's server function and the Neon database compute both
 // warm, so real clicks don't pay the ~3s (server) + ~1.5s (database)
@@ -8,7 +9,7 @@ import type { Config } from "@netlify/functions";
 // on each ping.
 export default async () => {
   try {
-    const res = await fetch("https://jevca.netlify.app/api/keepalive");
+    const res = await fetch(`${APP_URL}/api/keepalive`);
     console.log(`[keep-warm] ping status ${res.status}`);
   } catch (err) {
     console.log("[keep-warm] ping failed:", err);
