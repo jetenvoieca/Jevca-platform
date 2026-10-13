@@ -1,4 +1,5 @@
 import { cleanColour } from "@/lib/rowLayout";
+import { withTextStyle } from "@/lib/textStyle";
 import { cleanLinkUrl, cleanRichText, EMPTY_RICH_TEXT, isRichTextEmpty, type RichText } from "@/lib/richText";
 import {
   mailBlockTypeLabel,
@@ -219,39 +220,79 @@ export function isBlockContentEmpty(content: BlockContent): boolean {
   }
 }
 
-// Moves a mail's content into a new layout when its template is changed
-// (Craig's rule): each component's content goes to the component of the
-// same kind in the same order — the 1st Text to the 1st Text, the 1st
-// Gallery to the 1st Gallery. `dropped` names the components whose
-// content has nowhere to go (empty ones aren't counted), e.g.
-// ["Text", "Gallery"], so the person can be warned first.
+// Where a mail's components go in a new layout — used when the mail's
+// template is changed, and (2026-10-13) when its template is edited.
+// Craig's rule: a component goes to the same component if the new layout
+// still has it (a mail made from a template shares its components'
+// ids), otherwise to the next unused component of the same kind in
+// reading order — the 1st Text to the 1st Text, the 1st Gallery to the
+// 1st Gallery. Components with nowhere to go are left out.
+function placeComponents(from: MailTemplateLayout, to: MailTemplateLayout): Map<string, MailBlock> {
+  const targetById = new Map(to.blocks.map((b) => [b.id, b]));
+  const placed = new Map<string, MailBlock>();
+  const used = new Set<string>();
+  for (const block of from.blocks) {
+    const same = targetById.get(block.id);
+    if (same && same.type === block.type) {
+      placed.set(block.id, same);
+      used.add(same.id);
+    }
+  }
+  // A layout's blocks are kept in reading order.
+  for (const block of from.blocks) {
+    if (placed.has(block.id)) continue;
+    const next = to.blocks.find((b) => b.type === block.type && !used.has(b.id));
+    if (next) {
+      placed.set(block.id, next);
+      used.add(next.id);
+    }
+  }
+  return placed;
+}
+
+// Moves a mail's content into a new layout (see placeComponents).
+// `dropped` names the components whose content has nowhere to go (empty
+// ones aren't counted), e.g. ["Text", "Gallery"], so the person can be
+// warned first.
 export function moveMailContent(
   content: MailContent,
   from: MailTemplateLayout,
   to: MailTemplateLayout
 ): { content: MailContent; dropped: string[] } {
-  const byType = (layout: MailTemplateLayout) => {
-    const lists = new Map<MailBlockType, MailBlock[]>();
-    // A layout's blocks are kept in reading order.
-    for (const block of layout.blocks) {
-      if (!hasContent(block.type)) continue;
-      lists.set(block.type, [...(lists.get(block.type) ?? []), block]);
-    }
-    return lists;
-  };
-  const source = byType(from);
-  const target = byType(to);
+  const placed = placeComponents(from, to);
   const moved: MailContent = {};
   const dropped: string[] = [];
-  for (const [type, blocks] of source) {
-    const places = target.get(type) ?? [];
-    blocks.forEach((block, i) => {
-      const found = content[block.id];
-      if (!found || found.type !== type) return;
-      const place = places[i];
-      if (place) moved[place.id] = found;
-      else if (!isBlockContentEmpty(found)) dropped.push(mailBlockTypeLabel(type));
-    });
+  for (const block of from.blocks) {
+    if (!hasContent(block.type)) continue;
+    const found = content[block.id];
+    if (!found || found.type !== block.type) continue;
+    const place = placed.get(block.id);
+    if (place) moved[place.id] = found;
+    else if (!isBlockContentEmpty(found)) dropped.push(mailBlockTypeLabel(block.type));
   }
   return { content: cleanMailContent(moved, to), dropped };
+}
+
+// A mail brought in line with its edited template (2026-10-13, Craig's
+// choice): the template's components, arrangement and look, with the
+// mail's content moved across (moveMailContent) and each component's
+// own Text style, set on the mail, kept where the component goes.
+export function followTemplate(
+  layout: MailTemplateLayout,
+  content: MailContent,
+  template: MailTemplateLayout
+): { layout: MailTemplateLayout; content: MailContent; dropped: string[] } {
+  const placed = placeComponents(layout, template);
+  const ownStyle = new Map<string, MailBlock["textStyle"]>();
+  for (const block of layout.blocks) {
+    const place = placed.get(block.id);
+    if (place && block.textStyle) ownStyle.set(place.id, block.textStyle);
+  }
+  const blocks = template.blocks.map((b) => {
+    const style = ownStyle.get(b.id);
+    return style ? withTextStyle(b, style) : b;
+  });
+  const followed = { ...template, blocks };
+  const moved = moveMailContent(content, layout, followed);
+  return { layout: followed, content: moved.content, dropped: moved.dropped };
 }

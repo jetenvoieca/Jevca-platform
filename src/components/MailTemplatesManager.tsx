@@ -6,7 +6,10 @@ import {
   createMailTemplate,
   deleteMailTemplate,
   duplicateMailTemplate,
+  applyTemplateToHeldMails,
+  syncTemplateMails,
   updateMailTemplate,
+  type HeldMail,
   type MailTemplateSummary,
 } from "@/lib/actions/mailTemplates";
 import { newMailTemplateLayout } from "@/lib/mailTemplateLayout";
@@ -27,6 +30,11 @@ import { useAutoSave } from "@/components/useAutoSave";
 // sized, spaced and aligned by hand. Every change shows at once and
 // saves itself shortly after (a new template is created the first time
 // it has a name — see useAutoSave).
+//
+// Campaign mails not yet sent follow the template as it's edited
+// (2026-10-13 — see lib/actions/mailTemplates.ts). On Close, any whose
+// content would have no place in it are listed, to update them anyway
+// or leave them as they are.
 export default function MailTemplatesManager({
   templates,
 }: {
@@ -37,6 +45,10 @@ export default function MailTemplatesManager({
   const [draft, setDraft] = useState<MailTemplateDraft | null>(null);
   const [listError, setListError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // The template being edited (null for a new one, which no mail uses
+  // yet), and the mails held back from following it, once it's closed.
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [held, setHeld] = useState<HeldMail[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const autoSave = useAutoSave<MailTemplateDraft>({
@@ -57,7 +69,9 @@ export default function MailTemplatesManager({
   };
 
   const openEditor = (mode: "add" | "edit") => {
-    autoSave.begin(mode === "edit" && selected ? selected.id : null);
+    const id = mode === "edit" && selected ? selected.id : null;
+    autoSave.begin(id);
+    setEditingId(id);
     setListError(null);
     setDraft(
       mode === "edit" && selected
@@ -71,6 +85,16 @@ export default function MailTemplatesManager({
     startTransition(async () => {
       await autoSave.flush();
       setDraft(null);
+      if (editingId) setHeld(await syncTemplateMails(editingId));
+    });
+  };
+
+  const updateHeld = () => {
+    const id = editingId;
+    setHeld([]);
+    if (!id) return;
+    startTransition(async () => {
+      await applyTemplateToHeldMails(id);
     });
   };
 
@@ -201,6 +225,19 @@ export default function MailTemplatesManager({
           </div>
         )}
       </aside>
+
+      <ConfirmDialog
+        open={held.length > 0}
+        title="Update these mails too?"
+        message={`Unsent mails using this template follow it, but in these the content below has no place in it and would be removed: ${held
+          .map((h) => `${h.campaign} – ${h.mail} (${h.dropped.join(", ")})`)
+          .join("; ")}. If you leave them, they keep their own components and only take the template's look.`}
+        confirmLabel="Update anyway"
+        cancelLabel="Leave them"
+        danger
+        onConfirm={updateHeld}
+        onCancel={() => setHeld([])}
+      />
 
       <ConfirmDialog
         open={confirmingDelete && !!selected}
