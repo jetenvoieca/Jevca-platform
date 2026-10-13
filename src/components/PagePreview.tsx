@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
@@ -19,7 +19,7 @@ import {
   type VerticalAlign,
 } from "@/lib/rowLayout";
 import { isTextComponent, mergeTextStyle } from "@/lib/textStyle";
-import { useSiteData } from "@/lib/siteData";
+import { useSiteData, type PageContent } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import {
   phoneSizedClass,
@@ -94,15 +94,22 @@ export default function PagePreview({
   fullScreen?: boolean;
 }) {
   const siteData = useSiteData();
-  const [content, setContent] = useState<PageContent | null>(null);
+  const [loaded, setLoaded] = useState<PageContent | null>(null);
   const [loading, setLoading] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const blockBuild = style?.type === "BLOCK_BUILD";
+  // On the published site everything is already here (2026-10-13), so
+  // the page is drawn at once; the admin preview loads it.
+  const now = useMemo(
+    () => (curationId ? siteData.pageContentNow(pageId, curationId) : null),
+    [siteData, pageId, curationId]
+  );
+  const content = now ?? loaded;
 
   useEffect(() => {
     setViewingId(null);
-    if (!curationId) {
-      setContent(null);
+    if (!curationId || now) {
+      setLoaded(null);
       return;
     }
     // Ignores a reply that arrives after a different page was selected.
@@ -118,13 +125,13 @@ export default function PagePreview({
       siteData.getArtist(),
     ]).then(([curation, sections, components, signupForms, artist]) => {
       if (!current) return;
-      setContent({ curation, sections, components, signupForms, artist });
+      setLoaded({ curation, sections, components, signupForms, artist });
       setLoading(false);
     });
     return () => {
       current = false;
     };
-  }, [siteData, curationId, pageId, blockBuild]);
+  }, [siteData, curationId, pageId, blockBuild, now]);
 
   const closeView = useCallback(() => setViewingId(null), []);
   const curation = content?.curation ?? null;
@@ -181,17 +188,6 @@ export default function PagePreview({
     </div>
   );
 }
-
-// What a page shows, loaded together. Sections, components and sign-up
-// forms are only loaded for a Block Build page.
-type PageContent = {
-  curation: CurationDetail | null;
-  sections: CurationSectionData[];
-  components: ComponentContent[];
-  signupForms: SignupFormContent[];
-  // The artist's Logo and footer.
-  artist: SiteArtist | null;
-};
 
 // One row of the page as shown: its blocks' contents and widths, the
 // space below it, the space between its blocks and its alignment.

@@ -70,8 +70,13 @@ export default function CanvasPlayer({
 }) {
   const siteData = useSiteData();
   const T = layout.tileSize;
-  const [placements, setPlacements] = useState<CanvasPlacement[] | null>(null);
-  const [covers, setCovers] = useState<Map<string, CurationCover>>(new Map());
+  // On the published site the placements are already here (2026-10-13),
+  // so the canvas is drawn at once; the admin preview loads them.
+  const [now] = useState(() => siteData.canvasNow(pageId));
+  const [placements, setPlacements] = useState<CanvasPlacement[] | null>(now?.placements ?? null);
+  const [covers, setCovers] = useState<Map<string, CurationCover>>(
+    () => new Map((now?.covers ?? []).map((c) => [c.id, c]))
+  );
   const [works, setWorks] = useState<Map<string, CurationWork[]>>(new Map());
   const [view, setView] = useState<{ w: number; h: number } | null>(null);
   const [ready, setReady] = useState(false);
@@ -83,6 +88,7 @@ export default function CanvasPlayer({
   const frameRef = useRef<number | null>(null);
 
   useEffect(() => {
+    if (now) return;
     let current = true;
     Promise.all([siteData.getCanvas(pageId), siteData.listCovers()]).then(
       ([loadedPlacements, loadedCovers]) => {
@@ -94,7 +100,7 @@ export default function CanvasPlayer({
     return () => {
       current = false;
     };
-  }, [siteData, pageId]);
+  }, [siteData, pageId, now]);
 
   // The view's size, kept up to date as it changes.
   useLayoutEffect(() => {

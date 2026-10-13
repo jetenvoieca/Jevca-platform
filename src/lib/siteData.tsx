@@ -26,6 +26,17 @@ import type { SiteArtist } from "@/lib/siteArtist";
 // site's working data, live — and the published site — its saved
 // snapshot (lib/siteSnapshot.ts) — so a page only ever looks one way.
 // Wrap them in LiveSiteData or SnapshotSiteData.
+// What a page shows, loaded together. Sections, components and sign-up
+// forms are only used by a Block Build page.
+export type PageContent = {
+  curation: CurationDetail | null;
+  sections: CurationSectionData[];
+  components: ComponentContent[];
+  signupForms: SignupFormContent[];
+  // The artist's Logo and footer.
+  artist: SiteArtist | null;
+};
+
 export type SiteData = {
   getCuration(curationId: string): Promise<CurationDetail | null>;
   listSections(curationId: string): Promise<CurationSectionData[]>;
@@ -38,6 +49,14 @@ export type SiteData = {
   listCovers(): Promise<CurationCover[]>;
   // The artist's Logo and footer (2026-10-13) — see lib/siteArtist.ts.
   getArtist(): Promise<SiteArtist | null>;
+  // Everything a page shows, at once (2026-10-13): from the published
+  // snapshot, which is already in the browser, so a page is drawn
+  // straight away — no "Loading…". Null in the admin preview, whose
+  // pages load with the getters above.
+  pageContentNow(pageId: string, curationId: string): PageContent | null;
+  // A Canvas page's placements and the curations' covers, at once, in
+  // the same way.
+  canvasNow(pageId: string): { placements: CanvasPlacement[]; covers: CurationCover[] } | null;
   // Where a Logo links: the site's home page on the published site; null
   // in the admin preview, where it isn't a link.
   homeHref: string | null;
@@ -78,6 +97,8 @@ export function LiveSiteData({
       getSignupForms: (pageId) => getPageSignupForms(siteId, pageId),
       listCovers: () => listCurationCovers(artistId),
       getArtist: () => getSiteArtist(artistId),
+      pageContentNow: () => null,
+      canvasNow: () => null,
       homeHref: null,
       signup: null,
     }),
@@ -112,6 +133,21 @@ export function SnapshotSiteData({
         snapshot.pages.find((p) => p.id === pageId)?.signupForms ?? [],
       listCovers: async () => snapshot.covers,
       getArtist: async () => snapshot.artist,
+      pageContentNow: (pageId, curationId) => {
+        const page = snapshot.pages.find((p) => p.id === pageId);
+        const curation = snapshot.curations[curationId];
+        return {
+          curation: curation?.detail ?? null,
+          sections: curation?.sections ?? [],
+          components: page?.components ?? [],
+          signupForms: page?.signupForms ?? [],
+          artist: snapshot.artist,
+        };
+      },
+      canvasNow: (pageId) => ({
+        placements: snapshot.pages.find((p) => p.id === pageId)?.canvas ?? [],
+        covers: snapshot.covers,
+      }),
       homeHref: publishedHomePath(siteId),
       signup: { siteId, siteKey },
     }),
