@@ -18,7 +18,11 @@ function availabilitiesFor(filter: string): Availability[] {
 }
 
 export type ArtworkFilterInput = {
+  // Free-text search (name, catalogue #, medium) — the artwork picker's.
   q?: string;
+  // One exact artwork name (2026-10-13) — the Artwork Catalogue's Name
+  // dropdown. Several works can share a name (different types).
+  name?: string;
   availability?: string;
   location?: string;
   type?: string;
@@ -29,9 +33,10 @@ export type ArtworkFilterInput = {
 };
 
 export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput) {
-  const { q, availability, location, type, curation } = filters;
+  const { q, name, availability, location, type, curation } = filters;
   return {
     artistId,
+    ...(name ? { catalogueName: name } : {}),
     ...(q
       ? {
           OR: [
@@ -68,24 +73,14 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
 export function artworkMatchesFilters(
   artwork: {
     catalogueName: string;
-    catalogueNumber: string;
-    medium: string | null;
     availability: string;
     location: string | null;
     type: string | null;
   },
   filters: ArtworkFilterInput
 ): boolean {
-  const { q, availability, location, type } = filters;
-  if (q) {
-    const needle = q.toLowerCase();
-    const haystacks = [
-      artwork.catalogueName,
-      artwork.catalogueNumber,
-      artwork.medium,
-    ];
-    if (!haystacks.some((h) => h && h.toLowerCase().includes(needle))) return false;
-  }
+  const { name, availability, location, type } = filters;
+  if (name && artwork.catalogueName !== name) return false;
   if (availability && !availabilitiesFor(availability).includes(artwork.availability as Availability)) {
     return false;
   }

@@ -173,9 +173,9 @@ export async function listImages(artistId: string, q?: string) {
 
 // ArtworkPicker's list (Curations, campaign mails, Hopper). Scoped to the
 // artist, not the site, since any of that artist's sites can feature any
-// of their artworks. Search, Location and Type mean exactly what they mean
-// in the Artwork Catalogue — the same shared buildArtworkWhere and order
-// (lib/artworkFilters.ts). Returned a page at a time (2026-10-13): it used
+// of their artworks. Search matches name, catalogue # and medium; Location
+// and Type mean exactly what they mean in the Artwork Catalogue — the same
+// shared buildArtworkWhere and order (lib/artworkFilters.ts). Returned a page at a time (2026-10-13): it used
 // to return only the 60 newest, so older works could never be picked.
 // Works to leave out (e.g. already in the curation) are excluded here, not
 // after loading, so they don't use up a page.

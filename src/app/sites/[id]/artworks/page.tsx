@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { listArtworks, getArtworkDetailForClient } from "@/lib/actions/artworks";
+import { listArtworks, listArtworkNames, getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { listCurations } from "@/lib/actions/curations";
 import ArtworksCatalogueView from "./ArtworksCatalogueView";
@@ -7,7 +7,8 @@ import ArtworksCatalogueView from "./ArtworksCatalogueView";
 export const dynamic = "force-dynamic";
 
 type SearchParams = {
-  q?: string;
+  // One exact artwork name — the Name dropdown (2026-10-13).
+  name?: string;
   availability?: string;
   location?: string;
   type?: string;
@@ -40,9 +41,9 @@ export default async function ArtworksCataloguePage({
   });
   const artistId = site!.artistId;
 
-  const [{ rows, total, soldCount }, settings, curations, selectedRaw] = await Promise.all([
+  const [{ rows, total, soldCount }, settings, names, curations, selectedRaw] = await Promise.all([
     listArtworks(artistId, {
-      q: sp.q,
+      name: sp.name,
       availability: sp.availability,
       location: sp.location,
       type: sp.type,
@@ -50,6 +51,7 @@ export default async function ArtworksCataloguePage({
       limit: PAGE_SIZE,
     }),
     getArtworkSettings(artistId),
+    listArtworkNames(artistId),
     listCurations(artistId),
     sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
   ]);
@@ -65,7 +67,8 @@ export default async function ArtworksCataloguePage({
       total={total}
       soldCount={soldCount}
       pageSize={PAGE_SIZE}
-      q={sp.q || ""}
+      name={sp.name || ""}
+      names={names}
       availability={sp.availability || ""}
       location={sp.location || ""}
       type={sp.type || ""}

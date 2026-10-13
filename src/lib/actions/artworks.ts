@@ -340,6 +340,19 @@ export async function countArtworksNeedingReview(artistId: string): Promise<numb
   return countArtworksNeedingReviewCached(artistId);
 }
 
+// Every distinct artwork name for the artist, A–Z the same way the grid
+// sorts (natural-language collation, see buildArtworkOrderBy) — the
+// Artwork Catalogue's Name dropdown (2026-10-13).
+export async function listArtworkNames(artistId: string): Promise<string[]> {
+  const rows = await db.artwork.findMany({
+    where: { artistId },
+    distinct: ["catalogueName"],
+    orderBy: { catalogueName: "asc" },
+    select: { catalogueName: true },
+  });
+  return rows.map((r) => r.catalogueName);
+}
+
 // Lightweight rows for the grid — only what a tile needs to render.
 // Full detail is fetched separately (getArtworkDetail) when a tile is opened.
 export async function listArtworks(

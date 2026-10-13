@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   getArtworkDetailForClient,
   listArtworks,
+  listArtworkNames,
   deleteArtworkIfBlank,
   type ArtworkListRow,
 } from "@/lib/actions/artworks";
@@ -22,7 +23,7 @@ import { useClientWords } from "@/components/ClientWordsProvider";
 // Every filter the catalogue offers, in one shape — what the URL, the
 // grid fetches and the PDF/CSV exports all read from.
 type Filters = {
-  q: string;
+  name: string;
   availability: string;
   location: string;
   type: string;
@@ -57,7 +58,7 @@ function activeFilterParams(filters: Filters): Record<string, string> {
 // The same filters as listArtworks takes them — unset ones left out.
 function toListFilters(filters: Filters) {
   return {
-    q: filters.q || undefined,
+    name: filters.name || undefined,
     availability: filters.availability || undefined,
     location: filters.location || undefined,
     type: filters.type || undefined,
@@ -74,7 +75,8 @@ export default function ArtworksCatalogueView({
   total: initialTotal,
   soldCount: initialSoldCount,
   pageSize,
-  q: initialQ,
+  name: initialName,
+  names: initialNames,
   availability: initialAvailability,
   location: initialLocation,
   type: initialType,
@@ -97,7 +99,10 @@ export default function ArtworksCatalogueView({
   total: number;
   soldCount: number;
   pageSize: number;
-  q: string;
+  // The Name dropdown (2026-10-13): the chosen name, and every artwork
+  // name to choose from.
+  name: string;
+  names: string[];
   availability: string;
   location: string;
   type: string;
@@ -148,14 +153,19 @@ export default function ArtworksCatalogueView({
   // applies the moment you click a chip or change a dropdown, no
   // separate step, and the URL still updates (via replaceState, not a
   // navigation) so filters stay bookmarkable/shareable.
-  const [q, setQ] = useState(initialQ);
+  const [name, setName] = useState(initialName);
+  const [names, setNames] = useState(initialNames);
   const [availability, setAvailability] = useState(initialAvailability);
   const [location, setLocation] = useState(initialLocation);
   const [type, setType] = useState(initialType);
   const [curation, setCuration] = useState(initialCuration);
-  const searchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const currentFilters: Filters = { q, availability, location, type, curation };
+  // The Name list changes when a work is renamed, duplicated or deleted.
+  const refreshNames = () => {
+    listArtworkNames(artistId).then(setNames);
+  };
+
+  const currentFilters: Filters = { name, availability, location, type, curation };
 
   // Declared up here, ahead of applyFilters below, specifically because
   // applyFilters' own dependency array reads `selected` directly
@@ -186,7 +196,7 @@ export default function ArtworksCatalogueView({
 
   const applyFilters = useCallback(
     async (overrides: Partial<Filters>) => {
-      const next: Filters = { q, availability, location, type, curation, ...overrides };
+      const next: Filters = { name, availability, location, type, curation, ...overrides };
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
         ...toListFilters(next),
         limit: pageSize,
@@ -214,7 +224,7 @@ export default function ArtworksCatalogueView({
         updateUrlSelected(null);
       }
     },
-    [artistId, q, availability, location, type, curation, pageSize, selected]
+    [artistId, name, availability, location, type, curation, pageSize, selected]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -222,7 +232,7 @@ export default function ArtworksCatalogueView({
     setLoadMoreError(false);
     try {
       const { rows } = await listArtworks(artistId, {
-        ...toListFilters({ q, availability, location, type, curation }),
+        ...toListFilters({ name, availability, location, type, curation }),
         offset: artworks.length,
         limit: pageSize,
       });
@@ -237,7 +247,7 @@ export default function ArtworksCatalogueView({
     } finally {
       setLoadingMore(false);
     }
-  }, [artistId, artworks.length, q, availability, location, type, curation, pageSize]);
+  }, [artistId, artworks.length, name, availability, location, type, curation, pageSize]);
 
   // Infinite scroll: an invisible sentinel sits just past the last row.
   // When it enters the viewport we auto-fetch the next page — no "Load
@@ -332,6 +342,7 @@ export default function ArtworksCatalogueView({
 
   const handleDeletedPanel = () => {
     if (selected) setArtworks((prev) => prev.filter((a) => a.id !== selected.id));
+    refreshNames();
     selectedIdRef.current = null;
     setSelected(null);
     updateUrlSelected(null);
@@ -357,6 +368,7 @@ export default function ArtworksCatalogueView({
       setTotal(newTotal);
       setSoldCount(newSoldCount);
       setLoadMoreError(false);
+      refreshNames();
       handleSelect(newArtworkId);
     })();
   };
@@ -389,6 +401,7 @@ export default function ArtworksCatalogueView({
       // (2026-08-15 fix).
       if (item && item.artistId === artistId && selectedIdRef.current === idAtCallTime) {
         setSelected(item);
+        refreshNames();
 
         const stillMatches = artworkMatchesFilters(item, currentFilters);
 
@@ -678,29 +691,29 @@ export default function ArtworksCatalogueView({
               </select>
             )}
 
-            <form
-              onSubmit={(e) => {
-                // Enter in the search box jumps the queue past the debounce
-                // below, rather than waiting it out.
-                e.preventDefault();
-                if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                applyFilters({ q });
-              }}
-              className="flex flex-wrap items-center gap-2"
-            >
-              <input
-                type="text"
-                name="q"
-                value={q}
+            <div className="flex flex-wrap items-center gap-2">
+              {/* Name dropdown (2026-10-13) — replaced the search box.
+                  Shows every work with that name, whatever its type. A
+                  chosen name no longer in the list (just renamed) stays
+                  shown, so the box never silently reads "All names". */}
+              <select
+                name="name"
+                value={name}
                 onChange={(e) => {
                   const v = e.target.value;
-                  setQ(v);
-                  if (searchDebounceRef.current) clearTimeout(searchDebounceRef.current);
-                  searchDebounceRef.current = setTimeout(() => applyFilters({ q: v }), 350);
+                  setName(v);
+                  applyFilters({ name: v });
                 }}
-                placeholder="Search title, catalogue #, medium"
-                className="w-44 rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm"
-              />
+                className="max-w-56 rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
+              >
+                <option value="">All names</option>
+                {name && !names.includes(name) && <option value={name}>{name}</option>}
+                {names.map((n) => (
+                  <option key={n} value={n}>
+                    {n}
+                  </option>
+                ))}
+              </select>
               <select
                 name="location"
                 value={location}
@@ -735,7 +748,7 @@ export default function ArtworksCatalogueView({
                   </option>
                 ))}
               </select>
-            </form>
+            </div>
           </div>
 
           <p className="mb-3 text-sm text-neutral-400">

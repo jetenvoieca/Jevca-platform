@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { listArtworks, getArtworkDetailForClient } from "@/lib/actions/artworks";
+import { listArtworks, listArtworkNames, getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { resolvePreviewSiteId } from "@/lib/previewSites";
 import ArtworksCatalogueView from "@/app/sites/[id]/artworks/ArtworksCatalogueView";
@@ -8,7 +8,8 @@ import ArtworksCatalogueView from "@/app/sites/[id]/artworks/ArtworksCatalogueVi
 export const dynamic = "force-dynamic";
 
 type SearchParams = {
-  q?: string;
+  // One exact artwork name — the Name dropdown (2026-10-13).
+  name?: string;
   availability?: string;
   location?: string;
   type?: string;
@@ -43,15 +44,16 @@ export default async function PreviewArtworksPage({
   if (!site) notFound();
   const artistId = site.artistId;
 
-  const [{ rows, total, soldCount }, settings, selectedRaw] = await Promise.all([
+  const [{ rows, total, soldCount }, settings, names, selectedRaw] = await Promise.all([
     listArtworks(artistId, {
-      q: sp.q,
+      name: sp.name,
       availability: sp.availability,
       location: sp.location,
       type: sp.type,
       limit: PAGE_SIZE,
     }),
     getArtworkSettings(artistId),
+    listArtworkNames(artistId),
     sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
   ]);
 
@@ -67,7 +69,8 @@ export default async function PreviewArtworksPage({
       total={total}
       soldCount={soldCount}
       pageSize={PAGE_SIZE}
-      q={sp.q || ""}
+      name={sp.name || ""}
+      names={names}
       availability={sp.availability || ""}
       location={sp.location || ""}
       type={sp.type || ""}

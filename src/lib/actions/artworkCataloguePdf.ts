@@ -331,7 +331,7 @@ function buildTextLines(a: {
 function describeFilters(filters: CatalogueExportFilters, curationName: string | null): string {
   const parts: string[] = [];
   if (curationName) parts.push(`Curation: ${curationName}`);
-  if (filters.q) parts.push(`Search: "${filters.q}"`);
+  if (filters.name) parts.push(`Name: ${filters.name}`);
   if (filters.availability) parts.push(filters.availability === "SOLD" ? "Sold" : "Available");
   if (filters.type) parts.push(`Type: ${filters.type}`);
   if (filters.location) parts.push(`Location: ${filters.location}`);

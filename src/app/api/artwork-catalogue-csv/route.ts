@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const { csv, filename } = await generateArtworkCatalogueCsv(artistId, {
-      q: params.get("q") || undefined,
+      name: params.get("name") || undefined,
       availability: params.get("availability") || undefined,
       location: params.get("location") || undefined,
       type: params.get("type") || undefined,

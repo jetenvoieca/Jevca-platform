@@ -12,7 +12,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const { bytes, filename } = await generateArtworkCataloguePdf(artistId, artist, {
-      q: params.get("q") || undefined,
+      name: params.get("name") || undefined,
       availability: params.get("availability") || undefined,
       location: params.get("location") || undefined,
       type: params.get("type") || undefined,
