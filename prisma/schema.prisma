@@ -125,11 +125,10 @@ enum Mailbox {
 
 // The kinds of section a curation's presentation can have (2026-10-06)
 // — see CurationSection.
+// In display order (Postgres sorts an enum by its declared order).
 enum CurationSectionType {
-  TAGLINE
   DESCRIPTION
   VIDEO
-  TEXT
   IMAGES
 }
 
@@ -629,33 +628,29 @@ model Curation {
   @@index([artistId])
 }
 
-// One section of a curation's presentation (2026-10-06, from Craig's
-// mockups), shown in order in the curation panel on a page: a Tag line
-// (`text`, one line), a Description (`text`), Free text (`heading` +
-// `text`), a Video (one video from the Media Catalogue, in `media`) or
-// Images (photos from the Media Catalogue, in `media`, shown one under
-// another). Any type can be used any number of times; `position` sets
-// the order (0 first). Edited on the Curations page. Removed with its
-// curation. Text sections are plain text (2026-10-07 — their height and
-// background colour were removed). Can also be put in a Block Build
+// One section of a curation's presentation (2026-10-06; fixed
+// 2026-10-13, Craig's mockup): every curation has exactly three — a
+// Description (`text`), a Video (one video from the Media Catalogue, in
+// `media`) and Supporting Images (photos from the Media Catalogue, in
+// `media`) — created with the curation, shown in that order (the type's
+// order), never added, removed or reordered. Edited on the Curations
+// page. Removed with its curation. Can also be put in a Block Build
 // page's components (2026-10-07) — see PageComponentContent.
 model CurationSection {
   id         String              @id @default(cuid())
   curationId String
   curation   Curation            @relation(fields: [curationId], references: [id], onDelete: Cascade)
   type       CurationSectionType
-  position   Int                 @default(0)
 
-  heading String?
-  text    String?
-  media   CurationSectionMedia[]
+  text  String?
+  media CurationSectionMedia[]
 
   pageComponents PageComponentContent[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([curationId, position])
+  @@unique([curationId, type])
 }
 
 // One video or image in a curation section (2026-10-06) — see

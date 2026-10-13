@@ -71,14 +71,14 @@ function sectionContent(section: CurationSectionData): Content {
   };
 }
 
-// A line to tell sections of the same type apart: the start of its
-// text, or what it holds.
+// A line saying what a section holds: the start of its text, or how
+// many pictures.
 function sectionDetail(section: CurationSectionData): string {
   if (section.type === "VIDEO") return section.media.length > 0 ? "Video chosen" : "No video yet";
   if (section.type === "IMAGES") {
     return section.media.length === 1 ? "1 image" : `${section.media.length} images`;
   }
-  const text = (section.heading || section.text || "").trim();
+  const text = (section.text || "").trim();
   if (!text) return "Empty";
   return text.length > DETAIL_LENGTH ? `${text.slice(0, DETAIL_LENGTH)}…` : text;
 }

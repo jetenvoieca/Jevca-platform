@@ -3,13 +3,15 @@
 // the Curations page editor and the curation panel on a page. Plain
 // module, not "use server", so all of them can import it. See
 // CurationSection in schema.prisma.
+//
+// Every curation has exactly these three, in this order (2026-10-13,
+// Craig's mockup) — never added, removed or reordered. Further layout is
+// done in Pages.
 
 export const CURATION_SECTION_TYPES = [
-  { value: "TAGLINE", label: "Tag line" },
   { value: "DESCRIPTION", label: "Description" },
   { value: "VIDEO", label: "Video" },
-  { value: "TEXT", label: "Free text" },
-  { value: "IMAGES", label: "Images" },
+  { value: "IMAGES", label: "Supporting Images" },
 ] as const;
 
 export type CurationSectionType = (typeof CURATION_SECTION_TYPES)[number]["value"];
@@ -20,11 +22,6 @@ export function isCurationSectionType(value: string): value is CurationSectionTy
 
 export function curationSectionLabel(type: CurationSectionType): string {
   return CURATION_SECTION_TYPES.find((t) => t.value === type)?.label ?? type;
-}
-
-// The section types that hold text.
-export function isTextSection(type: CurationSectionType): boolean {
-  return type === "TAGLINE" || type === "DESCRIPTION" || type === "TEXT";
 }
 
 // One video or image in a section: `url` is the larger display version
@@ -39,7 +36,6 @@ export type SectionMedia = {
 export type CurationSectionData = {
   id: string;
   type: CurationSectionType;
-  heading: string | null;
   text: string | null;
   media: SectionMedia[];
 };
@@ -47,18 +43,8 @@ export type CurationSectionData = {
 // Whether a section has nothing to show yet — empty sections are left
 // out wherever they're shown.
 export function sectionIsEmpty(section: CurationSectionData): boolean {
-  switch (section.type) {
-    case "TAGLINE":
-    case "DESCRIPTION":
-      return !section.text;
-    case "TEXT":
-      return !section.heading && !section.text;
-    case "VIDEO":
-    case "IMAGES":
-      return section.media.length === 0;
-  }
+  return section.type === "DESCRIPTION" ? !section.text : section.media.length === 0;
 }
 
-export const MAX_SECTION_HEADING = 200;
 export const MAX_SECTION_TEXT = 20000;
 export const MAX_SECTION_IMAGES = 20;

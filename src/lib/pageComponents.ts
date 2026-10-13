@@ -17,7 +17,7 @@ export type ComponentContent = { blockId: string; sectionId: string | null };
 // What can go in a component: a section, by its type, or the works.
 export type ContentKind = CurationSectionType | "WORKS";
 
-const TEXT_KINDS: readonly ContentKind[] = ["TAGLINE", "DESCRIPTION", "TEXT"];
+const TEXT_KINDS: readonly ContentKind[] = ["DESCRIPTION"];
 
 // Which content each component takes (Craig's choice, 2026-10-07: match
 // by kind). Feature takes nothing yet. A Sign-up form (2026-10-10)

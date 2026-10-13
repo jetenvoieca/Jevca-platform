@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
 import { artworkDetailLines } from "@/lib/artworkDetails";
 import { toArtworkImages, type ArtworkImage } from "@/lib/artworkImages";
+import { CURATION_SECTION_TYPES } from "@/lib/curationSections";
 
 // Curations (2026-09-24) — named, ordered selections of an artist's
 // artworks. See the note on Curation in schema.prisma.
@@ -202,8 +203,6 @@ export async function getCuration(
       name: true,
       sections: {
         where: { type: "DESCRIPTION" },
-        orderBy: { position: "asc" },
-        take: 1,
         select: { text: true },
       },
       items: {
@@ -247,8 +246,16 @@ export async function createCuration(
   const name = nameRaw.trim();
   if (!name) return { error: "A name is required." };
   try {
+    // Made with its three presentation sections (2026-10-13) — see
+    // CurationSection in schema.prisma.
     return await db.curation.create({
-      data: { artistId, name },
+      data: {
+        artistId,
+        name,
+        sections: {
+          create: CURATION_SECTION_TYPES.map((t) => ({ type: t.value })),
+        },
+      },
       select: { id: true, name: true },
     });
   } catch (err) {

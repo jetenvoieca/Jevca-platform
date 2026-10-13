@@ -39,9 +39,8 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // - left: the open curation — its name (click to rename), Delete, its
 //   works in order (drag to reorder, hover × to remove, "+ Add Works"
 //   tile to pick more), and beside them the curation's presentation
-//   sections (2026-10-06, from Craig's mockups — Tag line, Description,
-//   Video, Free text, Images; see CurationSectionsEditor), which scroll
-//   on their own.
+//   sections (fixed 2026-10-13: Description, Video, Supporting Images;
+//   see CurationSectionsEditor), which scroll on their own.
 // - right: every curation; click one to open it, or add a new one.
 //
 // Presentation (2026-10-03) — a work's images, Name, Description and

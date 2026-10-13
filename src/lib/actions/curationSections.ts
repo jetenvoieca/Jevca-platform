@@ -3,25 +3,24 @@
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
 import {
-  MAX_SECTION_HEADING,
   MAX_SECTION_IMAGES,
   MAX_SECTION_TEXT,
-  isCurationSectionType,
   type CurationSectionData,
   type SectionMedia,
 } from "@/lib/curationSections";
 
 // A curation's presentation sections (2026-10-06) — see CurationSection
-// in schema.prisma and lib/curationSections.ts. Every action takes the
-// artistId and only touches sections of that artist's own curations,
-// and only that artist's own images and videos can be used.
+// in schema.prisma and lib/curationSections.ts. Every curation has the
+// same three, made with it (createCuration), so there's nothing to add,
+// delete or reorder (2026-10-13). Every action takes the artistId and
+// only touches sections of that artist's own curations, and only that
+// artist's own images and videos can be used.
 
 type Result<T> = T | { error: string };
 
 const SECTION_SELECT = {
   id: true,
   type: true,
-  heading: true,
   text: true,
   media: {
     orderBy: { position: "asc" },
@@ -33,8 +32,7 @@ const SECTION_SELECT = {
 
 type SectionRow = {
   id: string;
-  type: string;
-  heading: string | null;
+  type: CurationSectionData["type"];
   text: string | null;
   media: {
     image: {
@@ -59,92 +57,51 @@ function toMedia(image: SectionRow["media"][number]["image"]): SectionMedia {
 function toData(row: SectionRow): CurationSectionData {
   return {
     id: row.id,
-    type: isCurationSectionType(row.type) ? row.type : "TEXT",
-    heading: row.heading,
+    type: row.type,
     text: row.text,
     media: row.media.map((m) => toMedia(m.image)),
   };
 }
 
-async function ownsCuration(curationId: string, artistId: string): Promise<boolean> {
-  const row = await db.curation.findFirst({
-    where: { id: curationId, artistId },
-    select: { id: true },
-  });
-  return Boolean(row);
-}
-
-// In order, first first.
+// The curation's three sections, in their fixed order (the type's order).
 export async function listCurationSections(
   curationId: string,
   artistId: string
 ): Promise<CurationSectionData[]> {
   const rows = await db.curationSection.findMany({
     where: { curationId, curation: { artistId } },
-    orderBy: { position: "asc" },
+    orderBy: { type: "asc" },
     select: SECTION_SELECT,
   });
   return rows.map(toData);
 }
 
-// Adds an empty section of `type` at the end.
-export async function addCurationSection(
-  curationId: string,
-  artistId: string,
-  type: string
-): Promise<Result<CurationSectionData>> {
-  if (!isCurationSectionType(type)) return { error: "Unknown section type." };
-  if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
-  const last = await db.curationSection.findFirst({
-    where: { curationId },
-    orderBy: { position: "desc" },
-    select: { position: true },
-  });
-  const row = await db.curationSection.create({
-    data: { curationId, type, position: (last?.position ?? -1) + 1 },
-    select: SECTION_SELECT,
-  });
-  return toData(row);
-}
-
-// Saves a section's heading and/or text. Blank is stored as nothing.
+// Saves the Description's text. Blank is stored as nothing.
 export async function updateCurationSectionText(
   sectionId: string,
   artistId: string,
-  input: { heading?: string; text?: string }
-): Promise<Result<{ heading: string | null; text: string | null }>> {
-  const data: { heading?: string | null; text?: string | null } = {};
-  if (input.heading !== undefined) {
-    const heading = input.heading.trim() || null;
-    if (heading && heading.length > MAX_SECTION_HEADING) {
-      return { error: `A heading can be at most ${MAX_SECTION_HEADING} characters.` };
-    }
-    data.heading = heading;
-  }
-  if (input.text !== undefined) {
-    const text = input.text.trim() || null;
-    if (text && text.length > MAX_SECTION_TEXT) {
-      return {
-        error: `A section can be at most ${MAX_SECTION_TEXT.toLocaleString("en-GB")} characters.`,
-      };
-    }
-    data.text = text;
+  textRaw: string
+): Promise<Result<{ text: string | null }>> {
+  const text = textRaw.trim() || null;
+  if (text && text.length > MAX_SECTION_TEXT) {
+    return {
+      error: `A description can be at most ${MAX_SECTION_TEXT.toLocaleString("en-GB")} characters.`,
+    };
   }
   const section = await db.curationSection.findFirst({
-    where: { id: sectionId, curation: { artistId } },
+    where: { id: sectionId, curation: { artistId }, type: "DESCRIPTION" },
     select: { id: true },
   });
   if (!section) return { error: "Section not found." };
-  const saved = await db.curationSection.update({
+  return db.curationSection.update({
     where: { id: sectionId },
-    data,
-    select: { heading: true, text: true },
+    data: { text },
+    select: { text: true },
   });
-  return saved;
 }
 
-// Sets a Video section's video (one, or none) or an Images section's
-// photos (in order), replacing what was there.
+// Sets the Video section's video (one, or none) or the Supporting
+// Images section's photos (in order), replacing what was there.
 export async function setCurationSectionMedia(
   sectionId: string,
   artistId: string,
@@ -163,7 +120,7 @@ export async function setCurationSectionMedia(
   const isVideo = section.type === "VIDEO";
   if (isVideo && ids.length > 1) return { error: "A Video section holds one video." };
   if (!isVideo && ids.length > MAX_SECTION_IMAGES) {
-    return { error: `An Images section can hold at most ${MAX_SECTION_IMAGES} images.` };
+    return { error: `Supporting Images can hold at most ${MAX_SECTION_IMAGES} images.` };
   }
 
   const images = await db.image.findMany({
@@ -183,24 +140,4 @@ export async function setCurationSectionMedia(
 
   const byId = new Map(images.map((img) => [img.id, img]));
   return { media: ids.map((id) => toMedia(byId.get(id)!)) };
-}
-
-export async function deleteCurationSection(sectionId: string, artistId: string): Promise<void> {
-  await db.curationSection.deleteMany({ where: { id: sectionId, curation: { artistId } } });
-}
-
-// Saves a new order: `sectionIds` is every section of the curation, in
-// its new order.
-export async function reorderCurationSections(
-  curationId: string,
-  artistId: string,
-  sectionIds: string[]
-): Promise<Result<{ ok: true }>> {
-  if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
-  await db.$transaction(
-    sectionIds.map((id, position) =>
-      db.curationSection.updateMany({ where: { id, curationId }, data: { position } })
-    )
-  );
-  return { ok: true };
 }
