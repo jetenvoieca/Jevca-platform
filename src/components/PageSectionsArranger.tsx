@@ -53,7 +53,7 @@ import SignupFormSetup from "@/components/SignupFormSetup";
 // panel. On the left, the page's curation's works and its Description,
 // Video and Supporting Images; on the right, the page's Display Style
 // (desktop width) with what each component holds drawn in it:
-// - A Header is typed straight in.
+// - A Header or Byline is typed straight in.
 // - Drag the works or a section onto a component to put it there. A
 //   component holds one, and takes only what fits it (see
 //   lib/pageComponents.ts) — while dragging, the components it fits are
@@ -394,9 +394,10 @@ export default function PageSectionsArranger({
                                   onSetUp={() => setSettingUp(b.id)}
                                 />
                               ) : isTypedBlock(b.type) ? (
-                                <HeaderSlot
+                                <TypedSlot
                                   key={content?.text ?? ""}
                                   label={blockTypeLabel(b.type)}
+                                  byline={b.type === "byline"}
                                   text={content?.text ?? ""}
                                   style={textStyle ? bodyTextCss(textStyle) : undefined}
                                   onSave={(text) => saveText(b, text)}
@@ -572,14 +573,16 @@ function Slot({
   );
 }
 
-// A Header, typed straight in; saves when left.
-function HeaderSlot({
+// A Header or Byline, typed straight in; saves when left.
+function TypedSlot({
   label,
+  byline,
   text,
   style,
   onSave,
 }: {
   label: string;
+  byline: boolean;
   text: string;
   style: CSSProperties | undefined;
   onSave: (text: string) => void;
@@ -593,8 +596,10 @@ function HeaderSlot({
         onChange={(e) => setValue(e.target.value)}
         onBlur={() => value.trim() !== text && onSave(value)}
         maxLength={MAX_TYPED_TEXT}
-        placeholder="Type the header…"
-        className="w-full rounded-md border border-neutral-200 bg-white px-3 py-2 text-3xl text-neutral-900 focus:border-neutral-400 focus:outline-none"
+        placeholder={byline ? "Type the byline…" : "Type the header…"}
+        className={`w-full rounded-md border border-neutral-200 bg-white px-3 py-2 focus:border-neutral-400 focus:outline-none ${
+          byline ? "text-xl text-neutral-600" : "text-3xl text-neutral-900"
+        }`}
         style={style}
       />
     </Labelled>

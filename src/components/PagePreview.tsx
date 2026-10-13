@@ -38,7 +38,7 @@ import CanvasPlayer from "@/components/CanvasPlayer";
 // and phone — see components/pageMargins.ts).
 // - Block Build (2026-10-07, was Private / Custom): each component
 //   shows what was put in it in the page's Arrange (see
-//   lib/pageComponents.ts) — a Header typed on the page, the
+//   lib/pageComponents.ts) — a Header or Byline typed on the page, the
 //   Description in a Text or Text grid (this page's own copy if edited
 //   here), both in the style's font, size, style and colour for that
 //   component; the Video; Supporting Images (the first in a Single
@@ -265,15 +265,18 @@ function BlockBuildPage({
     if (!kind || !contentFits(block.type, kind)) return null;
     if (content.source === "WORKS") return works(block, content);
     if (content.source === "TYPED") {
+      if (!content.text) return null;
       const style = textStyleOf(block);
-      return content.text ? (
-        <h2
-          className="whitespace-pre-line break-words text-2xl text-neutral-900"
-          style={style ? bodyTextCss(style) : undefined}
-        >
+      const css = style ? bodyTextCss(style) : undefined;
+      return block.type === "byline" ? (
+        <p className="whitespace-pre-line break-words text-base text-neutral-600" style={css}>
+          {content.text}
+        </p>
+      ) : (
+        <h2 className="whitespace-pre-line break-words text-2xl text-neutral-900" style={css}>
           {content.text}
         </h2>
-      ) : null;
+      );
     }
     const curated = content.sectionId ? sectionById.get(content.sectionId) : undefined;
     if (!curated) return null;

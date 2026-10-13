@@ -23,6 +23,8 @@ export function BlockShape({
   switch (type) {
     case "header":
       return <Bar className="h-7 w-2/3" />;
+    case "byline":
+      return <Bar className="h-3.5 w-1/3" />;
     case "text":
       return (
         <div className="flex flex-col gap-2">

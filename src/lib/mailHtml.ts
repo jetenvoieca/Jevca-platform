@@ -64,7 +64,7 @@ const LOGO_WIDTH = 200;
 const SIGNATURE_WIDTH = 180;
 const ARTWORK_GAP = 16;
 
-const TEXT_BLOCKS = new Set<MailBlock["type"]>(["header", "text", "textgrid", "artwork"]);
+const TEXT_BLOCKS = new Set<MailBlock["type"]>(["header", "byline", "text", "textgrid", "artwork"]);
 
 const FOOTER_LABELS: Record<MailLanguage, { unsubscribe: string }> = {
   en: { unsubscribe: "Unsubscribe" },
@@ -74,6 +74,7 @@ const FOOTER_LABELS: Record<MailLanguage, { unsubscribe: string }> = {
 // A text component's own look when the template doesn't set one.
 const TEXT_DEFAULTS = {
   header: { size: 24, look: "bold", lineHeight: 1.25 },
+  byline: { size: 16, look: "regular", lineHeight: 1.4 },
   text: { size: 15, look: "regular", lineHeight: 1.5 },
   textgrid: { size: 14, look: "regular", lineHeight: 1.5 },
 } as const;
@@ -192,6 +193,10 @@ function blockHtml(input: MailHtmlInput, block: MailBlock, width: number, align:
     case "header": {
       const text = contentOf(content, { ...block, type: "header" }).text[language];
       return text ? `<h1 style="margin:0;${textCss(styleOf(layout, "header", block), "header")}">${escapeHtml(text)}</h1>` : "";
+    }
+    case "byline": {
+      const text = contentOf(content, { ...block, type: "byline" }).text[language];
+      return text ? `<p style="margin:0;${textCss(styleOf(layout, "byline", block), "byline")}">${escapeHtml(text)}</p>` : "";
     }
     case "text": {
       const doc = contentOf(content, { ...block, type: "text" }).text[language];

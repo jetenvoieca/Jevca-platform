@@ -147,7 +147,8 @@ export async function movePageComponent(
   return { ok: true };
 }
 
-// Saves a component's text: a Header's typed text (blank empties it),
+// Saves a component's text: a Header's or Byline's typed text (blank
+// empties it),
 // or a Description's text for this page only (null = back to the
 // curation's own).
 export async function setPageComponentText(
@@ -166,7 +167,9 @@ export async function setPageComponentText(
       return { ok: true };
     }
     if (text.length > MAX_TYPED_TEXT) {
-      return { error: `A header can be at most ${MAX_TYPED_TEXT} characters.` };
+      return {
+        error: `A ${blockTypeLabel(found.block.type).toLowerCase()} can be at most ${MAX_TYPED_TEXT} characters.`,
+      };
     }
     const data = {
       source: "TYPED" as const,

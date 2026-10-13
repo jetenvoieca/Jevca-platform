@@ -47,6 +47,7 @@ export function frenchGaps(mail: TranslatableMail): TranslationPiece[] {
   line("preview", mail.preview);
   for (const [id, c] of Object.entries(mail.content)) {
     if (c.type === "header") line(`header:${id}`, c.text);
+    if (c.type === "byline") line(`byline:${id}`, c.text);
     if (c.type === "button") line(`button:${id}`, c.label);
     if (c.type === "text") rich(`text:${id}`, c.text);
     if (c.type === "textgrid") c.cells.forEach((cell, i) => rich(`cell:${id}:${i}`, cell));
@@ -61,7 +62,7 @@ export function hasNoFrench(mail: TranslatableMail): boolean {
     !blank(mail.subject.fr) ||
     !blank(mail.preview.fr) ||
     Object.values(mail.content).some((c) => {
-      if (c.type === "header") return !blank(c.text.fr);
+      if (c.type === "header" || c.type === "byline") return !blank(c.text.fr);
       if (c.type === "button") return !blank(c.label.fr);
       if (c.type === "text") return !isRichTextEmpty(c.text.fr);
       if (c.type === "textgrid") return c.cells.some((cell) => !isRichTextEmpty(cell.fr));
@@ -84,6 +85,7 @@ export function applyFrench<T extends TranslatableMail>(mail: T, fill: FrenchFil
   const content: MailContent = {};
   for (const [id, c] of Object.entries(mail.content)) {
     if (c.type === "header") content[id] = { ...c, text: line(`header:${id}`, c.text) };
+    else if (c.type === "byline") content[id] = { ...c, text: line(`byline:${id}`, c.text) };
     else if (c.type === "button") content[id] = { ...c, label: line(`button:${id}`, c.label) };
     else if (c.type === "text") content[id] = { ...c, text: rich(`text:${id}`, c.text) };
     else if (c.type === "textgrid") {

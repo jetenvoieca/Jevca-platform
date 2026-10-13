@@ -14,7 +14,7 @@ import type { LayoutBlockType } from "@/lib/pageStyleLayout";
 // - WORKS: the curation's works.
 // - SECTION: the curation's section `sectionId`; for a Description,
 //   `text` is this page's own copy (null = the curation's).
-// - TYPED: `text`, typed on the page (a Header).
+// - TYPED: `text`, typed on the page (a Header or Byline).
 // `hiddenIds` / `orderIds`: works or Supporting Images removed on this
 // page, and the order chosen — see arrangeItems.
 export type ComponentContent = {
@@ -31,12 +31,13 @@ export type ComponentContent = {
 export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 
 // Which content each component takes (Craig's choice: match by kind;
-// 2026-10-13: a Header is typed in, a Text or Text grid takes the
+// 2026-10-13: a Header or Byline is typed in, a Text or Text grid takes the
 // Description). Feature takes nothing yet. A Sign-up form (2026-10-10)
 // takes no content: it's set up on its own in Arrange (see
 // lib/signupForms.ts). A Logo (2026-10-13) is always the artist's own.
 const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   header: ["TYPED"],
+  byline: ["TYPED"],
   text: ["DESCRIPTION"],
   textgrid: ["DESCRIPTION"],
   video: ["VIDEO"],
@@ -94,5 +95,5 @@ export function hiddenItems<T>(
   return items.filter((item) => hidden.has(idOf(item)));
 }
 
-// The longest Header that can be typed.
+// The longest Header or Byline that can be typed.
 export const MAX_TYPED_TEXT = 300;

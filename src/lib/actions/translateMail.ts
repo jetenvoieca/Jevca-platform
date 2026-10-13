@@ -29,6 +29,7 @@ const PIECE_NAMES: Record<string, string> = {
   subject: "the subject line",
   preview: "the preview text shown after the subject",
   header: "a heading",
+  byline: "a byline, the short line under a heading",
   button: "a button's label",
   text: "a passage of text",
   cell: "a column of text",

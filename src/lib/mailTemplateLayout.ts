@@ -38,6 +38,8 @@ export const MAIL_WIDTH = 600;
 export const MAIL_BLOCK_TYPES = [
   { value: "logo", label: "Logo" },
   { value: "header", label: "Header" },
+  // A line typed under the Header, usually (2026-10-13).
+  { value: "byline", label: "Byline" },
   { value: "text", label: "Text" },
   { value: "image", label: "Single Image" },
   { value: "gallery", label: "Gallery" },
@@ -57,7 +59,7 @@ export function mailBlockTypeLabel(type: MailBlockType): string {
   return MAIL_BLOCK_TYPES.find((t) => t.value === type)?.label ?? type;
 }
 
-// `textStyle`: a Header, Text or Text grid component's own look.
+// `textStyle`: a Header, Byline, Text or Text grid component's own look.
 export type MailBlock = RowBlock<MailBlockType> & StyledBlock<MailFontId>;
 
 export type MailTextStyle = TextStyle<MailFontId>;
@@ -69,7 +71,8 @@ export type MailTemplateLayout = RowLayout<MailBlock> & {
   backgroundColor: string | null;
   // Spacing for every Gallery component.
   gridSpacing: GridSpacing;
-  // How the text in its Header, Text and Text grid components looks.
+  // How the text in its Header, Byline, Text and Text grid components
+  // looks.
   textStyles: TextStyles<MailFontId>;
 };
 
@@ -90,7 +93,12 @@ export function newMailTemplateLayout(): MailTemplateLayout {
     backgroundColor: null,
     gridSpacing: DEFAULT_GRID_SPACING,
     margins: DEFAULT_MAIL_MARGINS,
-    textStyles: { header: DEFAULT_TEXT_STYLE, text: DEFAULT_TEXT_STYLE, textgrid: DEFAULT_TEXT_STYLE },
+    textStyles: {
+      header: DEFAULT_TEXT_STYLE,
+      byline: DEFAULT_TEXT_STYLE,
+      text: DEFAULT_TEXT_STYLE,
+      textgrid: DEFAULT_TEXT_STYLE,
+    },
     rows: {},
     blocks: [newMailBlock("logo")],
   };

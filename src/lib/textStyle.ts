@@ -1,6 +1,7 @@
 import { cleanColour, cleanNumber } from "@/lib/rowLayout";
 
-// How the text in a layout's Header, Text and Text grid components looks
+// How the text in a layout's Header, Byline, Text and Text grid
+// components looks
 // (2026-10-07, from Craig's mockup; shared with Mail Templates
 // 2026-10-08) — one setting per component type, for the whole layout,
 // the same on desktop and phone: a font from the layout's own set list
@@ -10,6 +11,8 @@ import { cleanColour, cleanNumber } from "@/lib/rowLayout";
 
 export const TEXT_COMPONENT_TYPES = [
   { value: "header", label: "Header" },
+  // A line typed under the Header, usually (2026-10-13).
+  { value: "byline", label: "Byline" },
   { value: "text", label: "Text" },
   { value: "textgrid", label: "Text grid" },
 ] as const;
@@ -72,6 +75,7 @@ export function cleanTextStyles<F extends string>(
   const value = (raw ?? {}) as Partial<Record<TextComponentType, unknown>>;
   return {
     header: cleanTextStyle(value.header, isFont),
+    byline: cleanTextStyle(value.byline, isFont),
     text: cleanTextStyle(value.text, isFont),
     textgrid: cleanTextStyle(value.textgrid, isFont),
   };

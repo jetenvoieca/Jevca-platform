@@ -28,6 +28,8 @@ import { cleanBlockTextStyle, cleanTextStyles, type StyledBlock, type TextStyle,
 // page's curation in the page's Arrange (see lib/pageComponents.ts).
 export const LAYOUT_BLOCK_TYPES = [
   { value: "header", label: "Header" },
+  // Typed on each page, usually under the Header (2026-10-13).
+  { value: "byline", label: "Byline" },
   { value: "text", label: "Text" },
   { value: "image", label: "Single Image" },
   { value: "gallery", label: "Gallery" },
@@ -128,6 +130,7 @@ const DEFAULT_TEXT_STYLE: PageTextStyle = { font: null, size: null, look: null, 
 
 const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
   header: DEFAULT_TEXT_STYLE,
+  byline: DEFAULT_TEXT_STYLE,
   text: DEFAULT_TEXT_STYLE,
   textgrid: DEFAULT_TEXT_STYLE,
 };

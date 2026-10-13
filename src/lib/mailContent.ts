@@ -37,6 +37,8 @@ export function pictureKey(picture: MailPicture): string {
 }
 
 export type HeaderContent = { type: "header"; text: Localized<string> };
+// A line typed under the Header, usually (2026-10-13).
+export type BylineContent = { type: "byline"; text: Localized<string> };
 export type TextContent = { type: "text"; text: Localized<RichText> };
 export type TextGridContent = { type: "textgrid"; cells: Localized<RichText>[] };
 export type ImageContent = { type: "image"; picture: MailPicture | null };
@@ -54,6 +56,7 @@ export type ButtonContent = {
 
 export type BlockContent =
   | HeaderContent
+  | BylineContent
   | TextContent
   | TextGridContent
   | ImageContent
@@ -90,6 +93,7 @@ function cleanPicture(raw: unknown): MailPicture | null {
 export function emptyContent(type: ContentBlockType): BlockContent {
   switch (type) {
     case "header":
+    case "byline":
       return { type, text: { en: "", fr: "" } };
     case "text":
       return { type, text: { en: EMPTY_RICH_TEXT, fr: EMPTY_RICH_TEXT } };
@@ -115,6 +119,7 @@ function cleanBlockContent(type: ContentBlockType, raw: unknown): BlockContent {
   if (value.type !== type) return emptyContent(type);
   switch (type) {
     case "header":
+    case "byline":
       return { type, text: localized(value.text, cleanLine) };
     case "text":
       return { type, text: localized(value.text, cleanRichText) };
@@ -204,6 +209,7 @@ export function isBlockContentEmpty(content: BlockContent): boolean {
   const blankRich = (text: Localized<RichText>) => isRichTextEmpty(text.en) && isRichTextEmpty(text.fr);
   switch (content.type) {
     case "header":
+    case "byline":
       return blank(content.text);
     case "text":
       return blankRich(content.text);

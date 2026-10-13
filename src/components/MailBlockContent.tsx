@@ -81,6 +81,20 @@ export default function MailBlockContent({
         />
       )}
 
+      {content.type === "byline" && (
+        <input
+          type="text"
+          value={content.text[language]}
+          onChange={(e) =>
+            onChange({ ...content, text: { ...content.text, [language]: e.target.value } })
+          }
+          placeholder="Type byline in here"
+          aria-label={`Byline in ${inLanguage}`}
+          style={look}
+          className={`${inputClass} text-center text-sm`}
+        />
+      )}
+
       {content.type === "text" && (
         <RichTextField
           key={`${blockId}:${language}:${revision}`}
