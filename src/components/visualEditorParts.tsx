@@ -4,6 +4,7 @@ import {
   createContext,
   useContext,
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type HTMLAttributes,
@@ -45,6 +46,10 @@ const ScaleContext = createContext(1);
 // of the contents inside the margin) is measured against when its edge
 // is dragged.
 const FrameWidthContext = createContext(PAGE_DESKTOP_WIDTH);
+
+// The page's visible area on screen — a selected component's bar and
+// panel are kept inside it (KeptInFrame).
+const FrameElementContext = createContext<HTMLElement | null>(null);
 
 // The Desktop / Phone switch above the page (its hint text dropped
 // 2026-10-09 to keep the screen clean, Craig's choice).
@@ -99,6 +104,7 @@ export function ScaledFrame({
   const [scale, setScale] = useState(1);
   const [width, setWidth] = useState(fullWidth);
   const [height, setHeight] = useState(0);
+  const [frameElement, setFrameElement] = useState<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const outer = outerRef.current;
@@ -131,6 +137,7 @@ export function ScaledFrame({
           the panel it sits in, so it's always measured and shrunk to it. */}
       <div ref={outerRef} className="w-full" style={{ contain: "inline-size" }}>
         <div
+          ref={setFrameElement}
           className="mx-auto"
           style={{ width: width * scale, height: height * scale, overflowX: "clip" }}
         >
@@ -139,7 +146,11 @@ export function ScaledFrame({
             style={{ width, transform: `scale(${scale})`, transformOrigin: "0 0" }}
           >
             <ScaleContext.Provider value={scale}>
-              <FrameWidthContext.Provider value={width}>{children}</FrameWidthContext.Provider>
+              <FrameWidthContext.Provider value={width}>
+                <FrameElementContext.Provider value={frameElement}>
+                  {children}
+                </FrameElementContext.Provider>
+              </FrameWidthContext.Provider>
             </ScaleContext.Provider>
           </div>
         </div>
@@ -317,14 +328,14 @@ export function EditableBlock({
       )}
 
       {selected && (
-        <Unscaled className="absolute bottom-full left-0 z-30 mb-1" origin="bottom left">
+        <KeptInFrame className="absolute bottom-full left-0 z-30 mb-1" origin="bottom left">
           {bar}
-        </Unscaled>
+        </KeptInFrame>
       )}
       {selected && panel && (
-        <Unscaled className="absolute left-0 top-0 z-30" origin="0 0">
+        <KeptInFrame className="absolute left-0 top-0 z-30" origin="0 0">
           {panel}
-        </Unscaled>
+        </KeptInFrame>
       )}
     </div>
   );
@@ -371,6 +382,68 @@ function Unscaled({
   );
 }
 
+// A selected component's bar or panel: at its normal size like Unscaled,
+// and kept inside the page's visible width — moved left when it would
+// run past the right edge (a component on the right of a narrow page),
+// and never wider than the page (the bar's buttons then wrap).
+function KeptInFrame({
+  className,
+  origin,
+  children,
+}: {
+  className: string;
+  origin: string;
+  children: ReactNode;
+}) {
+  const scale = useContext(ScaleContext);
+  const frame = useContext(FrameElementContext);
+  const ref = useRef<HTMLDivElement>(null);
+  const [fit, setFit] = useState<{ shift: number; maxWidth?: number }>({ shift: 0 });
+
+  // Screen pixels: the scale(1 / scale) below cancels the page's scale.
+  const measure = () => {
+    const box = ref.current;
+    const anchor = box?.parentElement;
+    if (!box || !anchor || !frame) return;
+    const room = frame.getBoundingClientRect();
+    const start = anchor.getBoundingClientRect().left;
+    const width = box.getBoundingClientRect().width;
+    const left = Math.max(room.left, Math.min(start, room.right - width));
+    const shift = Math.round(left - start);
+    const maxWidth = Math.floor(room.width);
+    setFit((f) => (f.shift === shift && f.maxWidth === maxWidth ? f : { shift, maxWidth }));
+  };
+
+  // After every render (the component may have moved), and whenever the
+  // page, the component or the bar changes size.
+  useLayoutEffect(measure);
+  useEffect(() => {
+    const box = ref.current;
+    const anchor = box?.parentElement;
+    if (!box || !anchor || !frame) return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(frame);
+    observer.observe(anchor);
+    observer.observe(box);
+    return () => observer.disconnect();
+  }, [frame]);
+
+  return (
+    <div
+      ref={ref}
+      className={className}
+      style={{
+        width: "max-content",
+        maxWidth: fit.maxWidth,
+        transform: `translateX(${fit.shift / scale}px) scale(${1 / scale})`,
+        transformOrigin: origin,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 const HORIZONTAL_BUTTONS: { value: HorizontalAlign; label: string }[] = [
   { value: "left", label: "Align left" },
   { value: "center", label: "Align centre" },
@@ -407,7 +480,7 @@ export function SelectionBar({
     <div
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
-      className="flex cursor-default items-center gap-0.5 whitespace-nowrap rounded-md border border-neutral-300 bg-white p-0.5 shadow-sm"
+      className="flex cursor-default flex-wrap items-center gap-0.5 rounded-md border border-neutral-300 bg-white p-0.5 shadow-sm"
     >
       {desktop &&
         HORIZONTAL_BUTTONS.map((b) => (
@@ -464,7 +537,11 @@ export function BarButton({
       ? "bg-blue-100 text-blue-700"
       : "text-neutral-700 hover:bg-neutral-100";
   return (
-    <button type="button" onClick={onClick} className={`rounded px-2 py-1 text-xs ${colour}`}>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`whitespace-nowrap rounded px-2 py-1 text-xs ${colour}`}
+    >
       {children}
     </button>
   );
@@ -508,7 +585,7 @@ export function PanelBox({
     <div
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => e.stopPropagation()}
-      className="flex w-72 cursor-default flex-col gap-2 rounded-md border border-neutral-300 bg-white p-3 shadow-md"
+      className="flex w-72 max-w-full cursor-default flex-col gap-2 rounded-md border border-neutral-300 bg-white p-3 shadow-md"
     >
       <div className="flex items-center justify-between">
         <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{title}</p>
