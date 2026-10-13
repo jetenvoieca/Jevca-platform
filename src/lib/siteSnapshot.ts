@@ -36,6 +36,29 @@ export function publishedHomePath(siteId: string): string {
   return `/site-preview/${siteId}`;
 }
 
+// A Live Page's address on the published site: the first is the home
+// page, the others are at their slug.
+export function publishedPagePath(siteId: string, pages: { slug: string }[], index: number): string {
+  const base = publishedHomePath(siteId);
+  return index === 0 ? base : `${base}/${encodeURIComponent(pages[index].slug)}`;
+}
+
+// The Live Page an address on the published site shows — null if it
+// isn't one of the site's pages.
+export function pageForPath<P extends { slug: string }>(
+  siteId: string,
+  pages: P[],
+  pathname: string
+): P | null {
+  const base = publishedHomePath(siteId);
+  const path = pathname.replace(/\/+$/, "");
+  if (path === base) return pages[0] ?? null;
+  if (!path.startsWith(`${base}/`)) return null;
+  const slug = decodeURIComponent(path.slice(base.length + 1));
+  if (slug.includes("/")) return null;
+  return pages.find((p) => p.slug === slug) ?? null;
+}
+
 // One live page, in menu order. `curationId` is the page's own curation
 // (not used with a Canvas style, whose curations are in `canvas`).
 // `menuStyleId` (2026-10-06) is the menu this page shows — its own, or

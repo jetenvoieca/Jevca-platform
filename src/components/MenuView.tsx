@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, type CSSProperties, type ReactNode } from "react";
-import Link from "next/link";
 import {
   menuBackground,
   menuHeight,
@@ -9,7 +8,8 @@ import {
   type MenuStyleLayout,
 } from "@/lib/menuStyleLayout";
 
-// One menu entry — a Live Page. With `href` it's a link; without (the
+// One menu entry — a Live Page. With `href` it's a link (the published
+// site shows the page without leaving — see PublishedSite); without (the
 // Menus page preview) choosing it only shows what would happen.
 export type MenuViewItem = { id: string; title: string; href?: string };
 
@@ -229,9 +229,9 @@ function MenuEntry({
   const label: ReactNode = item.title;
   if (item.href) {
     return (
-      <Link href={item.href} onClick={onChoose} className={className} style={style}>
+      <a href={item.href} onClick={onChoose} className={className} style={style}>
         {label}
-      </Link>
+      </a>
     );
   }
   return (

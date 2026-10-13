@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname } from "next/navigation";
 import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
-import { publishedHomePath } from "@/lib/siteSnapshot";
+import { publishedPagePath } from "@/lib/siteSnapshot";
 import MenuView from "@/components/MenuView";
 
 // What the menu needs of each Live Page, in order — the first is the
 // home page.
-export type PublishedMenuPage = {
+type PublishedMenuPage = {
   id: string;
   title: string;
   slug: string;
@@ -18,9 +17,9 @@ export type PublishedMenuPage = {
 // Phones are narrower than this (Tailwind's md), as everywhere else.
 const PHONE_QUERY = "(max-width: 767px)";
 
-// A published site's menu (2026-10-06): drawn by the site's layout, so it
-// stays in place as pages change — a Fixed menu stays open. Shows the
-// menu chosen for the current page (its own, or else the site's), in its
+// A published site's menu (2026-10-06): drawn once with the site (see
+// PublishedSite), so it stays in place as pages change — a Fixed menu
+// stays open. Shows the menu chosen for the current page (its own, or else the site's), in its
 // Menu Style (see MenuView); the items are the site's Live Pages. A page
 // with no menu shows none. Changing to a page with a different menu
 // starts that menu closed.
@@ -28,24 +27,24 @@ export default function PublishedSiteMenu({
   siteId,
   pages,
   menus,
+  currentId,
 }: {
   siteId: string;
   pages: PublishedMenuPage[];
   menus: Record<string, MenuStyleLayout>;
+  // The page being shown — null on an address that isn't one.
+  currentId: string | null;
 }) {
-  const pathname = usePathname();
   const phone = usePhone();
 
-  const base = publishedHomePath(siteId);
-  const slug = pathname.startsWith(`${base}/`) ? decodeURIComponent(pathname.slice(base.length + 1)) : "";
-  const current = slug ? pages.find((p) => p.slug === slug) : pages[0];
+  const current = pages.find((p) => p.id === currentId);
   const layout = current?.menuStyleId ? menus[current.menuStyleId] : undefined;
   if (!current || !layout) return null;
 
   const items = pages.map((p, i) => ({
     id: p.id,
     title: p.title,
-    href: i === 0 ? base : `${base}/${p.slug}`,
+    href: publishedPagePath(siteId, pages, i),
   }));
 
   return (

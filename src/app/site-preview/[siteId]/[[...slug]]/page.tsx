@@ -1,26 +1,31 @@
 import type { Metadata } from "next";
-import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { turnstileSiteKeyForHost } from "@/lib/turnstile";
+import { pageForPath, publishedHomePath } from "@/lib/siteSnapshot";
 import { loadPublishedSite } from "../published";
-import PublishedSiteView from "@/components/PublishedSiteView";
 
-// A site's own pages, as last published (2026-10-06) — full screen,
-// drawn from the published snapshot only (see lib/siteSnapshot.ts). The
-// home page (no address after the site) is the first of its Live Pages;
-// the others are at their page's address. The menu is drawn by the
-// layout (../layout.tsx). Private for now: like every
-// admin address, only reachable when logged in (see middleware.ts).
+// A site's own pages, as last published (2026-10-06) — the home page (no
+// address after the site) is the first of its Live Pages; the others are
+// at their page's address. The site itself — every page and its menu —
+// is drawn by the layout (../layout.tsx, see PublishedSite), loaded once
+// and then shown in the browser (2026-10-13), so this route only gives
+// an address its title, a missing page its "not found", and the
+// messages for a site with nothing to show yet. Private for now: like
+// every admin address, only reachable when logged in (see
+// middleware.ts).
 export const dynamic = "force-dynamic";
 
 type Params = Promise<{ siteId: string; slug?: string[] }>;
+
+function pathOf(siteId: string, slug: string[] | undefined): string {
+  return slug?.length ? `${publishedHomePath(siteId)}/${slug.join("/")}` : publishedHomePath(siteId);
+}
 
 export async function generateMetadata({ params }: { params: Params }): Promise<Metadata> {
   const { siteId, slug } = await params;
   const published = await loadPublishedSite(siteId);
   if (!published) return { title: "Not published yet" };
   const { snapshot } = published;
-  const page = slug?.[0] ? snapshot.pages.find((p) => p.slug === slug[0]) : snapshot.pages[0];
+  const page = pageForPath(siteId, snapshot.pages, pathOf(siteId, slug));
   return { title: page ? `${page.title} — ${snapshot.siteName}` : snapshot.siteName };
 }
 
@@ -39,25 +44,11 @@ export default async function SitePreviewPage({ params }: { params: Params }) {
   }
 
   const { snapshot } = published;
-  if (slug && slug.length > 1) notFound();
-  const page = slug?.[0] ? snapshot.pages.find((p) => p.slug === slug[0]) : snapshot.pages[0];
-
-  if (!page) {
-    if (slug?.[0]) notFound();
-    return (
-      <main className="flex min-h-[100dvh] items-center justify-center p-6">
-        <p className="text-center text-sm text-neutral-500">
-          This site has no Live Pages yet.
-        </p>
-      </main>
-    );
-  }
-
-  // The robot check for the page's sign-up forms (2026-10-10), on the
-  // address the page is shown on — see lib/turnstile.ts.
-  const hasSignupForm = page.signupForms.length > 0;
-  const host = ((await headers()).get("host") ?? "").toLowerCase().split(":")[0];
-  const siteKey = hasSignupForm ? await turnstileSiteKeyForHost(host) : null;
-
-  return <PublishedSiteView siteId={siteId} siteKey={siteKey} snapshot={snapshot} pageId={page.id} />;
+  if (pageForPath(siteId, snapshot.pages, pathOf(siteId, slug))) return null;
+  if (slug?.length) notFound();
+  return (
+    <main className="flex min-h-[100dvh] items-center justify-center p-6">
+      <p className="text-center text-sm text-neutral-500">This site has no Live Pages yet.</p>
+    </main>
+  );
 }
