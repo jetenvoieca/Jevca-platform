@@ -58,7 +58,7 @@ export type CustomerDetail = {
     // current invoice (opened by clicking its date), whether it's a
     // framing/delivery charge (never ticked), and what has to match for
     // sales to share an invoice (buyer and Stripe account; currency is
-    // above). An unpaid consigned sale with no invoice gets a tick box.
+    // above). A consigned sale with no invoice gets a tick box.
     invoice: { id: string; createdAt: string } | null;
     chargeKind: "FRAMING" | "DELIVERY" | null;
     onInstalments: boolean;

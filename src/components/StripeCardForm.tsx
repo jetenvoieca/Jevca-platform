@@ -3,13 +3,11 @@
 import { useState, useMemo } from "react";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
-import { recordPaymentIntent } from "@/lib/actions/payments";
-
 function CardEntryForm({
-  purchaseId,
+  onSucceeded,
   onDone,
 }: {
-  purchaseId: string;
+  onSucceeded: (paymentIntentId: string) => Promise<unknown>;
   onDone: () => void;
 }) {
   const stripe = useStripe();
@@ -43,11 +41,12 @@ function CardEntryForm({
     // stuck UNPAID, because the webhook wasn't reaching this
     // environment). stripe.confirmPayment succeeding means Stripe has
     // already taken the money; the app should say so immediately.
-    // recordPaymentIntent is the same call the webhook makes and is
+    // onSucceeded is the same call the webhook makes (recordPaymentIntent
+    // for a sale, recordInvoicePaymentIntent for an invoice) and is
     // idempotent — if the webhook also arrives, it's simply a no-op.
     if (paymentIntent?.status === "succeeded") {
       try {
-        await recordPaymentIntent(purchaseId, paymentIntent.id);
+        await onSucceeded(paymentIntent.id);
       } catch {
         // Don't block the artist on this — the webhook is still a
         // working backup path if this direct call somehow failed.
@@ -86,7 +85,7 @@ export default function StripeCardForm({
   clientSecret,
   publishableKey,
   stripeAccount,
-  purchaseId,
+  onSucceeded,
   onDone,
 }: {
   clientSecret: string;
@@ -96,10 +95,10 @@ export default function StripeCardForm({
   // The PaymentIntent was created in that account, so Stripe.js must be
   // told it too, or it can't find the payment.
   stripeAccount: string | null;
-  // 2026-09-20 — needed here now so a successful confirmPayment can
-  // record itself directly (see CardEntryForm's own note above) instead
-  // of relying solely on the Stripe webhook.
-  purchaseId: string;
+  // Records the payment as soon as Stripe confirms it (2026-09-20 — see
+  // CardEntryForm's own note above) instead of relying solely on the
+  // Stripe webhook: the sale's or the invoice's own record call.
+  onSucceeded: (paymentIntentId: string) => Promise<unknown>;
   onDone: () => void;
 }) {
   // loadStripe caches internally per key, so this is cheap even if it
@@ -113,7 +112,7 @@ export default function StripeCardForm({
 
   return (
     <Elements stripe={stripePromise} options={{ clientSecret }}>
-      <CardEntryForm purchaseId={purchaseId} onDone={onDone} />
+      <CardEntryForm onSucceeded={onSucceeded} onDone={onDone} />
     </Elements>
   );
 }

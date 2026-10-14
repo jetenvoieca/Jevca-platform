@@ -133,6 +133,11 @@ export default function GalleriesView({
   // Which of the work's sale and its framing/delivery charges has its
   // panel open (null = the summary) — see GallerySaleCard.
   const [focusedSaleId, setFocusedSaleId] = useState<string | null>(null);
+  // How the work was opened (2026-10-14) — its picture ("image") or a
+  // Sales-tab line ("line", with that sale) — which decides how a Gallery
+  // location's sale is shown (see GallerySaleCard's `view`).
+  const [workView, setWorkView] = useState<"image" | "line">("image");
+  const [lineSaleId, setLineSaleId] = useState<string | null>(null);
   const [workPending, startWorkTransition] = useTransition();
   const [saleError, setSaleError] = useState<string | null>(null);
   const [saleTotalAmount, setSaleTotalAmount] = useState("");
@@ -155,9 +160,10 @@ export default function GalleriesView({
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   // ---- Invoicing from the Sales tab (2026-10-14, Craig's mockup) ----
-  // Unpaid sales not yet invoiced each get a tick box in the Invoiced
-  // column; "Produce Invoice" puts every ticked sale on one invoice and
-  // opens it. The invoice window also opens from an invoiced sale's date.
+  // Sales not yet invoiced each get a tick box in the Invoiced column;
+  // "Produce Invoice" puts every ticked sale on one invoice and opens it
+  // (for paid sales, "Produce Receipt"). The invoice window also opens
+  // from an invoiced sale's date.
   const [invoiceTicks, setInvoiceTicks] = useState<string[]>([]);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [invoiceModalId, setInvoiceModalId] = useState<string | null>(null);
@@ -216,6 +222,8 @@ export default function GalleriesView({
     setSelectedWorkId(workId);
     setSelectedWorkDetail(null);
     setFocusedSaleId(null);
+    setWorkView(purchaseId ? "line" : "image");
+    setLineSaleId(purchaseId ?? null);
     setWorkLoading(true);
     setSaleError(null);
     setSaleTotalAmount("");
@@ -295,17 +303,24 @@ export default function GalleriesView({
     refreshGalleryDetail(selectedId);
   };
 
-  // A sale can be ticked when it's an unpaid consigned sale with no
-  // invoice — not a framing/delivery charge (invoiced on its own) or one
-  // being paid by instalments — and matches whatever is already ticked:
-  // the same currency, buyer and Stripe account (see produceInvoice).
+  // A sale can be ticked when it's a consigned sale with no invoice —
+  // not cancelled, not a framing/delivery charge (invoiced on its own),
+  // not being paid by instalments — and matches whatever is already
+  // ticked: paid or unpaid alike (paid ones get their receipt,
+  // 2026-10-14), the same currency, buyer and Stripe account (see
+  // produceInvoice).
   type SalesRow = GalleryDetail["purchases"][number];
   const canInvoice = (p: SalesRow) =>
-    p.channel === "GALLERY" && p.status === "ACTIVE" && !p.invoice && !p.chargeKind && !p.onInstalments;
+    p.channel === "GALLERY" &&
+    p.status !== "ABANDONED" &&
+    !p.invoice &&
+    !p.chargeKind &&
+    !(p.status === "ACTIVE" && p.onInstalments);
   const firstTicked = selectedDetail?.purchases.find((p) => invoiceTicks.includes(p.id)) ?? null;
   const matchesTicked = (p: SalesRow) =>
     !firstTicked ||
-    (p.currency === firstTicked.currency &&
+    (p.status === firstTicked.status &&
+      p.currency === firstTicked.currency &&
       p.buyerKey === firstTicked.buyerKey &&
       p.stripeKey === firstTicked.stripeKey);
 
@@ -493,6 +508,22 @@ export default function GalleriesView({
         (p) => p.channel === "GALLERY" && p.status === "COMPLETED"
       ) ?? null)
     : null;
+  // The sale whose Sales-tab line was clicked (a charge's line opens the
+  // sale it belongs to) — so a past or cancelled sale opens as itself. A
+  // cancelled sale only shows at a Gallery location, to be deleted; at an
+  // Own location its line still opens the work as before.
+  const lineSale =
+    workView === "line" && lineSaleId
+      ? ([selectedWorkDetail?.activePurchase, ...(selectedWorkDetail?.purchaseHistory ?? [])].find(
+          (p) => p && (p.id === lineSaleId || p.charges.some((c) => c.id === lineSaleId))
+        ) ?? null)
+      : null;
+  const shownSale: PurchaseDetail | null =
+    lineSale &&
+    lineSale.channel === "GALLERY" &&
+    (lineSale.status !== "ABANDONED" || lineSale.location?.kind === "GALLERY")
+      ? lineSale
+      : (activeWorkPurchase ?? completedGallerySale);
 
   // Live Net Due preview on the blank Record Sale form (2026-09-22) —
   // same shared formula used everywhere else a sale's Net Due is shown
@@ -796,7 +827,11 @@ export default function GalleriesView({
                                   className={`inline-flex items-center gap-2 rounded-md border border-neutral-300 px-2 py-1 ${
                                     matchesTicked(p) ? "cursor-pointer hover:bg-neutral-50" : "cursor-not-allowed opacity-40"
                                   }`}
-                                  title={matchesTicked(p) ? undefined : "Only sales with the same currency and buyer can share an invoice."}
+                                  title={
+                                    matchesTicked(p)
+                                      ? undefined
+                                      : "Only sales with the same currency and buyer, all paid or all unpaid, can share an invoice."
+                                  }
                                 >
                                   <input
                                     type="checkbox"
@@ -825,7 +860,11 @@ export default function GalleriesView({
                       disabled={producingInvoice}
                       className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
                     >
-                      {producingInvoice ? "Producing…" : "Produce Invoice"}
+                      {producingInvoice
+                        ? "Producing…"
+                        : firstTicked?.status === "COMPLETED"
+                          ? "Produce Receipt"
+                          : "Produce Invoice"}
                     </button>
                   </div>
                 )}
@@ -1096,7 +1135,7 @@ export default function GalleriesView({
                 <div className="shrink-0">
                   <SaleHeader
                     artwork={selectedWorkDetail}
-                    purchase={activeWorkPurchase ?? completedGallerySale}
+                    purchase={shownSale}
                     siteId={siteId}
                     onChanged={refreshAfterSaleChange}
                     onClose={closeWork}
@@ -1105,15 +1144,16 @@ export default function GalleriesView({
                 </div>
 
                 <div className="flex-1 overflow-y-auto px-5 py-5">
-                  {activeWorkPurchase ? (
-                    activeWorkPurchase.channel === "GALLERY" ? (
+                  {shownSale ? (
+                    shownSale.channel === "GALLERY" ? (
                       <GallerySaleCard
-                        purchase={activeWorkPurchase}
+                        purchase={shownSale}
                         siteId={siteId}
                         paymentMethods={paymentMethods}
                         onChanged={refreshAfterSaleChange}
                         focusedId={focusedSaleId}
                         onFocusChange={setFocusedSaleId}
+                        view={workView}
                       />
                     ) : (
                       <p className="text-sm text-neutral-500">
@@ -1121,15 +1161,6 @@ export default function GalleriesView({
                         progress — manage it from the Sales page.
                       </p>
                     )
-                  ) : completedGallerySale ? (
-                    <GallerySaleCard
-                      purchase={completedGallerySale}
-                      siteId={siteId}
-                      paymentMethods={paymentMethods}
-                      onChanged={refreshAfterSaleChange}
-                      focusedId={focusedSaleId}
-                      onFocusChange={setFocusedSaleId}
-                    />
                   ) : (
                     <div className="space-y-3">
                       {/* Row 1: Date · Sale price · Currency */}

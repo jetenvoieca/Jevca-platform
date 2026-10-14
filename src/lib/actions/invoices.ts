@@ -2,7 +2,8 @@
 
 import { db } from "@/lib/db";
 import { saleBreakdown, saleTitle } from "@/lib/saleMath";
-import { getStripeClientForSale, toMinorUnits } from "@/lib/stripe";
+import { getPublishableKey, getStripeClientForSale, toMinorUnits } from "@/lib/stripe";
+import type { CardEntry } from "@/lib/actions/payments";
 import { retireGalleryPaymentLinks } from "@/lib/paymentLinks";
 import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
 import { buyerKey, loadInvoice, retireInvoicePaymentLink, type LoadedInvoice } from "@/lib/invoices";
@@ -27,13 +28,15 @@ function stripeErrorMessage(err: unknown): string {
 // ---------- Producing ----------
 
 // "Produce Invoice" on a location's Sales tab: one invoice for every
-// ticked sale. They must be unpaid consigned sales of the same location
-// and buyer, in the same currency and Stripe account, not framing/
-// delivery charges (those are invoiced on their own), not being paid by
-// instalments, and not already on an invoice. The invoice gets the next
-// number and today's date, and a payment link for the whole balance so
-// the emailed invoice always includes a way to pay (if Stripe can't make
-// one, the invoice is still produced and the link can be made later).
+// ticked sale. They must be consigned sales of the same location and
+// buyer, in the same currency and Stripe account, not framing/delivery
+// charges (those are invoiced on their own), and not already on an
+// invoice — and either all unpaid (not being paid by instalments), or
+// all already paid (2026-10-14: then it's their receipt, already marked
+// paid). An unpaid invoice gets the next number, today's date, and a
+// payment link for the whole balance so the emailed invoice always
+// includes a way to pay (if Stripe can't make one, the invoice is still
+// produced and the link can be made later).
 export async function produceInvoice(purchaseIds: string[]): Promise<Result<{ invoiceId: string }>> {
   const ids = [...new Set(purchaseIds)];
   if (ids.length === 0) return { ok: false, error: "Tick at least one sale." };
@@ -45,16 +48,21 @@ export async function produceInvoice(purchaseIds: string[]): Promise<Result<{ in
   });
   if (sales.length !== ids.length) return { ok: false, error: "One of these sales no longer exists." };
 
+  const paid = sales[0].status === "COMPLETED";
   for (const sale of sales) {
     if (sale.channel !== "GALLERY") return { ok: false, error: "Only consigned sales can share an invoice." };
-    if (sale.status !== "ACTIVE") return { ok: false, error: "One of these sales has already been paid or cancelled." };
+    if (sale.status === "ABANDONED") return { ok: false, error: "One of these sales was cancelled." };
+    if ((sale.status === "COMPLETED") !== paid) {
+      return { ok: false, error: "Paid and unpaid sales can't share an invoice." };
+    }
     if (sale.chargeKind && ids.length > 1) {
       return { ok: false, error: "Framing and delivery charges are invoiced on their own." };
     }
+    if (sale.invoiceId) return { ok: false, error: "One of these sales is already on an invoice." };
+    if (paid) continue;
     if (sale.stripeSubscriptionScheduleId) {
       return { ok: false, error: "One of these sales is being paid by instalments through Stripe." };
     }
-    if (sale.invoiceId) return { ok: false, error: "One of these sales is already on an invoice." };
     if (saleBreakdown(sale).balance <= 0) return { ok: false, error: "Nothing is left to pay on one of these sales." };
   }
 
@@ -75,8 +83,13 @@ export async function produceInvoice(purchaseIds: string[]): Promise<Result<{ in
 
   // Ordered as ticked, which is the table's order.
   const ordered = ids.map((id) => sales.find((s) => s.id === id)!);
-  const created = await createInvoice(ordered, null);
-  if (!created.ok) return created;
+  // A receipt is dated the day the last of its sales was paid.
+  const lastPaid = ordered.reduce<Date | null>(
+    (latest, s) => (s.closedAt && (!latest || s.closedAt > latest) ? s.closedAt : latest),
+    null
+  );
+  const created = await createInvoice(ordered, paid ? (lastPaid ?? new Date()) : null);
+  if (!created.ok || paid) return created;
 
   for (const sale of ordered) await retireGalleryPaymentLinks(sale);
   await createInvoicePaymentLink(created.invoiceId);
@@ -273,6 +286,38 @@ export async function createInvoicePaymentLink(invoiceId: string): Promise<Resul
       data: { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
     });
     return { ok: true, url: link.url };
+  } catch (err) {
+    return { ok: false, error: stripeErrorMessage(err) };
+  }
+}
+
+// "Take Card" on a sale that's on an unpaid invoice (2026-10-14): the
+// whole invoice is paid by card, entered in the app by the artist with
+// Stripe's own card form (StripeCardForm), into the invoice's Stripe
+// account. invoiceId rides on the PaymentIntent's metadata, so the card
+// form and the webhook both record it with recordInvoicePaymentIntent.
+export async function createInvoiceCardIntent(invoiceId: string): Promise<Result<CardEntry>> {
+  try {
+    const invoice = await loadInvoice(invoiceId);
+    if (!invoice) return { ok: false, error: "Invoice not found." };
+    const closed = notOpenError(invoice);
+    if (closed) return { ok: false, error: closed };
+    const balance = invoiceBalance(invoice);
+    if (balance <= 0) return { ok: false, error: "Nothing is left to pay on this invoice." };
+
+    const intent = await getStripeClientForSale(invoice).paymentIntents.create({
+      amount: toMinorUnits(balance),
+      currency: invoice.currency.toLowerCase(),
+      description: `Invoice ${formatInvoiceNumber(invoice.number)}`,
+      metadata: { invoiceId: invoice.id },
+    });
+    if (!intent.client_secret) return { ok: false, error: "Stripe did not return a client secret." };
+    return {
+      ok: true,
+      clientSecret: intent.client_secret,
+      publishableKey: getPublishableKey(invoice.stripeMode),
+      stripeAccount: invoice.stripeAccountId,
+    };
   } catch (err) {
     return { ok: false, error: stripeErrorMessage(err) };
   }

@@ -9,6 +9,7 @@ import {
   forceDeleteCompletedSale,
   createGalleryPaymentLink,
   createGalleryCardIntent,
+  recordPaymentIntent,
   getGalleryInstalmentDefault,
   saveSaleExtra,
   type CardEntry,
@@ -22,6 +23,12 @@ import {
   splitIntoInstalments,
 } from "@/lib/saleMath";
 import { invoiceToOpen } from "@/lib/saleInvoice";
+import {
+  createInvoiceCardIntent,
+  getInvoiceWindow,
+  markInvoicePaid,
+  recordInvoicePaymentIntent,
+} from "@/lib/actions/invoices";
 import { formatDate } from "@/lib/formatDate";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -203,6 +210,9 @@ function SaleFigures({ purchase }: { purchase: PurchaseDetail }) {
       </div>
 
       <div className="mt-3 min-h-[1.25rem] space-y-0.5 text-xs text-neutral-500">
+        {purchase.status === "ABANDONED" && (
+          <p className="text-red-700">Cancelled{purchase.closedAt ? ` ${formatDate(purchase.closedAt)}` : ""}</p>
+        )}
         {purchase.payments
           .filter((p) => p.status === "PAID")
           .map((p) => (
@@ -253,11 +263,22 @@ type CardProps = {
   paymentMethods: string[];
   // Called after any action that changes this sale; the caller re-fetches.
   onChanged: () => void;
+  // How it was opened on its Location (2026-10-14, Craig's mockup) —
+  // only changes a Gallery location's sale, which is shown simplified:
+  // "image" (its Consigned Works picture) shows the figures with Cancel /
+  // Delete only; "line" (its row on the Sales tab) adds taking payment —
+  // Take Card and Record Payment, which pay its whole invoice if it's on
+  // one — or, once paid, the Certificate of Authenticity. Invoices are
+  // produced from the Sales tab's tick boxes. An Own location's sale
+  // keeps the full panel.
+  view: "image" | "line";
 };
 
-// The single shared view of one GALLERY-channel sale (ACTIVE or
-// COMPLETED), used everywhere such a sale can be opened. ABANDONED
-// sales never come here — callers show SaleDetailCard for those.
+// One GALLERY-channel (consigned) sale on its Location — the only place
+// it's managed (2026-10-14). A Gallery location's sale is shown
+// simplified (see CardProps.view); a cancelled one only when opened from
+// its Sales-tab line, to delete it. Elsewhere a consigned sale is shown
+// read-only (ConsignedSaleSummary).
 //
 // A sale with no framing/delivery charge sales shows its panel
 // straight away. Once it has any (2026-09-23 mockup), it first shows a
@@ -341,7 +362,7 @@ export function ConsignedSaleSummary({ purchase }: { purchase: PurchaseDetail })
 // One sale's full panel: its figures, a sliding input panel, the Action
 // panel, and Cancel/Delete. A framing/delivery charge sale has no
 // Arrange buttons and no certificate.
-function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
+function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -376,6 +397,9 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   const [cardOption, setCardOption] = useState<AmountOption | null>(null);
   const [cardIntent, setCardIntent] = useState<CardEntry | null>(null);
 
+  // Paying the sale's whole invoice (Gallery line view) — what it comes to.
+  const [invoiceDue, setInvoiceDue] = useState<{ balance: string; currency: string; sales: number } | null>(null);
+
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
     message: string;
@@ -393,6 +417,12 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   // Framing and delivery are only arranged for an Own location's sale —
   // a gallery arranges its own (2026-10-14).
   const canArrangeExtras = !isCharge && !onUnpaidInvoice && purchase.location?.kind !== "GALLERY";
+  // The simplified Gallery views (see CardProps.view); null = full panel.
+  const galleryView = purchase.location?.kind === "GALLERY" ? view : null;
+  const isCancelled = purchase.status === "ABANDONED";
+  // On a Gallery line, Take Card / Record Payment pay the whole invoice
+  // the sale is on (no part payment of an invoice).
+  const payingInvoice = galleryView === "line" && onUnpaidInvoice ? invoice : null;
   const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
   const onInstalmentPlan = purchase.type === "INSTALMENTS";
   const balance = isPaid ? 0 : saleBreakdown(purchase).balance;
@@ -422,6 +452,28 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
         setExtraName((kind === "framing" ? purchase.framer : purchase.courier) ?? "");
         setExtraCost((kind === "framing" ? purchase.framingCost : purchase.deliveryCost) ?? "");
       }
+    } else if (payingInvoice) {
+      // The whole invoice: shows what it comes to, and for a card sets up
+      // Stripe's card form for that amount straight away.
+      setPayDate(new Date().toISOString().slice(0, 10));
+      setPayMethod(paymentMethods[0] || "");
+      setInvoiceDue(null);
+      setCardIntent(null);
+      startTransition(async () => {
+        const data = await getInvoiceWindow(payingInvoice.id);
+        if (data) setInvoiceDue({ balance: data.balance, currency: data.currency, sales: data.sales.length });
+        if (kind !== "card") return;
+        const res = await createInvoiceCardIntent(payingInvoice.id);
+        if (!res.ok) {
+          setError(res.error);
+          return;
+        }
+        setCardIntent({
+          clientSecret: res.clientSecret,
+          publishableKey: res.publishableKey,
+          stripeAccount: res.stripeAccount,
+        });
+      });
     } else if (kind === "payment") {
       setPayDate(new Date().toISOString().slice(0, 10));
       setPayAmount(balance.toFixed(2));
@@ -465,7 +517,9 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
     fd.set("paidDate", payDate);
     fd.set("amount", payAmount.trim());
     fd.set("method", payMethod);
-    runAndClose(() => recordGalleryPayment(purchase.id, siteId, fd));
+    runAndClose(() =>
+      payingInvoice ? markInvoicePaid(payingInvoice.id, fd) : recordGalleryPayment(purchase.id, siteId, fd)
+    );
   };
 
   // Clicking an option box selects it and shows its link (generated on
@@ -645,7 +699,15 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
         <div className="overflow-hidden">
           <div className="pt-4">
             <p className="rounded-md bg-neutral-100 py-1.5 text-center text-sm text-neutral-500">
-              {DRAWER_TITLE[drawerKind]}
+              {payingInvoice
+                ? `Pay invoice ${formatInvoiceNumber(payingInvoice.number)}${
+                    invoiceDue
+                      ? ` — ${formatMoney(invoiceDue.balance, invoiceDue.currency)}${
+                          invoiceDue.sales > 1 ? ` for ${invoiceDue.sales} sales` : ""
+                        }`
+                      : ""
+                  }`
+                : DRAWER_TITLE[drawerKind]}
             </p>
 
             {(drawerKind === "framing" || drawerKind === "delivery") && (
@@ -688,17 +750,20 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
                   aria-label="Date"
                   className={`flex-1 ${drawerInputCls}`}
                 />
-                <input
-                  type="text"
-                  inputMode="decimal"
-                  value={payAmount}
-                  onChange={(e) => setPayAmount(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleRecordPayment()}
-                  placeholder="Amount"
-                  disabled={isPending}
-                  aria-label="Amount"
-                  className={`flex-1 ${drawerInputCls}`}
-                />
+                {/* An invoice is paid in full, so no amount to type. */}
+                {!payingInvoice && (
+                  <input
+                    type="text"
+                    inputMode="decimal"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && handleRecordPayment()}
+                    placeholder="Amount"
+                    disabled={isPending}
+                    aria-label="Amount"
+                    className={`flex-1 ${drawerInputCls}`}
+                  />
+                )}
                 <select
                   value={payMethod}
                   onChange={(e) => setPayMethod(e.target.value)}
@@ -767,7 +832,25 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
                 </>
               ))}
 
+            {drawerKind === "card" && payingInvoice && (
+              <div className="mt-4">
+                {cardIntent ? (
+                  <StripeCardForm
+                    key={cardIntent.clientSecret}
+                    clientSecret={cardIntent.clientSecret}
+                    publishableKey={cardIntent.publishableKey}
+                    stripeAccount={cardIntent.stripeAccount}
+                    onSucceeded={(paymentIntentId) => recordInvoicePaymentIntent(payingInvoice.id, paymentIntentId)}
+                    onDone={handleCardDone}
+                  />
+                ) : (
+                  <p className="text-center text-sm text-neutral-400">Preparing card form…</p>
+                )}
+              </div>
+            )}
+
             {drawerKind === "card" &&
+              !payingInvoice &&
               (onInstalmentPlan ? (
                 <p className="mt-3 text-center text-sm text-neutral-500">
                   This sale is already being paid by instalments through Stripe.
@@ -791,7 +874,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
                           clientSecret={cardIntent.clientSecret}
                           publishableKey={cardIntent.publishableKey}
                           stripeAccount={cardIntent.stripeAccount}
-                          purchaseId={purchase.id}
+                          onSucceeded={(paymentIntentId) => recordPaymentIntent(purchase.id, paymentIntentId)}
                           onDone={handleCardDone}
                         />
                       ) : (
@@ -806,67 +889,94 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
       </div>
 
       {/* ---- Action panel ---- */}
-      {/* Framing and delivery stay available after payment (they may be
-          arranged later) — see canArrangeExtras. */}
-      <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
-        {canArrangeExtras && (
-          <>
-            <button type="button" onClick={() => openDrawer("framing")} disabled={isPending} className={actionButtonCls}>
-              Arrange Framing
-            </button>
-            <button type="button" onClick={() => openDrawer("delivery")} disabled={isPending} className={actionButtonCls}>
-              Arrange Delivery
-            </button>
-          </>
-        )}
-        {isPaid ? (
-          <>
-            <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
-              {preparingInvoice ? "Preparing…" : "Send Receipt"}
-            </button>
-            {!isCharge && (
-              <button
-                type="button"
-                onClick={() => setShowCertificateModal(true)}
-                disabled={isPending}
-                className={actionButtonCls}
-              >
-                Certificate of Authenticity
+      {galleryView === "line" && purchase.status === "ACTIVE" ? (
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
+          <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
+            Take Card
+          </button>
+          <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
+            Record Payment
+          </button>
+        </div>
+      ) : galleryView === "line" && isPaid && !isCharge ? (
+        <div className="mt-4 grid grid-cols-1 gap-2 rounded-lg bg-[#F9F6EE] p-3">
+          <button
+            type="button"
+            onClick={() => setShowCertificateModal(true)}
+            disabled={isPending}
+            className={actionButtonCls}
+          >
+            Certificate of Authenticity
+          </button>
+        </div>
+      ) : galleryView === null ? (
+        <>
+        {/* Framing and delivery stay available after payment (they may be
+            arranged later) — see canArrangeExtras. */}
+        <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
+          {canArrangeExtras && (
+            <>
+              <button type="button" onClick={() => openDrawer("framing")} disabled={isPending} className={actionButtonCls}>
+                Arrange Framing
               </button>
-            )}
-          </>
-        ) : onUnpaidInvoice ? (
-          <>
-            <p className="self-center text-center text-sm text-neutral-700">
-              On invoice {formatInvoiceNumber(invoice.number)}
-            </p>
-            <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
-              {preparingInvoice ? "Preparing…" : "Open invoice"}
-            </button>
-          </>
-        ) : (
-          <>
-            <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
-              {preparingInvoice ? "Preparing…" : "Send invoice"}
-            </button>
-            <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
-              Record Payment
-            </button>
-            <button type="button" onClick={() => openDrawer("link")} disabled={isPending} className={actionButtonCls}>
-              Payment link
-            </button>
-            <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
-              Take Card
-            </button>
-          </>
-        )}
-      </div>
+              <button type="button" onClick={() => openDrawer("delivery")} disabled={isPending} className={actionButtonCls}>
+                Arrange Delivery
+              </button>
+            </>
+          )}
+          {isPaid ? (
+            <>
+              <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
+                {preparingInvoice ? "Preparing…" : "Send Receipt"}
+              </button>
+              {!isCharge && (
+                <button
+                  type="button"
+                  onClick={() => setShowCertificateModal(true)}
+                  disabled={isPending}
+                  className={actionButtonCls}
+                >
+                  Certificate of Authenticity
+                </button>
+              )}
+            </>
+          ) : onUnpaidInvoice ? (
+            <>
+              <p className="self-center text-center text-sm text-neutral-700">
+                On invoice {formatInvoiceNumber(invoice.number)}
+              </p>
+              <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
+                {preparingInvoice ? "Preparing…" : "Open invoice"}
+              </button>
+            </>
+          ) : (
+            <>
+              <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
+                {preparingInvoice ? "Preparing…" : "Send invoice"}
+              </button>
+              <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
+                Record Payment
+              </button>
+              <button type="button" onClick={() => openDrawer("link")} disabled={isPending} className={actionButtonCls}>
+                Payment link
+              </button>
+              <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
+                Take Card
+              </button>
+            </>
+          )}
+        </div>
+        </>
+      ) : null}
 
       {/* ---- Cancel / Delete ---- */}
-      <div className="mt-6 grid grid-cols-2 text-center text-sm text-red-700">
-        <button type="button" onClick={handleCancelSale} disabled={isPending} className="hover:underline disabled:opacity-50">
-          {isCharge ? "Cancel Charge" : "Cancel Sale"}
-        </button>
+      {/* A cancelled sale can only be deleted. */}
+      <div className={`mt-6 grid text-center text-sm text-red-700 ${isCancelled ? "grid-cols-1" : "grid-cols-2"}`}>
+        {!isCancelled && (
+          <button type="button" onClick={handleCancelSale} disabled={isPending} className="hover:underline disabled:opacity-50">
+            {isCharge ? "Cancel Charge" : "Cancel Sale"}
+          </button>
+        )}
         <button type="button" onClick={handleDeleteSale} disabled={isPending} className="hover:underline disabled:opacity-50">
           {isCharge ? "Delete Charge" : "Delete Sale"}
         </button>

@@ -9,6 +9,7 @@ import {
   abandonPurchase,
   createCardEntryIntent,
   markSalePaid,
+  recordPaymentIntent,
   type CardEntry,
   type PurchaseDetail,
 } from "@/lib/actions/payments";
@@ -349,7 +350,7 @@ export default function PurchasePanel({
                   clientSecret={cardEntry.clientSecret}
                   publishableKey={cardEntry.publishableKey}
                   stripeAccount={cardEntry.stripeAccount}
-                  purchaseId={activePurchase.id}
+                  onSucceeded={(paymentIntentId) => recordPaymentIntent(activePurchase.id, paymentIntentId)}
                   onDone={() => {
                     setCardEntry(null);
                     if (onChanged) onChanged();
