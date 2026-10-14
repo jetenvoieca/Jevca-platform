@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
 import { saleTitle, netOfCommission } from "@/lib/saleMath";
+import { buyerKey } from "@/lib/invoices";
 
 export type CustomerKind = "INDIVIDUAL" | "GALLERY" | "OWN";
 
@@ -53,10 +54,16 @@ export type CustomerDetail = {
     status: "ACTIVE" | "COMPLETED" | "ABANDONED";
     channel: "STRIPE" | "GALLERY";
     createdAt: string;
-    // Added 2026-09-12 so the Sales tab table's status badge can show
-    // "Invoice sent" instead of "UNPAID" once an invoice has actually
-    // gone out — same field GallerySaleCard's own badge already reads.
-    invoiceEmailedAt: string | null;
+    // For the Sales tab's Invoiced column (2026-10-14): the sale's
+    // current invoice (opened by clicking its date), whether it's a
+    // framing/delivery charge (never ticked), and what has to match for
+    // sales to share an invoice (buyer and Stripe account; currency is
+    // above). An unpaid consigned sale with no invoice gets a tick box.
+    invoice: { id: string; createdAt: string } | null;
+    chargeKind: "FRAMING" | "DELIVERY" | null;
+    onInstalments: boolean;
+    buyerKey: string;
+    stripeKey: string;
   }[];
   // Other artists this same email address also buys from — computed live
   // by matching, not an explicit link (2026-08-13 decision: separate
@@ -161,6 +168,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
               images: { take: 1, select: { url: true, thumbnailKey: true } },
             },
           },
+          invoice: { select: { id: true, createdAt: true } },
         },
         orderBy: { createdAt: "desc" },
       },
@@ -224,7 +232,11 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
         status: p.status,
         channel: p.channel,
         createdAt: p.createdAt.toISOString(),
-        invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
+        invoice: p.invoice ? { id: p.invoice.id, createdAt: p.invoice.createdAt.toISOString() } : null,
+        chargeKind: p.chargeKind,
+        onInstalments: !!p.stripeSubscriptionScheduleId,
+        buyerKey: buyerKey({ ...p, customer }),
+        stripeKey: `${p.stripeMode}|${p.stripeAccountId ?? ""}`,
       };
     }),
     alsoCustomerOf,

@@ -333,6 +333,8 @@ model Artist {
   // their named mail lists. See Subscriber and MailList below.
   subscribers Subscriber[]
   mailLists   MailList[]
+  // Every invoice/receipt document (2026-10-14) — see Invoice below.
+  invoices Invoice[]
 }
 
 // An artist's own Stripe account, linked to the platform (Jetenvoieca)
@@ -852,11 +854,11 @@ model InboundEmailAttachment {
 // sent from within an open thread, AND (2026-09-05, second Email
 // Integration request — "add a Sent view showing everything") every
 // invoice/receipt/certificate send too, purely so the Sent list has one
-// place to read from. Purchase's own invoiceEmailedAt/invoiceEmailedTo/
-// certificateEmailedAt/certificateEmailedTo fields are unchanged and
-// still what the per-sale card reads for its own "Invoice sent [date]"
-// line — this table doesn't replace them, it's an additional record
-// written alongside them purely for this unified view.
+// place to read from. Invoice.emailedAt/receiptEmailedAt and
+// Purchase.certificateEmailedAt are still what the sale card reads for
+// its own "Invoice sent [date]" lines — this table doesn't replace them,
+// it's an additional record written alongside them purely for this
+// unified view.
 model OutboundEmail {
   id String @id @default(cuid())
 
@@ -888,10 +890,14 @@ model OutboundEmail {
   // receipt/certificate sends are always Art.
   mailbox Mailbox @default(ART)
 
-  // Set only for INVOICE/RECEIPT/CERTIFICATE sends, so the Sent list can
-  // show which sale a send belongs to — never set for ADMIN/REPLY.
+  // Set only for CERTIFICATE sends, so the Sent list can show which sale
+  // a send belongs to — never set for ADMIN/REPLY.
   purchaseId String?
   purchase   Purchase? @relation(fields: [purchaseId], references: [id])
+
+  // Set only for INVOICE/RECEIPT sends (2026-10-14) — the invoice sent.
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
 
   // Same "which artist/gallery does this belong to, for the filter"
   // purpose as InboundEmail.artistId/customerId above. For a reply, both
@@ -922,6 +928,7 @@ model OutboundEmail {
   @@index([customerId])
   @@index([inReplyToId])
   @@index([purchaseId])
+  @@index([invoiceId])
   @@index([mailbox, sentAt])
   @@index([taskId])
   @@index([messageId])
@@ -1588,41 +1595,32 @@ model Purchase {
   courier      String?
   deliveryCost Decimal? @db.Decimal(10, 2)
 
-  invoiceNumber Int?
+  // The invoice this sale is on now (2026-10-14) — null until one is
+  // produced, and again if that invoice is cancelled. An invoice can
+  // cover several sales; see Invoice below. While the invoice is unpaid,
+  // the sale's price, extras and payments are locked.
+  invoiceId String?
+  invoice   Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
+  // Every invoice the sale has been on, cancelled ones included.
+  invoiceLines InvoiceLine[]
 
-  // Persistent Payment Link (not a one-off Checkout Session — see the
-  // note on createGalleryPaymentLink in payments.ts) for the net amount
-  // a gallery owes on this sale. Only ever set for GALLERY-channel
-  // sales (2026-09-01, Part Three).
+  // Payment links for this one sale while it isn't on an invoice
+  // (2026-09-01; instalments 2026-09-23) — a Payment Link (not a
+  // Checkout Session, which expires within a day) for the full balance,
+  // and one for the FIRST of stripeInstalmentLinkCount instalments,
+  // saving the buyer's card so the rest are charged monthly (see
+  // recordGalleryStripePayment). Both are retired whenever the balance
+  // changes, since each encodes a fixed amount, and when the sale is put
+  // on an invoice (which has its own link). Only for GALLERY-channel
+  // sales.
   stripePaymentLinkId  String?
   stripePaymentLinkUrl String?
-
-  // The instalment-plan counterpart of the link above (2026-09-23): a
-  // Payment Link for the FIRST of stripeInstalmentLinkCount instalments
-  // of the balance, saving the buyer's card so the rest are charged
-  // monthly (see recordGalleryStripePayment). Both links are retired
-  // whenever the balance changes, since each encodes a fixed amount.
   stripeInstalmentLinkId    String?
   stripeInstalmentLinkUrl   String?
   stripeInstalmentLinkCount Int?
 
-  // When the invoice for this sale was last actually emailed, and to
-  // which address — set only by sendInvoiceEmail
-  // (lib/actions/invoiceEmail.ts, 2026-09-01, Part Three). Purely a log
-  // for display; re-sending overwrites both rather than keeping history.
-  invoiceEmailedAt DateTime?
-  invoiceEmailedTo String?
-
-  // The same log for the receipt (2026-09-23) — kept separate so the
-  // sale shows both "Invoice sent" and "Receipt sent". Set by
-  // sendInvoiceEmail when the sale is already paid.
-  receiptEmailedAt DateTime?
-  receiptEmailedTo String?
-
-  // Same simple sent-log, for the Certificate of Authenticity
-  // (2026-09-03) — see the matching invoiceEmailedAt/invoiceEmailedTo
-  // above. Independent of those: a sale can have its invoice/receipt
-  // sent without ever having a certificate requested, or vice versa.
+  // When the Certificate of Authenticity was last emailed, and to whom
+  // (2026-09-03). Re-sending overwrites both.
   certificateEmailedAt DateTime?
   certificateEmailedTo String?
 
@@ -1649,10 +1647,9 @@ model Purchase {
   stripeSubscriptionId          String?
 
   payments Payment[]
-  // Every invoice/receipt/certificate email ever sent for this sale
-  // (2026-09-05, Email Integration — unified Sent list). Purely additive
-  // alongside invoiceEmailedAt/certificateEmailedAt above, which remain
-  // the source for the per-sale "Invoice sent [date]" line.
+  // Every certificate email sent for this sale (2026-09-05, Email
+  // Integration — unified Sent list; invoice/receipt emails are on its
+  // Invoice). Purely additive alongside certificateEmailedAt above.
   outboundEmails OutboundEmail[]
   // Alerts raised about this sale (2026-09-21) — see AlertEvent.purchaseId.
   alertEvents AlertEvent[]
@@ -1664,6 +1661,78 @@ model Purchase {
   @@index([customerId])
   @@index([parentPurchaseId])
   @@index([stripeAccountId])
+  @@index([invoiceId])
+}
+
+// An invoice — or, once paid, a receipt (2026-10-14, Craig's mockup: a
+// gallery that sold several works gets one invoice and one payment link
+// for them all). The one place invoice numbers, payment links and sent
+// dates live, for every sale: a direct Stripe sale or a single consigned
+// sale has an invoice of one; on a location's Sales tab several unpaid
+// consigned sales can be ticked and put on one invoice ("Produce
+// Invoice"). Its sales must share their location, buyer, currency and
+// Stripe account. No partial payment: it's paid in full, from the
+// invoice window (Mark as paid) or its payment link, which records each
+// sale's balance as paid.
+//
+// `number` comes from Artist.nextInvoiceNumber when the invoice is
+// produced (createdAt = the day it was produced). `paidAt` is set once
+// every sale on it is paid. A cancelled invoice (`cancelledAt`, only
+// while unpaid) is kept on record with its lines; its sales are freed
+// to go on another invoice.
+model Invoice {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id])
+
+  number   Int
+  currency String
+
+  // The Stripe account its sales' money goes to — the same for every
+  // sale on it (see Purchase.stripeAccountId).
+  stripeMode      StripeMode
+  stripeAccountId String?
+
+  // A persistent Payment Link for the whole balance, made when the
+  // invoice is produced (or when first asked for) and switched off when
+  // it's paid or cancelled.
+  stripePaymentLinkId  String?
+  stripePaymentLinkUrl String?
+
+  // When the invoice, and later the receipt, was last emailed and to
+  // whom.
+  emailedAt        DateTime?
+  emailedTo        String?
+  receiptEmailedAt DateTime?
+  receiptEmailedTo String?
+
+  paidAt      DateTime?
+  cancelledAt DateTime?
+
+  // The sales on it now (none once cancelled) …
+  sales Purchase[]
+  // … and every sale it was produced for, in order — kept when cancelled.
+  lines InvoiceLine[]
+  // Invoice/receipt emails sent for it.
+  outboundEmails OutboundEmail[]
+
+  createdAt DateTime @default(now())
+
+  @@unique([artistId, number])
+  @@index([paidAt, cancelledAt, emailedAt])
+}
+
+// One sale on one invoice (2026-10-14), in the order produced. Removed
+// with either.
+model InvoiceLine {
+  invoiceId  String
+  invoice    Invoice  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  purchaseId String
+  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  position   Int
+
+  @@id([invoiceId, purchaseId])
+  @@index([purchaseId])
 }
 
 model Payment {

@@ -126,7 +126,7 @@ export default function SalesView({
                 <td className="px-3 py-2">{formatMoney(s.totalAmount, s.currency)}</td>
                 <td className="px-3 py-2">{formatMoney(s.netAmount, s.currency)}</td>
                 <td className="px-3 py-2">
-                  <SaleStatusBadge status={s.status} invoiceEmailedAt={s.invoiceEmailedAt} />
+                  <SaleStatusBadge status={s.status} />
                 </td>
                 <td className="px-3 py-2 text-neutral-400">{formatDate(s.createdAt)}</td>
               </tr>

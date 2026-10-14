@@ -18,11 +18,6 @@ export type SaleRow = {
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
   createdAt: string;
   closedAt: string | null;
-  // Added 2026-09-12 so this list's own Status column can use the same
-  // shared SaleStatusBadge (GallerySaleCard.tsx) as everywhere else a
-  // sale's status is shown, rather than a second hand-rolled version —
-  // shows "Invoice sent" instead of "UNPAID" once one's gone out.
-  invoiceEmailedAt: string | null;
 };
 
 // Every Purchase across the artist's whole catalogue (same scoping as the
@@ -53,19 +48,18 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
     status: p.status,
     createdAt: p.createdAt.toISOString(),
     closedAt: p.closedAt ? p.closedAt.toISOString() : null,
-    invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
   }));
 }
 
 // Sales reset — a full, permanent wipe of an artist's sales data, added
-// 2026-08-09 for switching an artist from test-mode Stripe testing to
-// real sales with a genuinely clean slate. Deliberately total rather than
+// 2026-08-09 for switching an artist from test-mode Stripe testing to real
+// sales with a genuinely clean slate. Deliberately total rather than
 // partial ("part deletes lead to misunderstandings" — explicit user
 // decision): Purchases, their Payments (cascades automatically per the
-// schema's onDelete: Cascade), Sale Terms (pricing), AND resets any
-// artwork's availability that isn't already Available. Scoped strictly by
-// artistId — never touches another artist's data, since this platform is
-// multi-tenant.
+// schema's onDelete: Cascade), their Invoices, Sale Terms (pricing), AND
+// resets any artwork's availability that isn't already Available. Scoped
+// strictly by artistId — never touches another artist's data, since this
+// platform is multi-tenant.
 
 export type SalesResetPreview = {
   artistName: string;
@@ -101,6 +95,7 @@ export async function resetArtistSalesData(
       // step rather than relying silently on cascade behaviour.
       db.payment.deleteMany({ where: { purchase: { artwork: { artistId } } } }),
       db.purchase.deleteMany({ where: { artwork: { artistId } } }),
+      db.invoice.deleteMany({ where: { artistId } }),
       db.saleTerms.deleteMany({ where: { artwork: { artistId } } }),
       db.artwork.updateMany({
         where: { artistId, availability: { not: "AVAILABLE" } },

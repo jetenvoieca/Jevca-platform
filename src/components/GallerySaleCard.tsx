@@ -21,9 +21,11 @@ import {
   saleBreakdown,
   splitIntoInstalments,
 } from "@/lib/saleMath";
+import { invoiceToOpen } from "@/lib/saleInvoice";
 import { formatDate } from "@/lib/formatDate";
+import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import ConfirmDialog from "@/components/ConfirmDialog";
-import InvoiceEmailModal from "@/components/InvoiceEmailModal";
+import InvoiceModal from "@/components/InvoiceModal";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 import StripeCardForm from "@/components/StripeCardForm";
 
@@ -147,24 +149,23 @@ function formatMoney(amount: string, currency: string) {
 // Status badge for list/table rows (Locations Sales tab, Sales page,
 // Consolidated Sales). Not shown inside the card itself — the card's
 // own status area replaces it there.
-export function SaleStatusBadge({
-  status,
-  invoiceEmailedAt,
-}: {
-  status: "ACTIVE" | "COMPLETED" | "ABANDONED";
-  invoiceEmailedAt?: string | null;
-}) {
-  if (status === "COMPLETED") {
-    return <span className="text-sm text-green-600">Completed</span>;
-  }
+// PAID / UNPAID, or Cancelled (2026-10-14, Craig's mockup — whether
+// it's been invoiced is its own column now).
+export function SaleStatusBadge({ status }: { status: "ACTIVE" | "COMPLETED" | "ABANDONED" }) {
   if (status === "ABANDONED") {
-    return <span className="text-sm text-neutral-400">Abandoned</span>;
+    return <span className="text-sm text-neutral-400">Cancelled</span>;
   }
   return (
     <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
-      {invoiceEmailedAt ? "Invoice sent" : "UNPAID"}
+      {status === "COMPLETED" ? "PAID" : "UNPAID"}
     </span>
   );
+}
+
+// The invoice a sale is on now, if any — its one invoice not cancelled
+// (see PurchaseDetail.invoices).
+function liveInvoice(purchase: PurchaseDetail) {
+  return purchase.invoices.find((i) => !i.cancelledAt) ?? null;
 }
 
 // "Delivery charge · Bils Boat" — names a charge sale in the summary
@@ -217,8 +218,26 @@ function SaleFigures({ purchase }: { purchase: PurchaseDetail }) {
             {formatMoney(nextDueInstalment.amount, nextDueInstalment.currency)}
           </p>
         )}
-        {purchase.invoiceEmailedAt && <p>Invoice sent {formatDate(purchase.invoiceEmailedAt)}</p>}
-        {purchase.receiptEmailedAt && <p>Receipt sent {formatDate(purchase.receiptEmailedAt)}</p>}
+        {purchase.invoices.map((invoice) => {
+          const label = `${invoice.paidAt ? "Receipt" : "Invoice"} ${formatInvoiceNumber(invoice.number)}`;
+          if (invoice.cancelledAt) {
+            return (
+              <p key={invoice.id}>
+                Invoice {formatInvoiceNumber(invoice.number)} cancelled {formatDate(invoice.cancelledAt)}
+              </p>
+            );
+          }
+          return (
+            <div key={invoice.id}>
+              <p>
+                {label} · {formatDate(invoice.createdAt)}
+                {invoice.saleCount > 1 && ` · ${invoice.saleCount} sales`}
+              </p>
+              {invoice.emailedAt && <p>Invoice sent {formatDate(invoice.emailedAt)}</p>}
+              {invoice.receiptEmailedAt && <p>Receipt sent {formatDate(invoice.receiptEmailedAt)}</p>}
+            </div>
+          );
+        })}
         {purchase.certificateEmailedAt && (
           <p>Certificate of authenticity sent {formatDate(purchase.certificateEmailedAt)}</p>
         )}
@@ -309,8 +328,8 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // ---- Invoice/receipt email ----
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  // ---- Invoice / receipt window ----
+  const [invoiceModalId, setInvoiceModalId] = useState<string | null>(null);
   const [preparingInvoice, setPreparingInvoice] = useState(false);
 
   // ---- Certificate of Authenticity ----
@@ -349,6 +368,10 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
 
   const isPaid = purchase.status === "COMPLETED";
   const isCharge = purchase.chargeKind !== null;
+  // On an unpaid invoice (2026-10-14): paid, linked or cancelled from the
+  // invoice window, and nothing about it can change until then.
+  const invoice = liveInvoice(purchase);
+  const onUnpaidInvoice = !!invoice && !invoice.paidAt;
   const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
   const onInstalmentPlan = purchase.type === "INSTALMENTS";
   const balance = isPaid ? 0 : saleBreakdown(purchase).balance;
@@ -537,9 +560,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
       liveCharges.length > 0 ? " Its framing/delivery charges are deleted with it." : "";
     const message = isPaid
       ? `This ${saleNoun} has been paid. Deleting removes it and its payments from your records entirely, permanently — including from your accounts. Only do this for test or clearly wrong data, never for a real transaction.${chargesNote}`
-      : purchase.invoiceNumber
-        ? `An invoice (#${purchase.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the ${saleNoun} entirely.${chargesNote}`
-        : `This removes the ${saleNoun} entirely — it cannot be undone.${chargesNote}`;
+      : `This removes the ${saleNoun} entirely — it cannot be undone.${chargesNote}`;
     setPendingConfirm({
       title: `Delete this ${saleNoun} permanently?`,
       message,
@@ -563,23 +584,21 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
     });
   };
 
-  // Send invoice generates the full-amount payment link first (if the
-  // sale is still owed and has none), so the emailed invoice always
-  // includes a way to pay. If that fails the modal still opens — the
-  // email falls back to its non-link wording.
-  const handleOpenInvoiceModal = () => {
-    if (isPaid || onInstalmentPlan || purchase.stripePaymentLinkUrl) {
-      setShowInvoiceModal(true);
-      return;
-    }
+  // Send invoice / Send Receipt / Open invoice: opens the sale's current
+  // invoice, or produces an invoice of one (for a paid sale, its
+  // receipt) — see invoiceToOpen.
+  const handleOpenInvoice = () => {
     setError(null);
     setPreparingInvoice(true);
     startTransition(async () => {
-      const res = await createGalleryPaymentLink(purchase.id, siteId);
-      if (!res.ok) setError(res.error);
-      onChanged();
+      const res = await invoiceToOpen(purchase);
       setPreparingInvoice(false);
-      setShowInvoiceModal(true);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setInvoiceModalId(res.invoiceId);
+      onChanged();
     });
   };
 
@@ -767,9 +786,10 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
 
       {/* ---- Action panel ---- */}
       {/* Framing and delivery stay available after payment (they may be
-          arranged later) — a charge sale itself has neither. */}
+          arranged later) — a charge sale itself has neither, and a sale on
+          an unpaid invoice can't change until it's paid or cancelled. */}
       <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
-        {!isCharge && (
+        {!isCharge && !onUnpaidInvoice && (
           <>
             <button type="button" onClick={() => openDrawer("framing")} disabled={isPending} className={actionButtonCls}>
               Arrange Framing
@@ -781,8 +801,8 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
         )}
         {isPaid ? (
           <>
-            <button type="button" onClick={handleOpenInvoiceModal} disabled={isPending} className={actionButtonCls}>
-              Send Receipt
+            <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
+              {preparingInvoice ? "Preparing…" : "Send Receipt"}
             </button>
             {!isCharge && (
               <button
@@ -795,9 +815,18 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
               </button>
             )}
           </>
+        ) : onUnpaidInvoice ? (
+          <>
+            <p className="self-center text-center text-sm text-neutral-700">
+              On invoice {formatInvoiceNumber(invoice.number)}
+            </p>
+            <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
+              {preparingInvoice ? "Preparing…" : "Open invoice"}
+            </button>
+          </>
         ) : (
           <>
-            <button type="button" onClick={handleOpenInvoiceModal} disabled={isPending} className={actionButtonCls}>
+            <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
               {preparingInvoice ? "Preparing…" : "Send invoice"}
             </button>
             <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
@@ -833,13 +862,15 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
         onCancel={() => setPendingConfirm(null)}
       />
 
-      {showInvoiceModal && (
-        <InvoiceEmailModal
-          purchaseId={purchase.id}
-          siteId={siteId}
-          isPaid={isPaid}
-          onClose={() => setShowInvoiceModal(false)}
-          onSent={onChanged}
+      {invoiceModalId && (
+        <InvoiceModal
+          invoiceId={invoiceModalId}
+          paymentMethods={paymentMethods}
+          onClose={() => setInvoiceModalId(null)}
+          onChanged={() => {
+            onChanged();
+            router.refresh();
+          }}
         />
       )}
 

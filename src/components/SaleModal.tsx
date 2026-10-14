@@ -105,13 +105,10 @@ export default function SaleModal({
     router.refresh();
   };
 
-  const handleDeleteSale = (purchaseId: string, siteId: string, invoiceNumber: number | null) => {
-    const message = invoiceNumber
-      ? `An invoice (#${invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely.`
-      : "This removes the sale entirely — it cannot be undone.";
+  const handleDeleteSale = (purchaseId: string, siteId: string) => {
     setPendingConfirm({
       title: "Delete this sale permanently?",
-      message,
+      message: "This removes the sale entirely — it cannot be undone.",
       confirmLabel: "Delete permanently",
       danger: true,
       onConfirm: () => {
@@ -215,12 +212,7 @@ export default function SaleModal({
                     artworkMedium={selectedDetail.medium}
                     onDelete={
                       selectedPurchase.status !== "COMPLETED"
-                        ? () =>
-                            handleDeleteSale(
-                              selectedPurchase.id,
-                              target.siteId!,
-                              selectedPurchase.invoiceNumber
-                            )
+                        ? () => handleDeleteSale(selectedPurchase.id, target.siteId!)
                         : undefined
                     }
                     onForceDelete={

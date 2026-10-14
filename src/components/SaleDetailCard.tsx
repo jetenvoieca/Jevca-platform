@@ -1,9 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useTransition } from "react";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 import { formatDate } from "@/lib/formatDate";
+import { hasInvoiceToOpen, invoiceToOpen } from "@/lib/saleInvoice";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
+import InvoiceModal from "@/components/InvoiceModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
 function formatMoney(amount: string, currency: string) {
@@ -19,10 +21,6 @@ function Field({ label, value }: { label: string; value: string | null | undefin
       <dd className="text-sm text-neutral-800">{value}</dd>
     </div>
   );
-}
-
-function downloadInvoice(purchaseId: string) {
-  window.open(`/api/invoice/${purchaseId}`, "_blank");
 }
 
 export default function SaleDetailCard({
@@ -59,6 +57,19 @@ export default function SaleDetailCard({
   // abandoned/completed gallery sale reached via this generic card
   // rather than GallerySaleCard's own interactive one).
   const [showCertificateModal, setShowCertificateModal] = useState(false);
+  // The sale's invoice or receipt (2026-10-14) — see invoiceToOpen. A
+  // past sale's invoice is only ever looked at or re-sent here.
+  const [invoiceModalId, setInvoiceModalId] = useState<string | null>(null);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  const openInvoice = () => {
+    setInvoiceError(null);
+    startTransition(async () => {
+      const res = await invoiceToOpen(purchase);
+      if (res.ok) setInvoiceModalId(res.invoiceId);
+      else setInvoiceError(res.error);
+    });
+  };
   // The next instalment still owed, if this sale was abandoned partway
   // through an instalment plan — irrelevant (and absent) for a fully
   // Completed sale, since nothing's left due.
@@ -73,13 +84,16 @@ export default function SaleDetailCard({
           past transaction, shown for reference only.
         </p>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => downloadInvoice(purchase.id)}
-            className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
-          >
-            {purchase.status === "COMPLETED" ? "Download receipt" : "Download invoice"}
-          </button>
+          {hasInvoiceToOpen(purchase) && (
+            <button
+              type="button"
+              onClick={openInvoice}
+              disabled={isPending}
+              className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50 disabled:opacity-50"
+            >
+              {purchase.status === "COMPLETED" ? "Receipt" : "Invoice"}
+            </button>
+          )}
           {purchase.status === "COMPLETED" && (
             <button
               type="button"
@@ -109,6 +123,7 @@ export default function SaleDetailCard({
           )}
         </div>
       </div>
+      {invoiceError && <p className="text-xs text-red-600">{invoiceError}</p>}
 
       <dl className="grid grid-cols-2 gap-3">
         <Field label="Type" value={artworkType} />
@@ -212,6 +227,10 @@ export default function SaleDetailCard({
           siteId={siteId}
           onClose={() => setShowCertificateModal(false)}
         />
+      )}
+
+      {invoiceModalId && (
+        <InvoiceModal invoiceId={invoiceModalId} paymentMethods={[]} onClose={() => setInvoiceModalId(null)} />
       )}
     </div>
   );

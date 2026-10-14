@@ -7,13 +7,13 @@ import { useBackdropClose } from "@/lib/useBackdropClose";
 type Tab = "certificate" | "email";
 
 // Certificate of Authenticity preview/send modal (2026-09-03) — mirrors
-// InvoiceEmailModal closely (same "preview tab embeds the real PDF via
+// InvoiceModal closely (same "preview tab embeds the real PDF via
 // ?disposition=inline, Email tab loads a draft on first open, recipient
 // is always re-derived server-side" structure), but simpler: no
 // isPaid branching. Available for any non-abandoned sale (2026-09-10 —
 // see the matching note in certificate.ts), not just an already-paid
 // one. Kept as its own component rather than adding a third mode to
-// InvoiceEmailModal, since the two documents (and their send actions)
+// InvoiceModal, since the two documents (and their send actions)
 // are genuinely different things, not variations of the same one.
 export default function CertificateEmailModal({
   purchaseId,

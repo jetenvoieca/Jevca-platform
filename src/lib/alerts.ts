@@ -1,7 +1,8 @@
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { formatDate } from "@/lib/formatDate";
-import { netOwed, saleTitle } from "@/lib/saleMath";
+import { saleBreakdown, saleTitle } from "@/lib/saleMath";
+import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import type { SaleModalTarget } from "@/components/SaleModal";
 import { MANUAL_SUBSCRIPTION_METHODS } from "@/lib/subscriptionMethods";
 import { clientAlertId } from "@/lib/clientAlertIds";
@@ -14,9 +15,9 @@ import { clientAlertId } from "@/lib/clientAlertIds";
 // cancelled (2026-10-09, see cancelSubscription).
 const MANUAL_OVERDUE_DAYS = 30 + 14;
 
-// 2026-09-19 decision: a sale whose invoice has been emailed but has had
-// no payment received or recorded is overdue once more than 30 days have
-// passed since that email went out. See SALE_INVOICE_OVERDUE below.
+// 2026-09-19 decision: an invoice that has been emailed but not paid is
+// overdue once more than 30 days have passed since that email went out.
+// See SALE_INVOICE_OVERDUE below.
 const INVOICE_OVERDUE_DAYS = 30;
 
 // Stored alert types that link somewhere other than a site's Settings
@@ -248,43 +249,48 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
         },
         orderBy: { dueDate: "asc" },
       }),
-      // A sale whose invoice was emailed more than INVOICE_OVERDUE_DAYS ago
-      // and still has no payment received or recorded (2026-09-19). Gallery
-      // sales have no Payment rows at all until they're marked paid, so
-      // the Payment-based check above can never see them — this looks at
-      // the sale itself instead.
-      db.purchase.findMany({
+      // An invoice emailed more than INVOICE_OVERDUE_DAYS ago and still
+      // unpaid (2026-09-19; by invoice since 2026-10-14, so an invoice
+      // covering several sales is one alert). Gallery sales have no
+      // Payment rows until they're paid, so the Payment-based check above
+      // can never see them.
+      db.invoice.findMany({
         where: {
-          status: "ACTIVE",
-          invoiceEmailedAt: { lt: new Date(now - INVOICE_OVERDUE_DAYS * 24 * 60 * 60 * 1000) },
-          payments: { none: { status: "PAID" } },
+          paidAt: null,
+          cancelledAt: null,
+          emailedAt: { lt: new Date(now - INVOICE_OVERDUE_DAYS * 24 * 60 * 60 * 1000) },
         },
+        relationLoadStrategy: "query",
         select: {
           id: true,
-          artworkId: true,
-          buyerName: true,
-          totalAmount: true,
-          commissionPercent: true,
-          depositPaid: true,
-          framingCost: true,
-          deliveryCost: true,
-          chargeKind: true,
+          number: true,
           currency: true,
-          invoiceEmailedAt: true,
-          artwork: {
+          emailedAt: true,
+          artistId: true,
+          artist: {
             select: {
-              catalogueName: true,
-              artistId: true,
-              artist: {
-                select: {
-                  name: true,
-                  sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
-                },
-              },
+              name: true,
+              sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+            },
+          },
+          sales: {
+            orderBy: { createdAt: "asc" },
+            select: {
+              id: true,
+              artworkId: true,
+              buyerName: true,
+              totalAmount: true,
+              commissionPercent: true,
+              depositPaid: true,
+              framingCost: true,
+              deliveryCost: true,
+              chargeKind: true,
+              artwork: { select: { catalogueName: true } },
+              payments: { select: { amount: true, status: true } },
             },
           },
         },
-        orderBy: { invoiceEmailedAt: "asc" },
+        orderBy: { emailedAt: "asc" },
       }),
     ]);
 
@@ -377,30 +383,35 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     };
   });
 
-  const overdueInvoiceItems: AlertItem[] = overdueInvoices.map((p) => {
-    const artist = p.artwork.artist;
-    const siteId = artist.sites[0]?.id || null;
-    const sentAt = p.invoiceEmailedAt!; // Never null — the query above requires it.
+  const overdueInvoiceItems: AlertItem[] = overdueInvoices.flatMap((invoice) => {
+    const first = invoice.sales[0];
+    if (!first) return [];
+    const siteId = invoice.artist.sites[0]?.id || null;
+    const sentAt = invoice.emailedAt!; // Never null — the query above requires it.
     const days = daysSince(sentAt, now);
-    // What was invoiced — the shared Net Due formula (lib/saleMath.ts);
-    // a direct Stripe sale has no commission or extras, so it's just the
-    // price. Nothing has been paid yet (see the query above).
-    const owed = netOwed(p);
-    const buyer = p.buyerName || "unnamed buyer";
-    return {
-      id: `invoice-overdue-${p.id}`,
-      type: "SALE_INVOICE_OVERDUE",
-      severity: days - INVOICE_OVERDUE_DAYS > 30 ? "CRITICAL" : "WARNING",
-      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(p.artwork.catalogueName, p.chargeKind)}" — ${p.currency} ${owed.toFixed(2)}, sent ${formatDate(sentAt)} (${days} days ago) and still unpaid.`,
-      artistId: p.artwork.artistId,
-      artistName: artist.name,
-      siteId,
-      linkHref: null,
-      linkLabel: "View sale",
-      createdAt: sentAt.toISOString(),
-      dismissable: false,
-      sale: { purchaseId: p.id, artworkId: p.artworkId, artistId: p.artwork.artistId, siteId },
-    };
+    // What's still owed — the shared balance formula (lib/saleMath.ts).
+    const owed = invoice.sales.reduce((sum, s) => sum + saleBreakdown(s).balance, 0);
+    const buyer = first.buyerName || "unnamed buyer";
+    const what =
+      invoice.sales.length === 1
+        ? `"${saleTitle(first.artwork.catalogueName, first.chargeKind)}"`
+        : `${invoice.sales.length} works`;
+    return [
+      {
+        id: `invoice-overdue-${invoice.id}`,
+        type: "SALE_INVOICE_OVERDUE",
+        severity: days - INVOICE_OVERDUE_DAYS > 30 ? "CRITICAL" : "WARNING",
+        message: `${invoice.artist.name}: invoice ${formatInvoiceNumber(invoice.number)} to ${buyer} for ${what} — ${invoice.currency} ${owed.toFixed(2)}, sent ${formatDate(sentAt)} (${days} days ago) and still unpaid.`,
+        artistId: invoice.artistId,
+        artistName: invoice.artist.name,
+        siteId,
+        linkHref: null,
+        linkLabel: "View sale",
+        createdAt: sentAt.toISOString(),
+        dismissable: false,
+        sale: { purchaseId: first.id, artworkId: first.artworkId, artistId: invoice.artistId, siteId },
+      },
+    ];
   });
 
   return [

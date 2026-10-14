@@ -57,8 +57,26 @@ export async function retireGalleryPaymentLinks(
 }
 
 // Every unpaid sale of an artwork (its own sale and any framing/delivery
-// charges) loses its payment links — used when the artwork is renamed.
+// charges) loses its payment links, and so does any unpaid invoice it's
+// on (2026-10-14) — used when the artwork is renamed.
 export async function retireArtworkPaymentLinks(artworkId: string) {
+  const invoices = await db.invoice.findMany({
+    where: {
+      paidAt: null,
+      cancelledAt: null,
+      stripePaymentLinkId: { not: null },
+      sales: { some: { artworkId } },
+    },
+    select: { id: true, stripeMode: true, stripeAccountId: true, stripePaymentLinkId: true },
+  });
+  for (const invoice of invoices) {
+    await deactivatePaymentLink(invoice, invoice.stripePaymentLinkId);
+    await db.invoice.update({
+      where: { id: invoice.id },
+      data: { stripePaymentLinkId: null, stripePaymentLinkUrl: null },
+    });
+  }
+
   const purchases = await db.purchase.findMany({
     where: {
       artworkId,

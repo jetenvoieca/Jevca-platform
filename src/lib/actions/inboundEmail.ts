@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import { raiseAlertIfNotAlreadyOpen, resolveAlertsOfType } from "@/lib/alerts";
+import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import { saleTitle } from "@/lib/saleMath";
 import { uploadToR2, deleteFromR2 } from "@/lib/r2";
 import { readableEmailText } from "@/lib/emailText";
@@ -333,6 +334,7 @@ export async function getSentList(mailbox: Mailbox): Promise<SentSummaryItem[]> 
       artist: { select: { name: true } },
       customer: { select: { name: true } },
       purchase: { select: { chargeKind: true, artwork: { select: { catalogueName: true } } } },
+      invoice: { select: { number: true } },
     },
   });
   return rows.map((r) => ({
@@ -346,7 +348,13 @@ export async function getSentList(mailbox: Mailbox): Promise<SentSummaryItem[]> 
     artistName: r.artist?.name || null,
     customerId: r.customerId,
     customerName: r.customer?.name || null,
-    artworkTitle: r.purchase ? saleTitle(r.purchase.artwork.catalogueName, r.purchase.chargeKind) : null,
+    // What the send was about: the sale (a certificate) or the invoice
+    // (an invoice or receipt, which can cover several sales).
+    artworkTitle: r.purchase
+      ? saleTitle(r.purchase.artwork.catalogueName, r.purchase.chargeKind)
+      : r.invoice
+        ? `Invoice ${formatInvoiceNumber(r.invoice.number)}`
+        : null,
     sentAt: r.sentAt.toISOString(),
   }));
 }
@@ -547,7 +555,7 @@ export async function deleteInboundEmail(id: string): Promise<void> {
 // Deletes a sent message — an ad hoc admin send, a reply, or a logged
 // invoice/receipt/certificate send (2026-09-06, same request as above).
 // Only removes it from this Sent record; doesn't touch
-// Purchase.invoiceEmailedAt/certificateEmailedAt or anything already
+// the invoice's or sale's own "sent" dates or anything already
 // delivered to the recipient — this is a record of what was sent, not
 // the send itself, so deleting it just tidies the list.
 export async function deleteOutboundEmail(id: string): Promise<void> {

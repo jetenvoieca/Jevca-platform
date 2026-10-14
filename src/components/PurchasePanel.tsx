@@ -16,18 +16,12 @@ import { formatDate } from "@/lib/formatDate";
 import StripeCardForm from "@/components/StripeCardForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
-import InvoiceEmailModal from "@/components/InvoiceEmailModal";
+import InvoiceModal from "@/components/InvoiceModal";
+import { hasInvoiceToOpen, invoiceToOpen } from "@/lib/saleInvoice";
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-}
-
-// Opens the generated PDF in a new tab/download — a plain onClick +
-// window.open rather than a raw <a href> or next/link's <Link> (which is
-// for in-app navigation, not hitting an API route that returns a file).
-function downloadInvoice(purchaseId: string) {
-  window.open(`/api/invoice/${purchaseId}`, "_blank");
 }
 
 // The panel for an unpaid direct Stripe sale — one started from the
@@ -63,9 +57,10 @@ export default function PurchasePanel({
   // active purchase's own button and any completed history row's,
   // holding whichever purchase id it's currently open for (or null).
   const [certificateModalId, setCertificateModalId] = useState<string | null>(null);
-  // "Send invoice" on an unpaid sale (2026-09-21) — the invoice preview
-  // and email window.
-  const [showInvoiceModal, setShowInvoiceModal] = useState(false);
+  // The invoice window (2026-09-21; by invoice since 2026-10-14) — "Send
+  // invoice" on the unpaid sale, and each sale's invoice or receipt —
+  // holding the invoice it's open for (or null).
+  const [invoiceModalId, setInvoiceModalId] = useState<string | null>(null);
   // "Record sale" on an unpaid sale (2026-09-21) — the inline Date paid /
   // Payment type form, same idea as GallerySaleCard's "Mark as Paid".
   const [showRecordForm, setShowRecordForm] = useState(false);
@@ -114,16 +109,11 @@ export default function PurchasePanel({
 
   // For a genuinely wrong sale (not just one that fell through) —
   // deliberately a separate, harder confirmation from "Cancel" above,
-  // since this can't be undone. Warns specifically about invoice number
-  // gaps, since that's the one consequence that isn't obvious from the
-  // UI alone (2026-08-13).
+  // since this can't be undone.
   const handleDeleteHistoryItem = (p: PurchaseDetail) => {
-    const message = p.invoiceNumber
-      ? `An invoice (#${p.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely, not just from this list.`
-      : "This removes the sale entirely, not just from this list — it cannot be undone.";
     setPendingConfirm({
       title: "Delete this sale permanently?",
-      message,
+      message: "This removes the sale entirely, not just from this list — it cannot be undone.",
       confirmLabel: "Delete permanently",
       danger: true,
       onConfirm: () => {
@@ -168,12 +158,9 @@ export default function PurchasePanel({
   // wrong transaction (wrong buyer, wrong price) doesn't need the extra
   // "cancel first, then delete from history" round trip.
   const handleDeleteActiveSale = () => {
-    const message = activePurchase.invoiceNumber
-      ? `An invoice (#${activePurchase.invoiceNumber}) was already generated for it — deleting will leave a gap in your invoice numbering, which is fine but can't be undone. This removes the sale entirely.`
-      : "This removes the sale entirely — it cannot be undone.";
     setPendingConfirm({
       title: "Delete this sale permanently?",
-      message,
+      message: "This removes the sale entirely — it cannot be undone.",
       confirmLabel: "Delete permanently",
       danger: true,
       onConfirm: () => {
@@ -186,6 +173,19 @@ export default function PurchasePanel({
           else router.refresh();
         });
       },
+    });
+  };
+
+  // Opens a sale's invoice (or receipt) — see invoiceToOpen.
+  const openInvoice = (p: PurchaseDetail) => {
+    setError(null);
+    startTransition(async () => {
+      const res = await invoiceToOpen(p);
+      if (!res.ok) {
+        setError(res.error);
+        return;
+      }
+      setInvoiceModalId(res.invoiceId);
     });
   };
 
@@ -270,7 +270,7 @@ export default function PurchasePanel({
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => setShowInvoiceModal(true)}
+                onClick={() => openInvoice(activePurchase)}
                 disabled={isPending}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
               >
@@ -405,10 +405,11 @@ export default function PurchasePanel({
             <div className="mt-3 flex flex-wrap gap-2">
               <button
                 type="button"
-                onClick={() => downloadInvoice(activePurchase.id)}
-                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+                onClick={() => openInvoice(activePurchase)}
+                disabled={isPending}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
               >
-                Download invoice
+                Invoice
               </button>
               <button
                 type="button"
@@ -517,13 +518,16 @@ export default function PurchasePanel({
                     {p.status === "COMPLETED" ? "Completed" : "Abandoned"}
                   </span>
                   <span className="text-neutral-400">{p.closedAt ? formatDate(p.closedAt) : ""}</span>
-                  <button
-                    type="button"
-                    onClick={() => downloadInvoice(p.id)}
-                    className="text-neutral-500 hover:underline"
-                  >
-                    {p.status === "COMPLETED" ? "Receipt" : "Invoice"}
-                  </button>
+                  {hasInvoiceToOpen(p) && (
+                    <button
+                      type="button"
+                      onClick={() => openInvoice(p)}
+                      disabled={isPending}
+                      className="text-neutral-500 hover:underline disabled:opacity-50"
+                    >
+                      {p.status === "COMPLETED" ? "Receipt" : "Invoice"}
+                    </button>
+                  )}
                   {p.status === "COMPLETED" && (
                     <button
                       type="button"
@@ -568,12 +572,12 @@ export default function PurchasePanel({
         onCancel={() => setPendingConfirm(null)}
       />
 
-      {showInvoiceModal && (
-        <InvoiceEmailModal
-          purchaseId={activePurchase.id}
-          siteId={siteId}
-          onClose={() => setShowInvoiceModal(false)}
-          onSent={onChanged ?? (() => router.refresh())}
+      {invoiceModalId && (
+        <InvoiceModal
+          invoiceId={invoiceModalId}
+          paymentMethods={paymentMethods}
+          onClose={() => setInvoiceModalId(null)}
+          onChanged={onChanged ?? (() => router.refresh())}
         />
       )}
 

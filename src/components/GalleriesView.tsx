@@ -16,11 +16,13 @@ import {
 } from "@/lib/actions/locations";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
+import { produceInvoice } from "@/lib/actions/invoices";
 import { netOwed } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
+import InvoiceModal from "@/components/InvoiceModal";
 import SaleHeader from "@/components/SaleHeader";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
@@ -152,6 +154,15 @@ export default function GalleriesView({
   const [saleBuyerEmail, setSaleBuyerEmail] = useState("");
   const [saleDate, setSaleDate] = useState(() => new Date().toISOString().slice(0, 10));
 
+  // ---- Invoicing from the Sales tab (2026-10-14, Craig's mockup) ----
+  // Unpaid sales not yet invoiced each get a tick box in the Invoiced
+  // column; "Produce Invoice" puts every ticked sale on one invoice and
+  // opens it. The invoice window also opens from an invoiced sale's date.
+  const [invoiceTicks, setInvoiceTicks] = useState<string[]>([]);
+  const [invoiceError, setInvoiceError] = useState<string | null>(null);
+  const [invoiceModalId, setInvoiceModalId] = useState<string | null>(null);
+  const [producingInvoice, startInvoiceTransition] = useTransition();
+
   const filtered = galleries.filter((g) => {
     if (!q.trim()) return true;
     const needle = q.trim().toLowerCase();
@@ -161,6 +172,8 @@ export default function GalleriesView({
   const openRow = (customerId: string) => {
     setSelectedId(customerId);
     setSelectedDetail(null);
+    setInvoiceTicks([]);
+    setInvoiceError(null);
     setSelectedWorkId(null);
     setSelectedWorkDetail(null);
     // Was resetting to "details" here (2026-09-09 fix) — this ran on
@@ -277,6 +290,44 @@ export default function GalleriesView({
     if (!selectedWorkId || !selectedId) return;
     getArtworkDetailForClient(selectedWorkId).then((detail) => setSelectedWorkDetail(detail));
     refreshGalleryDetail(selectedId);
+  };
+
+  // A sale can be ticked when it's an unpaid consigned sale with no
+  // invoice — not a framing/delivery charge (invoiced on its own) or one
+  // being paid by instalments — and matches whatever is already ticked:
+  // the same currency, buyer and Stripe account (see produceInvoice).
+  type SalesRow = GalleryDetail["purchases"][number];
+  const canInvoice = (p: SalesRow) =>
+    p.channel === "GALLERY" && p.status === "ACTIVE" && !p.invoice && !p.chargeKind && !p.onInstalments;
+  const firstTicked = selectedDetail?.purchases.find((p) => invoiceTicks.includes(p.id)) ?? null;
+  const matchesTicked = (p: SalesRow) =>
+    !firstTicked ||
+    (p.currency === firstTicked.currency &&
+      p.buyerKey === firstTicked.buyerKey &&
+      p.stripeKey === firstTicked.stripeKey);
+
+  const toggleTick = (purchaseId: string) => {
+    setInvoiceError(null);
+    setInvoiceTicks((ticks) =>
+      ticks.includes(purchaseId) ? ticks.filter((id) => id !== purchaseId) : [...ticks, purchaseId]
+    );
+  };
+
+  const handleProduceInvoice = () => {
+    if (!selectedDetail || !selectedId) return;
+    // In the table's order, which is the invoice's line order.
+    const ids = selectedDetail.purchases.filter((p) => invoiceTicks.includes(p.id)).map((p) => p.id);
+    setInvoiceError(null);
+    startInvoiceTransition(async () => {
+      const res = await produceInvoice(ids);
+      if (!res.ok) {
+        setInvoiceError(res.error);
+        return;
+      }
+      setInvoiceTicks([]);
+      setInvoiceModalId(res.invoiceId);
+      refreshGalleryDetail(selectedId);
+    });
   };
 
   const saveField = (
@@ -657,33 +708,35 @@ export default function GalleriesView({
                 <p className="mb-4 text-sm text-neutral-500">{salesSummary}</p>
                 <div className="overflow-hidden rounded-lg border border-neutral-200">
                   {/* table-fixed + explicit column widths (2026-09-10) —
-                      table-auto let a long artwork title grow the
-                      Artwork column and push Date off the visible edge
-                      of this panel. Artwork now truncates within its own
-                      reserved width instead, so Status/Amount/Net/Date
-                      always stay on screen regardless of title length
-                      or window size. */}
+                      a long artwork title truncates within its own
+                      column, so every other column always stays on
+                      screen. Columns per Craig's mockup (2026-10-14):
+                      date first, and Invoiced last — the date it was
+                      invoiced (opens the invoice), a tick box to put it
+                      on a new invoice, or a dash. */}
                   <table className="w-full table-fixed text-sm">
                     <colgroup>
-                      <col className="w-[34%]" />
-                      <col className="w-[18%]" />
-                      <col className="w-[16%]" />
-                      <col className="w-[16%]" />
-                      <col className="w-[16%]" />
+                      <col className="w-[15%]" />
+                      <col className="w-[27%]" />
+                      <col className="w-[13%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[14%]" />
+                      <col className="w-[17%]" />
                     </colgroup>
                     <thead>
                       <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
+                        <th className="px-3 py-2 font-normal">Date</th>
                         <th className="px-3 py-2 font-normal">{words.item}</th>
                         <th className="px-3 py-2 font-normal">Status</th>
                         <th className="px-3 py-2 font-normal">Amount</th>
                         <th className="px-3 py-2 font-normal">Net</th>
-                        <th className="px-3 py-2 font-normal">Date</th>
+                        <th className="px-3 py-2 font-normal">Invoiced</th>
                       </tr>
                     </thead>
                     <tbody>
                       {selectedDetail.purchases.length === 0 ? (
                         <tr>
-                          <td colSpan={5} className="px-3 py-6 text-center text-sm text-neutral-400">
+                          <td colSpan={6} className="px-3 py-6 text-center text-sm text-neutral-400">
                             Nothing here yet.
                           </td>
                         </tr>
@@ -699,6 +752,9 @@ export default function GalleriesView({
                             onClick={() => openWork(p.artworkId, p.id)}
                             className="cursor-pointer border-b border-neutral-100 last:border-0 hover:bg-neutral-50"
                           >
+                            <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
+                              {formatDate(p.createdAt)}
+                            </td>
                             <td className="px-3 py-2">
                               <div className="flex min-w-0 items-center gap-2">
                                 {p.artworkImageUrl ? (
@@ -715,7 +771,7 @@ export default function GalleriesView({
                               </div>
                             </td>
                             <td className="whitespace-nowrap px-3 py-2">
-                              <SaleStatusBadge status={p.status} invoiceEmailedAt={p.invoiceEmailedAt} />
+                              <SaleStatusBadge status={p.status} />
                             </td>
                             <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
                               {formatMoney(p.totalAmount, p.currency)}
@@ -723,8 +779,33 @@ export default function GalleriesView({
                             <td className="whitespace-nowrap px-3 py-2 text-neutral-800">
                               {formatMoney(p.netAmount, p.currency)}
                             </td>
-                            <td className="whitespace-nowrap px-3 py-2 text-neutral-400">
-                              {formatDate(p.createdAt)}
+                            <td className="whitespace-nowrap px-3 py-2" onClick={(e) => e.stopPropagation()}>
+                              {p.invoice ? (
+                                <button
+                                  type="button"
+                                  onClick={() => setInvoiceModalId(p.invoice!.id)}
+                                  className="text-neutral-800 hover:underline"
+                                >
+                                  {formatDate(p.invoice.createdAt)}
+                                </button>
+                              ) : canInvoice(p) ? (
+                                <label
+                                  className={`inline-flex items-center gap-2 rounded-md border border-neutral-300 px-2 py-1 ${
+                                    matchesTicked(p) ? "cursor-pointer hover:bg-neutral-50" : "cursor-not-allowed opacity-40"
+                                  }`}
+                                  title={matchesTicked(p) ? undefined : "Only sales with the same currency and buyer can share an invoice."}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={invoiceTicks.includes(p.id)}
+                                    onChange={() => toggleTick(p.id)}
+                                    disabled={producingInvoice || !matchesTicked(p)}
+                                  />
+                                  Invoice
+                                </label>
+                              ) : (
+                                <span className="text-neutral-400">—</span>
+                              )}
                             </td>
                           </tr>
                         ))
@@ -732,6 +813,19 @@ export default function GalleriesView({
                     </tbody>
                   </table>
                 </div>
+                {invoiceError && <p className="mt-3 text-right text-sm text-red-600">{invoiceError}</p>}
+                {invoiceTicks.length > 0 && (
+                  <div className="mt-3 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={handleProduceInvoice}
+                      disabled={producingInvoice}
+                      className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+                    >
+                      {producingInvoice ? "Producing…" : "Produce Invoice"}
+                    </button>
+                  </div>
+                )}
               </div>
             ) : (
               <div className="space-y-3">
@@ -1173,6 +1267,18 @@ export default function GalleriesView({
         onConfirm={handleDeleteGallery}
         onCancel={() => setConfirmingDelete(false)}
       />
+
+      {invoiceModalId && (
+        <InvoiceModal
+          invoiceId={invoiceModalId}
+          paymentMethods={paymentMethods}
+          onClose={() => setInvoiceModalId(null)}
+          onChanged={() => {
+            if (selectedId) refreshGalleryDetail(selectedId);
+            refreshAfterSaleChange();
+          }}
+        />
+      )}
     </div>
   );
 }

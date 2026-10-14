@@ -8,6 +8,7 @@ import {
   handleInstalmentInvoicePaid,
   handleInstalmentInvoiceFailed,
 } from "@/lib/actions/payments";
+import { recordInvoicePaymentIntent } from "@/lib/actions/invoices";
 
 // Extracts the subscription ID from an Invoice, handling both API shapes:
 // old (`invoice.subscription`, versions before 2025-03-31) and new
@@ -87,15 +88,19 @@ export async function POST(req: NextRequest) {
   try {
     switch (event.type) {
       // Fires for every collection route — a hosted Checkout Session, an
-      // in-app card entry, and a consigned sale's payment links all end
-      // in a PaymentIntent succeeding. recordPaymentIntent (payments.ts)
-      // works out which sale it belongs to and records it — the same
+      // in-app card entry, a consigned sale's payment links and an
+      // invoice's payment link all end in a PaymentIntent succeeding.
+      // recordPaymentIntent (payments.ts) works out which sale it belongs
+      // to and records it (an invoice's, recordInvoicePaymentIntent) — the same
       // call the in-app card form makes, so whichever arrives first
       // does the work and the other is a no-op.
       case "payment_intent.succeeded": {
         const intent = event.data.object as Stripe.PaymentIntent;
         const purchaseId = intent.metadata?.purchaseId;
+        const invoiceId = intent.metadata?.invoiceId;
         if (purchaseId) await recordPaymentIntent(purchaseId, intent.id);
+        // An invoice's payment link (2026-10-14) pays every sale on it.
+        else if (invoiceId) await recordInvoicePaymentIntent(invoiceId, intent.id);
         break;
       }
 

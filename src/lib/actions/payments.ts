@@ -25,6 +25,9 @@ import {
   type SaleStripeFields,
 } from "@/lib/stripe";
 import { APP_URL } from "@/lib/appUrl";
+import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
+import { invoiceLockError } from "@/lib/invoices";
+import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 
 // No revalidatePath(`/sites/${siteId}/artworks`) calls in this file
 // (2026-08-15 removal) — that route is force-dynamic (never statically
@@ -72,6 +75,19 @@ export type PaymentDetail = {
   method: string | null;
 };
 
+// One invoice a sale is or was on (2026-10-14) — what the sale card and
+// the Sales tab need to show and open it.
+export type SaleInvoice = {
+  id: string;
+  number: number;
+  createdAt: string;
+  emailedAt: string | null;
+  receiptEmailedAt: string | null;
+  paidAt: string | null;
+  cancelledAt: string | null;
+  saleCount: number;
+};
+
 export type PurchaseDetail = {
   id: string;
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
@@ -100,20 +116,12 @@ export type PurchaseDetail = {
   framingCost: string | null;
   courier: string | null;
   deliveryCost: string | null;
-  invoiceNumber: number | null;
-  // Part Three (2026-09-01) — see the matching schema.prisma comments.
-  stripePaymentLinkUrl: string | null;
-  // Instalment-plan payment link (2026-09-23) — see the matching
-  // schema.prisma comment.
-  stripeInstalmentLinkUrl: string | null;
-  stripeInstalmentLinkCount: number | null;
-  invoiceEmailedAt: string | null;
-  invoiceEmailedTo: string | null;
-  // Receipt sent-log (2026-09-23) — see Purchase.receiptEmailedAt.
-  receiptEmailedAt: string | null;
-  receiptEmailedTo: string | null;
-  // Certificate of Authenticity sent-log (2026-09-03) — same simple
-  // current-status pattern as invoiceEmailedAt/invoiceEmailedTo above.
+  // Every invoice the sale has been on (2026-10-14), oldest first — at
+  // most one not cancelled, which is the sale's current invoice
+  // (Purchase.invoiceId). See Invoice in schema.prisma.
+  invoices: SaleInvoice[];
+  // Certificate of Authenticity sent-log (2026-09-03) — when it was last
+  // emailed, and to whom.
   certificateEmailedAt: string | null;
   certificateEmailedTo: string | null;
   totalAmount: string;
@@ -567,6 +575,8 @@ export async function createGalleryPaymentLink(
       relationLoadStrategy: "query",
     });
     if (!purchase) return { ok: false, error: "Sale not found." };
+    const locked = await invoiceLockError(purchase.invoiceId);
+    if (locked) return { ok: false, error: locked };
 
     const due = amountToCollect(purchase, instalments);
     if (!due.ok) return due;
@@ -644,6 +654,8 @@ export async function createGalleryCardIntent(
       relationLoadStrategy: "query",
     });
     if (!purchase) return { ok: false, error: "Sale not found." };
+    const locked = await invoiceLockError(purchase.invoiceId);
+    if (locked) return { ok: false, error: locked };
 
     const due = amountToCollect(purchase, instalments);
     if (!due.ok) return due;
@@ -749,6 +761,8 @@ export async function updateGallerySaleAmount(
   if (purchase.status !== "ACTIVE") {
     return { ok: false, error: "This sale is no longer editable — it's already been paid." };
   }
+  const locked = await invoiceLockError(purchase.invoiceId);
+  if (locked) return { ok: false, error: locked };
 
   const totalAmount = (formData.get("totalAmount") as string)?.trim();
   const currency = (formData.get("currency") as string)?.trim().toUpperCase();
@@ -804,6 +818,9 @@ export async function saveSaleExtra(
   if (name && !cost) return { ok: false, error: "Please enter the cost." };
 
   if (purchase.status === "COMPLETED") return saveChargeSale(purchase, kind, name, cost);
+
+  const locked = await invoiceLockError(purchase.invoiceId);
+  if (locked) return { ok: false, error: locked };
 
   const current = kind === "framing" ? purchase.framingCost : purchase.deliveryCost;
   const currentCost = current != null ? parseFloat(current.toString()).toFixed(2) : null;
@@ -1045,6 +1062,11 @@ export async function deleteGallerySale(
     };
   }
 
+  for (const sale of [purchase, ...purchase.charges]) {
+    const locked = await invoiceLockError(sale.invoiceId);
+    if (locked) return { ok: false, error: locked };
+  }
+
   for (const sale of [purchase, ...purchase.charges]) await retireGalleryPaymentLinks(sale);
   await db.purchase.delete({ where: { id: purchaseId } });
   await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
@@ -1067,34 +1089,27 @@ export async function forceDeleteCompletedSale(
   purchaseId: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { invoice: { include: { _count: { select: { lines: true } } } } },
+  });
   if (!purchase) return { ok: false, error: "Sale not found." };
 
+  // Its invoice goes with it — unless that invoice also covers other
+  // sales, which would then no longer add up.
+  const invoice = purchase.invoice;
+  if (invoice && invoice._count.lines > 1) {
+    return {
+      ok: false,
+      error: `This sale is on invoice ${formatInvoiceNumber(invoice.number)} with other sales, so it can't be deleted on its own.`,
+    };
+  }
+
   await db.purchase.delete({ where: { id: purchaseId } });
+  if (invoice) await db.invoice.delete({ where: { id: invoice.id } });
   await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
 
   return { ok: true };
-}
-
-// Reads the optional Date paid and Method a payment form sends. No date
-// means now; no method means none recorded.
-function readPaidDetails(
-  formData: FormData
-): { paidDate: Date; method: string | null } | { error: string } {
-  const paidDateRaw = (formData.get("paidDate") as string | null)?.trim();
-  const method = (formData.get("method") as string | null)?.trim() || null;
-
-  if (!paidDateRaw) return { paidDate: new Date(), method };
-  const parsed = new Date(paidDateRaw);
-  if (Number.isNaN(parsed.getTime())) return { error: "That date isn't valid." };
-  return { paidDate: parsed, method };
-}
-
-// The next Payment.sequence for a sale — payments on a consigned sale
-// can now arrive in any number and order (partial payments, a link,
-// instalments), so this is always "after the last one", never a fixed 1.
-function nextSequence(payments: { sequence: number }[]): number {
-  return payments.reduce((max, p) => Math.max(max, p.sequence), 0) + 1;
 }
 
 // "Record Payment" on a consigned sale (2026-09-23, partial payments) —
@@ -1116,6 +1131,8 @@ export async function recordGalleryPayment(
   if (!purchase) return { ok: false, error: "Sale not found." };
   if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
   if (purchase.status !== "ACTIVE") return { ok: false, error: "This sale has already been paid." };
+  const locked = await invoiceLockError(purchase.invoiceId);
+  if (locked) return { ok: false, error: locked };
 
   const paid = readPaidDetails(formData);
   if ("error" in paid) return { ok: false, error: paid.error };
@@ -1227,14 +1244,18 @@ export async function abandonPurchase(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Purchase not found." };
-
   // A cancelled sale takes its still-open framing/delivery charges with
   // it (paid ones stay, as the real records they are), and nothing about
-  // it should stay payable through an old link.
+  // it should stay payable through an old link. Neither it nor a charge
+  // can be on an unpaid invoice — that's cancelled first.
   const openCharges = await db.purchase.findMany({
     where: { parentPurchaseId: purchase.id, status: "ACTIVE" },
-    select: { id: true },
+    select: { id: true, invoiceId: true },
   });
+  for (const sale of [purchase, ...openCharges]) {
+    const locked = await invoiceLockError(sale.invoiceId);
+    if (locked) return { ok: false, error: locked };
+  }
   for (const charge of openCharges) await abandonPurchase(charge.id, siteId);
   await retireGalleryPaymentLinks(purchase);
 
@@ -1406,35 +1427,6 @@ function stripeErrorMessage(err: unknown): string {
 }
 
 // ---------- Webhook-side handlers (called from /api/stripe/webhook) ----------
-
-// Completes a sale once it's fully paid, and marks its artwork SOLD.
-// "Fully paid" depends on the channel:
-//   - GALLERY (consigned): the balance — Net Due less every PAID
-//     payment (saleBreakdown(), lib/saleMath.ts) — has reached zero.
-//     Payments can arrive in any mix: partial payments recorded by hand,
-//     a payment link, or an instalment plan.
-//   - STRIPE (direct): every scheduled Payment row is PAID — a Full
-//     sale has one; an instalment sale completes once the last clears.
-// Safe to call after any payment; does nothing until the sale is settled.
-async function completeIfSettled(purchaseId: string, closedAt: Date = new Date()) {
-  const purchase = await db.purchase.findUnique({
-    where: { id: purchaseId },
-    include: { payments: true },
-    relationLoadStrategy: "query",
-  });
-  if (!purchase || purchase.status !== "ACTIVE") return;
-
-  const settled =
-    purchase.channel === "GALLERY"
-      ? saleBreakdown(purchase).balance <= 0
-      : purchase.payments.every((p) => p.status === "PAID");
-  if (!settled) return;
-
-  await db.purchase.update({ where: { id: purchaseId }, data: { status: "COMPLETED", closedAt } });
-  if (!purchase.parentPurchaseId) {
-    await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
-  }
-}
 
 // Sets up the monthly auto-charges for the rest of an instalment plan
 // once its first instalment has been paid and the buyer's card saved:

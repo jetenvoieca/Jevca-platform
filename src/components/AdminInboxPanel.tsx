@@ -214,7 +214,7 @@ import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, Reinst
 // falling back to the previous item if the deleted one was last, and to
 // nothing only once the list is genuinely empty.
 //
-// Plain, minimalist styling, consistent with InvoiceEmailModal/
+// Plain, minimalist styling, consistent with InvoiceModal/
 // SiteSettingsPanel elsewhere in the app — no separate visual language
 // for this screen.
 

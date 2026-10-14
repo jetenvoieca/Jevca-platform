@@ -2,6 +2,7 @@
 
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
+import { saleInvoicesInclude, toSaleInvoices } from "@/lib/invoices";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
@@ -423,7 +424,10 @@ export async function getArtworkDetail(id: string) {
     include: {
       images: true,
       purchases: {
-        include: { payments: { orderBy: { sequence: "asc" } } },
+        include: {
+          payments: { orderBy: { sequence: "asc" } },
+          invoiceLines: saleInvoicesInclude,
+        },
         orderBy: { createdAt: "desc" },
       },
       // Only the catalogue number is actually shown ("Derived from
@@ -469,15 +473,8 @@ export async function getArtworkDetailForClient(id: string) {
     framingCost: p.framingCost != null ? p.framingCost.toString() : null,
     courier: p.courier,
     deliveryCost: p.deliveryCost != null ? p.deliveryCost.toString() : null,
-    invoiceNumber: p.invoiceNumber,
-    // Part Three (2026-09-01) — see the matching schema.prisma comments.
-    stripePaymentLinkUrl: p.stripePaymentLinkUrl,
-    stripeInstalmentLinkUrl: p.stripeInstalmentLinkUrl,
-    stripeInstalmentLinkCount: p.stripeInstalmentLinkCount,
-    invoiceEmailedAt: p.invoiceEmailedAt ? p.invoiceEmailedAt.toISOString() : null,
-    invoiceEmailedTo: p.invoiceEmailedTo,
-    receiptEmailedAt: p.receiptEmailedAt ? p.receiptEmailedAt.toISOString() : null,
-    receiptEmailedTo: p.receiptEmailedTo,
+    // Every invoice the sale is or was on (2026-10-14).
+    invoices: toSaleInvoices(p.invoiceLines),
     // Certificate of Authenticity sent-log (2026-09-03) — see the
     // matching schema.prisma/payments.ts comments.
     certificateEmailedAt: p.certificateEmailedAt ? p.certificateEmailedAt.toISOString() : null,
