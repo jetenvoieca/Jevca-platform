@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { TaskInput } from "@/lib/actions/tasks";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 import LinkifiedText from "@/components/LinkifiedText";
+import { CopyIcon, CheckIcon } from "@/components/ActionIcons";
 import { formatDate } from "@/lib/formatDate";
 
 // The task form shown in the Inbox's modal (2026-09-19, CRM Phase 2) —
@@ -32,6 +33,10 @@ import { formatDate } from "@/lib/formatDate";
 //
 // Files (2026-10-11): the task's Files section (`files`, see
 // TaskFilesPanel) sits under the description.
+//
+// Copy (2026-10-14, direct request — selecting text is awkward on an
+// iPad): an icon in the description's top right corner copies the whole
+// description; it shows a tick for a moment once copied.
 //
 // Insights (2026-10-13, direct request): the same form shows an Insight
 // (`dateAdded` set — the day Keep this was pressed). An insight has Date
@@ -75,6 +80,18 @@ export default function TaskForm({
   const isInsight = dateAdded !== null;
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const [editingDescription, setEditingDescription] = useState(!form.description.trim());
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  const copyDescription = () => {
+    navigator.clipboard
+      .writeText(form.description)
+      .then(() => setCopied(true))
+      .catch(() => alert("Couldn't copy — your browser didn't allow it."));
+  };
   // One height for all three, and min-w-0 so none can push past its
   // column. The date box also drops Safari's own look (appearance-none),
   // which on an iPad made it wider and taller than its column (2026-10-11).
@@ -157,6 +174,22 @@ export default function TaskForm({
         className={inputCls}
       />
 
+      {/* The description, with Copy in its top right corner (pr-9 keeps the
+          text clear of it). Copy doesn't take the focus, so pressing it
+          while typing leaves the box open. */}
+      <div className="relative">
+      {form.description.trim() && (
+        <button
+          type="button"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={copyDescription}
+          title="Copy description"
+          aria-label="Copy description"
+          className="absolute right-1.5 top-1.5 z-10 rounded-md bg-white/90 p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-700"
+        >
+          {copied ? <CheckIcon /> : <CopyIcon />}
+        </button>
+      )}
       {editingDescription ? (
         <textarea
           value={form.description}
@@ -165,7 +198,7 @@ export default function TaskForm({
           autoFocus={!!form.description.trim()}
           placeholder={isInsight ? "Insight description" : "Task description"}
           rows={8}
-          className={inputCls}
+          className={`${inputCls} pr-9`}
         />
       ) : (
         <div
@@ -175,11 +208,12 @@ export default function TaskForm({
           onKeyDown={(e) => {
             if (e.key === "Enter") setEditingDescription(true);
           }}
-          className={`${inputCls} min-h-[11.5rem] cursor-text whitespace-pre-wrap [overflow-wrap:anywhere]`}
+          className={`${inputCls} min-h-[11.5rem] cursor-text whitespace-pre-wrap pr-9 [overflow-wrap:anywhere]`}
         >
           <LinkifiedText text={form.description} />
         </div>
       )}
+      </div>
 
       {onOpenEmail && (
         <button

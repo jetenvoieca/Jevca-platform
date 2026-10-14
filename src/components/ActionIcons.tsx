@@ -100,3 +100,22 @@ export function ReinstateIcon() {
     </Icon>
   );
 }
+
+// Two overlapping sheets — Copy (2026-10-14, a task's description).
+export function CopyIcon() {
+  return (
+    <Icon>
+      <rect x="8" y="8" width="12" height="13" rx="2" />
+      <path d="M16 8V5a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h2" />
+    </Icon>
+  );
+}
+
+// A tick — shown briefly once something is copied.
+export function CheckIcon() {
+  return (
+    <Icon>
+      <path d="m5 12.5 4.5 4.5L19 7.5" />
+    </Icon>
+  );
+}
