@@ -1137,7 +1137,13 @@ export default function GalleriesView({
                     artwork={selectedWorkDetail}
                     purchase={shownSale}
                     siteId={siteId}
-                    onChanged={refreshAfterSaleChange}
+                    // A Gallery sale opened from its picture is read only —
+                    // no Edit (2026-10-14).
+                    onChanged={
+                      workView === "image" && shownSale?.location?.kind === "GALLERY"
+                        ? undefined
+                        : refreshAfterSaleChange
+                    }
                     onClose={closeWork}
                     onTitleClick={() => setFocusedSaleId(null)}
                   />

@@ -265,8 +265,8 @@ type CardProps = {
   onChanged: () => void;
   // How it was opened on its Location (2026-10-14, Craig's mockup) —
   // only changes a Gallery location's sale, which is shown simplified:
-  // "image" (its Consigned Works picture) shows the figures with Cancel /
-  // Delete only; "line" (its row on the Sales tab) adds taking payment —
+  // "image" (its Consigned Works picture) is read only — just the
+  // figures; "line" (its row on the Sales tab) adds taking payment —
   // Take Card and Record Payment, which pay its whole invoice if it's on
   // one — or, once paid, the Certificate of Authenticity. Invoices are
   // produced from the Sales tab's tick boxes. An Own location's sale
@@ -988,17 +988,20 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
       ) : null}
 
       {/* ---- Cancel / Delete ---- */}
-      {/* A cancelled sale can only be deleted. */}
-      <div className={`mt-6 grid text-center text-sm text-red-700 ${isCancelled ? "grid-cols-1" : "grid-cols-2"}`}>
-        {!isCancelled && (
-          <button type="button" onClick={handleCancelSale} disabled={isPending} className="hover:underline disabled:opacity-50">
-            {isCharge ? "Cancel Charge" : "Cancel Sale"}
+      {/* Not on a Gallery sale opened from its picture, which is read
+          only (2026-10-14). A cancelled sale can only be deleted. */}
+      {galleryView !== "image" && (
+        <div className={`mt-6 grid text-center text-sm text-red-700 ${isCancelled ? "grid-cols-1" : "grid-cols-2"}`}>
+          {!isCancelled && (
+            <button type="button" onClick={handleCancelSale} disabled={isPending} className="hover:underline disabled:opacity-50">
+              {isCharge ? "Cancel Charge" : "Cancel Sale"}
+            </button>
+          )}
+          <button type="button" onClick={handleDeleteSale} disabled={isPending} className="hover:underline disabled:opacity-50">
+            {isCharge ? "Delete Charge" : "Delete Sale"}
           </button>
-        )}
-        <button type="button" onClick={handleDeleteSale} disabled={isPending} className="hover:underline disabled:opacity-50">
-          {isCharge ? "Delete Charge" : "Delete Sale"}
-        </button>
-      </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={pendingConfirm !== null}
