@@ -24,7 +24,16 @@ export async function loadInvoice(invoiceId: string) {
         include: {
           purchase: {
             include: {
-              artwork: { select: { catalogueName: true } },
+              artwork: {
+                select: {
+                  catalogueName: true,
+                  type: true,
+                  size: true,
+                  medium: true,
+                  mainImage: { select: { displayKey: true } },
+                  images: { take: 1, select: { displayKey: true } },
+                },
+              },
               customer: true,
               payments: { orderBy: { sequence: "asc" } },
             },

@@ -14,6 +14,8 @@ import {
   type LoadedInvoice,
 } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
+import { artworkDetailLines } from "@/lib/artworkDetails";
+import { publicMediaUrl } from "@/lib/r2";
 
 // Invoices (2026-10-14, Craig's mockups) — see Invoice in schema.prisma.
 // Consigned sales are ticked on their Location's Sales tab and put on one
@@ -258,7 +260,8 @@ function notOpenError(invoice: LoadedInvoice): string | null {
 
 // The invoice's payment link — a persistent Stripe Payment Link (not a
 // Checkout Session, which expires within a day) for the whole balance:
-// one line per sale, plus its framing and delivery. Made once and
+// one line per work (name, picture, details), plus its framing and
+// delivery, with who it's from and the invoice number by the Pay button. Made once and
 // reused; switched off when the invoice is paid or cancelled. invoiceId
 // rides on the PaymentIntent's own metadata (Payment Link metadata
 // doesn't reach it) — that's how the webhook recognises the payment
@@ -271,32 +274,74 @@ export async function createInvoicePaymentLink(invoiceId: string): Promise<Resul
     if (closed) return { ok: false, error: closed };
     if (invoice.stripePaymentLinkUrl) return { ok: true, url: invoice.stripePaymentLinkUrl };
 
-    const items: { name: string; amount: number }[] = invoice.lines
-      .map(({ purchase }) => ({
-        name: saleTitle(purchase.artwork.catalogueName, purchase.chargeKind),
-        amount: saleBreakdown(purchase).balance,
-      }))
-      .filter((item) => item.amount > 0);
-    const extras = invoiceExtras(invoice);
-    if (extras.balance > 0) {
-      if (extras.framing) items.push({ name: "Framing", amount: extras.framing });
-      if (extras.delivery) items.push({ name: "Delivery", amount: extras.delivery });
-    }
-    if (items.length === 0) return { ok: false, error: "Nothing is left to pay on this invoice." };
-
     const stripe = getStripeClientForSale(invoice);
-    const lineItems = [];
-    for (const item of items) {
+    const money = (n: number) =>
+      new Intl.NumberFormat("en-GB", { style: "currency", currency: invoice.currency }).format(n);
+
+    // Each work as its own product (2026-10-14, Craig: the payment page
+    // must show what's being paid for) — its name, picture and details
+    // (type, size, medium, and how the amount was reached), then the
+    // invoice's framing and delivery. Stripe lists them with the total.
+    const lineItems: { price: string; quantity: number }[] = [];
+    for (const { purchase } of invoice.lines) {
+      const b = saleBreakdown(purchase);
+      if (b.balance <= 0) continue;
+      const deductions = [
+        b.commission ? `less ${b.commissionPercent}% commission` : null,
+        b.deposit ? `less ${money(b.deposit)} deposit paid` : null,
+        b.paid ? `less ${money(b.paid)} already paid` : null,
+      ].filter(Boolean);
+      const description = [
+        artworkDetailLines(purchase.artwork).join(" · "),
+        deductions.length ? `Sale price ${money(b.salePrice)}, ${deductions.join(", ")}` : null,
+      ]
+        .filter(Boolean)
+        .join(" — ");
+      const imageKey = purchase.artwork.mainImage?.displayKey ?? purchase.artwork.images[0]?.displayKey;
+      const imageUrl = publicMediaUrl(imageKey);
+      const product = await stripe.products.create({
+        name: saleTitle(purchase.artwork.catalogueName, purchase.chargeKind),
+        ...(description ? { description } : {}),
+        ...(imageUrl?.startsWith("https://") ? { images: [imageUrl] } : {}),
+      });
       const price = await stripe.prices.create({
-        unit_amount: toMinorUnits(item.amount),
+        product: product.id,
+        unit_amount: toMinorUnits(b.balance),
         currency: invoice.currency.toLowerCase(),
-        product_data: { name: item.name },
       });
       lineItems.push({ price: price.id, quantity: 1 });
     }
+    const extras = invoiceExtras(invoice);
+    if (extras.balance > 0) {
+      for (const [name, amount] of [
+        ["Framing", extras.framing],
+        ["Delivery", extras.delivery],
+      ] as const) {
+        if (!amount) continue;
+        const price = await stripe.prices.create({
+          unit_amount: toMinorUnits(amount),
+          currency: invoice.currency.toLowerCase(),
+          product_data: { name },
+        });
+        lineItems.push({ price: price.id, quantity: 1 });
+      }
+    }
+    if (lineItems.length === 0) return { ok: false, error: "Nothing is left to pay on this invoice." };
+
+    // Who it's from, by the Pay button — the page's own heading is the
+    // Stripe account's name, which can't be set per invoice.
+    const site = await db.site.findFirst({
+      where: { artistId: invoice.artistId, status: { not: "ARCHIVED" } },
+      orderBy: { createdAt: "asc" },
+      select: { name: true },
+    });
+    const from = [invoice.artist.name, site?.name].filter(Boolean).join(" – ");
 
     const link = await stripe.paymentLinks.create({
       line_items: lineItems,
+      custom_text: {
+        submit: { message: `${from} · Invoice ${formatInvoiceNumber(invoice.number)}` },
+      },
       metadata: { invoiceId: invoice.id },
       payment_intent_data: {
         description: `Invoice ${formatInvoiceNumber(invoice.number)}`,
