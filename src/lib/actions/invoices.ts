@@ -282,6 +282,18 @@ export async function createInvoicePaymentLink(invoiceId: string): Promise<Resul
     // must show what's being paid for) — its name, picture and details
     // (type, size, medium, and how the amount was reached), then the
     // invoice's framing and delivery. Stripe lists them with the total.
+    // Who it's from and the invoice number — at the start of each work's
+    // details (seen under the page's "View details") and by the Pay
+    // button. The page's own heading is the Stripe account's name, which
+    // can't be set per invoice.
+    const site = await db.site.findFirst({
+      where: { artistId: invoice.artistId, status: { not: "ARCHIVED" } },
+      orderBy: { createdAt: "asc" },
+      select: { name: true },
+    });
+    const from = [invoice.artist.name, site?.name].filter(Boolean).join(" – ");
+    const invoiceLabel = `${from} · Invoice ${formatInvoiceNumber(invoice.number)}`;
+
     const lineItems: { price: string; quantity: number }[] = [];
     for (const { purchase } of invoice.lines) {
       const b = saleBreakdown(purchase);
@@ -292,6 +304,7 @@ export async function createInvoicePaymentLink(invoiceId: string): Promise<Resul
         b.paid ? `less ${money(b.paid)} already paid` : null,
       ].filter(Boolean);
       const description = [
+        invoiceLabel,
         artworkDetailLines(purchase.artwork).join(" · "),
         deductions.length ? `Sale price ${money(b.salePrice)}, ${deductions.join(", ")}` : null,
       ]
@@ -328,19 +341,10 @@ export async function createInvoicePaymentLink(invoiceId: string): Promise<Resul
     }
     if (lineItems.length === 0) return { ok: false, error: "Nothing is left to pay on this invoice." };
 
-    // Who it's from, by the Pay button — the page's own heading is the
-    // Stripe account's name, which can't be set per invoice.
-    const site = await db.site.findFirst({
-      where: { artistId: invoice.artistId, status: { not: "ARCHIVED" } },
-      orderBy: { createdAt: "asc" },
-      select: { name: true },
-    });
-    const from = [invoice.artist.name, site?.name].filter(Boolean).join(" – ");
-
     const link = await stripe.paymentLinks.create({
       line_items: lineItems,
       custom_text: {
-        submit: { message: `${from} · Invoice ${formatInvoiceNumber(invoice.number)}` },
+        submit: { message: invoiceLabel },
       },
       metadata: { invoiceId: invoice.id },
       payment_intent_data: {
