@@ -258,7 +258,7 @@ export default function GalleriesView({
   const workBackdrop = useBackdropClose(closeWork);
 
   // Auto-opens a Location (and, if given, one of its works) from the
-  // URL's own ?location=&work= query params (2026-09-22) — this is what
+  // URL's own ?location=&work=&sale= query params (2026-09-22) — this is what
   // the Artwork Catalogue's "Sold" button navigates to, so pressing it
   // lands here with the right gallery/work already open, matching the
   // mockup, rather than just dropping onto a blank Locations page.
@@ -267,6 +267,9 @@ export default function GalleriesView({
   useEffect(() => {
     const locationParam = searchParams.get("location");
     const workParam = searchParams.get("work");
+    // The sale to open — a framing/delivery charge opens on its own panel
+    // (from the Sales page's Open in location).
+    const saleParam = searchParams.get("sale") ?? undefined;
     if (!locationParam) return;
     setSelectedId(locationParam);
     setSelectedDetail(null);
@@ -276,7 +279,7 @@ export default function GalleriesView({
     getGalleryDetail(locationParam).then((detail) => {
       setSelectedDetail(detail);
       setLoading(false);
-      if (workParam) openWork(workParam);
+      if (workParam) openWork(workParam, saleParam);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

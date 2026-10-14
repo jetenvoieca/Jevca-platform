@@ -10,7 +10,8 @@ import EditSaleButton from "@/components/EditSaleButton";
 // type, size and — once a sale is recorded — its sold date, with
 // Edit/Close top right. `purchase` is null on the blank Record Sale
 // form, which hides the Sold line and the Edit button (as does an
-// abandoned sale).
+// abandoned sale). Without `onChanged` the header is read-only — no Edit
+// (a consigned sale shown outside its Location, 2026-10-14).
 //
 // `onTitleClick` (optional) makes the image and details clickable — the
 // sale card uses it to return from one sale's panel to the summary of
@@ -26,7 +27,7 @@ export default function SaleHeader({
   artwork: ArtworkDetail;
   purchase: PurchaseDetail | null;
   siteId: string;
-  onChanged: () => void;
+  onChanged?: () => void;
   onClose: () => void;
   onTitleClick?: () => void;
 }) {
@@ -67,7 +68,7 @@ export default function SaleHeader({
       </div>
 
       <div className="flex shrink-0 items-center gap-2">
-        <EditSaleButton purchase={purchase} siteId={siteId} onChanged={onChanged} />
+        {onChanged && <EditSaleButton purchase={purchase} siteId={siteId} onChanged={onChanged} />}
         <button
           type="button"
           onClick={onClose}

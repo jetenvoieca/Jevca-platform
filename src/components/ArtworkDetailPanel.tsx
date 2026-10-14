@@ -176,7 +176,8 @@ export default function ArtworkDetailPanel({
   // Not Paid") or genuinely SOLD (see the "Availability model" note in
   // lib/actions/payments.ts). Once true, the Available/SOLD control
   // below is replaced by plain static text: the sale itself is managed
-  // from its Location or the Sales page, never from here.
+  // from its Location (a direct Studio sale: the Sales page), never from
+  // here.
   const committed = artwork.availability === "SOLD" || artwork.availability === "RESERVED";
 
   // ---- "Sold" button routing (2026-09-22) ----

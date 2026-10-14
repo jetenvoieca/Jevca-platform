@@ -427,6 +427,7 @@ export async function getArtworkDetail(id: string) {
         include: {
           payments: { orderBy: { sequence: "asc" } },
           invoiceLines: saleInvoicesInclude,
+          customer: { select: { kind: true } },
         },
         orderBy: { createdAt: "desc" },
       },
@@ -475,6 +476,10 @@ export async function getArtworkDetailForClient(id: string) {
     deliveryCost: p.deliveryCost != null ? p.deliveryCost.toString() : null,
     // Every invoice the sale is or was on (2026-10-14).
     invoices: toSaleInvoices(p.invoiceLines),
+    location:
+      p.customerId && (p.customer?.kind === "GALLERY" || p.customer?.kind === "OWN")
+        ? { customerId: p.customerId, kind: p.customer.kind }
+        : null,
     // Certificate of Authenticity sent-log (2026-09-03) — see the
     // matching schema.prisma/payments.ts comments.
     certificateEmailedAt: p.certificateEmailedAt ? p.certificateEmailedAt.toISOString() : null,

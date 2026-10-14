@@ -320,6 +320,24 @@ export default function GallerySaleCard({
   );
 }
 
+// A consigned sale shown outside its Location (2026-10-14 — the Sales
+// page, Consolidated Sales, Inbox): its figures and those of its
+// framing/delivery charges, with no actions. It's managed only from its
+// Location.
+export function ConsignedSaleSummary({ purchase }: { purchase: PurchaseDetail }) {
+  const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
+  return (
+    <div className="divide-y divide-neutral-200">
+      {[purchase, ...liveCharges].map((p) => (
+        <div key={p.id} className="py-4 first:pt-0">
+          {p.chargeKind && <ChargeHeading charge={p} />}
+          <SaleFigures purchase={p} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // One sale's full panel: its figures, a sliding input panel, the Action
 // panel, and Cancel/Delete. A framing/delivery charge sale has no
 // Arrange buttons and no certificate.
@@ -372,6 +390,9 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
   // invoice window, and nothing about it can change until then.
   const invoice = liveInvoice(purchase);
   const onUnpaidInvoice = !!invoice && !invoice.paidAt;
+  // Framing and delivery are only arranged for an Own location's sale —
+  // a gallery arranges its own (2026-10-14).
+  const canArrangeExtras = !isCharge && !onUnpaidInvoice && purchase.location?.kind !== "GALLERY";
   const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
   const onInstalmentPlan = purchase.type === "INSTALMENTS";
   const balance = isPaid ? 0 : saleBreakdown(purchase).balance;
@@ -786,10 +807,9 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged }: CardProps) {
 
       {/* ---- Action panel ---- */}
       {/* Framing and delivery stay available after payment (they may be
-          arranged later) — a charge sale itself has neither, and a sale on
-          an unpaid invoice can't change until it's paid or cancelled. */}
+          arranged later) — see canArrangeExtras. */}
       <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
-        {!isCharge && !onUnpaidInvoice && (
+        {canArrangeExtras && (
           <>
             <button type="button" onClick={() => openDrawer("framing")} disabled={isPending} className={actionButtonCls}>
               Arrange Framing

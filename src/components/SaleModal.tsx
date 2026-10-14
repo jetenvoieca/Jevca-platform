@@ -8,7 +8,7 @@ import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payme
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
-import GallerySaleCard from "@/components/GallerySaleCard";
+import { ConsignedSaleSummary, SaleStatusBadge } from "@/components/GallerySaleCard";
 import SaleHeader from "@/components/SaleHeader";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useBackdropClose } from "@/lib/useBackdropClose";
@@ -30,6 +30,11 @@ export type SaleModalTarget = {
 // alerts can open exactly the same modal rather than a second copy of it.
 // Also used by each site's own Sales page (SalesView), so a sale looks
 // and behaves the same wherever it's opened.
+//
+// A consigned sale (one made at a Location) is managed only from its
+// Location (2026-10-14, "a single source"): here it's shown read-only,
+// with Open in location going straight to it there. Only a direct sale
+// is managed here.
 //
 // Loads its own data (the artwork's detail plus the artist's Settings-
 // editable payment methods) when it opens, and renders its
@@ -55,9 +60,6 @@ export default function SaleModal({
   // cover every client, so it sets its own wording (ClientWordsProvider).
   const [clientKind, setClientKind] = useState<ClientKind | null>(null);
   const [loading, setLoading] = useState(true);
-  // Which of the sale and its framing/delivery charges has its panel
-  // open (null = the summary) — see GallerySaleCard.
-  const [focusedSaleId, setFocusedSaleId] = useState<string | null>(null);
 
   const [pendingConfirm, setPendingConfirm] = useState<{
     title: string;
@@ -76,11 +78,6 @@ export default function SaleModal({
     ]).then(([detail, settings]) => {
       if (cancelled) return;
       setSelectedDetail(detail);
-      // A charge opened from a list goes straight to its own panel.
-      const openedCharge = [detail?.activePurchase, ...(detail?.purchaseHistory ?? [])].some((p) =>
-        p?.charges.some((c) => c.id === target.purchaseId)
-      );
-      setFocusedSaleId(openedCharge ? target.purchaseId : null);
       setPaymentMethods(settings.paymentMethods);
       setClientKind(settings.clientKind);
       setLoading(false);
@@ -172,9 +169,8 @@ export default function SaleModal({
                   artwork={selectedDetail}
                   purchase={selectedPurchase}
                   siteId={target.siteId ?? ""}
-                  onChanged={refreshSelected}
+                  onChanged={selectedPurchase?.channel === "GALLERY" ? undefined : refreshSelected}
                   onClose={onClose}
-                  onTitleClick={() => setFocusedSaleId(null)}
                 />
               </div>
 
@@ -185,15 +181,33 @@ export default function SaleModal({
                       ? "There's no active site to manage the sale from."
                       : "This sale couldn't be found — it may have changed since the list loaded."}
                   </p>
-                ) : selectedPurchase.channel === "GALLERY" && selectedPurchase.status !== "ABANDONED" ? (
-                  <GallerySaleCard
-                    purchase={selectedPurchase}
-                    siteId={target.siteId}
-                    paymentMethods={paymentMethods}
-                    onChanged={refreshSelected}
-                    focusedId={focusedSaleId}
-                    onFocusChange={setFocusedSaleId}
-                  />
+                ) : selectedPurchase.channel === "GALLERY" ? (
+                  <div className="space-y-5">
+                    <SaleStatusBadge status={selectedPurchase.status} />
+                    <ConsignedSaleSummary purchase={selectedPurchase} />
+                    {selectedPurchase.location ? (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          // A cancelled sale opens just its Location; a
+                          // live one opens with its sale on screen.
+                          const work =
+                            selectedPurchase.status === "ABANDONED"
+                              ? ""
+                              : `&work=${selectedDetail.id}&sale=${target.purchaseId}`;
+                          router.push(
+                            `/sites/${target.siteId}/galleries?location=${selectedPurchase.location!.customerId}${work}`
+                          );
+                          onClose();
+                        }}
+                        className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+                      >
+                        Open in location
+                      </button>
+                    ) : (
+                      <p className="text-sm text-neutral-500">This sale isn&apos;t linked to a location.</p>
+                    )}
+                  </div>
                 ) : selectedPurchase.status === "ACTIVE" ? (
                   // An unpaid direct sale from the Studio app.
                   <PurchasePanel

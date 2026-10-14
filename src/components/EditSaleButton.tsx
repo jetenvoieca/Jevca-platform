@@ -33,7 +33,10 @@ export default function EditSaleButton({
   const [currency, setCurrency] = useState("GBP");
   const [error, setError] = useState<string | null>(null);
 
-  if (!purchase || purchase.channel !== "GALLERY" || purchase.status !== "ACTIVE") {
+  // Not while the sale is on an unpaid invoice (2026-10-14) — its price
+  // is locked until the invoice is paid or cancelled.
+  const onUnpaidInvoice = !!purchase?.invoices.some((i) => !i.cancelledAt && !i.paidAt);
+  if (!purchase || purchase.channel !== "GALLERY" || purchase.status !== "ACTIVE" || onUnpaidInvoice) {
     return null;
   }
 

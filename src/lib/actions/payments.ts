@@ -120,6 +120,13 @@ export type PurchaseDetail = {
   // most one not cancelled, which is the sale's current invoice
   // (Purchase.invoiceId). See Invoice in schema.prisma.
   invoices: SaleInvoice[];
+  // The Location the sale was recorded at (2026-10-14) — its backing
+  // Customer and whether it's a third-party Gallery or the artist's Own
+  // stock — or null for a sale not made at a location. A consigned
+  // sale is managed only from its Location; framing and delivery are
+  // only arranged for an Own location's sale (a gallery arranges its
+  // own).
+  location: { customerId: string; kind: "GALLERY" | "OWN" } | null;
   // Certificate of Authenticity sent-log (2026-09-03) — when it was last
   // emailed, and to whom.
   certificateEmailedAt: string | null;
@@ -176,7 +183,8 @@ export type PurchaseDetail = {
 //
 // Once RESERVED or SOLD, the Artwork Catalogue shows the status as
 // plain text only; the sale itself is managed or cancelled from its
-// Location or the Sales page, never from the Catalogue.
+// Location (a direct Studio sale: the Sales page), never from the
+// Catalogue.
 
 // Refuses to start a second sale once the artwork is RESERVED or SOLD —
 // used by every way a sale can begin (startPurchase, startGallerySale,
@@ -187,7 +195,7 @@ async function assertArtworkAvailableForSale(artworkId: string): Promise<string 
     select: { availability: true },
   });
   if (artwork?.availability === "SOLD" || artwork?.availability === "RESERVED") {
-    return "This already has a sale in progress or completed — manage it from the Sales page first.";
+    return "This already has a sale in progress or completed — manage it from its location first.";
   }
   return null;
 }
@@ -783,7 +791,8 @@ export async function updateGallerySaleAmount(
 // ---------- Framing / delivery on a consigned sale ----------
 
 // Saves (or, with both fields blank, removes) the one framing or one
-// delivery entry on a consigned sale (2026-09-23).
+// delivery entry on a consigned sale (2026-09-23) — only at an Own
+// location: a gallery always arranges its own (2026-10-14).
 //
 // While the sale is still being paid (ACTIVE) the cost is added to this
 // sale itself: it's paid by the buyer/gallery, so it adds to Net Due
@@ -799,9 +808,15 @@ export async function saveSaleExtra(
   kind: "framing" | "delivery",
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
+  const purchase = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    include: { customer: { select: { kind: true } } },
+  });
   if (!purchase) return { ok: false, error: "Sale not found." };
   if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
+  if (purchase.customer?.kind === "GALLERY") {
+    return { ok: false, error: "Framing and delivery are arranged by the gallery." };
+  }
   if (purchase.parentPurchaseId) {
     return { ok: false, error: "Framing and delivery are arranged on the main sale." };
   }
