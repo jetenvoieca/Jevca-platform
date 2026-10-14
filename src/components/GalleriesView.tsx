@@ -1305,7 +1305,6 @@ export default function GalleriesView({
       {invoiceModalId && (
         <InvoiceModal
           invoiceId={invoiceModalId}
-          paymentMethods={paymentMethods}
           onClose={() => setInvoiceModalId(null)}
           onChanged={() => {
             if (selectedId) refreshGalleryDetail(selectedId);

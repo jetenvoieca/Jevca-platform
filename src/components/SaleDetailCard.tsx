@@ -230,7 +230,7 @@ export default function SaleDetailCard({
       )}
 
       {invoiceModalId && (
-        <InvoiceModal invoiceId={invoiceModalId} paymentMethods={[]} onClose={() => setInvoiceModalId(null)} />
+        <InvoiceModal invoiceId={invoiceModalId} onClose={() => setInvoiceModalId(null)} />
       )}
     </div>
   );

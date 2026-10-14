@@ -420,9 +420,10 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
   // The simplified Gallery views (see CardProps.view); null = full panel.
   const galleryView = purchase.location?.kind === "GALLERY" ? view : null;
   const isCancelled = purchase.status === "ABANDONED";
-  // On a Gallery line, Take Card / Record Payment pay the whole invoice
-  // the sale is on (no part payment of an invoice).
-  const payingInvoice = galleryView === "line" && onUnpaidInvoice ? invoice : null;
+  // On an unpaid invoice, Take Card / Record Payment pay the whole
+  // invoice (no part payment of an invoice) — the invoice window has no
+  // payment buttons (2026-10-14).
+  const payingInvoice = onUnpaidInvoice && galleryView !== "image" ? invoice : null;
   const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
   const onInstalmentPlan = purchase.type === "INSTALMENTS";
   const balance = isPaid ? 0 : saleBreakdown(purchase).balance;
@@ -889,6 +890,20 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
       </div>
 
       {/* ---- Action panel ---- */}
+      {/* A Gallery line can open the sale's invoice, to see it while
+          recording the payment (2026-10-14). */}
+      {galleryView === "line" && invoice && (
+        <button
+          type="button"
+          onClick={handleOpenInvoice}
+          disabled={isPending}
+          className="mt-4 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+        >
+          {preparingInvoice
+            ? "Preparing…"
+            : `View ${invoice.paidAt ? "receipt" : "invoice"} ${formatInvoiceNumber(invoice.number)}`}
+        </button>
+      )}
       {galleryView === "line" && purchase.status === "ACTIVE" ? (
         <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
           <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
@@ -942,11 +957,14 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
             </>
           ) : onUnpaidInvoice ? (
             <>
-              <p className="self-center text-center text-sm text-neutral-700">
-                On invoice {formatInvoiceNumber(invoice.number)}
-              </p>
+              <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
+                Take Card
+              </button>
+              <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
+                Record Payment
+              </button>
               <button type="button" onClick={handleOpenInvoice} disabled={isPending} className={actionButtonCls}>
-                {preparingInvoice ? "Preparing…" : "Open invoice"}
+                {preparingInvoice ? "Preparing…" : `Open invoice ${formatInvoiceNumber(invoice.number)}`}
               </button>
             </>
           ) : (
@@ -995,7 +1013,6 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
       {invoiceModalId && (
         <InvoiceModal
           invoiceId={invoiceModalId}
-          paymentMethods={paymentMethods}
           onClose={() => setInvoiceModalId(null)}
           onChanged={() => {
             onChanged();

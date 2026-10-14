@@ -176,9 +176,6 @@ async function createInvoice(
 export type InvoiceWindowData = {
   id: string;
   number: string;
-  // A consigned sale's invoice is paid, linked and cancelled from the
-  // window; a direct sale's has its own panel for that.
-  consigned: boolean;
   status: "UNPAID" | "PAID" | "CANCELLED";
   createdAt: string;
   paidAt: string | null;
@@ -189,9 +186,8 @@ export type InvoiceWindowData = {
   receiptEmailedTo: string | null;
   balance: string;
   currency: string;
-  // Being paid by instalments through Stripe — no link or Mark as paid.
+  // Being paid by instalments through Stripe.
   onInstalments: boolean;
-  stripePaymentLinkUrl: string | null;
   sales: { id: string; title: string }[];
 };
 
@@ -213,7 +209,6 @@ export async function getInvoiceWindow(invoiceId: string): Promise<InvoiceWindow
   return {
     id: invoice.id,
     number: formatInvoiceNumber(invoice.number),
-    consigned: sales.every((s) => s.channel === "GALLERY"),
     status: invoiceStatus(invoice),
     createdAt: invoice.createdAt.toISOString(),
     paidAt: invoice.paidAt?.toISOString() ?? null,
@@ -225,7 +220,6 @@ export async function getInvoiceWindow(invoiceId: string): Promise<InvoiceWindow
     balance: invoiceBalance(invoice).toFixed(2),
     currency: invoice.currency,
     onInstalments: sales.some((s) => s.stripeSubscriptionScheduleId),
-    stripePaymentLinkUrl: invoice.stripePaymentLinkUrl,
     sales: sales.map((s) => ({ id: s.id, title: saleTitle(s.artwork.catalogueName, s.chargeKind) })),
   };
 }

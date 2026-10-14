@@ -7,6 +7,7 @@ import { artistFromAddress } from "@/lib/email";
 import { saleTitle } from "@/lib/saleMath";
 import { invoiceParty, loadInvoice, type LoadedInvoice } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
+import { createInvoicePaymentLink } from "./invoices";
 
 // Emailing an invoice, or its receipt once paid (Part Three, 2026-09-01;
 // by invoice since 2026-10-14, so one email covers every sale on it).
@@ -48,6 +49,11 @@ function recipientFor(invoice: LoadedInvoice): { ok: true; to: string } | { ok: 
 // the receipt, with no payment request at all. A gallery is
 // congratulated on its sale(s); anyone else thanked for their purchase.
 export async function getInvoiceEmailDraft(invoiceId: string): Promise<InvoiceEmailDraft | { error: string }> {
+  // An unpaid invoice's payment link is made when it's produced; if that
+  // didn't work then (or it was retired since, e.g. an artwork renamed),
+  // it's made now so the email can include it. A failure just leaves the
+  // email without a link.
+  await createInvoicePaymentLink(invoiceId);
   const invoice = await loadInvoice(invoiceId);
   if (!invoice) return { error: "Invoice not found." };
   const recipient = recipientFor(invoice);

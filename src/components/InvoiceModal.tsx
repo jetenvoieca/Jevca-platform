@@ -1,27 +1,13 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import {
-  cancelInvoice,
-  createInvoicePaymentLink,
-  getInvoiceWindow,
-  markInvoicePaid,
-  type InvoiceWindowData,
-} from "@/lib/actions/invoices";
+import { cancelInvoice, getInvoiceWindow, type InvoiceWindowData } from "@/lib/actions/invoices";
 import { getInvoiceEmailDraft, sendInvoiceEmail } from "@/lib/actions/invoiceEmail";
 import { formatDate } from "@/lib/formatDate";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 type Tab = "invoice" | "email";
-type Panel = "link" | "paid" | null;
-
-// Same look as the sale card's action buttons.
-const actionButtonCls =
-  "rounded-md bg-[#5E5E5E] px-3 py-1.5 text-sm text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50";
-const inputCls =
-  "min-w-0 flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-center text-sm disabled:opacity-50";
-
 function formatMoney(amount: string, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(parseFloat(amount));
 }
@@ -30,21 +16,19 @@ function formatMoney(amount: string, currency: string) {
 // window): one invoice — for one sale or several — with two tabs, the
 // real PDF (the same one that's emailed, so the preview can't drift from
 // it; titled Receipt once paid) and the email. An unpaid invoice can be
-// cancelled from here — kept on record as cancelled, its sales freed —
-// and a consigned sale's is also paid in full here (Mark as paid, or its
-// payment link).
+// cancelled from here — kept on record as cancelled, its sales freed.
+// It's paid from a sale's own popup (Take Card / Record Payment, which
+// pay the whole invoice) or through its payment link, made with it and
+// included in the email (2026-10-14: no payment buttons here).
 //
 // Plain, minimalist styling consistent with the rest of the app.
 export default function InvoiceModal({
   invoiceId,
-  // Offered in Mark as paid's Method dropdown (Settings-editable).
-  paymentMethods,
   onClose,
   // Called after anything that changes the invoice or its sales.
   onChanged,
 }: {
   invoiceId: string;
-  paymentMethods: string[];
   onClose: () => void;
   onChanged?: () => void;
 }) {
@@ -58,12 +42,6 @@ export default function InvoiceModal({
   const [isPending, startTransition] = useTransition();
   const [actionError, setActionError] = useState<string | null>(null);
 
-  // Payment link / Mark as paid
-  const [panel, setPanel] = useState<Panel>(null);
-  const [linkUrl, setLinkUrl] = useState<string | null>(null);
-  const [linkCopied, setLinkCopied] = useState(false);
-  const [paidDate, setPaidDate] = useState("");
-  const [paidMethod, setPaidMethod] = useState("");
   const [confirmingCancel, setConfirmingCancel] = useState(false);
 
   // Email tab
@@ -100,10 +78,7 @@ export default function InvoiceModal({
 
   const isPaid = invoice?.status === "PAID";
   const docLabel = isPaid ? "Receipt" : "Invoice";
-  // Any unpaid invoice can be cancelled; a consigned sale's is also paid
-  // from here (a direct sale is paid from its own panel).
   const isOpen = invoice?.status === "UNPAID";
-  const canSettle = !!invoice && isOpen && invoice.consigned && !invoice.onInstalments;
 
   function loadDraft() {
     getInvoiceEmailDraft(invoiceId).then((result) => {
@@ -140,59 +115,6 @@ export default function InvoiceModal({
     });
   };
 
-  const togglePanel = (next: Panel) => {
-    setActionError(null);
-    if (panel === next) {
-      setPanel(null);
-      return;
-    }
-    setPanel(next);
-    if (next === "paid") {
-      setPaidDate(new Date().toISOString().slice(0, 10));
-      setPaidMethod(paymentMethods[0] || "");
-    }
-    if (next === "link") {
-      setLinkCopied(false);
-      setLinkUrl(invoice?.stripePaymentLinkUrl ?? null);
-      if (!invoice?.stripePaymentLinkUrl) {
-        startTransition(async () => {
-          const res = await createInvoicePaymentLink(invoiceId);
-          if (!res.ok) {
-            setActionError(res.error);
-            setPanel(null);
-            return;
-          }
-          setLinkUrl(res.url);
-          load();
-        });
-      }
-    }
-  };
-
-  const handleCopyLink = () => {
-    if (!linkUrl) return;
-    navigator.clipboard.writeText(linkUrl).then(() => {
-      setLinkCopied(true);
-      setTimeout(() => setLinkCopied(false), 1500);
-    });
-  };
-
-  const handleMarkPaid = () => {
-    setActionError(null);
-    const fd = new FormData();
-    fd.set("paidDate", paidDate);
-    fd.set("method", paidMethod);
-    startTransition(async () => {
-      const res = await markInvoicePaid(invoiceId, fd);
-      if (!res.ok) {
-        setActionError(res.error);
-        return;
-      }
-      setPanel(null);
-      changed();
-    });
-  };
-
   const handleCancel = () => {
     setConfirmingCancel(false);
     setActionError(null);
@@ -202,7 +124,6 @@ export default function InvoiceModal({
         setActionError(res.error);
         return;
       }
-      setPanel(null);
       changed();
     });
   };
@@ -265,82 +186,15 @@ export default function InvoiceModal({
             )}
 
             {isOpen && (
-              <div className="pt-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  {canSettle && (
-                    <>
-                      <button type="button" onClick={() => togglePanel("link")} disabled={isPending} className={actionButtonCls}>
-                        Payment link
-                      </button>
-                      <button type="button" onClick={() => togglePanel("paid")} disabled={isPending} className={actionButtonCls}>
-                        Mark as paid
-                      </button>
-                    </>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setConfirmingCancel(true)}
-                    disabled={isPending}
-                    className="ml-auto text-sm text-red-700 hover:underline disabled:opacity-50"
-                  >
-                    Cancel invoice
-                  </button>
-                </div>
-
-                {panel === "link" && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={linkUrl ?? "Generating…"}
-                      onFocus={(e) => e.currentTarget.select()}
-                      className="min-w-0 flex-1 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-600"
-                    />
-                    <button
-                      type="button"
-                      onClick={handleCopyLink}
-                      disabled={!linkUrl}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
-                    >
-                      {linkCopied ? "Copied" : "Copy"}
-                    </button>
-                  </div>
-                )}
-
-                {panel === "paid" && (
-                  <div className="mt-3 flex items-center gap-2">
-                    <input
-                      type="date"
-                      value={paidDate}
-                      onChange={(e) => setPaidDate(e.target.value)}
-                      disabled={isPending}
-                      aria-label="Date paid"
-                      className={inputCls}
-                    />
-                    <select
-                      value={paidMethod}
-                      onChange={(e) => setPaidMethod(e.target.value)}
-                      disabled={isPending}
-                      aria-label="Method"
-                      className={inputCls}
-                    >
-                      <option value="">Method…</option>
-                      {paymentMethods.map((m) => (
-                        <option key={m} value={m}>
-                          {m}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={handleMarkPaid}
-                      disabled={isPending || !paidMethod}
-                      className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm text-white hover:bg-neutral-700 disabled:opacity-50"
-                    >
-                      Save
-                    </button>
-                  </div>
-                )}
+              <div className="flex justify-end pt-2">
+                <button
+                  type="button"
+                  onClick={() => setConfirmingCancel(true)}
+                  disabled={isPending}
+                  className="text-sm text-red-700 hover:underline disabled:opacity-50"
+                >
+                  Cancel invoice
+                </button>
               </div>
             )}
 

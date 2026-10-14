@@ -576,7 +576,6 @@ export default function PurchasePanel({
       {invoiceModalId && (
         <InvoiceModal
           invoiceId={invoiceModalId}
-          paymentMethods={paymentMethods}
           onClose={() => setInvoiceModalId(null)}
           onChanged={onChanged ?? (() => router.refresh())}
         />
