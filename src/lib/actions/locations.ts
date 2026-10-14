@@ -56,29 +56,10 @@ export async function listLocationCustomers(artistId: string): Promise<LocationC
   }));
 }
 
-// Looks up a Location by its exact name (2026-09-22) — how the "Sold"
-// button on the Artwork Catalogue resolves an artwork's current
-// Location string to somewhere it can actually navigate to. Returns
-// null for a blank/unmatched name (the caller then prompts to add one
-// via createLocation below).
-export async function findLocationByName(
-  artistId: string,
-  name: string
-): Promise<LocationSummary | null> {
-  const trimmed = name.trim();
-  if (!trimmed) return null;
-  const row = await db.location.findUnique({
-    where: { artistId_name: { artistId, name: trimmed } },
-  });
-  if (!row) return null;
-  return { id: row.id, name: row.name, type: row.type as LocationType, customerId: row.customerId };
-}
-
 // Creates a new Location — and its linked Customer record in the same
 // call (kind "GALLERY" or "OWN" to match), so the two can never exist
 // independently of each other. Reused by the Settings screen's own "+
-// Add" row, the Artwork Catalogue's Location dropdown "+ Add new…", and
-// the "Sold" button's forced prompt when Location is blank.
+// Add" row and the Artwork Catalogue's Location dropdown "+ Add new…".
 export async function createLocation(
   artistId: string,
   siteId: string,

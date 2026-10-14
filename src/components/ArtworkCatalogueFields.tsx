@@ -28,7 +28,6 @@ export type ArtworkFacetValues = {
   // Artwork.date in schema.prisma.
   date: string;
   studioNotes: string;
-  availability: string;
 };
 
 // Vertical padding cut ~20% (2026-09-11, direct request — "catalogue
@@ -45,8 +44,8 @@ const labelCls = "mb-1 block text-sm font-medium text-neutral-700";
 // entry before anything autosaves.
 const ADD_NEW = "__add_new__";
 
-// The Type / Medium / Size / Edition / Location / Date / Availability /
-// Studio notes block — one shared component (2026-09-07, direct request)
+// The Type / Medium / Size / Edition / Location / Date / Studio notes
+// block — one shared component (2026-09-07, direct request)
 // used by both the full Artwork editor's Catalogue tab
 // (ArtworkDetailPanel) and the Hopper's quick-add form
 // (HopperView/QuickCatalogueFields). These two had drifted into
@@ -64,9 +63,12 @@ const ADD_NEW = "__add_new__";
 //
 // Name and Reference/Offered price stay outside this component — the
 // caller renders Name as the first grid cell, so Name and Type share a
-// row. `children`, if given, renders between Date and Availability so
-// the Catalogue tab can slot its price fields into the middle of the
-// grid.
+// row. `children`, if given, renders after Date so the Catalogue tab can
+// slot its price fields into the middle of the grid.
+//
+// No Availability here (2026-10-14, Craig's mockup): an artwork with no
+// sale is available as a matter of course, and one is only ever made
+// SOLD by recording its sale at its Location.
 //
 // Expects to be rendered directly inside a caller's own
 // `<div className="grid grid-cols-2 gap-4">` (a bare fragment, not a
@@ -79,7 +81,6 @@ export default function ArtworkCatalogueFields({
   onTypeOrSizeChange,
   onLocationChange,
   children,
-  availabilityOverride,
   onAddType,
   onAddMedium,
   onAddLocation,
@@ -99,11 +100,6 @@ export default function ArtworkCatalogueFields({
   // "Consigned price" while the Location is a Gallery.
   onLocationChange?: (location: string) => void;
   children?: React.ReactNode;
-  // Replaces the default Availability <select> (2026-09-10) — the
-  // Catalogue tab swaps in its own Available/SOLD control, shown for
-  // every Type, editions included; the Hopper's quick-add passes a
-  // hidden AVAILABLE, since a new artwork always starts available.
-  availabilityOverride?: React.ReactNode;
   // Inline "add new preset" support (2026-09-11, direct request — "all
   // drop-downs add ability to add to lists"). Each is a small async
   // action that actually persists the new value to the artist's own
@@ -314,24 +310,6 @@ export default function ArtworkCatalogueFields({
         />
       </div>
       {children}
-      {availabilityOverride ??
-        (!isEditionType ? (
-          <div>
-            <label className={labelCls}>Availability</label>
-            <select
-              name="availability"
-              defaultValue={values.availability}
-              onChange={(e) => onAutosave?.(e.currentTarget.form!)}
-              className={inputCls}
-            >
-              <option value="AVAILABLE">Available</option>
-              <option value="RESERVED">Reserved</option>
-              <option value="SOLD">Sold</option>
-            </select>
-          </div>
-        ) : (
-          <input type="hidden" name="availability" value={values.availability} />
-        ))}
       <div className="col-span-2">
         <label className={labelCls}>
           Studio notes <span className="font-normal text-neutral-400">(private)</span>

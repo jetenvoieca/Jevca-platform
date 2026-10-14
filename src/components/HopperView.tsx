@@ -1266,11 +1266,8 @@ function parseHopperItemForQuickCatalogue(
 // Catalogue tab puts them, then Studio notes. Tier and Group were removed
 // from this form (2026-09-24) along with the rest of the catalogue —
 // replaced by Curations, managed separately from the Curations page, not
-// at creation time. Availability is the one deliberate omission — every
-// artwork created here starts AVAILABLE (see createArtworkFromHopperQuick),
-// so there's nothing to toggle; availabilityOverride below swaps in a
-// plain hidden input rather than showing the Available/SOLD control at
-// all.
+// at creation time. Every artwork created here starts AVAILABLE (see
+// createArtworkFromHopperQuick).
 //
 // This duplicates the Name/Reference+Offered-price JSX ArtworkDetailPanel's
 // Catalogue tab already has, rather than sharing one component for it —
@@ -1353,13 +1350,11 @@ function QuickCatalogueFields({
               location: item.artworkLocation ?? "",
               date: "",
               studioNotes: parsed.studioNotes,
-              availability: "AVAILABLE",
             }}
             onTypeOrSizeChange={(type, size) => {
               setTypeValue(type);
               setSizeValue(size);
             }}
-            availabilityOverride={<input type="hidden" name="availability" value="AVAILABLE" />}
           >
             <div className="grid grid-cols-2 gap-2">
               <div>

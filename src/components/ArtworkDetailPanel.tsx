@@ -7,14 +7,9 @@ import {
   deleteArtwork,
   deleteArtworkIfBlank,
   duplicateArtwork,
-  setArtworkLocation,
 } from "@/lib/actions/artworks";
 import { addArtworkType, addSettingOption } from "@/lib/actions/artworkSettings";
-import {
-  findLocationByName,
-  createLocation,
-  type LocationSummary,
-} from "@/lib/actions/locations";
+import { createLocation, type LocationSummary } from "@/lib/actions/locations";
 import { computeReferencePrice } from "@/lib/pricing";
 import { CURRENCIES } from "@/lib/currencies";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
@@ -78,8 +73,7 @@ export type ArtworkSettings = {
   artworkTypeRecords: { id: string; name: string; refValue: string }[];
   // Real Location model now (2026-09-22, Gallery/Own — see Location in
   // schema.prisma), replacing the old plain-string artworkLocations
-  // list. Used by the Location dropdown, and by the "Sold" button's
-  // routing below (findLocationByName/createLocation).
+  // list. Used by the Location dropdown.
   locations: LocationSummary[];
   mediumPresets: string[];
   sizePresets: string[];
@@ -172,54 +166,26 @@ export default function ArtworkDetailPanel({
   const atGallery = locationTypes.get(locationValue) === "GALLERY";
   const priceLabel = atGallery ? "Consigned price" : "Offered price";
 
-  // Whether this artwork has a sale committed at all — RESERVED ("Sold -
-  // Not Paid") or genuinely SOLD (see the "Availability model" note in
-  // lib/actions/payments.ts). Once true, the Available/SOLD control
-  // below is replaced by plain static text: the sale itself is managed
-  // from its Location (a direct Studio sale: the Sales page), never from
-  // here.
-  const committed = artwork.availability === "SOLD" || artwork.availability === "RESERVED";
-
-  // ---- "Sold" button routing (2026-09-22) ----
-  // Every sale is recorded and managed at the artwork's Location (a
-  // Gallery you consign to, or one of your own — studio, storage — see
-  // Location in schema.prisma), so pressing SOLD takes you there with
-  // this work's sale panel open. If Location is blank, or doesn't match
-  // a saved one, this asks for one first (creating it on the fly)
-  // rather than guessing. (The Catalogue's own inline sale panel was
-  // removed 2026-09-23.)
-  const [soldRoutingPending, setSoldRoutingPending] = useState(false);
-  const handleSoldClick = async () => {
-    if (soldRoutingPending) return;
-    setSoldRoutingPending(true);
-    try {
-      const currentName = (artwork.location || "").trim();
-      let target = currentName ? await findLocationByName(artistId, currentName) : null;
-      if (!target) {
-        const name = window
-          .prompt(
-            currentName
-              ? `"${currentName}" isn't a saved Location yet. Name it:`
-              : `Where is this piece going? (a ${words.location.toLowerCase()}, or your own studio/storage):`,
-            currentName
-          )
-          ?.trim();
-        if (!name) return;
-        const isGallery = window.confirm(
-          `Is "${name}" a ${words.location} you consign to?\n\nOK = ${words.location}\nCancel = Own (e.g. your studio)`
-        );
-        const result = await createLocation(artistId, siteId, name, isGallery ? "GALLERY" : "OWN");
-        if ("error" in result) {
-          alert(result.error);
-          return;
-        }
-        target = result;
-        await setArtworkLocation(artwork.id, siteId, result.name);
-      }
-      router.push(`/sites/${siteId}/galleries?location=${target.customerId}&work=${artwork.id}`);
-    } finally {
-      setSoldRoutingPending(false);
+  // The artwork's sale, once it has one (2026-10-14, Craig's mockup):
+  // the catalogue has no Available/SOLD control any more — an artwork
+  // with no sale is available as a matter of course, and a sale is
+  // recorded at the artwork's Location. Once sold (or, for a Studio
+  // sale, "Sold - Not Paid"), a SOLD button by the price opens that sale
+  // in its Location (a sale with no Location: the Sales page).
+  const sale =
+    artwork.availability === "SOLD" || artwork.availability === "RESERVED"
+      ? (artwork.activePurchase ??
+        artwork.purchaseHistory.find((p) => p.status === "COMPLETED") ??
+        null)
+      : null;
+  const openSale = () => {
+    if (!sale?.location) {
+      router.push(`/sites/${siteId}/sales`);
+      return;
     }
+    router.push(
+      `/sites/${siteId}/galleries?location=${sale.location.customerId}&work=${artwork.id}&sale=${sale.id}`
+    );
   };
 
   // ---- Autosave (2026-08-15) — reads straight from the DOM via
@@ -313,9 +279,8 @@ export default function ArtworkDetailPanel({
     await addSettingOption(artistId, siteId, "mediumPresets", fd);
   };
   // Persists to the Location model (2026-09-22, see
-  // actions/locations.ts) — asks Gallery vs Own the same way
-  // handleSoldClick above does, since a Location needs a Type to be
-  // created at all.
+  // actions/locations.ts) — asks Gallery vs Own, since a Location needs
+  // a Type to be created at all.
   const handleAddLocation = async (name: string) => {
     const isGallery = window.confirm(
       `Is "${name}" a ${words.location} you consign to?\n\nOK = ${words.location}\nCancel = Own (e.g. your studio)`
@@ -414,13 +379,12 @@ export default function ArtworkDetailPanel({
             />
           </div>
 
-          {/* The Type/Medium/Size/Edition/Location/Date/Availability/
-              Studio notes block below is the exact same shared component
-              the Hopper's quick-add form uses (ArtworkCatalogueFields,
-              2026-09-07) — Name above, and Reference/Offered price
-              (passed as children, rendered between Date and
-              Availability) stay Catalogue-only. availabilityOverride
-              swaps in the Available/SOLD control. onAddType/onAddMedium/
+          {/* The Type/Medium/Size/Edition/Location/Date/Studio notes
+              block below is the exact same shared component the
+              Hopper's quick-add form uses (ArtworkCatalogueFields,
+              2026-09-07) — Name above, and Reference/Offered price and
+              SOLD (passed as children, rendered after Date) stay
+              Catalogue-only. onAddType/onAddMedium/
               onAddLocation give those selects their own inline "+ Add
               new…" option — the Hopper doesn't pass these, so its
               selects are unaffected. */}
@@ -435,7 +399,6 @@ export default function ArtworkDetailPanel({
               availableQty: artwork.availableQty?.toString() ?? "",
               date: artwork.date || "",
               studioNotes: artwork.studioNotes || "",
-              availability: artwork.availability,
             }}
             onAutosave={autosaveCatalogue}
             onTypeOrSizeChange={(type, size) => {
@@ -446,45 +409,6 @@ export default function ArtworkDetailPanel({
             onAddType={handleAddType}
             onAddMedium={handleAddMedium}
             onAddLocation={handleAddLocation}
-            availabilityOverride={
-              // Available/SOLD — only while the artwork isn't
-              // `committed` (see above); once RESERVED or SOLD it's
-              // plain static text. Available is simply the current
-              // state; SOLD routes to the artwork's Location (see
-              // handleSoldClick above).
-              committed ? (
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Availability
-                  </label>
-                  <p className="rounded-md border border-neutral-300 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-700">
-                    {artwork.availability === "SOLD" ? "SOLD" : "Sold - Not Paid"}
-                  </p>
-                  <input type="hidden" name="availability" value={artwork.availability} />
-                </div>
-              ) : (
-                <div>
-                  <label className="mb-1 block text-sm font-medium text-neutral-700">
-                    Availability
-                  </label>
-                  <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                    <span className="flex-1 bg-neutral-900 px-3 py-[6.4px] text-center font-medium text-white">
-                      Available
-                    </span>
-                    <button
-                      type="button"
-                      onClick={handleSoldClick}
-                      disabled={!artwork.offeredPrice || soldRoutingPending}
-                      title={!artwork.offeredPrice ? `Set the ${priceLabel} first` : undefined}
-                      className="flex-1 bg-white px-3 py-[6.4px] font-medium text-neutral-600 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      {soldRoutingPending ? "…" : "SOLD"}
-                    </button>
-                  </div>
-                  <input type="hidden" name="availability" value={artwork.availability} />
-                </div>
-              )
-            }
           >
             {/* Reference and Offered price as one compact pair
                 (2026-09-11, direct request — "put reference price
@@ -492,7 +416,7 @@ export default function ArtworkDetailPanel({
                 comparison"): a single child of ArtworkCatalogueFields,
                 so together they take one outer grid cell, with their
                 own tight 2-column sub-grid inside. */}
-            <div className="grid grid-cols-2 gap-2">
+            <div className={`grid gap-2 ${sale ? "grid-cols-[1fr_1fr_auto]" : "grid-cols-2"}`}>
               {/* Reference price is a suggestion, not typed —
                   (Size preset's width × height) × the selected
                   Type's Ref value, recalculated live as either
@@ -535,6 +459,23 @@ export default function ArtworkDetailPanel({
                   </select>
                 </div>
               </div>
+              {sale && (
+                <div>
+                  {/* An empty label keeps the button level with the
+                      price boxes. */}
+                  <label className="mb-1 block text-sm font-medium text-neutral-700" aria-hidden>
+                    &nbsp;
+                  </label>
+                  <button
+                    type="button"
+                    onClick={openSale}
+                    title={artwork.availability === "RESERVED" ? "Sold - Not Paid — open the sale" : "Open the sale"}
+                    className="rounded-md border border-neutral-300 px-4 py-[6.4px] text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+                  >
+                    SOLD
+                  </button>
+                </div>
+              )}
             </div>
           </ArtworkCatalogueFields>
         </div>
