@@ -416,19 +416,21 @@ export default function ArtworkDetailPanel({
                 comparison"): a single child of ArtworkCatalogueFields,
                 so together they take one outer grid cell, with their
                 own tight 2-column sub-grid inside. */}
-            <div className={`grid gap-2 ${sale ? "grid-cols-[1fr_1fr_auto]" : "grid-cols-2"}`}>
+            {/* Reference price kept narrow (2026-10-14, Craig: up to five
+                figures, whole pounds/euros) so the price has room. */}
+            <div className={`grid gap-2 ${sale ? "grid-cols-[5rem_1fr_auto]" : "grid-cols-[5rem_1fr]"}`}>
               {/* Reference price is a suggestion, not typed —
                   (Size preset's width × height) × the selected
                   Type's Ref value, recalculated live as either
                   changes (2026-08-28). See src/lib/pricing.ts. */}
               <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">
-                  Reference price
+                  Ref. price
                 </label>
                 <input
                   type="text"
                   readOnly
-                  value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
+                  value={referencePrice != null ? Math.round(referencePrice).toString() : "—"}
                   className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
                 />
               </div>
