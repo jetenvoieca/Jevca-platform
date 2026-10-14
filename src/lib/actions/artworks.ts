@@ -2,7 +2,7 @@
 
 import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
-import { saleInvoicesInclude, toSaleInvoices } from "@/lib/invoices";
+import { retireArtworkInvoiceLinks, saleInvoicesInclude, toSaleInvoices } from "@/lib/invoices";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
@@ -13,7 +13,6 @@ import {
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
 import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
-import { retireArtworkPaymentLinks } from "@/lib/paymentLinks";
 import { isCurrency } from "@/lib/currencies";
 import { toArtworkImages } from "@/lib/artworkImages";
 import { getArtistDefaultCurrency } from "@/lib/primarySite";
@@ -625,10 +624,10 @@ export async function updateCatalogue(
   });
 
   // A payment link has the artwork's name fixed inside Stripe, so a
-  // rename retires the links on its unpaid sales; the next press of
-  // "Payment link" makes a fresh one with the new name.
+  // rename retires the links of its unpaid invoices; a fresh one is made
+  // with the new name.
   if (catalogueName && current && catalogueName !== current.catalogueName) {
-    await retireArtworkPaymentLinks(id);
+    await retireArtworkInvoiceLinks(id);
   }
 }
 
@@ -681,7 +680,7 @@ export async function updateArtworkName(
   if (current.catalogueName === catalogueName) return { ok: true, catalogueName };
 
   await db.artwork.update({ where: { id: artworkId }, data: { catalogueName } });
-  await retireArtworkPaymentLinks(artworkId);
+  await retireArtworkInvoiceLinks(artworkId);
   return { ok: true, catalogueName };
 }
 

@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 // The artist's own Account (2026-09-27) — same table as the platform's
 // Account page. Sales = every PAID payment, in the month it was actually
 // paid (an instalment sale spreads across the months each instalment
-// landed). Expenses = the artist's Purchases. Scoped by artistId, same
+// landed) — a sale's, or an invoice's own framing and delivery
+// (2026-10-14). Expenses = the artist's Purchases. Scoped by artistId, same
 // as Sales and Payments received (an artist's sales are shared across
 // any of their sites).
 export default async function AccountPage({ params }: { params: Promise<{ id: string }> }) {
@@ -24,7 +25,13 @@ export default async function AccountPage({ params }: { params: Promise<{ id: st
 
   const [payments, expenses] = await Promise.all([
     db.payment.findMany({
-      where: { status: "PAID", purchase: { artwork: { artistId: site.artistId } } },
+      where: {
+        status: "PAID",
+        OR: [
+          { purchase: { artwork: { artistId: site.artistId } } },
+          { invoice: { artistId: site.artistId } },
+        ],
+      },
       select: { amount: true, currency: true, paidDate: true, createdAt: true },
     }),
     db.expense.findMany({

@@ -134,8 +134,8 @@ export default function GalleriesView({
   // panel open (null = the summary) — see GallerySaleCard.
   const [focusedSaleId, setFocusedSaleId] = useState<string | null>(null);
   // How the work was opened (2026-10-14) — its picture ("image") or a
-  // Sales-tab line ("line", with that sale) — which decides how a Gallery
-  // location's sale is shown (see GallerySaleCard's `view`).
+  // Sales-tab line ("line", with that sale) — which decides how its sale
+  // is shown (see GallerySaleCard's `view`).
   const [workView, setWorkView] = useState<"image" | "line">("image");
   const [lineSaleId, setLineSaleId] = useState<string | null>(null);
   const [workPending, startWorkTransition] = useTransition();
@@ -168,6 +168,12 @@ export default function GalleriesView({
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [invoiceModalId, setInvoiceModalId] = useState<string | null>(null);
   const [producingInvoice, startInvoiceTransition] = useTransition();
+  // An Own location's invoice can carry framing and delivery costs for
+  // the whole invoice (2026-10-14 — a gallery arranges its own): pressing
+  // Produce Invoice there first asks for them (both optional).
+  const [askingCosts, setAskingCosts] = useState(false);
+  const [invoiceFraming, setInvoiceFraming] = useState("");
+  const [invoiceDelivery, setInvoiceDelivery] = useState("");
 
   const filtered = galleries.filter((g) => {
     if (!q.trim()) return true;
@@ -180,6 +186,7 @@ export default function GalleriesView({
     setSelectedDetail(null);
     setInvoiceTicks([]);
     setInvoiceError(null);
+    setAskingCosts(false);
     setSelectedWorkId(null);
     setSelectedWorkDetail(null);
     // Was resetting to "details" here (2026-09-09 fix) — this ran on
@@ -326,22 +333,37 @@ export default function GalleriesView({
 
   const toggleTick = (purchaseId: string) => {
     setInvoiceError(null);
+    setAskingCosts(false);
     setInvoiceTicks((ticks) =>
       ticks.includes(purchaseId) ? ticks.filter((id) => id !== purchaseId) : [...ticks, purchaseId]
     );
   };
 
+  // Framing and delivery are asked for on an Own location's unpaid
+  // invoice only (not a receipt).
+  const asksCosts = selectedLocationType === "OWN" && firstTicked?.status === "ACTIVE";
+
   const handleProduceInvoice = () => {
     if (!selectedDetail || !selectedId) return;
+    if (asksCosts && !askingCosts) {
+      setInvoiceFraming("");
+      setInvoiceDelivery("");
+      setAskingCosts(true);
+      return;
+    }
     // In the table's order, which is the invoice's line order.
     const ids = selectedDetail.purchases.filter((p) => invoiceTicks.includes(p.id)).map((p) => p.id);
     setInvoiceError(null);
     startInvoiceTransition(async () => {
-      const res = await produceInvoice(ids);
+      const res = await produceInvoice(
+        ids,
+        asksCosts ? { framing: invoiceFraming, delivery: invoiceDelivery } : undefined
+      );
       if (!res.ok) {
         setInvoiceError(res.error);
         return;
       }
+      setAskingCosts(false);
       setInvoiceTicks([]);
       setInvoiceModalId(res.invoiceId);
       refreshGalleryDetail(selectedId);
@@ -509,9 +531,8 @@ export default function GalleriesView({
       ) ?? null)
     : null;
   // The sale whose Sales-tab line was clicked (a charge's line opens the
-  // sale it belongs to) — so a past or cancelled sale opens as itself. A
-  // cancelled sale only shows at a Gallery location, to be deleted; at an
-  // Own location its line still opens the work as before.
+  // sale it belongs to) — so a past or cancelled sale opens as itself (a
+  // cancelled one, to be deleted).
   const lineSale =
     workView === "line" && lineSaleId
       ? ([selectedWorkDetail?.activePurchase, ...(selectedWorkDetail?.purchaseHistory ?? [])].find(
@@ -519,11 +540,7 @@ export default function GalleriesView({
         ) ?? null)
       : null;
   const shownSale: PurchaseDetail | null =
-    lineSale &&
-    lineSale.channel === "GALLERY" &&
-    (lineSale.status !== "ABANDONED" || lineSale.location?.kind === "GALLERY")
-      ? lineSale
-      : (activeWorkPurchase ?? completedGallerySale);
+    lineSale?.channel === "GALLERY" ? lineSale : (activeWorkPurchase ?? completedGallerySale);
 
   // Live Net Due preview on the blank Record Sale form (2026-09-22) —
   // same shared formula used everywhere else a sale's Net Due is shown
@@ -852,6 +869,42 @@ export default function GalleriesView({
                   </table>
                 </div>
                 {invoiceError && <p className="mt-3 text-right text-sm text-red-600">{invoiceError}</p>}
+                {invoiceTicks.length > 0 && askingCosts && (
+                  <div className="mt-3 flex flex-wrap items-end justify-end gap-3">
+                    <div className="w-32">
+                      <label className={labelCls}>Framing cost</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={invoiceFraming}
+                        onChange={(e) => setInvoiceFraming(e.target.value)}
+                        placeholder="None"
+                        disabled={producingInvoice}
+                        className={inputCls}
+                      />
+                    </div>
+                    <div className="w-32">
+                      <label className={labelCls}>Delivery cost</label>
+                      <input
+                        type="text"
+                        inputMode="decimal"
+                        value={invoiceDelivery}
+                        onChange={(e) => setInvoiceDelivery(e.target.value)}
+                        placeholder="None"
+                        disabled={producingInvoice}
+                        className={inputCls}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setAskingCosts(false)}
+                      disabled={producingInvoice}
+                      className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                    >
+                      Back
+                    </button>
+                  </div>
+                )}
                 {invoiceTicks.length > 0 && (
                   <div className="mt-3 flex justify-end">
                     <button
@@ -1137,13 +1190,9 @@ export default function GalleriesView({
                     artwork={selectedWorkDetail}
                     purchase={shownSale}
                     siteId={siteId}
-                    // A Gallery sale opened from its picture is read only —
-                    // no Edit (2026-10-14).
-                    onChanged={
-                      workView === "image" && shownSale?.location?.kind === "GALLERY"
-                        ? undefined
-                        : refreshAfterSaleChange
-                    }
+                    // A sale opened from its picture is read only — no Edit
+                    // (2026-10-14).
+                    onChanged={workView === "image" && shownSale ? undefined : refreshAfterSaleChange}
                     onClose={closeWork}
                     onTitleClick={() => setFocusedSaleId(null)}
                   />

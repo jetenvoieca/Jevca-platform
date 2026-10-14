@@ -4,18 +4,24 @@ import { db } from "@/lib/db";
 import { saleBreakdown, saleTitle } from "@/lib/saleMath";
 import { getPublishableKey, getStripeClientForSale, toMinorUnits } from "@/lib/stripe";
 import type { CardEntry } from "@/lib/actions/payments";
-import { retireGalleryPaymentLinks } from "@/lib/paymentLinks";
 import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
-import { buyerKey, loadInvoice, retireInvoicePaymentLink, type LoadedInvoice } from "@/lib/invoices";
+import {
+  buyerKey,
+  invoiceBalance,
+  invoiceExtras,
+  loadInvoice,
+  retireInvoicePaymentLink,
+  type LoadedInvoice,
+} from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 
-// Invoices (2026-10-14, Craig's mockup) — see Invoice in schema.prisma.
-// A sale's invoice is produced from its own card (an invoice of one,
-// which is also how a paid sale gets its receipt), or several unpaid
-// consigned sales are ticked on a location's Sales tab and put on one
-// invoice. It's then paid in full from the invoice window (Mark as paid)
-// or through its payment link, or cancelled — kept on record, its sales
-// freed. While unpaid, its sales can't be changed or paid on their own
+// Invoices (2026-10-14, Craig's mockups) — see Invoice in schema.prisma.
+// Consigned sales are ticked on their Location's Sales tab and put on one
+// invoice (Produce Invoice), or, once paid, on one receipt; a direct
+// sale's invoice is an invoice of one (invoiceForSale). An unpaid invoice
+// is paid in full — Take Card or Record Payment on one of its sales, or
+// its payment link — or cancelled: kept on record, its sales freed.
+// While unpaid, its sales can't be changed or paid on their own
 // (invoiceLockError, lib/invoices.ts).
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
@@ -25,19 +31,34 @@ function stripeErrorMessage(err: unknown): string {
   return "Something went wrong talking to Stripe.";
 }
 
+// A cost typed when producing an invoice: blank = none.
+function readCost(raw: string | undefined, label: string): { ok: true; value: string | null } | { ok: false; error: string } {
+  const text = (raw ?? "").trim();
+  if (!text) return { ok: true, value: null };
+  const n = parseFloat(text);
+  if (Number.isNaN(n) || n < 0) return { ok: false, error: `That ${label} cost isn't valid.` };
+  return { ok: true, value: n > 0 ? n.toFixed(2) : null };
+}
+
 // ---------- Producing ----------
 
 // "Produce Invoice" on a location's Sales tab: one invoice for every
 // ticked sale. They must be consigned sales of the same location and
 // buyer, in the same currency and Stripe account, not framing/delivery
-// charges (those are invoiced on their own), and not already on an
-// invoice — and either all unpaid (not being paid by instalments), or
-// all already paid (2026-10-14: then it's their receipt, already marked
-// paid). An unpaid invoice gets the next number, today's date, and a
-// payment link for the whole balance so the emailed invoice always
-// includes a way to pay (if Stripe can't make one, the invoice is still
-// produced and the link can be made later).
-export async function produceInvoice(purchaseIds: string[]): Promise<Result<{ invoiceId: string }>> {
+// charge sales (older ones, invoiced on their own), and not already on
+// an invoice — and either all unpaid (not being paid by instalments), or
+// all already paid (then it's their receipt, already marked paid).
+//
+// An unpaid invoice at an Own location can carry framing and delivery
+// costs for the whole invoice (`costs`, 2026-10-14 — a gallery arranges
+// its own). It gets the next number, today's date, and a payment link for
+// the whole balance so the emailed invoice always includes a way to pay
+// (if Stripe can't make one, the invoice is still produced and the link
+// is made when the email is drafted).
+export async function produceInvoice(
+  purchaseIds: string[],
+  costs?: { framing?: string; delivery?: string }
+): Promise<Result<{ invoiceId: string }>> {
   const ids = [...new Set(purchaseIds)];
   if (ids.length === 0) return { ok: false, error: "Tick at least one sale." };
 
@@ -81,6 +102,14 @@ export async function produceInvoice(purchaseIds: string[]): Promise<Result<{ in
     return { ok: false, error: "These sales were taken into different Stripe accounts, so they can't share a payment link." };
   }
 
+  const framing = readCost(costs?.framing, "framing");
+  if (!framing.ok) return framing;
+  const delivery = readCost(costs?.delivery, "delivery");
+  if (!delivery.ok) return delivery;
+  if ((framing.value || delivery.value) && (paid || first.customer?.kind === "GALLERY")) {
+    return { ok: false, error: "Framing and delivery are only added to an Own location's invoice." };
+  }
+
   // Ordered as ticked, which is the table's order.
   const ordered = ids.map((id) => sales.find((s) => s.id === id)!);
   // A receipt is dated the day the last of its sales was paid.
@@ -88,39 +117,32 @@ export async function produceInvoice(purchaseIds: string[]): Promise<Result<{ in
     (latest, s) => (s.closedAt && (!latest || s.closedAt > latest) ? s.closedAt : latest),
     null
   );
-  const created = await createInvoice(ordered, paid ? (lastPaid ?? new Date()) : null);
+  const created = await createInvoice(ordered, {
+    paidAt: paid ? (lastPaid ?? new Date()) : null,
+    framingCost: framing.value,
+    deliveryCost: delivery.value,
+  });
   if (!created.ok || paid) return created;
 
-  for (const sale of ordered) await retireGalleryPaymentLinks(sale);
   await createInvoicePaymentLink(created.invoiceId);
   return created;
 }
 
-// The invoice to open from a sale's own card or panel ("Send invoice",
-// "Send Receipt", a past sale's Invoice/Receipt): its current invoice,
-// or else a new invoice of one — for a paid sale, already marked paid,
-// so it's its receipt. A cancelled sale gets no new invoice.
+// The invoice to open for a direct sale ("Send invoice", a past sale's
+// Invoice/Receipt): its current invoice, or else a new invoice of one —
+// for a paid sale, already marked paid, so it's its receipt. A cancelled
+// sale gets no new invoice.
 export async function invoiceForSale(purchaseId: string): Promise<Result<{ invoiceId: string }>> {
   const sale = await db.purchase.findUnique({
     where: { id: purchaseId },
-    include: { artwork: { select: { artistId: true } }, payments: true },
-    relationLoadStrategy: "query",
+    include: { artwork: { select: { artistId: true } } },
   });
   if (!sale) return { ok: false, error: "Sale not found." };
   if (sale.invoiceId) return { ok: true, invoiceId: sale.invoiceId };
   if (sale.status === "ABANDONED") return { ok: false, error: "This sale was cancelled." };
 
   const isPaid = sale.status === "COMPLETED";
-  const created = await createInvoice([sale], isPaid ? (sale.closedAt ?? new Date()) : null);
-  if (!created.ok) return created;
-
-  // An unpaid consigned sale's invoice gets a payment link straight away,
-  // replacing the sale's own — unless it's being paid by instalments.
-  if (!isPaid && sale.channel === "GALLERY" && !sale.stripeSubscriptionScheduleId) {
-    await retireGalleryPaymentLinks(sale);
-    await createInvoicePaymentLink(created.invoiceId);
-  }
-  return created;
+  return createInvoice([sale], { paidAt: isPaid ? (sale.closedAt ?? new Date()) : null });
 }
 
 // Creates the invoice with the artist's next number, and puts the sales
@@ -134,7 +156,7 @@ async function createInvoice(
     stripeAccountId: string | null;
     artwork: { artistId: string };
   }[],
-  paidAt: Date | null
+  details: { paidAt: Date | null; framingCost?: string | null; deliveryCost?: string | null }
 ): Promise<Result<{ invoiceId: string }>> {
   const first = sales[0];
   try {
@@ -151,7 +173,9 @@ async function createInvoice(
           currency: first.currency,
           stripeMode: first.stripeMode,
           stripeAccountId: first.stripeAccountId,
-          paidAt,
+          paidAt: details.paidAt,
+          framingCost: details.framingCost ?? null,
+          deliveryCost: details.deliveryCost ?? null,
           lines: { create: sales.map((s, position) => ({ purchaseId: s.id, position })) },
         },
       });
@@ -195,13 +219,6 @@ function invoiceStatus(invoice: { paidAt: Date | null; cancelledAt: Date | null 
   return invoice.cancelledAt ? "CANCELLED" : invoice.paidAt ? "PAID" : "UNPAID";
 }
 
-// What's still owed on an invoice: every live sale's balance.
-function invoiceBalance(invoice: LoadedInvoice): number {
-  return invoice.lines
-    .filter((l) => l.purchase.invoiceId === invoice.id)
-    .reduce((sum, l) => sum + saleBreakdown(l.purchase).balance, 0);
-}
-
 export async function getInvoiceWindow(invoiceId: string): Promise<InvoiceWindowData | null> {
   const invoice = await loadInvoice(invoiceId);
   if (!invoice) return null;
@@ -224,7 +241,7 @@ export async function getInvoiceWindow(invoiceId: string): Promise<InvoiceWindow
   };
 }
 
-// Why an invoice can't be paid, linked or cancelled right now.
+// Why an invoice can't be paid or linked right now.
 function notOpenError(invoice: LoadedInvoice): string | null {
   if (invoice.cancelledAt) return "This invoice was cancelled.";
   if (invoice.paidAt) return "This invoice has already been paid.";
@@ -240,11 +257,12 @@ function notOpenError(invoice: LoadedInvoice): string | null {
 // ---------- Paying ----------
 
 // The invoice's payment link — a persistent Stripe Payment Link (not a
-// Checkout Session, which expires within a day) for the whole balance,
-// one line per sale. Made once and reused; switched off when the invoice
-// is paid or cancelled. invoiceId rides on the PaymentIntent's own
-// metadata (Payment Link metadata doesn't reach it) — that's how the
-// webhook recognises the payment (recordInvoicePaymentIntent).
+// Checkout Session, which expires within a day) for the whole balance:
+// one line per sale, plus its framing and delivery. Made once and
+// reused; switched off when the invoice is paid or cancelled. invoiceId
+// rides on the PaymentIntent's own metadata (Payment Link metadata
+// doesn't reach it) — that's how the webhook recognises the payment
+// (recordInvoicePaymentIntent).
 export async function createInvoicePaymentLink(invoiceId: string): Promise<Result<{ url: string }>> {
   try {
     const invoice = await loadInvoice(invoiceId);
@@ -253,19 +271,29 @@ export async function createInvoicePaymentLink(invoiceId: string): Promise<Resul
     if (closed) return { ok: false, error: closed };
     if (invoice.stripePaymentLinkUrl) return { ok: true, url: invoice.stripePaymentLinkUrl };
 
+    const items: { name: string; amount: number }[] = invoice.lines
+      .map(({ purchase }) => ({
+        name: saleTitle(purchase.artwork.catalogueName, purchase.chargeKind),
+        amount: saleBreakdown(purchase).balance,
+      }))
+      .filter((item) => item.amount > 0);
+    const extras = invoiceExtras(invoice);
+    if (extras.balance > 0) {
+      if (extras.framing) items.push({ name: "Framing", amount: extras.framing });
+      if (extras.delivery) items.push({ name: "Delivery", amount: extras.delivery });
+    }
+    if (items.length === 0) return { ok: false, error: "Nothing is left to pay on this invoice." };
+
     const stripe = getStripeClientForSale(invoice);
     const lineItems = [];
-    for (const { purchase } of invoice.lines) {
-      const { balance } = saleBreakdown(purchase);
-      if (balance <= 0) continue;
+    for (const item of items) {
       const price = await stripe.prices.create({
-        unit_amount: toMinorUnits(balance),
+        unit_amount: toMinorUnits(item.amount),
         currency: invoice.currency.toLowerCase(),
-        product_data: { name: saleTitle(purchase.artwork.catalogueName, purchase.chargeKind) },
+        product_data: { name: item.name },
       });
       lineItems.push({ price: price.id, quantity: 1 });
     }
-    if (lineItems.length === 0) return { ok: false, error: "Nothing is left to pay on this invoice." };
 
     const link = await stripe.paymentLinks.create({
       line_items: lineItems,
@@ -285,11 +313,11 @@ export async function createInvoicePaymentLink(invoiceId: string): Promise<Resul
   }
 }
 
-// "Take Card" on a sale that's on an unpaid invoice (2026-10-14): the
-// whole invoice is paid by card, entered in the app by the artist with
-// Stripe's own card form (StripeCardForm), into the invoice's Stripe
-// account. invoiceId rides on the PaymentIntent's metadata, so the card
-// form and the webhook both record it with recordInvoicePaymentIntent.
+// "Take Card" on a sale that's on an unpaid invoice: the whole invoice is
+// paid by card, entered in the app by the artist with Stripe's own card
+// form (StripeCardForm), into the invoice's Stripe account. invoiceId
+// rides on the PaymentIntent's metadata, so the card form and the webhook
+// both record it with recordInvoicePaymentIntent.
 export async function createInvoiceCardIntent(invoiceId: string): Promise<Result<CardEntry>> {
   try {
     const invoice = await loadInvoice(invoiceId);
@@ -317,42 +345,57 @@ export async function createInvoiceCardIntent(invoiceId: string): Promise<Result
   }
 }
 
-// Records every sale on the invoice as paid in full — each sale's
-// balance as its own PAID payment — then completes them, which marks the
-// invoice paid (settleInvoiceIfPaid). Shared by Mark as paid and the
-// payment link.
-async function payInvoiceSales(
+// Records the whole invoice as paid: each sale's balance as its own PAID
+// payment, and its framing and delivery as the invoice's own — then
+// completes the sales, which marks the invoice paid (settleInvoiceIfPaid,
+// lib/invoices.ts). Shared by Record Payment and card / link payments.
+async function payInvoice(
   invoice: LoadedInvoice,
   payment: { paidDate: Date; method: string | null; stripePaymentIntentId?: string }
 ) {
+  const paidFields = {
+    status: "PAID" as const,
+    paidDate: payment.paidDate,
+    method: payment.method,
+    stripePaymentIntentId: payment.stripePaymentIntentId ?? null,
+  };
   const sales = invoice.lines.map((l) => l.purchase).filter((s) => s.invoiceId === invoice.id);
-  await db.$transaction(
-    sales
+  const extras = invoiceExtras(invoice);
+
+  await db.$transaction([
+    ...sales
       .map((sale) => ({ sale, balance: saleBreakdown(sale).balance }))
       .filter(({ balance }) => balance > 0)
       .map(({ sale, balance }) =>
         db.payment.create({
           data: {
+            ...paidFields,
             purchaseId: sale.id,
             sequence: nextSequence(sale.payments),
             amount: balance.toFixed(2),
             currency: sale.currency,
-            status: "PAID",
-            paidDate: payment.paidDate,
-            method: payment.method,
-            stripePaymentIntentId: payment.stripePaymentIntentId ?? null,
           },
         })
-      )
-  );
-  for (const sale of sales) {
-    await retireGalleryPaymentLinks(sale);
-    await completeIfSettled(sale.id, payment.paidDate);
-  }
+      ),
+    ...(extras.balance > 0
+      ? [
+          db.payment.create({
+            data: {
+              ...paidFields,
+              invoiceId: invoice.id,
+              sequence: nextSequence(invoice.payments),
+              amount: extras.balance.toFixed(2),
+              currency: invoice.currency,
+            },
+          }),
+        ]
+      : []),
+  ]);
+  for (const sale of sales) await completeIfSettled(sale.id, payment.paidDate);
 }
 
-// "Mark as paid" in the invoice window: the whole invoice was paid
-// outside Stripe, on the date and by the method given.
+// "Record Payment" on a sale that's on an unpaid invoice: the whole
+// invoice was paid outside Stripe, on the date and by the method given.
 export async function markInvoicePaid(invoiceId: string, formData: FormData): Promise<Result> {
   const invoice = await loadInvoice(invoiceId);
   if (!invoice) return { ok: false, error: "Invoice not found." };
@@ -363,11 +406,12 @@ export async function markInvoicePaid(invoiceId: string, formData: FormData): Pr
   if ("error" in paid) return { ok: false, error: paid.error };
   if (!paid.method) return { ok: false, error: "Please choose the payment method." };
 
-  await payInvoiceSales(invoice, paid);
+  await payInvoice(invoice, paid);
   return { ok: true };
 }
 
-// The invoice's payment link was paid (from the Stripe webhook). The
+// The invoice was paid through Stripe — its payment link (from the
+// webhook) or Take Card (from the card form, and the webhook too). The
 // PaymentIntent is re-read from the invoice's own Stripe account rather
 // than trusted, and a repeat for the same PaymentIntent is ignored.
 export async function recordInvoicePaymentIntent(invoiceId: string, paymentIntentId: string) {
@@ -376,19 +420,17 @@ export async function recordInvoicePaymentIntent(invoiceId: string, paymentInten
 
   const intent = await getStripeClientForSale(invoice).paymentIntents.retrieve(paymentIntentId);
   if (intent.status !== "succeeded" || intent.metadata?.invoiceId !== invoiceId) return;
-  const alreadyRecorded = invoice.lines.some((l) =>
-    l.purchase.payments.some((p) => p.stripePaymentIntentId === intent.id)
-  );
-  if (alreadyRecorded) return;
+  const payments = [...invoice.payments, ...invoice.lines.flatMap((l) => l.purchase.payments)];
+  if (payments.some((p) => p.stripePaymentIntentId === intent.id)) return;
 
-  await payInvoiceSales(invoice, { paidDate: new Date(), method: null, stripePaymentIntentId: intent.id });
+  await payInvoice(invoice, { paidDate: new Date(), method: null, stripePaymentIntentId: intent.id });
 }
 
 // ---------- Cancelling ----------
 
 // "Cancel invoice" — only while unpaid. Kept on record, marked
-// cancelled, with its lines; its sales are freed to be changed, paid or
-// put on another invoice; its payment link is switched off.
+// cancelled, with its lines and costs; its sales are freed to be changed,
+// paid or put on another invoice; its payment link is switched off.
 export async function cancelInvoice(invoiceId: string): Promise<Result> {
   const invoice = await loadInvoice(invoiceId);
   if (!invoice) return { ok: false, error: "Invoice not found." };

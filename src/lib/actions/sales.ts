@@ -77,7 +77,9 @@ export async function getSalesResetPreview(artistId: string): Promise<SalesReset
 
   const [purchaseCount, paymentCount, saleTermsCount, artworksToResetCount] = await Promise.all([
     db.purchase.count({ where: { artwork: { artistId } } }),
-    db.payment.count({ where: { purchase: { artwork: { artistId } } } }),
+    db.payment.count({
+      where: { OR: [{ purchase: { artwork: { artistId } } }, { invoice: { artistId } }] },
+    }),
     db.saleTerms.count({ where: { artwork: { artistId } } }),
     db.artwork.count({ where: { artistId, availability: { not: "AVAILABLE" } } }),
   ]);
@@ -95,6 +97,7 @@ export async function resetArtistSalesData(
       // step rather than relying silently on cascade behaviour.
       db.payment.deleteMany({ where: { purchase: { artwork: { artistId } } } }),
       db.purchase.deleteMany({ where: { artwork: { artistId } } }),
+      // Removes the invoices' own payments with them.
       db.invoice.deleteMany({ where: { artistId } }),
       db.saleTerms.deleteMany({ where: { artwork: { artistId } } }),
       db.artwork.updateMany({

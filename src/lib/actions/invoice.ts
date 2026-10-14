@@ -1,7 +1,7 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { APP_URL } from "@/lib/appUrl";
 import { saleBreakdown, saleTitle } from "@/lib/saleMath";
-import { loadInvoice } from "@/lib/invoices";
+import { invoiceExtras, loadInvoice } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 
 // Not a "use server" file (2026-10-14): only the invoice route and the
@@ -90,8 +90,8 @@ const LABELS = {
 // The invoice's PDF (2026-10-14: one document for every sale on the
 // invoice). Titled "Receipt" once paid, and marked cancelled if it was.
 // A consigned (gallery/own-location) invoice has one line per work —
-// sale price, commission and net — then framing, delivery and deposits,
-// the total, what's been paid and the balance. A direct sale's invoice
+// sale price, commission and net — then the invoice's framing and
+// delivery, deposits, the total, what's been paid and the balance. A direct sale's invoice
 // of one shows its price, with VAT split out if the artist has a VAT
 // number and rate.
 export async function generateInvoicePdf(
@@ -256,11 +256,14 @@ export async function generateInvoicePdf(
 
     const sum = (pick: (b: (typeof amounts)[number]["b"]) => number) =>
       amounts.reduce((total, { b }) => total + pick(b), 0);
-    const framing = sum((b) => b.framing);
-    const delivery = sum((b) => b.delivery);
+    // Framing and delivery: the invoice's own (2026-10-14), plus any an
+    // older sale carries itself.
+    const extras = invoiceExtras(invoice);
+    const framing = sum((b) => b.framing) + extras.framing;
+    const delivery = sum((b) => b.delivery) + extras.delivery;
     const deposit = sum((b) => b.deposit);
-    invoiceTotal = sum((b) => b.net);
-    amountPaid = sum((b) => b.paid);
+    invoiceTotal = sum((b) => b.net) + extras.framing + extras.delivery;
+    amountPaid = sum((b) => b.paid) + extras.paid;
 
     if (framing) drawRow(t.framing, fmt(framing));
     if (delivery) drawRow(t.delivery, fmt(delivery));

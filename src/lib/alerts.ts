@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { formatDate } from "@/lib/formatDate";
 import { saleBreakdown, saleTitle } from "@/lib/saleMath";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
+import { invoiceExtras } from "@/lib/invoices";
 import type { SaleModalTarget } from "@/components/SaleModal";
 import { MANUAL_SUBSCRIPTION_METHODS } from "@/lib/subscriptionMethods";
 import { clientAlertId } from "@/lib/clientAlertIds";
@@ -267,6 +268,9 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
           currency: true,
           emailedAt: true,
           artistId: true,
+          framingCost: true,
+          deliveryCost: true,
+          payments: { select: { amount: true, status: true } },
           artist: {
             select: {
               name: true,
@@ -362,25 +366,29 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     };
   });
 
-  const unpaidInvoiceItems: AlertItem[] = unpaidPayments.map((p) => {
-    const artist = p.purchase.artwork.artist;
+  // Only a sale's scheduled instalments are ever DUE — an invoice's own
+  // payments are always recorded already paid.
+  const unpaidInvoiceItems: AlertItem[] = unpaidPayments.flatMap((p) => {
+    if (!p.purchase) return [];
+    const purchase = p.purchase;
+    const artist = purchase.artwork.artist;
     const siteId = artist.sites[0]?.id || null;
     const daysOverdue = p.dueDate ? daysSince(p.dueDate, now) : 0;
-    const buyer = p.purchase.buyerName || "unnamed buyer";
+    const buyer = purchase.buyerName || "unnamed buyer";
     const failedNote = p.status === "FAILED" ? " (payment attempt failed)" : "";
-    return {
+    return [{
       id: `unpaid-invoice-${p.id}`,
       type: "SALE_INVOICE_UNPAID",
       severity: daysOverdue > 30 ? "CRITICAL" : "WARNING",
-      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(p.purchase.artwork.catalogueName, p.purchase.chargeKind)}" — ${p.currency} ${parseFloat(p.amount.toString()).toFixed(2)}, ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue${failedNote}.`,
-      artistId: p.purchase.artwork.artistId,
+      message: `${artist.name}: invoice to ${buyer} for "${saleTitle(purchase.artwork.catalogueName, purchase.chargeKind)}" — ${p.currency} ${parseFloat(p.amount.toString()).toFixed(2)}, ${daysOverdue} day${daysOverdue === 1 ? "" : "s"} overdue${failedNote}.`,
+      artistId: purchase.artwork.artistId,
       artistName: artist.name,
       siteId,
       linkHref: siteId ? `/sites/${siteId}/sales` : null,
       linkLabel: "View sales",
       createdAt: (p.dueDate || new Date()).toISOString(),
       dismissable: false,
-    };
+    }];
   });
 
   const overdueInvoiceItems: AlertItem[] = overdueInvoices.flatMap((invoice) => {
@@ -389,8 +397,10 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     const siteId = invoice.artist.sites[0]?.id || null;
     const sentAt = invoice.emailedAt!; // Never null — the query above requires it.
     const days = daysSince(sentAt, now);
-    // What's still owed — the shared balance formula (lib/saleMath.ts).
-    const owed = invoice.sales.reduce((sum, s) => sum + saleBreakdown(s).balance, 0);
+    // What's still owed — each sale's balance (lib/saleMath.ts) plus the
+    // invoice's own framing and delivery (lib/invoices.ts).
+    const owed =
+      invoice.sales.reduce((sum, s) => sum + saleBreakdown(s).balance, 0) + invoiceExtras(invoice).balance;
     const buyer = first.buyerName || "unnamed buyer";
     const what =
       invoice.sales.length === 1

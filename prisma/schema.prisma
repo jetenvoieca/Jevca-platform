@@ -1569,7 +1569,9 @@ model Purchase {
   // titled "[artwork] Framing Charge" / "... Delivery Charge" (see
   // saleTitle(), lib/saleMath.ts). At most one of each kind per sale.
   // Never gets a Certificate of Authenticity. Deleting the parent sale
-  // deletes its charges too.
+  // deletes its charges too. No longer made since 2026-10-14 (framing and
+  // delivery are now an Own location's invoice's own costs — see
+  // Invoice.framingCost); kept for the charges already recorded.
   parentPurchaseId String?
   parentPurchase   Purchase?   @relation("PurchaseCharges", fields: [parentPurchaseId], references: [id], onDelete: Cascade)
   charges          Purchase[]  @relation("PurchaseCharges")
@@ -1589,7 +1591,9 @@ model Purchase {
   // Framing and delivery arranged for this sale (2026-09-23) — at most
   // one of each; editing replaces it. Both costs are paid by the buyer/
   // gallery, so they ADD to Net Due, and commission is never charged on
-  // them (sale price only). See saleBreakdown(), lib/saleMath.ts.
+  // them (sale price only). See saleBreakdown(), lib/saleMath.ts. No
+  // longer set since 2026-10-14 (see Invoice.framingCost); kept for the
+  // sales already recorded with them.
   framer       String?
   framingCost  Decimal? @db.Decimal(10, 2)
   courier      String?
@@ -1603,21 +1607,6 @@ model Purchase {
   invoice   Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   // Every invoice the sale has been on, cancelled ones included.
   invoiceLines InvoiceLine[]
-
-  // Payment links for this one sale while it isn't on an invoice
-  // (2026-09-01; instalments 2026-09-23) — a Payment Link (not a
-  // Checkout Session, which expires within a day) for the full balance,
-  // and one for the FIRST of stripeInstalmentLinkCount instalments,
-  // saving the buyer's card so the rest are charged monthly (see
-  // recordGalleryStripePayment). Both are retired whenever the balance
-  // changes, since each encodes a fixed amount, and when the sale is put
-  // on an invoice (which has its own link). Only for GALLERY-channel
-  // sales.
-  stripePaymentLinkId  String?
-  stripePaymentLinkUrl String?
-  stripeInstalmentLinkId    String?
-  stripeInstalmentLinkUrl   String?
-  stripeInstalmentLinkCount Int?
 
   // When the Certificate of Authenticity was last emailed, and to whom
   // (2026-09-03). Re-sending overwrites both.
@@ -1693,9 +1682,17 @@ model Invoice {
   stripeMode      StripeMode
   stripeAccountId String?
 
+  // Framing and delivery for the invoice as a whole (2026-10-14, Own
+  // locations — a gallery arranges its own): costs only, typed when the
+  // invoice is produced, added to its total, and paid with it — their
+  // payment is the invoice's own (`payments`), not any sale's.
+  framingCost  Decimal? @db.Decimal(10, 2)
+  deliveryCost Decimal? @db.Decimal(10, 2)
+  payments     Payment[]
+
   // A persistent Payment Link for the whole balance, made when the
-  // invoice is produced (or when first asked for) and switched off when
-  // it's paid or cancelled.
+  // invoice is produced (or when the email is drafted, if missing) and
+  // switched off when it's paid or cancelled.
   stripePaymentLinkId  String?
   stripePaymentLinkUrl String?
 
@@ -1735,10 +1732,17 @@ model InvoiceLine {
   @@index([purchaseId])
 }
 
+// A payment towards a sale — or (2026-10-14) towards an invoice's own
+// framing and delivery costs, which belong to the invoice as a whole,
+// not to any one of its sales. Exactly one of purchaseId / invoiceId is
+// set (a database check makes sure). Every PAID payment is income on the
+// Account page either way.
 model Payment {
-  id         String   @id @default(cuid())
-  purchaseId String
-  purchase   Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  id         String    @id @default(cuid())
+  purchaseId String?
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  invoiceId  String?
+  invoice    Invoice?  @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
   sequence Int
   amount   Decimal       @db.Decimal(10, 2)
@@ -1748,11 +1752,9 @@ model Payment {
   dueDate  DateTime?
   paidDate DateTime?
 
-  // Only ever set on a GALLERY-channel sale's payment, by
-  // recordGalleryPayment (2026-09-03) — chosen from Artist.paymentMethods
-  // at the moment it's marked paid. Left null for Stripe-channel
-  // payments (always card, not worth recording) and for every row
-  // created before this existed.
+  // Chosen from Artist.paymentMethods when a payment is recorded by hand
+  // (Record Payment, 2026-09-03). Left null for card payments through
+  // Stripe and for every row created before this existed.
   method String?
 
   stripePaymentIntentId String?
@@ -1762,6 +1764,7 @@ model Payment {
   updatedAt DateTime @updatedAt
 
   @@index([purchaseId])
+  @@index([invoiceId])
 }
 
 model Image {
