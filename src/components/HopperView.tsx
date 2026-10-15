@@ -723,6 +723,12 @@ export default function HopperView({
                       ) : (
                         <img src={item.url} alt="" className="aspect-square w-full object-cover" />
                       )}
+                      {/* Marks a video at a glance (2026-10-15). */}
+                      {item.kind === "VIDEO" && (
+                        <span className="absolute bottom-1 right-1 rounded bg-black/60 px-1.5 py-0.5 text-[10px] text-white">
+                          ▶
+                        </span>
+                      )}
                       {bulkSelectMode && (
                         <span
                           className={`absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border text-xs ${
