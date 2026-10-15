@@ -3,29 +3,25 @@ import type { ReactNode } from "react";
 // The common scheme for "action buttons" (2026-09-19): the buttons where
 // you decide what to do with the information you've been shown (Save
 // Task, Task Completed, Up to date, Dismiss, etc.). They always sit
-// together in a cream panel, as narrow dark-grey buttons with cream text
-// — use these components rather than styling a one-off button, so
+// together in a cream panel, as narrow outlined buttons — use these components rather than styling a one-off button, so
 // every action area looks the same.
 //   Panel:  #F9F6EF background, #5E5E5E border
-//   Button: #5E5E5E background, #F9F6EF text
+//   Button: #F9F6EF background, #5E5E5E border and text (outlined rather
+//   than filled since 2026-10-15, Craig's mock-up — a block of filled
+//   buttons looked heavy)
 //
 // `align` sets which side the stacked buttons hug (default: right).
 // `footer` is for the one main button that belongs alone at the
 // bottom-right of the panel (e.g. "Up to date").
 //
 // The mini action bar (2026-10-01, direct request — see mock-up) is the
-// same panel, sized to fit a header such as an opened email's: less
-// padding, narrower buttons, two to a row. Its buttons are outlined
-// rather than filled (2026-10-15, Craig's mock-up — a block of filled
-// buttons looked heavy):
-//   Mini button: #F9F6EF background, #5E5E5E border and text
+// same panel and buttons, sized to fit a header such as an opened
+// email's: less padding, narrower buttons, two to a row.
 
 // Shared by both button sizes, so they can't drift apart.
 const PANEL_CLS = "rounded-md border border-[#5E5E5E] bg-[#F9F6EF]";
 const BUTTON_CLS =
-  "h-[27px] rounded bg-[#5E5E5E] px-2 text-sm text-[#F9F6EF] hover:bg-[#4a4a4a] disabled:opacity-50";
-const MINI_BUTTON_CLS =
-  "h-[27px] w-28 rounded border border-[#5E5E5E] bg-[#F9F6EF] px-2 text-sm text-[#5E5E5E] hover:bg-[#EDE8DC] disabled:opacity-50";
+  "h-[27px] rounded border border-[#5E5E5E] bg-[#F9F6EF] px-2 text-sm text-[#5E5E5E] hover:bg-[#EDE8DC] disabled:opacity-50";
 
 export function ActionPanel({
   children,
@@ -84,7 +80,7 @@ export function MiniActionButton({
   children: ReactNode;
 }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled} className={MINI_BUTTON_CLS}>
+    <button type="button" onClick={onClick} disabled={disabled} className={`${BUTTON_CLS} w-28`}>
       {children}
     </button>
   );
