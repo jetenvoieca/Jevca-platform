@@ -862,6 +862,7 @@ export default function HopperView({
                 isPending={isPending}
                 settings={artworkSettings}
                 artworkIntake={artworkIntake}
+                mediaIntake={!!returnTo}
                 forArtwork={
                   forArtwork && {
                     hasMain: forArtwork.hasMain,
@@ -991,6 +992,7 @@ function SortingCard({
   isPending,
   settings,
   artworkIntake,
+  mediaIntake,
   forArtwork,
   onBin,
   onAddToMedia,
@@ -1005,6 +1007,9 @@ function SortingCard({
   isPending: boolean;
   settings: ArtworkSettings;
   artworkIntake: boolean;
+  // Reached from a media picker's Upload new: Bin, Add to Media and Crop
+  // only.
+  mediaIntake: boolean;
   // Set when adding images to one artwork: Bin and Ancillary image only.
   // onAdd returns an error message, or null once added.
   forArtwork?: {
@@ -1120,7 +1125,12 @@ function SortingCard({
               Ancillary image
             </button>
           )}
-          {!forArtwork && !artworkIntake && (
+          {mediaIntake && (
+            <button type="button" onClick={onAddToMedia} disabled={isPending} className={actionCls}>
+              Add to Media
+            </button>
+          )}
+          {!forArtwork && !artworkIntake && !mediaIntake && (
             <>
               <button type="button" onClick={onAddToMedia} disabled={isPending} className={actionCls}>
                 Add to Media
