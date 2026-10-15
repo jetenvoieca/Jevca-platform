@@ -306,7 +306,7 @@ export default function HopperView({
     }
     setBulkDeleting(true);
     startTransition(async () => {
-      const { failed } = await binHopperItems(Array.from(selectedForDelete), siteId);
+      const { failed } = await binHopperItems(artistId, Array.from(selectedForDelete));
       setBulkDeleting(false);
       setSelectedForDelete(new Set());
       setBulkSelectMode(false);

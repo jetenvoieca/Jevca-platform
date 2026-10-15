@@ -70,6 +70,26 @@ export async function deleteImagePermanently(
   return { ok: true };
 }
 
+// Several at once (the Hopper's Up next and the Media Catalogue's Select,
+// 2026-10-15) — the same per-image delete, so the two can never behave
+// differently, limited to this artist's own images. Partial failure is
+// reported back (which ids and why) rather than all-or-nothing, so one
+// image still linked elsewhere doesn't block deleting the rest.
+export async function deleteImagesPermanently(
+  artistId: string,
+  ids: string[]
+): Promise<{ deletedCount: number; failed: { id: string; error: string }[] }> {
+  const own = await db.image.findMany({
+    where: { id: { in: ids }, artistId },
+    select: { id: true },
+  });
+  const results = await Promise.all(
+    own.map(async ({ id }) => ({ id, result: await deleteImagePermanently(id) }))
+  );
+  const failed = results.flatMap((r) => (r.result.ok ? [] : [{ id: r.id, error: r.result.error }]));
+  return { deletedCount: results.length - failed.length, failed };
+}
+
 // "Delete & Replace" for an artwork's Main image (2026-09-13, direct
 // request). Main is the artwork's image of record — there is no more
 // "Set as Main" to reassign it to an already-existing image; the only

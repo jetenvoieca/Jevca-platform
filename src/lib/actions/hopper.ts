@@ -6,7 +6,7 @@ import { publicMediaUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
-import { deleteImagePermanently } from "./imageDelete";
+import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 
 // None of these actions revalidate /sites/[id]/hopper OR /sites/[id]/
 // artworks (2026-08-17, second pass at this same fix) — both those
@@ -113,25 +113,12 @@ export async function binHopperItem(
 
 // Bulk version of binHopperItem (2026-09-07, direct request — "add
 // ability to bulk select images to delete") for the Up next grid's
-// select mode. Reuses the exact same per-item delete (and its same
-// "still linked elsewhere" failure case) rather than a separate bulk
-// implementation, so the two can never behave differently. Runs the
-// batch concurrently — Hopper selections are a handful to a few dozen
-// images at once, not thousands, so no chunking/queueing is needed here.
-// Partial failure is reported back (which ids failed and why) rather
-// than all-or-nothing, so one linked-elsewhere image doesn't block
-// deleting the rest of a selection.
+// select mode — see deleteImagesPermanently.
 export async function binHopperItems(
-  ids: string[],
-  siteId: string
+  artistId: string,
+  ids: string[]
 ): Promise<{ deletedCount: number; failed: { id: string; error: string }[] }> {
-  const results = await Promise.all(
-    ids.map(async (id) => ({ id, result: await deleteImagePermanently(id) }))
-  );
-  const failed = results
-    .filter((r) => !r.result.ok)
-    .map((r) => ({ id: r.id, error: (r.result as { ok: false; error: string }).error }));
-  return { deletedCount: results.length - failed.length, failed };
+  return deleteImagesPermanently(artistId, ids);
 }
 
 export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {

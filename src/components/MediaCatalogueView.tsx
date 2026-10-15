@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { listMedia, getMediaDetail } from "@/lib/actions/mediaCatalogue";
+import { listMedia, getMediaDetail, deleteMediaItems } from "@/lib/actions/mediaCatalogue";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import VideoThumb from "@/components/VideoThumb";
 import { useClientWords } from "@/components/ClientWordsProvider";
@@ -98,6 +98,47 @@ export default function MediaCatalogueView({
   // clicked item via a direct, lightweight server-action call.
   const [selected, setSelected] = useState<MediaDetail | null>(initialSelected);
   const [selectingId, setSelectingId] = useState<string | null>(null);
+
+  // Select → Delete (2026-10-15, direct request — clearing out images
+  // and videos that won't be used). While selecting, a click ticks an
+  // item instead of opening it.
+  const [selectMode, setSelectMode] = useState(false);
+  const [ticked, setTicked] = useState<Set<string>>(new Set());
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const toggleTicked = (id: string) =>
+    setTicked((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
+  const leaveSelectMode = () => {
+    setSelectMode(false);
+    setTicked(new Set());
+  };
+
+  const handleDeleteTicked = async () => {
+    const count = ticked.size;
+    if (count === 0) return;
+    if (!confirm(`Permanently delete ${count} item${count === 1 ? "" : "s"}? This can't be undone.`)) {
+      return;
+    }
+    setDeleting(true);
+    const { failed } = await deleteMediaItems(artistId, siteId, Array.from(ticked));
+    const failedIds = new Set(failed.map((f) => f.id));
+    setItems((prev) => prev.filter((m) => !ticked.has(m.id) || failedIds.has(m.id)));
+    setDeleteError(
+      failed.length > 0
+        ? `${failed.length} item${failed.length === 1 ? "" : "s"} couldn't be deleted — still linked elsewhere (e.g. a catalogue entry's main image). Remove that link first.`
+        : null
+    );
+    setDeleting(false);
+    leaveSelectMode();
+    router.refresh();
+  };
 
   useEffect(() => {
     const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
@@ -299,6 +340,45 @@ export default function MediaCatalogueView({
           <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
 
           <div className="flex items-center gap-3">
+            {selectMode ? (
+              <div className="flex items-center gap-3 text-sm">
+                <button
+                  type="button"
+                  onClick={() =>
+                    setTicked(
+                      ticked.size === items.length ? new Set() : new Set(items.map((m) => m.id))
+                    )
+                  }
+                  className="text-neutral-500 hover:text-neutral-900 hover:underline"
+                >
+                  {ticked.size === items.length ? "Select none" : "Select all"}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDeleteTicked}
+                  disabled={ticked.size === 0 || deleting}
+                  className="rounded-md border border-red-200 px-3 py-1.5 text-red-600 hover:bg-red-50 disabled:opacity-50"
+                >
+                  {deleting ? "Deleting…" : `Delete (${ticked.size})`}
+                </button>
+                <button
+                  type="button"
+                  onClick={leaveSelectMode}
+                  disabled={deleting}
+                  className="text-neutral-400 hover:text-neutral-700"
+                >
+                  Cancel
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setSelectMode(true)}
+                className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
+              >
+                Select
+              </button>
+            )}
             <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
               <button
                 type="button"
@@ -409,6 +489,9 @@ export default function MediaCatalogueView({
         </div>
         </div>
 
+        {deleteError && (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-600">{deleteError}</p>
+        )}
         <p className="mb-3 mt-3 text-sm text-neutral-400">
           {items.length} of {total} item{total === 1 ? "" : "s"}
         </p>
@@ -422,12 +505,15 @@ export default function MediaCatalogueView({
               <button
                 key={m.id}
                 type="button"
-                onClick={() => handleSelect(m.id)}
+                onClick={() => (selectMode ? toggleTicked(m.id) : handleSelect(m.id))}
                 disabled={selectingId === m.id}
-                className={`block w-full rounded-md border-2 p-1 text-left ${
-                  selected?.id === m.id ? "border-neutral-900" : "border-transparent"
+                className={`relative block w-full rounded-md border-2 p-1 text-left ${
+                  (selectMode ? ticked.has(m.id) : selected?.id === m.id)
+                    ? "border-neutral-900"
+                    : "border-transparent"
                 } ${selectingId === m.id ? "opacity-60" : ""}`}
               >
+                {selectMode && <TickMark on={ticked.has(m.id)} />}
                 {m.kind === "VIDEO" ? (
                   <div className="relative">
                     {m.posterUrl ? (
@@ -463,7 +549,7 @@ export default function MediaCatalogueView({
                 )}
               </button>
             ))}
-            <AddNewTile siteId={siteId} />
+            {!selectMode && <AddNewTile siteId={siteId} />}
           </div>
         ) : (
           <table className="w-full border-collapse text-sm">
@@ -479,12 +565,15 @@ export default function MediaCatalogueView({
               {items.map((m) => (
                 <tr
                   key={m.id}
-                  onClick={() => handleSelect(m.id)}
+                  onClick={() => (selectMode ? toggleTicked(m.id) : handleSelect(m.id))}
                   className={`cursor-pointer border-b border-neutral-100 ${
-                    selected?.id === m.id ? "bg-neutral-100" : "hover:bg-neutral-50"
+                    (selectMode ? ticked.has(m.id) : selected?.id === m.id)
+                      ? "bg-neutral-100"
+                      : "hover:bg-neutral-50"
                   } ${selectingId === m.id ? "opacity-60" : ""}`}
                 >
-                  <td className="py-2">
+                  <td className="relative w-12 py-2">
+                    {selectMode && <TickMark on={ticked.has(m.id)} />}
                     {m.kind === "VIDEO" ? (
                       m.posterUrl ? (
                         <img
@@ -506,11 +595,13 @@ export default function MediaCatalogueView({
                   </td>
                 </tr>
               ))}
-              <tr className="border-b border-neutral-100">
-                <td colSpan={4} className="py-2">
-                  <AddNewRow siteId={siteId} />
-                </td>
-              </tr>
+              {!selectMode && (
+                <tr className="border-b border-neutral-100">
+                  <td colSpan={4} className="py-2">
+                    <AddNewRow siteId={siteId} />
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         )}
@@ -579,5 +670,18 @@ function AddNewRow({ siteId }: { siteId: string }) {
     >
       + Add New
     </Link>
+  );
+}
+
+// The tick on an item while selecting.
+function TickMark({ on }: { on: boolean }) {
+  return (
+    <span
+      className={`absolute right-2 top-2 z-10 flex h-5 w-5 items-center justify-center rounded-full border text-xs ${
+        on ? "border-neutral-900 bg-neutral-900 text-white" : "border-neutral-300 bg-white/80 text-transparent"
+      }`}
+    >
+      ✓
+    </span>
   );
 }

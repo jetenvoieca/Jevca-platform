@@ -4,7 +4,7 @@ import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
-import { deleteImagePermanently } from "./imageDelete";
+import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 
 type ListFilters = {
   purpose?: "marketing" | "related";
@@ -207,6 +207,18 @@ export async function deleteMedia(
   if (result.ok) {
     revalidatePath(`/sites/${siteId}/media`);
   }
+  return result;
+}
+
+// Select → Delete in the Media Catalogue (2026-10-15): several at once,
+// with the same rules as one (see deleteImagesPermanently).
+export async function deleteMediaItems(
+  artistId: string,
+  siteId: string,
+  ids: string[]
+): Promise<{ deletedCount: number; failed: { id: string; error: string }[] }> {
+  const result = await deleteImagesPermanently(artistId, ids);
+  if (result.deletedCount > 0) revalidatePath(`/sites/${siteId}/media`);
   return result;
 }
 
