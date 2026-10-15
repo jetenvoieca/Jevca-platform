@@ -97,7 +97,7 @@ export default function SalesView({
   const moneyCell = "px-3 py-1.5 text-right whitespace-nowrap";
 
   return (
-    <div className="max-w-6xl p-6">
+    <div className="mx-auto max-w-6xl p-6">
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Sales</h1>
       <p className="mb-4 text-sm text-neutral-500">
         {filtered.length} sale{filtered.length === 1 ? "" : "s"}
