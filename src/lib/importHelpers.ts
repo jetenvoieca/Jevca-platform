@@ -45,3 +45,25 @@ export function withTimeout<T>(promise: Promise<T>, ms: number, message: string)
     }),
   ]);
 }
+
+// Request headers that look like a browser's — a bare server-to-server
+// fetch with no User-Agent/Referer looks like a bot to many hosts and
+// gets blocked (see fetchAndUploadImage in artworkImport.ts). Shared by
+// the image imports and the Hopper's video copy (2026-10-15).
+export function browserFetchHeaders(url: string): Record<string, string> {
+  return {
+    "User-Agent":
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    Accept: "image/avif,image/webp,image/apng,image/*,video/*,*/*;q=0.8",
+    Referer: new URL(url).origin + "/",
+  };
+}
+
+// The file extension for an image or video content type, e.g.
+// "video/quicktime" → "mov".
+export function extensionForContentType(contentType: string): string {
+  const subtype = contentType.split("/")[1]?.split(";")[0]?.trim() || "";
+  if (subtype === "quicktime") return "mov";
+  if (subtype === "jpeg") return "jpg";
+  return subtype || "bin";
+}

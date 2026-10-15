@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   parseHopperImportCsv,
   importHopperCsvRow,
+  getHopperVideoImports,
   type NormalizedHopperImportRow,
 } from "@/lib/actions/hopperImport";
 import { withTimeout } from "@/lib/importHelpers";
@@ -31,6 +32,10 @@ export default function HopperImportPanel({
   const [runTotal, setRunTotal] = useState(0);
   const [failures, setFailures] = useState<Failure[]>([]);
   const [finished, setFinished] = useState(false);
+  // Videos being copied in the background (2026-10-15), by import id —
+  // see lib/hopperVideoImport.ts. The import is only finished once each
+  // has landed in the Hopper or failed.
+  const [copying, setCopying] = useState<Map<string, NormalizedHopperImportRow>>(new Map());
   // A backdrop click closes it, except while an import is running —
   // the same rule as the Close button, which is hidden then.
   const backdrop = useBackdropClose(() => {
@@ -84,10 +89,13 @@ export default function HopperImportPanel({
         const result = await withTimeout(
           importHopperCsvRow(artistId, siteId, row),
           35000,
-          "Timed out after 35s — the image source may be slow or unresponsive. Try again."
+          "Timed out after 35s — the source may be slow or unresponsive. Try again."
         );
         if (!result.ok) {
           setFailures((prev) => [...prev, { row, error: result.error }]);
+        } else if (result.videoImportId) {
+          const id = result.videoImportId;
+          setCopying((prev) => new Map(prev).set(id, row));
         }
       } catch (err) {
         setFailures((prev) => [
@@ -97,7 +105,7 @@ export default function HopperImportPanel({
             error:
               err instanceof Error
                 ? err.message
-                : "Something went wrong fetching this image (possibly a slow/unresponsive source — try again).",
+                : "Something went wrong fetching this file (possibly a slow/unresponsive source — try again).",
           },
         ]);
       }
@@ -108,6 +116,30 @@ export default function HopperImportPanel({
     setFinished(true);
     router.refresh();
   };
+
+  // Checks on the videos still copying every few seconds until each has
+  // landed or failed.
+  useEffect(() => {
+    if (copying.size === 0) return;
+    const timer = setInterval(async () => {
+      const states = await getHopperVideoImports(artistId, Array.from(copying.keys()));
+      const settled = states.filter((s) => s.status !== "COPYING");
+      if (settled.length === 0) return;
+      setFailures((prev) => [
+        ...prev,
+        ...settled
+          .filter((s) => s.status === "FAILED")
+          .map((s) => ({ row: copying.get(s.id)!, error: s.error || "Could not copy the video." })),
+      ]);
+      setCopying((prev) => {
+        const next = new Map(prev);
+        settled.forEach((s) => next.delete(s.id));
+        return next;
+      });
+      router.refresh();
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [copying, artistId, router]);
 
   const handleStartImport = () => {
     if (!rows) return;
@@ -120,6 +152,7 @@ export default function HopperImportPanel({
   };
 
   const untitled = rows?.filter((r) => !r.title).length ?? 0;
+  const allDone = finished && copying.size === 0;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...backdrop}>
@@ -140,9 +173,10 @@ export default function HopperImportPanel({
         {!rows && !parsing && (
           <div>
             <p className="mb-3 text-sm text-neutral-500">
-              Choose a CSV. Expected columns: Image URL (required), Title (optional — used as the
-              starting caption). Every other detail — Type, Price, Group, and so on — gets filled
-              in later while sorting each item, same as any other Hopper item.
+              Choose a CSV. Expected columns: Image URL or Video URL (required — one per row),
+              Title (optional — used as the starting caption). Every other detail — Type, Price,
+              Group, and so on — gets filled in later while sorting each item, same as any other
+              Hopper item.
             </p>
             <input
               type="file"
@@ -161,7 +195,7 @@ export default function HopperImportPanel({
         {rows && !importing && !finished && (
           <div>
             <p className="mb-2 text-sm text-neutral-700">
-              <span className="font-medium">{fileName}</span> — {rows.length} image
+              <span className="font-medium">{fileName}</span> — {rows.length} item
               {rows.length === 1 ? "" : "s"} found.
             </p>
             {untitled > 0 && (
@@ -186,8 +220,9 @@ export default function HopperImportPanel({
               {rows.length > 8 && <p>…and {rows.length - 8} more</p>}
             </div>
             <p className="mb-4 text-xs text-neutral-400">
-              This fetches each image individually and can take a few minutes for a large file —
-              keep this tab open until it finishes.
+              This fetches each item individually and can take a few minutes for a large file —
+              keep this tab open until it finishes. Videos are copied in the background and can
+              take a little longer to appear.
             </p>
             <div className="flex gap-2">
               <button
@@ -195,7 +230,7 @@ export default function HopperImportPanel({
                 onClick={handleStartImport}
                 className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
               >
-                Import {rows.length} image{rows.length === 1 ? "" : "s"}
+                Import {rows.length} item{rows.length === 1 ? "" : "s"}
               </button>
               <button
                 type="button"
@@ -211,10 +246,15 @@ export default function HopperImportPanel({
         {(importing || finished) && rows && (
           <div>
             <p className="mb-2 text-sm text-neutral-700">
-              {finished ? "Done — " : "Importing… "}
+              {allDone ? "Done — " : "Importing… "}
               {done} of {runTotal}
               {failures.length > 0 && `, ${failures.length} failed`}
             </p>
+            {copying.size > 0 && (
+              <p className="mb-2 text-xs text-neutral-500">
+                Copying {copying.size} video{copying.size === 1 ? "" : "s"} in the background…
+              </p>
+            )}
             <div className="mb-3 h-2 w-full overflow-hidden rounded-full bg-neutral-100">
               <div
                 className="h-full bg-neutral-900 transition-all"
@@ -225,13 +265,13 @@ export default function HopperImportPanel({
               <div className="mb-3 max-h-40 overflow-y-auto rounded-md bg-red-50 p-2 text-xs text-red-700">
                 {failures.map((f, i) => (
                   <p key={i}>
-                    <span className="font-medium">{f.row.title || f.row.imageUrl}:</span>{" "}
+                    <span className="font-medium">{f.row.title || f.row.url}:</span>{" "}
                     {f.error}
                   </p>
                 ))}
               </div>
             )}
-            {finished && (
+            {allDone && (
               <div className="flex gap-2">
                 {failures.length > 0 && (
                   <button

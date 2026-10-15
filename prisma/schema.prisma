@@ -309,6 +309,7 @@ model Artist {
   subscriptionCancelledAt      DateTime?
 
   images Image[]
+  hopperVideoImports HopperVideoImport[]
   // Picked via MediaPicker from this same artist's Media Catalogue — see
   // the note by profileImageId above.
   profileImage Image? @relation("ArtistProfileImage", fields: [profileImageId], references: [id])
@@ -1765,6 +1766,36 @@ model Payment {
 
   @@index([purchaseId])
   @@index([invoiceId])
+}
+
+// A video being copied into the Hopper by its CSV import (2026-10-15).
+// Videos are too big to copy within a normal request, so a Netlify
+// background function copies each one from its source to R2 (see
+// netlify/functions/import-hopper-video-background.mts); this row tracks
+// it so the import window can show when it lands or why it failed. The
+// Image is created (status HOPPER) only once the copy has finished.
+enum HopperVideoImportStatus {
+  COPYING
+  DONE
+  FAILED
+}
+
+model HopperVideoImport {
+  id        String                  @id @default(cuid())
+  artistId  String
+  artist    Artist                  @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  sourceUrl String
+  title     String?
+  // Where the copy goes in R2, and its type.
+  key       String
+  mimeType  String
+  status    HopperVideoImportStatus @default(COPYING)
+  error     String?
+  imageId   String?
+  createdAt DateTime                @default(now())
+  updatedAt DateTime                @updatedAt
+
+  @@index([artistId])
 }
 
 model Image {

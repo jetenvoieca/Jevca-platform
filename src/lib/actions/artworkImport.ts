@@ -7,7 +7,11 @@ import Papa from "papaparse";
 import { uploadToR2, deleteFromR2 } from "@/lib/r2";
 import { generateImageSizes } from "@/lib/imageSizes";
 import { createArtworkWithRetry } from "./artworks";
-import { repairDoubledUrl } from "@/lib/importHelpers";
+import {
+  browserFetchHeaders,
+  extensionForContentType,
+  repairDoubledUrl,
+} from "@/lib/importHelpers";
 
 // Generic CSV artwork import (2026-08-11) — built for Louise Dear's
 // migration off her hard-coded prototype site, deliberately written to
@@ -108,11 +112,17 @@ export async function parseArtworkImportCsv(
 // can reuse this instead of duplicating the retry/User-Agent-spoofing
 // logic, which is genuinely non-trivial and shouldn't drift between two
 // copies.
+//
+// A URL that turns out to be a video (2026-10-15) isn't copied here —
+// videos are too big for a normal request — and comes back as
+// { video: contentType } for the caller to decide (the Hopper's import
+// hands it to a background copy; the Artwork import refuses it).
 export async function fetchAndUploadImage(
   artistId: string,
   imageUrl: string
 ): Promise<
   | { key: string; url: string; mimeType: string; thumbnailKey: string | null; displayKey: string | null }
+  | { video: string }
   | { error: string }
 > {
   // Confirmed cause of the 2026-08-11 run's ~60% failure rate: a bare
@@ -123,12 +133,7 @@ export async function fetchAndUploadImage(
   // the "works for some, fails for others" pattern seen. A realistic
   // browser-shaped request, plus a couple of retries for anything still
   // transient, fixes the large majority of these.
-  const headers = {
-    "User-Agent":
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-    Accept: "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
-    Referer: new URL(imageUrl).origin + "/",
-  };
+  const headers = browserFetchHeaders(imageUrl);
 
   let lastError = "Unknown error";
   for (let attempt = 0; attempt < 3; attempt++) {
@@ -145,12 +150,16 @@ export async function fetchAndUploadImage(
         if (res.status !== 429 && res.status < 500) break;
       } else {
         const contentType = res.headers.get("content-type") || "";
+        if (contentType.startsWith("video/")) {
+          await res.body?.cancel();
+          return { video: contentType.split(";")[0].trim() };
+        }
         if (!contentType.startsWith("image/")) {
           lastError = `URL did not return an image (got "${contentType || "unknown"}")`;
           break;
         }
         const buffer = Buffer.from(await res.arrayBuffer());
-        const ext = contentType.split("/")[1]?.split(";")[0] || "jpg";
+        const ext = extensionForContentType(contentType);
         const key = `${artistId}/${randomUUID()}-import.${ext}`;
         await uploadToR2(key, buffer, contentType);
 
@@ -193,6 +202,9 @@ export async function importArtworkRow(
   try {
     const imageResult = await fetchAndUploadImage(artistId, row.imageUrl);
     if ("error" in imageResult) return { ok: false, error: imageResult.error };
+    if ("video" in imageResult) {
+      return { ok: false, error: "This is a video — import it through the Hopper's CSV import." };
+    }
 
     const artwork = await createArtworkWithRetry(artistId, {
       catalogueName: row.title,
