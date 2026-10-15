@@ -4,7 +4,7 @@ import type { RecentSite } from "@/lib/recentSites";
 import type { ClientWords } from "@/lib/clientKind";
 
 // Colour for every section that's specific to the site you're currently
-// inside (Artworks, Media, Website, Financial, Marketing) — distinct from the
+// inside (Artworks, Website, Financial, Marketing) — distinct from the
 // default grey used for Administration/Templates/Sites, so it's
 // visually obvious which groups are "always there" versus "belong to
 // this particular site". Also reused by the evaluation-only nav
@@ -24,7 +24,6 @@ export type SiteNavKey =
   | "hopper"
   | "media"
   | "bucket"
-  | "mediaSettings"
   | "pages"
   | "analytics"
   | "account"
@@ -38,9 +37,18 @@ export type SiteNavKey =
   | "socialMedia"
   | "pr";
 
-const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "curations", "galleries", "artworkSettings"];
-
-const MEDIA_KEYS: SiteNavKey[] = ["hopper", "media", "bucket", "mediaSettings"];
+// Media's pages sit under Artworks (2026-10-15, Craig's mockup) — one
+// section for artworks and the images and videos behind them, with one
+// Settings page for both.
+const ARTWORK_KEYS: SiteNavKey[] = [
+  "artworks",
+  "curations",
+  "galleries",
+  "hopper",
+  "media",
+  "bucket",
+  "artworkSettings",
+];
 
 const WEBSITE_KEYS: SiteNavKey[] = ["pages", "analytics"];
 
@@ -82,7 +90,7 @@ export function buildSiteNavEntries({
 
   const artworkChildren: AppShellNavItem[] = [
     {
-      label: "Catalogue",
+      label: `${words.items} Catalogue`,
       href: `${base}/artworks`,
       active: active === "artworks",
       badge: artworkNeedsReviewCount,
@@ -90,18 +98,9 @@ export function buildSiteNavEntries({
     { label: "Curations", href: `${base}/curations`, active: active === "curations" },
     // "Locations" — the /galleries route, relabelled.
     { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },
-    {
-      label: "Settings",
-      href: `${base}/artworks/settings`,
-      active: active === "artworkSettings",
-      subtle: true,
-    },
-  ];
-
-  const mediaChildren: AppShellNavItem[] = [
     { label: "Hopper", href: `${base}/hopper`, active: active === "hopper", badge: hopperCount },
     {
-      label: "Catalogue",
+      label: "Media Catalogue",
       href: `${base}/media`,
       active: active === "media",
       badge: mediaNeedsReviewCount,
@@ -109,8 +108,8 @@ export function buildSiteNavEntries({
     { label: "Bucket", href: `${base}/bucket`, active: active === "bucket" },
     {
       label: "Settings",
-      href: `${base}/media/settings`,
-      active: active === "mediaSettings",
+      href: `${base}/artworks/settings`,
+      active: active === "artworkSettings",
       subtle: true,
     },
   ];
@@ -176,14 +175,6 @@ export function buildSiteNavEntries({
       color: SITE_SECTION_COLOR,
       active: sectionActive(ARTWORK_KEYS),
       children: artworkChildren,
-    },
-    {
-      label: "Media",
-      section: true,
-      key: "media",
-      color: SITE_SECTION_COLOR,
-      active: sectionActive(MEDIA_KEYS),
-      children: mediaChildren,
     },
     {
       label: "Website",

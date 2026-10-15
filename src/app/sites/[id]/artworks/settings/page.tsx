@@ -3,6 +3,8 @@ import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import SettingsListCard from "@/components/SettingsListCard";
 import ArtworkTypesCard from "@/components/ArtworkTypesCard";
 import LocationsCard from "@/components/LocationsCard";
+import MediaTagSettingsCard from "@/components/MediaTagSettingsCard";
+import { getMediaTagPresets } from "@/lib/actions/mediaCatalogue";
 import { clientWords } from "@/lib/clientKind";
 
 export default async function ArtworkSettingsPage({
@@ -13,14 +15,17 @@ export default async function ArtworkSettingsPage({
   const { id } = await params;
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
-  const settings = await getArtworkSettings(artistId);
+  const [settings, mediaTags] = await Promise.all([
+    getArtworkSettings(artistId),
+    getMediaTagPresets(artistId),
+  ]);
   const words = clientWords(settings.clientKind);
 
   return (
     <div className="p-6">
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Settings</h1>
       <p className="mb-6 text-sm text-neutral-500">
-        Manage the Type, Location, Medium and Size options offered across the {words.catalogue}.
+        Manage the options offered across the {words.catalogue} and the Media Catalogue.
         Shared across all of this {words.client.toLowerCase()}&apos;s sites.
       </p>
 
@@ -67,6 +72,9 @@ export default async function ArtworkSettingsPage({
           options={settings.paymentMethods}
           placeholder="e.g. Bank transfer, Cash…"
         />
+        {/* Media tags (2026-10-15) — moved here when the Media menu
+            joined Artworks; one Settings page for both. */}
+        <MediaTagSettingsCard artistId={artistId} siteId={id} tags={mediaTags} />
       </div>
     </div>
   );

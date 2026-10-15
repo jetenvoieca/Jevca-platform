@@ -20,7 +20,6 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
   if (pathname.startsWith(`${base}/artworks`)) return "artworks";
   if (pathname.startsWith(`${base}/curations`)) return "curations";
   if (pathname.startsWith(`${base}/galleries`)) return "galleries";
-  if (pathname === `${base}/media/settings`) return "mediaSettings";
   if (pathname.startsWith(`${base}/media`)) return "media";
   if (pathname === `${base}/hopper`) return "hopper";
   if (pathname === `${base}/bucket`) return "bucket";

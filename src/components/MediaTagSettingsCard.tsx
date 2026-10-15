@@ -17,7 +17,7 @@ export default function MediaTagSettingsCard({
 
   return (
     <div className="max-w-md rounded-lg border border-amber-100 bg-amber-50/50 p-4">
-      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-amber-700">Tags</h3>
+      <h3 className="mb-1 text-xs font-medium uppercase tracking-wide text-amber-700">Media Tags</h3>
       <p className="mb-3 text-xs text-neutral-500">
         Offered when tagging Marketing media, so wording stays consistent for searching later.
       </p>

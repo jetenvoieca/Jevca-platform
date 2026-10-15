@@ -7,8 +7,8 @@ export type PreviewNavKey = "artworks" | "hopper" | "galleries" | "sales" | "gui
 // The reduced, evaluation-only nav shown under /preview/<slug>/* — see
 // previewSites.ts. Deliberately a fixed, hand-picked list (not a
 // filtered version of buildSiteNavEntries): a genuinely different, much
-// simpler menu, laid out in the same Artworks / Media / Financial
-// grouping as the full per-site nav.
+// simpler menu, laid out in the same Artworks / Financial grouping as
+// the full per-site nav.
 //
 // "Guides" (2026-09-12) is a placeholder for now — it links to a page
 // that just says so; the real read-only guides view is later work.
@@ -29,19 +29,14 @@ export function buildPreviewNavEntries({
       section: true,
       key: "artworks",
       color: SITE_SECTION_COLOR,
-      active: active === "artworks" || active === "galleries",
+      active: active === "artworks" || active === "galleries" || active === "hopper",
       children: [
-        { label: "Catalogue", href: `${basePath}/artworks`, active: active === "artworks" },
+        {
+          label: `${words.items} Catalogue`,
+          href: `${basePath}/artworks`,
+          active: active === "artworks",
+        },
         { label: "Locations", href: `${basePath}/galleries`, active: active === "galleries" },
-      ],
-    },
-    {
-      label: "Media",
-      section: true,
-      key: "media",
-      color: SITE_SECTION_COLOR,
-      active: active === "hopper",
-      children: [
         {
           label: "Hopper",
           href: `${basePath}/hopper`,
