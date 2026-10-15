@@ -62,7 +62,7 @@ export default function SalesView({
   sales: SaleRow[];
 }) {
   const words = useClientWords();
-  const [period, setPeriod] = useState<Period>("ALL");
+  const [period, setPeriod] = useState<Period>("YEAR");
   const [currencyView, setCurrencyView] = useState<CurrencyView>("EUR");
   const [target, setTarget] = useState<SaleModalTarget | null>(null);
   const router = useRouter();
