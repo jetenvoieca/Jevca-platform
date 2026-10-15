@@ -25,6 +25,10 @@ const PERIOD_LABEL: Record<Period, string> = {
 
 const CURRENCY_SYMBOL: Record<Currency, string> = { GBP: "£", EUR: "€" };
 
+// Which currency's sales are shown: one, or both side by side.
+const CURRENCY_VIEWS = ["EUR", "GBP", "BOTH"] as const;
+type CurrencyView = (typeof CURRENCY_VIEWS)[number];
+
 function formatMoney(amount: number, currency: string) {
   return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
 }
@@ -59,14 +63,22 @@ export default function SalesView({
 }) {
   const words = useClientWords();
   const [period, setPeriod] = useState<Period>("ALL");
+  const [currencyView, setCurrencyView] = useState<CurrencyView>("EUR");
   const [target, setTarget] = useState<SaleModalTarget | null>(null);
   const router = useRouter();
 
   const currentYear = ukYearMonth(new Date())!.year;
 
+  const shownCurrencies: readonly Currency[] = currencyView === "BOTH" ? CURRENCIES : [currencyView];
+
   const filtered = useMemo(
-    () => sales.filter((s) => inPeriod(s, period, currentYear)),
-    [sales, period, currentYear]
+    () =>
+      sales.filter(
+        (s) =>
+          inPeriod(s, period, currentYear) &&
+          (currencyView === "BOTH" || s.currency === currencyView)
+      ),
+    [sales, period, currentYear, currencyView]
   );
 
   // Paid / Unpaid / Total per currency. Cancelled sales are listed but
@@ -103,21 +115,39 @@ export default function SalesView({
         {filtered.length} sale{filtered.length === 1 ? "" : "s"}
       </p>
 
-      <div className="mb-4 flex flex-wrap gap-2">
-        {PERIODS.map((p) => (
-          <button
-            key={p}
-            type="button"
-            onClick={() => setPeriod(p)}
-            className={`rounded-full border px-3 py-1 text-xs font-medium ${
-              period === p
-                ? "border-neutral-900 bg-neutral-900 text-white"
-                : "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50"
-            }`}
-          >
-            {PERIOD_LABEL[p]}
-          </button>
-        ))}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          {PERIODS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => setPeriod(p)}
+              className={`rounded-full border px-3 py-1 text-xs font-medium ${
+                period === p
+                  ? "border-neutral-900 bg-neutral-900 text-white"
+                  : "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              {PERIOD_LABEL[p]}
+            </button>
+          ))}
+        </div>
+        <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
+          {CURRENCY_VIEWS.map((v) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setCurrencyView(v)}
+              className={`px-3 py-1 font-medium ${
+                currencyView === v
+                  ? "bg-neutral-900 text-white"
+                  : "bg-white text-neutral-600 hover:bg-neutral-50"
+              }`}
+            >
+              {v === "BOTH" ? "Both" : v}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="overflow-x-auto rounded-lg border border-neutral-200">
@@ -128,12 +158,12 @@ export default function SalesView({
               <th className="px-3 py-2 font-normal">{words.item}</th>
               <th className="px-3 py-2 font-normal">Buyer</th>
               <th className="px-3 py-2 font-normal">Type</th>
-              {CURRENCIES.map((c) => (
+              {shownCurrencies.map((c) => (
                 <th key={`amount-${c}`} className="px-3 py-2 text-right font-normal">
                   Amount {CURRENCY_SYMBOL[c]}
                 </th>
               ))}
-              {CURRENCIES.map((c) => (
+              {shownCurrencies.map((c) => (
                 <th key={`net-${c}`} className="px-3 py-2 text-right font-normal">
                   Net {CURRENCY_SYMBOL[c]}
                 </th>
@@ -145,7 +175,7 @@ export default function SalesView({
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={5 + CURRENCIES.length * 2}
+                  colSpan={5 + shownCurrencies.length * 2}
                   className="px-3 py-6 text-center text-sm text-neutral-400"
                 >
                   No sales in this period.
@@ -186,12 +216,12 @@ export default function SalesView({
                 <td className="px-3 py-1.5 text-neutral-500">
                   {s.type === "FULL" ? "Full" : "Instalments"}
                 </td>
-                {CURRENCIES.map((c) => (
+                {shownCurrencies.map((c) => (
                   <td key={`amount-${c}`} className={moneyCell}>
                     {s.currency === c ? formatMoney(parseFloat(s.totalAmount), c) : ""}
                   </td>
                 ))}
-                {CURRENCIES.map((c) => (
+                {shownCurrencies.map((c) => (
                   <td key={`net-${c}`} className={moneyCell}>
                     {s.currency === c ? formatMoney(parseFloat(s.netAmount), c) : ""}
                   </td>
@@ -212,12 +242,12 @@ export default function SalesView({
                   <td colSpan={4} className="px-3 py-1.5 text-right">
                     {label}
                   </td>
-                  {CURRENCIES.map((c) => (
+                  {shownCurrencies.map((c) => (
                     <td key={`amount-${c}`} className={moneyCell}>
                       {formatMoney(sums[c].amount, c)}
                     </td>
                   ))}
-                  {CURRENCIES.map((c) => (
+                  {shownCurrencies.map((c) => (
                     <td key={`net-${c}`} className={moneyCell}>
                       {formatMoney(sums[c].net, c)}
                     </td>
