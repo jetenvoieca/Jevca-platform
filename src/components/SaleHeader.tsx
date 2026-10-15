@@ -16,6 +16,9 @@ import EditSaleButton from "@/components/EditSaleButton";
 // `onTitleClick` (optional) makes the image and details clickable — the
 // sale card uses it to return from one sale's panel to the summary of
 // the sale and its framing/delivery charges (see GallerySaleCard).
+//
+// `onOpenCatalogue` (optional) adds a Catalogue button under Close that
+// opens the work in the Artwork Catalogue (2026-10-15, Craig's mockup).
 export default function SaleHeader({
   artwork,
   purchase,
@@ -23,6 +26,7 @@ export default function SaleHeader({
   onChanged,
   onClose,
   onTitleClick,
+  onOpenCatalogue,
 }: {
   artwork: ArtworkDetail;
   purchase: PurchaseDetail | null;
@@ -30,6 +34,7 @@ export default function SaleHeader({
   onChanged?: () => void;
   onClose: () => void;
   onTitleClick?: () => void;
+  onOpenCatalogue?: () => void;
 }) {
   const mainImage =
     artwork.images.find((i) => i.id === artwork.mainImageId) ?? artwork.images[0] ?? null;
@@ -67,15 +72,26 @@ export default function SaleHeader({
         </div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-2">
-        {onChanged && <EditSaleButton purchase={purchase} siteId={siteId} onChanged={onChanged} />}
-        <button
-          type="button"
-          onClick={onClose}
-          className="rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
-        >
-          Close
-        </button>
+      <div className="flex shrink-0 flex-col items-end gap-2 self-stretch">
+        <div className="flex items-center gap-2">
+          {onChanged && <EditSaleButton purchase={purchase} siteId={siteId} onChanged={onChanged} />}
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
+          >
+            Close
+          </button>
+        </div>
+        {onOpenCatalogue && (
+          <button
+            type="button"
+            onClick={onOpenCatalogue}
+            className="mt-auto rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
+          >
+            Catalogue
+          </button>
+        )}
       </div>
     </div>
   );

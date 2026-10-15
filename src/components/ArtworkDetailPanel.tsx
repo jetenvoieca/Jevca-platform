@@ -160,10 +160,16 @@ export default function ArtworkDetailPanel({
   // Artwork.priceCurrency). Tracked live so the label follows the
   // Location dropdown, including a Location just added from it.
   const [locationValue, setLocationValue] = useState(artwork.location || "");
-  const [locationTypes, setLocationTypes] = useState(
-    () => new Map(settings.locations.map((l) => [l.name, l.type]))
+  // Every Location by name — its type for the price label, and its
+  // record for the Location's View button (2026-10-15, Craig's mockup:
+  // opens the work in its Location).
+  const [locationsByName, setLocationsByName] = useState(
+    () => new Map(settings.locations.map((l) => [l.name, l]))
   );
-  const atGallery = locationTypes.get(locationValue) === "GALLERY";
+  const currentLocation = locationsByName.get(locationValue) ?? null;
+  const atGallery = currentLocation?.type === "GALLERY";
+  const viewInLocation = (location: LocationSummary) =>
+    router.push(`/sites/${siteId}/galleries?location=${location.customerId}&work=${artwork.id}`);
   const priceLabel = atGallery ? "Consigned price" : "Offered price";
 
   // The artwork's sale, once it has one (2026-10-14, Craig's mockup):
@@ -286,9 +292,9 @@ export default function ArtworkDetailPanel({
       `Is "${name}" a ${words.location} you consign to?\n\nOK = ${words.location}\nCancel = Own (e.g. your studio)`
     );
     const type = isGallery ? "GALLERY" : "OWN";
-    setLocationTypes((prev) => new Map(prev).set(name, type));
     const result = await createLocation(artistId, siteId, name, type);
     if ("error" in result) alert(result.error);
+    else setLocationsByName((prev) => new Map(prev).set(result.name, result));
   };
 
   return (
@@ -406,6 +412,7 @@ export default function ArtworkDetailPanel({
               setSizeValue(size);
             }}
             onLocationChange={setLocationValue}
+            onViewLocation={currentLocation ? () => viewInLocation(currentLocation) : undefined}
             onAddType={handleAddType}
             onAddMedium={handleAddMedium}
             onAddLocation={handleAddLocation}

@@ -1218,6 +1218,9 @@ export default function GalleriesView({
                     onChanged={workView === "image" && shownSale ? undefined : refreshAfterSaleChange}
                     onClose={closeWork}
                     onTitleClick={() => setFocusedSaleId(null)}
+                    onOpenCatalogue={() =>
+                      router.push(`/sites/${siteId}/artworks?selected=${selectedWorkDetail.id}`)
+                    }
                   />
                 </div>
 

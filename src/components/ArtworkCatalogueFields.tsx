@@ -80,6 +80,7 @@ export default function ArtworkCatalogueFields({
   onAutosave,
   onTypeOrSizeChange,
   onLocationChange,
+  onViewLocation,
   children,
   onAddType,
   onAddMedium,
@@ -99,6 +100,9 @@ export default function ArtworkCatalogueFields({
   // Fired on Location change, so the Catalogue tab can label its price
   // "Consigned price" while the Location is a Gallery.
   onLocationChange?: (location: string) => void;
+  // A View button beside Location, shown when given: opens the work in
+  // its Location.
+  onViewLocation?: () => void;
   children?: React.ReactNode;
   // Inline "add new preset" support (2026-09-11, direct request — "all
   // drop-downs add ability to add to lists"). Each is a small async
@@ -266,33 +270,44 @@ export default function ArtworkCatalogueFields({
       <input type="hidden" name="availableQty" value={values.availableQty} />
       <div>
         <label className={labelCls}>Location</label>
-        <select
-          name="location"
-          value={locationValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            const form = e.currentTarget.form!;
-            if (v === ADD_NEW) {
-              addNew("Location", onAddLocation, setLocationValue, form, onLocationChange);
-              return;
-            }
-            setLocationValue(v);
-            onLocationChange?.(v);
-            onAutosave?.(form);
-          }}
-          className={inputCls}
-        >
-          <option value="">Choose from list…</option>
-          {withCurrent(
-            settings.locations.map((l) => l.name),
-            locationValue
-          ).map((l) => (
-            <option key={l} value={l}>
-              {l}
-            </option>
-          ))}
-          {onAddLocation && <option value={ADD_NEW}>+ Add new…</option>}
-        </select>
+        <div className="flex gap-1">
+          <select
+            name="location"
+            value={locationValue}
+            onChange={(e) => {
+              const v = e.target.value;
+              const form = e.currentTarget.form!;
+              if (v === ADD_NEW) {
+                addNew("Location", onAddLocation, setLocationValue, form, onLocationChange);
+                return;
+              }
+              setLocationValue(v);
+              onLocationChange?.(v);
+              onAutosave?.(form);
+            }}
+            className={`${inputCls} min-w-0`}
+          >
+            <option value="">Choose from list…</option>
+            {withCurrent(
+              settings.locations.map((l) => l.name),
+              locationValue
+            ).map((l) => (
+              <option key={l} value={l}>
+                {l}
+              </option>
+            ))}
+            {onAddLocation && <option value={ADD_NEW}>+ Add new…</option>}
+          </select>
+          {onViewLocation && (
+            <button
+              type="button"
+              onClick={onViewLocation}
+              className="shrink-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-600 hover:bg-neutral-50"
+            >
+              View
+            </button>
+          )}
+        </div>
       </div>
       {/* A plain single-column cell (2026-09-12, direct request — "date
           field too long, shorten and reposition") — sits right next to
