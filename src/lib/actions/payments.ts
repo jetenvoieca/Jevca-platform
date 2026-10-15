@@ -23,6 +23,7 @@ import { APP_URL } from "@/lib/appUrl";
 import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
 import { invoiceLockError } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
+import { isCurrency } from "@/lib/currencies";
 
 // No revalidatePath(`/sites/${siteId}/artworks`) calls in this file
 // (2026-08-15 removal) — that route is force-dynamic (never statically
@@ -447,6 +448,16 @@ export async function startArtworkSaleAndEnterCard(
 
 // ---------- Gallery sales — no Stripe involved at all ----------
 
+// A work has one price (offeredPrice, mirrored into presentationPrice —
+// see schema.prisma), shown as "Consigned price" while at a gallery.
+// When a consigned sale is recorded, or its price edited, at a
+// different price or currency, the work's price follows the sale
+// (2026-10-15, Craig's decision).
+function consignedPriceFromSale(totalAmount: string, currency: string) {
+  const price = parseFloat(totalAmount).toFixed(2);
+  return { offeredPrice: price, presentationPrice: price, priceCurrency: currency };
+}
+
 // Reworked 2026-08-31 to be started only from the Location's own
 // Consigned Works panel (GalleriesView), never typed from the Artwork
 // Catalogue's Payment tab any more — see the matching removal in
@@ -500,8 +511,7 @@ export async function startGallerySale(
   if (!artwork) return { ok: false, error: "Not found — it may have been deleted." };
 
   const totalAmount = (formData.get("totalAmount") as string)?.trim();
-  const currencyRaw = (formData.get("currency") as string)?.trim().toUpperCase();
-  const currency = currencyRaw || "GBP";
+  const currency = (formData.get("currency") as string)?.trim().toUpperCase() ?? "";
   const commissionPercent = (formData.get("commissionPercent") as string)?.trim() || null;
   const depositPaid = (formData.get("depositPaid") as string)?.trim() || null;
   const buyerName = (formData.get("buyerName") as string)?.trim() || customer.name;
@@ -509,6 +519,8 @@ export async function startGallerySale(
   const saleDateRaw = (formData.get("saleDate") as string)?.trim();
 
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
+  if (!Number.isFinite(parseFloat(totalAmount))) return { ok: false, error: "That price isn't valid." };
+  if (!isCurrency(currency)) return { ok: false, error: "That currency isn't supported." };
 
   let createdAt: Date | undefined;
   if (saleDateRaw) {
@@ -538,8 +550,12 @@ export async function startGallerySale(
   // Recording the sale is itself the commit (2026-09-22 — see the
   // file-level Availability note above) — straight to SOLD, not
   // RESERVED. Whether the Net Due balance has actually been paid is
-  // tracked separately (Purchase.status, still ACTIVE here).
-  await db.artwork.update({ where: { id: artworkId }, data: { availability: "SOLD" } });
+  // tracked separately (Purchase.status, still ACTIVE here). The work's
+  // price becomes the price it sold for (see consignedPriceFromSale).
+  await db.artwork.update({
+    where: { id: artworkId },
+    data: { availability: "SOLD", ...consignedPriceFromSale(totalAmount, currency) },
+  });
 
   return { ok: true, purchaseId: purchase.id };
 }
@@ -669,10 +685,22 @@ export async function updateGallerySaleAmount(
   const currency = (formData.get("currency") as string)?.trim().toUpperCase();
 
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
-  if (!currency) return { ok: false, error: "The currency is required." };
-  if (Number.isNaN(parseFloat(totalAmount))) return { ok: false, error: "That price isn't valid." };
+  if (!isCurrency(currency)) return { ok: false, error: "That currency isn't supported." };
+  if (!Number.isFinite(parseFloat(totalAmount))) return { ok: false, error: "That price isn't valid." };
 
-  await db.purchase.update({ where: { id: purchaseId }, data: { totalAmount, currency } });
+  // An older framing/delivery charge sale has its own amount, not the
+  // work's price, so only the work's own sale moves the work's price.
+  await db.$transaction([
+    db.purchase.update({ where: { id: purchaseId }, data: { totalAmount, currency } }),
+    ...(purchase.chargeKind
+      ? []
+      : [
+          db.artwork.update({
+            where: { id: purchase.artworkId },
+            data: consignedPriceFromSale(totalAmount, currency),
+          }),
+        ]),
+  ]);
 
   return { ok: true };
 }

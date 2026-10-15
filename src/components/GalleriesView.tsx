@@ -271,6 +271,8 @@ export default function GalleriesView({
       // harmless to set unconditionally since saleTotalAmount is never
       // read once a sale already exists.
       setSaleTotalAmount(detail?.presentationPrice || "");
+      // …and to the work's own currency (2026-10-15).
+      if (detail?.priceCurrency) setSaleCurrency(detail.priceCurrency);
       setWorkLoading(false);
     });
   };
