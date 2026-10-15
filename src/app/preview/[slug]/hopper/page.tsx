@@ -32,6 +32,7 @@ export default async function PreviewHopperPage({
       artistId={artistId}
       queue={queue}
       artworkSettings={settings}
+      artistVersion
     />
   );
 }

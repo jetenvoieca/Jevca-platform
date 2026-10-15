@@ -87,6 +87,7 @@ export default function HopperView({
   artistId,
   queue,
   artworkSettings,
+  artistVersion = false,
 }: {
   siteId: string;
   // Where the Processed log's "Linked to X"/"New artwork" entries should
@@ -104,6 +105,10 @@ export default function HopperView({
   // Used by the inline "quick catalogue" fields shown after "Create new
   // artwork" — see the note by that button in SortingCard.
   artworkSettings: ArtworkSettings;
+  // The artists' version (2026-10-15, Craig's mockup): the sorting card
+  // only offers Bin, New Artwork, Ancillary image (added to an existing
+  // artwork as a related image) and Crop.
+  artistVersion?: boolean;
 }) {
   const words = useClientWords();
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
@@ -779,6 +784,7 @@ export default function HopperView({
                 item={current}
                 isPending={isPending}
                 settings={artworkSettings}
+                artistVersion={artistVersion}
                 onBin={() => handleBin(current)}
                 onAddToMedia={() => handleAddToMedia(current)}
                 onAddToBucket={() => handleAddToBucket(current)}
@@ -900,6 +906,7 @@ function SortingCard({
   item,
   isPending,
   settings,
+  artistVersion,
   onBin,
   onAddToMedia,
   onAddToBucket,
@@ -912,6 +919,7 @@ function SortingCard({
   item: HopperItem;
   isPending: boolean;
   settings: ArtworkSettings;
+  artistVersion: boolean;
   onBin: () => void;
   onAddToMedia: () => void;
   onAddToBucket: () => void;
@@ -998,44 +1006,77 @@ function SortingCard({
           >
             Bin
           </button>
-          <button
-            type="button"
-            onClick={onAddToMedia}
-            disabled={isPending}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Add to Media
-          </button>
-          <button
-            type="button"
-            onClick={onAddToBucket}
-            disabled={isPending}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Add to Bucket
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setShowManageForm(true);
-              setShowQuickForm(false);
-            }}
-            disabled={isPending || showManageForm}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Manage {words.item}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setShowQuickForm(true);
-              setShowManageForm(false);
-            }}
-            disabled={isPending || showQuickForm}
-            className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-          >
-            Create new {words.item.toLowerCase()}
-          </button>
+          {!artistVersion && (
+            <>
+              <button
+                type="button"
+                onClick={onAddToMedia}
+                disabled={isPending}
+                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Add to Media
+              </button>
+              <button
+                type="button"
+                onClick={onAddToBucket}
+                disabled={isPending}
+                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Add to Bucket
+              </button>
+            </>
+          )}
+          {artistVersion ? (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickForm(true);
+                  setShowManageForm(false);
+                }}
+                disabled={isPending || showQuickForm}
+                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                New {words.item}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowManageForm(true);
+                  setShowQuickForm(false);
+                }}
+                disabled={isPending || showManageForm}
+                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Ancillary image
+              </button>
+            </>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowManageForm(true);
+                  setShowQuickForm(false);
+                }}
+                disabled={isPending || showManageForm}
+                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Manage {words.item}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowQuickForm(true);
+                  setShowManageForm(false);
+                }}
+                disabled={isPending || showQuickForm}
+                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Create new {words.item.toLowerCase()}
+              </button>
+            </>
+          )}
           {item.kind === "PHOTO" && (
             <button
               type="button"
@@ -1056,6 +1097,7 @@ function SortingCard({
       {showManageForm && (
         <ManageArtworkPanel
           artistId={artistId}
+          relatedOnly={artistVersion}
           managing={managingArtwork}
           onCancel={() => setShowManageForm(false)}
           onDone={async (artworkId, artworkName, mode, relatedName) => {
@@ -1085,13 +1127,17 @@ function SortingCard({
   );
 }
 
+// relatedOnly (the artists' version's "Ancillary image"): the image is
+// always added as a related image — no Main / Related choice.
 function ManageArtworkPanel({
   artistId,
+  relatedOnly,
   managing,
   onCancel,
   onDone,
 }: {
   artistId: string;
+  relatedOnly: boolean;
   managing: boolean;
   onCancel: () => void;
   onDone: (
@@ -1105,7 +1151,7 @@ function ManageArtworkPanel({
   const [selected, setSelected] = useState<{ id: string; catalogueName: string } | null>(
     null
   );
-  const [mode, setMode] = useState<"main" | "related">("main");
+  const [mode, setMode] = useState<"main" | "related">(relatedOnly ? "related" : "main");
   const [relatedName, setRelatedName] = useState("");
 
   return (
@@ -1136,35 +1182,37 @@ function ManageArtworkPanel({
         )}
       </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={() => setMode("main")}
-          className={`flex-1 rounded-md border px-3 py-[6.4px] text-sm font-medium ${
-            mode === "main"
-              ? "border-neutral-900 bg-neutral-900 text-white"
-              : "border-neutral-300 hover:bg-neutral-50"
-          }`}
-        >
-          Make Main image
-        </button>
-        <button
-          type="button"
-          onClick={() => setMode("related")}
-          className={`flex-1 rounded-md border px-3 py-[6.4px] text-sm font-medium ${
-            mode === "related"
-              ? "border-neutral-900 bg-neutral-900 text-white"
-              : "border-neutral-300 hover:bg-neutral-50"
-          }`}
-        >
-          Make related image
-        </button>
-      </div>
+      {!relatedOnly && (
+        <div className="flex gap-2">
+          <button
+            type="button"
+            onClick={() => setMode("main")}
+            className={`flex-1 rounded-md border px-3 py-[6.4px] text-sm font-medium ${
+              mode === "main"
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-neutral-300 hover:bg-neutral-50"
+            }`}
+          >
+            Make Main image
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("related")}
+            className={`flex-1 rounded-md border px-3 py-[6.4px] text-sm font-medium ${
+              mode === "related"
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-neutral-300 hover:bg-neutral-50"
+            }`}
+          >
+            Make related image
+          </button>
+        </div>
+      )}
 
       {mode === "related" && (
         <div>
           <label className="mb-1 block text-sm font-medium text-neutral-700">
-            Name of Related image
+            {relatedOnly ? "Name of ancillary image" : "Name of Related image"}
           </label>
           <input
             type="text"
