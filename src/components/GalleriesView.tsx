@@ -22,6 +22,7 @@ import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
+import { ACTION_BUTTON_LOOK } from "@/components/ActionPanel";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
 import InvoiceModal from "@/components/InvoiceModal";
 import SaleHeader from "@/components/SaleHeader";
@@ -1345,7 +1346,7 @@ export default function GalleriesView({
                         type="button"
                         onClick={handleRecordSale}
                         disabled={workPending || !saleTotalAmount.trim()}
-                        className="mt-3 w-full rounded-md bg-[#5E5E5E] px-3 py-2 text-sm text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50"
+                        className={`mt-3 w-full rounded-md px-3 py-2 ${ACTION_BUTTON_LOOK}`}
                       >
                         Record Sale
                       </button>

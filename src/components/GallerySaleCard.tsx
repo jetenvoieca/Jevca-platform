@@ -32,10 +32,10 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import InvoiceModal from "@/components/InvoiceModal";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 import StripeCardForm from "@/components/StripeCardForm";
+import { ACTION_BUTTON_LOOK } from "@/components/ActionPanel";
 
-// Every action-panel button: #5E5E5E with #F9F6EE text.
-const actionButtonCls =
-  "rounded-md bg-[#5E5E5E] px-3 py-2 text-sm text-[#F9F6EE] hover:bg-[#4a4a4a] disabled:opacity-50";
+// Every action-panel button: the shared outlined look (ActionPanel.tsx).
+const actionButtonCls = `rounded-md px-3 py-2 ${ACTION_BUTTON_LOOK}`;
 
 // Inputs inside the sliding panel — centred text, per mockup.
 const drawerInputCls =

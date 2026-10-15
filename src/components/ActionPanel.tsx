@@ -20,8 +20,11 @@ import type { ReactNode } from "react";
 
 // Shared by both button sizes, so they can't drift apart.
 const PANEL_CLS = "rounded-md border border-[#5E5E5E] bg-[#F9F6EF]";
-const BUTTON_CLS =
-  "h-[27px] rounded border border-[#5E5E5E] bg-[#F9F6EF] px-2 text-sm text-[#5E5E5E] hover:bg-[#EDE8DC] disabled:opacity-50";
+// The outlined look itself (no size), also used by the sale buttons in
+// locations so every action button looks the same.
+export const ACTION_BUTTON_LOOK =
+  "border border-[#5E5E5E] bg-[#F9F6EF] text-sm text-[#5E5E5E] hover:bg-[#EDE8DC] disabled:opacity-50";
+const BUTTON_CLS = `h-[27px] rounded px-2 ${ACTION_BUTTON_LOOK}`;
 
 export function ActionPanel({
   children,
