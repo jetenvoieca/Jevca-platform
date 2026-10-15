@@ -312,6 +312,8 @@ model Artist {
   hopperVideoImports HopperVideoImport[]
   // Marketing → Social Media (2026-10-15). See SocialPost.
   socialPosts SocialPost[]
+  // The artist's Instagram, connected for posting (2026-10-15).
+  instagramConnection InstagramConnection?
   // Picked via MediaPicker from this same artist's Media Catalogue — see
   // the note by profileImageId above.
   profileImage Image? @relation("ArtistProfileImage", fields: [profileImageId], references: [id])
@@ -1798,6 +1800,21 @@ model HopperVideoImport {
   updatedAt DateTime                @updatedAt
 
   @@index([artistId])
+}
+
+// An artist's Instagram account, connected for posting (2026-10-15) —
+// see lib/instagram.ts. The access token lasts 60 days and is renewed
+// before then; it is kept encrypted (lib/secretBox.ts).
+model InstagramConnection {
+  id                   String   @id @default(cuid())
+  artistId             String   @unique
+  artist               Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  instagramUserId      String
+  username             String
+  accessTokenEncrypted String
+  expiresAt            DateTime
+  connectedAt          DateTime @default(now())
+  updatedAt            DateTime @updatedAt
 }
 
 // Marketing → Social Media (2026-10-15): a post for the artist's
