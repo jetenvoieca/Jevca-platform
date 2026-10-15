@@ -56,3 +56,13 @@ export function formatDateTime(value: DateInput): string {
   const d = parse(value);
   return d ? dateTimeFormat.format(d) : "";
 }
+
+// The UK calendar year and month (1–12) a timestamp falls in — for
+// filtering by year or quarter on the same calendar the dates are shown in.
+export function ukYearMonth(value: DateInput): { year: number; month: number } | null {
+  const d = parse(value);
+  if (!d) return null;
+  const parts = dateFormat.formatToParts(d);
+  const part = (type: string) => Number(parts.find((p) => p.type === type)?.value);
+  return { year: part("year"), month: part("month") };
+}

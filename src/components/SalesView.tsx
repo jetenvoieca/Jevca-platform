@@ -2,22 +2,52 @@
 
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { formatDate } from "@/lib/formatDate";
+import { formatDate, ukYearMonth } from "@/lib/formatDate";
+import { CURRENCIES, type Currency } from "@/lib/currencies";
 import { SaleStatusBadge } from "@/components/GallerySaleCard";
 import SaleModal, { type SaleModalTarget } from "@/components/SaleModal";
 import type { SaleRow } from "@/lib/actions/sales";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
-const STATUS_FILTERS = ["ALL", "ACTIVE", "COMPLETED", "ABANDONED"] as const;
+// Sale date periods: all time, this (UK calendar) year, or one quarter
+// of this year.
+const PERIODS = ["ALL", "YEAR", "Q1", "Q2", "Q3", "Q4"] as const;
+type Period = (typeof PERIODS)[number];
 
-function formatMoney(amount: string, currency: string) {
-  const n = parseFloat(amount);
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
+const PERIOD_LABEL: Record<Period, string> = {
+  ALL: "All time",
+  YEAR: "This Year",
+  Q1: "Q1",
+  Q2: "Q2",
+  Q3: "Q3",
+  Q4: "Q4",
+};
+
+const CURRENCY_SYMBOL: Record<Currency, string> = { GBP: "£", EUR: "€" };
+
+function formatMoney(amount: number, currency: string) {
+  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
+}
+
+function inPeriod(sale: SaleRow, period: Period, year: number): boolean {
+  if (period === "ALL") return true;
+  const date = ukYearMonth(sale.createdAt);
+  if (!date || date.year !== year) return false;
+  if (period === "YEAR") return true;
+  const quarter = Math.ceil(date.month / 3);
+  return period === `Q${quarter}`;
+}
+
+type Sums = Record<Currency, { amount: number; net: number }>;
+
+function emptySums(): Sums {
+  return Object.fromEntries(CURRENCIES.map((c) => [c, { amount: 0, net: 0 }])) as Sums;
 }
 
 // One site's Sales list. Clicking a row opens the shared SaleModal —
 // the same modal Consolidated Sales and the Inbox use, so a sale looks
-// and behaves identically wherever it's opened.
+// and behaves identically wherever it's opened. Every sale is listed,
+// cancelled ones included; amounts sit in one column per currency.
 export default function SalesView({
   siteId,
   artistId,
@@ -28,75 +58,97 @@ export default function SalesView({
   sales: SaleRow[];
 }) {
   const words = useClientWords();
-  const [filter, setFilter] = useState<(typeof STATUS_FILTERS)[number]>("ALL");
+  const [period, setPeriod] = useState<Period>("ALL");
   const [target, setTarget] = useState<SaleModalTarget | null>(null);
   const router = useRouter();
 
+  const currentYear = ukYearMonth(new Date())!.year;
+
   const filtered = useMemo(
-    () => (filter === "ALL" ? sales : sales.filter((s) => s.status === filter)),
-    [sales, filter]
+    () => sales.filter((s) => inPeriod(s, period, currentYear)),
+    [sales, period, currentYear]
   );
 
-  // Completed sales, summed per currency (GBP and EUR kept separate).
+  // Paid / Unpaid / Total per currency. Cancelled sales are listed but
+  // not counted.
   const totals = useMemo(() => {
-    const byCurrency: Record<string, number> = {};
-    let count = 0;
-    for (const s of sales) {
-      if (s.status !== "COMPLETED") continue;
-      count++;
-      byCurrency[s.currency] = (byCurrency[s.currency] || 0) + parseFloat(s.totalAmount);
+    const paid = emptySums();
+    const unpaid = emptySums();
+    const total = emptySums();
+    for (const s of filtered) {
+      if (s.status === "ABANDONED") continue;
+      const currency = s.currency as Currency;
+      if (!CURRENCIES.includes(currency)) continue;
+      const amount = parseFloat(s.totalAmount);
+      const net = parseFloat(s.netAmount);
+      const bucket = s.status === "COMPLETED" ? paid : unpaid;
+      bucket[currency].amount += amount;
+      bucket[currency].net += net;
+      total[currency].amount += amount;
+      total[currency].net += net;
     }
-    return { count, byCurrency };
-  }, [sales]);
+    return [
+      { label: "Paid", sums: paid },
+      { label: "Unpaid", sums: unpaid },
+      { label: "Total", sums: total },
+    ];
+  }, [filtered]);
+
+  const moneyCell = "px-3 py-1.5 text-right whitespace-nowrap";
 
   return (
-    <div className="p-6">
+    <div className="max-w-6xl p-6">
       <h1 className="mb-1 text-2xl font-semibold text-neutral-900">Sales</h1>
       <p className="mb-4 text-sm text-neutral-500">
-        {totals.count === 0
-          ? "No completed sales yet."
-          : `${totals.count} completed sale${totals.count === 1 ? "" : "s"} · ${Object.entries(
-              totals.byCurrency
-            )
-              .map(([cur, amt]) => formatMoney(amt.toFixed(2), cur))
-              .join(" · ")}`}
+        {filtered.length} sale{filtered.length === 1 ? "" : "s"}
       </p>
 
-      <div className="mb-4 flex gap-2">
-        {STATUS_FILTERS.map((f) => (
+      <div className="mb-4 flex flex-wrap gap-2">
+        {PERIODS.map((p) => (
           <button
-            key={f}
+            key={p}
             type="button"
-            onClick={() => setFilter(f)}
-            className={`rounded-full px-3 py-1 text-xs font-medium ${
-              filter === f
-                ? "bg-neutral-900 text-white"
-                : "bg-neutral-100 text-neutral-600 hover:bg-neutral-200"
+            onClick={() => setPeriod(p)}
+            className={`rounded-full border px-3 py-1 text-xs font-medium ${
+              period === p
+                ? "border-neutral-900 bg-neutral-900 text-white"
+                : "border-neutral-300 bg-white text-neutral-600 hover:bg-neutral-50"
             }`}
           >
-            {f === "ALL" ? "All" : f.charAt(0) + f.slice(1).toLowerCase()}
+            {PERIOD_LABEL[p]}
           </button>
         ))}
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-neutral-200">
+      <div className="overflow-x-auto rounded-lg border border-neutral-200">
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-neutral-200 bg-neutral-50 text-left text-xs text-neutral-400">
+              <th className="px-3 py-2 font-normal">Date</th>
               <th className="px-3 py-2 font-normal">{words.item}</th>
               <th className="px-3 py-2 font-normal">Buyer</th>
               <th className="px-3 py-2 font-normal">Type</th>
-              <th className="px-3 py-2 font-normal">Amount</th>
-              <th className="px-3 py-2 font-normal">Net</th>
+              {CURRENCIES.map((c) => (
+                <th key={`amount-${c}`} className="px-3 py-2 text-right font-normal">
+                  Amount {CURRENCY_SYMBOL[c]}
+                </th>
+              ))}
+              {CURRENCIES.map((c) => (
+                <th key={`net-${c}`} className="px-3 py-2 text-right font-normal">
+                  Net {CURRENCY_SYMBOL[c]}
+                </th>
+              ))}
               <th className="px-3 py-2 font-normal">Status</th>
-              <th className="px-3 py-2 font-normal">Date</th>
             </tr>
           </thead>
           <tbody>
             {filtered.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-3 py-6 text-center text-sm text-neutral-400">
-                  Nothing here yet.
+                <td
+                  colSpan={5 + CURRENCIES.length * 2}
+                  className="px-3 py-6 text-center text-sm text-neutral-400"
+                >
+                  No sales in this period.
                 </td>
               </tr>
             )}
@@ -110,28 +162,71 @@ export default function SalesView({
                   target?.purchaseId === s.purchaseId ? "bg-neutral-50" : ""
                 }`}
               >
-                <td className="flex items-center gap-2 px-3 py-2">
-                  {s.artworkThumbnail ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={s.artworkThumbnail} alt="" className="h-8 w-8 rounded object-cover" />
-                  ) : (
-                    <div className="h-8 w-8 rounded bg-neutral-100" />
-                  )}
-                  <span className="truncate">{s.artworkTitle}</span>
+                <td className="px-3 py-1.5 whitespace-nowrap text-neutral-400">
+                  {formatDate(s.createdAt)}
                 </td>
-                <td className="px-3 py-2 text-neutral-600">{s.buyerName || s.buyerEmail}</td>
-                <td className="px-3 py-2 text-neutral-500">
+                <td className="px-3 py-1.5">
+                  <div className="flex max-w-[16rem] items-center gap-2">
+                    {s.artworkThumbnail ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={s.artworkThumbnail}
+                        alt=""
+                        className="h-7 w-7 shrink-0 rounded object-cover"
+                      />
+                    ) : (
+                      <div className="h-7 w-7 shrink-0 rounded bg-neutral-100" />
+                    )}
+                    <span className="truncate">{s.artworkTitle}</span>
+                  </div>
+                </td>
+                <td className="max-w-[12rem] truncate px-3 py-1.5 text-neutral-600">
+                  {s.buyerName || s.buyerEmail}
+                </td>
+                <td className="px-3 py-1.5 text-neutral-500">
                   {s.type === "FULL" ? "Full" : "Instalments"}
                 </td>
-                <td className="px-3 py-2">{formatMoney(s.totalAmount, s.currency)}</td>
-                <td className="px-3 py-2">{formatMoney(s.netAmount, s.currency)}</td>
-                <td className="px-3 py-2">
+                {CURRENCIES.map((c) => (
+                  <td key={`amount-${c}`} className={moneyCell}>
+                    {s.currency === c ? formatMoney(parseFloat(s.totalAmount), c) : ""}
+                  </td>
+                ))}
+                {CURRENCIES.map((c) => (
+                  <td key={`net-${c}`} className={moneyCell}>
+                    {s.currency === c ? formatMoney(parseFloat(s.netAmount), c) : ""}
+                  </td>
+                ))}
+                <td className="px-3 py-1.5">
                   <SaleStatusBadge status={s.status} />
                 </td>
-                <td className="px-3 py-2 text-neutral-400">{formatDate(s.createdAt)}</td>
               </tr>
             ))}
           </tbody>
+          {filtered.length > 0 && (
+            <tfoot className="border-t border-neutral-300 bg-neutral-50">
+              {totals.map(({ label, sums }) => (
+                <tr
+                  key={label}
+                  className={label === "Total" ? "font-semibold text-neutral-900" : "text-neutral-600"}
+                >
+                  <td colSpan={4} className="px-3 py-1.5 text-right">
+                    {label}
+                  </td>
+                  {CURRENCIES.map((c) => (
+                    <td key={`amount-${c}`} className={moneyCell}>
+                      {formatMoney(sums[c].amount, c)}
+                    </td>
+                  ))}
+                  {CURRENCIES.map((c) => (
+                    <td key={`net-${c}`} className={moneyCell}>
+                      {formatMoney(sums[c].net, c)}
+                    </td>
+                  ))}
+                  <td />
+                </tr>
+              ))}
+            </tfoot>
+          )}
         </table>
       </div>
 
