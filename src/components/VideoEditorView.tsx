@@ -10,7 +10,9 @@ import {
   setClipTrim,
   initializeClipDuration,
   splitClip,
+  addPicksToTimeline,
 } from "@/lib/actions/videoEditor";
+import MediaPicker from "@/components/MediaPicker";
 import { renderVideo, discardRenderResult } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
@@ -45,12 +47,14 @@ type RenderStatus = {
 
 export default function VideoEditorView({
   siteId,
+  artistId,
   renderId,
   initialClips,
   renderStatus,
   tagPresets,
 }: {
   siteId: string;
+  artistId: string;
   renderId: string;
   initialClips: Clip[];
   renderStatus: RenderStatus;
@@ -62,7 +66,17 @@ export default function VideoEditorView({
   const [rendering, setRendering] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
   const router = useRouter();
+
+  // Add Media (2026-10-15): media and artworks picked together, added to
+  // the end of the video.
+  const addPicks = async (picks: { imageIds: string[]; artworkIds: string[] }) => {
+    setAddError(null);
+    const result = await addPicksToTimeline(artistId, siteId, picks);
+    if (!result.ok) setAddError(result.error);
+    router.refresh();
+  };
 
   useEffect(() => {
     setClips(initialClips);
@@ -222,7 +236,25 @@ export default function VideoEditorView({
               )}
             </p>
           </div>
-          <div className="text-right">
+          <div className="flex items-start gap-3 text-right">
+            {!renderStatus && (
+              <MediaPicker
+                artistId={artistId}
+                siteId={siteId}
+                mode="multi"
+                mediaKinds={["PHOTO", "VIDEO"]}
+                variant="button"
+                label="Add Media"
+                withArtworks
+                onSelect={(images, artworks) =>
+                  addPicks({
+                    imageIds: images.map((i) => i.id),
+                    artworkIds: artworks.map((a) => a.id),
+                  })
+                }
+              />
+            )}
+            <div>
             <button
               type="button"
               onClick={handleRenderClick}
@@ -239,6 +271,8 @@ export default function VideoEditorView({
                 below, since that's new information, not a restatement of
                 what the greyed-out button already shows. */}
             {renderError && <p className="mt-1 max-w-xs text-xs text-red-600">{renderError}</p>}
+            {addError && <p className="mt-1 max-w-xs text-xs text-red-600">{addError}</p>}
+            </div>
           </div>
         </div>
       </div>
@@ -330,7 +364,7 @@ export default function VideoEditorView({
         <>
         {clips.length === 0 ? (
           <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-            Nothing here yet — add items from the Hopper.
+            Nothing here yet — use Add Media to choose the pictures and videos.
           </div>
         ) : (
           <div className="mb-6 flex gap-3 overflow-x-auto pb-2">

@@ -309,17 +309,17 @@ function PictureSlot({
         siteId={pickers.siteId}
         variant="button"
         label="Add Media"
-        onSelect={(images) => {
-          const image = images[0];
-          if (!image) return;
-          const next: MailPicture = { kind: "media", id: image.id };
-          pickers.onThumb(pictureKey(next), { url: image.url, label: image.caption ?? "" });
-          onPick(next);
-        }}
-        onPickArtwork={(a) => {
-          const next: MailPicture = { kind: "artwork", id: a.id };
-          pickers.onThumb(pictureKey(next), { url: a.imageUrl, label: a.catalogueName });
-          onPick(next);
+        withArtworks
+        onSelect={([image], [artwork]) => {
+          if (artwork) {
+            const next: MailPicture = { kind: "artwork", id: artwork.id };
+            pickers.onThumb(pictureKey(next), { url: artwork.imageUrl, label: artwork.catalogueName });
+            onPick(next);
+          } else if (image) {
+            const next: MailPicture = { kind: "media", id: image.id };
+            pickers.onThumb(pictureKey(next), { url: image.url, label: image.caption ?? "" });
+            onPick(next);
+          }
         }}
       />
     </EmptySlot>

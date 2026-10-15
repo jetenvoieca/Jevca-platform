@@ -69,7 +69,7 @@ export default function MediaPicker({
   previewClassName,
   variant = "tile",
   onSelect,
-  onPickArtwork,
+  withArtworks = false,
 }: {
   artistId: string;
   // For the "Upload new" link to this site's Hopper.
@@ -114,12 +114,14 @@ export default function MediaPicker({
   // "button" (2026-10-08, a campaign mail's picture slots): a plain
   // button with `label` instead of the dashed tile, like ArtworkPicker's.
   variant?: "tile" | "button";
-  onSelect: (images: PickedImage[]) => void;
-  // When given (2026-10-15, campaign mails): the picker also offers the
-  // artworks — an Artworks | Media switch, starting on Artworks, like the
-  // Media Catalogue. Picking an artwork (its main image) calls this
-  // instead of onSelect. Single pick only.
-  onPickArtwork?: (artwork: ArtworkListRow) => void;
+  // Picked media, and (withArtworks) picked artworks — one call with
+  // everything picked.
+  onSelect: (images: PickedImage[], artworks: ArtworkListRow[]) => void;
+  // (2026-10-15 — campaign mails, the video editor): the picker also
+  // offers the artworks — an Artworks | Media switch, starting on
+  // Artworks, like the Media Catalogue. Picked artworks come to onSelect
+  // as its second list. In multi mode both can be ticked together.
+  withArtworks?: boolean;
 }) {
   const words = useClientWords();
   const router = useRouter();
@@ -130,9 +132,10 @@ export default function MediaPicker({
   const [relatedCount, setRelatedCount] = useState(0);
   const [selected, setSelected] = useState<PickedImage[]>([]);
   const [source, setSource] = useState<"artworks" | "media">(
-    onPickArtwork ? "artworks" : "media"
+    withArtworks ? "artworks" : "media"
   );
   const [artworks, setArtworks] = useState<ArtworkListRow[]>([]);
+  const [selectedArtworks, setSelectedArtworks] = useState<ArtworkListRow[]>([]);
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -180,6 +183,7 @@ export default function MediaPicker({
   const handleOpen = () => {
     setOpen(true);
     setSelected([]);
+    setSelectedArtworks([]);
     reload(query);
     // Fetch the Related count up front too, so the tab badge is correct
     // even before switching to it — otherwise it'd read "Related (0)"
@@ -220,7 +224,7 @@ export default function MediaPicker({
 
   const handlePick = (img: PickedImage) => {
     if (mode === "single") {
-      onSelect([img]);
+      onSelect([img], []);
       setOpen(false);
     } else {
       setSelected((prev) =>
@@ -231,9 +235,23 @@ export default function MediaPicker({
     }
   };
 
+  const handlePickArtwork = (artwork: ArtworkListRow) => {
+    if (mode === "single") {
+      onSelect([], [artwork]);
+      setOpen(false);
+    } else {
+      setSelectedArtworks((prev) =>
+        prev.some((a) => a.id === artwork.id)
+          ? prev.filter((a) => a.id !== artwork.id)
+          : [...prev, artwork]
+      );
+    }
+  };
+
   const confirmMulti = () => {
-    onSelect(selected);
+    onSelect(selected, selectedArtworks);
     setSelected([]);
+    setSelectedArtworks([]);
     setOpen(false);
   };
 
@@ -332,20 +350,23 @@ export default function MediaPicker({
           {isPending && (
             <p className="pb-3 text-xs text-neutral-400">Searching…</p>
           )}
-          {source === "artworks" && onPickArtwork ? (
+          {source === "artworks" && withArtworks ? (
             <div className="grid grid-cols-6 gap-3">
               {artworks.map((a) => (
                 <button
                   key={a.id}
                   type="button"
-                  onClick={() => {
-                    onPickArtwork(a);
-                    setOpen(false);
-                  }}
+                  onClick={() => handlePickArtwork(a)}
                   disabled={!a.imageUrl}
                   className="text-left disabled:opacity-40"
                 >
-                  <div className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300">
+                  <div
+                    className={`overflow-hidden rounded-md border-2 ${
+                      selectedArtworks.some((s) => s.id === a.id)
+                        ? "border-neutral-900"
+                        : "border-transparent hover:border-neutral-300"
+                    }`}
+                  >
                     {a.imageUrl ? (
                       // eslint-disable-next-line @next/next/no-img-element
                       <img src={a.imageUrl} alt="" className="aspect-square w-full object-cover" />
@@ -428,7 +449,7 @@ export default function MediaPicker({
               })}
             </div>
           )}
-          {source === "artworks" && onPickArtwork && artworks.length === 0 && !isPending && (
+          {source === "artworks" && withArtworks && artworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">No matches.</p>
           )}
           {source === "media" && images.length === 0 && !isPending && (
@@ -450,7 +471,7 @@ export default function MediaPicker({
           <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-8">
             {/* Reordered above Search (2026-08-18, direct request) —
                 matches the reference layout's tabs-then-search order. */}
-            {onPickArtwork && (
+            {withArtworks && (
               <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
                 {(["artworks", "media"] as const).map((s) => (
                   <button
@@ -540,10 +561,28 @@ export default function MediaPicker({
             {mode === "multi" && (
               <div>
                 <p className="mb-2 text-sm text-neutral-500">
-                  {selected.length} selected
+                  {selected.length + selectedArtworks.length} selected
                 </p>
-                {selected.length > 0 && (
+                {selected.length + selectedArtworks.length > 0 && (
                   <div className="grid grid-cols-3 gap-2">
+                    {selectedArtworks.map((a) => (
+                      <div key={`artwork-${a.id}`} className="group relative">
+                        <div className="overflow-hidden rounded-md border border-neutral-200">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={a.imageUrl ?? ""} alt="" className="aspect-square w-full object-cover" />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setSelectedArtworks((prev) => prev.filter((p) => p.id !== a.id))
+                          }
+                          aria-label={`Remove ${a.catalogueName} from selection`}
+                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white shadow hover:bg-neutral-700"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
                     {selected.map((img) => (
                       <div key={img.id} className="group relative">
                         <div className="overflow-hidden rounded-md border border-neutral-200">
@@ -591,7 +630,7 @@ export default function MediaPicker({
               <button
                 type="button"
                 onClick={confirmMulti}
-                disabled={selected.length === 0}
+                disabled={selected.length + selectedArtworks.length === 0}
                 className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
               >
                 Add selected

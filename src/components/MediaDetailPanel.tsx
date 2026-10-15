@@ -127,7 +127,7 @@ export default function MediaDetailPanel({
                 disabled={isPending || addedToBucket}
                 className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:opacity-50"
               >
-                {addedToBucket ? "Added to Bucket" : "Add to Bucket"}
+                {addedToBucket ? "Added to Video Edit" : "Add to Video Edit"}
               </button>
               <button
                 type="button"

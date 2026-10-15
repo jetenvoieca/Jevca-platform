@@ -86,6 +86,57 @@ export async function appendImageToTimeline(
   return { ok: true };
 }
 
+// The video editor's own Add Media (2026-10-15): media and artworks
+// (their Main image, else their first) picked together, added to the
+// end of the draft in that order. Unlike appendImageToTimeline this
+// leaves each image where it is — they're already in the Media
+// Catalogue or on their artwork. Only this artist's own.
+export async function addPicksToTimeline(
+  artistId: string,
+  siteId: string,
+  picks: { imageIds: string[]; artworkIds: string[] }
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (await hasUnresolvedRender(artistId)) {
+    return {
+      ok: false,
+      error: "A render is in progress — finish reviewing it (Save or Discard) before adding more.",
+    };
+  }
+
+  const artworks = await db.artwork.findMany({
+    where: { id: { in: picks.artworkIds }, artistId },
+    select: { id: true, mainImageId: true, images: { take: 1, select: { id: true } } },
+  });
+  const artworkImageIds = picks.artworkIds.flatMap((id) => {
+    const artwork = artworks.find((a) => a.id === id);
+    const imageId = artwork?.mainImageId ?? artwork?.images[0]?.id;
+    return imageId ? [imageId] : [];
+  });
+  const imageIds = [...picks.imageIds, ...artworkImageIds];
+
+  const images = await db.image.findMany({
+    where: { id: { in: imageIds }, artistId },
+    select: { id: true, kind: true },
+  });
+  const kindById = new Map(images.map((img) => [img.id, img.kind]));
+
+  const draft = await getOrCreateDraft(artistId);
+  const timeline = readTimeline(draft.timeline);
+  for (const imageId of imageIds) {
+    const kind = kindById.get(imageId);
+    if (!kind) continue;
+    timeline.clips.push(
+      kind === "PHOTO"
+        ? { id: randomUUID(), imageId, kind: "PHOTO", duration: 2 }
+        : { id: randomUUID(), imageId, kind: "VIDEO" }
+    );
+  }
+  await saveTimeline(draft.id, timeline);
+
+  revalidatePath(`/sites/${siteId}/bucket`);
+  return { ok: true };
+}
+
 export async function addMediaToBucket(
   imageId: string,
   siteId: string

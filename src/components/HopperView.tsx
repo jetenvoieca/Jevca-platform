@@ -366,7 +366,7 @@ export default function HopperView({
         return;
       }
       setAddError(null);
-      logProcessed(item, "Added to Bucket", `/sites/${siteId}/bucket`);
+      logProcessed(item, "Added to Video Edit", `/sites/${siteId}/bucket`);
       advanceAfterAction();
     });
   };
@@ -1136,7 +1136,7 @@ function SortingCard({
                 Add to Media
               </button>
               <button type="button" onClick={onAddToBucket} disabled={isPending} className={actionCls}>
-                Add to Bucket
+                Add to Video Edit
               </button>
               <button
                 type="button"
