@@ -14,13 +14,18 @@ import type { ReactNode } from "react";
 // bottom-right of the panel (e.g. "Up to date").
 //
 // The mini action bar (2026-10-01, direct request — see mock-up) is the
-// same panel and buttons, sized to fit a header such as an opened
-// email's: less padding, narrower buttons, two to a row.
+// same panel, sized to fit a header such as an opened email's: less
+// padding, narrower buttons, two to a row. Its buttons are outlined
+// rather than filled (2026-10-15, Craig's mock-up — a block of filled
+// buttons looked heavy):
+//   Mini button: #F9F6EF background, #5E5E5E border and text
 
 // Shared by both button sizes, so they can't drift apart.
 const PANEL_CLS = "rounded-md border border-[#5E5E5E] bg-[#F9F6EF]";
 const BUTTON_CLS =
   "h-[27px] rounded bg-[#5E5E5E] px-2 text-sm text-[#F9F6EF] hover:bg-[#4a4a4a] disabled:opacity-50";
+const MINI_BUTTON_CLS =
+  "h-[27px] w-28 rounded border border-[#5E5E5E] bg-[#F9F6EF] px-2 text-sm text-[#5E5E5E] hover:bg-[#EDE8DC] disabled:opacity-50";
 
 export function ActionPanel({
   children,
@@ -79,7 +84,7 @@ export function MiniActionButton({
   children: ReactNode;
 }) {
   return (
-    <button type="button" onClick={onClick} disabled={disabled} className={`${BUTTON_CLS} w-28`}>
+    <button type="button" onClick={onClick} disabled={disabled} className={MINI_BUTTON_CLS}>
       {children}
     </button>
   );
