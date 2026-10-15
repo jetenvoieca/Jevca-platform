@@ -6,7 +6,6 @@ import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
 import { listArtworks, type ArtworkListRow } from "@/lib/actions/artworks";
 import VideoThumb from "@/components/VideoThumb";
-import UploadNewImageModal from "@/components/UploadNewImageModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
 type PickedImage = {
@@ -72,9 +71,7 @@ export default function MediaPicker({
   onPickArtwork,
 }: {
   artistId: string;
-  // Needed for the "Upload new" button's shared upload modal (see
-  // UploadNewImageModal) — used both for its own "Open Hopper" fallback
-  // link, and to pass through to the upload primitive.
+  // For the "Upload new" link to this site's Hopper.
   siteId: string;
   mode?: "single" | "multi";
   videoOnly?: boolean;
@@ -136,9 +133,6 @@ export default function MediaPicker({
   const [artworks, setArtworks] = useState<ArtworkListRow[]>([]);
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Whether the shared "cut down Hopper" upload modal is open — see the
-  // "Upload new" button below.
-  const [showUploadModal, setShowUploadModal] = useState(false);
 
   // This picker searches across the whole catalogue rather than paging
   // through it (unlike the Media Catalogue screen itself, which now
@@ -514,22 +508,19 @@ export default function MediaPicker({
               className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
             />
 
-            {/* Opens the shared "cut down Hopper" upload modal
-                (2026-09-13, direct request — "same idea as delete and
-                adding new main image", replacing a plain Link out to
-                the full Hopper page) rather than leaving this picker
-                entirely. A successful upload is picked immediately
-                (handlePick), same as clicking any existing thumbnail
-                above — single mode closes the whole picker with it
-                selected; multi mode adds it to the current selection. */}
+            {/* Upload new (2026-10-15, direct request) — goes to the
+                Hopper, where new media comes in and is sorted. Opens in
+                a new tab so whatever is being edited here stays open;
+                the picker shows the new item the next time it opens. */}
             {source === "media" && (
-              <button
-                type="button"
-                onClick={() => setShowUploadModal(true)}
+              <a
+                href={`/sites/${siteId}/hopper`}
+                target="_blank"
+                rel="noopener noreferrer"
                 className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-center text-sm hover:bg-neutral-50"
               >
                 Upload new
-              </button>
+              </a>
             )}
 
             {/* Selected items, shown as thumbnails with their own remove
@@ -612,24 +603,6 @@ export default function MediaPicker({
         </div>
       </div>
       </div>
-
-      {showUploadModal && (
-        <UploadNewImageModal
-          artistId={artistId}
-          siteId={siteId}
-          onClose={() => setShowUploadModal(false)}
-          onUploaded={(image) => {
-            handlePick({
-              id: image.id,
-              url: image.thumbnailUrl || image.url,
-              posterUrl: image.posterUrl,
-              caption: image.caption,
-              kind: image.kind,
-              artwork: null,
-            });
-          }}
-        />
-      )}
     </div>
   );
 
