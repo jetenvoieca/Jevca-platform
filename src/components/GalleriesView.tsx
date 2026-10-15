@@ -602,6 +602,11 @@ export default function GalleriesView({
       .map((p) => p.artworkId)
   );
 
+  // Unsold works first, sold ones after (each group keeps its A–Z order).
+  const orderedWorks = [...(selectedDetail?.consignedWorks ?? [])].sort(
+    (a, b) => Number(soldWorkIds.has(a.id)) - Number(soldWorkIds.has(b.id))
+  );
+
   return (
     <div className="flex h-full overflow-hidden">
       {/* ---- Consigned Works (left) ---- */}
@@ -651,7 +656,7 @@ export default function GalleriesView({
               </p>
             ) : (
               <div className="flex flex-wrap gap-3">
-                {selectedDetail.consignedWorks.map((w) => (
+                {orderedWorks.map((w) => (
                   <button
                     key={w.id}
                     type="button"
@@ -680,7 +685,7 @@ export default function GalleriesView({
                       {w.catalogueName}
                     </p>
                     <p className="text-xs text-neutral-400">
-                      {w.presentationPrice ? `£${w.presentationPrice}` : "—"}
+                      {w.presentationPrice ? formatMoney(w.presentationPrice, w.priceCurrency) : "—"}
                     </p>
                   </button>
                 ))}

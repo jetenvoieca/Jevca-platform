@@ -247,6 +247,7 @@ export type GalleryConsignedWork = {
   id: string;
   catalogueName: string;
   presentationPrice: string | null;
+  priceCurrency: string;
   description: string | null;
   medium: string | null;
   size: string | null;
@@ -288,6 +289,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
       id: true,
       catalogueName: true,
       presentationPrice: true,
+      priceCurrency: true,
       description: true,
       medium: true,
       size: true,
@@ -307,6 +309,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
         id: w.id,
         catalogueName: w.catalogueName,
         presentationPrice: w.presentationPrice ? w.presentationPrice.toString() : null,
+        priceCurrency: w.priceCurrency,
         description: w.description,
         medium: w.medium,
         size: w.size,
