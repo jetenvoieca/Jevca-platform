@@ -21,6 +21,7 @@ import { netOwed } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import ExportPdfDialog from "@/components/ExportPdfDialog";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
 import InvoiceModal from "@/components/InvoiceModal";
 import SaleHeader from "@/components/SaleHeader";
@@ -65,11 +66,14 @@ function LocationTypeBadge({ type }: { type: LocationType }) {
 export default function GalleriesView({
   siteId,
   artistId,
+  artistName,
   galleries,
   paymentMethods,
 }: {
   siteId: string;
   artistId: string;
+  // Default header title of the location's PDF.
+  artistName: string;
   // Every Location this artist has (2026-09-22 rework of the old
   // Galleries-only page) — Gallery (third-party, consignment,
   // commission) and Own (the artist's own stock: studio, storage,
@@ -93,6 +97,10 @@ export default function GalleriesView({
   const [newLocationType, setNewLocationType] = useState<LocationType>("GALLERY");
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // The location's PDF (consignment note / price list): every work at
+  // the location, sold ones marked — the Artwork Catalogue's PDF,
+  // filtered to this location.
+  const [showPdfDialog, setShowPdfDialog] = useState(false);
   // Defaults to "sales" (2026-09-09, direct request) — the sales history
   // is what's checked on opening a gallery day to day; Details (contact
   // info, address) is looked up far less often. openRow below (fired
@@ -716,6 +724,13 @@ export default function GalleriesView({
                 {selectedLocationType && <LocationTypeBadge type={selectedLocationType} />}
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPdfDialog(true)}
+                  className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
+                >
+                  PDF
+                </button>
                 <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
                   <button
                     type="button"
@@ -1356,6 +1371,25 @@ export default function GalleriesView({
         onConfirm={handleDeleteGallery}
         onCancel={() => setConfirmingDelete(false)}
       />
+
+      {showPdfDialog && selectedDetail && (
+        <ExportPdfDialog
+          open
+          defaultTitle={artistName}
+          defaultSubtitle={`Consignment note — ${selectedDetail.name}`}
+          onCancel={() => setShowPdfDialog(false)}
+          onExport={(headerTitle, headerSubtitle) => {
+            setShowPdfDialog(false);
+            const params = new URLSearchParams({
+              artistId,
+              location: selectedDetail.name,
+              headerTitle,
+              headerSubtitle,
+            });
+            window.open(`/api/artwork-catalogue-pdf?${params.toString()}`, "_blank");
+          }}
+        />
+      )}
 
       {invoiceModalId && (
         <InvoiceModal

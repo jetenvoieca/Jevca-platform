@@ -16,7 +16,10 @@ export default async function PreviewGalleriesPage({
   const siteId = resolvePreviewSiteId(slug);
   if (!siteId) notFound();
 
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { artistId: true } });
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: { artistId: true, artist: { select: { name: true } } },
+  });
   if (!site) notFound();
 
   // Every Location now (2026-09-22 rework) — Gallery and Own alike, via
@@ -29,6 +32,7 @@ export default async function PreviewGalleriesPage({
     <GalleriesView
       siteId={siteId}
       artistId={site.artistId}
+      artistName={site.artist.name}
       galleries={galleries}
       paymentMethods={paymentMethods}
     />

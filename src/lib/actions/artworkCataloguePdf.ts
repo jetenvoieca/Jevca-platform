@@ -9,6 +9,7 @@ import {
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
 import { catalogueFileName, clientWords, type ClientKind } from "@/lib/clientKind";
+import { formatMoney } from "@/lib/studioShared";
 
 // The shared catalogue filters (lib/artworkFilters.ts — the same ones
 // the on-screen grid uses), plus this export's own header wording.
@@ -106,7 +107,7 @@ export async function generateArtworkCataloguePdf(
         medium: true,
         size: true,
         presentationPrice: true,
-        priceFramed: true,
+        priceCurrency: true,
         availability: true,
         mainImage: { select: { thumbnailKey: true, displayKey: true } },
         images: { take: 1, select: { thumbnailKey: true, displayKey: true } },
@@ -300,7 +301,7 @@ function buildTextLines(a: {
   medium: string | null;
   size: string | null;
   presentationPrice: { toString(): string } | null;
-  priceFramed: { toString(): string } | null;
+  priceCurrency: string;
   availability: string;
 }): TextLine[] {
   const lines: TextLine[] = [
@@ -310,12 +311,9 @@ function buildTextLines(a: {
   const details = [a.type, a.medium, a.size].filter(Boolean).join(" · ");
   if (details) lines.push({ text: details, size: 9, grey: true });
 
-  const unframed = a.presentationPrice != null ? a.presentationPrice.toString() : null;
-  const framed = a.priceFramed != null ? a.priceFramed.toString() : null;
-  if (unframed && framed) {
-    lines.push({ text: `Unframed £${unframed} · Framed £${framed}`, size: 9 });
-  } else if (unframed) {
-    lines.push({ text: `£${unframed}`, size: 9 });
+  // One price per work, in the work's own currency.
+  if (a.presentationPrice != null) {
+    lines.push({ text: formatMoney(Number(a.presentationPrice.toString()), a.priceCurrency), size: 9 });
   }
 
   if (a.availability !== "AVAILABLE") {
