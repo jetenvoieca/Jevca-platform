@@ -16,7 +16,7 @@ export default function InstagramSettingsCard({
 }: {
   artistId: string;
   siteId: string;
-  account: { username: string; expiresAt: string } | null;
+  account: { username: string; expiresAt: string; renewError: string | null } | null;
   error: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
@@ -39,7 +39,16 @@ export default function InstagramSettingsCard({
         <div className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm">
           <div>
             <p className="font-medium text-neutral-900">@{account.username}</p>
-            <p className="text-xs text-neutral-400">Connected until {formatDate(account.expiresAt)}</p>
+            {new Date(account.expiresAt) < new Date() ? (
+              <p className="text-xs text-red-600">The connection has run out — disconnect and connect again.</p>
+            ) : (
+              <p className="text-xs text-neutral-400">
+                Renews itself every week · valid until {formatDate(account.expiresAt)}
+              </p>
+            )}
+            {account.renewError && (
+              <p className="text-xs text-red-600">Last renewal failed: {account.renewError}</p>
+            )}
           </div>
           <button
             type="button"

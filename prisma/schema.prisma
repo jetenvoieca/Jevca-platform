@@ -1803,8 +1803,9 @@ model HopperVideoImport {
 }
 
 // An artist's Instagram account, connected for posting (2026-10-15) —
-// see lib/instagram.ts. The access token lasts 60 days and is renewed
-// before then; it is kept encrypted (lib/secretBox.ts).
+// see lib/instagram.ts. The access token lasts 60 days; it is renewed
+// every week by a daily run (lib/instagramRenewal.ts), and kept encrypted
+// (lib/secretBox.ts). `renewError`: why the last renewal failed, if it did.
 model InstagramConnection {
   id                   String   @id @default(cuid())
   artistId             String   @unique
@@ -1813,6 +1814,7 @@ model InstagramConnection {
   username             String
   accessTokenEncrypted String
   expiresAt            DateTime
+  renewError           String?
   connectedAt          DateTime @default(now())
   updatedAt            DateTime @updatedAt
 }

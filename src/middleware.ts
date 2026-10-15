@@ -60,6 +60,9 @@ const NEWS_PATH_PREFIXES = ["/api/media/", "/unsubscribe/"];
 // - /api/campaigns/send-due — the campaign sending runs, called by the
 //   Netlify background function; authenticated by CAMPAIGN_SEND_SECRET
 //   in the route itself (2026-10-08)
+// - /api/instagram/renew  — the daily Instagram renewal, called by the
+//   Netlify scheduled function; authenticated by INSTAGRAM_RENEW_SECRET
+//   in the route itself (2026-10-15)
 // - /login                — has to be reachable before you're logged in
 // - /inbox-app/           — the Inbox's home-screen app manifest and icons
 //   (2026-10-09); the iPad fetches them without the login cookie, and
@@ -77,6 +80,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/webhooks/resend-inbound",
   "/api/webhooks/resend-campaigns",
   "/api/campaigns/send-due",
+  "/api/instagram/renew",
   "/login",
   "/inbox-app/",
   "/privacy",

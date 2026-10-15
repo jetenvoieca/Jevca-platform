@@ -62,9 +62,10 @@ export function instagramAuthorizeUrl(state: string): string {
   return `https://www.instagram.com/oauth/authorize?${params}`;
 }
 
-type ErrorFields = { error_message?: string; error?: { message?: string } };
+// Instagram's error replies, in either of its two shapes.
+export type ErrorFields = { error_message?: string; error?: { message?: string } };
 
-function errorText(body: ErrorFields, fallback: string): string {
+export function errorText(body: ErrorFields, fallback: string): string {
   return body.error_message || body.error?.message || fallback;
 }
 
@@ -116,6 +117,7 @@ export async function completeInstagramConnection(artistId: string, code: string
     username: me.username,
     accessTokenEncrypted: encryptSecret(long.access_token),
     expiresAt: new Date(Date.now() + long.expires_in * 1000),
+    renewError: null,
     connectedAt: new Date(),
   };
   await db.instagramConnection.upsert({
@@ -125,11 +127,11 @@ export async function completeInstagramConnection(artistId: string, code: string
   });
 }
 
-export type InstagramAccount = { username: string; expiresAt: Date };
+export type InstagramAccount = { username: string; expiresAt: Date; renewError: string | null };
 
 export async function getInstagramAccount(artistId: string): Promise<InstagramAccount | null> {
   return db.instagramConnection.findUnique({
     where: { artistId },
-    select: { username: true, expiresAt: true },
+    select: { username: true, expiresAt: true, renewError: true },
   });
 }
