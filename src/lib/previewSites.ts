@@ -1,9 +1,9 @@
 // Fixed artist -> site mappings for the read-only-menu "preview" mode
 // (2026-09-12, evaluation build only — see decisions log). Each entry
 // is reachable at /preview/<slug>, showing that one site's own content
-// through a reduced, hand-picked nav (see previewNav.ts): Hopper,
-// Artwork Catalogue, Locations, a placeholder Guides link, and Sales —
-// nothing else (no Administration, Templates, Sites, Media Catalogue,
+// through a reduced, hand-picked nav (see previewNav.ts): Artwork
+// Catalogue (with its Add Artworks page), Locations, a placeholder
+// Guides link, and Sales — nothing else (no Administration, Templates, Sites, Media Catalogue,
 // Bucket, Customers, Purchases, or the site's own Pages/Menu/Profile
 // section).
 //

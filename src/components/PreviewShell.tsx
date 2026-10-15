@@ -11,7 +11,6 @@ import { useClientWords } from "@/components/ClientWordsProvider";
 // links — just the fixed nav plus whatever page content is passed in.
 function resolveActiveKey(pathname: string, basePath: string): PreviewNavKey | null {
   if (pathname.startsWith(`${basePath}/artworks`)) return "artworks";
-  if (pathname.startsWith(`${basePath}/hopper`)) return "hopper";
   if (pathname.startsWith(`${basePath}/galleries`)) return "galleries";
   if (pathname.startsWith(`${basePath}/sales`)) return "sales";
   if (pathname.startsWith(`${basePath}/guides`)) return "guides";

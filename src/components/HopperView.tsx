@@ -87,7 +87,7 @@ export default function HopperView({
   artistId,
   queue,
   artworkSettings,
-  artistVersion = false,
+  artworkIntake = false,
 }: {
   siteId: string;
   // Where the Processed log's "Linked to X"/"New artwork" entries should
@@ -105,10 +105,13 @@ export default function HopperView({
   // Used by the inline "quick catalogue" fields shown after "Create new
   // artwork" — see the note by that button in SortingCard.
   artworkSettings: ArtworkSettings;
-  // The artists' version (2026-10-15, Craig's mockup): the sorting card
-  // only offers Bin, New Artwork, Ancillary image (added to an existing
-  // artwork as a related image) and Crop.
-  artistVersion?: boolean;
+  // "Add Artworks" (2026-10-15, Craig's mockup): the same queue, reached
+  // only from the Artwork Catalogue's "+ Add New", for adding artworks
+  // and their ancillary images. The sorting card only offers Bin, New
+  // Artwork, Ancillary image (added to an existing artwork as a related
+  // image) and Crop. The full Hopper, with every option, is the
+  // admin's own; artists only get this.
+  artworkIntake?: boolean;
 }) {
   const words = useClientWords();
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
@@ -600,10 +603,22 @@ export default function HopperView({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {artworkIntake && (
+        <div className="mb-4 flex items-center gap-3">
+          <Link
+            href={`${resolvedBasePath}/artworks`}
+            className="rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50"
+          >
+            ← Catalogue
+          </Link>
+          <h1 className="text-2xl font-semibold text-neutral-900">Add {words.items}</h1>
+        </div>
+      )}
+
       {isDraggingOver && (
         <div className="pointer-events-none absolute inset-0 z-50 flex items-center justify-center rounded-lg border-4 border-dashed border-neutral-900 bg-white/90">
           <p className="text-lg font-medium text-neutral-900">
-            Drop images or videos to add to the Hopper
+            Drop images or videos to add them here
           </p>
         </div>
       )}
@@ -784,7 +799,7 @@ export default function HopperView({
                 item={current}
                 isPending={isPending}
                 settings={artworkSettings}
-                artistVersion={artistVersion}
+                artworkIntake={artworkIntake}
                 onBin={() => handleBin(current)}
                 onAddToMedia={() => handleAddToMedia(current)}
                 onAddToBucket={() => handleAddToBucket(current)}
@@ -906,7 +921,7 @@ function SortingCard({
   item,
   isPending,
   settings,
-  artistVersion,
+  artworkIntake,
   onBin,
   onAddToMedia,
   onAddToBucket,
@@ -919,7 +934,7 @@ function SortingCard({
   item: HopperItem;
   isPending: boolean;
   settings: ArtworkSettings;
-  artistVersion: boolean;
+  artworkIntake: boolean;
   onBin: () => void;
   onAddToMedia: () => void;
   onAddToBucket: () => void;
@@ -1006,7 +1021,7 @@ function SortingCard({
           >
             Bin
           </button>
-          {!artistVersion && (
+          {!artworkIntake && (
             <>
               <button
                 type="button"
@@ -1026,7 +1041,7 @@ function SortingCard({
               </button>
             </>
           )}
-          {artistVersion ? (
+          {artworkIntake ? (
             <>
               <button
                 type="button"
@@ -1097,7 +1112,7 @@ function SortingCard({
       {showManageForm && (
         <ManageArtworkPanel
           artistId={artistId}
-          relatedOnly={artistVersion}
+          relatedOnly={artworkIntake}
           managing={managingArtwork}
           onCancel={() => setShowManageForm(false)}
           onDone={async (artworkId, artworkName, mode, relatedName) => {

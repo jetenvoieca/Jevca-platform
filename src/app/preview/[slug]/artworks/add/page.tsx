@@ -7,7 +7,9 @@ import HopperView from "@/components/HopperView";
 
 export const dynamic = "force-dynamic";
 
-export default async function PreviewHopperPage({
+// The preview's "Add Artworks" — see /sites/[id]/artworks/add. Artists
+// don't get the full Hopper.
+export default async function PreviewAddArtworksPage({
   params,
 }: {
   params: Promise<{ slug: string }>;
@@ -32,7 +34,7 @@ export default async function PreviewHopperPage({
       artistId={artistId}
       queue={queue}
       artworkSettings={settings}
-      artistVersion
+      artworkIntake
     />
   );
 }

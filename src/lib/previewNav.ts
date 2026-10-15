@@ -2,7 +2,7 @@ import type { AppShellNavEntry } from "@/components/SidebarNav";
 import { SITE_SECTION_COLOR } from "@/lib/siteNav";
 import type { ClientWords } from "@/lib/clientKind";
 
-export type PreviewNavKey = "artworks" | "hopper" | "galleries" | "sales" | "guides";
+export type PreviewNavKey = "artworks" | "galleries" | "sales" | "guides";
 
 // The reduced, evaluation-only nav shown under /preview/<slug>/* — see
 // previewSites.ts. Deliberately a fixed, hand-picked list (not a
@@ -27,7 +27,7 @@ export function buildPreviewNavEntries({
       section: true,
       key: "artworks",
       color: SITE_SECTION_COLOR,
-      active: active === "artworks" || active === "galleries" || active === "hopper",
+      active: active === "artworks" || active === "galleries",
       children: [
         {
           label: "Catalogue",
@@ -35,7 +35,6 @@ export function buildPreviewNavEntries({
           active: active === "artworks",
         },
         { label: "Locations", href: `${basePath}/galleries`, active: active === "galleries" },
-        { label: "Hopper", href: `${basePath}/hopper`, active: active === "hopper" },
       ],
     },
     { label: "Guides", href: `${basePath}/guides`, active: active === "guides" },

@@ -22,7 +22,7 @@ const PAGE_SIZE = 60;
 // exact same view component and server actions, resolving the preview
 // slug to a real site id first. The only difference passed down is
 // basePath, so every in-page link (currently just "+ Add New" ->
-// Hopper) stays inside this reduced shell instead of jumping out to
+// Add Artworks) stays inside this reduced shell instead of jumping out to
 // the full admin one. No Curations filter here yet — the preview menu
 // doesn't have Curations (2026-09-24).
 export default async function PreviewArtworksPage({

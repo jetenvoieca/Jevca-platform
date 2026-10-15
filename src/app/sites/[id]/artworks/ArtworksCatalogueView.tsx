@@ -87,7 +87,7 @@ export default function ArtworksCatalogueView({
 }: {
   siteId: string;
   // Where this view's own in-page links (currently just "+ Add New" ->
-  // Hopper) should point. Defaults to the real site's own admin path so
+  // Add Artworks) should point. Defaults to the real site's own admin path so
   // every existing caller is unaffected; the evaluation-only reduced
   // menu (see previewSites.ts) passes its own basePath instead, so that
   // link stays inside that reduced shell rather than jumping out to the
@@ -463,18 +463,14 @@ export default function ArtworksCatalogueView({
     return `/api/artwork-catalogue-csv?${params.toString()}`;
   };
 
-  // Goes straight to the Hopper now (2026-08-19, direct request) — the
-  // Hopper is the primary way media gets into the Artwork Catalogue (see
-  // hopper-design.md), so "add a new artwork" from here means starting
-  // that flow, not creating a blank row directly. Previously created an
-  // empty artwork via createArtwork and opened it in this panel; that
-  // action is untouched and still used elsewhere, just not from this
-  // button any more. Uses resolvedBasePath (2026-09-12) rather than a
+  // Goes to "Add Artworks" (2026-10-15) — the Hopper narrowed to adding
+  // artworks and their ancillary images (see HopperView's artworkIntake),
+  // rather than creating a blank row directly. Uses resolvedBasePath (2026-09-12) rather than a
   // hardcoded /sites/${siteId} so this stays inside the evaluation
   // reduced-menu shell when rendered there.
   const addNewTile = (
     <Link
-      href={`${resolvedBasePath}/hopper`}
+      href={`${resolvedBasePath}/artworks/add`}
       className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
     >
       + Add New
@@ -847,7 +843,7 @@ export default function ArtworksCatalogueView({
                 <tr className="border-b border-neutral-100">
                   <td colSpan={5} className="py-2">
                     <Link
-                      href={`${resolvedBasePath}/hopper`}
+                      href={`${resolvedBasePath}/artworks/add`}
                       className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
                     >
                       + Add New
