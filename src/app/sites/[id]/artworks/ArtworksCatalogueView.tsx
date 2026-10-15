@@ -17,6 +17,7 @@ import ArtworkDetailPanel, {
 } from "@/components/ArtworkDetailPanel";
 import { artworkMatchesFilters } from "@/lib/artworkFilters";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
+import ArtworkFilterBar from "@/components/ArtworkFilterBar";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
@@ -663,88 +664,24 @@ export default function ArtworksCatalogueView({
             </div>
           </div>
 
-          {/* Row 2: filtering/search — a separate functional group from
-              the view controls above. Curations (2026-09-24) sits
-              leftmost, then Search, Location and Type. */}
-          <div className="mb-3 flex flex-wrap items-center gap-3">
-            {curations.length > 0 && (
-              <select
-                name="curation"
-                value={curation}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setCuration(v);
-                  applyFilters({ curation: v });
-                }}
-                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
-              >
-                <option value="">All curations</option>
-                {curations.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
-            )}
-
-            <div className="flex flex-wrap items-center gap-2">
-              {/* Name dropdown (2026-10-13) — replaced the search box.
-                  Shows every work with that name, whatever its type. A
-                  chosen name no longer in the list (just renamed) stays
-                  shown, so the box never silently reads "All names". */}
-              <select
-                name="name"
-                value={name}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setName(v);
-                  applyFilters({ name: v });
-                }}
-                className="max-w-56 rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
-              >
-                <option value="">All names</option>
-                {name && !names.includes(name) && <option value={name}>{name}</option>}
-                {names.map((n) => (
-                  <option key={n} value={n}>
-                    {n}
-                  </option>
-                ))}
-              </select>
-              <select
-                name="location"
-                value={location}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setLocation(v);
-                  applyFilters({ location: v });
-                }}
-                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
-              >
-                <option value="">All locations</option>
-                {settings.locations.map((l) => (
-                  <option key={l.id} value={l.name}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-              <select
-                name="type"
-                value={type}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  setType(v);
-                  applyFilters({ type: v });
-                }}
-                className="rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm"
-              >
-                <option value="">All types</option>
-                {settings.artworkTypes.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {/* Row 2: filtering — a separate functional group from the
+              view controls above (shared with the Media Catalogue's
+              Artworks view, see ArtworkFilterBar). */}
+          <div className="mb-3">
+            <ArtworkFilterBar
+              values={{ curation, name, location, type }}
+              curations={curations}
+              names={names}
+              locations={settings.locations.map((l) => l.name)}
+              types={settings.artworkTypes}
+              onChange={(change) => {
+                if (change.curation !== undefined) setCuration(change.curation);
+                if (change.name !== undefined) setName(change.name);
+                if (change.location !== undefined) setLocation(change.location);
+                if (change.type !== undefined) setType(change.type);
+                applyFilters(change);
+              }}
+            />
           </div>
 
           <p className="mb-3 text-sm text-neutral-400">

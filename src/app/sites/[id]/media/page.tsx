@@ -8,6 +8,10 @@ import {
 } from "@/lib/actions/mediaCatalogue";
 import { getBackfillCount } from "@/lib/actions/imageBackfill";
 import MediaCatalogueView from "@/components/MediaCatalogueView";
+import MediaArtworksView from "@/components/MediaArtworksView";
+import { listArtworks, listArtworkNames } from "@/lib/actions/artworks";
+import { getArtworkSettings } from "@/lib/actions/artworkSettings";
+import { listCurations } from "@/lib/actions/curations";
 import ImageBackfillPanel from "@/components/ImageBackfillPanel";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +29,11 @@ type SearchParams = {
   // going through this route again (2026-08-08 perf pass — see
   // MediaCatalogueView for why).
   selected?: string;
+  // The Artworks view's filters (2026-10-15) — see MediaArtworksView.
+  curation?: string;
+  name?: string;
+  location?: string;
+  type?: string;
 };
 
 export default async function MediaCataloguePage({
@@ -36,10 +45,48 @@ export default async function MediaCataloguePage({
 }) {
   const { id } = await params;
   const sp = await searchParams;
-  const purpose = sp.purpose === "related" ? "related" : "marketing";
-
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
+
+  // Artworks view (2026-10-15): the catalogue's works, read only.
+  if (sp.purpose === "artworks") {
+    const filters = {
+      curation: sp.curation || "",
+      name: sp.name || "",
+      location: sp.location || "",
+      type: sp.type || "",
+    };
+    const [{ rows, total }, counts, settings, names, curations] = await Promise.all([
+      listArtworks(artistId, {
+        curation: filters.curation || undefined,
+        name: filters.name || undefined,
+        location: filters.location || undefined,
+        type: filters.type || undefined,
+        limit: PAGE_SIZE,
+      }),
+      countMediaByPurpose(artistId),
+      getArtworkSettings(artistId),
+      listArtworkNames(artistId),
+      listCurations(artistId),
+    ]);
+    return (
+      <MediaArtworksView
+        siteId={id}
+        artistId={artistId}
+        artworks={rows}
+        total={total}
+        pageSize={PAGE_SIZE}
+        filters={filters}
+        curations={curations}
+        names={names}
+        locations={settings.locations.map((l) => l.name)}
+        types={settings.artworkTypes}
+        relatedCount={counts.related}
+      />
+    );
+  }
+
+  const purpose = sp.purpose === "related" ? "related" : "marketing";
 
   const [{ rows: mediaRows, total }, counts, tagPresets, artistArtworks, selectedItem, backfillCount] =
     await Promise.all([

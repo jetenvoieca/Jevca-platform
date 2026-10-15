@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
+import { toArtworkImages } from "@/lib/artworkImages";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 
 type ListFilters = {
@@ -228,4 +229,26 @@ export async function removeMediaTagPreset(artistId: string, siteId: string, val
   const next = current.filter((v) => v !== value);
   await db.artist.update({ where: { id: artistId }, data: { mediaTags: next } });
   revalidatePath(`/sites/${siteId}/marketing/settings`);
+}
+
+// One artwork's images, for the Media Catalogue's read-only Artworks
+// view (2026-10-15) — Main first. Only this artist's own.
+export async function getArtworkImagesForMedia(artistId: string, artworkId: string) {
+  const artwork = await db.artwork.findFirst({
+    where: { id: artworkId, artistId },
+    select: {
+      id: true,
+      catalogueName: true,
+      mainImageId: true,
+      images: {
+        select: { id: true, url: true, thumbnailKey: true, displayKey: true, kind: true, posterUrl: true },
+      },
+    },
+  });
+  if (!artwork) return null;
+  return {
+    id: artwork.id,
+    catalogueName: artwork.catalogueName,
+    images: toArtworkImages(artwork.images, artwork.mainImageId),
+  };
 }

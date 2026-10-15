@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { listMedia, getMediaDetail, deleteMediaItems } from "@/lib/actions/mediaCatalogue";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import VideoThumb from "@/components/VideoThumb";
+import MediaCatalogueTabs from "@/components/MediaCatalogueTabs";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
 type MediaRow = {
@@ -152,9 +153,6 @@ export default function MediaCatalogueView({
     setDensity(n);
     window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
   };
-
-  const toggleHref = (nextPurpose: "marketing" | "related") =>
-    `/sites/${siteId}/media?purpose=${nextPurpose}`;
 
   // Live filters (2026-09-12, direct request — "filters should activate
   // as you type, so remove button") — replaces the old GET-form-plus-
@@ -429,26 +427,7 @@ export default function MediaCatalogueView({
             <form>, now that filters apply live (2026-09-12) rather than
             on submit — see applyFilters/handleSearchChange above. */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
-            <Link
-              href={toggleHref("marketing")}
-              className={`px-4 py-1.5 ${
-                purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-              }`}
-            >
-              Marketing
-            </Link>
-            <Link
-              href={toggleHref("related")}
-              className={`px-4 py-1.5 font-medium ${
-                purpose === "related"
-                  ? "bg-neutral-900 text-white"
-                  : "bg-rose-100 text-rose-700 hover:bg-rose-200"
-              }`}
-            >
-              Related ({counts.related})
-            </Link>
-          </div>
+          <MediaCatalogueTabs siteId={siteId} current={purpose} relatedCount={counts.related} />
 
           <div className="flex flex-wrap items-center gap-2">
             <input
