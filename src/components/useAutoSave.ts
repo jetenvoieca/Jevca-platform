@@ -9,7 +9,8 @@ import { useEffect, useRef, useState } from "react";
 // existing items (a campaign's mail) has no `create`. Saves run one at a
 // time, in order, so a quick run of changes can never create an item
 // twice. `flush` saves anything still waiting — used on Close, so
-// nothing is lost.
+// nothing is lost; leaving the page saves it too (2026-10-15 — e.g.
+// Upload new going to the Hopper).
 
 export type SaveStatus = { text: string; isError: boolean };
 
@@ -39,9 +40,14 @@ export function useAutoSave<D>({
   const pendingRef = useRef<D | null>(null);
   const queueRef = useRef<Promise<void>>(Promise.resolve());
 
+  // On leaving, anything still waiting is saved (through the latest save).
+  const saveRef = useRef<(draft: D) => Promise<void>>(() => Promise.resolve());
   useEffect(
     () => () => {
       if (timerRef.current) clearTimeout(timerRef.current);
+      const pending = pendingRef.current;
+      pendingRef.current = null;
+      if (pending) void saveRef.current(pending);
     },
     []
   );
@@ -69,6 +75,7 @@ export function useAutoSave<D>({
     });
     return queueRef.current;
   };
+  saveRef.current = save;
 
   // Starts editing an existing item (its id), or a new one (null).
   const begin = (id: string | null) => {

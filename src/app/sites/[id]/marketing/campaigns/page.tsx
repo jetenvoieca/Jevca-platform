@@ -8,8 +8,16 @@ import CampaignsView from "@/components/CampaignsView";
 // Marketing → Mail Campaigns (2026-10-08) — see CampaignsView.
 export const dynamic = "force-dynamic";
 
-export default async function MailCampaignsPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function MailCampaignsPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  // The campaign and mail to open (CampaignsView keeps them here).
+  searchParams: Promise<{ campaign?: string; mail?: string }>;
+}) {
   const { id } = await params;
+  const sp = await searchParams;
   const site = await db.site.findUnique({
     where: { id },
     select: { id: true, artistId: true, artist: { select: { email: true } } },
@@ -28,6 +36,7 @@ export default async function MailCampaignsPage({ params }: { params: Promise<{ 
       artistId={site.artistId}
       artistEmail={site.artist.email}
       initialCampaigns={campaigns}
+      initialOpen={sp.campaign ? { campaignId: sp.campaign, mailId: sp.mail ?? null } : null}
       templates={templates}
       lists={lists}
     />

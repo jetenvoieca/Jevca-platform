@@ -96,6 +96,7 @@ export default function CampaignsView({
   artistId,
   artistEmail,
   initialCampaigns,
+  initialOpen,
   templates,
   lists,
 }: {
@@ -103,6 +104,9 @@ export default function CampaignsView({
   artistId: string;
   artistEmail: string | null;
   initialCampaigns: CampaignSummary[];
+  // The campaign and mail to open (from the address — e.g. coming back
+  // from the Hopper after Upload new).
+  initialOpen: { campaignId: string; mailId: string | null } | null;
   templates: MailTemplateSummary[];
   lists: MailListSummary[];
 }) {
@@ -158,25 +162,46 @@ export default function CampaignsView({
   };
 
   // Opens a mail for editing, saving anything still waiting on the last.
-  // `onResults`: picked from the Results, which stay open.
+  // `onResults`: picked from the Results, which stay open. `showMail`:
+  // straight onto the mail, even for a sent campaign.
   const openMail = (
     campaign: CampaignSummary | null,
     next: CampaignMailData | null,
-    onResults = false
+    onResults = false,
+    showMail = false
   ) => {
     startTransition(async () => {
       await autoSave.flush();
       // Another campaign opens on its Results; another of its mails, on
       // that mail (unless picked from the Results).
-      setShowMail(!onResults && !!campaign && campaign.id === selectedId);
+      setShowMail(showMail || (!onResults && !!campaign && campaign.id === selectedId));
       setSelectedId(campaign?.id ?? null);
       setMailId(next?.id ?? null);
       setDraft(next ? toDraft(next) : null);
+      // Kept in the address, so leaving (e.g. Upload new → Hopper) and
+      // coming back reopens the same mail.
+      const params = new URLSearchParams();
+      if (campaign) params.set("campaign", campaign.id);
+      if (next) params.set("mail", next.id);
+      const qs = params.toString();
+      window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
       setTranslateError(null);
       autoSave.begin(next?.id ?? null);
       if (next) setThumbs(await describeMailPictures(siteId, next.content));
     });
   };
+
+  // Opens the campaign and mail named in the address, once.
+  useEffect(() => {
+    if (!initialOpen) return;
+    const campaign = initialCampaigns.find((c) => c.id === initialOpen.campaignId);
+    if (!campaign) return;
+    const next =
+      campaign.mails.find((m) => m.id === initialOpen.mailId) ?? campaign.mails[0] ?? null;
+    // Straight onto the mail, not the Results.
+    openMail(campaign, next, false, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The Preview follows every change, drawn shortly after typing stops.
   useEffect(() => {

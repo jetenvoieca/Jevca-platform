@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
 import { listArtworks, type ArtworkListRow } from "@/lib/actions/artworks";
@@ -121,6 +122,7 @@ export default function MediaPicker({
   onPickArtwork?: (artwork: ArtworkListRow) => void;
 }) {
   const words = useClientWords();
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [purpose, setPurpose] = useState<"marketing" | "related">("marketing");
@@ -509,18 +511,21 @@ export default function MediaPicker({
             />
 
             {/* Upload new (2026-10-15, direct request) — goes to the
-                Hopper, where new media comes in and is sorted. Opens in
-                a new tab so whatever is being edited here stays open;
-                the picker shows the new item the next time it opens. */}
+                Hopper, where new media comes in and is sorted, and
+                comes back here once an item is added to Media (the
+                Hopper's returnTo). Unsaved edits are saved on leaving
+                (useAutoSave); the newest media shows first here. */}
             {source === "media" && (
-              <a
-                href={`/sites/${siteId}/hopper`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
+                type="button"
+                onClick={() => {
+                  const here = window.location.pathname + window.location.search;
+                  router.push(`/sites/${siteId}/hopper?returnTo=${encodeURIComponent(here)}`);
+                }}
                 className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-center text-sm hover:bg-neutral-50"
               >
                 Upload new
-              </a>
+              </button>
             )}
 
             {/* Selected items, shown as thumbnails with their own remove

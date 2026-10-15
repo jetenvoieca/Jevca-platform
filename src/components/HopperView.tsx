@@ -91,6 +91,7 @@ export default function HopperView({
   artworkSettings,
   artworkIntake = false,
   forArtwork,
+  returnTo,
 }: {
   siteId: string;
   // Where the Processed log's "Linked to X"/"New artwork" entries should
@@ -119,6 +120,9 @@ export default function HopperView({
   // only — Bin and Ancillary image (its first image becomes Main). See
   // addHopperItemToThisArtwork.
   forArtwork?: { id: string; catalogueName: string; imageCount: number; hasMain: boolean };
+  // Came from a media picker's "Upload new" (2026-10-15): after Add to
+  // Media, go back there, where the new item can be picked.
+  returnTo?: string;
 }) {
   const words = useClientWords();
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
@@ -349,7 +353,8 @@ export default function HopperView({
     startTransition(async () => {
       await addHopperItemToMedia(item.id, siteId);
       logProcessed(item, "Added to Media Catalogue", `/sites/${siteId}/media?selected=${item.id}`);
-      advanceAfterAction();
+      if (returnTo) router.push(returnTo);
+      else advanceAfterAction();
     });
   };
 
@@ -629,6 +634,18 @@ export default function HopperView({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
+      {returnTo && (
+        <div className="mb-4 flex items-center gap-3 rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+          <Link
+            href={returnTo}
+            className="rounded-md border border-neutral-300 bg-white px-2 py-[4px] text-xs hover:bg-neutral-50"
+          >
+            ← Back
+          </Link>
+          Add the new image or video, then press Add to Media — you&apos;ll go straight back.
+        </div>
+      )}
+
       {forArtwork ? (
         <div className="mb-4 flex items-center gap-3">
           <Link
