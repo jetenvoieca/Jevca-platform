@@ -8,6 +8,8 @@ import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 
 type ListFilters = {
   purpose?: "marketing" | "related";
+  // Pictures or videos only (2026-10-15 — the Marketing and Videos views).
+  kind?: "PHOTO" | "VIDEO";
   q?: string;
   tag?: string;
   artworkId?: string;
@@ -41,13 +43,14 @@ const DEFAULT_PAGE_SIZE = 60;
 // main image) rather than comparing IDs by hand, so it stays correct
 // automatically if Set as Main ever moves to a different image.
 export async function listMedia(artistId: string, filters: ListFilters) {
-  const { purpose, q, tag, artworkId, offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
+  const { purpose, kind, q, tag, artworkId, offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
 
   const where = {
     artistId,
     status: { not: "ARCHIVED" as const },
     ...(purpose === "marketing" ? { artworkId: null } : {}),
     ...(purpose === "related" ? { artworkId: { not: null }, mainImageOfArtwork: null } : {}),
+    ...(kind ? { kind } : {}),
     ...(artworkId ? { artworkId } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
     ...(q
@@ -94,8 +97,13 @@ export async function listMedia(artistId: string, filters: ListFilters) {
 // See the note on listMedia above — Related deliberately excludes each
 // artwork's own Main image, same reasoning and same exclusion.
 export async function countMediaByPurpose(artistId: string) {
-  const [marketing, related] = await Promise.all([
-    db.image.count({ where: { artistId, status: { not: "ARCHIVED" }, artworkId: null } }),
+  const [marketing, videos, related] = await Promise.all([
+    db.image.count({
+      where: { artistId, status: { not: "ARCHIVED" }, artworkId: null, kind: "PHOTO" },
+    }),
+    db.image.count({
+      where: { artistId, status: { not: "ARCHIVED" }, artworkId: null, kind: "VIDEO" },
+    }),
     db.image.count({
       where: {
         artistId,
@@ -105,7 +113,7 @@ export async function countMediaByPurpose(artistId: string) {
       },
     }),
   ]);
-  return { marketing, related };
+  return { marketing, videos, related };
 }
 
 export async function getMediaDetail(id: string) {

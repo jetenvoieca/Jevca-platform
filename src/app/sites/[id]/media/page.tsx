@@ -9,6 +9,7 @@ import {
 import { getBackfillCount } from "@/lib/actions/imageBackfill";
 import MediaCatalogueView from "@/components/MediaCatalogueView";
 import MediaArtworksView from "@/components/MediaArtworksView";
+import { mediaListFilters, readMediaTab } from "@/lib/mediaTabs";
 import { listArtworks, listArtworkNames } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { listCurations } from "@/lib/actions/curations";
@@ -48,8 +49,10 @@ export default async function MediaCataloguePage({
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
 
+  const tab = readMediaTab(sp.purpose);
+
   // Artworks view (2026-10-15): the catalogue's works, read only.
-  if (sp.purpose === "artworks") {
+  if (tab === "artworks") {
     const filters = {
       curation: sp.curation || "",
       name: sp.name || "",
@@ -86,12 +89,12 @@ export default async function MediaCataloguePage({
     );
   }
 
-  const purpose = sp.purpose === "related" ? "related" : "marketing";
+  const purpose = tab;
 
   const [{ rows: mediaRows, total }, counts, tagPresets, artistArtworks, selectedItem, backfillCount] =
     await Promise.all([
       listMedia(artistId, {
-        purpose,
+        ...mediaListFilters(purpose),
         q: sp.q,
         tag: sp.tag,
         artworkId: sp.artworkId,

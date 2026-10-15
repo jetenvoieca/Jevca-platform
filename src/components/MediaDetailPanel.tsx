@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateMedia, deleteMedia } from "@/lib/actions/mediaCatalogue";
 import { addMediaToBucket } from "@/lib/actions/videoEditor";
+import { nameRenderedVideo } from "@/lib/actions/render";
 
 export type MediaDetail = {
   id: string;
@@ -338,12 +339,31 @@ export default function MediaDetailPanel({
 
         <div className="flex items-center gap-3">
           {saved && <span className="text-sm text-green-600">Saved</span>}
+          {/* Save (2026-10-15, Craig's mockup) — keeps the rendered video
+              in the Media Catalogue (Videos), under its Caption or
+              "Untitled video", and frees the editor for the next one. */}
+          {variant === "pendingRender" && (
+            <button
+              type="button"
+              onClick={(e) => {
+                const caption = new FormData(e.currentTarget.form!).get("caption");
+                startTransition(async () => {
+                  await nameRenderedVideo(siteId, media.id, String(caption ?? ""));
+                  router.refresh();
+                });
+              }}
+              disabled={isPending || discarding}
+              className="ml-auto rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+            >
+              Save
+            </button>
+          )}
           {variant === "pendingRender" && onDiscard && (
             <button
               type="button"
               onClick={onDiscard}
               disabled={discarding}
-              className="ml-auto rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+              className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
             >
               {discarding ? "Discarding…" : "Discard"}
             </button>

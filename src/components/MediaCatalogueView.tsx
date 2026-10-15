@@ -7,6 +7,7 @@ import { listMedia, getMediaDetail, deleteMediaItems } from "@/lib/actions/media
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import VideoThumb from "@/components/VideoThumb";
 import MediaCatalogueTabs from "@/components/MediaCatalogueTabs";
+import { mediaListFilters, type MediaTab } from "@/lib/mediaTabs";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
 type MediaRow = {
@@ -57,7 +58,7 @@ export default function MediaCatalogueView({
   media: MediaRow[];
   total: number;
   pageSize: number;
-  purpose: "marketing" | "related";
+  purpose: Exclude<MediaTab, "artworks">;
   q: string;
   tag: string;
   artworkId: string;
@@ -177,7 +178,7 @@ export default function MediaCatalogueView({
     if (nextQ) params.set("q", nextQ);
     else params.delete("q");
 
-    if (purpose === "marketing") {
+    if (purpose !== "related") {
       const nextTag = overrides.tag ?? tag;
       if (nextTag) params.set("tag", nextTag);
       else params.delete("tag");
@@ -281,7 +282,7 @@ export default function MediaCatalogueView({
     (async () => {
       try {
         const { rows } = await listMedia(artistId, {
-          purpose,
+          ...mediaListFilters(purpose),
           q: q || undefined,
           tag: tag || undefined,
           artworkId: artworkId || undefined,
@@ -437,7 +438,7 @@ export default function MediaCatalogueView({
               placeholder="Search caption, alt text"
               className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
             />
-            {purpose === "marketing" ? (
+            {purpose !== "related" ? (
               <select
                 value={tag}
                 onChange={(e) => applyFilters({ tag: e.target.value })}

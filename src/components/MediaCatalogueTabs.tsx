@@ -1,20 +1,18 @@
 import Link from "next/link";
+import type { MediaTab } from "@/lib/mediaTabs";
 
-export type MediaCatalogueTab = "artworks" | "marketing" | "related";
-
-// The Media Catalogue's views (2026-10-15): Artworks (the catalogue's
-// works, to look at and pick from — read only), Marketing and Related.
+// The Media Catalogue's views — see lib/mediaTabs.ts.
 export default function MediaCatalogueTabs({
   siteId,
   current,
   relatedCount,
 }: {
   siteId: string;
-  current: MediaCatalogueTab;
+  current: MediaTab;
   relatedCount: number;
 }) {
-  const href = (tab: MediaCatalogueTab) => `/sites/${siteId}/media?purpose=${tab}`;
-  const plain = (tab: MediaCatalogueTab) =>
+  const href = (tab: MediaTab) => `/sites/${siteId}/media?purpose=${tab}`;
+  const plain = (tab: MediaTab) =>
     `px-4 py-1.5 ${current === tab ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"}`;
   return (
     <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
@@ -23,6 +21,9 @@ export default function MediaCatalogueTabs({
       </Link>
       <Link href={href("marketing")} className={plain("marketing")}>
         Marketing
+      </Link>
+      <Link href={href("videos")} className={plain("videos")}>
+        Videos
       </Link>
       <Link
         href={href("related")}
