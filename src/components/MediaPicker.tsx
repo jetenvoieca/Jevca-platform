@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition, type ReactNode } from "reac
 import { createPortal } from "react-dom";
 import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
+import { listArtworks, type ArtworkListRow } from "@/lib/actions/artworks";
 import VideoThumb from "@/components/VideoThumb";
 import UploadNewImageModal from "@/components/UploadNewImageModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
@@ -68,6 +69,7 @@ export default function MediaPicker({
   previewClassName,
   variant = "tile",
   onSelect,
+  onPickArtwork,
 }: {
   artistId: string;
   // Needed for the "Upload new" button's shared upload modal (see
@@ -115,6 +117,11 @@ export default function MediaPicker({
   // button with `label` instead of the dashed tile, like ArtworkPicker's.
   variant?: "tile" | "button";
   onSelect: (images: PickedImage[]) => void;
+  // When given (2026-10-15, campaign mails): the picker also offers the
+  // artworks — an Artworks | Media switch, starting on Artworks, like the
+  // Media Catalogue. Picking an artwork (its main image) calls this
+  // instead of onSelect. Single pick only.
+  onPickArtwork?: (artwork: ArtworkListRow) => void;
 }) {
   const words = useClientWords();
   const [open, setOpen] = useState(false);
@@ -123,6 +130,10 @@ export default function MediaPicker({
   const [images, setImages] = useState<PickedImage[]>([]);
   const [relatedCount, setRelatedCount] = useState(0);
   const [selected, setSelected] = useState<PickedImage[]>([]);
+  const [source, setSource] = useState<"artworks" | "media">(
+    onPickArtwork ? "artworks" : "media"
+  );
+  const [artworks, setArtworks] = useState<ArtworkListRow[]>([]);
   const [isPending, startTransition] = useTransition();
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // Whether the shared "cut down Hopper" upload modal is open — see the
@@ -154,10 +165,26 @@ export default function MediaPicker({
     });
   };
 
+  const loadArtworks = (q: string) => {
+    startTransition(async () => {
+      const { rows } = await listArtworks(artistId, { q: q || undefined, limit: PICKER_FETCH_LIMIT });
+      setArtworks(rows);
+    });
+  };
+
+  // Whichever list is showing.
+  const reload = (q: string) => (source === "artworks" ? loadArtworks(q) : load(q, purpose));
+
+  const handleSourceChange = (next: "artworks" | "media") => {
+    setSource(next);
+    if (next === "artworks") loadArtworks(query);
+    else load(query, purpose);
+  };
+
   const handleOpen = () => {
     setOpen(true);
     setSelected([]);
-    load(query, purpose);
+    reload(query);
     // Fetch the Related count up front too, so the tab badge is correct
     // even before switching to it — otherwise it'd read "Related (0)"
     // until clicked once.
@@ -183,7 +210,7 @@ export default function MediaPicker({
   useEffect(() => {
     if (!open) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => load(query, purpose), 250);
+    debounceRef.current = setTimeout(() => reload(query), 250);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
@@ -309,74 +336,106 @@ export default function MediaPicker({
           {isPending && (
             <p className="pb-3 text-xs text-neutral-400">Searching…</p>
           )}
-          <div className="grid grid-cols-6 gap-3">
-            {images.map((img) => {
-              const isSelected = selected.some((s) => s.id === img.id);
-              return (
+          {source === "artworks" && onPickArtwork ? (
+            <div className="grid grid-cols-6 gap-3">
+              {artworks.map((a) => (
                 <button
-                  key={img.id}
+                  key={a.id}
                   type="button"
-                  onClick={() => handlePick(img)}
-                  className="text-left"
+                  onClick={() => {
+                    onPickArtwork(a);
+                    setOpen(false);
+                  }}
+                  disabled={!a.imageUrl}
+                  className="text-left disabled:opacity-40"
                 >
-                  <div
-                    className={`overflow-hidden rounded-md border-2 ${
-                      isSelected
-                        ? "border-neutral-900"
-                        : "border-transparent hover:border-neutral-300"
-                    }`}
-                  >
-                    {img.kind === "VIDEO" ? (
-                      img.posterUrl ? (
-                        <img
-                          src={img.posterUrl}
-                          alt=""
-                          className="aspect-square w-full object-cover"
-                        />
-                      ) : (
-                        // Same fallback as the Media Catalogue grid
-                        // (MediaCatalogueView.tsx): videos uploaded via the
-                        // iPhone Shortcut have no posterUrl at all, so show
-                        // the video's own first frame live instead of a
-                        // plain placeholder. Previously this picker was the
-                        // one place still showing a grey "Video" box —
-                        // different code rendering the same data
-                        // differently (see decisions-log, 2026-08-16).
-                        <VideoThumb
-                          src={img.url}
-                          className="aspect-square w-full object-cover"
-                        />
-                      )
+                  <div className="overflow-hidden rounded-md border-2 border-transparent hover:border-neutral-300">
+                    {a.imageUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={a.imageUrl} alt="" className="aspect-square w-full object-cover" />
                     ) : (
-                      <img src={img.url} alt="" className="aspect-square w-full object-cover" />
+                      <div className="aspect-square w-full bg-neutral-100" />
                     )}
                   </div>
-                  {/* Caption/title under each thumbnail (2026-08-17,
-                      direct request) — this picker previously showed no
-                      text at all, making genuinely similar-looking images
-                      (e.g. several close variants of the same piece)
-                      indistinguishable without opening each one. Only
-                      rendered when there's an actual caption, so an
-                      uncaptioned image doesn't leave an odd empty gap
-                      that shifts the grid's alignment either way. */}
-                  {img.caption && (
-                    <p className="mt-1 truncate text-xs text-neutral-500" title={img.caption}>
-                      {img.caption}
-                    </p>
-                  )}
-                  {img.artwork && (
-                    <p
-                      className="truncate text-xs font-medium text-rose-600"
-                      title={img.artwork.catalogueName}
-                    >
-                      → {img.artwork.catalogueName}
-                    </p>
-                  )}
+                  <p className="mt-1 truncate text-xs text-neutral-500" title={a.catalogueName}>
+                    {a.catalogueName}
+                  </p>
                 </button>
-              );
-            })}
-          </div>
-          {images.length === 0 && !isPending && (
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-6 gap-3">
+              {images.map((img) => {
+                const isSelected = selected.some((s) => s.id === img.id);
+                return (
+                  <button
+                    key={img.id}
+                    type="button"
+                    onClick={() => handlePick(img)}
+                    className="text-left"
+                  >
+                    <div
+                      className={`overflow-hidden rounded-md border-2 ${
+                        isSelected
+                          ? "border-neutral-900"
+                          : "border-transparent hover:border-neutral-300"
+                      }`}
+                    >
+                      {img.kind === "VIDEO" ? (
+                        img.posterUrl ? (
+                          <img
+                            src={img.posterUrl}
+                            alt=""
+                            className="aspect-square w-full object-cover"
+                          />
+                        ) : (
+                          // Same fallback as the Media Catalogue grid
+                          // (MediaCatalogueView.tsx): videos uploaded via the
+                          // iPhone Shortcut have no posterUrl at all, so show
+                          // the video's own first frame live instead of a
+                          // plain placeholder. Previously this picker was the
+                          // one place still showing a grey "Video" box —
+                          // different code rendering the same data
+                          // differently (see decisions-log, 2026-08-16).
+                          <VideoThumb
+                            src={img.url}
+                            className="aspect-square w-full object-cover"
+                          />
+                        )
+                      ) : (
+                        <img src={img.url} alt="" className="aspect-square w-full object-cover" />
+                      )}
+                    </div>
+                    {/* Caption/title under each thumbnail (2026-08-17,
+                        direct request) — this picker previously showed no
+                        text at all, making genuinely similar-looking images
+                        (e.g. several close variants of the same piece)
+                        indistinguishable without opening each one. Only
+                        rendered when there's an actual caption, so an
+                        uncaptioned image doesn't leave an odd empty gap
+                        that shifts the grid's alignment either way. */}
+                    {img.caption && (
+                      <p className="mt-1 truncate text-xs text-neutral-500" title={img.caption}>
+                        {img.caption}
+                      </p>
+                    )}
+                    {img.artwork && (
+                      <p
+                        className="truncate text-xs font-medium text-rose-600"
+                        title={img.artwork.catalogueName}
+                      >
+                        → {img.artwork.catalogueName}
+                      </p>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+          {source === "artworks" && onPickArtwork && artworks.length === 0 && !isPending && (
+            <p className="py-12 text-center text-sm text-neutral-400">No matches.</p>
+          )}
+          {source === "media" && images.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
               {linkedArtworkId && purpose === "related"
                 ? `No images related to this ${words.item.toLowerCase()} yet.`
@@ -395,6 +454,22 @@ export default function MediaPicker({
           <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-8">
             {/* Reordered above Search (2026-08-18, direct request) —
                 matches the reference layout's tabs-then-search order. */}
+            {onPickArtwork && (
+              <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
+                {(["artworks", "media"] as const).map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => handleSourceChange(s)}
+                    className={`px-4 py-1.5 ${
+                      source === s ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                    }`}
+                  >
+                    {s === "artworks" ? words.items : "Media"}
+                  </button>
+                ))}
+              </div>
+            )}
             {linkedArtworkId && (
               // Same pill style as the Media Catalogue's own Marketing/
               // Related toggle, for visual consistency.
@@ -427,7 +502,9 @@ export default function MediaPicker({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={
-                mediaKinds && mediaKinds.length > 1
+                source === "artworks"
+                  ? `Search ${words.items.toLowerCase()}…`
+                  : mediaKinds && mediaKinds.length > 1
                   ? "Search images and videos…"
                   : videoOnly
                     ? "Search videos…"
@@ -445,13 +522,15 @@ export default function MediaPicker({
                 (handlePick), same as clicking any existing thumbnail
                 above — single mode closes the whole picker with it
                 selected; multi mode adds it to the current selection. */}
-            <button
-              type="button"
-              onClick={() => setShowUploadModal(true)}
-              className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-center text-sm hover:bg-neutral-50"
-            >
-              Upload new
-            </button>
+            {source === "media" && (
+              <button
+                type="button"
+                onClick={() => setShowUploadModal(true)}
+                className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-center text-sm hover:bg-neutral-50"
+              >
+                Upload new
+              </button>
+            )}
 
             {/* Selected items, shown as thumbnails with their own remove
                 control (2026-08-18, direct request) — previously this

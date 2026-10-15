@@ -278,8 +278,8 @@ export function ButtonSettings({
   );
 }
 
-// One picture: the chosen one with ✕ to remove it, or an empty slot to
-// choose one from Media or from an artwork's main image.
+// One picture: the chosen one with ✕ to remove it, or an empty slot whose
+// Add Media picker offers the artworks (their main image) and Media.
 function PictureSlot({
   picture,
   pickers,
@@ -293,7 +293,6 @@ function PictureSlot({
   onPick: (picture: MailPicture) => void;
   onRemove: () => void;
 }) {
-  const words = useClientWords();
   if (picture) {
     return (
       <Filled
@@ -305,12 +304,11 @@ function PictureSlot({
   }
   return (
     <EmptySlot className={className}>
-      <span className="text-xs text-neutral-400">Add from</span>
       <MediaPicker
         artistId={pickers.artistId}
         siteId={pickers.siteId}
         variant="button"
-        label="Media"
+        label="Add Media"
         onSelect={(images) => {
           const image = images[0];
           if (!image) return;
@@ -318,15 +316,7 @@ function PictureSlot({
           pickers.onThumb(pictureKey(next), { url: image.url, label: image.caption ?? "" });
           onPick(next);
         }}
-      />
-      <ArtworkPicker
-        artistId={pickers.artistId}
-        variant="button"
-        label={words.item}
-        allowCreate={false}
-        onSelect={(artworks) => {
-          const a = artworks[0];
-          if (!a) return;
+        onPickArtwork={(a) => {
           const next: MailPicture = { kind: "artwork", id: a.id };
           pickers.onThumb(pictureKey(next), { url: a.imageUrl, label: a.catalogueName });
           onPick(next);
