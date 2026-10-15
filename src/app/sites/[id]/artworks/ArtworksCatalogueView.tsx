@@ -873,6 +873,7 @@ export default function ArtworksCatalogueView({
             <ArtworkDetailPanel
               key={selected.id}
               siteId={siteId}
+              basePath={resolvedBasePath}
               artistId={artistId}
               artwork={selected}
               settings={settings}

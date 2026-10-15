@@ -10,11 +10,13 @@ import {
   addHopperItemToArtwork,
   addHopperItemToBucket,
   createArtworkFromHopperQuick,
+  addHopperItemToThisArtwork,
 } from "@/lib/actions/hopper";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
+import { MAX_ARTWORK_IMAGES } from "@/lib/artworkImages";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
@@ -88,6 +90,7 @@ export default function HopperView({
   queue,
   artworkSettings,
   artworkIntake = false,
+  forArtwork,
 }: {
   siteId: string;
   // Where the Processed log's "Linked to X"/"New artwork" entries should
@@ -112,6 +115,10 @@ export default function HopperView({
   // image) and Crop. The full Hopper, with every option, is the
   // admin's own; artists only get this.
   artworkIntake?: boolean;
+  // An artwork's own "+ Add" (2026-10-15): images for that one artwork
+  // only — Bin and Ancillary image (its first image becomes Main). See
+  // addHopperItemToThisArtwork.
+  forArtwork?: { id: string; catalogueName: string; imageCount: number; hasMain: boolean };
 }) {
   const words = useClientWords();
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
@@ -365,6 +372,25 @@ export default function HopperView({
   // now also carries an optional name straight onto the image's own
   // caption (see the matching note on addHopperItemToArtwork in
   // hopper.ts), rather than there being no way to name it at all.
+  // The page reloads forArtwork after each add (advanceAfterAction), and
+  // the server refuses a fifth image either way.
+  const artworkFull = !!forArtwork && forArtwork.imageCount >= MAX_ARTWORK_IMAGES;
+
+  const handleAddToThisArtwork = async (item: HopperItem, name: string): Promise<string | null> => {
+    if (!forArtwork) return null;
+    const result = await addHopperItemToThisArtwork(item.id, artistId, forArtwork.id, name);
+    if (!result.ok) return result.error;
+    logProcessed(
+      item,
+      result.becameMain
+        ? `Main image for ${forArtwork.catalogueName}`
+        : `Added to ${forArtwork.catalogueName}`,
+      `${resolvedBasePath}/artworks?selected=${forArtwork.id}`
+    );
+    advanceAfterAction();
+    return null;
+  };
+
   const handleManageArtwork = (
     item: HopperItem,
     artworkId: string,
@@ -603,16 +629,35 @@ export default function HopperView({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      {artworkIntake && (
+      {forArtwork ? (
         <div className="mb-4 flex items-center gap-3">
           <Link
-            href={`${resolvedBasePath}/artworks`}
+            href={`${resolvedBasePath}/artworks?selected=${forArtwork.id}`}
             className="rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50"
           >
-            ← Catalogue
+            ← {forArtwork.catalogueName}
           </Link>
-          <h1 className="text-2xl font-semibold text-neutral-900">Add {words.items}</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900">
+            Add images to {forArtwork.catalogueName}
+          </h1>
+          {artworkFull && (
+            <span className="text-sm text-neutral-500">
+              — it has its {MAX_ARTWORK_IMAGES} images
+            </span>
+          )}
         </div>
+      ) : (
+        artworkIntake && (
+          <div className="mb-4 flex items-center gap-3">
+            <Link
+              href={`${resolvedBasePath}/artworks`}
+              className="rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50"
+            >
+              ← Catalogue
+            </Link>
+            <h1 className="text-2xl font-semibold text-neutral-900">Add {words.items}</h1>
+          </div>
+        )
       )}
 
       {isDraggingOver && (
@@ -800,6 +845,13 @@ export default function HopperView({
                 isPending={isPending}
                 settings={artworkSettings}
                 artworkIntake={artworkIntake}
+                forArtwork={
+                  forArtwork && {
+                    hasMain: forArtwork.hasMain,
+                    full: artworkFull,
+                    onAdd: (name) => handleAddToThisArtwork(current, name),
+                  }
+                }
                 onBin={() => handleBin(current)}
                 onAddToMedia={() => handleAddToMedia(current)}
                 onAddToBucket={() => handleAddToBucket(current)}
@@ -922,6 +974,7 @@ function SortingCard({
   isPending,
   settings,
   artworkIntake,
+  forArtwork,
   onBin,
   onAddToMedia,
   onAddToBucket,
@@ -935,6 +988,13 @@ function SortingCard({
   isPending: boolean;
   settings: ArtworkSettings;
   artworkIntake: boolean;
+  // Set when adding images to one artwork: Bin and Ancillary image only.
+  // onAdd returns an error message, or null once added.
+  forArtwork?: {
+    hasMain: boolean;
+    full: boolean;
+    onAdd: (name: string) => Promise<string | null>;
+  };
   onBin: () => void;
   onAddToMedia: () => void;
   onAddToBucket: () => void;
@@ -954,6 +1014,18 @@ function SortingCard({
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
   const [showManageForm, setShowManageForm] = useState(false);
+  const [showAncillaryForm, setShowAncillaryForm] = useState(false);
+
+  const actionCls =
+    "rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50";
+  const openManage = () => {
+    setShowManageForm(true);
+    setShowQuickForm(false);
+  };
+  const openQuick = () => {
+    setShowQuickForm(true);
+    setShowManageForm(false);
+  };
   const [managingArtwork, setManagingArtwork] = useState(false);
 
   return (
@@ -1021,78 +1093,63 @@ function SortingCard({
           >
             Bin
           </button>
-          {!artworkIntake && (
+          {forArtwork && (
+            <button
+              type="button"
+              onClick={() => setShowAncillaryForm(true)}
+              disabled={isPending || showAncillaryForm || forArtwork.full}
+              className={actionCls}
+            >
+              Ancillary image
+            </button>
+          )}
+          {!forArtwork && !artworkIntake && (
             <>
-              <button
-                type="button"
-                onClick={onAddToMedia}
-                disabled={isPending}
-                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-              >
+              <button type="button" onClick={onAddToMedia} disabled={isPending} className={actionCls}>
                 Add to Media
               </button>
-              <button
-                type="button"
-                onClick={onAddToBucket}
-                disabled={isPending}
-                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-              >
+              <button type="button" onClick={onAddToBucket} disabled={isPending} className={actionCls}>
                 Add to Bucket
               </button>
-            </>
-          )}
-          {artworkIntake ? (
-            <>
               <button
                 type="button"
-                onClick={() => {
-                  setShowQuickForm(true);
-                  setShowManageForm(false);
-                }}
-                disabled={isPending || showQuickForm}
-                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-              >
-                New {words.item}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowManageForm(true);
-                  setShowQuickForm(false);
-                }}
+                onClick={openManage}
                 disabled={isPending || showManageForm}
-                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-              >
-                Ancillary image
-              </button>
-            </>
-          ) : (
-            <>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowManageForm(true);
-                  setShowQuickForm(false);
-                }}
-                disabled={isPending || showManageForm}
-                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                className={actionCls}
               >
                 Manage {words.item}
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setShowQuickForm(true);
-                  setShowManageForm(false);
-                }}
+                onClick={openQuick}
                 disabled={isPending || showQuickForm}
-                className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
+                className={actionCls}
               >
                 Create new {words.item.toLowerCase()}
               </button>
             </>
           )}
-          {item.kind === "PHOTO" && (
+          {!forArtwork && artworkIntake && (
+            <>
+              <button
+                type="button"
+                onClick={openQuick}
+                disabled={isPending || showQuickForm}
+                className={actionCls}
+              >
+                New {words.item}
+              </button>
+              <button
+                type="button"
+                onClick={openManage}
+                disabled={isPending || showManageForm}
+                className={actionCls}
+              >
+                Ancillary image
+              </button>
+            </>
+          )}
+          {item.kind === "PHOTO" && !forArtwork && (
             <button
               type="button"
               onClick={() => {
@@ -1107,6 +1164,14 @@ function SortingCard({
             </button>
           )}
         </div>
+      )}
+
+      {showAncillaryForm && forArtwork && (
+        <AncillaryForm
+          hasMain={forArtwork.hasMain}
+          onCancel={() => setShowAncillaryForm(false)}
+          onDone={forArtwork.onAdd}
+        />
       )}
 
       {showManageForm && (
@@ -1138,6 +1203,69 @@ function SortingCard({
           }}
         />
       )}
+    </div>
+  );
+}
+
+// Adding the item to one artwork (forArtwork): just its name — or
+// nothing, when it will be the artwork's first (Main) image.
+function AncillaryForm({
+  hasMain,
+  onCancel,
+  onDone,
+}: {
+  hasMain: boolean;
+  onCancel: () => void;
+  onDone: (name: string) => Promise<string | null>;
+}) {
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const save = async () => {
+    setSaving(true);
+    setError(await onDone(name));
+    setSaving(false);
+  };
+
+  return (
+    <div className="mt-4 space-y-4 rounded-md border border-neutral-300 p-4">
+      {hasMain ? (
+        <div>
+          <label className="mb-1 block text-sm font-medium text-neutral-700">
+            Name of ancillary image
+          </label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+          />
+        </div>
+      ) : (
+        <p className="text-sm text-neutral-600">
+          This is the artwork&apos;s first image, so it becomes its Main image.
+        </p>
+      )}
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      <div className="flex items-center gap-3">
+        <button
+          type="button"
+          onClick={save}
+          disabled={saving}
+          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {saving ? "Saving…" : "Done, next item"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={saving}
+          className="text-sm text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
     </div>
   );
 }

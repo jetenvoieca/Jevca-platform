@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import MediaPicker from "@/components/MediaPicker";
+import Link from "next/link";
 import ImageFill from "@/components/ImageFill";
 import SetMainFromHopperModal from "@/components/SetMainFromHopperModal";
-import { linkImagesToArtwork, unlinkImageFromArtwork } from "@/lib/actions/artworks";
+import { unlinkImageFromArtwork } from "@/lib/actions/artworks";
 import type { ArtworkImage } from "@/lib/artworkImages";
 
 // Reworked into a big preview + fixed 4-slot mini grid (2026-09-11,
@@ -21,7 +21,7 @@ import type { ArtworkImage } from "@/lib/artworkImages";
 // the artwork's image of record, not something to be reassigned to an
 // already-linked image from in here. The only ways Main ever changes
 // now: the artwork's very first image becomes Main automatically (see
-// the auto-assign note on linkImagesToArtwork in actions/artworks.ts),
+// addHopperItemToThisArtwork in actions/hopper.ts),
 // or a wrong one is fixed via "Delete & Replace" below — which opens
 // SetMainFromHopperModal to upload its replacement directly; the old
 // Main image is only actually deleted once that upload succeeds (see
@@ -34,6 +34,7 @@ import type { ArtworkImage } from "@/lib/artworkImages";
 export default function ArtworkImageManager({
   artworkId,
   siteId,
+  basePath,
   artistId,
   images: initialImages,
   mainImageId,
@@ -41,6 +42,9 @@ export default function ArtworkImageManager({
 }: {
   artworkId: string;
   siteId: string;
+  // Where the "+ Add" tiles go — the admin's own site path, or the
+  // preview's.
+  basePath: string;
   artistId: string;
   images: ArtworkImage[];
   // Which image (if any) is actually Main — an explicit id, not a
@@ -95,38 +99,6 @@ export default function ArtworkImageManager({
       .finally(() => setBusy(false));
   };
 
-  // Adds one or more already-uploaded images — used by every "+ Add"
-  // tile below, including the Main slot's when it's empty (a brand-new
-  // artwork's very first image). Whichever image ends up Main is decided
-  // server-side (linkImagesToArtwork auto-assigns Main whenever the
-  // artwork doesn't have one yet); the localMainId update here just
-  // mirrors that same rule locally so the UI doesn't have to wait on a
-  // refetch to show it correctly.
-  const handleAdd = (
-    added: { id: string; url: string; kind: string; posterUrl: string | null }[]
-  ) => {
-    const ids = added.map((i) => i.id);
-    setBusy(true);
-    linkImagesToArtwork(artworkId, ids, siteId)
-      .then(() => {
-        setImages((prev) => [
-          ...prev,
-          ...added
-            .filter((img) => !prev.some((p) => p.id === img.id))
-            .map((img) => ({
-              id: img.id,
-              url: img.url,
-              displayUrl: img.url,
-              kind: img.kind,
-              posterUrl: img.posterUrl,
-            })),
-        ]);
-        setLocalMainId((prev) => prev ?? ids[0] ?? prev);
-        onDataChanged?.();
-      })
-      .finally(() => setBusy(false));
-  };
-
   // "Delete & Replace" (2026-09-13, direct request; 2026-09-13 fix —
   // "should only delete after new one selected") — the only way left to
   // fix a wrong Main image, but this button no longer deletes anything
@@ -141,21 +113,17 @@ export default function ArtworkImageManager({
     setShowSetMainModal(true);
   };
 
-  // An empty slot — picks an image or video to add to the artwork. The
-  // first one added to an artwork with no Main becomes Main.
+  // An empty slot (2026-10-15) — opens the Hopper for this artwork:
+  // Bin and Ancillary image only (see HopperView's forArtwork). Its
+  // first image becomes Main.
   const addTile = (key: string) => (
-    <div key={key} className="aspect-square">
-      <MediaPicker
-        artistId={artistId}
-        siteId={siteId}
-        mode="single"
-        label="Add"
-        linkedArtworkId={artworkId}
-        mediaKinds={["PHOTO", "VIDEO"]}
-        previewClassName="aspect-square h-full w-full"
-        onSelect={(added) => handleAdd(added)}
-      />
-    </div>
+    <Link
+      key={key}
+      href={`${basePath}/artworks/add?artwork=${artworkId}`}
+      className="flex aspect-square items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
+    >
+      + Add
+    </Link>
   );
 
   const mainLabel = (size: "sm" | "xs") => (

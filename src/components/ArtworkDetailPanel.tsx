@@ -87,6 +87,7 @@ export type ArtworkSettings = {
 
 export default function ArtworkDetailPanel({
   siteId,
+  basePath,
   artistId,
   artwork,
   settings,
@@ -97,6 +98,9 @@ export default function ArtworkDetailPanel({
   showCloseButton = true,
 }: {
   siteId: string;
+  // The site's admin path, or the preview's — where the image "+ Add"
+  // tiles lead (defaults to the admin's own).
+  basePath?: string;
   artistId: string;
   artwork: ArtworkDetail;
   settings: ArtworkSettings;
@@ -366,6 +370,7 @@ export default function ArtworkDetailPanel({
       <ArtworkImageManager
         artworkId={artwork.id}
         siteId={siteId}
+        basePath={basePath ?? `/sites/${siteId}`}
         artistId={artistId}
         images={artwork.images}
         mainImageId={artwork.mainImageId}

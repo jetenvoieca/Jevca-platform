@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
+import { MAX_ARTWORK_IMAGES } from "@/lib/artworkImages";
 
 // None of these actions revalidate /sites/[id]/hopper OR /sites/[id]/
 // artworks (2026-08-17, second pass at this same fix) — both those
@@ -148,6 +149,61 @@ export async function addHopperItemToArtwork(
       await tx.artwork.update({ where: { id: artworkId }, data: { mainImageId: id } });
     }
   });
+}
+
+// The artwork an "Add images" page is for (?artwork= on Add Artworks),
+// limited to this artist's own — null if it isn't one.
+export async function getHopperTargetArtwork(artistId: string, artworkId: string) {
+  const artwork = await db.artwork.findFirst({
+    where: { id: artworkId, artistId },
+    select: { id: true, catalogueName: true, mainImageId: true, _count: { select: { images: true } } },
+  });
+  if (!artwork) return null;
+  return {
+    id: artwork.id,
+    catalogueName: artwork.catalogueName,
+    imageCount: artwork._count.images,
+    hasMain: !!artwork.mainImageId,
+  };
+}
+
+// "Ancillary image" from an artwork's own "+ Add" (2026-10-15): adds the
+// Hopper item to that artwork. Its first image becomes Main (same rule
+// as linkImagesToArtwork); after that each is an ancillary image with
+// the given name. Refused once the artwork has its four images.
+export async function addHopperItemToThisArtwork(
+  id: string,
+  artistId: string,
+  artworkId: string,
+  name: string
+): Promise<{ ok: true; becameMain: boolean } | { ok: false; error: string }> {
+  const artwork = await db.artwork.findFirst({
+    where: { id: artworkId, artistId },
+    select: { mainImageId: true, _count: { select: { images: true } } },
+  });
+  if (!artwork) return { ok: false, error: "That artwork couldn't be found." };
+  if (artwork._count.images >= MAX_ARTWORK_IMAGES) {
+    return { ok: false, error: `This artwork already has its ${MAX_ARTWORK_IMAGES} images.` };
+  }
+  const image = await db.image.findFirst({ where: { id, artistId, status: "HOPPER" } });
+  if (!image) return { ok: false, error: "That item couldn't be found." };
+
+  const becameMain = !artwork.mainImageId;
+  const caption = name.trim();
+  await db.$transaction(async (tx) => {
+    await tx.image.update({
+      where: { id },
+      data: {
+        status: "SORTED",
+        artworkId,
+        ...(!becameMain && caption ? { caption } : {}),
+      },
+    });
+    if (becameMain) {
+      await tx.artwork.update({ where: { id: artworkId }, data: { mainImageId: id } });
+    }
+  });
+  return { ok: true, becameMain };
 }
 
 // Replaces the old two-step "Add Artwork" flow (2026-08-18, direct

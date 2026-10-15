@@ -1,5 +1,10 @@
 import { publicMediaUrl } from "@/lib/r2";
 
+// An artwork holds at most this many images: its Main image plus up to
+// three ancillary (related) ones (2026-09-11 — the four slots of
+// ArtworkImageManager).
+export const MAX_ARTWORK_IMAGES = 4;
+
 // An artwork's images as the admin screens show them (2026-10-03) —
 // shared by the Artwork Catalogue's detail panel and the Curations
 // page, so both read the same images the same way.
