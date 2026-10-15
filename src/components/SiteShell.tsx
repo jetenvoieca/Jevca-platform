@@ -34,6 +34,7 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
   if (pathname.startsWith(`${base}/marketing/campaigns`)) return "mailCampaigns";
   if (pathname.startsWith(`${base}/marketing/social`)) return "socialMedia";
   if (pathname.startsWith(`${base}/marketing/pr`)) return "pr";
+  if (pathname.startsWith(`${base}/marketing/settings`)) return "marketingSettings";
   return null;
 }
 

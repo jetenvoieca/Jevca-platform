@@ -32,23 +32,13 @@ export type SiteNavKey =
   | "customers"
   | "profile"
   | "purchasesSettings"
+  | "marketingSettings"
   | "subscribers"
   | "mailCampaigns"
   | "socialMedia"
   | "pr";
 
-// Media's pages sit under Artworks (2026-10-15, Craig's mockup) — one
-// section for artworks and the images and videos behind them, with one
-// Settings page for both.
-const ARTWORK_KEYS: SiteNavKey[] = [
-  "artworks",
-  "curations",
-  "galleries",
-  "hopper",
-  "media",
-  "bucket",
-  "artworkSettings",
-];
+const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "curations", "galleries", "artworkSettings"];
 
 const WEBSITE_KEYS: SiteNavKey[] = ["pages", "analytics"];
 
@@ -61,7 +51,18 @@ const FINANCIAL_KEYS: SiteNavKey[] = [
   "purchasesSettings",
 ];
 
-const MARKETING_KEYS: SiteNavKey[] = ["subscribers", "mailCampaigns", "socialMedia", "pr"];
+// Hopper, Media Catalogue and Bucket sit in Marketing (2026-10-15,
+// Craig's decision); artworks get their images through Add Artworks.
+const MARKETING_KEYS: SiteNavKey[] = [
+  "hopper",
+  "media",
+  "bucket",
+  "subscribers",
+  "mailCampaigns",
+  "socialMedia",
+  "pr",
+  "marketingSettings",
+];
 
 export function buildSiteNavEntries({
   siteId,
@@ -87,9 +88,6 @@ export function buildSiteNavEntries({
     { label: "Curations", href: `${base}/curations`, active: active === "curations" },
     // "Locations" — the /galleries route, relabelled.
     { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },
-    { label: "Hopper", href: `${base}/hopper`, active: active === "hopper" },
-    { label: "Media Catalogue", href: `${base}/media`, active: active === "media" },
-    { label: "Bucket", href: `${base}/bucket`, active: active === "bucket" },
     {
       label: "Settings",
       href: `${base}/artworks/settings`,
@@ -130,6 +128,9 @@ export function buildSiteNavEntries({
   // placeholders for now.
   const marketingBase = `${base}/marketing`;
   const marketingChildren: AppShellNavItem[] = [
+    { label: "Hopper", href: `${base}/hopper`, active: active === "hopper" },
+    { label: "Media Catalogue", href: `${base}/media`, active: active === "media" },
+    { label: "Bucket", href: `${base}/bucket`, active: active === "bucket" },
     {
       label: "Subscribers",
       href: `${marketingBase}/subscribers`,
@@ -142,6 +143,12 @@ export function buildSiteNavEntries({
     },
     { label: "Social Media", href: `${marketingBase}/social`, active: active === "socialMedia" },
     { label: "PR", href: `${marketingBase}/pr`, active: active === "pr" },
+    {
+      label: "Settings",
+      href: `${marketingBase}/settings`,
+      active: active === "marketingSettings",
+      subtle: true,
+    },
   ];
 
   const sectionActive = (keys: SiteNavKey[]) => active !== null && keys.includes(active);

@@ -220,12 +220,12 @@ export async function addMediaTagPreset(
   const current = await getMediaTagPresets(artistId);
   const next = current.filter((v) => v.toLowerCase() !== value.toLowerCase());
   await db.artist.update({ where: { id: artistId }, data: { mediaTags: [...next, value] } });
-  revalidatePath(`/sites/${siteId}/artworks/settings`);
+  revalidatePath(`/sites/${siteId}/marketing/settings`);
 }
 
 export async function removeMediaTagPreset(artistId: string, siteId: string, value: string) {
   const current = await getMediaTagPresets(artistId);
   const next = current.filter((v) => v !== value);
   await db.artist.update({ where: { id: artistId }, data: { mediaTags: next } });
-  revalidatePath(`/sites/${siteId}/artworks/settings`);
+  revalidatePath(`/sites/${siteId}/marketing/settings`);
 }
