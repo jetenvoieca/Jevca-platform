@@ -130,7 +130,7 @@ export function buildSiteNavEntries({
   const marketingChildren: AppShellNavItem[] = [
     { label: "Hopper", href: `${base}/hopper`, active: active === "hopper" },
     { label: "Media Catalogue", href: `${base}/media`, active: active === "media" },
-    { label: "Bucket", href: `${base}/bucket`, active: active === "bucket" },
+    { label: "Video Edit", href: `${base}/bucket`, active: active === "bucket" },
     {
       label: "Subscribers",
       href: `${marketingBase}/subscribers`,
