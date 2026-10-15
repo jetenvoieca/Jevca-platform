@@ -13,6 +13,7 @@ import {
 import type { RichText } from "@/lib/richText";
 import type { CampaignMailInput } from "@/lib/actions/campaigns";
 import type { ClientKind } from "@/lib/clientKind";
+import { readJson } from "@/lib/claudeJson";
 
 // A campaign mail's "Translate now" (2026-10-08): translates the English
 // of every part whose French is still empty (see lib/mailTranslation.ts)
@@ -83,40 +84,33 @@ export async function translateMailToFrench(
       model: MODEL,
       max_tokens: MAX_TOKENS,
       system,
-      tools: [
-        {
-          name: "give_french",
-          description: rich
-            ? "The French, one tagged string per English paragraph, in order."
-            : "The French translation.",
-          input_schema: {
+      // Structured output: the reply is JSON matching this schema.
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: {
             type: "object",
             properties: {
-              french: rich
-                ? {
-                    type: "array",
-                    items: { type: "string" },
-                    minItems: piece.paragraphs.length,
-                    maxItems: piece.paragraphs.length,
-                  }
-                : { type: "string" },
+              french: rich ? { type: "array", items: { type: "string" } } : { type: "string" },
             },
             required: ["french"],
+            additionalProperties: false,
           },
         },
-      ],
-      tool_choice: { type: "tool", name: "give_french" },
+      },
       messages: [
         {
           role: "user",
-          content: `Translate this part of an email (${PIECE_NAMES[piece.key.split(":")[0]] ?? "text"}) into French:\n\n${JSON.stringify(
-            rich ? piece.paragraphs : piece.text
-          )}`,
+          content:
+            `Translate this part of an email (${PIECE_NAMES[piece.key.split(":")[0]] ?? "text"}) into French` +
+            (rich
+              ? `, as exactly ${piece.paragraphs.length} tagged string${piece.paragraphs.length === 1 ? "" : "s"}, one per English paragraph, in order`
+              : "") +
+            `:\n\n${JSON.stringify(rich ? piece.paragraphs : piece.text)}`,
         },
       ],
     });
-    const block = response.content.find((b) => b.type === "tool_use");
-    const french = block && block.type === "tool_use" ? (block.input as { french?: unknown }).french : null;
+    const french = readJson(response)?.french;
     if (piece.kind === "line") return typeof french === "string" && french.trim() ? french.trim() : null;
     return Array.isArray(french) ? tagsToRichText(french.map((v) => String(v ?? "")), piece.links) : null;
   };

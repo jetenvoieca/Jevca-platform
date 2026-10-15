@@ -1,6 +1,7 @@
 "use server";
 
 import Anthropic from "@anthropic-ai/sdk";
+import { readJson } from "@/lib/claudeJson";
 
 // Translate on an opened email in the Inbox (2026-10-09, direct request —
 // French emails into English), on every email tab. Uses Claude, with the
@@ -34,11 +35,11 @@ export async function translateEmailToEnglish(subject: string, text: string): Pr
         "You translate emails into natural, clear British English. Keep the meaning, tone and layout — " +
         "paragraphs, lists, line breaks — and leave names, addresses, numbers, links and amounts as they are. " +
         "Anything already in English stays as it is.",
-      tools: [
-        {
-          name: "give_english",
-          description: "The email in English.",
-          input_schema: {
+      // Structured output: the reply is JSON matching this schema.
+      output_config: {
+        format: {
+          type: "json_schema",
+          schema: {
             type: "object",
             properties: {
               subject: { type: "string", description: "The subject line in English." },
@@ -46,10 +47,10 @@ export async function translateEmailToEnglish(subject: string, text: string): Pr
               already_english: { type: "boolean", description: "True if the email was already all in English." },
             },
             required: ["subject", "body", "already_english"],
+            additionalProperties: false,
           },
         },
-      ],
-      tool_choice: { type: "tool", name: "give_english" },
+      },
       messages: [
         {
           role: "user",
@@ -57,12 +58,7 @@ export async function translateEmailToEnglish(subject: string, text: string): Pr
         },
       ],
     });
-    const block = response.content.find((b) => b.type === "tool_use");
-    const out = (block && block.type === "tool_use" ? block.input : null) as {
-      subject?: unknown;
-      body?: unknown;
-      already_english?: unknown;
-    } | null;
+    const out = readJson(response);
     if (out?.already_english === true) return { ok: false, error: "This email is already in English." };
     if (typeof out?.body !== "string" || !out.body.trim()) {
       return { ok: false, error: "The translation came back empty — try again." };
