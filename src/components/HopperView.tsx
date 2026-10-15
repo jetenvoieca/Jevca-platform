@@ -262,7 +262,7 @@ export default function HopperView({
   // "When added from any source immediately fill the panel" (2026-09-13,
   // direct request) — any of the four ways a new item can land in the
   // Hopper (manual upload, drag-and-drop, CSV import, or just clicking
-  // Incoming to check for new arrivals) should open straight into the
+  // Hopper to check for new arrivals) should open straight into the
   // sorting card, not require an extra click on a thumbnail first. Since
   // sortOrder defaults to "newest" and the server always returns the
   // truly newest row first once sorted that way, marking hasInteracted
@@ -524,25 +524,21 @@ export default function HopperView({
     handleUploadFiles(e.dataTransfer.files);
   };
 
-  // Labels shortened 2026-08-17 (was "Check Incoming"/"Add from folder"/
-  // "Add media") — direct request, part of tidying the layout up for use
-  // at half-screen width where every extra pixel of button-row space
-  // matters. No longer echoed as an invisible spacer above the other two
-  // columns (removed 2026-08-18 — see the note below) — this row now only
-  // exists here, above the sorting card, where it actually belongs.
+  // Short labels so the row fits at half-screen width. The first button
+  // checks for new arrivals.
   const importButtons = (
     <div className="flex flex-wrap items-center gap-2">
       <button
         type="button"
         onClick={() => {
-          // "Incoming" is itself an explicit signal to start sorting
-          // (2026-09-13) — see revealLatestArrival above.
+          // Checking for new arrivals is itself a signal to start sorting
+          // — see revealLatestArrival above.
           revealLatestArrival();
           router.refresh();
         }}
         className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
       >
-        Incoming
+        Hopper
       </button>
       <label
         className={`rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 ${
@@ -747,10 +743,6 @@ export default function HopperView({
         </div>
 
         <div className="order-1 flex flex-col lg:order-none lg:min-w-[320px] lg:flex-1 lg:basis-[42%] lg:overflow-hidden">
-          <h1 className="mb-3 text-2xl font-semibold text-neutral-900">
-            Hopper <span className="text-base font-normal text-neutral-400">({queue.length})</span>
-          </h1>
-
           {uploadProgress && (
             <div className="mb-3 max-w-sm">
               <p className="mb-1 text-xs text-neutral-500">
