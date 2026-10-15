@@ -1,6 +1,5 @@
 "use server";
 
-import { unstable_cache } from "next/cache";
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
@@ -33,23 +32,6 @@ import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 // calls do that job. /bucket is kept, since appendImageToTimeline
 // building that route's data is a genuine, different case worth
 // checking if this recurs there too.
-
-// countHopper powers the Hopper sidebar badge in the shared site layout
-// (src/app/sites/[id]/layout.tsx), which re-runs on every navigation
-// inside a site. A plain db.image.count() is cheap on its own, but paid
-// on every single click it adds up — and it doesn't need to be
-// exact to the second (2026-08-31, same reasoning as getOpenAlerts in
-// lib/alerts.ts). Cached for 60s per artist instead of queried fresh on
-// every navigation.
-const countHopperCached = unstable_cache(
-  async (artistId: string) => db.image.count({ where: { artistId, status: "HOPPER" } }),
-  ["count-hopper"],
-  { revalidate: 60 }
-);
-
-export async function countHopper(artistId: string): Promise<number> {
-  return countHopperCached(artistId);
-}
 
 // Returns rows already in the exact shape HopperView's HopperItem
 // expects (2026-09-24) — this mapping used to be copied by hand into

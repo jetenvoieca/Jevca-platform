@@ -43,9 +43,6 @@ function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
 export default function SiteShell({
   siteId,
   salesEnabled,
-  hopperCount,
-  artworkNeedsReviewCount,
-  mediaNeedsReviewCount,
   alertCount,
   lastPublishedAt,
   recentSites,
@@ -54,9 +51,6 @@ export default function SiteShell({
 }: {
   siteId: string;
   salesEnabled: boolean;
-  hopperCount: number;
-  artworkNeedsReviewCount: number;
-  mediaNeedsReviewCount: number;
   alertCount: number;
   // ISO date, or null if the site has never been published.
   lastPublishedAt: string | null;
@@ -75,9 +69,6 @@ export default function SiteShell({
     siteId,
     active: resolveActiveKey(pathname, siteId),
     alertCount,
-    hopperCount,
-    artworkNeedsReviewCount,
-    mediaNeedsReviewCount,
     salesEnabled,
     recentSites,
     words,

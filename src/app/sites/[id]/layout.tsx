@@ -1,8 +1,5 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { countHopper } from "@/lib/actions/hopper";
-import { countArtworksNeedingReview } from "@/lib/actions/artworks";
-import { countMediaNeedingReview } from "@/lib/actions/mediaCatalogue";
 import { getLastPublishedAt } from "@/lib/actions/siteSnapshot";
 import { publishedHomePath } from "@/lib/siteSnapshot";
 import { getOpenAlerts } from "@/lib/alerts";
@@ -13,7 +10,7 @@ import ClientWordsProvider from "@/components/ClientWordsProvider";
 
 // Without this, Next can treat this layout as static-cacheable (it uses
 // no dynamic APIs like cookies()/headers(), just plain db reads) and
-// serve stale counts (Hopper, needs-review, alerts) from the Full Route
+// serve stale data (alerts, last published) from the Full Route
 // Cache — the site's own Settings page (src/app/sites/[id]/page.tsx)
 // already sets this for the same reason.
 export const dynamic = "force-dynamic";
@@ -36,17 +33,7 @@ export default async function SiteLayout({
   // Opening a site records the visit (Site.lastVisitedAt). The recent
   // sites under "Sites" in the menu are this site, then the one opened
   // before it.
-  const [
-    hopperCount,
-    artworkNeedsReviewCount,
-    mediaNeedsReviewCount,
-    openAlerts,
-    lastPublishedAt,
-    previousSites,
-  ] = await Promise.all([
-    countHopper(site.artistId),
-    countArtworksNeedingReview(site.artistId),
-    countMediaNeedingReview(site.artistId),
+  const [openAlerts, lastPublishedAt, previousSites] = await Promise.all([
     getOpenAlerts(),
     getLastPublishedAt(id),
     getRecentSites({ excludeSiteId: id, take: 1 }),
@@ -61,9 +48,6 @@ export default async function SiteLayout({
       <SiteShell
         siteId={id}
         salesEnabled={site.salesEnabled}
-        hopperCount={hopperCount}
-        artworkNeedsReviewCount={artworkNeedsReviewCount}
-        mediaNeedsReviewCount={mediaNeedsReviewCount}
         alertCount={openAlerts.length}
         lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
         recentSites={recentSites}

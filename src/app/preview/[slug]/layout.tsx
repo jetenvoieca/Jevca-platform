@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { countHopper } from "@/lib/actions/hopper";
 import { resolvePreviewSiteId } from "@/lib/previewSites";
 import PreviewShell from "@/components/PreviewShell";
 import ClientWordsProvider from "@/components/ClientWordsProvider";
@@ -27,14 +26,11 @@ export default async function PreviewLayout({
   });
   if (!site) notFound();
 
-  const hopperCount = await countHopper(site.artistId);
-
   return (
     <ClientWordsProvider kind={site.artist.kind}>
       <PreviewShell
         basePath={`/preview/${slug}`}
         siteLabel={site.name.trim() || site.artist.name}
-        hopperCount={hopperCount}
       >
         {children}
       </PreviewShell>

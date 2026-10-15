@@ -768,7 +768,7 @@ export default function HopperView({
             {!current ? (
               <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
                 {queue.length === 0
-                  ? "Hopper is empty — drag and drop files here, or use the buttons above."
+                  ? "Drag and drop files here, or use the buttons above."
                   : "Drag and drop a new file in, or pick one from Up next to start sorting."}
               </div>
             ) : (

@@ -15,12 +15,10 @@ export type PreviewNavKey = "artworks" | "hopper" | "galleries" | "sales" | "gui
 export function buildPreviewNavEntries({
   basePath,
   active,
-  hopperCount,
   words,
 }: {
   basePath: string;
   active: PreviewNavKey | null;
-  hopperCount: number;
   words: ClientWords;
 }): AppShellNavEntry[] {
   return [
@@ -32,17 +30,12 @@ export function buildPreviewNavEntries({
       active: active === "artworks" || active === "galleries" || active === "hopper",
       children: [
         {
-          label: `${words.items} Catalogue`,
+          label: "Catalogue",
           href: `${basePath}/artworks`,
           active: active === "artworks",
         },
         { label: "Locations", href: `${basePath}/galleries`, active: active === "galleries" },
-        {
-          label: "Hopper",
-          href: `${basePath}/hopper`,
-          active: active === "hopper",
-          badge: hopperCount,
-        },
+        { label: "Hopper", href: `${basePath}/hopper`, active: active === "hopper" },
       ],
     },
     { label: "Guides", href: `${basePath}/guides`, active: active === "guides" },

@@ -21,7 +21,6 @@ function resolveActiveKey(pathname: string, basePath: string): PreviewNavKey | n
 export default function PreviewShell({
   basePath,
   siteLabel,
-  hopperCount,
   children,
 }: {
   // e.g. "/preview/louise-dear" — every nav link and active-state check
@@ -29,13 +28,12 @@ export default function PreviewShell({
   // works for any slug in previewSites.ts.
   basePath: string;
   siteLabel: string;
-  hopperCount: number;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const active = resolveActiveKey(pathname, basePath);
   const words = useClientWords();
-  const navItems = buildPreviewNavEntries({ basePath, active, hopperCount, words });
+  const navItems = buildPreviewNavEntries({ basePath, active, words });
 
   return (
     <AppShell

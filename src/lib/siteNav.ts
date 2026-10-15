@@ -67,9 +67,6 @@ export function buildSiteNavEntries({
   siteId,
   active,
   alertCount,
-  hopperCount,
-  artworkNeedsReviewCount,
-  mediaNeedsReviewCount,
   salesEnabled,
   recentSites,
   words,
@@ -77,9 +74,6 @@ export function buildSiteNavEntries({
   siteId: string;
   active: SiteNavKey | null;
   alertCount: number;
-  hopperCount: number;
-  artworkNeedsReviewCount: number;
-  mediaNeedsReviewCount: number;
   salesEnabled: boolean;
   // This site first, then the one opened before it — see the site layout.
   recentSites: RecentSite[];
@@ -89,22 +83,12 @@ export function buildSiteNavEntries({
   const base = `/sites/${siteId}`;
 
   const artworkChildren: AppShellNavItem[] = [
-    {
-      label: `${words.items} Catalogue`,
-      href: `${base}/artworks`,
-      active: active === "artworks",
-      badge: artworkNeedsReviewCount,
-    },
+    { label: "Catalogue", href: `${base}/artworks`, active: active === "artworks" },
     { label: "Curations", href: `${base}/curations`, active: active === "curations" },
     // "Locations" — the /galleries route, relabelled.
     { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },
-    { label: "Hopper", href: `${base}/hopper`, active: active === "hopper", badge: hopperCount },
-    {
-      label: "Media Catalogue",
-      href: `${base}/media`,
-      active: active === "media",
-      badge: mediaNeedsReviewCount,
-    },
+    { label: "Hopper", href: `${base}/hopper`, active: active === "hopper" },
+    { label: "Media Catalogue", href: `${base}/media`, active: active === "media" },
     { label: "Bucket", href: `${base}/bucket`, active: active === "bucket" },
     {
       label: "Settings",
