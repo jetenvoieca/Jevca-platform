@@ -2,16 +2,12 @@ import type { AppShellNavEntry } from "@/components/SidebarNav";
 import { SITE_SECTION_COLOR } from "@/lib/siteNav";
 import type { ClientWords } from "@/lib/clientKind";
 
-export type PreviewNavKey = "artworks" | "galleries" | "sales" | "guides";
+export type PreviewNavKey = "artworks" | "curations" | "galleries";
 
-// The reduced, evaluation-only nav shown under /preview/<slug>/* — see
-// previewSites.ts. Deliberately a fixed, hand-picked list (not a
-// filtered version of buildSiteNavEntries): a genuinely different, much
-// simpler menu, laid out in the same Artworks / Financial grouping as
-// the full per-site nav.
-//
-// "Guides" (2026-09-12) is a placeholder for now — it links to a page
-// that just says so; the real read-only guides view is later work.
+// The artists' version (2026-10-15 — the simplest one): the nav shown
+// under /preview/<slug>/* — see previewSites.ts. Just the Artworks
+// section: Catalogue (with its Add Artworks page), Curations and
+// Locations.
 export function buildPreviewNavEntries({
   basePath,
   active,
@@ -27,24 +23,12 @@ export function buildPreviewNavEntries({
       section: true,
       key: "artworks",
       color: SITE_SECTION_COLOR,
-      active: active === "artworks" || active === "galleries",
+      active: active !== null,
       children: [
-        {
-          label: "Catalogue",
-          href: `${basePath}/artworks`,
-          active: active === "artworks",
-        },
+        { label: "Catalogue", href: `${basePath}/artworks`, active: active === "artworks" },
+        { label: "Curations", href: `${basePath}/curations`, active: active === "curations" },
         { label: "Locations", href: `${basePath}/galleries`, active: active === "galleries" },
       ],
-    },
-    { label: "Guides", href: `${basePath}/guides`, active: active === "guides" },
-    {
-      label: "Financial",
-      section: true,
-      key: "financial",
-      color: SITE_SECTION_COLOR,
-      active: active === "sales",
-      children: [{ label: "Sales", href: `${basePath}/sales`, active: active === "sales" }],
     },
   ];
 }
