@@ -310,6 +310,8 @@ model Artist {
 
   images Image[]
   hopperVideoImports HopperVideoImport[]
+  // Marketing → Social Media (2026-10-15). See SocialPost.
+  socialPosts SocialPost[]
   // Picked via MediaPicker from this same artist's Media Catalogue — see
   // the note by profileImageId above.
   profileImage Image? @relation("ArtistProfileImage", fields: [profileImageId], references: [id])
@@ -1798,6 +1800,53 @@ model HopperVideoImport {
   @@index([artistId])
 }
 
+// Marketing → Social Media (2026-10-15): a post for the artist's
+// Instagram. A POST with one video goes out as a Reel, with one image as
+// a picture, with 2–10 items as a carousel; a STORY is one item (see
+// lib/socialPosts.ts). One caption, English and French together. Status
+// DRAFT until posting is set up; the others are for posting.
+enum SocialPostFormat {
+  POST
+  STORY
+}
+
+enum SocialPostStatus {
+  DRAFT
+  SCHEDULED
+  POSTING
+  POSTED
+  FAILED
+}
+
+model SocialPost {
+  id       String           @id @default(cuid())
+  artistId String
+  artist   Artist           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  format   SocialPostFormat @default(POST)
+  caption  String           @default("")
+  status   SocialPostStatus @default(DRAFT)
+  media    SocialPostMedia[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId, status])
+}
+
+// One picture or video in a social post, in order. Deleting the image
+// from the Media Catalogue takes it out of the post.
+model SocialPostMedia {
+  id       String     @id @default(cuid())
+  postId   String
+  post     SocialPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  imageId  String
+  image    Image      @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  position Int
+
+  @@index([postId])
+  @@index([imageId])
+}
+
 model Image {
   id       String @id @default(cuid())
   artistId String
@@ -1871,6 +1920,8 @@ model Image {
   curationSectionMedia CurationSectionMedia[]
 
   sourceVideoRender VideoRender?
+  // Social posts showing this image or video (2026-10-15).
+  socialPostMedia SocialPostMedia[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

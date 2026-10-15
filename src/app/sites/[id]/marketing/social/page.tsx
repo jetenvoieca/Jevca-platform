@@ -1,9 +1,32 @@
-// Placeholder (2026-10-08) — Marketing → Social Media is planned but not built yet.
-export default function SocialMediaPage() {
+import { notFound } from "next/navigation";
+import { db } from "@/lib/db";
+import { listSocialPosts } from "@/lib/actions/socialPosts";
+import SocialView from "@/components/SocialView";
+
+// Marketing → Social Media (2026-10-15) — see SocialView.
+export const dynamic = "force-dynamic";
+
+export default async function SocialMediaPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  // The post to open (SocialView keeps it here).
+  searchParams: Promise<{ post?: string }>;
+}) {
+  const { id } = await params;
+  const sp = await searchParams;
+  const site = await db.site.findUnique({ where: { id }, select: { id: true, artistId: true } });
+  if (!site) notFound();
+
+  const posts = await listSocialPosts(site.artistId);
+
   return (
-    <div className="p-6">
-      <h1 className="mb-2 text-2xl font-semibold text-neutral-900">Social Media</h1>
-      <p className="text-sm text-neutral-400">Not built yet.</p>
-    </div>
+    <SocialView
+      siteId={site.id}
+      artistId={site.artistId}
+      initialPosts={posts}
+      initialOpenId={sp.post ?? null}
+    />
   );
 }
