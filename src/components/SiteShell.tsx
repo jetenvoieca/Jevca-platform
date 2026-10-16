@@ -7,6 +7,7 @@ import { publishSite } from "@/lib/actions/siteSnapshot";
 import { buildSiteNavEntries, type SiteNavKey } from "@/lib/siteNav";
 import type { RecentSite } from "@/lib/recentSites";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import { PageHeadingProvider } from "@/components/PageHeading";
 
 // Works out which nav item should be highlighted/open purely from the
 // current path — this shell is rendered once from the shared site
@@ -59,7 +60,7 @@ export default function SiteShell({
   recentSites: RecentSite[];
   // The site name / domain header, pinned above the scrolling page
   // content — built by the (server) layout since it needs the site
-  // record, passed in ready-made.
+  // record, passed in ready-made. It holds the PageHeadingSlot.
   header: ReactNode;
   children: ReactNode;
 }) {
@@ -82,10 +83,12 @@ export default function SiteShell({
       lastPublishedAt={lastPublishedAt}
       navItems={navItems}
       content={
-        <div className="flex h-full flex-col">
-          <div className="shrink-0 border-b border-neutral-200 px-6 py-4">{header}</div>
-          <div className="flex-1 overflow-y-auto">{children}</div>
-        </div>
+        <PageHeadingProvider>
+          <div className="flex h-full flex-col">
+            <div className="shrink-0 border-b border-neutral-200 px-6 py-4">{header}</div>
+            <div className="flex-1 overflow-y-auto">{children}</div>
+          </div>
+        </PageHeadingProvider>
       }
     />
   );

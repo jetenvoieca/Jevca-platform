@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { buildPreviewNavEntries, type PreviewNavKey } from "@/lib/previewNav";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import { PageHeadingProvider, PageHeadingSlot } from "@/components/PageHeading";
 
 // The evaluation-only reduced-menu shell (2026-09-12) — see
 // previewSites.ts / previewNav.ts. Deliberately much simpler than
@@ -37,13 +38,19 @@ export default function PreviewShell({
     <AppShell
       navItems={navItems}
       content={
-        <div className="flex h-full flex-col">
-          <div className="shrink-0 border-b border-neutral-200 px-6 py-4">
-            <p className="text-xs uppercase tracking-wide text-neutral-400">Evaluation preview</p>
-            <h1 className="text-lg font-semibold text-neutral-900">{siteLabel}</h1>
+        <PageHeadingProvider>
+          <div className="flex h-full flex-col">
+            {/* Site label left, the page's own heading (if any) centred. */}
+            <div className="grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-4 border-b border-neutral-200 px-6 py-4">
+              <div>
+                <p className="text-xs uppercase tracking-wide text-neutral-400">Evaluation preview</p>
+                <h1 className="text-lg font-semibold text-neutral-900">{siteLabel}</h1>
+              </div>
+              <PageHeadingSlot />
+            </div>
+            <div className="flex-1 overflow-y-auto">{children}</div>
           </div>
-          <div className="flex-1 overflow-y-auto">{children}</div>
-        </div>
+        </PageHeadingProvider>
       }
     />
   );

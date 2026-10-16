@@ -23,6 +23,7 @@ import HopperItemPreview from "@/components/HopperItemPreview";
 import HopperCropEditor from "@/components/HopperCropEditor";
 import { computeReferencePrice } from "@/lib/pricing";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import { PageHeading } from "@/components/PageHeading";
 
 export type HopperItem = {
   id: string;
@@ -73,15 +74,6 @@ type ProcessedEntry = {
 // unmount — see decisions log, 2026-08-05). Same localStorage pattern
 // already used for the Media Catalogue's density preference.
 const processedLogKey = (artistId: string) => `jevca:hopper-processed:${artistId}`;
-// Which end of the queue you're sorting from — a genuine processing-order
-// choice (2026-08-18, direct request), not just how the "Up next" list
-// looks: "newest" means the most recently uploaded item is the one you're
-// actually asked to sort, and it sits at the top of "Up next" too.
-// "oldest" is the original first-in-first-out order. Defaults to "newest"
-// per direct instruction — remembered per artist, same localStorage
-// pattern as the Processed log above.
-const sortOrderKey = (artistId: string) => `jevca:hopper-sort-order:${artistId}`;
-type HopperSortOrder = "newest" | "oldest";
 
 export default function HopperView({
   siteId,
@@ -129,12 +121,6 @@ export default function HopperView({
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  // Defaults to "newest" (direct instruction) — the server always sends
-  // `queue` oldest-first (see listHopperQueue's orderBy), so this is
-  // resorted client-side below rather than requiring a fresh server
-  // fetch just to flip direction; the whole queue is already loaded at
-  // once anyway.
-  const [sortOrder, setSortOrder] = useState<HopperSortOrder>("newest");
   const [addUploading, setAddUploading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   // { done, total } while a batch upload is in progress, null otherwise
@@ -199,36 +185,12 @@ export default function HopperView({
     }
   }, [processedLog, artistId]);
 
-  // Same SSR-safe "start at the default, fill in from storage right
-  // after mount" pattern as the Processed log above — starts at
-  // "newest" on both server and first client render (no hydration
-  // mismatch), then switches to whatever this browser last chose, if
-  // anything, immediately after.
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(sortOrderKey(artistId));
-      if (stored === "newest" || stored === "oldest") setSortOrder(stored);
-    } catch {
-      // Corrupt or unavailable storage — just keep the "newest" default.
-    }
-  }, [artistId]);
-
-  useEffect(() => {
-    try {
-      window.localStorage.setItem(sortOrderKey(artistId), sortOrder);
-    } catch {
-      // Storage full/unavailable — non-critical, just won't persist.
-    }
-  }, [sortOrder, artistId]);
-
-  // The server always sends `queue` oldest-first (listHopperQueue's
-  // orderBy) — sorted explicitly here by createdAt rather than just
-  // reversing that array, so this doesn't quietly break if the server
-  // order ever changes for an unrelated reason.
-  const sortedQueue =
-    sortOrder === "newest"
-      ? [...queue].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-      : [...queue].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+  // Always newest first (2026-10-16): the item you're asked to sort is
+  // the most recently added. Sorted here by createdAt rather than relying
+  // on the server's order.
+  const sortedQueue = [...queue].sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
 
   // 2026-08-19 — separate from `current` itself: tracks whether the
   // person has actually gotten going yet (picked something, or completed
@@ -239,7 +201,7 @@ export default function HopperView({
 
   // Blank until something is actually picked — either a thumbnail from
   // "Up next" below, or a freshly dropped/uploaded file — but once the
-  // person has gotten going, falls back to the new oldest/newest item
+  // person has gotten going, falls back to the newest item
   // same as always, so the flick-through rhythm after each action (see
   // advanceAfterAction) isn't broken by this. Matters more now that "Add
   // New" in the Artwork Catalogue sends people here directly (2026-08-19,
@@ -269,7 +231,7 @@ export default function HopperView({
 
   // After any sort action, drop back to "no explicit selection" so the
   // next render (post-refresh, with this item now gone from the queue)
-  // naturally falls forward to the new oldest item — the auto-advance
+  // naturally falls forward to the newest item — the auto-advance
   // flick-through rhythm from the original spec, without needing to
   // track index positions by hand.
   const advanceAfterAction = () => {
@@ -282,9 +244,8 @@ export default function HopperView({
   // direct request) — any of the four ways a new item can land in the
   // Hopper (manual upload, drag-and-drop, CSV import, or just clicking
   // Hopper to check for new arrivals) should open straight into the
-  // sorting card, not require an extra click on a thumbnail first. Since
-  // sortOrder defaults to "newest" and the server always returns the
-  // truly newest row first once sorted that way, marking hasInteracted
+  // sorting card, not require an extra click on a thumbnail first. The
+  // queue is always newest first, so marking hasInteracted
   // (with no explicit selectedId) is enough — sortedQueue[0] after the
   // next refresh is exactly the item that just arrived.
   const revealLatestArrival = () => {
@@ -646,8 +607,9 @@ export default function HopperView({
         </div>
       )}
 
+      {/* Shown in the page's top band (2026-10-16, Craig's mockup). */}
       {forArtwork ? (
-        <div className="mb-4 flex items-center gap-3">
+        <PageHeading>
           <Link
             href={`${resolvedBasePath}/artworks?selected=${forArtwork.id}`}
             className="rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50"
@@ -662,10 +624,10 @@ export default function HopperView({
               — it has its {MAX_ARTWORK_IMAGES} images
             </span>
           )}
-        </div>
+        </PageHeading>
       ) : (
         artworkIntake && (
-          <div className="mb-4 flex items-center gap-3">
+          <PageHeading>
             <Link
               href={`${resolvedBasePath}/artworks`}
               className="rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50"
@@ -673,7 +635,7 @@ export default function HopperView({
               ← Catalogue
             </Link>
             <h1 className="text-2xl font-semibold text-neutral-900">Add {words.items}</h1>
-          </div>
+          </PageHeading>
         )
       )}
 
@@ -691,10 +653,7 @@ export default function HopperView({
 
       <div className="flex flex-col gap-6 lg:h-[calc(100vh-7rem)] lg:flex-row lg:items-stretch">
         <div className="order-2 flex flex-col lg:order-none lg:min-w-[260px] lg:max-w-[700px] lg:flex-1 lg:basis-[38%] lg:overflow-hidden">
-          <div className="mb-2 flex items-center justify-between">
-            <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">
-              Up next ({remaining.length})
-            </p>
+          <div className="mb-2 flex items-center justify-end">
             <div className="flex items-center gap-3">
               {bulkSelectMode ? (
                 <>
@@ -739,36 +698,6 @@ export default function HopperView({
                 >
                   Select
                 </button>
-              )}
-              {!bulkSelectMode && (
-                <div className="flex items-center gap-0.5">
-                  <button
-                    type="button"
-                    onClick={() => setSortOrder("newest")}
-                    aria-label="Newest first"
-                    title="Newest first"
-                    className={`px-1 text-xs leading-none ${
-                      sortOrder === "newest"
-                        ? "text-neutral-900"
-                        : "text-neutral-300 hover:text-neutral-500"
-                    }`}
-                  >
-                    ▲
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setSortOrder("oldest")}
-                    aria-label="Oldest first"
-                    title="Oldest first"
-                    className={`px-1 text-xs leading-none ${
-                      sortOrder === "oldest"
-                        ? "text-neutral-900"
-                        : "text-neutral-300 hover:text-neutral-500"
-                    }`}
-                  >
-                    ▼
-                  </button>
-                </div>
               )}
             </div>
           </div>
@@ -851,7 +780,7 @@ export default function HopperView({
               <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
                 {queue.length === 0
                   ? "Drag and drop files here, or use the buttons above."
-                  : "Drag and drop a new file in, or pick one from Up next to start sorting."}
+                  : "Drag and drop a new file in, or pick one from the list to start sorting."}
               </div>
             ) : (
               <SortingCard

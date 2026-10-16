@@ -7,6 +7,7 @@ import { getRecentSites, recordSiteVisit } from "@/lib/recentSites";
 import SiteShell from "@/components/SiteShell";
 import SiteNameField from "@/components/SiteNameField";
 import ClientWordsProvider from "@/components/ClientWordsProvider";
+import { PageHeadingSlot } from "@/components/PageHeading";
 
 // Without this, Next can treat this layout as static-cacheable (it uses
 // no dynamic APIs like cookies()/headers(), just plain db reads) and
@@ -52,7 +53,9 @@ export default async function SiteLayout({
         lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
         recentSites={recentSites}
         header={
-          <div className="flex items-start justify-between gap-4">
+          // Site name left, the page's own heading (if any) centred,
+          // View published site right.
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
             <SiteNameField
               site={{
                 id: site.id,
@@ -64,12 +67,13 @@ export default async function SiteLayout({
               }}
               ownerName={site.artist.name}
             />
+            <PageHeadingSlot />
             {/* The site as last published (2026-10-06), in a new tab. */}
             <a
               href={publishedHomePath(site.id)}
               target="_blank"
               rel="noopener noreferrer"
-              className="shrink-0 rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+              className="justify-self-end rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
             >
               View published site ↗
             </a>
