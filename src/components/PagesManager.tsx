@@ -167,28 +167,6 @@ export default function PagesManager({
     );
   };
 
-  // Buttons for the selected page (2026-10-16) — dragging doesn't work on
-  // an iPad: up or down its list, or across to the other list (at the end).
-  const selectedList: ListKey | null = !selected ? null : selected.visible ? "live" : "hidden";
-  const selectedIndex = !selected ? -1 : (selected.visible ? live : hidden).findIndex((p) => p.id === selected.id);
-
-  const moveSelected = (by: -1 | 1) => {
-    if (!selected || !selectedList) return;
-    const list = (selectedList === "live" ? live : hidden).slice();
-    const target = selectedIndex + by;
-    if (target < 0 || target >= list.length) return;
-    [list[selectedIndex], list[target]] = [list[target], list[selectedIndex]];
-    if (selectedList === "live") saveLists(list, hidden);
-    else saveLists(live, list);
-  };
-
-  const switchSelectedList = () => {
-    if (!selected) return;
-    const moved = { ...selected, visible: !selected.visible };
-    if (selected.visible) saveLists(live.filter((p) => p.id !== selected.id), [...hidden, moved]);
-    else saveLists([...live, moved], hidden.filter((p) => p.id !== selected.id));
-  };
-
   const selectPage = (id: string) => {
     setSelectedId(id === selectedId ? null : id);
     setArranging(false);
@@ -358,41 +336,6 @@ export default function PagesManager({
             className={`${buttonClass} hover:border-red-300 hover:bg-red-50 hover:text-red-700`}
           >
             Delete
-          </button>
-        </div>
-
-        {/* Moving the selected page without dragging (2026-10-16 — iPad). */}
-        <div className="grid grid-cols-[1fr_auto_auto] gap-2">
-          <button
-            type="button"
-            onClick={switchSelectedList}
-            disabled={!selected || isPending}
-            className={buttonClass}
-          >
-            {selected && !selected.visible ? "Make live" : "Hide"}
-          </button>
-          <button
-            type="button"
-            onClick={() => moveSelected(-1)}
-            disabled={!selected || selectedIndex <= 0 || isPending}
-            className={`${buttonClass} px-3`}
-            aria-label="Move up"
-          >
-            ↑
-          </button>
-          <button
-            type="button"
-            onClick={() => moveSelected(1)}
-            disabled={
-              !selected ||
-              selectedIndex < 0 ||
-              selectedIndex >= (selected.visible ? live : hidden).length - 1 ||
-              isPending
-            }
-            className={`${buttonClass} px-3`}
-            aria-label="Move down"
-          >
-            ↓
           </button>
         </div>
 
