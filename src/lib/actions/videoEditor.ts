@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
-import { readTimeline, type Timeline, type TimelineClip } from "@/lib/videoTimeline";
+import { isVideoShape, readTimeline, type Timeline, type TimelineClip, type VideoShape } from "@/lib/videoTimeline";
 import { hasUnresolvedRender } from "./render";
 
 async function getOrCreateDraft(artistId: string) {
@@ -47,7 +47,18 @@ export async function getDraftTimeline(artistId: string) {
     })
     .filter((c): c is TimelineClip & { image: (typeof images)[number] } => c !== null);
 
-  return { renderId: draft.id, clips };
+  return { renderId: draft.id, clips, shape: timeline.shape ?? "square" };
+}
+
+// The video's shape (2026-10-16).
+export async function setTimelineShape(siteId: string, renderId: string, shape: VideoShape): Promise<void> {
+  if (!isVideoShape(shape)) return;
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft || draft.status !== "DRAFT") return;
+  const timeline = readTimeline(draft.timeline);
+  timeline.shape = shape;
+  await saveTimeline(renderId, timeline);
+  revalidatePath(`/sites/${siteId}/bucket`);
 }
 
 export async function appendImageToTimeline(
@@ -189,7 +200,11 @@ export async function clearDraftTimeline(siteId: string, renderId: string): Prom
   const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
 
   await db.$transaction([
-    db.videoRender.update({ where: { id: renderId }, data: { timeline: { clips: [] } } }),
+    // Clips go; the chosen shape stays.
+    db.videoRender.update({
+      where: { id: renderId },
+      data: { timeline: { clips: [], ...(timeline.shape ? { shape: timeline.shape } : {}) } },
+    }),
     ...(imageIds.length > 0
       ? [
           db.image.updateMany({

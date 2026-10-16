@@ -11,13 +11,14 @@ import {
   initializeClipDuration,
   splitClip,
   addPicksToTimeline,
+  setTimelineShape,
 } from "@/lib/actions/videoEditor";
 import MediaPicker from "@/components/MediaPicker";
 import { renderVideo, discardRenderResult } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
-import { totalTimelineSeconds, type TimelineClip } from "@/lib/videoTimeline";
+import { totalTimelineSeconds, VIDEO_SHAPES, type TimelineClip, type VideoShape } from "@/lib/videoTimeline";
 
 type ImageInfo = {
   id: string;
@@ -50,6 +51,7 @@ export default function VideoEditorView({
   artistId,
   renderId,
   initialClips,
+  initialShape,
   renderStatus,
   tagPresets,
 }: {
@@ -57,10 +59,17 @@ export default function VideoEditorView({
   artistId: string;
   renderId: string;
   initialClips: Clip[];
+  initialShape: VideoShape;
   renderStatus: RenderStatus;
   tagPresets: string[];
 }) {
   const [clips, setClips] = useState<Clip[]>(initialClips);
+  const [shape, setShape] = useState<VideoShape>(initialShape);
+
+  const changeShape = (next: VideoShape) => {
+    setShape(next);
+    setTimelineShape(siteId, renderId, next);
+  };
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -81,6 +90,10 @@ export default function VideoEditorView({
   useEffect(() => {
     setClips(initialClips);
   }, [initialClips]);
+
+  useEffect(() => {
+    setShape(initialShape);
+  }, [initialShape]);
 
   const idsKey = clips.map((c) => c.id).join(",");
   const isFirstRun = useRef(true);
@@ -235,6 +248,23 @@ export default function VideoEditorView({
                 </>
               )}
             </p>
+            {/* The video's shape (2026-10-16): upright for Reels and
+                Stories, portrait or square for the feed. */}
+            <div className="mt-2 flex w-fit overflow-hidden rounded-full border border-neutral-300 text-xs">
+              {VIDEO_SHAPES.map((s) => (
+                <button
+                  key={s.value}
+                  type="button"
+                  onClick={() => changeShape(s.value)}
+                  disabled={renderStatus != null}
+                  className={`px-3 py-1 font-medium disabled:opacity-50 ${
+                    shape === s.value ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
+                  }`}
+                >
+                  {s.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="flex items-start gap-3 text-right">
             {!renderStatus && (

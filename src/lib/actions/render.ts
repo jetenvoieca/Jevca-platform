@@ -2,14 +2,15 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { readTimeline, CROSSFADE_SECONDS, totalTimelineSeconds } from "@/lib/videoTimeline";
+import { readTimeline, videoSize, CROSSFADE_SECONDS, totalTimelineSeconds } from "@/lib/videoTimeline";
 import { uploadToR2, deleteFromR2, publicMediaUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 
 const HOST = "https://jevca.netlify.app";
-const OUTPUT_WIDTH = 1080;
-const OUTPUT_HEIGHT = 1080;
+
+// The video's size comes from its shape (2026-10-16 — see VIDEO_SHAPES).
+type OutputSize = { width: number; height: number };
 
 // One video at a time, enforced completely (2026-08-08): a render counts
 // as "in the way" from the moment it's submitted until it's actually
@@ -87,7 +88,8 @@ async function verifyAssetReachable(url: string, kind: "PHOTO" | "VIDEO"): Promi
 
 async function prepareImageAsset(
   sourceUrl: string,
-  artistId: string
+  artistId: string,
+  size: OutputSize
 ): Promise<{ url: string; key: string }> {
   const res = await fetch(sourceUrl);
   if (!res.ok) throw new Error(`source image returned ${res.status}`);
@@ -95,7 +97,7 @@ async function prepareImageAsset(
 
   const jpeg = await sharp(original)
     .rotate()
-    .resize(OUTPUT_WIDTH, OUTPUT_HEIGHT, { fit: "cover", position: "center" })
+    .resize(size.width, size.height, { fit: "cover", position: "center" })
     .flatten({ background: "#ffffff" })
     .toColourspace("srgb")
     .jpeg({ quality: 90 })
@@ -120,7 +122,7 @@ function clipLength(clip: ClipWithImage): number {
     : Math.max(0.1, (clip.trimOut ?? 0) - (clip.trimIn ?? 0));
 }
 
-function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
+function buildEditJson(clips: ClipWithImage[], callbackUrl: string, size: OutputSize) {
   const lengths = clips.map(clipLength);
 
   let cursor = 0;
@@ -146,8 +148,8 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
       start,
       length,
       fit: "crop" as const,
-      width: OUTPUT_WIDTH,
-      height: OUTPUT_HEIGHT,
+      width: size.width,
+      height: size.height,
       position: "center" as const,
       ...(Object.keys(transition).length > 0 ? { transition } : {}),
     };
@@ -155,7 +157,7 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string) {
 
   return {
     timeline: { tracks: [{ clips: shotClips }] },
-    output: { format: "mp4" as const, size: { width: OUTPUT_WIDTH, height: OUTPUT_HEIGHT } },
+    output: { format: "mp4" as const, size },
     callback: callbackUrl,
   };
 }
@@ -181,6 +183,7 @@ export async function renderVideo(
     return { ok: false, error: "Add at least one photo or video first." };
   }
 
+  const size = videoSize(timeline.shape);
   const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
   const images = await db.image.findMany({
     where: { id: { in: imageIds } },
@@ -220,7 +223,7 @@ export async function renderVideo(
 
     if (clip.kind === "PHOTO") {
       try {
-        const prepared = await prepareImageAsset(absoluteUrl, image.artistId);
+        const prepared = await prepareImageAsset(absoluteUrl, image.artistId, size);
         tempKeys.push(prepared.key);
         clipsWithImages.push({ ...clip, image: { url: prepared.url } });
       } catch {
@@ -238,7 +241,7 @@ export async function renderVideo(
 
   const env = activeEnv();
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
-  const editJson = buildEditJson(clipsWithImages, callbackUrl);
+  const editJson = buildEditJson(clipsWithImages, callbackUrl, size);
 
   await db.videoRender.update({
     where: { id: renderId },

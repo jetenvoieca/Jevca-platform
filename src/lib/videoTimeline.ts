@@ -25,8 +25,29 @@ export type TimelineClip = {
   sourceDuration?: number;
 };
 
+// The video's shape (2026-10-16): upright 9:16 for Reels and Stories,
+// portrait 4:5 or square for the feed. Videos made before this are
+// square.
+export type VideoShape = "upright" | "portrait" | "square";
+
+export const VIDEO_SHAPES: { value: VideoShape; label: string; width: number; height: number }[] = [
+  { value: "upright", label: "Upright 9:16", width: 1080, height: 1920 },
+  { value: "portrait", label: "Portrait 4:5", width: 1080, height: 1350 },
+  { value: "square", label: "Square", width: 1080, height: 1080 },
+];
+
+export function videoSize(shape: VideoShape | undefined): { width: number; height: number } {
+  const found = VIDEO_SHAPES.find((s) => s.value === shape) ?? VIDEO_SHAPES[2];
+  return { width: found.width, height: found.height };
+}
+
+export function isVideoShape(value: unknown): value is VideoShape {
+  return VIDEO_SHAPES.some((s) => s.value === value);
+}
+
 export type Timeline = {
   clips: TimelineClip[];
+  shape?: VideoShape;
 };
 
 export const emptyTimeline: Timeline = { clips: [] };
