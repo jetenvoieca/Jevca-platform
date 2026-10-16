@@ -59,19 +59,38 @@ export type Timeline = {
   shape?: VideoShape;
   music?: TimelineMusic;
   muteClips?: boolean;
+  fade?: FadeSpeed;
 };
 
 export const emptyTimeline: Timeline = { clips: [] };
 
-// Every adjacent pair of clips now crossfades automatically at render
-// time (2026-08-07) — this is Shotstack's own fixed fade duration for
-// their basic "fade" transition (confirmed directly in their docs: it's
-// not an adjustable parameter, always exactly 1 second), so the overlap
-// between clips has to match this exactly for the fade to land cleanly.
-// Shared between the render logic (which builds the actual overlap) and
-// the editor's displayed total-duration estimate (which needs to shorten
-// its number by the same amount, or it'd overstate the real result).
-export const CROSSFADE_SECONDS = 1;
+// How clips change from one to the next (2026-10-16; always a 1-second
+// fade before). Shotstack's fades come in three fixed lengths — fadeFast
+// 0.5s, fade 1s, fadeSlow 2s — so those are the choices, or a straight
+// cut. Neighbouring clips overlap by the fade's length so one dissolves
+// into the next; the render, the preview and the running total all use
+// the same overlaps (clipStarts, totalTimelineSeconds).
+export type FadeSpeed = "none" | "fast" | "normal" | "slow";
+
+export const FADE_SPEEDS: {
+  value: FadeSpeed;
+  label: string;
+  seconds: number;
+  transition: "fadeFast" | "fade" | "fadeSlow" | null;
+}[] = [
+  { value: "none", label: "Cut", seconds: 0, transition: null },
+  { value: "fast", label: "Fast fade", seconds: 0.5, transition: "fadeFast" },
+  { value: "normal", label: "Fade", seconds: 1, transition: "fade" },
+  { value: "slow", label: "Slow fade", seconds: 2, transition: "fadeSlow" },
+];
+
+export function fadeSpeedOf(value: FadeSpeed | undefined) {
+  return FADE_SPEEDS.find((f) => f.value === value) ?? FADE_SPEEDS[2];
+}
+
+export function isFadeSpeed(value: unknown): value is FadeSpeed {
+  return FADE_SPEEDS.some((f) => f.value === value);
+}
 
 // Shared with both the client (the live draft's own running total in
 // VideoEditorView's header) and the server (getRenderStatus, computing
@@ -82,13 +101,23 @@ export function clipLength(c: TimelineClip): number {
   return c.kind === "PHOTO" ? c.duration ?? 2 : Math.max(0, (c.trimOut ?? 0) - (c.trimIn ?? 0));
 }
 
-export function totalTimelineSeconds(clips: TimelineClip[]): number {
-  return clips.reduce((sum, c, i) => {
-    const length = clipLength(c);
-    const isLast = i === clips.length - 1;
-    const overlap = isLast ? 0 : Math.min(CROSSFADE_SECONDS, length, clipLength(clips[i + 1]));
-    return sum + length - overlap;
-  }, 0);
+// How much each clip overlaps the next (none for the last).
+function overlapAfter(clips: TimelineClip[], i: number, fadeSeconds: number): number {
+  return i === clips.length - 1 ? 0 : Math.min(fadeSeconds, clipLength(clips[i]), clipLength(clips[i + 1]));
+}
+
+// When each clip starts, in seconds.
+export function clipStarts(clips: TimelineClip[], fadeSeconds: number): number[] {
+  let cursor = 0;
+  return clips.map((clip, i) => {
+    const start = cursor;
+    cursor += clipLength(clip) - overlapAfter(clips, i, fadeSeconds);
+    return start;
+  });
+}
+
+export function totalTimelineSeconds(clips: TimelineClip[], fadeSeconds: number): number {
+  return clips.reduce((sum, c, i) => sum + clipLength(c) - overlapAfter(clips, i, fadeSeconds), 0);
 }
 
 export function readTimeline(raw: unknown): Timeline {

@@ -15,6 +15,7 @@ import {
   setTimelineMusic,
   setClipStickers,
   setAllPhotoDurations,
+  setTimelineFade,
 } from "@/lib/actions/videoEditor";
 import ClipStickersEditor from "@/components/ClipStickersEditor";
 import VideoPreviewPlayer from "@/components/VideoPreviewPlayer";
@@ -26,7 +27,10 @@ import TrimScrubber from "@/components/TrimScrubber";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
 import {
   totalTimelineSeconds,
+  fadeSpeedOf,
+  FADE_SPEEDS,
   VIDEO_SHAPES,
+  type FadeSpeed,
   type TimelineClip,
   type TimelineMusic,
   type VideoShape,
@@ -67,6 +71,7 @@ export default function VideoEditorView({
   initialShape,
   initialMusic,
   initialMuteClips,
+  initialFade,
   musicTracks,
   stickerLibrary,
   renderStatus: savedRenderStatus,
@@ -79,6 +84,7 @@ export default function VideoEditorView({
   initialShape: VideoShape;
   initialMusic: TimelineMusic | null;
   initialMuteClips: boolean;
+  initialFade: FadeSpeed;
   // The artist's Music library (Media Catalogue → Music).
   musicTracks: MusicTrackRow[];
   // The artist's Stickers library (Media Catalogue → Stickers).
@@ -97,6 +103,15 @@ export default function VideoEditorView({
     setShape(next);
     setTimelineShape(siteId, renderId, next);
   };
+
+  // How clips change from one to the next (2026-10-16).
+  const [fade, setFade] = useState<FadeSpeed>(initialFade);
+  const fadeSeconds = fadeSpeedOf(fade).seconds;
+  const changeFade = (next: FadeSpeed) => {
+    setFade(next);
+    setTimelineFade(siteId, renderId, next);
+  };
+  useEffect(() => setFade(initialFade), [initialFade]);
 
   // Music under the whole video (2026-10-16).
   const [music, setMusic] = useState<TimelineMusic | null>(initialMusic);
@@ -173,7 +188,7 @@ export default function VideoEditorView({
 
   const selected = clips.find((c) => c.id === selectedId) ?? null;
 
-  const totalSeconds = totalTimelineSeconds(clips);
+  const totalSeconds = totalTimelineSeconds(clips, fadeSeconds);
 
   // 2026-08-18 fix — a completed (or in-progress) render creates a fresh,
   // separate, genuinely empty draft alongside it, so you can start a new
@@ -333,6 +348,21 @@ export default function VideoEditorView({
                     }`}
                   >
                     {s.label}
+                  </button>
+                ))}
+              </div>
+              {/* How clips change from one to the next (2026-10-16). */}
+              <div className="mt-2 flex w-fit overflow-hidden rounded-full border border-neutral-300 text-xs">
+                {FADE_SPEEDS.map((f) => (
+                  <button
+                    key={f.value}
+                    type="button"
+                    onClick={() => changeFade(f.value)}
+                    className={`px-3 py-1 font-medium ${
+                      fade === f.value ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {f.label}
                   </button>
                 ))}
               </div>
@@ -642,6 +672,7 @@ export default function VideoEditorView({
           shape={shape}
           music={musicTrack && music ? { url: musicTrack.url, volume: music.volume } : null}
           muteClips={muteClips}
+          fadeSeconds={fadeSeconds}
           stickerLibrary={stickerLibrary}
           onClose={() => setPreviewing(false)}
         />

@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { readTimeline, videoSize, CROSSFADE_SECONDS, totalTimelineSeconds } from "@/lib/videoTimeline";
+import { readTimeline, videoSize, fadeSpeedOf, totalTimelineSeconds } from "@/lib/videoTimeline";
 import { uploadToR2, deleteFromR2, publicMediaUrl, storedFileUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
@@ -164,7 +164,8 @@ function buildEditJson(
   clips: ClipWithImage[],
   callbackUrl: string,
   size: OutputSize,
-  sound: { soundtrack: Soundtrack | null; muteClips: boolean }
+  sound: { soundtrack: Soundtrack | null; muteClips: boolean },
+  fade: ReturnType<typeof fadeSpeedOf>
 ) {
   const lengths = clips.map(clipLength);
 
@@ -177,7 +178,7 @@ function buildEditJson(
     const start = cursor;
     const isLast = i === clips.length - 1;
     const isFirst = i === 0;
-    const overlap = isLast ? 0 : Math.min(CROSSFADE_SECONDS, length, lengths[i + 1]);
+    const overlap = isLast ? 0 : Math.min(fade.seconds, length, lengths[i + 1]);
     cursor += length - overlap;
 
     const asset =
@@ -190,9 +191,9 @@ function buildEditJson(
             ...(sound.muteClips ? { volume: 0 } : {}),
           };
 
-    const transition: { in?: "fade"; out?: "fade" } = {};
-    if (!isFirst) transition.in = "fade";
-    if (!isLast) transition.out = "fade";
+    const transition: { in?: string; out?: string } = {};
+    if (fade.transition && !isFirst) transition.in = fade.transition;
+    if (fade.transition && !isLast) transition.out = fade.transition;
 
     for (const sticker of clip.stickers) {
       stickerClips.push({
@@ -353,7 +354,7 @@ export async function renderVideo(
   const editJson = buildEditJson(clipsWithImages, callbackUrl, size, {
     soundtrack,
     muteClips: timeline.muteClips === true,
-  });
+  }, fadeSpeedOf(timeline.fade));
 
   await db.videoRender.update({
     where: { id: renderId },
@@ -450,7 +451,7 @@ export async function getRenderStatus(artistId: string) {
     // empty, instead of "0 clips · 0s total" next to a render that
     // plainly had clips in it.
     clipCount: timeline.clips.length,
-    totalSeconds: totalTimelineSeconds(timeline.clips),
+    totalSeconds: totalTimelineSeconds(timeline.clips, fadeSpeedOf(timeline.fade).seconds),
     resultImage: render.resultImage
       ? {
           id: render.resultImage.id,

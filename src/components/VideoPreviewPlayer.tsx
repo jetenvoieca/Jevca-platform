@@ -3,8 +3,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import {
-  CROSSFADE_SECONDS,
   clipLength,
+  clipStarts,
   totalTimelineSeconds,
   videoSize,
   type TimelineClip,
@@ -16,7 +16,7 @@ import { stickerPreviewStyle, type StickerRow } from "@/lib/stickers";
 // browser, before it's sent to be rendered — on the render's own timing:
 // the clips in order at the video's shape (photos for their seconds,
 // videos between their trim points), each fading in over the one before
-// across the same 1-second overlap, with their stickers, and the music
+// across the same overlap as the render, with their stickers, and the music
 // under it fading in and out. Close to the render, not exact to the frame.
 
 type PreviewClip = TimelineClip & { image: { url: string; kind: "PHOTO" | "VIDEO" } };
@@ -24,19 +24,7 @@ type PreviewClip = TimelineClip & { image: { url: string; kind: "PHOTO" | "VIDEO
 const FADE_SECONDS = 1;
 const TICK_MS = 50;
 
-// When each clip starts — the same overlaps as the render (render.ts).
-function clipStarts(clips: TimelineClip[]): number[] {
-  let cursor = 0;
-  return clips.map((clip, i) => {
-    const start = cursor;
-    const length = clipLength(clip);
-    const overlap = i === clips.length - 1 ? 0 : Math.min(CROSSFADE_SECONDS, length, clipLength(clips[i + 1]));
-    cursor += length - overlap;
-    return start;
-  });
-}
-
-function FadeIn({ children }: { children: React.ReactNode }) {
+function FadeIn({ seconds, children }: { seconds: number; children: React.ReactNode }) {
   const [shown, setShown] = useState(false);
   useEffect(() => {
     const frame = requestAnimationFrame(() => setShown(true));
@@ -45,7 +33,7 @@ function FadeIn({ children }: { children: React.ReactNode }) {
   return (
     <div
       className={`absolute inset-0 transition-opacity ${shown ? "opacity-100" : "opacity-0"}`}
-      style={{ transitionDuration: `${CROSSFADE_SECONDS * 1000}ms` }}
+      style={{ transitionDuration: `${seconds * 1000}ms` }}
     >
       {children}
     </div>
@@ -57,19 +45,22 @@ export default function VideoPreviewPlayer({
   shape,
   music,
   muteClips,
+  fadeSeconds,
   stickerLibrary,
   onClose,
 }: {
   clips: PreviewClip[];
   shape: VideoShape;
+  // How long one clip takes to fade into the next (0: a cut).
+  fadeSeconds: number;
   music: { url: string; volume: number } | null;
   muteClips: boolean;
   stickerLibrary: StickerRow[];
   onClose: () => void;
 }) {
   const size = videoSize(shape);
-  const total = totalTimelineSeconds(clips);
-  const starts = clipStarts(clips);
+  const total = totalTimelineSeconds(clips, fadeSeconds);
+  const starts = clipStarts(clips, fadeSeconds);
   // Seconds into the video; null before it starts.
   const [time, setTime] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -124,7 +115,7 @@ export default function VideoPreviewPlayer({
           style={{ aspectRatio: `${size.width} / ${size.height}` }}
         >
           {showing.map(({ clip, i }) => (
-            <FadeIn key={`${clip.id}-${i}`}>
+            <FadeIn key={`${clip.id}-${i}`} seconds={i === 0 ? 0 : fadeSeconds}>
               {clip.kind === "PHOTO" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={clip.image.url} alt="" className="h-full w-full object-cover" />

@@ -10,10 +10,12 @@ import {
   type ClipSticker,
 } from "@/lib/stickers";
 import {
+  isFadeSpeed,
   isVideoShape,
   readTimeline,
   type Timeline,
   type TimelineClip,
+  type FadeSpeed,
   type TimelineMusic,
   type VideoShape,
 } from "@/lib/videoTimeline";
@@ -66,7 +68,19 @@ export async function getDraftTimeline(artistId: string) {
     shape: timeline.shape ?? "square",
     music: timeline.music ?? null,
     muteClips: timeline.muteClips ?? false,
+    fade: timeline.fade ?? "normal",
   };
+}
+
+// How clips change from one to the next (2026-10-16).
+export async function setTimelineFade(siteId: string, renderId: string, fade: FadeSpeed): Promise<void> {
+  if (!isFadeSpeed(fade)) return;
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft || draft.status !== "DRAFT") return;
+  const timeline = readTimeline(draft.timeline);
+  timeline.fade = fade;
+  await saveTimeline(renderId, timeline);
+  revalidatePath(`/sites/${siteId}/bucket`);
 }
 
 // A clip's picture stickers (2026-10-16) — only the artist's own, in one
