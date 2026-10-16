@@ -167,10 +167,12 @@ export default function SocialView({
     showInAddress(null);
   };
 
+  // A Post adds to its items; a Reel or Story holds one, so a pick
+  // replaces it.
   const addPicks = async (imageIds: string[], artworkIds: string[]) => {
     if (!open) return;
     const items = await socialMediaForPicks(artistId, { imageIds, artworkIds });
-    change({ media: [...open.media, ...items] });
+    change({ media: open.format === "POST" ? [...open.media, ...items] : items.slice(0, 1) });
   };
 
   const moveItem = (index: number, by: -1 | 1) => {
@@ -307,10 +309,10 @@ export default function SocialView({
                 <MediaPicker
                   artistId={artistId}
                   siteId={siteId}
-                  mode="multi"
+                  mode={open.format === "POST" ? "multi" : "single"}
                   mediaKinds={open.format === "REEL" ? ["VIDEO"] : ["PHOTO", "VIDEO"]}
                   variant="button"
-                  label="Add Media"
+                  label={open.format !== "POST" && open.media.length > 0 ? "Replace" : "Add Media"}
                   withArtworks={open.format !== "REEL"}
                   onSelect={(images, artworks) =>
                     addPicks(
