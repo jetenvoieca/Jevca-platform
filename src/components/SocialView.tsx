@@ -16,6 +16,8 @@ import {
 import {
   CAPTION_MAX,
   HASHTAG_MAX,
+  SOCIAL_FORMATS,
+  SOCIAL_FORMAT_LABEL,
   SOCIAL_STATUSES,
   SOCIAL_STATUS_LABEL,
   countHashtags,
@@ -29,7 +31,7 @@ import {
 } from "@/lib/socialPosts";
 
 // Marketing → Social Media (2026-10-15): the artist's Instagram posts,
-// by status, and the post editor — Post or Story, its pictures and
+// by status, and the post editor — Post, Reel or Story, its pictures and
 // videos (from the Media Catalogue and the artworks), and one caption,
 // English and French together. Changes save themselves. "Post now"
 // sends it to the connected Instagram (through Zernio — see
@@ -38,10 +40,15 @@ import {
 
 const CHECK_EVERY_MS = 15 * 1000;
 
-type Draft = { format: SocialPostFormat; caption: string; imageIds: string[] };
+type Draft = { format: SocialPostFormat; caption: string; reelInFeed: boolean; imageIds: string[] };
 
 function draftOf(post: SocialPostRow): Draft {
-  return { format: post.format, caption: post.caption, imageIds: post.media.map((m) => m.id) };
+  return {
+    format: post.format,
+    caption: post.caption,
+    reelInFeed: post.reelInFeed,
+    imageIds: post.media.map((m) => m.id),
+  };
 }
 
 function MediaTile({ item }: { item: SocialMediaItem }) {
@@ -226,7 +233,7 @@ export default function SocialView({
             {socialPostType(open.format, open.media)}
           </h1>
           <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
-            {(["POST", "STORY"] as const).map((f) => (
+            {SOCIAL_FORMATS.map((f) => (
               <button
                 key={f}
                 type="button"
@@ -236,10 +243,21 @@ export default function SocialView({
                   open.format === f ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
                 }`}
               >
-                {f === "POST" ? "Post" : "Story"}
+                {SOCIAL_FORMAT_LABEL[f]}
               </button>
             ))}
           </div>
+          {open.format === "REEL" && (
+            <label className="flex items-center gap-2 text-sm text-neutral-600">
+              <input
+                type="checkbox"
+                checked={open.reelInFeed}
+                disabled={!editable}
+                onChange={(e) => change({ reelInFeed: e.target.checked })}
+              />
+              Also show in the main feed
+            </label>
+          )}
         </div>
 
         <div className="mb-6">
@@ -287,10 +305,10 @@ export default function SocialView({
                 artistId={artistId}
                 siteId={siteId}
                 mode="multi"
-                mediaKinds={["PHOTO", "VIDEO"]}
+                mediaKinds={open.format === "REEL" ? ["VIDEO"] : ["PHOTO", "VIDEO"]}
                 variant="button"
                 label="Add Media"
-                withArtworks
+                withArtworks={open.format !== "REEL"}
                 onSelect={(images, artworks) =>
                   addPicks(
                     images.map((img) => img.id),

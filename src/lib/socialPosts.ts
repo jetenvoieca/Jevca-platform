@@ -1,9 +1,17 @@
 // Marketing → Social Media (2026-10-15) — the rules for an Instagram
-// post, shared by the Social page and the server. A POST with one video
-// is a Reel, with one image a picture, with 2–10 items a carousel; a
-// STORY is one picture or video, with no caption.
+// post, shared by the Social page and the server. A POST is one picture,
+// or a carousel of 2–10 pictures and videos; a REEL is one video; a STORY
+// is one picture or video, with no caption.
 
-export type SocialPostFormat = "POST" | "STORY";
+export type SocialPostFormat = "POST" | "REEL" | "STORY";
+
+export const SOCIAL_FORMATS: SocialPostFormat[] = ["POST", "REEL", "STORY"];
+
+export const SOCIAL_FORMAT_LABEL: Record<SocialPostFormat, string> = {
+  POST: "Post",
+  REEL: "Reel",
+  STORY: "Story",
+};
 export type SocialPostStatus = "DRAFT" | "SCHEDULED" | "POSTING" | "POSTED" | "FAILED";
 
 export const SOCIAL_STATUSES: SocialPostStatus[] = ["DRAFT", "SCHEDULED", "POSTED", "FAILED"];
@@ -34,6 +42,8 @@ export type SocialPostRow = {
   id: string;
   format: SocialPostFormat;
   caption: string;
+  // A Reel also shown in the main feed, not only the Reels tab.
+  reelInFeed: boolean;
   status: SocialPostStatus;
   media: SocialMediaItem[];
   updatedAt: string;
@@ -52,10 +62,9 @@ export function isEditable(status: SocialPostStatus): boolean {
 }
 
 // What Instagram will make of it.
-export function socialPostType(format: SocialPostFormat, media: { kind: string }[]): string {
-  if (format === "STORY") return "Story";
-  if (media.length > 1) return "Carousel";
-  return media[0]?.kind === "VIDEO" ? "Reel" : "Picture";
+export function socialPostType(format: SocialPostFormat, media: unknown[]): string {
+  if (format === "POST") return media.length > 1 ? "Carousel" : "Picture";
+  return SOCIAL_FORMAT_LABEL[format];
 }
 
 export function countHashtags(caption: string): number {
@@ -66,11 +75,18 @@ export function countHashtags(caption: string): number {
 export function socialPostProblem(post: {
   format: SocialPostFormat;
   caption: string;
-  media: { mimeType: string }[];
+  media: { kind: string; mimeType: string }[];
 }): string | null {
-  if (post.media.length === 0) return "Add a picture or video.";
+  if (post.media.length === 0) return post.format === "REEL" ? "Add a video." : "Add a picture or video.";
   if (post.media.some((m) => !POSTABLE_TYPES.includes(m.mimeType))) {
     return "Instagram takes JPEG or PNG pictures and MP4 or MOV videos only.";
+  }
+  if (post.format === "REEL" && (post.media.length > 1 || post.media[0].kind !== "VIDEO")) {
+    return "A Reel is one video.";
+  }
+  // Instagram makes a single video a Reel.
+  if (post.format === "POST" && post.media.length === 1 && post.media[0].kind === "VIDEO") {
+    return "One video on its own goes out as a Reel — choose Reel.";
   }
   if (post.format === "STORY" && post.media.length > 1) return "A Story has one picture or video.";
   if (post.media.length > CAROUSEL_MAX) return `A carousel has at most ${CAROUSEL_MAX} items.`;

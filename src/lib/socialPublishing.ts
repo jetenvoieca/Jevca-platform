@@ -64,6 +64,7 @@ export async function startSocialPosting(artistId: string, postId: string): Prom
             platform: "instagram",
             accountId: connection.zernioAccountId,
             ...(post.format === "STORY" ? { platformSpecificData: { contentType: "story" } } : {}),
+            ...(post.format === "REEL" ? { platformSpecificData: { shareToFeed: post.reelInFeed } } : {}),
           },
         ],
         scheduledFor: new Date(Date.now() + POST_NOW_DELAY_MS).toISOString(),

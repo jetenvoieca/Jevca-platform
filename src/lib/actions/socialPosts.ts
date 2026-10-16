@@ -6,6 +6,7 @@ import { checkSocialPosting, startSocialPosting } from "@/lib/socialPublishing";
 import {
   CAPTION_MAX,
   CAROUSEL_MAX,
+  SOCIAL_FORMATS,
   isEditable,
   type SocialMediaItem,
   type SocialPostFormat,
@@ -50,6 +51,7 @@ function toRow(p: {
   id: string;
   format: SocialPostFormat;
   caption: string;
+  reelInFeed: boolean;
   status: SocialPostRow["status"];
   updatedAt: Date;
   permalink: string | null;
@@ -61,6 +63,7 @@ function toRow(p: {
     id: p.id,
     format: p.format,
     caption: p.caption,
+    reelInFeed: p.reelInFeed,
     status: p.status,
     media: p.media.map((m) => toItem(m.image)),
     updatedAt: p.updatedAt.toISOString(),
@@ -131,12 +134,12 @@ export async function socialMediaForPicks(
 export async function updateSocialPost(
   artistId: string,
   id: string,
-  draft: { format: SocialPostFormat; caption: string; imageIds: string[] }
+  draft: { format: SocialPostFormat; caption: string; reelInFeed: boolean; imageIds: string[] }
 ): Promise<{ ok: true } | { error: string }> {
   const post = await db.socialPost.findFirst({ where: { id, artistId }, select: { status: true } });
   if (!post) return { error: "That post couldn't be found." };
   if (!isEditable(post.status)) return { error: "This post has been sent, so it can't be changed." };
-  if (draft.format !== "POST" && draft.format !== "STORY") return { error: "Unknown format." };
+  if (!SOCIAL_FORMATS.includes(draft.format)) return { error: "Unknown format." };
   if (draft.caption.length > CAPTION_MAX) return { error: `The caption is over ${CAPTION_MAX} characters.` };
   if (draft.imageIds.length > CAROUSEL_MAX) return { error: `At most ${CAROUSEL_MAX} items.` };
 
@@ -152,7 +155,10 @@ export async function updateSocialPost(
     db.socialPostMedia.createMany({
       data: imageIds.map((imageId, position) => ({ postId: id, imageId, position })),
     }),
-    db.socialPost.update({ where: { id }, data: { format: draft.format, caption: draft.caption } }),
+    db.socialPost.update({
+      where: { id },
+      data: { format: draft.format, caption: draft.caption, reelInFeed: draft.reelInFeed === true },
+    }),
   ]);
   return { ok: true };
 }
