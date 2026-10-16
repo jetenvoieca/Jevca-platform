@@ -626,7 +626,7 @@ export default function GalleriesView({
         }`}
       >
         <div className="mb-4 flex shrink-0 items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-center gap-2">
             <button
               type="button"
               onClick={backToList}
@@ -634,7 +634,10 @@ export default function GalleriesView({
             >
               ← Locations
             </button>
-            <h1 className="text-2xl font-semibold text-neutral-900">Consigned Works</h1>
+            {/* "Works at [Location]" (2026-10-16, Craig's mockup). */}
+            <h1 className="truncate text-2xl font-semibold text-neutral-900">
+              {selectedDetail ? `Works at ${selectedDetail.name}` : "Works"}
+            </h1>
           </div>
           {selectedDetail && (
             <button
