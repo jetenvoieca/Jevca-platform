@@ -2,19 +2,39 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useBackdropClose } from "@/lib/useBackdropClose";
-import { clipLength, totalTimelineSeconds, videoSize, type TimelineClip, type VideoShape } from "@/lib/videoTimeline";
+import {
+  CROSSFADE_SECONDS,
+  clipLength,
+  totalTimelineSeconds,
+  videoSize,
+  type TimelineClip,
+  type VideoShape,
+} from "@/lib/videoTimeline";
 import { stickerPreviewStyle, type StickerRow } from "@/lib/stickers";
 
 // Video Edit's Preview (2026-10-16): plays the video as it stands, in the
-// browser, before it's sent to be rendered — the clips in order at the
-// video's shape (photos for their seconds, videos between their trim
-// points), each fading in, with their stickers, and the music under it
-// fading in and out. Close to the render, not exact: the render
-// crossfades clips over each other and its timing is to the frame.
+// browser, before it's sent to be rendered — on the render's own timing:
+// the clips in order at the video's shape (photos for their seconds,
+// videos between their trim points), each fading in over the one before
+// across the same 1-second overlap, with their stickers, and the music
+// under it fading in and out. Close to the render, not exact to the frame.
 
 type PreviewClip = TimelineClip & { image: { url: string; kind: "PHOTO" | "VIDEO" } };
 
 const FADE_SECONDS = 1;
+const TICK_MS = 50;
+
+// When each clip starts — the same overlaps as the render (render.ts).
+function clipStarts(clips: TimelineClip[]): number[] {
+  let cursor = 0;
+  return clips.map((clip, i) => {
+    const start = cursor;
+    const length = clipLength(clip);
+    const overlap = i === clips.length - 1 ? 0 : Math.min(CROSSFADE_SECONDS, length, clipLength(clips[i + 1]));
+    cursor += length - overlap;
+    return start;
+  });
+}
 
 function FadeIn({ children }: { children: React.ReactNode }) {
   const [shown, setShown] = useState(false);
@@ -23,7 +43,10 @@ function FadeIn({ children }: { children: React.ReactNode }) {
     return () => cancelAnimationFrame(frame);
   }, []);
   return (
-    <div className={`absolute inset-0 transition-opacity duration-700 ${shown ? "opacity-100" : "opacity-0"}`}>
+    <div
+      className={`absolute inset-0 transition-opacity ${shown ? "opacity-100" : "opacity-0"}`}
+      style={{ transitionDuration: `${CROSSFADE_SECONDS * 1000}ms` }}
+    >
       {children}
     </div>
   );
@@ -46,64 +69,52 @@ export default function VideoPreviewPlayer({
 }) {
   const size = videoSize(shape);
   const total = totalTimelineSeconds(clips);
-  // The clip showing; clips.length once it has finished; -1 before it starts.
-  const [index, setIndex] = useState(-1);
-  const [elapsed, setElapsed] = useState(0);
+  const starts = clipStarts(clips);
+  // Seconds into the video; null before it starts.
+  const [time, setTime] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
   const startedAt = useRef(0);
   const backdrop = useBackdropClose(onClose);
   const stickers = new Map(stickerLibrary.map((s) => [s.id, s]));
+  const musicVolume = music?.volume ?? 0;
 
-  const next = () => setIndex((i) => i + 1);
+  const running = time != null && time < total;
 
   const play = () => {
     startedAt.current = performance.now();
-    setElapsed(0);
-    setIndex(0);
+    setTime(0);
     const audio = audioRef.current;
-    if (audio && music) {
+    if (audio) {
       audio.currentTime = 0;
       audio.volume = 0;
       audio.play().catch(() => {});
     }
   };
 
-  // Photos move on after their seconds; videos when they reach their end
-  // (below), with a safety stop in case a video never plays.
-  useEffect(() => {
-    const clip = clips[index];
-    if (!clip) return;
-    const seconds = clip.kind === "PHOTO" ? clip.duration ?? 2 : clipLength(clip) + 5;
-    const timer = setTimeout(next, seconds * 1000);
-    return () => clearTimeout(timer);
-  }, [index, clips]);
-
-  // The running time, and the music's fade in and out.
-  const running = index >= 0 && index < clips.length;
+  // The clock, and the music's fade in and out; the music stops at the end.
   useEffect(() => {
     if (!running) return;
     const timer = setInterval(() => {
       const t = (performance.now() - startedAt.current) / 1000;
-      setElapsed(t);
+      setTime(t);
       const audio = audioRef.current;
-      if (audio && music) {
-        const fade = Math.max(0, Math.min(1, t / FADE_SECONDS, (total - t) / FADE_SECONDS));
-        audio.volume = music.volume * fade;
-      }
-    }, 100);
+      if (!audio) return;
+      if (t >= total) audio.pause();
+      else audio.volume = musicVolume * Math.max(0, Math.min(1, t / FADE_SECONDS, (total - t) / FADE_SECONDS));
+    }, TICK_MS);
     return () => clearInterval(timer);
-  }, [running, music, total]);
-
-  // Finished: the music stops.
-  useEffect(() => {
-    if (index >= clips.length) audioRef.current?.pause();
-  }, [index, clips.length]);
+  }, [running, total, musicVolume]);
 
   // Closing stops everything.
   useEffect(() => () => audioRef.current?.pause(), []);
 
-  const clip = running ? clips[index] : null;
+  // The clips on screen now — two while one fades in over the other.
+  const showing = running
+    ? clips
+        .map((clip, i) => ({ clip, i }))
+        .filter(({ clip, i }) => time >= starts[i] && time < starts[i] + clipLength(clip))
+    : [];
+  const current = showing.length > 0 ? showing[showing.length - 1].i : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" {...backdrop}>
@@ -112,27 +123,21 @@ export default function VideoPreviewPlayer({
           className="relative h-[70vh] max-w-[90vw] overflow-hidden rounded-lg bg-black"
           style={{ aspectRatio: `${size.width} / ${size.height}` }}
         >
-          {clip && (
-            <FadeIn key={`${clip.id}-${index}`}>
+          {showing.map(({ clip, i }) => (
+            <FadeIn key={`${clip.id}-${i}`}>
               {clip.kind === "PHOTO" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={clip.image.url} alt="" className="h-full w-full object-cover" />
               ) : (
                 <video
-                  ref={videoRef}
                   src={clip.image.url}
                   muted={muteClips}
                   playsInline
-                  autoPlay
                   className="h-full w-full object-cover"
                   onLoadedMetadata={(e) => {
                     e.currentTarget.currentTime = clip.trimIn ?? 0;
                     e.currentTarget.play().catch(() => {});
                   }}
-                  onTimeUpdate={(e) => {
-                    if (e.currentTarget.currentTime >= (clip.trimOut ?? Infinity)) next();
-                  }}
-                  onEnded={next}
                 />
               )}
               {(clip.stickers ?? []).map((s) => {
@@ -143,7 +148,7 @@ export default function VideoPreviewPlayer({
                 ) : null;
               })}
             </FadeIn>
-          )}
+          ))}
           {!running && (
             <button
               type="button"
@@ -151,7 +156,7 @@ export default function VideoPreviewPlayer({
               className="absolute inset-0 flex items-center justify-center text-white"
             >
               <span className="rounded-full bg-white/20 px-6 py-3 text-lg backdrop-blur hover:bg-white/30">
-                {index === -1 ? "▶ Play preview" : "↻ Play again"}
+                {time == null ? "▶ Play preview" : "↻ Play again"}
               </span>
             </button>
           )}
@@ -159,8 +164,8 @@ export default function VideoPreviewPlayer({
 
         <div className="flex items-center gap-4 text-sm text-white">
           <span>
-            {running ? `Clip ${index + 1} of ${clips.length} · ` : ""}
-            {Math.min(elapsed, total).toFixed(0)}s / {total.toFixed(0)}s
+            {current != null ? `Clip ${current + 1} of ${clips.length} · ` : ""}
+            {Math.min(time ?? 0, total).toFixed(0)}s / {total.toFixed(0)}s
           </span>
           <button
             type="button"
@@ -170,7 +175,7 @@ export default function VideoPreviewPlayer({
             Close
           </button>
         </div>
-        <p className="text-xs text-white/60">A preview — the rendered video crossfades and times clips exactly.</p>
+        <p className="text-xs text-white/60">A preview on the render&apos;s timing — the render itself is exact to the frame.</p>
         {music && <audio ref={audioRef} src={music.url} preload="auto" />}
       </div>
     </div>
