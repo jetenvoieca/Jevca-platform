@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { finishHopperVideoImport } from "@/lib/hopperVideoImport";
-import { MEDIA_IMPORT_SECRET_HEADER, type VideoCopyReport } from "@/lib/hopperVideoCopy";
+import { type VideoCopyReport } from "@/lib/hopperVideoCopy";
+import { MEDIA_JOB_SECRET_HEADER } from "@/lib/mediaJobs";
 
 // The background function's report on one video it copied for the
 // Hopper's CSV import (2026-10-15) — see lib/hopperVideoImport.ts. Public
@@ -8,7 +9,7 @@ import { MEDIA_IMPORT_SECRET_HEADER, type VideoCopyReport } from "@/lib/hopperVi
 // MEDIA_IMPORT_SECRET.
 export async function POST(request: NextRequest) {
   const secret = process.env.MEDIA_IMPORT_SECRET;
-  if (!secret || request.headers.get(MEDIA_IMPORT_SECRET_HEADER) !== secret) {
+  if (!secret || request.headers.get(MEDIA_JOB_SECRET_HEADER) !== secret) {
     return NextResponse.json({ error: "Not allowed." }, { status: 401 });
   }
 

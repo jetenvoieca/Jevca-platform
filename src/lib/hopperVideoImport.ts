@@ -2,7 +2,9 @@ import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { APP_URL } from "@/lib/appUrl";
 import { extensionForContentType } from "@/lib/importHelpers";
-import { MEDIA_IMPORT_SECRET_HEADER, type VideoCopyRequest } from "@/lib/hopperVideoCopy";
+import { type VideoCopyRequest } from "@/lib/hopperVideoCopy";
+import { MEDIA_JOB_SECRET_HEADER } from "@/lib/mediaJobs";
+import { requestVideoPosters } from "@/lib/videoPosters";
 
 // Videos in the Hopper's CSV import (2026-10-15). A video is too big to
 // copy within a normal request (60 seconds on Netlify), so each one is
@@ -37,7 +39,7 @@ export async function startHopperVideoImport(
   try {
     const res = await fetch(`${APP_URL}/.netlify/functions/import-hopper-video-background`, {
       method: "POST",
-      headers: { "content-type": "application/json", [MEDIA_IMPORT_SECRET_HEADER]: secret },
+      headers: { "content-type": "application/json", [MEDIA_JOB_SECRET_HEADER]: secret },
       body: JSON.stringify(request),
       // A redirect means it never reached the function — don't follow it.
       redirect: "manual",
@@ -88,6 +90,8 @@ export async function finishHopperVideoImport(
       data: { status: "DONE", imageId: image.id },
     });
   });
+  // Its still picture (2026-10-16 — see lib/videoPosters.ts).
+  await requestVideoPosters();
 }
 
 export type HopperVideoImportState = {

@@ -1930,6 +1930,9 @@ model Image {
   // (lib/imageSquares.ts), not at upload.
   squareKey    String?
   posterUrl String?
+  // Why a video's still picture couldn't be made (2026-10-16 — see
+  // lib/videoPosters.ts); it isn't tried again. Null otherwise.
+  posterError String?
   kind      ImageKind   @default(PHOTO)
   mimeType  String
   caption   String?

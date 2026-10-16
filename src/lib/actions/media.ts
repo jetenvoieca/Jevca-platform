@@ -7,6 +7,7 @@ import { randomUUID } from "crypto";
 import { createArtworkWithRetry } from "./artworks";
 import { buildArtworkWhere, buildArtworkOrderBy, type ArtworkFilterInput } from "@/lib/artworkFilters";
 import { sanitizeFilename } from "@/lib/sanitizeFilename";
+import { requestVideoPosters } from "@/lib/videoPosters";
 
 // Step 1 of 2 for uploading: this only ever handles a filename and content
 // type — never the file itself — so it stays a tiny request regardless of
@@ -133,6 +134,8 @@ export async function finalizeUpload(
       artworkLocation: artworkLocation || null,
     },
   });
+  // A video that came without a still picture gets one made (2026-10-16).
+  if (kind === "VIDEO" && !image.posterUrl) await requestVideoPosters();
   return {
     image: {
       ...image,

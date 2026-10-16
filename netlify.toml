@@ -7,3 +7,10 @@
 
 [[plugins]]
   package = "@netlify/plugin-nextjs"
+
+# The video still-picture maker uses the ffmpeg program from the
+# ffmpeg-static package, kept as it is (not bundled) with its binary
+# (2026-10-16 — see netlify/functions/make-video-posters-background.mts).
+[functions."make-video-posters-background"]
+  external_node_modules = ["ffmpeg-static"]
+  included_files = ["node_modules/ffmpeg-static/ffmpeg"]

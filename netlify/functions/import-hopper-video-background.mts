@@ -5,8 +5,8 @@ import { Upload } from "@aws-sdk/lib-storage";
 import { r2, R2_BUCKET } from "../../src/lib/r2";
 import { APP_URL } from "../../src/lib/appUrl";
 import { browserFetchHeaders } from "../../src/lib/importHelpers";
+import { MEDIA_JOB_SECRET_HEADER } from "../../src/lib/mediaJobs";
 import {
-  MEDIA_IMPORT_SECRET_HEADER,
   type VideoCopyReport,
   type VideoCopyRequest,
 } from "../../src/lib/hopperVideoCopy";
@@ -54,7 +54,7 @@ async function copy(request: VideoCopyRequest): Promise<void> {
 async function report(secret: string, body: VideoCopyReport): Promise<void> {
   const res = await fetch(`${APP_URL}/api/hopper/video-import`, {
     method: "POST",
-    headers: { "content-type": "application/json", [MEDIA_IMPORT_SECRET_HEADER]: secret },
+    headers: { "content-type": "application/json", [MEDIA_JOB_SECRET_HEADER]: secret },
     body: JSON.stringify(body),
   });
   if (!res.ok) console.log("[import-hopper-video-background] report failed:", res.status);
@@ -62,7 +62,7 @@ async function report(secret: string, body: VideoCopyReport): Promise<void> {
 
 export default async (request: Request) => {
   const secret = process.env.MEDIA_IMPORT_SECRET;
-  if (!secret || request.headers.get(MEDIA_IMPORT_SECRET_HEADER) !== secret) return;
+  if (!secret || request.headers.get(MEDIA_JOB_SECRET_HEADER) !== secret) return;
 
   const copyRequest = (await request.json()) as VideoCopyRequest;
   try {

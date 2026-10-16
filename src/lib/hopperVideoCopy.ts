@@ -1,9 +1,7 @@
 // Shared by the app and the background function that copies a Hopper
 // CSV import's videos (netlify/functions/import-hopper-video-background.mts)
 // — kept free of database code so the function stays small. See
-// lib/hopperVideoImport.ts.
-
-export const MEDIA_IMPORT_SECRET_HEADER = "x-media-import-secret";
+// lib/hopperVideoImport.ts; the secret's header is in lib/mediaJobs.ts.
 
 // What the background function is sent to copy one video.
 export type VideoCopyRequest = {

@@ -3,6 +3,7 @@ import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { readTimeline } from "@/lib/videoTimeline";
 import { uploadToR2, deleteFromR2 } from "@/lib/r2";
+import { requestVideoPosters } from "@/lib/videoPosters";
 
 function shotstackHost(env: string) {
   return `https://api.shotstack.io/edit/${env}`;
@@ -96,6 +97,8 @@ export async function POST(req: NextRequest) {
     where: { id: render.id },
     data: { status: "DONE", resultImageId: image.id },
   });
+  // Shotstack didn't give a still picture — one is made instead.
+  if (!posterUrl) await requestVideoPosters();
 
   await cleanUpTempAssets(render.tempAssetKeys);
 
