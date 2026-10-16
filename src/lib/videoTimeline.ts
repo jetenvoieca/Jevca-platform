@@ -45,9 +45,16 @@ export function isVideoShape(value: unknown): value is VideoShape {
   return VIDEO_SHAPES.some((s) => s.value === value);
 }
 
+// Music under the whole video (2026-10-16): a track from the artist's
+// Music library, fading in and out, at `volume` (0–1). `muteClips`
+// silences the clips' own sound.
+export type TimelineMusic = { trackId: string; volume: number };
+
 export type Timeline = {
   clips: TimelineClip[];
   shape?: VideoShape;
+  music?: TimelineMusic;
+  muteClips?: boolean;
 };
 
 export const emptyTimeline: Timeline = { clips: [] };

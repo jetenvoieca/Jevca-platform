@@ -12,13 +12,21 @@ import {
   splitClip,
   addPicksToTimeline,
   setTimelineShape,
+  setTimelineMusic,
 } from "@/lib/actions/videoEditor";
 import MediaPicker from "@/components/MediaPicker";
 import { renderVideo, discardRenderResult } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
-import { totalTimelineSeconds, VIDEO_SHAPES, type TimelineClip, type VideoShape } from "@/lib/videoTimeline";
+import {
+  totalTimelineSeconds,
+  VIDEO_SHAPES,
+  type TimelineClip,
+  type TimelineMusic,
+  type VideoShape,
+} from "@/lib/videoTimeline";
+import type { MusicTrackRow } from "@/lib/musicTracks";
 
 type ImageInfo = {
   id: string;
@@ -52,6 +60,9 @@ export default function VideoEditorView({
   renderId,
   initialClips,
   initialShape,
+  initialMusic,
+  initialMuteClips,
+  musicTracks,
   renderStatus,
   tagPresets,
 }: {
@@ -60,6 +71,10 @@ export default function VideoEditorView({
   renderId: string;
   initialClips: Clip[];
   initialShape: VideoShape;
+  initialMusic: TimelineMusic | null;
+  initialMuteClips: boolean;
+  // The artist's Music library (Media Catalogue → Music).
+  musicTracks: MusicTrackRow[];
   renderStatus: RenderStatus;
   tagPresets: string[];
 }) {
@@ -70,6 +85,19 @@ export default function VideoEditorView({
     setShape(next);
     setTimelineShape(siteId, renderId, next);
   };
+
+  // Music under the whole video (2026-10-16).
+  const [music, setMusic] = useState<TimelineMusic | null>(initialMusic);
+  const [muteClips, setMuteClips] = useState(initialMuteClips);
+  const musicSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const changeMusic = (nextMusic: TimelineMusic | null, nextMute: boolean) => {
+    setMusic(nextMusic);
+    setMuteClips(nextMute);
+    // Saved shortly after, so dragging the volume doesn't save every step.
+    if (musicSaveRef.current) clearTimeout(musicSaveRef.current);
+    musicSaveRef.current = setTimeout(() => setTimelineMusic(siteId, renderId, nextMusic, nextMute), 400);
+  };
+  const musicTrack = music ? musicTracks.find((t) => t.id === music.trackId) ?? null : null;
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -94,6 +122,15 @@ export default function VideoEditorView({
   useEffect(() => {
     setShape(initialShape);
   }, [initialShape]);
+
+  // Only when what's saved actually changes (a refresh brings a new but
+  // equal object).
+  const initialMusicKey = JSON.stringify(initialMusic);
+  useEffect(() => {
+    setMusic(initialMusic);
+    setMuteClips(initialMuteClips);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialMusicKey, initialMuteClips]);
 
   const idsKey = clips.map((c) => c.id).join(",");
   const isFirstRun = useRef(true);
@@ -264,6 +301,63 @@ export default function VideoEditorView({
                   {s.label}
                 </button>
               ))}
+            </div>
+            {/* Music (2026-10-16): one track from the Music library under
+                the whole video, fading in and out. */}
+            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-neutral-600">
+              <label className="flex items-center gap-2">
+                Music
+                <select
+                  value={music?.trackId ?? ""}
+                  disabled={renderStatus != null}
+                  onChange={(e) =>
+                    changeMusic(
+                      e.target.value ? { trackId: e.target.value, volume: music?.volume ?? 0.8 } : null,
+                      muteClips
+                    )
+                  }
+                  className="max-w-56 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                >
+                  <option value="">None</option>
+                  {musicTracks.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              {musicTracks.length === 0 && (
+                <a href={`/sites/${siteId}/media?purpose=music`} className="text-xs text-neutral-400 underline">
+                  Add music in the Media Catalogue
+                </a>
+              )}
+              {music && (
+                <>
+                  <label className="flex items-center gap-2">
+                    Volume
+                    <input
+                      type="range"
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      value={music.volume}
+                      disabled={renderStatus != null}
+                      onChange={(e) => changeMusic({ ...music, volume: Number(e.target.value) }, muteClips)}
+                    />
+                    <span className="w-9 text-xs text-neutral-400">{Math.round(music.volume * 100)}%</span>
+                  </label>
+                  {musicTrack && <audio src={musicTrack.url} controls preload="none" className="h-8" />}
+                </>
+              )}
+              <label className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={muteClips}
+                  disabled={renderStatus != null}
+                  onChange={(e) => changeMusic(music, e.target.checked)}
+                />
+                Mute the clips&apos; own sound
+              </label>
             </div>
           </div>
           <div className="flex items-start gap-3 text-right">

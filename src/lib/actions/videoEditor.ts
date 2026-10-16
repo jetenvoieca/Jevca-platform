@@ -3,7 +3,14 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
-import { isVideoShape, readTimeline, type Timeline, type TimelineClip, type VideoShape } from "@/lib/videoTimeline";
+import {
+  isVideoShape,
+  readTimeline,
+  type Timeline,
+  type TimelineClip,
+  type TimelineMusic,
+  type VideoShape,
+} from "@/lib/videoTimeline";
 import { hasUnresolvedRender } from "./render";
 
 async function getOrCreateDraft(artistId: string) {
@@ -47,7 +54,39 @@ export async function getDraftTimeline(artistId: string) {
     })
     .filter((c): c is TimelineClip & { image: (typeof images)[number] } => c !== null);
 
-  return { renderId: draft.id, clips, shape: timeline.shape ?? "square" };
+  return {
+    renderId: draft.id,
+    clips,
+    shape: timeline.shape ?? "square",
+    music: timeline.music ?? null,
+    muteClips: timeline.muteClips ?? false,
+  };
+}
+
+// The video's music (2026-10-16): a track of the artist's (or none), its
+// volume, and whether the clips' own sound is muted.
+export async function setTimelineMusic(
+  siteId: string,
+  renderId: string,
+  music: TimelineMusic | null,
+  muteClips: boolean
+): Promise<void> {
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft || draft.status !== "DRAFT") return;
+  const timeline = readTimeline(draft.timeline);
+  if (music) {
+    const track = await db.musicTrack.findFirst({
+      where: { id: music.trackId, artistId: draft.artistId },
+      select: { id: true },
+    });
+    if (!track) return;
+    timeline.music = { trackId: track.id, volume: Math.min(1, Math.max(0, music.volume)) };
+  } else {
+    delete timeline.music;
+  }
+  timeline.muteClips = muteClips === true;
+  await saveTimeline(renderId, timeline);
+  revalidatePath(`/sites/${siteId}/bucket`);
 }
 
 // The video's shape (2026-10-16).
@@ -200,10 +239,10 @@ export async function clearDraftTimeline(siteId: string, renderId: string): Prom
   const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
 
   await db.$transaction([
-    // Clips go; the chosen shape stays.
+    // Clips go; the shape and music stay.
     db.videoRender.update({
       where: { id: renderId },
-      data: { timeline: { clips: [], ...(timeline.shape ? { shape: timeline.shape } : {}) } },
+      data: { timeline: { ...timeline, clips: [] } },
     }),
     ...(imageIds.length > 0
       ? [

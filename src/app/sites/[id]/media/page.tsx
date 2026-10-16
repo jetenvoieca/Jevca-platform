@@ -9,7 +9,9 @@ import {
 import { getBackfillCount } from "@/lib/actions/imageBackfill";
 import MediaCatalogueView from "@/components/MediaCatalogueView";
 import MediaArtworksView from "@/components/MediaArtworksView";
-import { mediaListFilters, readMediaTab } from "@/lib/mediaTabs";
+import { mediaListFilters, readCatalogueView } from "@/lib/mediaTabs";
+import MusicLibraryView from "@/components/MusicLibraryView";
+import { listMusic } from "@/lib/actions/music";
 import { listArtworks, listArtworkNames } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { listCurations } from "@/lib/actions/curations";
@@ -49,7 +51,15 @@ export default async function MediaCataloguePage({
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
 
-  const tab = readMediaTab(sp.purpose);
+  const tab = readCatalogueView(sp.purpose);
+
+  // Music view (2026-10-16): the artist's Music library.
+  if (tab === "music") {
+    const [tracks, counts] = await Promise.all([listMusic(artistId), countMediaByPurpose(artistId)]);
+    return (
+      <MusicLibraryView siteId={id} artistId={artistId} initialTracks={tracks} relatedCount={counts.related} />
+    );
+  }
 
   // Artworks view (2026-10-15): the catalogue's works, read only.
   if (tab === "artworks") {

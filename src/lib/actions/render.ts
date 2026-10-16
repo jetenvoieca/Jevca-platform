@@ -108,6 +108,10 @@ async function prepareImageAsset(
   return { url: `${HOST}/api/media/${key}`, key };
 }
 
+// Shotstack's soundtrack — the music under the whole video, fading in
+// and out (2026-10-16).
+type Soundtrack = { src: string; effect: "fadeInFadeOut"; volume: number };
+
 type ClipWithImage = {
   kind: "PHOTO" | "VIDEO";
   duration?: number;
@@ -122,7 +126,12 @@ function clipLength(clip: ClipWithImage): number {
     : Math.max(0.1, (clip.trimOut ?? 0) - (clip.trimIn ?? 0));
 }
 
-function buildEditJson(clips: ClipWithImage[], callbackUrl: string, size: OutputSize) {
+function buildEditJson(
+  clips: ClipWithImage[],
+  callbackUrl: string,
+  size: OutputSize,
+  sound: { soundtrack: Soundtrack | null; muteClips: boolean }
+) {
   const lengths = clips.map(clipLength);
 
   let cursor = 0;
@@ -137,7 +146,12 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string, size: Output
     const asset =
       clip.kind === "PHOTO"
         ? { type: "image" as const, src: clip.image.url }
-        : { type: "video" as const, src: clip.image.url, trim: clip.trimIn ?? 0 };
+        : {
+            type: "video" as const,
+            src: clip.image.url,
+            trim: clip.trimIn ?? 0,
+            ...(sound.muteClips ? { volume: 0 } : {}),
+          };
 
     const transition: { in?: "fade"; out?: "fade" } = {};
     if (!isFirst) transition.in = "fade";
@@ -156,7 +170,10 @@ function buildEditJson(clips: ClipWithImage[], callbackUrl: string, size: Output
   });
 
   return {
-    timeline: { tracks: [{ clips: shotClips }] },
+    timeline: {
+      ...(sound.soundtrack ? { soundtrack: sound.soundtrack } : {}),
+      tracks: [{ clips: shotClips }],
+    },
     output: { format: "mp4" as const, size },
     callback: callbackUrl,
   };
@@ -239,9 +256,26 @@ export async function renderVideo(
     }
   }
 
+  let soundtrack: Soundtrack | null = null;
+  if (timeline.music) {
+    const track = await db.musicTrack.findFirst({
+      where: { id: timeline.music.trackId, artistId: draft.artistId },
+      select: { key: true },
+    });
+    const src = track ? publicMediaUrl(track.key) || toAbsoluteUrl(`/api/media/${track.key}`) : null;
+    if (!src) {
+      await Promise.all(tempKeys.map((k) => deleteFromR2(k).catch(() => {})));
+      return { ok: false, error: "The chosen music has been deleted — choose another track, or None." };
+    }
+    soundtrack = { src, effect: "fadeInFadeOut", volume: timeline.music.volume };
+  }
+
   const env = activeEnv();
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
-  const editJson = buildEditJson(clipsWithImages, callbackUrl, size);
+  const editJson = buildEditJson(clipsWithImages, callbackUrl, size, {
+    soundtrack,
+    muteClips: timeline.muteClips === true,
+  });
 
   await db.videoRender.update({
     where: { id: renderId },

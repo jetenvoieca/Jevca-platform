@@ -1,5 +1,5 @@
 import Link from "next/link";
-import type { MediaTab } from "@/lib/mediaTabs";
+import type { CatalogueView } from "@/lib/mediaTabs";
 
 // The Media Catalogue's views — see lib/mediaTabs.ts.
 export default function MediaCatalogueTabs({
@@ -8,11 +8,11 @@ export default function MediaCatalogueTabs({
   relatedCount,
 }: {
   siteId: string;
-  current: MediaTab;
+  current: CatalogueView;
   relatedCount: number;
 }) {
-  const href = (tab: MediaTab) => `/sites/${siteId}/media?purpose=${tab}`;
-  const plain = (tab: MediaTab) =>
+  const href = (tab: CatalogueView) => `/sites/${siteId}/media?purpose=${tab}`;
+  const plain = (tab: CatalogueView) =>
     `px-4 py-1.5 ${current === tab ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"}`;
   return (
     <div className="flex overflow-hidden rounded-full border border-neutral-300 text-sm">
@@ -34,6 +34,9 @@ export default function MediaCatalogueTabs({
         }`}
       >
         Related ({relatedCount})
+      </Link>
+      <Link href={href("music")} className={plain("music")}>
+        Music
       </Link>
     </div>
   );

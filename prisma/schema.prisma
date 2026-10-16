@@ -312,6 +312,8 @@ model Artist {
   hopperVideoImports HopperVideoImport[]
   // Marketing → Social Media (2026-10-15). See SocialPost.
   socialPosts SocialPost[]
+  // The artist's Music library (2026-10-16). See MusicTrack.
+  musicTracks MusicTrack[]
   // The artist's Instagram, connected for posting (2026-10-15), and
   // their Zernio profile, which holds it (made on first connect, kept on
   // disconnect) — see lib/zernio.ts.
@@ -1801,6 +1803,24 @@ model HopperVideoImport {
   imageId   String?
   createdAt DateTime                @default(now())
   updatedAt DateTime                @updatedAt
+
+  @@index([artistId])
+}
+
+// A track in an artist's Music library (2026-10-16) — the Media
+// Catalogue's Music view; Video Edit can put one under a video as its
+// soundtrack. The artist's own royalty-free tracks (licences are theirs
+// to keep). The file is in R2 at `key`; `durationSeconds` is read in the
+// browser on upload.
+model MusicTrack {
+  id              String   @id @default(cuid())
+  artistId        String
+  artist          Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  name            String
+  key             String
+  mimeType        String
+  durationSeconds Float?
+  createdAt       DateTime @default(now())
 
   @@index([artistId])
 }
