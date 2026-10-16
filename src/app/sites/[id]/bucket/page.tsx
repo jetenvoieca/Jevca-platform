@@ -3,6 +3,7 @@ import { getDraftTimeline } from "@/lib/actions/videoEditor";
 import { getRenderStatus } from "@/lib/actions/render";
 import { getMediaTagPresets } from "@/lib/actions/mediaCatalogue";
 import { listMusic } from "@/lib/actions/music";
+import { listStickers } from "@/lib/actions/stickers";
 import VideoEditorView from "@/components/VideoEditorView";
 
 export const dynamic = "force-dynamic";
@@ -20,12 +21,14 @@ export default async function BucketPage({
   // to feed MediaDetailPanel's "Related Artwork" dropdown, which was
   // removed (see MediaDetailPanel.tsx and updateMedia's own note for the
   // full reasoning). Nothing else on this page ever used it.
-  const [{ renderId, clips, shape, music, muteClips }, renderStatus, tagPresets, musicTracks] = await Promise.all([
-    getDraftTimeline(artistId),
-    getRenderStatus(artistId),
-    getMediaTagPresets(artistId),
-    listMusic(artistId),
-  ]);
+  const [{ renderId, clips, shape, music, muteClips }, renderStatus, tagPresets, musicTracks, stickerLibrary] =
+    await Promise.all([
+      getDraftTimeline(artistId),
+      getRenderStatus(artistId),
+      getMediaTagPresets(artistId),
+      listMusic(artistId),
+      listStickers(artistId),
+    ]);
 
   return (
     <VideoEditorView
@@ -37,6 +40,7 @@ export default async function BucketPage({
       initialMusic={music}
       initialMuteClips={muteClips}
       musicTracks={musicTracks}
+      stickerLibrary={stickerLibrary}
       renderStatus={renderStatus}
       tagPresets={tagPresets}
     />

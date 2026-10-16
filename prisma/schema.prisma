@@ -314,6 +314,8 @@ model Artist {
   socialPosts SocialPost[]
   // The artist's Music library (2026-10-16). See MusicTrack.
   musicTracks MusicTrack[]
+  // The artist's Stickers library (2026-10-16). See Sticker.
+  stickers Sticker[]
   // The artist's Instagram, connected for posting (2026-10-15), and
   // their Zernio profile, which holds it (made on first connect, kept on
   // disconnect) — see lib/zernio.ts.
@@ -1821,6 +1823,20 @@ model MusicTrack {
   mimeType        String
   durationSeconds Float?
   createdAt       DateTime @default(now())
+
+  @@index([artistId])
+}
+
+// A picture sticker in an artist's Stickers library (2026-10-16) — the
+// Media Catalogue's Stickers view; Video Edit can place them on clips. A
+// PNG, usually with a see-through background, in R2 at `key`.
+model Sticker {
+  id        String   @id @default(cuid())
+  artistId  String
+  artist    Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  name      String
+  key       String
+  createdAt DateTime @default(now())
 
   @@index([artistId])
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { randomId } from "@/lib/randomId";
 import { useRouter } from "next/navigation";
 import {
   createGuide,
@@ -17,12 +18,6 @@ const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:opacity-50";
 const buttonCls =
   "rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-neutral-50";
-
-function newStepId() {
-  return typeof crypto !== "undefined" && crypto.randomUUID
-    ? crypto.randomUUID()
-    : Math.random().toString(36).slice(2);
-}
 
 // The Guides admin page (2026-09-04, direct request) — a topic list per
 // category (User / Technical pill tabs), each topic expanding in place
@@ -128,7 +123,7 @@ export default function GuidesPanel({ guides }: { guides: GuideWithSteps[] }) {
   };
 
   const addStep = () => {
-    const next = [...editSteps, { id: newStepId(), text: "", imageUrl: null }];
+    const next = [...editSteps, { id: randomId(), text: "", imageUrl: null }];
     setEditSteps(next);
     persist(editTitle, next);
   };

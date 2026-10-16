@@ -38,6 +38,9 @@ export default function MediaCatalogueTabs({
       <Link href={href("music")} className={plain("music")}>
         Music
       </Link>
+      <Link href={href("stickers")} className={plain("stickers")}>
+        Stickers
+      </Link>
     </div>
   );
 }

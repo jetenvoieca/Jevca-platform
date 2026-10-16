@@ -6,6 +6,7 @@ import { readTimeline, videoSize, CROSSFADE_SECONDS, totalTimelineSeconds } from
 import { uploadToR2, deleteFromR2, publicMediaUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
+import { STICKER_MARGIN, type StickerPosition } from "@/lib/stickers";
 
 const HOST = "https://jevca.netlify.app";
 
@@ -112,13 +113,43 @@ async function prepareImageAsset(
 // and out (2026-10-16).
 type Soundtrack = { src: string; effect: "fadeInFadeOut"; volume: number };
 
+// A sticker made ready for Shotstack: resized to its width in the video,
+// and where it sits.
+type PreparedSticker = { url: string; position: StickerPosition };
+
 type ClipWithImage = {
   kind: "PHOTO" | "VIDEO";
   duration?: number;
   trimIn?: number;
   trimOut?: number;
   image: { url: string };
+  stickers: PreparedSticker[];
 };
+
+// Shotstack moves a clip from its spot by a share of the video (x right,
+// y up); this keeps a sticker STICKER_MARGIN from the edges it sits by.
+function stickerOffset(position: StickerPosition): { x: number; y: number } {
+  const x = position.endsWith("Left") || position === "left" ? STICKER_MARGIN : position.endsWith("Right") || position === "right" ? -STICKER_MARGIN : 0;
+  const y = position.startsWith("top") ? -STICKER_MARGIN : position.startsWith("bottom") ? STICKER_MARGIN : 0;
+  return { x, y };
+}
+
+// A sticker's PNG at its width in this video, uploaded for the render.
+async function prepareStickerAsset(
+  sourceUrl: string,
+  artistId: string,
+  widthPx: number
+): Promise<{ url: string; key: string }> {
+  const res = await fetch(sourceUrl);
+  if (!res.ok) throw new Error(`sticker returned ${res.status}`);
+  const png = await sharp(Buffer.from(await res.arrayBuffer()))
+    .resize({ width: widthPx })
+    .png()
+    .toBuffer();
+  const key = `${artistId}/render-tmp/${randomUUID()}.png`;
+  await uploadToR2(key, png, "image/png");
+  return { url: `${HOST}/api/media/${key}`, key };
+}
 
 function clipLength(clip: ClipWithImage): number {
   return clip.kind === "PHOTO"
@@ -135,6 +166,9 @@ function buildEditJson(
   const lengths = clips.map(clipLength);
 
   let cursor = 0;
+  // Stickers go on their own track, above the clips, shown exactly while
+  // their clip is (fading with it).
+  const stickerClips: object[] = [];
   const shotClips = clips.map((clip, i) => {
     const length = lengths[i];
     const start = cursor;
@@ -157,6 +191,18 @@ function buildEditJson(
     if (!isFirst) transition.in = "fade";
     if (!isLast) transition.out = "fade";
 
+    for (const sticker of clip.stickers) {
+      stickerClips.push({
+        asset: { type: "image" as const, src: sticker.url },
+        start,
+        length,
+        fit: "none" as const,
+        position: sticker.position,
+        offset: stickerOffset(sticker.position),
+        ...(Object.keys(transition).length > 0 ? { transition } : {}),
+      });
+    }
+
     return {
       asset,
       start,
@@ -172,7 +218,8 @@ function buildEditJson(
   return {
     timeline: {
       ...(sound.soundtrack ? { soundtrack: sound.soundtrack } : {}),
-      tracks: [{ clips: shotClips }],
+      // The first track is the top one.
+      tracks: [...(stickerClips.length > 0 ? [{ clips: stickerClips }] : []), { clips: shotClips }],
     },
     output: { format: "mp4" as const, size },
     callback: callbackUrl,
@@ -208,6 +255,14 @@ export async function renderVideo(
   });
   const byId = new Map(images.map((img) => [img.id, img]));
 
+  // The artist's stickers used on the clips (a deleted one is left out).
+  const stickerIds = [...new Set(timeline.clips.flatMap((c) => (c.stickers ?? []).map((s) => s.stickerId)))];
+  const stickerRows = await db.sticker.findMany({
+    where: { artistId: draft.artistId, id: { in: stickerIds } },
+    select: { id: true, key: true, name: true },
+  });
+  const stickerById = new Map(stickerRows.map((s) => [s.id, s]));
+
   const clipsWithImages: ClipWithImage[] = [];
   const tempKeys: string[] = [];
 
@@ -238,11 +293,29 @@ export async function renderVideo(
       };
     }
 
+    const stickers: PreparedSticker[] = [];
+    for (const placed of clip.stickers ?? []) {
+      const sticker = stickerById.get(placed.stickerId);
+      if (!sticker) continue;
+      try {
+        const prepared = await prepareStickerAsset(
+          publicMediaUrl(sticker.key) || toAbsoluteUrl(`/api/media/${sticker.key}`),
+          draft.artistId,
+          Math.round(placed.size * size.width)
+        );
+        tempKeys.push(prepared.key);
+        stickers.push({ url: prepared.url, position: placed.position });
+      } catch {
+        await Promise.all(tempKeys.map((k) => deleteFromR2(k).catch(() => {})));
+        return { ok: false, error: `The sticker "${sticker.name}" couldn't be prepared — remove it and try again.` };
+      }
+    }
+
     if (clip.kind === "PHOTO") {
       try {
         const prepared = await prepareImageAsset(absoluteUrl, image.artistId, size);
         tempKeys.push(prepared.key);
-        clipsWithImages.push({ ...clip, image: { url: prepared.url } });
+        clipsWithImages.push({ ...clip, image: { url: prepared.url }, stickers });
       } catch {
         await Promise.all(tempKeys.map((k) => deleteFromR2(k).catch(() => {})));
         const label = image.caption || "One of the clips";
@@ -252,7 +325,7 @@ export async function renderVideo(
         };
       }
     } else {
-      clipsWithImages.push({ ...clip, image: { url: absoluteUrl } });
+      clipsWithImages.push({ ...clip, image: { url: absoluteUrl }, stickers });
     }
   }
 

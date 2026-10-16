@@ -8,12 +8,12 @@ export function readMediaTab(value: string | undefined): MediaTab {
   return value === "artworks" || value === "videos" || value === "related" ? value : "marketing";
 }
 
-// Every view of the Media Catalogue: the media views, and Music
-// (2026-10-16 — the artist's Music library).
-export type CatalogueView = MediaTab | "music";
+// Every view of the Media Catalogue: the media views, Music and Stickers
+// (2026-10-16 — the artist's libraries for Video Edit).
+export type CatalogueView = MediaTab | "music" | "stickers";
 
 export function readCatalogueView(value: string | undefined): CatalogueView {
-  return value === "music" ? "music" : readMediaTab(value);
+  return value === "music" || value === "stickers" ? value : readMediaTab(value);
 }
 
 // What listMedia is asked for, for a media view.

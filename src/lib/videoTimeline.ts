@@ -1,3 +1,5 @@
+import type { ClipSticker } from "@/lib/stickers";
+
 // Shared shape for a VideoRender's `timeline` JSON field — the ordered
 // list of clips making up the video currently being put together in the
 // Bucket/Video Editor. See bucket-video-editor-design.md.
@@ -23,6 +25,8 @@ export type TimelineClip = {
   // back out again, and a mid-clip cut wouldn't know the real bounds for
   // either resulting half.
   sourceDuration?: number;
+  // Picture stickers shown for the whole of this clip (2026-10-16).
+  stickers?: ClipSticker[];
 };
 
 // The video's shape (2026-10-16): upright 9:16 for Reels and Stories,

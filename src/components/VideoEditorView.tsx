@@ -13,7 +13,10 @@ import {
   addPicksToTimeline,
   setTimelineShape,
   setTimelineMusic,
+  setClipStickers,
 } from "@/lib/actions/videoEditor";
+import ClipStickersEditor from "@/components/ClipStickersEditor";
+import type { ClipSticker, StickerRow } from "@/lib/stickers";
 import MediaPicker from "@/components/MediaPicker";
 import { renderVideo, discardRenderResult } from "@/lib/actions/render";
 import VideoThumb from "@/components/VideoThumb";
@@ -63,6 +66,7 @@ export default function VideoEditorView({
   initialMusic,
   initialMuteClips,
   musicTracks,
+  stickerLibrary,
   renderStatus,
   tagPresets,
 }: {
@@ -75,6 +79,8 @@ export default function VideoEditorView({
   initialMuteClips: boolean;
   // The artist's Music library (Media Catalogue → Music).
   musicTracks: MusicTrackRow[];
+  // The artist's Stickers library (Media Catalogue → Stickers).
+  stickerLibrary: StickerRow[];
   renderStatus: RenderStatus;
   tagPresets: string[];
 }) {
@@ -223,6 +229,18 @@ export default function VideoEditorView({
   const handleTrimChange = (id: string, trimIn: number, trimOut: number) => {
     setClips((prev) => prev.map((c) => (c.id === id ? { ...c, trimIn, trimOut } : c)));
     setClipTrim(siteId, renderId, id, trimIn, trimOut);
+  };
+
+  // A clip's stickers: shown at once, saved shortly after (so dragging a
+  // size doesn't save every step).
+  const stickerSaves = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const handleStickersChange = (id: string, stickers: ClipSticker[]) => {
+    setClips((prev) => prev.map((c) => (c.id === id ? { ...c, stickers } : c)));
+    clearTimeout(stickerSaves.current.get(id));
+    stickerSaves.current.set(
+      id,
+      setTimeout(() => setClipStickers(siteId, renderId, id, stickers), 400)
+    );
   };
 
   const handleSplit = async (id: string, cutStart: number, cutEnd: number) => {
@@ -519,6 +537,7 @@ export default function VideoEditorView({
                   <img src={clip.image.url} alt="" className="aspect-square w-full rounded-md object-cover" />
                 )}
                 <div className="mt-1 truncate text-center text-xs text-neutral-500">
+                  {(clip.stickers?.length ?? 0) > 0 && <span title="Stickers">★ </span>}
                   {clip.kind === "PHOTO"
                     ? `${(clip.duration ?? 2).toFixed(1)}s`
                     : clip.trimIn != null && clip.trimOut != null
@@ -574,6 +593,16 @@ export default function VideoEditorView({
                 onSplit={(start, end) => handleSplit(selected.id, start, end)}
               />
             )}
+
+            <ClipStickersEditor
+              key={`stickers-${selected.id}`}
+              siteId={siteId}
+              frame={selected.image}
+              shape={shape}
+              library={stickerLibrary}
+              stickers={selected.stickers ?? []}
+              onChange={(stickers) => handleStickersChange(selected.id, stickers)}
+            />
           </div>
         )}
         </>

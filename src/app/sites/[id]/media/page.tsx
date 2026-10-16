@@ -12,6 +12,8 @@ import MediaArtworksView from "@/components/MediaArtworksView";
 import { mediaListFilters, readCatalogueView } from "@/lib/mediaTabs";
 import MusicLibraryView from "@/components/MusicLibraryView";
 import { listMusic } from "@/lib/actions/music";
+import StickerLibraryView from "@/components/StickerLibraryView";
+import { listStickers } from "@/lib/actions/stickers";
 import { listArtworks, listArtworkNames } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { listCurations } from "@/lib/actions/curations";
@@ -58,6 +60,14 @@ export default async function MediaCataloguePage({
     const [tracks, counts] = await Promise.all([listMusic(artistId), countMediaByPurpose(artistId)]);
     return (
       <MusicLibraryView siteId={id} artistId={artistId} initialTracks={tracks} relatedCount={counts.related} />
+    );
+  }
+
+  // Stickers view (2026-10-16): the artist's Stickers library.
+  if (tab === "stickers") {
+    const [stickers, counts] = await Promise.all([listStickers(artistId), countMediaByPurpose(artistId)]);
+    return (
+      <StickerLibraryView siteId={id} artistId={artistId} initialStickers={stickers} relatedCount={counts.related} />
     );
   }
 

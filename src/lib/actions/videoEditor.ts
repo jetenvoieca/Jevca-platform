@@ -4,6 +4,12 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import {
+  STICKER_SIZE_MAX,
+  STICKER_SIZE_MIN,
+  isStickerPosition,
+  type ClipSticker,
+} from "@/lib/stickers";
+import {
   isVideoShape,
   readTimeline,
   type Timeline,
@@ -61,6 +67,39 @@ export async function getDraftTimeline(artistId: string) {
     music: timeline.music ?? null,
     muteClips: timeline.muteClips ?? false,
   };
+}
+
+// A clip's picture stickers (2026-10-16) — only the artist's own, in one
+// of the nine spots, at a size within the limits; at most 5 on a clip.
+const MAX_STICKERS_PER_CLIP = 5;
+
+export async function setClipStickers(
+  siteId: string,
+  renderId: string,
+  clipId: string,
+  stickers: ClipSticker[]
+): Promise<void> {
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft || draft.status !== "DRAFT") return;
+  const timeline = readTimeline(draft.timeline);
+  const clip = timeline.clips.find((c) => c.id === clipId);
+  if (!clip) return;
+  const own = await db.sticker.findMany({
+    where: { artistId: draft.artistId, id: { in: stickers.map((s) => s.stickerId) } },
+    select: { id: true },
+  });
+  const ownIds = new Set(own.map((s) => s.id));
+  clip.stickers = stickers
+    .filter((s) => ownIds.has(s.stickerId) && isStickerPosition(s.position) && typeof s.id === "string")
+    .slice(0, MAX_STICKERS_PER_CLIP)
+    .map((s) => ({
+      id: s.id,
+      stickerId: s.stickerId,
+      position: s.position,
+      size: Math.min(STICKER_SIZE_MAX, Math.max(STICKER_SIZE_MIN, Number(s.size) || STICKER_SIZE_MIN)),
+    }));
+  await saveTimeline(renderId, timeline);
+  revalidatePath(`/sites/${siteId}/bucket`);
 }
 
 // The video's music (2026-10-16): a track of the artist's (or none), its
@@ -353,6 +392,7 @@ export async function splitClip(
     trimIn: clip.trimIn,
     trimOut: Math.max(clip.trimIn, cutStart),
     sourceDuration: clip.sourceDuration,
+    stickers: clip.stickers,
   };
   const partB: TimelineClip = {
     id: randomUUID(),
@@ -361,6 +401,7 @@ export async function splitClip(
     trimIn: Math.min(clip.trimOut, cutEnd),
     trimOut: clip.trimOut,
     sourceDuration: clip.sourceDuration,
+    stickers: clip.stickers,
   };
 
   const nextClips = [...timeline.clips];
