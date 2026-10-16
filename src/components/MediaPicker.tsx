@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { listImages } from "@/lib/actions/media";
 import { listMedia } from "@/lib/actions/mediaCatalogue";
 import { listArtworks, type ArtworkListRow } from "@/lib/actions/artworks";
+import { mediaListFilters, type MediaTab } from "@/lib/mediaTabs";
 import VideoThumb from "@/components/VideoThumb";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
@@ -34,6 +35,15 @@ type MediaRow = {
 // was always meant to include video — see the original Hopper spec).
 // When mediaKinds is given it takes over entirely; otherwise videoOnly's
 // old true/false logic applies unchanged.
+type PickerSource = MediaTab | "media";
+
+const SOURCE_LABEL: Record<Exclude<PickerSource, "artworks">, string> = {
+  marketing: "Marketing",
+  videos: "Videos",
+  related: "Related",
+  media: "Media",
+};
+
 function matchesKind(kind: string, videoOnly: boolean, mediaKinds?: ("PHOTO" | "VIDEO")[]): boolean {
   if (mediaKinds) return mediaKinds.includes(kind as "PHOTO" | "VIDEO");
   return videoOnly ? kind === "VIDEO" : kind === "PHOTO";
@@ -131,9 +141,19 @@ export default function MediaPicker({
   const [images, setImages] = useState<PickedImage[]>([]);
   const [relatedCount, setRelatedCount] = useState(0);
   const [selected, setSelected] = useState<PickedImage[]>([]);
-  const [source, setSource] = useState<"artworks" | "media">(
-    withArtworks ? "artworks" : "media"
-  );
+  // What the grid shows. With artworks (2026-10-16): the Media
+  // Catalogue's own views — Artworks, Marketing, Videos, Related — those
+  // holding a kind this picker takes. Otherwise one list, "media".
+  const takesPhotos = matchesKind("PHOTO", videoOnly, mediaKinds);
+  const takesVideos = matchesKind("VIDEO", videoOnly, mediaKinds);
+  const sources: PickerSource[] = withArtworks
+    ? [
+        ...(takesPhotos ? (["artworks", "marketing"] as const) : []),
+        ...(takesVideos ? (["videos"] as const) : []),
+        "related",
+      ]
+    : ["media"];
+  const [source, setSource] = useState<PickerSource>(sources[0]);
   const [artworks, setArtworks] = useState<ArtworkListRow[]>([]);
   const [selectedArtworks, setSelectedArtworks] = useState<ArtworkListRow[]>([]);
   const [isPending, startTransition] = useTransition();
@@ -171,20 +191,42 @@ export default function MediaPicker({
     });
   };
 
-  // Whichever list is showing.
-  const reload = (q: string) => (source === "artworks" ? loadArtworks(q) : load(q, purpose));
+  // One of the Media Catalogue's media views, newest first.
+  const loadMediaTab = (q: string, tab: Exclude<MediaTab, "artworks">) => {
+    startTransition(async () => {
+      const { rows } = await listMedia(artistId, {
+        ...mediaListFilters(tab),
+        q: q || undefined,
+        limit: PICKER_FETCH_LIMIT,
+        newestFirst: true,
+      });
+      setImages(toPicked(rows, videoOnly, mediaKinds));
+    });
+  };
 
-  const handleSourceChange = (next: "artworks" | "media") => {
+  const loadSource = (next: PickerSource, q: string) => {
+    if (next === "artworks") loadArtworks(q);
+    else if (next === "media") load(q, purpose);
+    else loadMediaTab(q, next);
+  };
+
+  // Whichever list is showing.
+  const reload = (q: string) => loadSource(source, q);
+
+  const handleSourceChange = (next: PickerSource) => {
     setSource(next);
-    if (next === "artworks") loadArtworks(query);
-    else load(query, purpose);
+    loadSource(next, query);
   };
 
   const handleOpen = () => {
     setOpen(true);
     setSelected([]);
     setSelectedArtworks([]);
-    reload(query);
+    // The views can change with the picker's settings (e.g. a social post
+    // switched to Reel takes videos only).
+    const start = sources.includes(source) ? source : sources[0];
+    setSource(start);
+    loadSource(start, query);
     // Fetch the Related count up front too, so the tab badge is correct
     // even before switching to it — otherwise it'd read "Related (0)"
     // until clicked once.
@@ -350,7 +392,7 @@ export default function MediaPicker({
           {isPending && (
             <p className="pb-3 text-xs text-neutral-400">Searching…</p>
           )}
-          {source === "artworks" && withArtworks ? (
+          {source === "artworks" ? (
             <div className="grid grid-cols-6 gap-3">
               {artworks.map((a) => (
                 <button
@@ -449,10 +491,10 @@ export default function MediaPicker({
               })}
             </div>
           )}
-          {source === "artworks" && withArtworks && artworks.length === 0 && !isPending && (
+          {source === "artworks" && artworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">No matches.</p>
           )}
-          {source === "media" && images.length === 0 && !isPending && (
+          {source !== "artworks" && images.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
               {linkedArtworkId && purpose === "related"
                 ? `No images related to this ${words.item.toLowerCase()} yet.`
@@ -472,17 +514,19 @@ export default function MediaPicker({
             {/* Reordered above Search (2026-08-18, direct request) —
                 matches the reference layout's tabs-then-search order. */}
             {withArtworks && (
-              <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
-                {(["artworks", "media"] as const).map((s) => (
+              <div className="flex flex-wrap gap-1.5 text-sm">
+                {sources.map((s) => (
                   <button
                     key={s}
                     type="button"
                     onClick={() => handleSourceChange(s)}
-                    className={`px-4 py-1.5 ${
-                      source === s ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                    className={`rounded-full border px-3 py-1 ${
+                      source === s
+                        ? "border-neutral-900 bg-neutral-900 text-white"
+                        : "border-neutral-300 hover:bg-neutral-50"
                     }`}
                   >
-                    {s === "artworks" ? words.items : "Media"}
+                    {s === "artworks" ? words.items : SOURCE_LABEL[s]}
                   </button>
                 ))}
               </div>
@@ -536,7 +580,7 @@ export default function MediaPicker({
                 comes back here once an item is added to Media (the
                 Hopper's returnTo). Unsaved edits are saved on leaving
                 (useAutoSave); the newest media shows first here. */}
-            {source === "media" && (
+            {source !== "artworks" && (
               <button
                 type="button"
                 onClick={() => {

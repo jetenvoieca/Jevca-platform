@@ -20,6 +20,9 @@ type ListFilters = {
   // sensible page size without every call site having to specify one.
   offset?: number;
   limit?: number;
+  // Newest first (2026-10-16 — the media picker, so something just
+  // uploaded is at the top); otherwise oldest first, as below.
+  newestFirst?: boolean;
 };
 
 const DEFAULT_PAGE_SIZE = 60;
@@ -43,7 +46,7 @@ const DEFAULT_PAGE_SIZE = 60;
 // main image) rather than comparing IDs by hand, so it stays correct
 // automatically if Set as Main ever moves to a different image.
 export async function listMedia(artistId: string, filters: ListFilters) {
-  const { purpose, kind, q, tag, artworkId, offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
+  const { purpose, kind, q, tag, artworkId, offset = 0, limit = DEFAULT_PAGE_SIZE, newestFirst = false } = filters;
 
   const where = {
     artistId,
@@ -72,7 +75,7 @@ export async function listMedia(artistId: string, filters: ListFilters) {
       // be selectable (a "Sort: Caption" option) until the Sort dropdown
       // was removed entirely (2026-09-12, direct request — "never used
       // it or even know why I would"); this is now the only order.
-      orderBy: { createdAt: "asc" },
+      orderBy: { createdAt: newestFirst ? "desc" : "asc" },
       // The artwork's Name — its one and only name (2026-09-23).
       include: { artwork: { select: { id: true, catalogueName: true } } },
       relationLoadStrategy: "query",
