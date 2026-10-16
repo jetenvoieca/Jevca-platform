@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import {
+  clipFadeIns,
   clipLength,
   clipStarts,
   totalTimelineSeconds,
@@ -61,6 +62,7 @@ export default function VideoPreviewPlayer({
   const size = videoSize(shape);
   const total = totalTimelineSeconds(clips, fadeSeconds);
   const starts = clipStarts(clips, fadeSeconds);
+  const fadeIns = clipFadeIns(clips, fadeSeconds);
   // Seconds into the video; null before it starts.
   const [time, setTime] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
@@ -115,7 +117,7 @@ export default function VideoPreviewPlayer({
           style={{ aspectRatio: `${size.width} / ${size.height}` }}
         >
           {showing.map(({ clip, i }) => (
-            <FadeIn key={`${clip.id}-${i}`} seconds={i === 0 ? 0 : fadeSeconds}>
+            <FadeIn key={`${clip.id}-${i}`} seconds={fadeIns[i]}>
               {clip.kind === "PHOTO" ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={clip.image.url} alt="" className="h-full w-full object-cover" />

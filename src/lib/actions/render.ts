@@ -160,26 +160,30 @@ function clipLength(clip: ClipWithImage): number {
     : Math.max(0.1, (clip.trimOut ?? 0) - (clip.trimIn ?? 0));
 }
 
+// The Shotstack edit (2026-10-16 fades): each clip on its own track,
+// later clips above earlier ones, each fading in over the one before
+// across their overlap (an opacity change, so any length works — Shotstack's
+// own fade transitions only come in 0.5, 1 and 2 seconds). Stickers on a
+// top track fade in and out with their clip.
 function buildEditJson(
   clips: ClipWithImage[],
   callbackUrl: string,
   size: OutputSize,
   sound: { soundtrack: Soundtrack | null; muteClips: boolean },
-  fade: ReturnType<typeof fadeSpeedOf>
+  fadeSeconds: number
 ) {
   const lengths = clips.map(clipLength);
+  const overlapAfter = (i: number) =>
+    i === clips.length - 1 ? 0 : Math.min(fadeSeconds, lengths[i], lengths[i + 1]);
 
   let cursor = 0;
-  // Stickers go on their own track, above the clips, shown exactly while
-  // their clip is (fading with it).
   const stickerClips: object[] = [];
   const shotClips = clips.map((clip, i) => {
     const length = lengths[i];
     const start = cursor;
-    const isLast = i === clips.length - 1;
-    const isFirst = i === 0;
-    const overlap = isLast ? 0 : Math.min(fade.seconds, length, lengths[i + 1]);
-    cursor += length - overlap;
+    const fadeIn = i === 0 ? 0 : overlapAfter(i - 1);
+    const fadeOut = overlapAfter(i);
+    cursor += length - fadeOut;
 
     const asset =
       clip.kind === "PHOTO"
@@ -191,9 +195,9 @@ function buildEditJson(
             ...(sound.muteClips ? { volume: 0 } : {}),
           };
 
-    const transition: { in?: string; out?: string } = {};
-    if (fade.transition && !isFirst) transition.in = fade.transition;
-    if (fade.transition && !isLast) transition.out = fade.transition;
+    // Opacity changes, timed within the clip.
+    const fadingIn = fadeIn > 0 ? [{ from: 0, to: 1, start: 0, length: fadeIn }] : [];
+    const fadingOut = fadeOut > 0 ? [{ from: 1, to: 0, start: length - fadeOut, length: fadeOut }] : [];
 
     for (const sticker of clip.stickers) {
       stickerClips.push({
@@ -203,7 +207,7 @@ function buildEditJson(
         fit: "none" as const,
         position: sticker.position,
         offset: stickerOffset(sticker.position),
-        ...(Object.keys(transition).length > 0 ? { transition } : {}),
+        ...(fadingIn.length + fadingOut.length > 0 ? { opacity: [...fadingIn, ...fadingOut] } : {}),
       });
     }
 
@@ -215,15 +219,18 @@ function buildEditJson(
       width: size.width,
       height: size.height,
       position: "center" as const,
-      ...(Object.keys(transition).length > 0 ? { transition } : {}),
+      ...(fadingIn.length > 0 ? { opacity: fadingIn } : {}),
     };
   });
 
   return {
     timeline: {
       ...(sound.soundtrack ? { soundtrack: sound.soundtrack } : {}),
-      // The first track is the top one.
-      tracks: [...(stickerClips.length > 0 ? [{ clips: stickerClips }] : []), { clips: shotClips }],
+      // The first track is the top one: stickers, then the clips, last first.
+      tracks: [
+        ...(stickerClips.length > 0 ? [{ clips: stickerClips }] : []),
+        ...shotClips.map((clip) => ({ clips: [clip] })).reverse(),
+      ],
     },
     // A still frame 1 second in (2026-10-16), saved as the video's
     // picture in the catalogue (see the render webhook).
@@ -354,7 +361,7 @@ export async function renderVideo(
   const editJson = buildEditJson(clipsWithImages, callbackUrl, size, {
     soundtrack,
     muteClips: timeline.muteClips === true,
-  }, fadeSpeedOf(timeline.fade));
+  }, fadeSpeedOf(timeline.fade).seconds);
 
   await db.videoRender.update({
     where: { id: renderId },

@@ -65,23 +65,20 @@ export type Timeline = {
 export const emptyTimeline: Timeline = { clips: [] };
 
 // How clips change from one to the next (2026-10-16; always a 1-second
-// fade before). Shotstack's fades come in three fixed lengths — fadeFast
-// 0.5s, fade 1s, fadeSlow 2s — so those are the choices, or a straight
-// cut. Neighbouring clips overlap by the fade's length so one dissolves
-// into the next; the render, the preview and the running total all use
-// the same overlaps (clipStarts, totalTimelineSeconds).
-export type FadeSpeed = "none" | "fast" | "normal" | "slow";
+// fade before): a cut, or a fade of 0.5 to 4 seconds. Neighbouring clips
+// overlap by the fade's length (never more than either clip's own
+// length), the next one fading in over the one before; the render, the
+// preview and the running total all use the same overlaps (clipStarts,
+// totalTimelineSeconds).
+export type FadeSpeed = "none" | "fast" | "normal" | "slow" | "slower" | "slowest";
 
-export const FADE_SPEEDS: {
-  value: FadeSpeed;
-  label: string;
-  seconds: number;
-  transition: "fadeFast" | "fade" | "fadeSlow" | null;
-}[] = [
-  { value: "none", label: "Cut", seconds: 0, transition: null },
-  { value: "fast", label: "Fast fade", seconds: 0.5, transition: "fadeFast" },
-  { value: "normal", label: "Fade", seconds: 1, transition: "fade" },
-  { value: "slow", label: "Slow fade", seconds: 2, transition: "fadeSlow" },
+export const FADE_SPEEDS: { value: FadeSpeed; label: string; seconds: number }[] = [
+  { value: "none", label: "Cut", seconds: 0 },
+  { value: "fast", label: "½s", seconds: 0.5 },
+  { value: "normal", label: "1s", seconds: 1 },
+  { value: "slow", label: "2s", seconds: 2 },
+  { value: "slower", label: "3s", seconds: 3 },
+  { value: "slowest", label: "4s", seconds: 4 },
 ];
 
 export function fadeSpeedOf(value: FadeSpeed | undefined) {
@@ -104,6 +101,11 @@ export function clipLength(c: TimelineClip): number {
 // How much each clip overlaps the next (none for the last).
 function overlapAfter(clips: TimelineClip[], i: number, fadeSeconds: number): number {
   return i === clips.length - 1 ? 0 : Math.min(fadeSeconds, clipLength(clips[i]), clipLength(clips[i + 1]));
+}
+
+// How long each clip takes to fade in over the one before (0 for the first).
+export function clipFadeIns(clips: TimelineClip[], fadeSeconds: number): number[] {
+  return clips.map((_, i) => (i === 0 ? 0 : overlapAfter(clips, i - 1, fadeSeconds)));
 }
 
 // When each clip starts, in seconds.
