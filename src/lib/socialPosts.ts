@@ -27,6 +27,7 @@ export type SocialMediaItem = {
   url: string;
   kind: string;
   posterUrl: string | null;
+  mimeType: string;
 };
 
 export type SocialPostRow = {
@@ -36,7 +37,19 @@ export type SocialPostRow = {
   status: SocialPostStatus;
   media: SocialMediaItem[];
   updatedAt: string;
+  // Once posted: the post on Instagram, and when. If posting failed, why.
+  permalink: string | null;
+  postedAt: string | null;
+  error: string | null;
 };
+
+// The file types Instagram takes.
+const POSTABLE_TYPES = ["image/jpeg", "image/png", "video/mp4", "video/quicktime"];
+
+// A draft can be changed and posted; so can one whose posting failed.
+export function isEditable(status: SocialPostStatus): boolean {
+  return status === "DRAFT" || status === "FAILED";
+}
 
 // What Instagram will make of it.
 export function socialPostType(format: SocialPostFormat, media: { kind: string }[]): string {
@@ -53,9 +66,12 @@ export function countHashtags(caption: string): number {
 export function socialPostProblem(post: {
   format: SocialPostFormat;
   caption: string;
-  media: unknown[];
+  media: { mimeType: string }[];
 }): string | null {
   if (post.media.length === 0) return "Add a picture or video.";
+  if (post.media.some((m) => !POSTABLE_TYPES.includes(m.mimeType))) {
+    return "Instagram takes JPEG or PNG pictures and MP4 or MOV videos only.";
+  }
   if (post.format === "STORY" && post.media.length > 1) return "A Story has one picture or video.";
   if (post.media.length > CAROUSEL_MAX) return `A carousel has at most ${CAROUSEL_MAX} items.`;
   if (post.caption.length > CAPTION_MAX) return `The caption is over ${CAPTION_MAX} characters.`;

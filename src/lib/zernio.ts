@@ -19,7 +19,10 @@ export class ZernioError extends Error {
 
 // One call to Zernio's API; its JSON reply, or a ZernioError with its
 // message.
-export async function zernio<T>(path: string, init: { method?: string; body?: unknown } = {}): Promise<T> {
+export async function zernio<T>(
+  path: string,
+  init: { method?: string; body?: unknown; headers?: Record<string, string> } = {}
+): Promise<T> {
   const key = process.env.ZERNIO_API_KEY;
   if (!key) throw new ZernioError("Missing ZERNIO_API_KEY — set it in Netlify first.", 0);
 
@@ -28,6 +31,7 @@ export async function zernio<T>(path: string, init: { method?: string; body?: un
     headers: {
       Authorization: `Bearer ${key}`,
       ...(init.body !== undefined ? { "Content-Type": "application/json" } : {}),
+      ...init.headers,
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });

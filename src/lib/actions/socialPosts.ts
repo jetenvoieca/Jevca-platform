@@ -1,62 +1,110 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { toArtworkImages } from "@/lib/artworkImages";
+import { publicMediaUrl } from "@/lib/r2";
+import { checkSocialPosting, startSocialPosting } from "@/lib/socialPublishing";
 import {
   CAPTION_MAX,
   CAROUSEL_MAX,
+  isEditable,
   type SocialMediaItem,
   type SocialPostFormat,
   type SocialPostRow,
 } from "@/lib/socialPosts";
 
 // Marketing → Social Media (2026-10-15) — an artist's social posts. See
-// lib/socialPosts.ts for the rules. Only drafts can be changed.
+// lib/socialPosts.ts for the rules and lib/socialPublishing.ts for
+// posting. Drafts, and posts whose posting failed, can be changed.
 
 const IMAGE_SELECT = {
   id: true,
   url: true,
   thumbnailKey: true,
-  displayKey: true,
   kind: true,
   posterUrl: true,
+  mimeType: true,
 } as const;
 
-function toItems(images: Parameters<typeof toArtworkImages>[0]): SocialMediaItem[] {
-  return toArtworkImages(images, null).map(({ id, url, kind, posterUrl }) => ({
-    id,
-    url,
-    kind,
-    posterUrl,
-  }));
+type ImageRow = { id: string; url: string; thumbnailKey: string | null; kind: string; posterUrl: string | null; mimeType: string };
+
+function toItem(image: ImageRow): SocialMediaItem {
+  return {
+    id: image.id,
+    url: publicMediaUrl(image.thumbnailKey) || image.url,
+    kind: image.kind,
+    posterUrl: image.posterUrl,
+    mimeType: image.mimeType,
+  };
 }
 
-export async function listSocialPosts(artistId: string): Promise<SocialPostRow[]> {
-  const posts = await db.socialPost.findMany({
-    where: { artistId },
-    orderBy: { updatedAt: "desc" },
-    include: { media: { orderBy: { position: "asc" }, include: { image: { select: IMAGE_SELECT } } } },
-  });
-  return posts.map((p) => ({
+const POST_INCLUDE = {
+  media: { orderBy: { position: "asc" as const }, include: { image: { select: IMAGE_SELECT } } },
+};
+
+async function postRow(id: string): Promise<SocialPostRow | null> {
+  const post = await db.socialPost.findUnique({ where: { id }, include: POST_INCLUDE });
+  return post ? toRow(post) : null;
+}
+
+function toRow(p: {
+  id: string;
+  format: SocialPostFormat;
+  caption: string;
+  status: SocialPostRow["status"];
+  updatedAt: Date;
+  permalink: string | null;
+  postedAt: Date | null;
+  error: string | null;
+  media: { image: ImageRow }[];
+}): SocialPostRow {
+  return {
     id: p.id,
     format: p.format,
     caption: p.caption,
     status: p.status,
-    media: toItems(p.media.map((m) => m.image)),
+    media: p.media.map((m) => toItem(m.image)),
     updatedAt: p.updatedAt.toISOString(),
-  }));
+    permalink: p.permalink,
+    postedAt: p.postedAt?.toISOString() ?? null,
+    error: p.error,
+  };
+}
+
+// Posts being posted are checked with Zernio first, so the list is
+// up to date.
+export async function listSocialPosts(artistId: string): Promise<SocialPostRow[]> {
+  const posting = await db.socialPost.findMany({ where: { artistId, status: "POSTING" }, select: { id: true } });
+  await Promise.all(posting.map((p) => checkSocialPosting(p.id)));
+  const posts = await db.socialPost.findMany({
+    where: { artistId },
+    orderBy: { updatedAt: "desc" },
+    include: POST_INCLUDE,
+  });
+  return posts.map(toRow);
 }
 
 export async function createSocialPost(artistId: string): Promise<SocialPostRow> {
-  const post = await db.socialPost.create({ data: { artistId } });
-  return {
-    id: post.id,
-    format: post.format,
-    caption: post.caption,
-    status: post.status,
-    media: [],
-    updatedAt: post.updatedAt.toISOString(),
-  };
+  const post = await db.socialPost.create({ data: { artistId }, include: POST_INCLUDE });
+  return toRow(post);
+}
+
+// "Post now": the post as it now stands, or why it couldn't go.
+export async function publishSocialPost(
+  artistId: string,
+  id: string
+): Promise<{ post: SocialPostRow } | { error: string; post: SocialPostRow | null }> {
+  const failed = await startSocialPosting(artistId, id);
+  const post = await postRow(id);
+  if (failed) return { ...failed, post };
+  return post ? { post } : { error: "That post couldn't be found.", post: null };
+}
+
+// How a post being posted is getting on.
+export async function refreshSocialPost(artistId: string, id: string): Promise<SocialPostRow | null> {
+  const owned = await db.socialPost.findFirst({ where: { id, artistId }, select: { id: true } });
+  if (!owned) return null;
+  await checkSocialPosting(id);
+  return postRow(id);
 }
 
 // The picker's picks as post items: media as picked, each artwork as its
@@ -76,7 +124,7 @@ export async function socialMediaForPicks(
   });
   const ids = [...picks.imageIds, ...artworkImageIds];
   const images = await db.image.findMany({ where: { id: { in: ids }, artistId }, select: IMAGE_SELECT });
-  const byId = new Map(toItems(images).map((item) => [item.id, item]));
+  const byId = new Map(images.map((image) => [image.id, toItem(image)]));
   return ids.flatMap((id) => byId.get(id) ?? []);
 }
 
@@ -87,7 +135,7 @@ export async function updateSocialPost(
 ): Promise<{ ok: true } | { error: string }> {
   const post = await db.socialPost.findFirst({ where: { id, artistId }, select: { status: true } });
   if (!post) return { error: "That post couldn't be found." };
-  if (post.status !== "DRAFT") return { error: "Only a draft can be changed." };
+  if (!isEditable(post.status)) return { error: "This post has been sent, so it can't be changed." };
   if (draft.format !== "POST" && draft.format !== "STORY") return { error: "Unknown format." };
   if (draft.caption.length > CAPTION_MAX) return { error: `The caption is over ${CAPTION_MAX} characters.` };
   if (draft.imageIds.length > CAROUSEL_MAX) return { error: `At most ${CAROUSEL_MAX} items.` };

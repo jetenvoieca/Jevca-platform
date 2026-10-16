@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { listSocialPosts } from "@/lib/actions/socialPosts";
+import { getInstagramAccount } from "@/lib/instagram";
 import SocialView from "@/components/SocialView";
 
 // Marketing → Social Media (2026-10-15) — see SocialView.
@@ -19,7 +20,10 @@ export default async function SocialMediaPage({
   const site = await db.site.findUnique({ where: { id }, select: { id: true, artistId: true } });
   if (!site) notFound();
 
-  const posts = await listSocialPosts(site.artistId);
+  const [posts, instagram] = await Promise.all([
+    listSocialPosts(site.artistId),
+    getInstagramAccount(site.artistId),
+  ]);
 
   return (
     <SocialView
@@ -27,6 +31,7 @@ export default async function SocialMediaPage({
       artistId={site.artistId}
       initialPosts={posts}
       initialOpenId={sp.post ?? null}
+      instagramUsername={instagram?.username ?? null}
     />
   );
 }

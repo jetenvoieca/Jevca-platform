@@ -1821,8 +1821,10 @@ model InstagramConnection {
 // Marketing → Social Media (2026-10-15): a post for the artist's
 // Instagram. A POST with one video goes out as a Reel, with one image as
 // a picture, with 2–10 items as a carousel; a STORY is one item (see
-// lib/socialPosts.ts). One caption, English and French together. Status
-// DRAFT until posting is set up; the others are for posting.
+// lib/socialPosts.ts). One caption, English and French together.
+// Posting goes through Zernio (lib/socialPublishing.ts): POSTING once
+// handed over (`zernioPostId`), then POSTED (`permalink`, `postedAt`) or
+// FAILED (`error`; a failed post can be changed and posted again).
 enum SocialPostFormat {
   POST
   STORY
@@ -1844,6 +1846,11 @@ model SocialPost {
   caption  String           @default("")
   status   SocialPostStatus @default(DRAFT)
   media    SocialPostMedia[]
+
+  zernioPostId String?
+  permalink    String?
+  error        String?
+  postedAt     DateTime?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

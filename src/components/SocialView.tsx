@@ -8,6 +8,8 @@ import { formatDate } from "@/lib/formatDate";
 import {
   createSocialPost,
   deleteSocialPost,
+  publishSocialPost,
+  refreshSocialPost,
   socialMediaForPicks,
   updateSocialPost,
 } from "@/lib/actions/socialPosts";
@@ -17,6 +19,7 @@ import {
   SOCIAL_STATUSES,
   SOCIAL_STATUS_LABEL,
   countHashtags,
+  isEditable,
   socialPostProblem,
   socialPostType,
   type SocialMediaItem,
@@ -28,8 +31,12 @@ import {
 // Marketing → Social Media (2026-10-15): the artist's Instagram posts,
 // by status, and the post editor — Post or Story, its pictures and
 // videos (from the Media Catalogue and the artworks), and one caption,
-// English and French together. Changes save themselves. Posting comes
-// once Instagram is connected.
+// English and French together. Changes save themselves. "Post now"
+// sends it to the connected Instagram (through Zernio — see
+// lib/socialPublishing.ts); a post being posted is checked every
+// 15 seconds until it's posted or has failed.
+
+const CHECK_EVERY_MS = 15 * 1000;
 
 type Draft = { format: SocialPostFormat; caption: string; imageIds: string[] };
 
@@ -53,10 +60,13 @@ export default function SocialView({
   artistId,
   initialPosts,
   initialOpenId,
+  instagramUsername,
 }: {
   siteId: string;
   artistId: string;
   initialPosts: SocialPostRow[];
+  // The connected Instagram, or null if none is.
+  instagramUsername: string | null;
   // The post to open (kept in the address as ?post=, so Add Media's
   // Upload new comes back to it).
   initialOpenId: string | null;
@@ -69,8 +79,25 @@ export default function SocialView({
     initialPosts.some((p) => p.id === initialOpenId) ? initialOpenId : null
   );
   const [error, setError] = useState<string | null>(null);
+  const [sending, setSending] = useState(false);
 
   const open = posts.find((p) => p.id === openId) ?? null;
+
+  const replacePost = (post: SocialPostRow) =>
+    setPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)));
+
+  // Posts being posted are checked until there's an outcome.
+  const postingIds = posts.filter((p) => p.status === "POSTING").map((p) => p.id).join(",");
+  useEffect(() => {
+    if (!postingIds) return;
+    const timer = setInterval(async () => {
+      for (const id of postingIds.split(",")) {
+        const post = await refreshSocialPost(artistId, id);
+        if (post) setPosts((prev) => prev.map((p) => (p.id === post.id ? post : p)));
+      }
+    }, CHECK_EVERY_MS);
+    return () => clearInterval(timer);
+  }, [postingIds, artistId]);
 
   const { status, begin, schedule, flush } = useAutoSave<Draft>({
     update: (id, draft) => updateSocialPost(artistId, id, draft),
@@ -116,7 +143,10 @@ export default function SocialView({
   };
 
   const removePost = async () => {
-    if (!open || !confirm("Delete this post?")) return;
+    if (!open) return;
+    const question =
+      open.status === "POSTED" ? "Delete this post from here? It stays on Instagram." : "Delete this post?";
+    if (!confirm(question)) return;
     const result = await deleteSocialPost(artistId, open.id);
     if ("error" in result) {
       setError(result.error);
@@ -147,8 +177,23 @@ export default function SocialView({
     change({ media: open.media.filter((_, i) => i !== index) });
   };
 
+  // Saves anything waiting first, so what's posted is what's shown.
+  const postNow = async () => {
+    if (!open || !confirm(`Post this to @${instagramUsername} now?`)) return;
+    setSending(true);
+    setError(null);
+    try {
+      await flush();
+      const result = await publishSocialPost(artistId, open.id);
+      if (result.post) replacePost(result.post);
+      if ("error" in result) setError(result.error);
+    } finally {
+      setSending(false);
+    }
+  };
+
   if (open) {
-    const editable = open.status === "DRAFT";
+    const editable = isEditable(open.status);
     const problem = socialPostProblem(open);
     const hashtags = countHashtags(open.caption);
     return (
@@ -168,7 +213,8 @@ export default function SocialView({
             <button
               type="button"
               onClick={removePost}
-              className="rounded-md border border-neutral-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50"
+              disabled={open.status === "POSTING"}
+              className="rounded-md border border-neutral-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40"
             >
               Delete
             </button>
@@ -280,22 +326,47 @@ export default function SocialView({
         )}
 
         <div className="flex items-center justify-end gap-3 border-t border-neutral-200 pt-4">
-          <span className="text-xs text-neutral-400">
-            {error ?? problem ?? "Posting comes once Instagram is connected."}
-          </span>
-          <button
-            type="button"
-            disabled
-            className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
-          >
-            Post now
-          </button>
+          {open.status === "POSTING" && (
+            <span className="text-sm text-neutral-500">Posting to Instagram — usually within a few minutes…</span>
+          )}
+          {open.status === "POSTED" && (
+            <span className="text-sm text-neutral-500">
+              Posted {open.postedAt ? formatDate(open.postedAt) : ""}
+              {open.permalink && (
+                <>
+                  {" · "}
+                  <a href={open.permalink} target="_blank" rel="noreferrer" className="underline hover:text-neutral-900">
+                    View on Instagram
+                  </a>
+                </>
+              )}
+            </span>
+          )}
+          {editable && (
+            <>
+              <span className={`text-xs ${error || open.error ? "text-red-600" : "text-neutral-400"}`}>
+                {error ??
+                  (open.error ? `Posting failed: ${open.error}` : null) ??
+                  problem ??
+                  (instagramUsername ? `Posts to @${instagramUsername}` : "Connect Instagram in Marketing → Settings first.")}
+              </span>
+              <button
+                type="button"
+                onClick={postNow}
+                disabled={!!problem || !instagramUsername || sending}
+                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+              >
+                {sending ? "Sending…" : "Post now"}
+              </button>
+            </>
+          )}
         </div>
       </div>
     );
   }
 
-  const shown = posts.filter((p) => p.status === tab || (tab === "SCHEDULED" && p.status === "POSTING"));
+  // A post being posted shows with the posted ones.
+  const shown = posts.filter((p) => p.status === tab || (tab === "POSTED" && p.status === "POSTING"));
 
   return (
     <div className="mx-auto max-w-6xl p-6">
@@ -347,7 +418,8 @@ export default function SocialView({
                 )}
               </div>
               <p className="mt-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
-                {socialPostType(p.format, p.media)} · {formatDate(p.updatedAt)}
+                {socialPostType(p.format, p.media)} ·{" "}
+                {p.status === "POSTING" ? "Posting…" : formatDate(p.postedAt ?? p.updatedAt)}
               </p>
               <p className="truncate text-sm text-neutral-900">
                 {p.caption.split("\n")[0] || <span className="text-neutral-400">No caption</span>}
