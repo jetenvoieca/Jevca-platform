@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import MediaPicker from "@/components/MediaPicker";
 import ImageFill from "@/components/ImageFill";
+import SocialPostPreview from "@/components/SocialPostPreview";
 import { useAutoSave } from "@/components/useAutoSave";
 import { formatDate } from "@/lib/formatDate";
 import {
@@ -33,6 +34,7 @@ import {
 // Marketing → Social Media (2026-10-15): the artist's Instagram posts,
 // by status, and the post editor — Post, Reel or Story, its pictures and
 // videos (from the Media Catalogue and the artworks), and one caption,
+// with a preview of how it will look on Instagram beside it
 // English and French together. Changes save themselves. "Post now"
 // sends it to the connected Instagram (through Zernio — see
 // lib/socialPublishing.ts); a post being posted is checked every
@@ -204,180 +206,190 @@ export default function SocialView({
     const problem = socialPostProblem(open);
     const hashtags = countHashtags(open.caption);
     return (
-      <div className="mx-auto max-w-4xl p-6">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <button
-            type="button"
-            onClick={closePost}
-            className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
-          >
-            ← Posts
-          </button>
-          <div className="flex items-center gap-3">
-            <span className={`text-xs ${status.isError ? "text-red-600" : "text-neutral-400"}`}>
-              {status.text}
-            </span>
+      <div className="mx-auto grid max-w-6xl gap-8 p-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div>
+          <div className="mb-4 flex items-center justify-between gap-3">
             <button
               type="button"
-              onClick={removePost}
-              disabled={open.status === "POSTING"}
-              className="rounded-md border border-neutral-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40"
+              onClick={closePost}
+              className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
             >
-              Delete
+              ← Posts
             </button>
-          </div>
-        </div>
-
-        <div className="mb-4 flex items-center gap-3">
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            {socialPostType(open.format, open.media)}
-          </h1>
-          <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
-            {SOCIAL_FORMATS.map((f) => (
-              <button
-                key={f}
-                type="button"
-                disabled={!editable}
-                onClick={() => change({ format: f })}
-                className={`px-3 py-1 font-medium ${
-                  open.format === f ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
-                }`}
-              >
-                {SOCIAL_FORMAT_LABEL[f]}
-              </button>
-            ))}
-          </div>
-          {open.format === "REEL" && (
-            <label className="flex items-center gap-2 text-sm text-neutral-600">
-              <input
-                type="checkbox"
-                checked={open.reelInFeed}
-                disabled={!editable}
-                onChange={(e) => change({ reelInFeed: e.target.checked })}
-              />
-              Also show in the main feed
-            </label>
-          )}
-        </div>
-
-        <div className="mb-6">
-          <div className="flex flex-wrap gap-3">
-            {open.media.map((item, i) => (
-              <div key={`${item.id}-${i}`} className="w-32">
-                <div className="aspect-square overflow-hidden rounded-md bg-neutral-100">
-                  <MediaTile item={item} />
-                </div>
-                {editable && (
-                  <div className="mt-1 flex justify-between text-xs">
-                    <button
-                      type="button"
-                      onClick={() => moveItem(i, -1)}
-                      disabled={i === 0}
-                      className="px-1 text-neutral-500 hover:text-neutral-900 disabled:opacity-30"
-                      aria-label="Move earlier"
-                    >
-                      ←
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => removeItem(i)}
-                      className="px-1 text-neutral-500 hover:text-red-600"
-                    >
-                      Remove
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveItem(i, 1)}
-                      disabled={i === open.media.length - 1}
-                      className="px-1 text-neutral-500 hover:text-neutral-900 disabled:opacity-30"
-                      aria-label="Move later"
-                    >
-                      →
-                    </button>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          {editable && (
-            <div className="mt-3">
-              <MediaPicker
-                artistId={artistId}
-                siteId={siteId}
-                mode="multi"
-                mediaKinds={open.format === "REEL" ? ["VIDEO"] : ["PHOTO", "VIDEO"]}
-                variant="button"
-                label="Add Media"
-                withArtworks={open.format !== "REEL"}
-                onSelect={(images, artworks) =>
-                  addPicks(
-                    images.map((img) => img.id),
-                    artworks.map((a) => a.id)
-                  )
-                }
-              />
-            </div>
-          )}
-        </div>
-
-        {open.format === "STORY" ? (
-          <p className="mb-6 text-sm text-neutral-400">A Story has no caption.</p>
-        ) : (
-          <div className="mb-6">
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
-            <textarea
-              value={open.caption}
-              onChange={(e) => change({ caption: e.target.value })}
-              disabled={!editable}
-              rows={10}
-              placeholder={"English…\n\nFrançais…\n\n#hashtags"}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
-            <p
-              className={`mt-1 text-xs ${
-                open.caption.length > CAPTION_MAX || hashtags > HASHTAG_MAX ? "text-red-600" : "text-neutral-400"
-              }`}
-            >
-              {open.caption.length} / {CAPTION_MAX} characters · {hashtags} / {HASHTAG_MAX} hashtags
-            </p>
-          </div>
-        )}
-
-        <div className="flex items-center justify-end gap-3 border-t border-neutral-200 pt-4">
-          {open.status === "POSTING" && (
-            <span className="text-sm text-neutral-500">Posting to Instagram — usually within a few minutes…</span>
-          )}
-          {open.status === "POSTED" && (
-            <span className="text-sm text-neutral-500">
-              Posted {open.postedAt ? formatDate(open.postedAt) : ""}
-              {open.permalink && (
-                <>
-                  {" · "}
-                  <a href={open.permalink} target="_blank" rel="noreferrer" className="underline hover:text-neutral-900">
-                    View on Instagram
-                  </a>
-                </>
-              )}
-            </span>
-          )}
-          {editable && (
-            <>
-              <span className={`text-xs ${error || open.error ? "text-red-600" : "text-neutral-400"}`}>
-                {error ??
-                  (open.error ? `Posting failed: ${open.error}` : null) ??
-                  problem ??
-                  (instagramUsername ? `Posts to @${instagramUsername}` : "Connect Instagram in Marketing → Settings first.")}
+            <div className="flex items-center gap-3">
+              <span className={`text-xs ${status.isError ? "text-red-600" : "text-neutral-400"}`}>
+                {status.text}
               </span>
               <button
                 type="button"
-                onClick={postNow}
-                disabled={!!problem || !instagramUsername || sending}
-                className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                onClick={removePost}
+                disabled={open.status === "POSTING"}
+                className="rounded-md border border-neutral-300 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-40"
               >
-                {sending ? "Sending…" : "Post now"}
+                Delete
               </button>
-            </>
+            </div>
+          </div>
+
+          <div className="mb-4 flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-neutral-900">
+              {socialPostType(open.format, open.media)}
+            </h1>
+            <div className="flex overflow-hidden rounded-full border border-neutral-300 text-xs">
+              {SOCIAL_FORMATS.map((f) => (
+                <button
+                  key={f}
+                  type="button"
+                  disabled={!editable}
+                  onClick={() => change({ format: f })}
+                  className={`px-3 py-1 font-medium ${
+                    open.format === f ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
+                  }`}
+                >
+                  {SOCIAL_FORMAT_LABEL[f]}
+                </button>
+              ))}
+            </div>
+            {open.format === "REEL" && (
+              <label className="flex items-center gap-2 text-sm text-neutral-600">
+                <input
+                  type="checkbox"
+                  checked={open.reelInFeed}
+                  disabled={!editable}
+                  onChange={(e) => change({ reelInFeed: e.target.checked })}
+                />
+                Also show in the main feed
+              </label>
+            )}
+          </div>
+
+          <div className="mb-6">
+            <div className="flex flex-wrap gap-3">
+              {open.media.map((item, i) => (
+                <div key={`${item.id}-${i}`} className="w-32">
+                  <div className="aspect-square overflow-hidden rounded-md bg-neutral-100">
+                    <MediaTile item={item} />
+                  </div>
+                  {editable && (
+                    <div className="mt-1 flex justify-between text-xs">
+                      <button
+                        type="button"
+                        onClick={() => moveItem(i, -1)}
+                        disabled={i === 0}
+                        className="px-1 text-neutral-500 hover:text-neutral-900 disabled:opacity-30"
+                        aria-label="Move earlier"
+                      >
+                        ←
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => removeItem(i)}
+                        className="px-1 text-neutral-500 hover:text-red-600"
+                      >
+                        Remove
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveItem(i, 1)}
+                        disabled={i === open.media.length - 1}
+                        className="px-1 text-neutral-500 hover:text-neutral-900 disabled:opacity-30"
+                        aria-label="Move later"
+                      >
+                        →
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+            {editable && (
+              <div className="mt-3">
+                <MediaPicker
+                  artistId={artistId}
+                  siteId={siteId}
+                  mode="multi"
+                  mediaKinds={open.format === "REEL" ? ["VIDEO"] : ["PHOTO", "VIDEO"]}
+                  variant="button"
+                  label="Add Media"
+                  withArtworks={open.format !== "REEL"}
+                  onSelect={(images, artworks) =>
+                    addPicks(
+                      images.map((img) => img.id),
+                      artworks.map((a) => a.id)
+                    )
+                  }
+                />
+              </div>
+            )}
+          </div>
+
+          {open.format === "STORY" ? (
+            <p className="mb-6 text-sm text-neutral-400">A Story has no caption.</p>
+          ) : (
+            <div className="mb-6">
+              <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
+              <textarea
+                value={open.caption}
+                onChange={(e) => change({ caption: e.target.value })}
+                disabled={!editable}
+                rows={10}
+                placeholder={"English…\n\nFrançais…\n\n#hashtags"}
+                className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+              />
+              <p
+                className={`mt-1 text-xs ${
+                  open.caption.length > CAPTION_MAX || hashtags > HASHTAG_MAX ? "text-red-600" : "text-neutral-400"
+                }`}
+              >
+                {open.caption.length} / {CAPTION_MAX} characters · {hashtags} / {HASHTAG_MAX} hashtags
+              </p>
+            </div>
           )}
+
+          <div className="flex items-center justify-end gap-3 border-t border-neutral-200 pt-4">
+            {open.status === "POSTING" && (
+              <span className="text-sm text-neutral-500">Posting to Instagram — usually within a few minutes…</span>
+            )}
+            {open.status === "POSTED" && (
+              <span className="text-sm text-neutral-500">
+                Posted {open.postedAt ? formatDate(open.postedAt) : ""}
+                {open.permalink && (
+                  <>
+                    {" · "}
+                    <a href={open.permalink} target="_blank" rel="noreferrer" className="underline hover:text-neutral-900">
+                      View on Instagram
+                    </a>
+                  </>
+                )}
+              </span>
+            )}
+            {editable && (
+              <>
+                <span className={`text-xs ${error || open.error ? "text-red-600" : "text-neutral-400"}`}>
+                  {error ??
+                    (open.error ? `Posting failed: ${open.error}` : null) ??
+                    problem ??
+                    (instagramUsername ? `Posts to @${instagramUsername}` : "Connect Instagram in Marketing → Settings first.")}
+                </span>
+                <button
+                  type="button"
+                  onClick={postNow}
+                  disabled={!!problem || !instagramUsername || sending}
+                  className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                >
+                  {sending ? "Sending…" : "Post now"}
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+
+        <div className="lg:sticky lg:top-6 lg:self-start">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">Preview</p>
+          <SocialPostPreview key={open.id} post={open} username={instagramUsername ?? "your_account"} />
+          <p className="mt-2 max-w-[320px] text-xs text-neutral-400">
+            Instagram may crop pictures slightly differently.
+          </p>
         </div>
       </div>
     );

@@ -21,17 +21,27 @@ const IMAGE_SELECT = {
   id: true,
   url: true,
   thumbnailKey: true,
+  displayKey: true,
   kind: true,
   posterUrl: true,
   mimeType: true,
 } as const;
 
-type ImageRow = { id: string; url: string; thumbnailKey: string | null; kind: string; posterUrl: string | null; mimeType: string };
+type ImageRow = {
+  id: string;
+  url: string;
+  thumbnailKey: string | null;
+  displayKey: string | null;
+  kind: string;
+  posterUrl: string | null;
+  mimeType: string;
+};
 
 function toItem(image: ImageRow): SocialMediaItem {
   return {
     id: image.id,
     url: publicMediaUrl(image.thumbnailKey) || image.url,
+    fullUrl: (image.kind === "PHOTO" && publicMediaUrl(image.displayKey)) || image.url,
     kind: image.kind,
     posterUrl: image.posterUrl,
     mimeType: image.mimeType,

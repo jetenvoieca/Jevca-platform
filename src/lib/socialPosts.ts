@@ -33,6 +33,8 @@ export type SocialMediaItem = {
   id: string;
   // Small version, for tiles.
   url: string;
+  // As posted (pictures at the larger size), for the preview.
+  fullUrl: string;
   kind: string;
   posterUrl: string | null;
   mimeType: string;
