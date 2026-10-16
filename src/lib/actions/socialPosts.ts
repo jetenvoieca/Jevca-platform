@@ -120,6 +120,17 @@ export async function refreshSocialPost(artistId: string, id: string): Promise<S
   return postRow(id);
 }
 
+// A new Reel draft holding one video (2026-10-16 — Video Edit's "Save &
+// post to Social"). Its id, for opening it on the Social page.
+export async function createReelFromVideo(imageId: string): Promise<string | null> {
+  const video = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true, kind: true } });
+  if (!video || video.kind !== "VIDEO") return null;
+  const post = await db.socialPost.create({
+    data: { artistId: video.artistId, format: "REEL", media: { create: [{ imageId, position: 0 }] } },
+  });
+  return post.id;
+}
+
 // The picker's picks as post items: media as picked, each artwork as its
 // Main image (or its first, if it has no Main).
 export async function socialMediaForPicks(

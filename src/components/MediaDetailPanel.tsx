@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { updateMedia, deleteMedia } from "@/lib/actions/mediaCatalogue";
 import { addMediaToBucket } from "@/lib/actions/videoEditor";
 import { nameRenderedVideo } from "@/lib/actions/render";
+import { createReelFromVideo } from "@/lib/actions/socialPosts";
 
 export type MediaDetail = {
   id: string;
@@ -356,6 +357,25 @@ export default function MediaDetailPanel({
               className="ml-auto rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
             >
               Save
+            </button>
+          )}
+          {/* Save & post to Social (2026-10-16): saves it, then opens a new
+              Reel draft with it on the Social page. */}
+          {variant === "pendingRender" && (
+            <button
+              type="button"
+              onClick={(e) => {
+                const caption = new FormData(e.currentTarget.form!).get("caption");
+                startTransition(async () => {
+                  await nameRenderedVideo(siteId, media.id, String(caption ?? ""));
+                  const postId = await createReelFromVideo(media.id);
+                  router.push(`/sites/${siteId}/marketing/social${postId ? `?post=${postId}` : ""}`);
+                });
+              }}
+              disabled={isPending || discarding}
+              className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
+            >
+              Save &amp; post to Social
             </button>
           )}
           {variant === "pendingRender" && onDiscard && (
