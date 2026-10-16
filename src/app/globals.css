@@ -12,3 +12,11 @@
 *::-webkit-scrollbar {
   display: none; /* Chrome, Safari, new Edge */
 }
+
+/* Dragging by touch (2026-10-16 — see TouchDragSupport): holding a
+   draggable item shouldn't select its text or open the picture menu. */
+[draggable="true"] {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}

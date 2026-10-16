@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import TouchDragSupport from "@/components/TouchDragSupport";
 
 export const metadata: Metadata = {
   title: "JEVCA Studio",
@@ -15,6 +16,7 @@ export default function RootLayout({
     <html lang="en">
       <body className="min-h-screen bg-white text-neutral-900 antialiased">
         {children}
+        <TouchDragSupport />
       </body>
     </html>
   );
