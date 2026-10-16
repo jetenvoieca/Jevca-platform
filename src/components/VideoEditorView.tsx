@@ -577,13 +577,10 @@ export default function VideoEditorView({
                 <img src={selected.image.url} alt="" className="mb-3 max-h-64 w-full rounded-md object-contain" />
                 <label className="flex items-center gap-2 text-sm text-neutral-600">
                   On screen for
-                  <input
-                    type="number"
-                    step={0.1}
-                    min={0.1}
+                  <DurationInput
+                    key={selected.id}
                     value={selected.duration ?? 2}
-                    onChange={(e) => handleDurationChange(selected.id, Number(e.target.value))}
-                    className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+                    onChange={(seconds) => handleDurationChange(selected.id, seconds)}
                   />
                   seconds
                 </label>
@@ -615,6 +612,38 @@ export default function VideoEditorView({
         </>
       )}
     </div>
+  );
+}
+
+// A photo's seconds on screen (2026-10-16). Typed freely — clearing the
+// box to type a new number used to snap it straight to 0.1 — and taken
+// once it's a number of at least 0.1; left with anything else, it goes
+// back to the last good value.
+function DurationInput({ value, onChange }: { value: number; onChange: (seconds: number) => void }) {
+  const [text, setText] = useState(String(value));
+  const commit = () => {
+    const seconds = Number(text.replace(",", "."));
+    if (Number.isFinite(seconds) && seconds >= 0.1) {
+      onChange(seconds);
+      setText(String(seconds));
+    } else {
+      setText(String(value));
+    }
+  };
+  return (
+    <input
+      type="text"
+      inputMode="decimal"
+      value={text}
+      onChange={(e) => {
+        setText(e.target.value);
+        const seconds = Number(e.target.value.replace(",", "."));
+        if (Number.isFinite(seconds) && seconds >= 0.1) onChange(seconds);
+      }}
+      onBlur={commit}
+      onKeyDown={(e) => e.key === "Enter" && commit()}
+      className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+    />
   );
 }
 
