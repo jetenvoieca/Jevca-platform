@@ -53,10 +53,11 @@ export async function getPresignedUploadUrl(key: string, contentType: string) {
 // straight from R2 rather than proxied through a server function, so
 // they load fast and don't tie up a function invocation per image.
 //
-// The domain lives in exactly one place (this function) on purpose: it's
-// currently R2's own free public dev URL (R2_PUBLIC_URL env var), and the
-// plan is to move to a proper custom domain once that's set up — at
-// which point only this one env var changes, nothing else in the app.
+// The domain lives in exactly one place (this function, from the
+// R2_PUBLIC_URL env var): since 2026-10-16 the bucket's own domain,
+// https://media.jevcamedia.com (bought in Cloudflare, connected under R2 →
+// jevca-media → Custom Domains), cached by Cloudflare. The old r2.dev
+// address stays switched on for mails already sent.
 export function publicMediaUrl(key: string | null | undefined): string | null {
   if (!key) return null;
   const base = process.env.R2_PUBLIC_URL;
