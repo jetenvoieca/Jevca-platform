@@ -54,6 +54,13 @@ export default function VideoThumb({
       }
     };
 
+    // Since files come straight from storage (2026-10-16) they can arrive
+    // before this runs — then the event has already happened, so the
+    // frame is shown now rather than waiting for an event that won't come.
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      showFirstFrame();
+      return;
+    }
     video.addEventListener("loadedmetadata", showFirstFrame);
     return () => video.removeEventListener("loadedmetadata", showFirstFrame);
   }, []);

@@ -224,7 +224,9 @@ function buildEditJson(
       // The first track is the top one.
       tracks: [...(stickerClips.length > 0 ? [{ clips: stickerClips }] : []), { clips: shotClips }],
     },
-    output: { format: "mp4" as const, size },
+    // A still frame 1 second in (2026-10-16), saved as the video's
+    // picture in the catalogue (see the render webhook).
+    output: { format: "mp4" as const, size, poster: { capture: 1 } },
     callback: callbackUrl,
   };
 }

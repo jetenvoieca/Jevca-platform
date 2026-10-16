@@ -54,11 +54,28 @@ export async function POST(req: NextRequest) {
   const key = `${render.artistId}/renders/${randomUUID()}.mp4`;
   await uploadToR2(key, bytes, "video/mp4");
 
+  // The still frame Shotstack made (2026-10-16), as the video's picture
+  // in the catalogue; without one the video's first frame is shown.
+  let posterUrl: string | null = null;
+  if (confirmed.poster) {
+    try {
+      const posterRes = await fetch(confirmed.poster);
+      if (posterRes.ok) {
+        const posterKey = `${render.artistId}/renders/${randomUUID()}-poster.jpg`;
+        await uploadToR2(posterKey, Buffer.from(await posterRes.arrayBuffer()), "image/jpeg");
+        posterUrl = `/api/media/${posterKey}`;
+      }
+    } catch {
+      // No picture — the first frame is shown instead.
+    }
+  }
+
   const image = await db.image.create({
     data: {
       artistId: render.artistId,
       key,
       url: `/api/media/${key}`,
+      posterUrl,
       kind: "VIDEO",
       mimeType: "video/mp4",
       status: "SORTED",
