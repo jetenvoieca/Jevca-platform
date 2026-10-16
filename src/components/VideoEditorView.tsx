@@ -17,6 +17,7 @@ import {
   setAllPhotoDurations,
 } from "@/lib/actions/videoEditor";
 import ClipStickersEditor from "@/components/ClipStickersEditor";
+import VideoPreviewPlayer from "@/components/VideoPreviewPlayer";
 import type { ClipSticker, StickerRow } from "@/lib/stickers";
 import MediaPicker from "@/components/MediaPicker";
 import { renderVideo, discardRenderResult } from "@/lib/actions/render";
@@ -112,6 +113,7 @@ export default function VideoEditorView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -409,6 +411,16 @@ export default function VideoEditorView({
                 }
               />
             )}
+            {!renderStatus && (
+              <button
+                type="button"
+                onClick={() => setPreviewing(true)}
+                disabled={clips.length === 0}
+                className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Preview
+              </button>
+            )}
             <div>
             <button
               type="button"
@@ -623,6 +635,16 @@ export default function VideoEditorView({
           </div>
         )}
         </>
+      )}
+      {previewing && (
+        <VideoPreviewPlayer
+          clips={clips}
+          shape={shape}
+          music={musicTrack && music ? { url: musicTrack.url, volume: music.volume } : null}
+          muteClips={muteClips}
+          stickerLibrary={stickerLibrary}
+          onClose={() => setPreviewing(false)}
+        />
       )}
     </div>
   );
