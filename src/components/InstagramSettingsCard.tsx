@@ -1,8 +1,7 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { disconnectInstagram } from "@/lib/actions/instagram";
-import { formatDate } from "@/lib/formatDate";
 
 // The artist's Instagram, for posting from the Social page (2026-10-15):
 // Connect (to Instagram's sign-in, see /api/instagram/connect), or the
@@ -16,14 +15,18 @@ export default function InstagramSettingsCard({
 }: {
   artistId: string;
   siteId: string;
-  account: { username: string; expiresAt: string; renewError: string | null } | null;
+  account: { username: string } | null;
   error: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
 
   const disconnect = () => {
     if (!confirm(`Disconnect @${account?.username}? Posting will stop until it's connected again.`)) return;
-    startTransition(() => disconnectInstagram(artistId, siteId));
+    startTransition(async () => {
+      const result = await disconnectInstagram(artistId, siteId);
+      setDisconnectError("error" in result ? result.error : null);
+    });
   };
 
   return (
@@ -33,22 +36,13 @@ export default function InstagramSettingsCard({
         The account the Social page posts to. It must be a professional (Business or Creator) account.
       </p>
 
-      {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
+      {(disconnectError ?? error) && <p className="mb-3 text-sm text-red-600">{disconnectError ?? error}</p>}
 
       {account ? (
         <div className="flex items-center justify-between gap-2 rounded-md border border-neutral-200 bg-white px-3 py-2 text-sm">
           <div>
             <p className="font-medium text-neutral-900">@{account.username}</p>
-            {new Date(account.expiresAt) < new Date() ? (
-              <p className="text-xs text-red-600">The connection has run out — disconnect and connect again.</p>
-            ) : (
-              <p className="text-xs text-neutral-400">
-                Renews itself every week · valid until {formatDate(account.expiresAt)}
-              </p>
-            )}
-            {account.renewError && (
-              <p className="text-xs text-red-600">Last renewal failed: {account.renewError}</p>
-            )}
+            <p className="text-xs text-neutral-400">Connected</p>
           </div>
           <button
             type="button"

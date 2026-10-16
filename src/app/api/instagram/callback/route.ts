@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { completeInstagramConnection, readInstagramState } from "@/lib/instagram";
 
-// Where Instagram returns after Connect Instagram is approved (or
-// cancelled). Checks the signed `state` the connect route sent, saves the
-// connection for that site's artist, and goes back to Marketing →
-// Settings either way, with a message if it didn't work. Behind the
-// admin login.
+// Where Zernio returns after Connect Instagram is approved (or not).
+// Checks the signed `state` the connect route put on this address,
+// records the connection for that site's artist, and goes back to
+// Marketing → Settings either way, with a message if it didn't work.
+// Behind the admin login.
 export async function GET(request: NextRequest) {
   const params = request.nextUrl.searchParams;
   const siteId = await readInstagramState(params.get("state"));
@@ -21,12 +21,22 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(url);
   };
 
-  if (params.get("error")) return back("The Instagram connection was cancelled.");
-  const code = params.get("code");
-  if (!code) return back("Instagram didn't return a connection code.");
+  if (params.get("error")) {
+    return back(
+      params.get("error") === "oauth_denied"
+        ? "The Instagram connection was cancelled."
+        : params.get("error_message") || "Instagram couldn't be connected. Please try again."
+    );
+  }
+  const profileId = params.get("profileId");
+  const accountId = params.get("accountId");
+  const username = params.get("username");
+  if (params.get("connected") !== "instagram" || !profileId || !accountId || !username) {
+    return back("Instagram didn't confirm the connection. Please try again.");
+  }
 
   try {
-    await completeInstagramConnection(site.artistId, code);
+    await completeInstagramConnection(site.artistId, { profileId, accountId, username });
   } catch (err) {
     return back(err instanceof Error ? err.message : "Couldn't connect Instagram.");
   }

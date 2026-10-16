@@ -312,8 +312,11 @@ model Artist {
   hopperVideoImports HopperVideoImport[]
   // Marketing → Social Media (2026-10-15). See SocialPost.
   socialPosts SocialPost[]
-  // The artist's Instagram, connected for posting (2026-10-15).
+  // The artist's Instagram, connected for posting (2026-10-15), and
+  // their Zernio profile, which holds it (made on first connect, kept on
+  // disconnect) — see lib/zernio.ts.
   instagramConnection InstagramConnection?
+  zernioProfileId     String?              @unique
   // Picked via MediaPicker from this same artist's Media Catalogue — see
   // the note by profileImageId above.
   profileImage Image? @relation("ArtistProfileImage", fields: [profileImageId], references: [id])
@@ -1802,21 +1805,17 @@ model HopperVideoImport {
   @@index([artistId])
 }
 
-// An artist's Instagram account, connected for posting (2026-10-15) —
-// see lib/instagram.ts. The access token lasts 60 days; it is renewed
-// every week by a daily run (lib/instagramRenewal.ts), and kept encrypted
-// (lib/secretBox.ts). `renewError`: why the last renewal failed, if it did.
+// An artist's Instagram account, connected for posting (2026-10-15).
+// Posting goes through Zernio (lib/zernio.ts), which holds Meta's
+// approval and the Instagram login itself; this records which Zernio
+// account is the artist's Instagram.
 model InstagramConnection {
-  id                   String   @id @default(cuid())
-  artistId             String   @unique
-  artist               Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
-  instagramUserId      String
-  username             String
-  accessTokenEncrypted String
-  expiresAt            DateTime
-  renewError           String?
-  connectedAt          DateTime @default(now())
-  updatedAt            DateTime @updatedAt
+  id              String   @id @default(cuid())
+  artistId        String   @unique
+  artist          Artist   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  zernioAccountId String   @unique
+  username        String
+  connectedAt     DateTime @default(now())
 }
 
 // Marketing → Social Media (2026-10-15): a post for the artist's

@@ -40,9 +40,7 @@ export default async function MarketingSettingsPage({
         <InstagramSettingsCard
           artistId={site.artistId}
           siteId={id}
-          account={
-            instagram ? { ...instagram, expiresAt: instagram.expiresAt.toISOString() } : null
-          }
+          account={instagram}
           error={instagramError || null}
         />
       </div>
