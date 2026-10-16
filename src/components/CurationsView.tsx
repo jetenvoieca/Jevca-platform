@@ -36,12 +36,15 @@ function formatPrice(amount: string | null, currency: string): string | null {
 }
 
 // Curations page (2026-09-24, stage one). Two columns:
-// - left: the open curation — its name (click to rename), Delete, its
-//   works in order (drag to reorder, hover × to remove, "+ Add Works"
-//   tile to pick more), and beside them the curation's presentation
-//   sections (fixed 2026-10-13: Description, Video, Supporting Images;
-//   see CurationSectionsEditor), which scroll on their own.
+// - left: the open curation — its name (click to rename), About, Delete,
+//   and its works in order (drag to reorder, hover × to remove, "+ Add
+//   Works" tile to pick more).
 // - right: every curation; click one to open it, or add a new one.
+//
+// About (2026-10-16, Craig's mockup): the curation's optional content —
+// its Title (the curation's name) and the presentation sections
+// (Description, Video, Supporting Images; see CurationSectionsEditor) —
+// opens in a centred modal from the About button.
 //
 // Presentation (2026-10-03) — a work's images, Name, Description and
 // Purchase Options within this curation (see CurationWorkPresentation).
@@ -53,8 +56,7 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // Frozen headers (2026-10-04, general requirement): the page fills the
 // space under the site header and never scrolls as a whole. The open
 // curation's title row and the list's "Curation Name" heading stay put;
-// the works, the sections and the list of curations each scroll on
-// their own.
+// the works and the list of curations each scroll on their own.
 export default function CurationsView({
   artistId,
   siteId,
@@ -77,6 +79,7 @@ export default function CurationsView({
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   // The work whose presentation modal is open, if any.
   const [presentingId, setPresentingId] = useState<string | null>(null);
+  const [aboutOpen, setAboutOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
 
   // Which curation is meant to be open right now, readable inside
@@ -96,6 +99,7 @@ export default function CurationsView({
     selectedIdRef.current = detail?.id ?? null;
     setSelected(detail);
     setTitleDraft(detail?.name ?? "");
+    setAboutOpen(false);
     updateUrlSelected(detail?.id ?? null);
   };
 
@@ -248,15 +252,42 @@ export default function CurationsView({
     setPresentingId(null);
   };
 
+  // Same for About: the field being edited saves as it loses focus.
+  const closeAbout = () => {
+    (document.activeElement as HTMLElement | null)?.blur();
+    setAboutOpen(false);
+  };
+
+  const modalOpen = !!presentingWork || (aboutOpen && !!selected);
   useEffect(() => {
-    if (!presentingWork) return;
+    if (!modalOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") closePresentation();
+      if (e.key !== "Escape") return;
+      closePresentation();
+      closeAbout();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [presentingWork]);
+  }, [modalOpen]);
+
+  // The curation's name, typed in place: saves when the box is left,
+  // Escape puts the saved name back. Used at the top and in About.
+  const nameInputProps = selected
+    ? {
+        type: "text",
+        value: titleDraft,
+        onChange: (e: React.ChangeEvent<HTMLInputElement>) => setTitleDraft(e.target.value),
+        onBlur: handleRename,
+        onKeyDown: (e: React.KeyboardEvent<HTMLInputElement>) => {
+          if (e.key === "Enter") e.currentTarget.blur();
+          if (e.key === "Escape") {
+            setTitleDraft(selected.name);
+            e.currentTarget.blur();
+          }
+        },
+      }
+    : null;
 
   return (
     <div className="grid h-full grid-cols-[4fr_1fr] overflow-hidden">
@@ -278,23 +309,20 @@ export default function CurationsView({
           </p>
         ) : (
           <div className={`flex min-h-0 flex-1 flex-col ${loadingId ? "opacity-60" : ""}`}>
-            {/* Frozen: the curation's name and Delete. */}
+            {/* Frozen: the curation's name, About and Delete. */}
             <div className="flex shrink-0 items-start gap-3 px-6 pb-4 pt-6">
               <input
-                type="text"
-                value={titleDraft}
-                onChange={(e) => setTitleDraft(e.target.value)}
-                onBlur={handleRename}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") e.currentTarget.blur();
-                  if (e.key === "Escape") {
-                    setTitleDraft(selected.name);
-                    e.currentTarget.blur();
-                  }
-                }}
+                {...nameInputProps}
                 title="Click to rename"
                 className="-mx-1 min-w-0 flex-1 rounded-md border border-transparent px-1 py-0.5 text-3xl font-light text-neutral-900 hover:border-neutral-300 focus:border-neutral-300 focus:outline-none"
               />
+              <button
+                type="button"
+                onClick={() => setAboutOpen(true)}
+                className="mt-1.5 shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm text-neutral-900 hover:bg-neutral-50"
+              >
+                About
+              </button>
               <button
                 type="button"
                 onClick={handleDelete}
@@ -305,93 +333,80 @@ export default function CurationsView({
               </button>
             </div>
 
-            <div className="flex min-h-0 flex-1 gap-6 px-6 pb-6">
-              {/* The works, scrolling on their own. */}
-              <div className="min-h-0 min-w-0 flex-1 overflow-y-auto">
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
-                  {selected.works.map((w, i) => {
-                    const price = formatPrice(w.offeredPrice, w.priceCurrency);
-                    return (
-                      <div
-                        key={w.artworkId}
-                        draggable
-                        onDragStart={(e) => {
-                          e.dataTransfer.effectAllowed = "move";
-                          e.dataTransfer.setData("text/plain", w.artworkId);
-                          setDragIndex(i);
-                        }}
-                        onDragOver={(e) => e.preventDefault()}
-                        onDrop={(e) => {
-                          e.preventDefault();
-                          handleDrop(i);
-                        }}
-                        onDragEnd={() => setDragIndex(null)}
-                        className={`group relative cursor-grab ${dragIndex === i ? "opacity-40" : ""}`}
-                      >
-                        <div className="relative">
-                          {w.imageUrl ? (
-                            <img
-                              src={w.imageUrl}
-                              alt=""
-                              draggable={false}
-                              className="aspect-square w-full rounded-md object-cover"
-                            />
-                          ) : (
-                            <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                              No image
-                            </div>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => setPresentingId(w.artworkId)}
-                            className="absolute bottom-2 left-1/2 hidden -translate-x-1/2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-neutral-900 shadow hover:bg-white group-hover:block"
-                          >
-                            Presentation
-                          </button>
-                        </div>
-                        <p className="mt-2 truncate text-sm font-medium text-neutral-900">
-                          {w.catalogueName}
-                        </p>
-                        {price && <p className="text-sm text-neutral-400">{price}</p>}
+            {/* The works, scrolling on their own. */}
+            <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
+                {selected.works.map((w, i) => {
+                  const price = formatPrice(w.offeredPrice, w.priceCurrency);
+                  return (
+                    <div
+                      key={w.artworkId}
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.effectAllowed = "move";
+                        e.dataTransfer.setData("text/plain", w.artworkId);
+                        setDragIndex(i);
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        handleDrop(i);
+                      }}
+                      onDragEnd={() => setDragIndex(null)}
+                      className={`group relative cursor-grab ${dragIndex === i ? "opacity-40" : ""}`}
+                    >
+                      <div className="relative">
+                        {w.imageUrl ? (
+                          <img
+                            src={w.imageUrl}
+                            alt=""
+                            draggable={false}
+                            className="aspect-square w-full rounded-md object-cover"
+                          />
+                        ) : (
+                          <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
+                            No image
+                          </div>
+                        )}
                         <button
                           type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleRemoveWork(w.artworkId);
-                          }}
-                          title="Remove from this curation"
-                          className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                          onClick={() => setPresentingId(w.artworkId)}
+                          className="absolute bottom-2 left-1/2 hidden -translate-x-1/2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-neutral-900 shadow hover:bg-white group-hover:block"
                         >
-                          ✕
+                          Presentation
                         </button>
                       </div>
-                    );
-                  })}
-                  <ArtworkPicker
-                    artistId={artistId}
-                    mode="multi"
-                    label={`Add ${words.items}`}
-                    allowCreate={false}
-                    excludeIds={selected.works.map((w) => w.artworkId)}
-                    onSelect={handleAddWorks}
-                  />
-                </div>
-
-                {selected.works.length > 1 && (
-                  <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
-                )}
-              </div>
-
-              {/* The curation's presentation sections, scrolling on their
-                  own. */}
-              <div className="min-h-0 w-[27%] min-w-[16rem] shrink-0 overflow-y-auto">
-                <CurationSectionsEditor
-                  key={selected.id}
-                  curationId={selected.id}
+                      <p className="mt-2 truncate text-sm font-medium text-neutral-900">
+                        {w.catalogueName}
+                      </p>
+                      {price && <p className="text-sm text-neutral-400">{price}</p>}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleRemoveWork(w.artworkId);
+                        }}
+                        title="Remove from this curation"
+                        className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  );
+                })}
+                <ArtworkPicker
                   artistId={artistId}
-                  siteId={siteId}
+                  mode="multi"
+                  label={`Add ${words.items}`}
+                  allowCreate={false}
+                  excludeIds={selected.works.map((w) => w.artworkId)}
+                  onSelect={handleAddWorks}
                 />
               </div>
+
+              {selected.works.length > 1 && (
+                <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
+              )}
             </div>
           </div>
         )}
@@ -432,8 +447,48 @@ export default function CurationsView({
         </div>
       )}
 
+      {selected && aboutOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) closeAbout();
+          }}
+        >
+          <div className="flex max-h-full w-full max-w-lg flex-col rounded-lg bg-white shadow-xl">
+            {/* Frozen: which curation this is, and Close. */}
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3">
+              <h2 className="min-w-0 flex-1 truncate text-lg text-neutral-900">
+                About — {selected.name}
+              </h2>
+              <button
+                type="button"
+                onClick={closeAbout}
+                className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-4">
+              <div className="rounded-xl border border-neutral-300 p-3">
+                <h3 className="mb-2 text-center text-base text-neutral-900">Title</h3>
+                <input
+                  {...nameInputProps}
+                  className="w-full rounded-md border border-transparent p-1 text-sm text-neutral-800 hover:border-neutral-300 focus:border-neutral-400 focus:outline-none"
+                />
+              </div>
+              <CurationSectionsEditor
+                key={selected.id}
+                curationId={selected.id}
+                artistId={artistId}
+                siteId={siteId}
+              />
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Right: every curation */}
-      <aside className="flex min-h-0 flex-col py-6 pr-6">
+      <aside className="flex min-h-0 flex-col p-6">
         <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-neutral-300 p-4">
           {/* Frozen heading; the list beneath it scrolls. */}
           <h2 className="mb-4 shrink-0 text-center text-lg text-neutral-900">Curation Name</h2>
