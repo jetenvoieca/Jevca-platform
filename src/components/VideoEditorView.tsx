@@ -67,7 +67,7 @@ export default function VideoEditorView({
   initialMuteClips,
   musicTracks,
   stickerLibrary,
-  renderStatus,
+  renderStatus: savedRenderStatus,
   tagPresets,
 }: {
   siteId: string;
@@ -86,6 +86,10 @@ export default function VideoEditorView({
 }) {
   const [clips, setClips] = useState<Clip[]>(initialClips);
   const [shape, setShape] = useState<VideoShape>(initialShape);
+  // A render being discarded goes from the page at once (2026-10-16),
+  // not after the server has finished and the page has reloaded.
+  const [discardedId, setDiscardedId] = useState<string | null>(null);
+  const renderStatus = savedRenderStatus && savedRenderStatus.id !== discardedId ? savedRenderStatus : null;
 
   const changeShape = (next: VideoShape) => {
     setShape(next);
@@ -264,6 +268,7 @@ export default function VideoEditorView({
   const [discarding, setDiscarding] = useState(false);
   const handleDiscard = async (statusId: string) => {
     if (!confirm("Discard this render? This can't be undone.")) return;
+    setDiscardedId(statusId);
     setDiscarding(true);
     await discardRenderResult(siteId, statusId);
     setDiscarding(false);

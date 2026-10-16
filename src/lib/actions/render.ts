@@ -492,8 +492,13 @@ export async function discardRenderResult(siteId: string, renderId: string): Pro
 
   await db.videoRender.delete({ where: { id: renderId } });
   if (render.resultImage) {
-    await db.image.delete({ where: { id: render.resultImage.id } }).catch(() => {});
-    await deleteFromR2(render.resultImage.key).catch(() => {});
+    const { id, key, posterUrl } = render.resultImage;
+    await db.image.delete({ where: { id } }).catch(() => {});
+    // The video, and its still picture if it has one of its own.
+    const posterKey = posterUrl?.startsWith("/api/media/") ? posterUrl.slice("/api/media/".length) : null;
+    await Promise.all(
+      [key, posterKey].filter((k): k is string => !!k).map((k) => deleteFromR2(k).catch(() => {}))
+    );
   }
 
   revalidatePath(`/sites/${siteId}/bucket`);
