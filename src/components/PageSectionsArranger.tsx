@@ -96,7 +96,7 @@ const WORKS: Content = {
   sectionId: null,
   kind: "WORKS",
   label: "Works",
-  detail: "The curation's works — for a Gallery or Sliding doors",
+  detail: "The curation's works — for a Single Image, Gallery or Sliding doors",
 };
 
 const DETAIL_LENGTH = 60;

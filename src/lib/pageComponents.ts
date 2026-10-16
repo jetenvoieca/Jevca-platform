@@ -32,7 +32,8 @@ export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 
 // Which content each component takes (Craig's choice: match by kind;
 // 2026-10-13: a Header or Byline is typed in, a Text or Text grid takes the
-// Description). Feature takes nothing yet. A Sign-up form (2026-10-10)
+// Description; 2026-10-16: a Single Image also takes the works, showing
+// the first as arranged on the page). Feature takes nothing yet. A Sign-up form (2026-10-10)
 // takes no content: it's set up on its own in Arrange (see
 // lib/signupForms.ts). A Logo (2026-10-13) is always the artist's own.
 const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
@@ -41,7 +42,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   text: ["DESCRIPTION"],
   textgrid: ["DESCRIPTION"],
   video: ["VIDEO"],
-  image: ["IMAGES"],
+  image: ["IMAGES", "WORKS"],
   gallery: ["IMAGES", "WORKS"],
   slidingdoors: ["WORKS"],
   artwork: [],

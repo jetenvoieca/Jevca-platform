@@ -236,6 +236,22 @@ function BlockBuildPage({
 
   const works = (block: LayoutBlock, content: ComponentContent): ReactNode => {
     const shown = arrangeItems(curation.works, (w) => w.artworkId, content);
+    // A Single Image shows the first work as arranged on the page, and
+    // opens it like a Gallery does (2026-10-16).
+    const first = shown[0];
+    const firstUrl = first ? (first.displayUrl ?? first.imageUrl) : null;
+    if (block.type === "image" && first && firstUrl) {
+      return (
+        <button
+          type="button"
+          onClick={() => onOpen(first.artworkId)}
+          title={first.catalogueName}
+          className="block w-full overflow-hidden rounded hover:opacity-90"
+        >
+          <FadeImage src={firstUrl} alt={first.catalogueName} className="w-full" />
+        </button>
+      );
+    }
     if (block.type === "gallery" && shown.length > 0) {
       return (
         <ImageGrid
