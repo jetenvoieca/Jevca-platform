@@ -1,12 +1,27 @@
 import { NextRequest } from "next/server";
-import { getFromR2 } from "@/lib/r2";
+import { getFromR2, publicMediaUrl } from "@/lib/r2";
 
+// The app's own address for a stored file (/api/media/<key>). Sends the
+// browser straight to the file in storage (2026-10-16): going through the
+// app, every file was loaded whole into a server function — slow, no
+// seeking in videos, and anything over Netlify's 6 MB reply limit (most
+// videos) failed or arrived only in part. Storage serves any size, in
+// parts as a video plays. Only if storage has no public address is the
+// file passed through here.
 export async function GET(
   _req: NextRequest,
   { params }: { params: Promise<{ key: string[] }> }
 ) {
   const { key } = await params;
   const objectKey = key.join("/");
+
+  const direct = publicMediaUrl(objectKey);
+  if (direct) {
+    return new Response(null, {
+      status: 302,
+      headers: { Location: direct, "Cache-Control": "public, max-age=86400" },
+    });
+  }
 
   try {
     const object = await getFromR2(objectKey);

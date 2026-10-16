@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { readTimeline, videoSize, CROSSFADE_SECONDS, totalTimelineSeconds } from "@/lib/videoTimeline";
-import { uploadToR2, deleteFromR2, publicMediaUrl } from "@/lib/r2";
+import { uploadToR2, deleteFromR2, publicMediaUrl, storedFileUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
 import { STICKER_MARGIN, type StickerPosition } from "@/lib/stickers";
@@ -54,8 +54,11 @@ function activeEnv(): ShotstackEnv {
 const SUPPORTED_IMAGE_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp", "image/gif"]);
 const SUPPORTED_VIDEO_TYPES = new Set(["video/mp4", "video/quicktime"]);
 
+// Where Shotstack (and the checks before it) fetch a file: straight from
+// storage when it has a public address, otherwise through the app.
 function toAbsoluteUrl(url: string): string {
-  return url.startsWith("http") ? url : `${HOST}${url}`;
+  const direct = storedFileUrl(url);
+  return direct.startsWith("http") ? direct : `${HOST}${direct}`;
 }
 
 function formatError(caption: string | null, mimeType: string): string {
@@ -106,7 +109,7 @@ async function prepareImageAsset(
 
   const key = `${artistId}/render-tmp/${randomUUID()}.jpg`;
   await uploadToR2(key, jpeg, "image/jpeg");
-  return { url: `${HOST}/api/media/${key}`, key };
+  return { url: toAbsoluteUrl(`/api/media/${key}`), key };
 }
 
 // Shotstack's soundtrack — the music under the whole video, fading in
@@ -148,7 +151,7 @@ async function prepareStickerAsset(
     .toBuffer();
   const key = `${artistId}/render-tmp/${randomUUID()}.png`;
   await uploadToR2(key, png, "image/png");
-  return { url: `${HOST}/api/media/${key}`, key };
+  return { url: toAbsoluteUrl(`/api/media/${key}`), key };
 }
 
 function clipLength(clip: ClipWithImage): number {
@@ -299,7 +302,7 @@ export async function renderVideo(
       if (!sticker) continue;
       try {
         const prepared = await prepareStickerAsset(
-          publicMediaUrl(sticker.key) || toAbsoluteUrl(`/api/media/${sticker.key}`),
+          toAbsoluteUrl(`/api/media/${sticker.key}`),
           draft.artistId,
           Math.round(placed.size * size.width)
         );
@@ -335,7 +338,7 @@ export async function renderVideo(
       where: { id: timeline.music.trackId, artistId: draft.artistId },
       select: { key: true },
     });
-    const src = track ? publicMediaUrl(track.key) || toAbsoluteUrl(`/api/media/${track.key}`) : null;
+    const src = track ? toAbsoluteUrl(`/api/media/${track.key}`) : null;
     if (!src) {
       await Promise.all(tempKeys.map((k) => deleteFromR2(k).catch(() => {})));
       return { ok: false, error: "The chosen music has been deleted — choose another track, or None." };
