@@ -14,6 +14,7 @@ import {
   setTimelineShape,
   setTimelineMusic,
   setClipStickers,
+  setAllPhotoDurations,
 } from "@/lib/actions/videoEditor";
 import ClipStickersEditor from "@/components/ClipStickersEditor";
 import type { ClipSticker, StickerRow } from "@/lib/stickers";
@@ -217,6 +218,11 @@ export default function VideoEditorView({
     const duration = Math.max(0.1, value);
     setClips((prev) => prev.map((c) => (c.id === id ? { ...c, duration } : c)));
     setClipDuration(siteId, renderId, id, duration);
+  };
+
+  const handleAllPhotoDurations = (seconds: number) => {
+    setClips((prev) => prev.map((c) => (c.kind === "PHOTO" ? { ...c, duration: seconds } : c)));
+    setAllPhotoDurations(siteId, renderId, seconds);
   };
 
   const handleKnownDuration = (id: string, sourceDuration: number) => {
@@ -583,6 +589,13 @@ export default function VideoEditorView({
                     onChange={(seconds) => handleDurationChange(selected.id, seconds)}
                   />
                   seconds
+                  <button
+                    type="button"
+                    onClick={() => handleAllPhotoDurations(selected.duration ?? 2)}
+                    className="rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50"
+                  >
+                    All photos
+                  </button>
                 </label>
               </div>
             ) : (

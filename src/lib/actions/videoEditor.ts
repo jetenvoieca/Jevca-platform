@@ -315,6 +315,18 @@ export async function reorderTimeline(
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
+// Every photo on screen for the same time (2026-10-16 — the "All photos"
+// button by a photo's seconds).
+export async function setAllPhotoDurations(siteId: string, renderId: string, duration: number): Promise<void> {
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft || draft.status !== "DRAFT") return;
+  const timeline = readTimeline(draft.timeline);
+  const seconds = Math.max(0.1, duration);
+  for (const clip of timeline.clips) if (clip.kind === "PHOTO") clip.duration = seconds;
+  await saveTimeline(renderId, timeline);
+  revalidatePath(`/sites/${siteId}/bucket`);
+}
+
 export async function setClipDuration(
   siteId: string,
   renderId: string,
