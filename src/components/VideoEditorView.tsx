@@ -303,80 +303,82 @@ export default function VideoEditorView({
                 </>
               )}
             </p>
-            {/* The video's shape (2026-10-16): upright for Reels and
-                Stories, portrait or square for the feed. */}
-            <div className="mt-2 flex w-fit overflow-hidden rounded-full border border-neutral-300 text-xs">
-              {VIDEO_SHAPES.map((s) => (
-                <button
-                  key={s.value}
-                  type="button"
-                  onClick={() => changeShape(s.value)}
-                  disabled={renderStatus != null}
-                  className={`px-3 py-1 font-medium disabled:opacity-50 ${
-                    shape === s.value ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-            {/* Music (2026-10-16): one track from the Music library under
-                the whole video, fading in and out. */}
-            <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-neutral-600">
-              <label className="flex items-center gap-2">
-                Music
-                <select
-                  value={music?.trackId ?? ""}
-                  disabled={renderStatus != null}
-                  onChange={(e) =>
-                    changeMusic(
-                      e.target.value ? { trackId: e.target.value, volume: music?.volume ?? 0.8 } : null,
-                      muteClips
-                    )
-                  }
-                  className="max-w-56 rounded-md border border-neutral-300 px-2 py-1 text-sm"
-                >
-                  <option value="">None</option>
-                  {musicTracks.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              {musicTracks.length === 0 && (
-                <a href={`/sites/${siteId}/media?purpose=music`} className="text-xs text-neutral-400 underline">
-                  Add music in the Media Catalogue
-                </a>
-              )}
-              {music && (
-                <>
-                  <label className="flex items-center gap-2">
-                    Volume
-                    <input
-                      type="range"
-                      min={0}
-                      max={1}
-                      step={0.05}
-                      value={music.volume}
-                      disabled={renderStatus != null}
-                      onChange={(e) => changeMusic({ ...music, volume: Number(e.target.value) }, muteClips)}
-                    />
-                    <span className="w-9 text-xs text-neutral-400">{Math.round(music.volume * 100)}%</span>
-                  </label>
-                  {musicTrack && <audio src={musicTrack.url} controls preload="none" className="h-8" />}
-                </>
-              )}
-              <label className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={muteClips}
-                  disabled={renderStatus != null}
-                  onChange={(e) => changeMusic(music, e.target.checked)}
-                />
-                Mute the clips&apos; own sound
-              </label>
-            </div>
+            {/* Shape and music — hidden while a render is open, like Add
+                Media: one video at a time. */}
+            {!renderStatus && (
+              <>
+              {/* The video's shape (2026-10-16): upright for Reels and
+                  Stories, portrait or square for the feed. */}
+              <div className="mt-2 flex w-fit overflow-hidden rounded-full border border-neutral-300 text-xs">
+                {VIDEO_SHAPES.map((s) => (
+                  <button
+                    key={s.value}
+                    type="button"
+                    onClick={() => changeShape(s.value)}
+                                      className={`px-3 py-1 font-medium ${
+                      shape === s.value ? "bg-neutral-900 text-white" : "bg-white text-neutral-600 hover:bg-neutral-50"
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+              {/* Music (2026-10-16): one track from the Music library under
+                  the whole video, fading in and out. */}
+              <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-neutral-600">
+                <label className="flex items-center gap-2">
+                  Music
+                  <select
+                    value={music?.trackId ?? ""}
+                                      onChange={(e) =>
+                      changeMusic(
+                        e.target.value ? { trackId: e.target.value, volume: music?.volume ?? 0.8 } : null,
+                        muteClips
+                      )
+                    }
+                    className="max-w-56 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                  >
+                    <option value="">None</option>
+                    {musicTracks.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {musicTracks.length === 0 && (
+                  <a href={`/sites/${siteId}/media?purpose=music`} className="text-xs text-neutral-400 underline">
+                    Add music in the Media Catalogue
+                  </a>
+                )}
+                {music && (
+                  <>
+                    <label className="flex items-center gap-2">
+                      Volume
+                      <input
+                        type="range"
+                        min={0}
+                        max={1}
+                        step={0.05}
+                        value={music.volume}
+                                              onChange={(e) => changeMusic({ ...music, volume: Number(e.target.value) }, muteClips)}
+                      />
+                      <span className="w-9 text-xs text-neutral-400">{Math.round(music.volume * 100)}%</span>
+                    </label>
+                    {musicTrack && <audio src={musicTrack.url} controls preload="none" className="h-8" />}
+                  </>
+                )}
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={muteClips}
+                                      onChange={(e) => changeMusic(music, e.target.checked)}
+                  />
+                  Mute the clips&apos; own sound
+                </label>
+              </div>
+              </>
+            )}
           </div>
           <div className="flex items-start gap-3 text-right">
             {!renderStatus && (
