@@ -11,13 +11,10 @@ import { useEffect, useRef } from "react";
 // a browser will render it black by default, so a tiny nudge to
 // currentTime once metadata loads is enough to make the real first frame
 // visible, with no server round-trip.
-export default function VideoThumb({
-  src,
-  className,
-}: {
-  src: string;
-  className?: string;
-}) {
+//
+// `at` (2026-10-17, Video Edit's neighbouring clips): show the frame at
+// that many seconds instead of the first.
+export default function VideoThumb({ src, className, at = 0.1 }: { src: string; className?: string; at?: number }) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -26,7 +23,7 @@ export default function VideoThumb({
 
     const seekToFirstFrame = () => {
       try {
-        video.currentTime = 0.1;
+        video.currentTime = at;
       } catch {
         // Some browsers can briefly disallow seeking immediately on
         // metadata load — harmless to skip, worst case it stays black.
@@ -48,7 +45,12 @@ export default function VideoThumb({
     const showFirstFrame = () => {
       const playAttempt = video.play();
       if (playAttempt && typeof playAttempt.then === "function") {
-        playAttempt.then(() => video.pause()).catch(seekToFirstFrame);
+        playAttempt
+          .then(() => {
+            video.pause();
+            seekToFirstFrame();
+          })
+          .catch(seekToFirstFrame);
       } else {
         seekToFirstFrame();
       }
@@ -63,16 +65,7 @@ export default function VideoThumb({
     }
     video.addEventListener("loadedmetadata", showFirstFrame);
     return () => video.removeEventListener("loadedmetadata", showFirstFrame);
-  }, []);
+  }, [at]);
 
-  return (
-    <video
-      ref={videoRef}
-      src={src}
-      muted
-      playsInline
-      preload="metadata"
-      className={className}
-    />
-  );
+  return <video ref={videoRef} src={src} muted playsInline preload="metadata" className={className} />;
 }

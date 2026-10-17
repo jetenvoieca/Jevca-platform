@@ -8,6 +8,8 @@ export default function TrimScrubber({
   videoUrl,
   aspectRatio,
   overlay,
+  before,
+  after,
   trimIn,
   trimOut,
   sourceDuration,
@@ -21,6 +23,9 @@ export default function TrimScrubber({
   // on top.
   aspectRatio: string;
   overlay?: ReactNode;
+  // Either side of it: how the clips before and after meet it.
+  before?: ReactNode;
+  after?: ReactNode;
   trimIn: number;
   trimOut: number;
   sourceDuration: number | null;
@@ -153,16 +158,20 @@ export default function TrimScrubber({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <div className="relative mx-auto mb-3 h-64 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
-        <video
-          ref={videoRef}
-          src={videoUrl}
-          onLoadedMetadata={handleLoadedMetadata}
-          onTimeUpdate={handleTimeUpdate}
-          className="h-full w-full object-cover"
-          playsInline
-        />
-        {overlay}
+      <div className="mb-3 flex items-center justify-center gap-4">
+        {before}
+        <div className="relative h-64 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
+          <video
+            ref={videoRef}
+            src={videoUrl}
+            onLoadedMetadata={handleLoadedMetadata}
+            onTimeUpdate={handleTimeUpdate}
+            className="h-full w-full object-cover"
+            playsInline
+          />
+          {overlay}
+        </div>
+        {after}
       </div>
 
       {duration == null ? (
