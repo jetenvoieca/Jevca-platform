@@ -206,9 +206,9 @@ export default function VideoPreviewPlayer({
       : undefined;
 
   return (
-    <div className="flex flex-col items-center gap-3 rounded-lg bg-neutral-900 p-6">
+    <div className="flex flex-col items-center gap-3 rounded-lg bg-neutral-900 p-4">
       <div
-        className="relative h-[60vh] max-w-full overflow-hidden rounded-lg bg-black"
+        className="relative h-[45vh] max-w-full overflow-hidden rounded-lg bg-black"
         style={{ aspectRatio: `${size.width} / ${size.height}` }}
       >
         {showing.map(({ clip, i }) => (
