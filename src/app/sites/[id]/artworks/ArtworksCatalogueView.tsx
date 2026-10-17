@@ -440,17 +440,37 @@ export default function ArtworksCatalogueView({
     })();
   };
 
+  // One layout button (2026-10-17, direct request — less clutter for
+  // something rarely changed): each click goes to the next of tiles 3, 5,
+  // 7 and 9 to a row, then the list, then back. Remembered on this
+  // browser ("list" or the number per row).
   useEffect(() => {
-    const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
-    const parsed = stored ? parseInt(stored, 10) : NaN;
-    if (DENSITY_OPTIONS.includes(parsed as (typeof DENSITY_OPTIONS)[number])) {
-      setDensity(parsed as (typeof DENSITY_OPTIONS)[number]);
+    try {
+      const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
+      if (stored === "list") {
+        setView("list");
+        return;
+      }
+      const parsed = stored ? parseInt(stored, 10) : NaN;
+      if (DENSITY_OPTIONS.includes(parsed as (typeof DENSITY_OPTIONS)[number])) {
+        setDensity(parsed as (typeof DENSITY_OPTIONS)[number]);
+      }
+    } catch {
+      // No storage here — the default layout stays.
     }
   }, []);
 
-  const setDensityAndStore = (n: (typeof DENSITY_OPTIONS)[number]) => {
-    setDensity(n);
-    window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
+  const nextLayout = () => {
+    const at = DENSITY_OPTIONS.indexOf(density);
+    const toList = view === "tile" && at === DENSITY_OPTIONS.length - 1;
+    const nextDensity = view === "list" ? DENSITY_OPTIONS[0] : DENSITY_OPTIONS[Math.min(at + 1, DENSITY_OPTIONS.length - 1)];
+    setView(toList ? "list" : "tile");
+    if (!toList) setDensity(nextDensity);
+    try {
+      window.localStorage.setItem(DENSITY_STORAGE_KEY, toList ? "list" : String(nextDensity));
+    } catch {
+      // Not remembered — fine.
+    }
   };
 
   // Builds the CSV export URL from whatever filters are currently active
@@ -503,7 +523,7 @@ export default function ArtworksCatalogueView({
           header no longer needs to leave space for it. */}
       <div className="shrink-0 px-6 pt-4">
         {/* Row 1: title + view controls, together since they both govern
-            how the whole catalogue displays: PDF/CSV/Tile-List/density.
+            how the whole catalogue displays: PDF, CSV and the layout button.
             All/Sold is in the filter row below (2026-10-17, direct
             request — "Available" removed). "Export PDF"/"Import from
             CSV" shortened to "PDF"/"CSV" (2026-09-11, direct request) — CSV now opens a small
@@ -574,45 +594,31 @@ export default function ArtworksCatalogueView({
                 )}
               </div>
 
-              <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-                <button
-                  type="button"
-                  onClick={() => setView("tile")}
-                  className={`px-3 py-[4.8px] ${
-                    view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                  }`}
-                >
-                  Tile
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setView("list")}
-                  className={`px-3 py-[4.8px] ${
-                    view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                  }`}
-                >
-                  List
-                </button>
-              </div>
-
-              {view === "tile" && (
-                <div className="flex items-center gap-1 text-sm text-neutral-500">
-                  {DENSITY_OPTIONS.map((n) => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setDensityAndStore(n)}
-                      className={`h-7 w-7 rounded-md text-sm ${
-                        density === n
-                          ? "bg-neutral-900 text-white"
-                          : "border border-neutral-300 hover:bg-neutral-50"
-                      }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={nextLayout}
+                title={view === "list" ? "List — click for tiles" : `${density} to a row — click to change`}
+                aria-label="Change layout"
+                className="flex items-center gap-1.5 rounded-md border border-neutral-300 px-2.5 py-[4.8px] text-sm text-neutral-700 hover:bg-neutral-50"
+              >
+                {view === "list" ? (
+                  <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor" aria-hidden>
+                    <rect x="1" y="2" width="14" height="2" rx="0.5" />
+                    <rect x="1" y="7" width="14" height="2" rx="0.5" />
+                    <rect x="1" y="12" width="14" height="2" rx="0.5" />
+                  </svg>
+                ) : (
+                  <>
+                    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor" aria-hidden>
+                      <rect x="1" y="1" width="6" height="6" rx="1" />
+                      <rect x="9" y="1" width="6" height="6" rx="1" />
+                      <rect x="1" y="9" width="6" height="6" rx="1" />
+                      <rect x="9" y="9" width="6" height="6" rx="1" />
+                    </svg>
+                    {density}
+                  </>
+                )}
+              </button>
             </div>
           </div>
 
