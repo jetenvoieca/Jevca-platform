@@ -246,6 +246,12 @@ export default function VideoEditorView({
   }, [renderStatus?.status]);
 
   const selected = clips.find((c) => c.id === selectedId) ?? null;
+  // The selected clip shows at the video's shape, with its stickers.
+  const frameAspect = `${videoSize(shape).width} / ${videoSize(shape).height}`;
+  const selectedStickers = (selected?.stickers ?? []).map((s) => {
+    const sticker = stickerLibrary.find((l) => l.id === s.stickerId);
+    return sticker ? <img key={s.id} src={sticker.url} alt="" style={stickerPreviewStyle(s.position, s.size)} /> : null;
+  });
 
   const totalSeconds = totalTimelineSeconds(clips);
 
@@ -683,25 +689,22 @@ export default function VideoEditorView({
                 {selected.image.caption || (selected.kind === "PHOTO" ? "Photo" : "Video")}
               </h2>
               <div className="rounded-lg border border-neutral-200 bg-white p-4">
+                {/* As it will show in the video: at the video's shape, with its stickers. */}
                 {selected.kind === "PHOTO" ? (
-                  // As it will show in the video: at the video's shape, with its stickers.
                   <div
                     className="relative mx-auto mb-4 h-64 overflow-hidden rounded-md bg-black"
-                    style={{ aspectRatio: `${videoSize(shape).width} / ${videoSize(shape).height}` }}
+                    style={{ aspectRatio: frameAspect }}
                   >
                     <img src={selected.image.url} alt="" className="h-full w-full object-cover" />
-                    {(selected.stickers ?? []).map((s) => {
-                      const sticker = stickerLibrary.find((l) => l.id === s.stickerId);
-                      return sticker ? (
-                        <img key={s.id} src={sticker.url} alt="" style={stickerPreviewStyle(s.position, s.size)} />
-                      ) : null;
-                    })}
+                    {selectedStickers}
                   </div>
                 ) : (
                   <div className="mb-4">
                     <TrimScrubber
                       key={selected.id}
                       videoUrl={selected.image.url}
+                      aspectRatio={frameAspect}
+                      overlay={selectedStickers}
                       trimIn={selected.trimIn ?? 0}
                       trimOut={selected.trimOut ?? selected.sourceDuration ?? 0}
                       sourceDuration={selected.sourceDuration ?? null}

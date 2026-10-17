@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
 type Mode = "trim" | "mark";
 
 export default function TrimScrubber({
   videoUrl,
+  aspectRatio,
+  overlay,
   trimIn,
   trimOut,
   sourceDuration,
@@ -14,6 +16,11 @@ export default function TrimScrubber({
   onSplit,
 }: {
   videoUrl: string;
+  // Shown as it will be in the video (2026-10-17): at the video's shape
+  // ("width / height"), cropped to fill it, with `overlay` (its stickers)
+  // on top.
+  aspectRatio: string;
+  overlay?: ReactNode;
   trimIn: number;
   trimOut: number;
   sourceDuration: number | null;
@@ -53,7 +60,7 @@ export default function TrimScrubber({
       if (debounceRef.current) clearTimeout(debounceRef.current);
       debounceRef.current = setTimeout(() => onTrimChange(nextIn, nextOut), 400);
     },
-    [onTrimChange]
+    [onTrimChange],
   );
 
   const handleLoadedMetadata = () => {
@@ -146,14 +153,17 @@ export default function TrimScrubber({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <video
-        ref={videoRef}
-        src={videoUrl}
-        onLoadedMetadata={handleLoadedMetadata}
-        onTimeUpdate={handleTimeUpdate}
-        className="mb-3 max-h-64 w-full rounded-md bg-black"
-        playsInline
-      />
+      <div className="relative mx-auto mb-3 h-64 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
+        <video
+          ref={videoRef}
+          src={videoUrl}
+          onLoadedMetadata={handleLoadedMetadata}
+          onTimeUpdate={handleTimeUpdate}
+          className="h-full w-full object-cover"
+          playsInline
+        />
+        {overlay}
+      </div>
 
       {duration == null ? (
         <p className="text-sm text-neutral-400">Loading video…</p>
@@ -229,10 +239,7 @@ export default function TrimScrubber({
               />
             )}
             {/* Playhead */}
-            <div
-              className="absolute top-0 h-full w-0.5 bg-neutral-900"
-              style={{ left: `${pct(playhead)}%` }}
-            />
+            <div className="absolute top-0 h-full w-0.5 bg-neutral-900" style={{ left: `${pct(playhead)}%` }} />
             {/* Trim handles */}
             {mode === "trim" && (
               <>
@@ -281,9 +288,7 @@ export default function TrimScrubber({
                 className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
               />
             </label>
-            <span className="text-sm text-neutral-500">
-              Kept: {formatTime(Math.max(0, localOut - localIn))}
-            </span>
+            <span className="text-sm text-neutral-500">Kept: {formatTime(Math.max(0, localOut - localIn))}</span>
           </div>
         </>
       )}
