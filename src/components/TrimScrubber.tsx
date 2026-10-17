@@ -200,7 +200,8 @@ export default function TrimScrubber({
             className="h-full w-full object-cover"
             playsInline
           />
-          {overlay}
+          {/* Above the video: a playing video can be drawn over its siblings. */}
+          <div className="pointer-events-none absolute inset-0 z-10">{overlay}</div>
         </div>
         {AFTER.map(stillFor)}
         {/* The hidden copy the stills are made from. */}
