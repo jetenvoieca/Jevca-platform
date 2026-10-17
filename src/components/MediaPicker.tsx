@@ -78,6 +78,7 @@ export default function MediaPicker({
   previewKind = "image",
   previewClassName,
   variant = "tile",
+  buttonClassName,
   onSelect,
   withArtworks = false,
 }: {
@@ -124,6 +125,8 @@ export default function MediaPicker({
   // "button" (2026-10-08, a campaign mail's picture slots): a plain
   // button with `label` instead of the dashed tile, like ArtworkPicker's.
   variant?: "tile" | "button";
+  // The button's own look, in place of the standard one.
+  buttonClassName?: string;
   // Picked media, and (withArtworks) picked artworks — one call with
   // everything picked.
   onSelect: (images: PickedImage[], artworks: ArtworkListRow[]) => void;
@@ -315,7 +318,10 @@ export default function MediaPicker({
       <button
         type="button"
         onClick={handleOpen}
-        className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+        className={
+          buttonClassName ??
+          "rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+        }
       >
         {label}
       </button>

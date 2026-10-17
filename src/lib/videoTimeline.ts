@@ -27,6 +27,9 @@ export type TimelineClip = {
   sourceDuration?: number;
   // Picture stickers shown for the whole of this clip (2026-10-16).
   stickers?: ClipSticker[];
+  // How this clip changes into the next one (2026-10-17; one setting for
+  // the whole video before). Unset: a 1-second fade.
+  fade?: FadeSpeed;
 };
 
 // The video's shape (2026-10-16): upright 9:16 for Reels and Stories,
@@ -58,15 +61,15 @@ export type TimelineMusic = { trackId: string; volume: number };
 // R2 at `key` (under {artistId}/voice/), playing from `start` seconds into
 // the video. While it plays the music drops to `musicUnderVoice` of its
 // volume (0–1).
-// How far the music drops under a new voiceover, to start with.
-export const DEFAULT_MUSIC_UNDER_VOICE = 0.3;
-
 export type TimelineVoice = {
   key: string;
   durationSeconds: number;
   start: number;
   musicUnderVoice: number;
 };
+
+// How far the music drops under a new voiceover, to start with.
+export const DEFAULT_MUSIC_UNDER_VOICE = 0.3;
 
 // Captions — words on screen (2026-10-17): either made at render time
 // from the voiceover (Shotstack listens to it and times each word), or
@@ -103,7 +106,6 @@ export type Timeline = {
   shape?: VideoShape;
   music?: TimelineMusic;
   muteClips?: boolean;
-  fade?: FadeSpeed;
   voice?: TimelineVoice;
   captions?: TimelineCaptions;
 };
@@ -153,12 +155,11 @@ export function volumeAt(changes: VolumeChange[], t: number): number {
 
 export const emptyTimeline: Timeline = { clips: [] };
 
-// How clips change from one to the next (2026-10-16; always a 1-second
-// fade before): a cut, or a fade of 0.5 to 4 seconds. Neighbouring clips
+// How each clip changes into the next (2026-10-16; per clip since
+// 2026-10-17): a cut, or a fade of 0.5 to 4 seconds. Neighbouring clips
 // overlap by the fade's length (never more than either clip's own
 // length), the next one fading in over the one before; the render, the
-// preview and the running total all use the same overlaps (clipStarts,
-// totalTimelineSeconds).
+// preview and the running total all use the same overlaps (clipOverlaps).
 export type FadeSpeed = "none" | "fast" | "normal" | "slow" | "slower" | "slowest";
 
 export const FADE_SPEEDS: { value: FadeSpeed; label: string; seconds: number }[] = [
@@ -187,28 +188,34 @@ export function clipLength(c: TimelineClip): number {
   return c.kind === "PHOTO" ? c.duration ?? 2 : Math.max(0, (c.trimOut ?? 0) - (c.trimIn ?? 0));
 }
 
-// How much each clip overlaps the next (none for the last).
-function overlapAfter(clips: TimelineClip[], i: number, fadeSeconds: number): number {
-  return i === clips.length - 1 ? 0 : Math.min(fadeSeconds, clipLength(clips[i]), clipLength(clips[i + 1]));
+// How much each clip overlaps the next (none for the last), given each
+// clip's length.
+export function clipOverlaps(clips: { fade?: FadeSpeed }[], lengths: number[]): number[] {
+  return clips.map((clip, i) =>
+    i === clips.length - 1 ? 0 : Math.min(fadeSpeedOf(clip.fade).seconds, lengths[i], lengths[i + 1])
+  );
 }
 
 // How long each clip takes to fade in over the one before (0 for the first).
-export function clipFadeIns(clips: TimelineClip[], fadeSeconds: number): number[] {
-  return clips.map((_, i) => (i === 0 ? 0 : overlapAfter(clips, i - 1, fadeSeconds)));
+export function clipFadeIns(clips: TimelineClip[]): number[] {
+  const overlaps = clipOverlaps(clips, clips.map(clipLength));
+  return clips.map((_, i) => (i === 0 ? 0 : overlaps[i - 1]));
 }
 
 // When each clip starts, in seconds.
-export function clipStarts(clips: TimelineClip[], fadeSeconds: number): number[] {
+export function clipStarts(clips: TimelineClip[]): number[] {
+  const overlaps = clipOverlaps(clips, clips.map(clipLength));
   let cursor = 0;
   return clips.map((clip, i) => {
     const start = cursor;
-    cursor += clipLength(clip) - overlapAfter(clips, i, fadeSeconds);
+    cursor += clipLength(clip) - overlaps[i];
     return start;
   });
 }
 
-export function totalTimelineSeconds(clips: TimelineClip[], fadeSeconds: number): number {
-  return clips.reduce((sum, c, i) => sum + clipLength(c) - overlapAfter(clips, i, fadeSeconds), 0);
+export function totalTimelineSeconds(clips: TimelineClip[]): number {
+  const overlaps = clipOverlaps(clips, clips.map(clipLength));
+  return clips.reduce((sum, c, i) => sum + clipLength(c) - overlaps[i], 0);
 }
 
 export function readTimeline(raw: unknown): Timeline {

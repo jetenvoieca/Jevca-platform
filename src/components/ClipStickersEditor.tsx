@@ -61,7 +61,7 @@ export default function ClipStickersEditor({
     onChange([...placed, { id: randomId(), stickerId, position: "bottomRight", size: STICKER_SIZE_DEFAULT }]);
 
   return (
-    <div className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
+    <div className="p-4">
       <h3 className="mb-3 text-sm font-medium text-neutral-700">Stickers</h3>
       <div className="flex flex-wrap gap-6">
         <div className="relative w-56 overflow-hidden rounded-md bg-black" style={{ aspectRatio: `${size.width} / ${size.height}` }}>

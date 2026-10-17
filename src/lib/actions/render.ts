@@ -5,7 +5,8 @@ import { revalidatePath } from "next/cache";
 import {
   readTimeline,
   videoSize,
-  fadeSpeedOf,
+  clipOverlaps,
+  type FadeSpeed,
   musicVolumeChanges,
   totalTimelineSeconds,
   type CaptionLine,
@@ -193,6 +194,7 @@ type ClipWithImage = {
   duration?: number;
   trimIn?: number;
   trimOut?: number;
+  fade?: FadeSpeed;
   image: { url: string };
   stickers: PreparedSticker[];
 };
@@ -238,20 +240,18 @@ function buildEditJson(
   callbackUrl: string,
   size: OutputSize,
   sound: Sound,
-  fadeSeconds: number,
   captions: Captions | null
 ) {
   const lengths = clips.map(clipLength);
-  const overlapAfter = (i: number) =>
-    i === clips.length - 1 ? 0 : Math.min(fadeSeconds, lengths[i], lengths[i + 1]);
+  const overlaps = clipOverlaps(clips, lengths);
 
   let cursor = 0;
   const stickerClips: object[] = [];
   const shotClips = clips.map((clip, i) => {
     const length = lengths[i];
     const start = cursor;
-    const fadeIn = i === 0 ? 0 : overlapAfter(i - 1);
-    const fadeOut = overlapAfter(i);
+    const fadeIn = i === 0 ? 0 : overlaps[i - 1];
+    const fadeOut = overlaps[i];
     cursor += length - fadeOut;
 
     const asset =
@@ -508,7 +508,6 @@ export async function renderVideo(
     callbackUrl,
     size,
     { music, voice, muteClips: timeline.muteClips === true },
-    fadeSpeedOf(timeline.fade).seconds,
     captions
   );
 
@@ -607,7 +606,7 @@ export async function getRenderStatus(artistId: string) {
     // empty, instead of "0 clips · 0s total" next to a render that
     // plainly had clips in it.
     clipCount: timeline.clips.length,
-    totalSeconds: totalTimelineSeconds(timeline.clips, fadeSpeedOf(timeline.fade).seconds),
+    totalSeconds: totalTimelineSeconds(timeline.clips),
     resultImage: render.resultImage
       ? {
           id: render.resultImage.id,

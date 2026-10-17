@@ -75,7 +75,6 @@ export async function getDraftTimeline(artistId: string) {
     music: timeline.music ?? null,
     voice: timeline.voice ?? null,
     muteClips: timeline.muteClips ?? false,
-    fade: timeline.fade ?? "normal",
     captions: timeline.captions ?? null,
   };
 }
@@ -157,13 +156,26 @@ export async function setTimelineVoice(siteId: string, renderId: string, voice: 
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
-// How clips change from one to the next (2026-10-16).
-export async function setTimelineFade(siteId: string, renderId: string, fade: FadeSpeed): Promise<void> {
+// How a clip changes into the next one (2026-10-17).
+export async function setClipFade(siteId: string, renderId: string, clipId: string, fade: FadeSpeed): Promise<void> {
   if (!isFadeSpeed(fade)) return;
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
   const timeline = readTimeline(draft.timeline);
-  timeline.fade = fade;
+  const clip = timeline.clips.find((c) => c.id === clipId);
+  if (!clip) return;
+  clip.fade = fade;
+  await saveTimeline(renderId, timeline);
+  revalidatePath(`/sites/${siteId}/bucket`);
+}
+
+// The same change between every clip ("All clips").
+export async function setAllClipFades(siteId: string, renderId: string, fade: FadeSpeed): Promise<void> {
+  if (!isFadeSpeed(fade)) return;
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft || draft.status !== "DRAFT") return;
+  const timeline = readTimeline(draft.timeline);
+  for (const clip of timeline.clips) clip.fade = fade;
   await saveTimeline(renderId, timeline);
   revalidatePath(`/sites/${siteId}/bucket`);
 }
@@ -410,7 +422,7 @@ export async function reorderTimeline(
     .filter((c): c is TimelineClip => !!c);
   const missing = timeline.clips.filter((c) => !orderedClipIds.includes(c.id));
 
-  await saveTimeline(renderId, { clips: [...reordered, ...missing] });
+  await saveTimeline(renderId, { ...timeline, clips: [...reordered, ...missing] });
   revalidatePath(`/sites/${siteId}/bucket`);
 }
 
@@ -504,6 +516,7 @@ export async function splitClip(
     trimOut: Math.max(clip.trimIn, cutStart),
     sourceDuration: clip.sourceDuration,
     stickers: clip.stickers,
+    fade: clip.fade,
   };
   const partB: TimelineClip = {
     id: randomUUID(),
@@ -513,11 +526,12 @@ export async function splitClip(
     trimOut: clip.trimOut,
     sourceDuration: clip.sourceDuration,
     stickers: clip.stickers,
+    fade: clip.fade,
   };
 
   const nextClips = [...timeline.clips];
   nextClips.splice(index, 1, partA, partB);
 
-  await saveTimeline(renderId, { clips: nextClips });
+  await saveTimeline(renderId, { ...timeline, clips: nextClips });
   revalidatePath(`/sites/${siteId}/bucket`);
 }

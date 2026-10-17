@@ -56,7 +56,6 @@ export default function VideoPreviewPlayer({
   shape,
   music,
   muteClips,
-  fadeSeconds,
   voice,
   captions,
   stickerLibrary,
@@ -65,8 +64,6 @@ export default function VideoPreviewPlayer({
 }: {
   clips: PreviewClip[];
   shape: VideoShape;
-  // How long one clip takes to fade into the next (0: a cut).
-  fadeSeconds: number;
   voice: { url: string; start: number; durationSeconds: number; musicUnderVoice: number } | null;
   music: { url: string; volume: number } | null;
   muteClips: boolean;
@@ -77,9 +74,9 @@ export default function VideoPreviewPlayer({
   onClose: () => void;
 }) {
   const size = videoSize(shape);
-  const total = totalTimelineSeconds(clips, fadeSeconds);
-  const starts = clipStarts(clips, fadeSeconds);
-  const fadeIns = clipFadeIns(clips, fadeSeconds);
+  const total = totalTimelineSeconds(clips);
+  const starts = clipStarts(clips);
+  const fadeIns = clipFadeIns(clips);
   // Seconds into the video; null before it starts.
   const [time, setTime] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
