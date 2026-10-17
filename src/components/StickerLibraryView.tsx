@@ -22,12 +22,57 @@ export const CHECKERED_STYLE = {
   backgroundPosition: "0 0,0 8px,8px -8px,-8px 0",
 };
 
-// The picture ready to be a sticker: a PNG with its see-through edges
-// trimmed off (2026-10-17), so a signature on a big empty canvas becomes
-// just the signature. A PNG with nothing to trim goes up as it is;
+// The picture ready to be a sticker: a PNG — its white background made
+// see-through if it had no see-through parts (removeWhiteBackground) —
+// with its see-through edges trimmed off (2026-10-17), so a signature on
+// a big empty canvas becomes just the signature. A PNG with nothing to trim goes up as it is;
 // anything else is drawn onto a canvas and saved as a PNG (see-through
 // parts kept).
 const SEE_THROUGH = 8; // alpha at or below this counts as empty
+
+// Makes a picture's white background see-through (2026-10-17): every
+// near-white pixel — including the white inside letters, which on a
+// signature is background too — and the soft edge of the drawing blended
+// to see-through, so no white fringe shows on a dark video. Only for
+// pictures with no see-through parts of their own. False if there was no
+// white to take out.
+const NEAR_WHITE = 235;
+
+function removeWhiteBackground(data: Uint8ClampedArray, width: number, height: number): boolean {
+  const background = new Uint8Array(width * height);
+  let found = false;
+  for (let p = 0; p < width * height; p++) {
+    const i = p * 4;
+    if (data[i] >= NEAR_WHITE && data[i + 1] >= NEAR_WHITE && data[i + 2] >= NEAR_WHITE) {
+      background[p] = 1;
+      found = true;
+    }
+  }
+  if (!found) return false;
+  for (let p = 0; p < width * height; p++) {
+    if (background[p]) {
+      data[p * 4 + 3] = 0;
+      continue;
+    }
+    // The edge of the drawing: white taken out of its colour.
+    const x = p % width;
+    const touchesBackground =
+      (x > 0 && background[p - 1]) ||
+      (x < width - 1 && background[p + 1]) ||
+      (p >= width && background[p - width]) ||
+      (p < width * (height - 1) && background[p + width]);
+    if (!touchesBackground) continue;
+    const i = p * 4;
+    const alpha = Math.max(255 - data[i], 255 - data[i + 1], 255 - data[i + 2]) / 255;
+    if (alpha <= 0) {
+      data[i + 3] = 0;
+      continue;
+    }
+    for (let c = 0; c < 3; c++) data[i + c] = Math.round(255 - (255 - data[i + c]) / alpha);
+    data[i + 3] = Math.round(alpha * 255);
+  }
+  return true;
+}
 
 async function asSticker(file: File): Promise<Blob> {
   const url = URL.createObjectURL(file);
@@ -47,8 +92,16 @@ async function asSticker(file: File): Promise<Blob> {
     if (!context) throw new Error("couldn't be read.");
     context.drawImage(image, 0, 0, width, height);
 
+    // A picture with no see-through parts at all (e.g. a signature saved
+    // on white) has its white background made see-through.
+    const pixels = context.getImageData(0, 0, width, height);
+    const { data } = pixels;
+    let opaque = true;
+    for (let i = 3; i < data.length && opaque; i += 4) if (data[i] < 255) opaque = false;
+    const madeSeeThrough = opaque && removeWhiteBackground(data, width, height);
+    if (madeSeeThrough) context.putImageData(pixels, 0, 0);
+
     // The smallest box holding everything that isn't see-through.
-    const { data } = context.getImageData(0, 0, width, height);
     let top = height,
       left = width,
       bottom = -1,
@@ -66,7 +119,7 @@ async function asSticker(file: File): Promise<Blob> {
     if (bottom < 0) throw new Error("the picture is completely see-through.");
     const untrimmed = top === 0 && left === 0 && bottom === height - 1 && right === width - 1;
     const isPng = file.type === "image/png" || (!file.type && /\.png$/i.test(file.name));
-    if (untrimmed && isPng) return file;
+    if (untrimmed && isPng && !madeSeeThrough) return file;
 
     const trimmed = document.createElement("canvas");
     trimmed.width = right - left + 1;
