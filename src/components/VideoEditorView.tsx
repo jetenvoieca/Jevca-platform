@@ -404,13 +404,12 @@ export default function VideoEditorView({
   // The rendered video, kept in the Media Catalogue (Videos) under the
   // name asked for on saving (2026-10-17) — and, for Social, a new Reel
   // draft with it opened on the Social page. Either frees the editor for
-  // the next. The name starts as its Caption, if one's been typed.
-  const renderCaptionRef = useRef<HTMLInputElement>(null);
+  // the next.
   const [savingRender, setSavingRender] = useState(false);
   const [naming, setNaming] = useState<"social" | "catalogue" | null>(null);
   const [renderName, setRenderName] = useState("");
   const askName = (for_: "social" | "catalogue") => {
-    setRenderName(renderCaptionRef.current?.value ?? "");
+    setRenderName("");
     setNaming(for_);
   };
   const saveRender = async (thenPost: boolean, name: string) => {
@@ -600,7 +599,6 @@ export default function VideoEditorView({
                     media={renderStatus.resultImage}
                     tagPresets={tagPresets}
                     variant="pendingRender"
-                    captionRef={renderCaptionRef}
                   />
                 </div>
               ) : null}

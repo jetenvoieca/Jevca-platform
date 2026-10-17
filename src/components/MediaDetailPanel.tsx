@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, type RefObject } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateMedia, deleteMedia } from "@/lib/actions/mediaCatalogue";
 import { addMediaToBucket } from "@/lib/actions/videoEditor";
@@ -24,7 +24,6 @@ export default function MediaDetailPanel({
   media,
   tagPresets,
   variant = "catalogue",
-  captionRef,
   onClose,
   onArchived,
   onDataChanged,
@@ -33,10 +32,9 @@ export default function MediaDetailPanel({
   media: MediaDetail;
   tagPresets: string[];
   // "pendingRender": a just-rendered video in Video Edit's centre panel
-  // (2026-10-17) — no header; it's saved, posted or discarded from Video
-  // Edit's menu, which reads the Caption through `captionRef`.
+  // (2026-10-17) — no header or Caption; it's named, saved, posted or
+  // discarded from Video Edit's menu.
   variant?: "catalogue" | "pendingRender";
-  captionRef?: RefObject<HTMLInputElement | null>;
   // Optional — when the parent manages selection as client-side state
   // (Media Catalogue, 2026-08-08 perf pass) it passes these to update its
   // own state directly instead of a full-page navigation. Falls back to
@@ -235,16 +233,19 @@ export default function MediaDetailPanel({
           text field. Tags don't blur when clicked, so their own
           add/remove handlers below call autosave directly instead. */}
       <form onBlur={(e) => autosave(e.currentTarget)} className="space-y-4">
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
-          <input
-            type="text"
-            name="caption"
-            ref={captionRef}
-            defaultValue={media.caption || ""}
-            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-          />
-        </div>
+        {/* A rendered video has no Caption here (2026-10-17): it's named when
+            saved from Video Edit's menu — a Caption typed here saved it at once. */}
+        {variant === "catalogue" && (
+          <div>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
+            <input
+              type="text"
+              name="caption"
+              defaultValue={media.caption || ""}
+              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
+          </div>
+        )}
 
         {/* Related to (2026-09-12, direct request) — read-only display of
             which artwork this item is linked to. Not editable here: that
