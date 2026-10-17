@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   reorderTimeline,
@@ -527,47 +528,50 @@ export default function VideoEditorView({
               {clearing ? "Clearing…" : "Clear"}
             </button>
           </nav>
-          {naming && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
-              <form
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  if (renderName.trim()) saveRender(naming === "social", renderName.trim());
-                }}
-                className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
-              >
-                <h2 className="text-base font-medium text-neutral-900">Name this video</h2>
-                <p className="mt-1 text-sm text-neutral-500">
-                  How it's known in the Media Catalogue{naming === "social" ? " and on the Social page" : ""}.
-                </p>
-                <input
-                  type="text"
-                  value={renderName}
-                  onChange={(e) => setRenderName(e.target.value)}
-                  maxLength={200}
-                  autoFocus
-                  placeholder="e.g. RUDE in motion"
-                  className="mt-4 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-                />
-                <div className="mt-5 flex justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNaming(null)}
-                    className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={!renderName.trim()}
-                    className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
-                  >
-                    {naming === "social" ? "Save and go to Social" : "Save to Catalogue"}
-                  </button>
-                </div>
-              </form>
-            </div>
-          )}
+          {/* Over the whole page — a portal, so the menu's own layer can't keep it under the panel. */}
+          {naming &&
+            createPortal(
+              <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+                <form
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    if (renderName.trim()) saveRender(naming === "social", renderName.trim());
+                  }}
+                  className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+                >
+                  <h2 className="text-base font-medium text-neutral-900">Name this video</h2>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    How it's known in the Media Catalogue{naming === "social" ? " and on the Social page" : ""}.
+                  </p>
+                  <input
+                    type="text"
+                    value={renderName}
+                    onChange={(e) => setRenderName(e.target.value)}
+                    maxLength={200}
+                    autoFocus
+                    placeholder="e.g. RUDE in motion"
+                    className="mt-4 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                  />
+                  <div className="mt-5 flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setNaming(null)}
+                      className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={!renderName.trim()}
+                      className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                    >
+                      {naming === "social" ? "Save and go to Social" : "Save to Catalogue"}
+                    </button>
+                  </div>
+                </form>
+              </div>,
+              document.body,
+            )}
           {renderError && <p className="mt-2 text-xs text-red-600">{renderError}</p>}
           {addError && <p className="mt-2 text-xs text-red-600">{addError}</p>}
         </aside>
