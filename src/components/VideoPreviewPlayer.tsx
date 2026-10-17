@@ -10,6 +10,7 @@ import {
   totalTimelineSeconds,
   volumeAt,
   videoSize,
+  type TimelineCaptions,
   type TimelineClip,
   type VideoShape,
 } from "@/lib/videoTimeline";
@@ -50,6 +51,7 @@ export default function VideoPreviewPlayer({
   muteClips,
   fadeSeconds,
   voice,
+  captions,
   stickerLibrary,
   onClose,
 }: {
@@ -60,6 +62,7 @@ export default function VideoPreviewPlayer({
   voice: { url: string; start: number; durationSeconds: number; musicUnderVoice: number } | null;
   music: { url: string; volume: number } | null;
   muteClips: boolean;
+  captions: TimelineCaptions | null;
   stickerLibrary: StickerRow[];
   onClose: () => void;
 }) {
@@ -144,6 +147,12 @@ export default function VideoPreviewPlayer({
         .filter(({ clip, i }) => time >= starts[i] && time < starts[i] + clipLength(clip))
     : [];
   const current = showing.length > 0 ? showing[showing.length - 1].i : null;
+  // Typed captions on screen now (those from the voiceover are written at
+  // render time, so aren't shown here).
+  const captionNow =
+    running && captions?.mode === "typed"
+      ? captions.lines.find((l) => l.text.trim() && time >= l.start && time < l.end)
+      : undefined;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" {...backdrop}>
@@ -178,6 +187,16 @@ export default function VideoPreviewPlayer({
               })}
             </FadeIn>
           ))}
+          {captionNow && captions && (
+            <div
+              className={`pointer-events-none absolute inset-x-[5%] text-center font-bold leading-tight text-white ${
+                captions.position === "top" ? "top-[8%]" : captions.position === "bottom" ? "bottom-[8%]" : "top-1/2 -translate-y-1/2"
+              } ${captions.style === "pop" ? "uppercase" : ""}`}
+              style={{ fontSize: "min(4.5vh, 5vw)", WebkitTextStroke: "1px #000", textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}
+            >
+              {captionNow.text}
+            </div>
+          )}
           {!running && (
             <button
               type="button"

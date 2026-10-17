@@ -17,8 +17,10 @@ import {
   setAllPhotoDurations,
   setTimelineFade,
   setTimelineVoice,
+  setTimelineCaptions,
 } from "@/lib/actions/videoEditor";
 import VoiceoverControl from "@/components/VoiceoverControl";
+import CaptionsControl from "@/components/CaptionsControl";
 import ClipStickersEditor from "@/components/ClipStickersEditor";
 import VideoPreviewPlayer from "@/components/VideoPreviewPlayer";
 import type { ClipSticker, StickerRow } from "@/lib/stickers";
@@ -33,6 +35,7 @@ import {
   FADE_SPEEDS,
   VIDEO_SHAPES,
   type FadeSpeed,
+  type TimelineCaptions,
   type TimelineClip,
   type TimelineMusic,
   type TimelineVoice,
@@ -76,6 +79,7 @@ export default function VideoEditorView({
   initialMuteClips,
   initialFade,
   initialVoice,
+  initialCaptions,
   musicTracks,
   stickerLibrary,
   renderStatus: savedRenderStatus,
@@ -90,6 +94,7 @@ export default function VideoEditorView({
   initialMuteClips: boolean;
   initialFade: FadeSpeed;
   initialVoice: TimelineVoice | null;
+  initialCaptions: TimelineCaptions | null;
   // The artist's Music library (Media Catalogue → Music).
   musicTracks: MusicTrackRow[];
   // The artist's Stickers library (Media Catalogue → Stickers).
@@ -147,6 +152,22 @@ export default function VideoEditorView({
     // Only when what's saved actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialVoiceKey]);
+
+  // Captions (2026-10-17): choices save at once, typing shortly after.
+  const [captions, setCaptions] = useState<TimelineCaptions | null>(initialCaptions);
+  const captionsSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const changeCaptions = (next: TimelineCaptions | null, save: "now" | "soon") => {
+    setCaptions(next);
+    if (captionsSaveRef.current) clearTimeout(captionsSaveRef.current);
+    if (save === "now") setTimelineCaptions(siteId, renderId, next);
+    else captionsSaveRef.current = setTimeout(() => setTimelineCaptions(siteId, renderId, next), 600);
+  };
+  const initialCaptionsKey = JSON.stringify(initialCaptions);
+  useEffect(() => {
+    setCaptions(initialCaptions);
+    // Only when what's saved actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialCaptionsKey]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -449,6 +470,12 @@ export default function VideoEditorView({
                 hasMusic={!!music}
                 onChange={changeVoice}
               />
+              <CaptionsControl
+                captions={captions}
+                hasVoice={!!voice}
+                totalSeconds={totalSeconds}
+                onChange={changeCaptions}
+              />
               </>
             )}
           </div>
@@ -703,6 +730,7 @@ export default function VideoEditorView({
           muteClips={muteClips}
           fadeSeconds={fadeSeconds}
           voice={voice ? { ...voice, url: `/api/media/${voice.key}` } : null}
+          captions={captions}
           stickerLibrary={stickerLibrary}
           onClose={() => setPreviewing(false)}
         />

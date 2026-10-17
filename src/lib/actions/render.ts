@@ -2,7 +2,16 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { readTimeline, videoSize, fadeSpeedOf, musicVolumeChanges, totalTimelineSeconds } from "@/lib/videoTimeline";
+import {
+  readTimeline,
+  videoSize,
+  fadeSpeedOf,
+  musicVolumeChanges,
+  totalTimelineSeconds,
+  type CaptionLine,
+  type CaptionPosition,
+  type CaptionStyle,
+} from "@/lib/videoTimeline";
 import { uploadToR2, deleteFromR2, publicMediaUrl, storedFileUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
@@ -121,6 +130,60 @@ type Sound = {
   muteClips: boolean;
 };
 
+// Captions (2026-10-17): Shotstack's rich captions, either listening to
+// the voiceover clip (alias) or reading an SRT file of the typed lines.
+type Captions = {
+  source: { fromVoice: true } | { srtUrl: string };
+  style: CaptionStyle;
+  position: CaptionPosition;
+};
+
+const VOICE_ALIAS = "voiceover";
+
+// Typed caption lines as an SRT subtitle file.
+function toSrt(lines: CaptionLine[]): string {
+  const time = (seconds: number) => {
+    const ms = Math.max(0, Math.round(seconds * 1000));
+    const pad = (n: number, width = 2) => String(n).padStart(width, "0");
+    return `${pad(Math.floor(ms / 3600000))}:${pad(Math.floor(ms / 60000) % 60)}:${pad(Math.floor(ms / 1000) % 60)},${pad(ms % 1000, 3)}`;
+  };
+  return lines
+    .filter((l) => l.text.trim() && l.end > l.start)
+    .sort((a, b) => a.start - b.start)
+    .map((l, i) => `${i + 1}\n${time(l.start)} --> ${time(l.end)}\n${l.text.trim()}\n`)
+    .join("\n");
+}
+
+// The caption clip: white bold words with a dark outline, in the chosen
+// look, across most of the video's width.
+function captionClip(captions: Captions, size: OutputSize, voice: { start: number; length: number } | null) {
+  const looks: Record<CaptionStyle, object> = {
+    clean: { animation: { style: "none" } },
+    highlight: { animation: { style: "highlight" }, active: { font: { color: "#efbf04" } } },
+    karaoke: { animation: { style: "karaoke" }, active: { font: { color: "#efbf04" } } },
+    pop: { animation: { style: "pop" }, style: { textTransform: "uppercase" } },
+    typewriter: { animation: { style: "typewriter" } },
+  };
+  const offsetY = captions.position === "top" ? -0.06 : captions.position === "bottom" ? 0.08 : 0;
+  const fromVoice = "fromVoice" in captions.source;
+  return {
+    asset: {
+      type: "rich-caption" as const,
+      src: fromVoice ? `alias://${VOICE_ALIAS}` : (captions.source as { srtUrl: string }).srtUrl,
+      font: { family: "Roboto", size: Math.round(size.width * 0.06), color: "#ffffff", weight: 700 },
+      stroke: { width: 3, color: "#000000", opacity: 1 },
+      ...looks[captions.style],
+    },
+    // From the voiceover, the captions run while it does.
+    start: voice ? voice.start : 0,
+    length: voice ? voice.length : "end",
+    width: Math.round(size.width * 0.9),
+    height: Math.round(size.height * 0.25),
+    position: captions.position,
+    offset: { x: 0, y: offsetY },
+  };
+}
+
 // A sticker made ready for Shotstack: resized to its width in the video,
 // and where it sits.
 type PreparedSticker = { url: string; position: StickerPosition };
@@ -175,7 +238,8 @@ function buildEditJson(
   callbackUrl: string,
   size: OutputSize,
   sound: Sound,
-  fadeSeconds: number
+  fadeSeconds: number,
+  captions: Captions | null
 ) {
   const lengths = clips.map(clipLength);
   const overlapAfter = (i: number) =>
@@ -255,15 +319,42 @@ function buildEditJson(
         ]
       : []),
     ...(voice
-      ? [{ clips: [{ asset: { type: "audio" as const, src: voice.src, volume: 1 }, start: voice.start, length: voiceLength }] }]
+      ? [
+          {
+            clips: [
+              {
+                alias: VOICE_ALIAS,
+                asset: { type: "audio" as const, src: voice.src, volume: 1 },
+                start: voice.start,
+                length: voiceLength,
+              },
+            ],
+          },
+        ]
       : []),
   ];
+  // Captions from the voiceover need it there.
+  const captionTrack =
+    captions && (!("fromVoice" in captions.source) || voice)
+      ? [
+          {
+            clips: [
+              captionClip(
+                captions,
+                size,
+                "fromVoice" in captions.source && voice ? { start: voice.start, length: voiceLength } : null
+              ),
+            ],
+          },
+        ]
+      : [];
 
   return {
     timeline: {
       // The first track is the top one: stickers, then the clips, last
       // first; the sound tracks below them.
       tracks: [
+        ...captionTrack,
         ...(stickerClips.length > 0 ? [{ clips: stickerClips }] : []),
         ...shotClips.map((clip) => ({ clips: [clip] })).reverse(),
         ...audioTracks,
@@ -395,6 +486,21 @@ export async function renderVideo(
     ? { ...timeline.voice, src: toAbsoluteUrl(`/api/media/${timeline.voice.key}`) }
     : null;
 
+  // Typed captions go to Shotstack as an SRT file.
+  let captions: Captions | null = null;
+  if (timeline.captions?.mode === "voice" && voice) {
+    captions = { source: { fromVoice: true }, style: timeline.captions.style, position: timeline.captions.position };
+  } else if (timeline.captions?.mode === "typed" && timeline.captions.lines.some((l) => l.text.trim())) {
+    const srtKey = `${draft.artistId}/render-tmp/${randomUUID()}.srt`;
+    await uploadToR2(srtKey, Buffer.from(toSrt(timeline.captions.lines), "utf8"), "text/plain; charset=utf-8");
+    tempKeys.push(srtKey);
+    captions = {
+      source: { srtUrl: toAbsoluteUrl(`/api/media/${srtKey}`) },
+      style: timeline.captions.style,
+      position: timeline.captions.position,
+    };
+  }
+
   const env = activeEnv();
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
   const editJson = buildEditJson(
@@ -402,7 +508,8 @@ export async function renderVideo(
     callbackUrl,
     size,
     { music, voice, muteClips: timeline.muteClips === true },
-    fadeSpeedOf(timeline.fade).seconds
+    fadeSpeedOf(timeline.fade).seconds,
+    captions
   );
 
   await db.videoRender.update({

@@ -10,10 +10,13 @@ import {
   type ClipSticker,
 } from "@/lib/stickers";
 import {
+  CAPTION_POSITIONS,
+  CAPTION_STYLES,
   isFadeSpeed,
   isVideoShape,
   readTimeline,
   type Timeline,
+  type TimelineCaptions,
   type TimelineClip,
   type FadeSpeed,
   type TimelineMusic,
@@ -73,7 +76,47 @@ export async function getDraftTimeline(artistId: string) {
     voice: timeline.voice ?? null,
     muteClips: timeline.muteClips ?? false,
     fade: timeline.fade ?? "normal",
+    captions: timeline.captions ?? null,
   };
+}
+
+// Captions (2026-10-17): from the voiceover, or typed lines with their
+// times; null removes them.
+const MAX_CAPTION_LINES = 100;
+const MAX_CAPTION_TEXT = 200;
+
+export async function setTimelineCaptions(
+  siteId: string,
+  renderId: string,
+  captions: TimelineCaptions | null
+): Promise<void> {
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft || draft.status !== "DRAFT") return;
+  const timeline = readTimeline(draft.timeline);
+  if (captions) {
+    if (captions.mode !== "voice" && captions.mode !== "typed") return;
+    if (!CAPTION_STYLES.some((s) => s.value === captions.style)) return;
+    if (!CAPTION_POSITIONS.some((p) => p.value === captions.position)) return;
+    const lines = Array.isArray(captions.lines) ? captions.lines.slice(0, MAX_CAPTION_LINES) : [];
+    timeline.captions = {
+      mode: captions.mode,
+      style: captions.style,
+      position: captions.position,
+      lines: lines.map((l) => {
+        const start = Math.max(0, Number(l.start) || 0);
+        return {
+          id: String(l.id).slice(0, 40),
+          text: String(l.text ?? "").slice(0, MAX_CAPTION_TEXT),
+          start,
+          end: Math.max(start, Number(l.end) || 0),
+        };
+      }),
+    };
+  } else {
+    delete timeline.captions;
+  }
+  await saveTimeline(renderId, timeline);
+  revalidatePath(`/sites/${siteId}/bucket`);
 }
 
 // The voiceover (2026-10-17). Uploads go straight from the browser to R2

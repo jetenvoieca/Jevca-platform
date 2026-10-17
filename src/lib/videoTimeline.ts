@@ -65,6 +65,36 @@ export type TimelineVoice = {
   musicUnderVoice: number;
 };
 
+// Captions — words on screen (2026-10-17): either made at render time
+// from the voiceover (Shotstack listens to it and times each word), or
+// typed lines, each shown from `start` to `end` seconds. In one of a few
+// looks, at the top, middle or bottom of the video.
+export type CaptionMode = "voice" | "typed";
+export type CaptionStyle = "clean" | "highlight" | "karaoke" | "pop" | "typewriter";
+export type CaptionPosition = "top" | "center" | "bottom";
+export type CaptionLine = { id: string; text: string; start: number; end: number };
+
+export type TimelineCaptions = {
+  mode: CaptionMode;
+  style: CaptionStyle;
+  position: CaptionPosition;
+  lines: CaptionLine[];
+};
+
+export const CAPTION_STYLES: { value: CaptionStyle; label: string }[] = [
+  { value: "clean", label: "Clean" },
+  { value: "highlight", label: "Highlight word" },
+  { value: "karaoke", label: "Karaoke" },
+  { value: "pop", label: "Pop" },
+  { value: "typewriter", label: "Typewriter" },
+];
+
+export const CAPTION_POSITIONS: { value: CaptionPosition; label: string }[] = [
+  { value: "top", label: "Top" },
+  { value: "center", label: "Middle" },
+  { value: "bottom", label: "Bottom" },
+];
+
 export type Timeline = {
   clips: TimelineClip[];
   shape?: VideoShape;
@@ -72,6 +102,7 @@ export type Timeline = {
   muteClips?: boolean;
   fade?: FadeSpeed;
   voice?: TimelineVoice;
+  captions?: TimelineCaptions;
 };
 
 // The music's volume through the video (2026-10-17), as Shotstack volume
