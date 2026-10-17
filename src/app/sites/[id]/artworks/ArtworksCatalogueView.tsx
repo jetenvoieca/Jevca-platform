@@ -124,11 +124,9 @@ export default function ArtworksCatalogueView({
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
   const [showImport, setShowImport] = useState(false);
-  // CSV now covers two directions — Import (existing ArtworkImportPanel)
-  // and Export (new, direct download of the current filtered view) —
-  // so the single "CSV" button opens a small choice popover instead of
-  // going straight into the importer (2026-09-11, direct request).
-  const [showCsvChoice, setShowCsvChoice] = useState(false);
+  // The export/import menu: Export PDF, Export CSV (the current filtered
+  // view), Import CSV (ArtworkImportPanel).
+  const [showFileMenu, setShowFileMenu] = useState(false);
   const words = useClientWords();
   const [artworks, setArtworks] = useState<ArtworkListRow[]>(initialArtworks);
   const [total, setTotal] = useState(initialTotal);
@@ -522,72 +520,65 @@ export default function ArtworksCatalogueView({
           a modal (see below), so the grid runs the full width and the
           header no longer needs to leave space for it. */}
       <div className="shrink-0 px-6 pt-4">
-        {/* Row 1: title + view controls, together since they both govern
-            how the whole catalogue displays: PDF, CSV and the layout button.
-            All/Sold is in the filter row below (2026-10-17, direct
-            request — "Available" removed). "Export PDF"/"Import from
-            CSV" shortened to "PDF"/"CSV" (2026-09-11, direct request) — CSV now opens a small
-            Import/Export choice rather than going straight into the
-            importer, since it covers both directions. Button/field
-            heights cut ~20% throughout this row and the filter row
-            below (2026-09-11, direct request — "catalogue will be a
-            high usage area"), same treatment as the detail panel.
-            "Sold" includes RESERVED ("Sold - Not Paid") works too
-            (2026-09-24) — see SOLD_AVAILABILITIES in
-            lib/artworkFilters.ts. */}
+        {/* Row 1: the title, then the export/import menu and the layout
+            button (2026-10-17, direct request — icons in place of PDF,
+            CSV, Tile/List and the density numbers, all rarely used).
+            All/Sold is in the filter row below; "Sold" includes
+            RESERVED ("Sold - Not Paid") works — see SOLD_AVAILABILITIES
+            in lib/artworkFilters.ts. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-semibold text-neutral-900">{words.catalogue}</h1>
 
             <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setShowExportDialog(true)}
-                className="rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm hover:bg-neutral-50"
-              >
-                PDF
-              </button>
-
-              {/* CSV — Import/Export choice popover (2026-09-11). A
-                  plain relative wrapper + absolutely-positioned panel,
-                  not a full modal (this is a two-option pick, not a
-                  form) — closed by a transparent, unstyled click-catcher
-                  behind it at the same fixed layer, same pattern as the
-                  detail modal's backdrop-click-to-close elsewhere in
-                  this file. */}
+              {/* Export / import (2026-10-17, direct request — one icon in
+                  place of PDF and CSV): a small menu of the choices.
+                  Closed by a transparent click-catcher behind it. */}
               <div className="relative">
                 <button
                   type="button"
-                  onClick={() => setShowCsvChoice((v) => !v)}
-                  className="rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm hover:bg-neutral-50"
+                  onClick={() => setShowFileMenu((v) => !v)}
+                  title="Export or import"
+                  aria-label="Export or import"
+                  className="flex items-center rounded-md border border-neutral-300 px-2.5 py-[4.8px] text-neutral-700 hover:bg-neutral-50"
                 >
-                  CSV
+                  <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+                    <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M2.5 11v2.5h11V11" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
                 </button>
-                {showCsvChoice && (
+                {showFileMenu && (
                   <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setShowCsvChoice(false)}
-                    />
-                    <div className="absolute right-0 top-full z-50 mt-1 w-40 overflow-hidden rounded-md border border-neutral-200 bg-white shadow-lg">
+                    <div className="fixed inset-0 z-40" onClick={() => setShowFileMenu(false)} />
+                    <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg">
                       <button
                         type="button"
                         onClick={() => {
-                          setShowCsvChoice(false);
-                          setShowImport(true);
+                          setShowFileMenu(false);
+                          setShowExportDialog(true);
                         }}
                         className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
                       >
-                        Import
+                        Export PDF
                       </button>
                       <button
                         type="button"
                         onClick={() => {
-                          setShowCsvChoice(false);
+                          setShowFileMenu(false);
                           window.open(buildCsvExportUrl(), "_blank");
                         }}
-                        className="block w-full border-t border-neutral-100 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
+                        className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
                       >
-                        Export
+                        Export CSV
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowFileMenu(false);
+                          setShowImport(true);
+                        }}
+                        className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50 border-t border-neutral-100"
+                      >
+                        Import CSV
                       </button>
                     </div>
                   </>
