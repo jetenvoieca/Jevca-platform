@@ -2,7 +2,15 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
-const NEARBY_SECONDS = 0.5;
+// The stills either side of the playhead: how far before and after it.
+const NEARBY: { offset: number; label: string }[] = [
+  { offset: -1, label: "1s before" },
+  { offset: -0.5, label: "½s before" },
+  { offset: 0.5, label: "½s after" },
+  { offset: 1, label: "1s after" },
+];
+// The earliest still: a frame at exactly 0 often doesn't paint.
+const FIRST_FRAME = 0.05;
 
 type Mode = "trim" | "mark";
 
@@ -124,8 +132,9 @@ export default function TrimScrubber({
     if (videoRef.current) videoRef.current.currentTime = t;
   };
 
-  // The frames ½s either side of where the video is, while it's still.
-  const nearby = isPlaying || duration == null ? null : playhead;
+  // The stills either side of where the video is, while it's still.
+  const nearbyTime = (offset: number): number | null =>
+    isPlaying || duration == null ? null : Math.min(duration, Math.max(FIRST_FRAME, playhead + offset));
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -171,13 +180,16 @@ export default function TrimScrubber({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-center gap-4">
-        <FrameAt
-          src={videoUrl}
-          time={nearby == null ? null : Math.max(0, nearby - NEARBY_SECONDS)}
-          aspectRatio={aspectRatio}
-          label="½s before"
-        />
+      <div className="mb-3 flex items-center justify-center gap-3">
+        {NEARBY.filter((n) => n.offset < 0).map((n) => (
+          <FrameAt
+            key={n.offset}
+            src={videoUrl}
+            time={nearbyTime(n.offset)}
+            aspectRatio={aspectRatio}
+            label={n.label}
+          />
+        ))}
         <div className="relative h-64 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
           <video
             ref={videoRef}
@@ -189,12 +201,15 @@ export default function TrimScrubber({
           />
           {overlay}
         </div>
-        <FrameAt
-          src={videoUrl}
-          time={nearby == null || duration == null ? null : Math.min(duration, nearby + NEARBY_SECONDS)}
-          aspectRatio={aspectRatio}
-          label="½s after"
-        />
+        {NEARBY.filter((n) => n.offset > 0).map((n) => (
+          <FrameAt
+            key={n.offset}
+            src={videoUrl}
+            time={nearbyTime(n.offset)}
+            aspectRatio={aspectRatio}
+            label={n.label}
+          />
+        ))}
       </div>
 
       {duration == null ? (
@@ -338,7 +353,7 @@ function formatTime(seconds: number): string {
   return `${m}:${s.padStart(4, "0")}`;
 }
 
-// A small still of the video at `time` (2026-10-17): the frames either
+// A small still of the video at `time` (2026-10-17): the stills either
 // side of the playhead. iPad Safari paints a seeked frame only once the
 // video has played, so it's played and paused once first.
 function FrameAt({
@@ -386,7 +401,7 @@ function FrameAt({
 
   return (
     <div className={`flex flex-col items-center gap-1 ${time == null ? "opacity-30" : "opacity-80"}`}>
-      <div className="h-32 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
+      <div className="h-24 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
         <video ref={ref} src={src} muted playsInline preload="metadata" className="h-full w-full object-cover" />
       </div>
       <span className="text-xs text-neutral-400">{label}</span>
