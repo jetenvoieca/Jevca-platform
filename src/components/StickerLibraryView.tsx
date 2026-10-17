@@ -9,7 +9,9 @@ import type { StickerRow } from "@/lib/stickers";
 // The Media Catalogue's Stickers view (2026-10-16): the artist's picture
 // stickers for Video Edit — PNGs, usually with a see-through background
 // (shown here on a checked background so that's visible). Upload several
-// at once, rename, delete.
+// at once, rename, delete. Any picture the browser can open can be chosen
+// (2026-10-17 — a PNG with an unusual file name couldn't be picked); one
+// that isn't a PNG is made into one here first.
 
 // A checked background, to show see-through parts.
 export const CHECKERED_STYLE = {
@@ -19,6 +21,31 @@ export const CHECKERED_STYLE = {
   backgroundSize: "16px 16px",
   backgroundPosition: "0 0,0 8px,8px -8px,-8px 0",
 };
+
+// The picture as a PNG: as it is if it already is one, otherwise drawn
+// onto a canvas and saved as one (see-through parts are kept).
+async function asPng(file: File): Promise<Blob> {
+  const isPng = file.type === "image/png" || (!file.type && /\.png$/i.test(file.name));
+  if (isPng) return file;
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode().catch(() => {
+      throw new Error("this browser can't open that picture — save it as a PNG and try again.");
+    });
+    const canvas = document.createElement("canvas");
+    // A drawing with no size of its own (some SVGs) is made 1000px wide.
+    canvas.width = image.naturalWidth || 1000;
+    canvas.height = image.naturalHeight || 1000;
+    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+    return await new Promise<Blob>((resolve, reject) =>
+      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("couldn't be made into a PNG."))), "image/png"),
+    );
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
 
 export default function StickerLibraryView({
   siteId,
@@ -42,10 +69,12 @@ export default function StickerLibraryView({
     for (const file of Array.from(files)) {
       setUploading(file.name);
       try {
-        const step = await requestStickerUpload(artistId, file.name, file.type);
+        const png = await asPng(file);
+        const name = file.name.replace(/\.[^.]+$/, "");
+        const step = await requestStickerUpload(artistId, `${name}.png`, "image/png");
         if ("error" in step) throw new Error(step.error);
-        await putToR2(step.uploadUrl, file, file.type);
-        const sticker = await addSticker(artistId, { key: step.key, name: file.name.replace(/\.[^.]+$/, "") });
+        await putToR2(step.uploadUrl, png, "image/png");
+        const sticker = await addSticker(artistId, { key: step.key, name });
         if ("error" in sticker) throw new Error(sticker.error);
         setStickers((prev) => [...prev, sticker].sort((a, b) => a.name.localeCompare(b.name)));
       } catch (err) {
@@ -85,7 +114,7 @@ export default function StickerLibraryView({
           <input
             ref={inputRef}
             type="file"
-            accept="image/png"
+            accept="image/*"
             multiple
             className="hidden"
             onChange={(e) => upload(e.target.files)}
@@ -94,7 +123,7 @@ export default function StickerLibraryView({
       </div>
 
       <p className="mb-3 mt-3 text-sm text-neutral-400">
-        PNG pictures, ideally with a see-through background, to place on clips in Video Edit.
+        Pictures, ideally PNGs with a see-through background, to place on clips in Video Edit.
       </p>
       {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
 
