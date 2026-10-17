@@ -26,6 +26,8 @@ import {
 import { hasUnresolvedRender } from "./render";
 import { deleteFromR2, getPresignedUploadUrl } from "@/lib/r2";
 import { MUSIC_TYPES } from "@/lib/musicTracks";
+import { APP_URL } from "@/lib/appUrl";
+import { MEDIA_JOB_SECRET_HEADER, type VideoStillJob } from "@/lib/mediaJobs";
 
 async function getOrCreateDraft(artistId: string) {
   const existing = await db.videoRender.findFirst({
@@ -537,4 +539,41 @@ export async function splitClip(
 
   await saveTimeline(renderId, { ...timeline, clips: nextClips });
   revalidatePath(`/sites/${siteId}/bucket`);
+}
+
+// Grab still (2026-10-17): one frame of a video, full size, into the
+// artist's Hopper. Taken by the background function
+// netlify/functions/grab-video-still-background.mts (ffmpeg), which hands
+// it to /api/video-stills; it shows in the Hopper a few seconds later.
+export async function grabVideoStill(
+  imageId: string,
+  atSecond: number
+): Promise<{ ok: true } | { error: string }> {
+  const video = await db.image.findUnique({
+    where: { id: imageId },
+    select: { artistId: true, key: true, kind: true, caption: true },
+  });
+  if (!video || video.kind !== "VIDEO") return { error: "That video couldn't be found." };
+  const secret = process.env.MEDIA_IMPORT_SECRET;
+  if (!secret) return { error: "Stills can't be taken here (MEDIA_IMPORT_SECRET isn't set)." };
+  const at = Math.max(0, Number(atSecond) || 0);
+  const job: VideoStillJob = {
+    artistId: video.artistId,
+    videoKey: video.key,
+    atSecond: at,
+    caption: `${video.caption || "Video"} — still at ${Math.floor(at / 60)}:${(at % 60).toFixed(1).padStart(4, "0")}`,
+  };
+  try {
+    const res = await fetch(`${APP_URL}/.netlify/functions/grab-video-still-background`, {
+      method: "POST",
+      headers: { [MEDIA_JOB_SECRET_HEADER]: secret, "content-type": "application/json" },
+      body: JSON.stringify(job),
+      // A redirect means it never reached the function — don't follow it.
+      redirect: "manual",
+    });
+    if (res.status !== 202 && !res.ok) return { error: "The still couldn't be started — try again." };
+  } catch {
+    return { error: "The still couldn't be started — try again." };
+  }
+  return { ok: true };
 }

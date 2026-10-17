@@ -63,6 +63,8 @@ const NEWS_PATH_PREFIXES = ["/api/media/", "/unsubscribe/"];
 // - /api/video-posters    — the background function making videos' still
 //   pictures; authenticated by MEDIA_IMPORT_SECRET in the route itself
 //   (2026-10-16)
+// - /api/video-stills     — the background function taking Video Edit's
+//   stills for the Hopper; authenticated the same way (2026-10-17)
 // - /login                — has to be reachable before you're logged in
 // - /inbox-app/           — the Inbox's home-screen app manifest and icons
 //   (2026-10-09); the iPad fetches them without the login cookie, and
@@ -81,6 +83,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/webhooks/resend-campaigns",
   "/api/campaigns/send-due",
   "/api/video-posters",
+  "/api/video-stills",
   "/login",
   "/inbox-app/",
   "/privacy",

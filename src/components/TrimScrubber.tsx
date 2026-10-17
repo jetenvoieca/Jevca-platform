@@ -17,6 +17,9 @@ const AFTER = [
 
 type Mode = "trim" | "mark";
 
+const SMALL_BUTTON =
+  "rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50";
+
 export default function TrimScrubber({
   videoUrl,
   aspectRatio,
@@ -27,6 +30,7 @@ export default function TrimScrubber({
   onKnownDuration,
   onTrimChange,
   onSplit,
+  onGrabStill,
 }: {
   videoUrl: string;
   // Shown as it will be in the video (2026-10-17): at the video's shape
@@ -42,6 +46,8 @@ export default function TrimScrubber({
   onKnownDuration: (duration: number) => void;
   onTrimChange: (trimIn: number, trimOut: number) => void;
   onSplit: (cutStart: number, cutEnd: number) => void;
+  // Grab still (2026-10-17): the frame at the playhead, for the Hopper.
+  onGrabStill: (atSecond: number) => Promise<{ ok: true } | { error: string }>;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const barRef = useRef<HTMLDivElement>(null);
@@ -135,6 +141,21 @@ export default function TrimScrubber({
     if (videoRef.current) videoRef.current.currentTime = t;
   };
 
+  const [still, setStill] = useState<"idle" | "working" | "sent">("idle");
+  const [stillError, setStillError] = useState<string | null>(null);
+  const grabStill = async () => {
+    setStill("working");
+    setStillError(null);
+    const result = await onGrabStill(playhead);
+    if ("error" in result) {
+      setStillError(result.error);
+      setStill("idle");
+      return;
+    }
+    setStill("sent");
+    setTimeout(() => setStill("idle"), 3000);
+  };
+
   // The playhead stays within the kept part, between the handles (2026-10-17).
   const withinKept = (t: number) => Math.min(localOut, Math.max(localIn, t));
 
@@ -192,19 +213,59 @@ export default function TrimScrubber({
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
-      <div className="mb-3 flex items-center justify-center gap-3">
+      <div className="mb-3 flex items-start justify-center gap-3">
         {BEFORE.map(stillFor)}
-        <div className="relative h-64 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
-          <video
-            ref={videoRef}
-            src={videoUrl}
-            onLoadedMetadata={handleLoadedMetadata}
-            onTimeUpdate={handleTimeUpdate}
-            className="h-full w-full object-cover"
-            playsInline
-          />
-          {/* Above the video: a playing video can be drawn over its siblings. */}
-          <div className="pointer-events-none absolute inset-0 z-10">{overlay}</div>
+        <div className="flex flex-col items-center gap-2">
+          <div className="relative h-64 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              onLoadedMetadata={handleLoadedMetadata}
+              onTimeUpdate={handleTimeUpdate}
+              className="h-full w-full object-cover"
+              playsInline
+            />
+            {/* Above the video: a playing video can be drawn over its siblings. */}
+            <div className="pointer-events-none absolute inset-0 z-10">{overlay}</div>
+          </div>
+          {/* Under the picture: cut a section out, or take this frame as a still. */}
+          {duration != null && (
+            // Centred under the picture, as wide as it needs without widening it.
+            <div className="relative h-9 w-full">
+              <div className="absolute left-1/2 flex -translate-x-1/2 items-center gap-3 whitespace-nowrap">
+                {mode === "trim" ? (
+                  <button type="button" onClick={() => setMode("mark")} className={SMALL_BUTTON}>
+                    Mark section
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMark(null);
+                        setMode("trim");
+                      }}
+                      className={SMALL_BUTTON}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!mark}
+                      onClick={confirmSplit}
+                      className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
+                    >
+                      Remove section
+                    </button>
+                  </div>
+                )}
+                <button type="button" onClick={grabStill} disabled={still === "working"} className={SMALL_BUTTON}>
+                  {still === "working" ? "Grabbing…" : still === "sent" ? "Sent to the Hopper" : "Grab still"}
+                </button>
+              </div>
+            </div>
+          )}
+          {stillError && <p className="text-xs text-red-600">{stillError}</p>}
         </div>
         {AFTER.map(stillFor)}
         {/* The hidden copy the stills are made from. */}
@@ -233,39 +294,6 @@ export default function TrimScrubber({
             <span className="text-xs text-neutral-500">
               {formatTime(playhead)} / {formatTime(duration)}
             </span>
-
-            <div className="ml-auto flex items-center gap-2">
-              {mode === "trim" ? (
-                <button
-                  type="button"
-                  onClick={() => setMode("mark")}
-                  className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-                >
-                  Mark section to cut
-                </button>
-              ) : (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setMark(null);
-                      setMode("trim");
-                    }}
-                    className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!mark}
-                    onClick={confirmSplit}
-                    className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-neutral-200 disabled:text-neutral-400"
-                  >
-                    Remove marked section
-                  </button>
-                </>
-              )}
-            </div>
           </div>
 
           <div
@@ -380,7 +408,8 @@ function Still({
     target.getContext("2d")?.drawImage(canvas, 0, 0);
   }, [canvas]);
   return (
-    <div className="flex flex-col items-center gap-1 opacity-80">
+    // Level with the middle of the picture (h-64): (16rem - 5rem) / 2.
+    <div className="mt-[5.5rem] flex flex-col items-center gap-1 opacity-80">
       <div className="h-20 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
         <canvas ref={ref} className="h-full w-full object-cover" />
       </div>

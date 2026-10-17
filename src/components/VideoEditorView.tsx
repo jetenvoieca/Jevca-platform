@@ -19,6 +19,7 @@ import {
   setAllClipFades,
   setTimelineVoice,
   setTimelineCaptions,
+  grabVideoStill,
 } from "@/lib/actions/videoEditor";
 import VoiceoverControl from "@/components/VoiceoverControl";
 import { uploadVoice } from "@/lib/voiceUpload";
@@ -711,6 +712,7 @@ export default function VideoEditorView({
                       onKnownDuration={(d) => handleKnownDuration(selected.id, d)}
                       onTrimChange={(inS, outS) => handleTrimChange(selected.id, inS, outS)}
                       onSplit={(start, end) => handleSplit(selected.id, start, end)}
+                      onGrabStill={(atSecond) => grabVideoStill(selected.imageId, atSecond)}
                     />
                   </div>
                 )}

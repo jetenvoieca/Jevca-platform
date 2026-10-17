@@ -1,6 +1,6 @@
 // Shared by the app and the Netlify background functions that work on
-// media (2026-10-16): copying a Hopper CSV import's videos and making
-// videos' still pictures. Kept free of database code so the functions
+// media (2026-10-16): copying a Hopper CSV import's videos, making
+// videos' still pictures, and Video Edit's Grab still (2026-10-17). Kept free of database code so the functions
 // stay small. Both are protected by MEDIA_IMPORT_SECRET (a Netlify
 // environment variable), sent in this header.
 
@@ -11,3 +11,13 @@ export type VideoPosterJob = { id: string; key: string };
 
 // What it reports back to /api/video-posters for one video.
 export type VideoPosterReport = { id: string } & ({ ok: true; posterKey: string } | { ok: false; error: string });
+
+// Video Edit's Grab still (2026-10-17): one frame of a video, full size,
+// for the Hopper — as handed to the background function.
+export type VideoStillJob = { artistId: string; videoKey: string; atSecond: number; caption: string };
+
+// What it reports back to /api/video-stills.
+export type VideoStillReport = { artistId: string; caption: string } & (
+  | { ok: true; key: string }
+  | { ok: false; error: string }
+);

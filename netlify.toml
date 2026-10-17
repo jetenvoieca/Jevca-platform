@@ -14,3 +14,9 @@
 [functions."make-video-posters-background"]
   external_node_modules = ["ffmpeg-static"]
   included_files = ["node_modules/ffmpeg-static/ffmpeg"]
+
+# Video Edit's Grab still uses it the same way (2026-10-17 — see
+# netlify/functions/grab-video-still-background.mts).
+[functions."grab-video-still-background"]
+  external_node_modules = ["ffmpeg-static"]
+  included_files = ["node_modules/ffmpeg-static/ffmpeg"]

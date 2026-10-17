@@ -25,7 +25,7 @@ export default async () => {
     console.log(
       res.status === 202
         ? "[send-campaigns] woke the sender"
-        : `[send-campaigns] could not wake the sender: ${res.status}`
+        : `[send-campaigns] could not wake the sender: ${res.status}`,
     );
   } catch (err) {
     console.log("[send-campaigns] could not wake the sender:", err);

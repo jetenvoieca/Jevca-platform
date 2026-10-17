@@ -6,10 +6,7 @@ import { r2, R2_BUCKET } from "../../src/lib/r2";
 import { APP_URL } from "../../src/lib/appUrl";
 import { browserFetchHeaders } from "../../src/lib/importHelpers";
 import { MEDIA_JOB_SECRET_HEADER } from "../../src/lib/mediaJobs";
-import {
-  type VideoCopyReport,
-  type VideoCopyRequest,
-} from "../../src/lib/hopperVideoCopy";
+import { type VideoCopyReport, type VideoCopyRequest } from "../../src/lib/hopperVideoCopy";
 
 // Copies one video from a Hopper CSV import into R2 (2026-10-15) — a
 // background function, so it can run for up to 15 minutes, far longer
