@@ -280,13 +280,29 @@ export default function VideoEditorView({
     if (selectedId === id) setSelectedId(null);
   };
 
-  const handleClearAll = async () => {
-    if (!confirm("Remove every clip from this strip and return them to Sorted media?")) return;
+  // Clear (2026-10-17): abandons this video and starts afresh — no
+  // clips, voiceover, captions or music, square again.
+  const handleClear = async () => {
+    if (!confirm("Clear this video and start afresh? The clips, voiceover, captions and music are all removed."))
+      return;
     setClearing(true);
-    await clearDraftTimeline(siteId, renderId);
-    setClips([]);
+    // Changes still waiting to save would bring things back.
+    for (const timer of [musicSaveRef.current, voiceSaveRef.current, captionsSaveRef.current]) {
+      if (timer) clearTimeout(timer);
+    }
+    stickerSaves.current.forEach((timer) => clearTimeout(timer));
+    stickerSaves.current.clear();
+    setPanel(null);
     setSelectedId(null);
+    setClips([]);
+    setShape("square");
+    setMusic(null);
+    setMuteClips(false);
+    setVoice(null);
+    setCaptions(null);
+    await clearDraftTimeline(siteId, renderId);
     setClearing(false);
+    router.refresh();
   };
 
   const handleDurationChange = (id: string, value: number) => {
@@ -419,19 +435,6 @@ export default function VideoEditorView({
         <h1 className="text-2xl font-semibold text-neutral-900">Video Editor</h1>
         <p className="text-sm text-neutral-500">
           {headerClipCount} clip{headerClipCount === 1 ? "" : "s"} · {formatTotal(headerTotalSeconds)} total
-          {clips.length > 0 && (
-            <>
-              {" · "}
-              <button
-                type="button"
-                onClick={handleClearAll}
-                disabled={clearing}
-                className="text-neutral-400 underline hover:text-neutral-700 disabled:opacity-50"
-              >
-                {clearing ? "Clearing…" : "Clear all"}
-              </button>
-            </>
-          )}
         </p>
         {clips.length > 0 && totalSeconds > 90 && <p className="text-xs text-amber-600">Over the 90s target</p>}
       </header>
@@ -499,6 +502,14 @@ export default function VideoEditorView({
               className={MENU_BUTTON}
             >
               {discarding ? "Deleting…" : "Delete"}
+            </button>
+            <button
+              type="button"
+              onClick={handleClear}
+              disabled={!editing || clearing || (clips.length === 0 && !voice && !captions && !music)}
+              className={`mt-3 ${MENU_BUTTON}`}
+            >
+              {clearing ? "Clearing…" : "Clear"}
             </button>
           </nav>
           {renderError && <p className="mt-2 text-xs text-red-600">{renderError}</p>}

@@ -382,17 +382,19 @@ export async function removeClipFromTimeline(
 // doesn't retroactively repair a timeline that's already corrupted, so
 // this gives a reliable way back to a genuinely clean slate regardless
 // of how it got dirty.
+// Clear (2026-10-17): the draft starts afresh — clips back to Sorted
+// media, and the voiceover (its recording deleted), captions, music and
+// shape gone.
 export async function clearDraftTimeline(siteId: string, renderId: string): Promise<void> {
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
-  if (!draft) return;
+  if (!draft || draft.status !== "DRAFT") return;
   const timeline = readTimeline(draft.timeline);
   const imageIds = [...new Set(timeline.clips.map((c) => c.imageId))];
 
   await db.$transaction([
-    // Clips go; the shape and music stay.
     db.videoRender.update({
       where: { id: renderId },
-      data: { timeline: { ...timeline, clips: [] } },
+      data: { timeline: { clips: [] } },
     }),
     ...(imageIds.length > 0
       ? [
@@ -403,6 +405,7 @@ export async function clearDraftTimeline(siteId: string, renderId: string): Prom
         ]
       : []),
   ]);
+  if (timeline.voice) await deleteFromR2(timeline.voice.key).catch(() => {});
 
   revalidatePath(`/sites/${siteId}/bucket`);
 }
