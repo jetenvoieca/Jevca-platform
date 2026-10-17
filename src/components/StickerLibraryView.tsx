@@ -96,7 +96,9 @@ function contentBox(data: Uint8ClampedArray, width: number, height: number): Box
   return bottom < 0 ? null : { top, left, bottom, right };
 }
 
-// Whether the edge of the box is (almost all) solid near-white.
+// Whether the edge of the box is (almost all) near-white — counting only
+// its pixels that aren't see-through, however soft (a white box may have
+// soft or rounded edges).
 const WHITE_EDGE_SHARE = 0.9;
 
 function edgeIsWhite(data: Uint8ClampedArray, width: number, box: Box): boolean {
@@ -104,8 +106,9 @@ function edgeIsWhite(data: Uint8ClampedArray, width: number, box: Box): boolean 
     total = 0;
   const check = (x: number, y: number) => {
     const i = (y * width + x) * 4;
+    if (data[i + 3] <= SEE_THROUGH) return;
     total++;
-    if (data[i + 3] > 250 && data[i] >= NEAR_WHITE && data[i + 1] >= NEAR_WHITE && data[i + 2] >= NEAR_WHITE) white++;
+    if (data[i] >= NEAR_WHITE && data[i + 1] >= NEAR_WHITE && data[i + 2] >= NEAR_WHITE) white++;
   };
   for (let x = box.left; x <= box.right; x++) {
     check(x, box.top);
