@@ -26,7 +26,7 @@ import { useBackdropClose } from "@/lib/useBackdropClose";
 import CaptionsControl from "@/components/CaptionsControl";
 import ClipStickersEditor from "@/components/ClipStickersEditor";
 import VideoPreviewPlayer from "@/components/VideoPreviewPlayer";
-import type { ClipSticker, StickerRow } from "@/lib/stickers";
+import { stickerPreviewStyle, type ClipSticker, type StickerRow } from "@/lib/stickers";
 import MediaPicker from "@/components/MediaPicker";
 import { renderVideo, discardRenderResult, nameRenderedVideo } from "@/lib/actions/render";
 import { createReelFromVideo } from "@/lib/actions/socialPosts";
@@ -41,6 +41,7 @@ import {
   DEFAULT_MUSIC_UNDER_VOICE,
   FADE_SPEEDS,
   VIDEO_SHAPES,
+  videoSize,
   type FadeSpeed,
   type TimelineCaptions,
   type TimelineClip,
@@ -672,7 +673,19 @@ export default function VideoEditorView({
               </h2>
               <div className="rounded-lg border border-neutral-200 bg-white p-4">
                 {selected.kind === "PHOTO" ? (
-                  <img src={selected.image.url} alt="" className="mb-4 max-h-64 w-full rounded-md object-contain" />
+                  // As it will show in the video: at the video's shape, with its stickers.
+                  <div
+                    className="relative mx-auto mb-4 h-64 overflow-hidden rounded-md bg-black"
+                    style={{ aspectRatio: `${videoSize(shape).width} / ${videoSize(shape).height}` }}
+                  >
+                    <img src={selected.image.url} alt="" className="h-full w-full object-cover" />
+                    {(selected.stickers ?? []).map((s) => {
+                      const sticker = stickerLibrary.find((l) => l.id === s.stickerId);
+                      return sticker ? (
+                        <img key={s.id} src={sticker.url} alt="" style={stickerPreviewStyle(s.position, s.size)} />
+                      ) : null;
+                    })}
+                  </div>
                 ) : (
                   <div className="mb-4">
                     <TrimScrubber
