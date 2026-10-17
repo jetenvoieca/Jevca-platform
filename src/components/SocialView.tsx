@@ -272,6 +272,11 @@ export default function SocialView({
                   <div className="aspect-square overflow-hidden rounded-md bg-neutral-100">
                     <MediaTile item={item} />
                   </div>
+                  {item.name && (
+                    <p className="mt-1 truncate text-xs text-neutral-600" title={item.name}>
+                      {item.name}
+                    </p>
+                  )}
                   {editable && (
                     <div className="mt-1 flex justify-between text-xs">
                       <button
@@ -449,6 +454,9 @@ export default function SocialView({
                   </span>
                 )}
               </div>
+              {p.media[0]?.name && (
+                <p className="mt-1 truncate text-sm font-medium text-neutral-900">{p.media[0].name}</p>
+              )}
               <p className="mt-1 text-xs font-medium uppercase tracking-wide text-neutral-500">
                 {socialPostType(p.format, p.media)} ·{" "}
                 {p.status === "POSTING" ? "Posting…" : formatDate(p.postedAt ?? p.updatedAt)}

@@ -25,6 +25,8 @@ const IMAGE_SELECT = {
   kind: true,
   posterUrl: true,
   mimeType: true,
+  caption: true,
+  artwork: { select: { catalogueName: true } },
 } as const;
 
 type ImageRow = {
@@ -35,11 +37,14 @@ type ImageRow = {
   kind: string;
   posterUrl: string | null;
   mimeType: string;
+  caption: string | null;
+  artwork: { catalogueName: string } | null;
 };
 
 function toItem(image: ImageRow): SocialMediaItem {
   return {
     id: image.id,
+    name: image.caption || image.artwork?.catalogueName || null,
     url: publicMediaUrl(image.thumbnailKey) || image.url,
     fullUrl: (image.kind === "PHOTO" && publicMediaUrl(image.displayKey)) || image.url,
     kind: image.kind,

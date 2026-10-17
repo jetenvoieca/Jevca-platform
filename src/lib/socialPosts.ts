@@ -31,6 +31,9 @@ export const CAROUSEL_MAX = 10;
 
 export type SocialMediaItem = {
   id: string;
+  // What it's called (2026-10-17): its own name (e.g. a video named when
+  // saved from Video Edit), else its artwork's; null if neither.
+  name: string | null;
   // Small version, for tiles.
   url: string;
   // As posted (pictures at the larger size), for the preview.
