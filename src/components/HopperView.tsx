@@ -967,8 +967,9 @@ function SortingCard({
   const [showManageForm, setShowManageForm] = useState(false);
   const [showAncillaryForm, setShowAncillaryForm] = useState(false);
 
+  // The routing buttons share the row evenly (2026-10-17 tidy).
   const actionCls =
-    "rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50";
+    "flex-1 whitespace-nowrap rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50";
   const openManage = () => {
     setShowManageForm(true);
     setShowQuickForm(false);
@@ -995,7 +996,26 @@ function SortingCard({
           }}
         />
       ) : (
-        <HopperItemPreview item={item} />
+        <HopperItemPreview
+          item={item}
+          corner={
+            item.kind === "PHOTO" &&
+            !forArtwork && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowCropEditor(true);
+                  setShowManageForm(false);
+                  setShowQuickForm(false);
+                }}
+                disabled={isPending}
+                className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm shadow-sm hover:bg-neutral-50 disabled:opacity-50"
+              >
+                Crop
+              </button>
+            )
+          }
+        />
       )}
 
       {/* Title/Description preview (2026-09-19, direct request — "add
@@ -1051,29 +1071,21 @@ function SortingCard({
               disabled={isPending || showAncillaryForm || forArtwork.full}
               className={actionCls}
             >
-              Ancillary image
+              Ancillary
             </button>
           )}
           {mediaIntake && (
             <button type="button" onClick={onAddToMedia} disabled={isPending} className={actionCls}>
-              Add to Media
+              Media
             </button>
           )}
           {!forArtwork && !artworkIntake && !mediaIntake && (
             <>
               <button type="button" onClick={onAddToMedia} disabled={isPending} className={actionCls}>
-                Add to Media
+                Media
               </button>
               <button type="button" onClick={onAddToBucket} disabled={isPending} className={actionCls}>
-                Add to Video Edit
-              </button>
-              <button
-                type="button"
-                onClick={openManage}
-                disabled={isPending || showManageForm}
-                className={actionCls}
-              >
-                Manage {words.item}
+                Video
               </button>
               <button
                 type="button"
@@ -1081,7 +1093,15 @@ function SortingCard({
                 disabled={isPending || showQuickForm}
                 className={actionCls}
               >
-                Create new {words.item.toLowerCase()}
+                {words.item}
+              </button>
+              <button
+                type="button"
+                onClick={openManage}
+                disabled={isPending || showManageForm}
+                className={actionCls}
+              >
+                Ancillary
               </button>
             </>
           )}
@@ -1093,7 +1113,7 @@ function SortingCard({
                 disabled={isPending || showQuickForm}
                 className={actionCls}
               >
-                New {words.item}
+                {words.item}
               </button>
               <button
                 type="button"
@@ -1101,23 +1121,9 @@ function SortingCard({
                 disabled={isPending || showManageForm}
                 className={actionCls}
               >
-                Ancillary image
+                Ancillary
               </button>
             </>
-          )}
-          {item.kind === "PHOTO" && !forArtwork && (
-            <button
-              type="button"
-              onClick={() => {
-                setShowCropEditor(true);
-                setShowManageForm(false);
-                setShowQuickForm(false);
-              }}
-              disabled={isPending}
-              className="ml-auto rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50"
-            >
-              Crop
-            </button>
           )}
         </div>
       )}
