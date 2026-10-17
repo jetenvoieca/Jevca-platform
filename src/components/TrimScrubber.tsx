@@ -108,7 +108,7 @@ export default function TrimScrubber({
         commitTrim(localIn, next);
         showAt(next);
       } else if (dragging === "playhead") {
-        showAt(t);
+        showAt(withinKept(t));
       } else if (markDragging && mark) {
         const end = Math.max(mark.start + 0.1, t);
         setMark({ start: mark.start, end });
@@ -134,6 +134,9 @@ export default function TrimScrubber({
     setPlayhead(t);
     if (videoRef.current) videoRef.current.currentTime = t;
   };
+
+  // The playhead stays within the kept part, between the handles (2026-10-17).
+  const withinKept = (t: number) => Math.min(localOut, Math.max(localIn, t));
 
   // The stills either side of where the video is.
   const nearby = [...BEFORE, ...AFTER];
@@ -273,6 +276,7 @@ export default function TrimScrubber({
                 startMark(e.clientX);
               } else {
                 setDragging("playhead");
+                showAt(withinKept(timeFromClientX(e.clientX)));
               }
             }}
           >
