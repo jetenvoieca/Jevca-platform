@@ -58,6 +58,9 @@ export type TimelineMusic = { trackId: string; volume: number };
 // R2 at `key` (under {artistId}/voice/), playing from `start` seconds into
 // the video. While it plays the music drops to `musicUnderVoice` of its
 // volume (0–1).
+// How far the music drops under a new voiceover, to start with.
+export const DEFAULT_MUSIC_UNDER_VOICE = 0.3;
+
 export type TimelineVoice = {
   key: string;
   durationSeconds: number;

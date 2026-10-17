@@ -1,38 +1,41 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { putToR2 } from "@/lib/putToR2";
-import { requestVoiceUpload } from "@/lib/actions/videoEditor";
-import { audioFileDuration, recordingToWav } from "@/lib/audioWav";
+import { audioFileDuration } from "@/lib/audioWav";
+import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
+import { uploadVoice } from "@/lib/voiceUpload";
 import { MUSIC_ACCEPT } from "@/lib/musicTracks";
-import type { TimelineVoice } from "@/lib/videoTimeline";
+import { DEFAULT_MUSIC_UNDER_VOICE, type TimelineVoice } from "@/lib/videoTimeline";
 
 // Video Edit's voiceover (2026-10-17): record one in the browser (iPad or
-// computer microphone) or upload a voice memo; then when it starts in the
-// video and how far the music drops while it plays. One per video.
-
-const DEFAULT_MUSIC_UNDER_VOICE = 0.3;
+// computer microphone) — on its own, or over the preview playing silently
+// (in VideoPreviewPlayer) — or upload a voice memo; then when it starts in
+// the video and how far the music drops while it plays. One per video.
 
 export default function VoiceoverControl({
   artistId,
   voice,
   totalSeconds,
   hasMusic,
+  canRecordOverPreview,
+  onRecordOverPreview,
   onChange,
 }: {
   artistId: string;
   voice: TimelineVoice | null;
   totalSeconds: number;
   hasMusic: boolean;
+  canRecordOverPreview: boolean;
+  onRecordOverPreview: () => void;
   // `save: "now"` for a new recording; changes to start/level save shortly after.
   onChange: (voice: TimelineVoice | null, save: "now" | "soon") => void;
 }) {
-  const [recording, setRecording] = useState(false);
+  const recorder = useVoiceRecorder();
   const [elapsed, setElapsed] = useState(0);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const recorderRef = useRef<MediaRecorder | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const recording = recorder.recording;
 
   useEffect(() => {
     if (!recording) return;
@@ -41,16 +44,11 @@ export default function VoiceoverControl({
     return () => clearInterval(timer);
   }, [recording]);
 
-  // Stops the microphone if the page is left mid-recording.
-  useEffect(() => () => recorderRef.current?.stream.getTracks().forEach((t) => t.stop()), []);
-
   const save = async (file: Blob, contentType: string, durationSeconds: number) => {
-    const step = await requestVoiceUpload(artistId, contentType);
-    if ("error" in step) throw new Error(step.error);
-    await putToR2(step.uploadUrl, file, contentType);
+    const key = await uploadVoice(artistId, file, contentType);
     onChange(
       {
-        key: step.key,
+        key,
         durationSeconds,
         start: voice?.start ?? 0,
         musicUnderVoice: voice?.musicUnderVoice ?? DEFAULT_MUSIC_UNDER_VOICE,
@@ -62,35 +60,25 @@ export default function VoiceoverControl({
   const startRecording = async () => {
     setError(null);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const recorder = new MediaRecorder(stream);
-      const chunks: Blob[] = [];
-      recorder.ondataavailable = (e) => e.data.size > 0 && chunks.push(e.data);
-      recorder.onstop = async () => {
-        stream.getTracks().forEach((t) => t.stop());
-        setBusy(true);
-        try {
-          const { wav, durationSeconds } = await recordingToWav(new Blob(chunks, { type: recorder.mimeType }));
-          await save(wav, "audio/wav", durationSeconds);
-        } catch (err) {
-          setError(err instanceof Error ? err.message : "The recording couldn't be saved.");
-        } finally {
-          setBusy(false);
-        }
-      };
-      recorderRef.current = recorder;
-      recorder.start();
-      setElapsed(0);
-      setRecording(true);
+      await recorder.openMicrophone();
     } catch {
       setError("The microphone couldn't be used — allow it in the browser and try again.");
+      return;
     }
+    setElapsed(0);
+    recorder.start();
   };
 
-  const stopRecording = () => {
-    recorderRef.current?.stop();
-    recorderRef.current = null;
-    setRecording(false);
+  const stopRecording = async () => {
+    setBusy(true);
+    try {
+      const result = await recorder.stop();
+      if (result) await save(result.wav, "audio/wav", result.durationSeconds);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "The recording couldn't be saved.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   const upload = async (file: File | undefined) => {
@@ -138,6 +126,15 @@ export default function VoiceoverControl({
           >
             ● {voice ? "Record again" : "Record"}
           </button>
+          {canRecordOverPreview && (
+            <button
+              type="button"
+              onClick={onRecordOverPreview}
+              className="rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
+            >
+              ● Record over the preview
+            </button>
+          )}
           <button
             type="button"
             onClick={() => fileRef.current?.click()}

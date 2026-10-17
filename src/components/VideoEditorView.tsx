@@ -20,6 +20,7 @@ import {
   setTimelineCaptions,
 } from "@/lib/actions/videoEditor";
 import VoiceoverControl from "@/components/VoiceoverControl";
+import { uploadVoice } from "@/lib/voiceUpload";
 import CaptionsControl from "@/components/CaptionsControl";
 import ClipStickersEditor from "@/components/ClipStickersEditor";
 import VideoPreviewPlayer from "@/components/VideoPreviewPlayer";
@@ -32,6 +33,7 @@ import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPane
 import {
   totalTimelineSeconds,
   fadeSpeedOf,
+  DEFAULT_MUSIC_UNDER_VOICE,
   FADE_SPEEDS,
   VIDEO_SHAPES,
   type FadeSpeed,
@@ -146,6 +148,14 @@ export default function VideoEditorView({
     if (save === "now") setTimelineVoice(siteId, renderId, next);
     else voiceSaveRef.current = setTimeout(() => setTimelineVoice(siteId, renderId, next), 400);
   };
+  // Recorded over the preview: it starts with the video.
+  const saveVoiceOverPreview = async (wav: Blob, durationSeconds: number) => {
+    const key = await uploadVoice(artistId, wav, "audio/wav");
+    changeVoice(
+      { key, durationSeconds, start: 0, musicUnderVoice: voice?.musicUnderVoice ?? DEFAULT_MUSIC_UNDER_VOICE },
+      "now"
+    );
+  };
   const initialVoiceKey = JSON.stringify(initialVoice);
   useEffect(() => {
     setVoice(initialVoice);
@@ -171,7 +181,8 @@ export default function VideoEditorView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
-  const [previewing, setPreviewing] = useState(false);
+  // Preview: watching it, or recording a voiceover over it (silent).
+  const [previewing, setPreviewing] = useState<"watch" | "record" | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -468,6 +479,8 @@ export default function VideoEditorView({
                 voice={voice}
                 totalSeconds={totalSeconds}
                 hasMusic={!!music}
+                canRecordOverPreview={clips.length > 0}
+                onRecordOverPreview={() => setPreviewing("record")}
                 onChange={changeVoice}
               />
               <CaptionsControl
@@ -500,7 +513,7 @@ export default function VideoEditorView({
             {!renderStatus && (
               <button
                 type="button"
-                onClick={() => setPreviewing(true)}
+                onClick={() => setPreviewing("watch")}
                 disabled={clips.length === 0}
                 className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40"
               >
@@ -726,13 +739,15 @@ export default function VideoEditorView({
         <VideoPreviewPlayer
           clips={clips}
           shape={shape}
-          music={musicTrack && music ? { url: musicTrack.url, volume: music.volume } : null}
-          muteClips={muteClips}
+          // Recording over it, the preview plays silently.
+          music={previewing === "watch" && musicTrack && music ? { url: musicTrack.url, volume: music.volume } : null}
+          muteClips={previewing === "record" || muteClips}
           fadeSeconds={fadeSeconds}
-          voice={voice ? { ...voice, url: `/api/media/${voice.key}` } : null}
+          voice={previewing === "watch" && voice ? { ...voice, url: `/api/media/${voice.key}` } : null}
           captions={captions}
           stickerLibrary={stickerLibrary}
-          onClose={() => setPreviewing(false)}
+          recordVoice={previewing === "record" ? saveVoiceOverPreview : undefined}
+          onClose={() => setPreviewing(null)}
         />
       )}
     </div>

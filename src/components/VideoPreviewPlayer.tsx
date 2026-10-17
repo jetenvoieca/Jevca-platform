@@ -15,6 +15,7 @@ import {
   type VideoShape,
 } from "@/lib/videoTimeline";
 import { stickerPreviewStyle, type StickerRow } from "@/lib/stickers";
+import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
 
 // Video Edit's Preview (2026-10-16): plays the video as it stands, in the
 // browser, before it's sent to be rendered — on the render's own timing:
@@ -23,10 +24,16 @@ import { stickerPreviewStyle, type StickerRow } from "@/lib/stickers";
 // across the same overlap as the render, with their stickers, and the music
 // under it fading in and out — dipping under the voiceover, which plays
 // from its start. Close to the render, not exact to the frame.
+//
+// Recording over the preview (2026-10-17): with `recordVoice`, the
+// preview plays silently after a 3-second countdown while the microphone
+// records; at the end (or Stop) the recording is handed back as the
+// voiceover, starting at 0s.
 
 type PreviewClip = TimelineClip & { image: { url: string; kind: "PHOTO" | "VIDEO" } };
 
 const TICK_MS = 50;
+const COUNTDOWN_SECONDS = 3;
 
 function FadeIn({ seconds, children }: { seconds: number; children: React.ReactNode }) {
   const [shown, setShown] = useState(false);
@@ -53,6 +60,7 @@ export default function VideoPreviewPlayer({
   voice,
   captions,
   stickerLibrary,
+  recordVoice,
   onClose,
 }: {
   clips: PreviewClip[];
@@ -64,6 +72,8 @@ export default function VideoPreviewPlayer({
   muteClips: boolean;
   captions: TimelineCaptions | null;
   stickerLibrary: StickerRow[];
+  // Recording over the preview: what to do with the recording.
+  recordVoice?: (wav: Blob, durationSeconds: number) => Promise<void>;
   onClose: () => void;
 }) {
   const size = videoSize(shape);
@@ -131,14 +141,59 @@ export default function VideoPreviewPlayer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [running, total, musicVolume, voice?.start, voice?.musicUnderVoice, voiceEnd]);
 
-  // Closing stops everything.
-  useEffect(
-    () => () => {
+  // Recording over the preview.
+  const recorder = useVoiceRecorder();
+  const [countdown, setCountdown] = useState<number | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [recordError, setRecordError] = useState<string | null>(null);
+  const closed = useRef(false);
+
+  const startRecording = async () => {
+    setRecordError(null);
+    try {
+      await recorder.openMicrophone();
+    } catch {
+      setRecordError("The microphone couldn't be used — allow it in the browser and try again.");
+      return;
+    }
+    for (let n = COUNTDOWN_SECONDS; n > 0; n--) {
+      setCountdown(n);
+      await new Promise((r) => setTimeout(r, 1000));
+      if (closed.current) return;
+    }
+    setCountdown(null);
+    recorder.start();
+    play();
+  };
+
+  // At the end of the video (or Stop), the recording becomes the voiceover.
+  const recordingDone = recorder.recording && time != null && time >= total;
+  useEffect(() => {
+    if (!recordingDone || !recordVoice) return;
+    setSaving(true);
+    recorder
+      .stop()
+      .then(async (result) => {
+        if (result) await recordVoice(result.wav, result.durationSeconds);
+        onClose();
+      })
+      .catch((err) => setRecordError(err instanceof Error ? err.message : "The recording couldn't be saved."))
+      .finally(() => setSaving(false));
+    // Once, when the recording reaches the end.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [recordingDone]);
+
+  // Closing stops everything (a recording not yet finished is dropped).
+  useEffect(() => {
+    closed.current = false;
+    return () => {
+      closed.current = true;
       audioRef.current?.pause();
       voiceRef.current?.pause();
-    },
-    []
-  );
+      recorder.cancel();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // The clips on screen now — two while one fades in over the other.
   const showing = running
@@ -197,16 +252,29 @@ export default function VideoPreviewPlayer({
               {captionNow.text}
             </div>
           )}
-          {!running && (
-            <button
-              type="button"
-              onClick={play}
-              className="absolute inset-0 flex items-center justify-center text-white"
-            >
-              <span className="rounded-full bg-white/20 px-6 py-3 text-lg backdrop-blur hover:bg-white/30">
-                {time == null ? "▶ Play preview" : "↻ Play again"}
-              </span>
-            </button>
+          {countdown != null ? (
+            <div className="absolute inset-0 flex items-center justify-center text-7xl font-bold text-white">
+              {countdown}
+            </div>
+          ) : saving ? (
+            <div className="absolute inset-0 flex items-center justify-center text-lg text-white">Saving the voiceover…</div>
+          ) : (
+            !running && (
+              <button
+                type="button"
+                onClick={recordVoice ? startRecording : play}
+                className="absolute inset-0 flex items-center justify-center text-white"
+              >
+                <span className="rounded-full bg-white/20 px-6 py-3 text-lg backdrop-blur hover:bg-white/30">
+                  {recordVoice ? "● Start recording" : time == null ? "▶ Play preview" : "↻ Play again"}
+                </span>
+              </button>
+            )
+          )}
+          {recorder.recording && running && (
+            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-sm text-white">
+              <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" /> Recording
+            </div>
           )}
         </div>
 
@@ -215,15 +283,29 @@ export default function VideoPreviewPlayer({
             {current != null ? `Clip ${current + 1} of ${clips.length} · ` : ""}
             {Math.min(time ?? 0, total).toFixed(0)}s / {total.toFixed(0)}s
           </span>
+          {recorder.recording && running && (
+            <button
+              type="button"
+              onClick={() => setTime(total)}
+              className="rounded-md bg-red-600 px-3 py-1 font-medium hover:bg-red-500"
+            >
+              Stop
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
             className="rounded-md border border-white/40 px-3 py-1 hover:bg-white/10"
           >
-            Close
+            {recorder.recording ? "Cancel" : "Close"}
           </button>
         </div>
-        <p className="text-xs text-white/60">A preview on the render&apos;s timing — the render itself is exact to the frame.</p>
+        {recordError && <p className="text-sm text-red-300">{recordError}</p>}
+        <p className="text-xs text-white/60">
+          {recordVoice
+            ? "The video plays silently while you speak; recording stops at the end, or press Stop. It replaces any voiceover and starts at 0s."
+            : "A preview on the render's timing — the render itself is exact to the frame."}
+        </p>
         {music && <audio ref={audioRef} src={music.url} preload="auto" />}
         {voice && <audio ref={voiceRef} src={voice.url} preload="auto" />}
       </div>
