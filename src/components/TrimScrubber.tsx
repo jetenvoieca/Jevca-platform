@@ -1,16 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useVideoStills } from "@/lib/useVideoStills";
 
 // The stills either side of the playhead: how far before and after it.
-const NEARBY: { offset: number; label: string }[] = [
+const BEFORE = [
+  { offset: -1.5, label: "1½s before" },
   { offset: -1, label: "1s before" },
   { offset: -0.5, label: "½s before" },
+];
+const AFTER = [
   { offset: 0.5, label: "½s after" },
   { offset: 1, label: "1s after" },
+  { offset: 1.5, label: "1½s after" },
 ];
-// The earliest still: a frame at exactly 0 often doesn't paint.
-const FIRST_FRAME = 0.05;
 
 type Mode = "trim" | "mark";
 
@@ -132,9 +135,15 @@ export default function TrimScrubber({
     if (videoRef.current) videoRef.current.currentTime = t;
   };
 
-  // The stills either side of where the video is, while it's still.
-  const nearbyTime = (offset: number): number | null =>
-    isPlaying || duration == null ? null : Math.min(duration, Math.max(FIRST_FRAME, playhead + offset));
+  // The stills either side of where the video is.
+  const nearby = [...BEFORE, ...AFTER];
+  const { videoRef: stillsVideoRef, stills } = useVideoStills(
+    duration,
+    nearby.map((n) => playhead + n.offset),
+  );
+  const stillFor = (n: (typeof nearby)[number]) => (
+    <Still key={n.offset} canvas={stills[nearby.indexOf(n)]} aspectRatio={aspectRatio} label={n.label} />
+  );
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -181,15 +190,7 @@ export default function TrimScrubber({
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-center gap-3">
-        {NEARBY.filter((n) => n.offset < 0).map((n) => (
-          <FrameAt
-            key={n.offset}
-            src={videoUrl}
-            time={nearbyTime(n.offset)}
-            aspectRatio={aspectRatio}
-            label={n.label}
-          />
-        ))}
+        {BEFORE.map(stillFor)}
         <div className="relative h-64 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
           <video
             ref={videoRef}
@@ -201,15 +202,16 @@ export default function TrimScrubber({
           />
           {overlay}
         </div>
-        {NEARBY.filter((n) => n.offset > 0).map((n) => (
-          <FrameAt
-            key={n.offset}
-            src={videoUrl}
-            time={nearbyTime(n.offset)}
-            aspectRatio={aspectRatio}
-            label={n.label}
-          />
-        ))}
+        {AFTER.map(stillFor)}
+        {/* The hidden copy the stills are made from. */}
+        <video
+          ref={stillsVideoRef}
+          src={videoUrl}
+          muted
+          playsInline
+          preload="auto"
+          className="pointer-events-none absolute h-px w-px opacity-0"
+        />
       </div>
 
       {duration == null ? (
@@ -353,56 +355,29 @@ function formatTime(seconds: number): string {
   return `${m}:${s.padStart(4, "0")}`;
 }
 
-// A small still of the video at `time` (2026-10-17): the stills either
-// side of the playhead. iPad Safari paints a seeked frame only once the
-// video has played, so it's played and paused once first.
-function FrameAt({
-  src,
-  time,
+// A still beside the video: a kept frame drawn onto a canvas, cropped
+// to the video's shape. Until its frame is made it keeps the last one.
+function Still({
+  canvas,
   aspectRatio,
   label,
 }: {
-  src: string;
-  time: number | null;
+  canvas: HTMLCanvasElement | null;
   aspectRatio: string;
   label: string;
 }) {
-  const ref = useRef<HTMLVideoElement>(null);
-  const primed = useRef(false);
-
+  const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
-    const video = ref.current;
-    if (!video || time == null) return;
-    const seek = () => {
-      try {
-        video.currentTime = time;
-      } catch {
-        // Not seekable yet — the next change tries again.
-      }
-    };
-    const show = () => {
-      if (primed.current) return seek();
-      primed.current = true;
-      video
-        .play()
-        .then(() => {
-          video.pause();
-          seek();
-        })
-        .catch(seek);
-    };
-    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
-      show();
-      return;
-    }
-    video.addEventListener("loadedmetadata", show, { once: true });
-    return () => video.removeEventListener("loadedmetadata", show);
-  }, [time]);
-
+    const target = ref.current;
+    if (!target || !canvas) return;
+    target.width = canvas.width;
+    target.height = canvas.height;
+    target.getContext("2d")?.drawImage(canvas, 0, 0);
+  }, [canvas]);
   return (
-    <div className={`flex flex-col items-center gap-1 ${time == null ? "opacity-30" : "opacity-80"}`}>
-      <div className="h-24 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
-        <video ref={ref} src={src} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+    <div className="flex flex-col items-center gap-1 opacity-80">
+      <div className="h-20 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
+        <canvas ref={ref} className="h-full w-full object-cover" />
       </div>
       <span className="text-xs text-neutral-400">{label}</span>
     </div>
