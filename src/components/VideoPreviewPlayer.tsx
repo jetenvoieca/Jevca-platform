@@ -6,7 +6,9 @@ import {
   clipFadeIns,
   clipLength,
   clipStarts,
+  musicVolumeChanges,
   totalTimelineSeconds,
+  volumeAt,
   videoSize,
   type TimelineClip,
   type VideoShape,
@@ -18,11 +20,11 @@ import { stickerPreviewStyle, type StickerRow } from "@/lib/stickers";
 // the clips in order at the video's shape (photos for their seconds,
 // videos between their trim points), each fading in over the one before
 // across the same overlap as the render, with their stickers, and the music
-// under it fading in and out. Close to the render, not exact to the frame.
+// under it fading in and out — dipping under the voiceover, which plays
+// from its start. Close to the render, not exact to the frame.
 
 type PreviewClip = TimelineClip & { image: { url: string; kind: "PHOTO" | "VIDEO" } };
 
-const FADE_SECONDS = 1;
 const TICK_MS = 50;
 
 function FadeIn({ seconds, children }: { seconds: number; children: React.ReactNode }) {
@@ -47,6 +49,7 @@ export default function VideoPreviewPlayer({
   music,
   muteClips,
   fadeSeconds,
+  voice,
   stickerLibrary,
   onClose,
 }: {
@@ -54,6 +57,7 @@ export default function VideoPreviewPlayer({
   shape: VideoShape;
   // How long one clip takes to fade into the next (0: a cut).
   fadeSeconds: number;
+  voice: { url: string; start: number; durationSeconds: number; musicUnderVoice: number } | null;
   music: { url: string; volume: number } | null;
   muteClips: boolean;
   stickerLibrary: StickerRow[];
@@ -66,16 +70,30 @@ export default function VideoPreviewPlayer({
   // Seconds into the video; null before it starts.
   const [time, setTime] = useState<number | null>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const voiceRef = useRef<HTMLAudioElement>(null);
+  const voiceStarted = useRef(false);
   const startedAt = useRef(0);
   const backdrop = useBackdropClose(onClose);
   const stickers = new Map(stickerLibrary.map((s) => [s.id, s]));
   const musicVolume = music?.volume ?? 0;
+  // The music's volume through the video — the same changes as the render.
+  const voiceEnd = voice ? Math.min(total, voice.start + voice.durationSeconds) : 0;
+  const musicChanges = musicVolumeChanges(
+    musicVolume,
+    total,
+    voice && voice.start < total ? { start: voice.start, end: voiceEnd, level: voice.musicUnderVoice } : null
+  );
 
   const running = time != null && time < total;
 
   const play = () => {
     startedAt.current = performance.now();
     setTime(0);
+    voiceStarted.current = false;
+    if (voiceRef.current) {
+      voiceRef.current.pause();
+      voiceRef.current.currentTime = 0;
+    }
     const audio = audioRef.current;
     if (audio) {
       audio.currentTime = 0;
@@ -91,15 +109,33 @@ export default function VideoPreviewPlayer({
       const t = (performance.now() - startedAt.current) / 1000;
       setTime(t);
       const audio = audioRef.current;
-      if (!audio) return;
-      if (t >= total) audio.pause();
-      else audio.volume = musicVolume * Math.max(0, Math.min(1, t / FADE_SECONDS, (total - t) / FADE_SECONDS));
+      if (audio) {
+        if (t >= total) audio.pause();
+        else audio.volume = Math.max(0, Math.min(1, volumeAt(musicChanges, t)));
+      }
+      const voiceAudio = voiceRef.current;
+      if (voiceAudio && voice) {
+        if (!voiceStarted.current && t >= voice.start && t < voiceEnd) {
+          voiceStarted.current = true;
+          voiceAudio.currentTime = t - voice.start;
+          voiceAudio.play().catch(() => {});
+        }
+        if (t >= voiceEnd) voiceAudio.pause();
+      }
     }, TICK_MS);
     return () => clearInterval(timer);
-  }, [running, total, musicVolume]);
+    // musicChanges and voice follow from these.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [running, total, musicVolume, voice?.start, voice?.musicUnderVoice, voiceEnd]);
 
   // Closing stops everything.
-  useEffect(() => () => audioRef.current?.pause(), []);
+  useEffect(
+    () => () => {
+      audioRef.current?.pause();
+      voiceRef.current?.pause();
+    },
+    []
+  );
 
   // The clips on screen now — two while one fades in over the other.
   const showing = running
@@ -170,6 +206,7 @@ export default function VideoPreviewPlayer({
         </div>
         <p className="text-xs text-white/60">A preview on the render&apos;s timing — the render itself is exact to the frame.</p>
         {music && <audio ref={audioRef} src={music.url} preload="auto" />}
+        {voice && <audio ref={voiceRef} src={voice.url} preload="auto" />}
       </div>
     </div>
   );

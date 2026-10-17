@@ -54,13 +54,68 @@ export function isVideoShape(value: unknown): value is VideoShape {
 // silences the clips' own sound.
 export type TimelineMusic = { trackId: string; volume: number };
 
+// A voiceover (2026-10-17): recorded in the browser or uploaded, saved in
+// R2 at `key` (under {artistId}/voice/), playing from `start` seconds into
+// the video. While it plays the music drops to `musicUnderVoice` of its
+// volume (0–1).
+export type TimelineVoice = {
+  key: string;
+  durationSeconds: number;
+  start: number;
+  musicUnderVoice: number;
+};
+
 export type Timeline = {
   clips: TimelineClip[];
   shape?: VideoShape;
   music?: TimelineMusic;
   muteClips?: boolean;
   fade?: FadeSpeed;
+  voice?: TimelineVoice;
 };
+
+// The music's volume through the video (2026-10-17), as Shotstack volume
+// changes ({from, to, start, length}, back to back): fading in over the
+// first second, dipping under the voiceover (half a second down, half a
+// second back up), and fading out over the last second. The render uses
+// these as they are; the preview reads them with volumeAt.
+export type VolumeChange = { from: number; to: number; start: number; length: number };
+
+const MUSIC_FADE_SECONDS = 1;
+const DUCK_SECONDS = 0.5;
+
+export function musicVolumeChanges(
+  volume: number,
+  totalSeconds: number,
+  voice: { start: number; end: number; level: number } | null
+): VolumeChange[] {
+  // Points in time and the volume there, joined by straight changes.
+  const fade = Math.min(MUSIC_FADE_SECONDS, totalSeconds / 2);
+  const points: [number, number][] = [[0, 0], [fade, volume]];
+  if (voice && voice.end > voice.start) {
+    const low = volume * voice.level;
+    const downAt = Math.max(fade, voice.start - DUCK_SECONDS);
+    const upEnd = Math.min(totalSeconds - fade, voice.end + DUCK_SECONDS);
+    if (upEnd > downAt) {
+      points.push([downAt, volume], [Math.min(voice.start, upEnd), low], [Math.max(downAt, voice.end), low], [upEnd, volume]);
+    }
+  }
+  points.push([totalSeconds - fade, volume], [totalSeconds, 0]);
+  const changes: VolumeChange[] = [];
+  for (let i = 1; i < points.length; i++) {
+    const [t0, v0] = points[i - 1];
+    const [t1, v1] = points[i];
+    if (t1 > t0) changes.push({ from: v0, to: v1, start: t0, length: t1 - t0 });
+  }
+  return changes;
+}
+
+export function volumeAt(changes: VolumeChange[], t: number): number {
+  for (const c of changes) {
+    if (t >= c.start && t < c.start + c.length) return c.from + ((c.to - c.from) * (t - c.start)) / c.length;
+  }
+  return 0;
+}
 
 export const emptyTimeline: Timeline = { clips: [] };
 

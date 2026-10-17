@@ -16,7 +16,9 @@ import {
   setClipStickers,
   setAllPhotoDurations,
   setTimelineFade,
+  setTimelineVoice,
 } from "@/lib/actions/videoEditor";
+import VoiceoverControl from "@/components/VoiceoverControl";
 import ClipStickersEditor from "@/components/ClipStickersEditor";
 import VideoPreviewPlayer from "@/components/VideoPreviewPlayer";
 import type { ClipSticker, StickerRow } from "@/lib/stickers";
@@ -33,6 +35,7 @@ import {
   type FadeSpeed,
   type TimelineClip,
   type TimelineMusic,
+  type TimelineVoice,
   type VideoShape,
 } from "@/lib/videoTimeline";
 import type { MusicTrackRow } from "@/lib/musicTracks";
@@ -72,6 +75,7 @@ export default function VideoEditorView({
   initialMusic,
   initialMuteClips,
   initialFade,
+  initialVoice,
   musicTracks,
   stickerLibrary,
   renderStatus: savedRenderStatus,
@@ -85,6 +89,7 @@ export default function VideoEditorView({
   initialMusic: TimelineMusic | null;
   initialMuteClips: boolean;
   initialFade: FadeSpeed;
+  initialVoice: TimelineVoice | null;
   // The artist's Music library (Media Catalogue → Music).
   musicTracks: MusicTrackRow[];
   // The artist's Stickers library (Media Catalogue → Stickers).
@@ -125,6 +130,23 @@ export default function VideoEditorView({
     musicSaveRef.current = setTimeout(() => setTimelineMusic(siteId, renderId, nextMusic, nextMute), 400);
   };
   const musicTrack = music ? musicTracks.find((t) => t.id === music.trackId) ?? null : null;
+
+  // The voiceover (2026-10-17): a new recording saves at once; its start
+  // and the music level save shortly after changing.
+  const [voice, setVoice] = useState<TimelineVoice | null>(initialVoice);
+  const voiceSaveRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const changeVoice = (next: TimelineVoice | null, save: "now" | "soon") => {
+    setVoice(next);
+    if (voiceSaveRef.current) clearTimeout(voiceSaveRef.current);
+    if (save === "now") setTimelineVoice(siteId, renderId, next);
+    else voiceSaveRef.current = setTimeout(() => setTimelineVoice(siteId, renderId, next), 400);
+  };
+  const initialVoiceKey = JSON.stringify(initialVoice);
+  useEffect(() => {
+    setVoice(initialVoice);
+    // Only when what's saved actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialVoiceKey]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
@@ -420,6 +442,13 @@ export default function VideoEditorView({
                   Mute the clips&apos; own sound
                 </label>
               </div>
+              <VoiceoverControl
+                artistId={artistId}
+                voice={voice}
+                totalSeconds={totalSeconds}
+                hasMusic={!!music}
+                onChange={changeVoice}
+              />
               </>
             )}
           </div>
@@ -673,6 +702,7 @@ export default function VideoEditorView({
           music={musicTrack && music ? { url: musicTrack.url, volume: music.volume } : null}
           muteClips={muteClips}
           fadeSeconds={fadeSeconds}
+          voice={voice ? { ...voice, url: `/api/media/${voice.key}` } : null}
           stickerLibrary={stickerLibrary}
           onClose={() => setPreviewing(false)}
         />

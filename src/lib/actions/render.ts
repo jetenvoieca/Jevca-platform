@@ -2,7 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { readTimeline, videoSize, fadeSpeedOf, totalTimelineSeconds } from "@/lib/videoTimeline";
+import { readTimeline, videoSize, fadeSpeedOf, musicVolumeChanges, totalTimelineSeconds } from "@/lib/videoTimeline";
 import { uploadToR2, deleteFromR2, publicMediaUrl, storedFileUrl } from "@/lib/r2";
 import { randomUUID } from "crypto";
 import sharp from "sharp";
@@ -112,9 +112,14 @@ async function prepareImageAsset(
   return { url: toAbsoluteUrl(`/api/media/${key}`), key };
 }
 
-// Shotstack's soundtrack — the music under the whole video, fading in
-// and out (2026-10-16).
-type Soundtrack = { src: string; effect: "fadeInFadeOut"; volume: number };
+// The sound under the video (2026-10-16/17): the music track at its
+// volume, and the voiceover from its start; the music fades in and out
+// and dips under the voice (musicVolumeChanges).
+type Sound = {
+  music: { src: string; volume: number } | null;
+  voice: { src: string; start: number; durationSeconds: number; musicUnderVoice: number } | null;
+  muteClips: boolean;
+};
 
 // A sticker made ready for Shotstack: resized to its width in the video,
 // and where it sits.
@@ -169,7 +174,7 @@ function buildEditJson(
   clips: ClipWithImage[],
   callbackUrl: string,
   size: OutputSize,
-  sound: { soundtrack: Soundtrack | null; muteClips: boolean },
+  sound: Sound,
   fadeSeconds: number
 ) {
   const lengths = clips.map(clipLength);
@@ -223,13 +228,45 @@ function buildEditJson(
     };
   });
 
+  // The video's length is where the last clip ends.
+  const total = cursor;
+  const voice = sound.voice && sound.voice.start < total ? sound.voice : null;
+  const voiceLength = voice ? Math.min(voice.durationSeconds, total - voice.start) : 0;
+  const audioTracks = [
+    ...(sound.music
+      ? [
+          {
+            clips: [
+              {
+                asset: {
+                  type: "audio" as const,
+                  src: sound.music.src,
+                  volume: musicVolumeChanges(
+                    sound.music.volume,
+                    total,
+                    voice ? { start: voice.start, end: voice.start + voiceLength, level: voice.musicUnderVoice } : null
+                  ),
+                },
+                start: 0,
+                length: total,
+              },
+            ],
+          },
+        ]
+      : []),
+    ...(voice
+      ? [{ clips: [{ asset: { type: "audio" as const, src: voice.src, volume: 1 }, start: voice.start, length: voiceLength }] }]
+      : []),
+  ];
+
   return {
     timeline: {
-      ...(sound.soundtrack ? { soundtrack: sound.soundtrack } : {}),
-      // The first track is the top one: stickers, then the clips, last first.
+      // The first track is the top one: stickers, then the clips, last
+      // first; the sound tracks below them.
       tracks: [
         ...(stickerClips.length > 0 ? [{ clips: stickerClips }] : []),
         ...shotClips.map((clip) => ({ clips: [clip] })).reverse(),
+        ...audioTracks,
       ],
     },
     // A still frame 1 second in (2026-10-16), saved as the video's
@@ -342,26 +379,31 @@ export async function renderVideo(
     }
   }
 
-  let soundtrack: Soundtrack | null = null;
+  let music: Sound["music"] = null;
   if (timeline.music) {
     const track = await db.musicTrack.findFirst({
       where: { id: timeline.music.trackId, artistId: draft.artistId },
       select: { key: true },
     });
-    const src = track ? toAbsoluteUrl(`/api/media/${track.key}`) : null;
-    if (!src) {
+    if (!track) {
       await Promise.all(tempKeys.map((k) => deleteFromR2(k).catch(() => {})));
       return { ok: false, error: "The chosen music has been deleted — choose another track, or None." };
     }
-    soundtrack = { src, effect: "fadeInFadeOut", volume: timeline.music.volume };
+    music = { src: toAbsoluteUrl(`/api/media/${track.key}`), volume: timeline.music.volume };
   }
+  const voice: Sound["voice"] = timeline.voice
+    ? { ...timeline.voice, src: toAbsoluteUrl(`/api/media/${timeline.voice.key}`) }
+    : null;
 
   const env = activeEnv();
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
-  const editJson = buildEditJson(clipsWithImages, callbackUrl, size, {
-    soundtrack,
-    muteClips: timeline.muteClips === true,
-  }, fadeSpeedOf(timeline.fade).seconds);
+  const editJson = buildEditJson(
+    clipsWithImages,
+    callbackUrl,
+    size,
+    { music, voice, muteClips: timeline.muteClips === true },
+    fadeSpeedOf(timeline.fade).seconds
+  );
 
   await db.videoRender.update({
     where: { id: renderId },

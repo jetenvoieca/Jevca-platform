@@ -17,9 +17,12 @@ import {
   type TimelineClip,
   type FadeSpeed,
   type TimelineMusic,
+  type TimelineVoice,
   type VideoShape,
 } from "@/lib/videoTimeline";
 import { hasUnresolvedRender } from "./render";
+import { deleteFromR2, getPresignedUploadUrl } from "@/lib/r2";
+import { MUSIC_TYPES } from "@/lib/musicTracks";
 
 async function getOrCreateDraft(artistId: string) {
   const existing = await db.videoRender.findFirst({
@@ -67,9 +70,48 @@ export async function getDraftTimeline(artistId: string) {
     clips,
     shape: timeline.shape ?? "square",
     music: timeline.music ?? null,
+    voice: timeline.voice ?? null,
     muteClips: timeline.muteClips ?? false,
     fade: timeline.fade ?? "normal",
   };
+}
+
+// The voiceover (2026-10-17). Uploads go straight from the browser to R2
+// (a recording is made into a WAV in the browser first): requestVoiceUpload,
+// then setTimelineVoice with what was uploaded.
+const VOICE_TYPES = ["audio/wav", ...MUSIC_TYPES];
+
+export async function requestVoiceUpload(
+  artistId: string,
+  contentType: string
+): Promise<{ uploadUrl: string; key: string } | { error: string }> {
+  if (!VOICE_TYPES.includes(contentType)) return { error: "A voiceover must be a WAV, MP3 or M4A file." };
+  const extension = contentType === "audio/mpeg" ? "mp3" : contentType.includes("wav") ? "wav" : "m4a";
+  const key = `${artistId}/voice/${randomUUID()}.${extension}`;
+  return { uploadUrl: await getPresignedUploadUrl(key, contentType), key };
+}
+
+// Sets (or, with null, removes) the voiceover; a replaced recording's
+// file is deleted.
+export async function setTimelineVoice(siteId: string, renderId: string, voice: TimelineVoice | null): Promise<void> {
+  const draft = await db.videoRender.findUnique({ where: { id: renderId } });
+  if (!draft || draft.status !== "DRAFT") return;
+  const timeline = readTimeline(draft.timeline);
+  if (voice && !voice.key.startsWith(`${draft.artistId}/voice/`)) return;
+  const previousKey = timeline.voice?.key;
+  if (voice) {
+    timeline.voice = {
+      key: voice.key,
+      durationSeconds: Math.max(0, Number(voice.durationSeconds) || 0),
+      start: Math.max(0, Number(voice.start) || 0),
+      musicUnderVoice: Math.min(1, Math.max(0, Number(voice.musicUnderVoice) || 0)),
+    };
+  } else {
+    delete timeline.voice;
+  }
+  await saveTimeline(renderId, timeline);
+  if (previousKey && previousKey !== voice?.key) await deleteFromR2(previousKey).catch(() => {});
+  revalidatePath(`/sites/${siteId}/bucket`);
 }
 
 // How clips change from one to the next (2026-10-16).

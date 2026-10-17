@@ -21,7 +21,7 @@ export default async function BucketPage({
   // to feed MediaDetailPanel's "Related Artwork" dropdown, which was
   // removed (see MediaDetailPanel.tsx and updateMedia's own note for the
   // full reasoning). Nothing else on this page ever used it.
-  const [{ renderId, clips, shape, music, muteClips, fade }, renderStatus, tagPresets, musicTracks, stickerLibrary] =
+  const [{ renderId, clips, shape, music, muteClips, fade, voice }, renderStatus, tagPresets, musicTracks, stickerLibrary] =
     await Promise.all([
       getDraftTimeline(artistId),
       getRenderStatus(artistId),
@@ -40,6 +40,7 @@ export default async function BucketPage({
       initialMusic={music}
       initialMuteClips={muteClips}
       initialFade={fade}
+      initialVoice={voice}
       musicTracks={musicTracks}
       stickerLibrary={stickerLibrary}
       renderStatus={renderStatus}
