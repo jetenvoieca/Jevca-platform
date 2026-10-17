@@ -248,17 +248,6 @@ export default function VideoEditorView({
   const selected = clips.find((c) => c.id === selectedId) ?? null;
   // The selected clip shows at the video's shape, with its stickers.
   const frameAspect = `${videoSize(shape).width} / ${videoSize(shape).height}`;
-  // Either side of it (2026-10-17): the end of the clip before and the
-  // start of the clip after, to judge how they meet.
-  const selectedIndex = selected ? clips.indexOf(selected) : -1;
-  const previousClip = selectedIndex > 0 ? clips[selectedIndex - 1] : null;
-  const nextClip = selectedIndex >= 0 ? (clips[selectedIndex + 1] ?? null) : null;
-  const neighbourBefore = previousClip && (
-    <NeighbourFrame clip={previousClip} edge="end" aspectRatio={frameAspect} label="Before" />
-  );
-  const neighbourAfter = nextClip && (
-    <NeighbourFrame clip={nextClip} edge="start" aspectRatio={frameAspect} label="After" />
-  );
   const selectedStickers = (selected?.stickers ?? []).map((s) => {
     const sticker = stickerLibrary.find((l) => l.id === s.stickerId);
     return sticker ? <img key={s.id} src={sticker.url} alt="" style={stickerPreviewStyle(s.position, s.size)} /> : null;
@@ -702,16 +691,12 @@ export default function VideoEditorView({
               <div className="rounded-lg border border-neutral-200 bg-white p-4">
                 {/* As it will show in the video: at the video's shape, with its stickers. */}
                 {selected.kind === "PHOTO" ? (
-                  <div className="mb-4 flex items-center justify-center gap-4">
-                    {neighbourBefore}
-                    <div
-                      className="relative h-64 overflow-hidden rounded-md bg-black"
-                      style={{ aspectRatio: frameAspect }}
-                    >
-                      <img src={selected.image.url} alt="" className="h-full w-full object-cover" />
-                      {selectedStickers}
-                    </div>
-                    {neighbourAfter}
+                  <div
+                    className="relative mx-auto mb-4 h-64 overflow-hidden rounded-md bg-black"
+                    style={{ aspectRatio: frameAspect }}
+                  >
+                    <img src={selected.image.url} alt="" className="h-full w-full object-cover" />
+                    {selectedStickers}
                   </div>
                 ) : (
                   <div className="mb-4">
@@ -720,8 +705,6 @@ export default function VideoEditorView({
                       videoUrl={selected.image.url}
                       aspectRatio={frameAspect}
                       overlay={selectedStickers}
-                      before={neighbourBefore}
-                      after={neighbourAfter}
                       trimIn={selected.trimIn ?? 0}
                       trimOut={selected.trimOut ?? selected.sourceDuration ?? 0}
                       sourceDuration={selected.sourceDuration ?? null}
@@ -846,35 +829,6 @@ function CentrePanel({ title, onClose, children }: { title: string; onClose?: ()
       </div>
       <div className="p-4">{children}</div>
     </section>
-  );
-}
-
-// The end (or start) of a neighbouring clip, small and faded, at the
-// video's shape: a photo, or a video's frame at its trim point.
-function NeighbourFrame({
-  clip,
-  edge,
-  aspectRatio,
-  label,
-}: {
-  clip: Clip;
-  edge: "start" | "end";
-  aspectRatio: string;
-  label: string;
-}) {
-  const className = "h-full w-full object-cover";
-  const at = edge === "start" ? (clip.trimIn ?? 0) : Math.max(0, (clip.trimOut ?? 0) - 0.05);
-  return (
-    <div className="flex flex-col items-center gap-1 opacity-70">
-      <div className="h-32 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
-        {clip.kind === "PHOTO" ? (
-          <img src={clip.image.url} alt="" className={className} />
-        ) : (
-          <VideoThumb key={at} src={clip.image.url} at={at} className={className} />
-        )}
-      </div>
-      <span className="text-xs text-neutral-400">{label}</span>
-    </div>
   );
 }
 

@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 
+const NEARBY_SECONDS = 0.5;
+
 type Mode = "trim" | "mark";
 
 export default function TrimScrubber({
   videoUrl,
   aspectRatio,
   overlay,
-  before,
-  after,
   trimIn,
   trimOut,
   sourceDuration,
@@ -23,9 +23,6 @@ export default function TrimScrubber({
   // on top.
   aspectRatio: string;
   overlay?: ReactNode;
-  // Either side of it: how the clips before and after meet it.
-  before?: ReactNode;
-  after?: ReactNode;
   trimIn: number;
   trimOut: number;
   sourceDuration: number | null;
@@ -92,14 +89,19 @@ export default function TrimScrubber({
     const handleMove = (e: PointerEvent) => {
       const t = timeFromClientX(e.clientX);
       if (dragging === "in") {
-        commitTrim(Math.min(t, localOut - 0.1), localOut);
+        const next = Math.min(t, localOut - 0.1);
+        commitTrim(next, localOut);
+        showAt(next);
       } else if (dragging === "out") {
-        commitTrim(localIn, Math.max(t, localIn + 0.1));
+        const next = Math.max(t, localIn + 0.1);
+        commitTrim(localIn, next);
+        showAt(next);
       } else if (dragging === "playhead") {
-        setPlayhead(t);
-        if (videoRef.current) videoRef.current.currentTime = t;
+        showAt(t);
       } else if (markDragging && mark) {
-        setMark({ start: mark.start, end: Math.max(mark.start + 0.1, t) });
+        const end = Math.max(mark.start + 0.1, t);
+        setMark({ start: mark.start, end });
+        showAt(end);
       }
     };
     const handleUp = () => {
@@ -114,6 +116,16 @@ export default function TrimScrubber({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dragging, markDragging, localIn, localOut, mark, duration]);
+
+  // The video shows the point being set (2026-10-17): the playhead, a
+  // trim handle, or the end of the section being marked.
+  const showAt = (t: number) => {
+    setPlayhead(t);
+    if (videoRef.current) videoRef.current.currentTime = t;
+  };
+
+  // The frames ½s either side of where the video is, while it's still.
+  const nearby = isPlaying || duration == null ? null : playhead;
 
   const togglePlay = () => {
     const video = videoRef.current;
@@ -145,6 +157,7 @@ export default function TrimScrubber({
     const clamped = Math.min(Math.max(t, localIn), localOut);
     setMark({ start: clamped, end: clamped });
     setMarkDragging(true);
+    showAt(clamped);
   };
 
   const confirmSplit = () => {
@@ -159,7 +172,12 @@ export default function TrimScrubber({
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-4">
       <div className="mb-3 flex items-center justify-center gap-4">
-        {before}
+        <FrameAt
+          src={videoUrl}
+          time={nearby == null ? null : Math.max(0, nearby - NEARBY_SECONDS)}
+          aspectRatio={aspectRatio}
+          label="½s before"
+        />
         <div className="relative h-64 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
           <video
             ref={videoRef}
@@ -171,7 +189,12 @@ export default function TrimScrubber({
           />
           {overlay}
         </div>
-        {after}
+        <FrameAt
+          src={videoUrl}
+          time={nearby == null || duration == null ? null : Math.min(duration, nearby + NEARBY_SECONDS)}
+          aspectRatio={aspectRatio}
+          label="½s after"
+        />
       </div>
 
       {duration == null ? (
@@ -313,4 +336,60 @@ function formatTime(seconds: number): string {
   const m = Math.floor(seconds / 60);
   const s = (seconds % 60).toFixed(1);
   return `${m}:${s.padStart(4, "0")}`;
+}
+
+// A small still of the video at `time` (2026-10-17): the frames either
+// side of the playhead. iPad Safari paints a seeked frame only once the
+// video has played, so it's played and paused once first.
+function FrameAt({
+  src,
+  time,
+  aspectRatio,
+  label,
+}: {
+  src: string;
+  time: number | null;
+  aspectRatio: string;
+  label: string;
+}) {
+  const ref = useRef<HTMLVideoElement>(null);
+  const primed = useRef(false);
+
+  useEffect(() => {
+    const video = ref.current;
+    if (!video || time == null) return;
+    const seek = () => {
+      try {
+        video.currentTime = time;
+      } catch {
+        // Not seekable yet — the next change tries again.
+      }
+    };
+    const show = () => {
+      if (primed.current) return seek();
+      primed.current = true;
+      video
+        .play()
+        .then(() => {
+          video.pause();
+          seek();
+        })
+        .catch(seek);
+    };
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      show();
+      return;
+    }
+    video.addEventListener("loadedmetadata", show, { once: true });
+    return () => video.removeEventListener("loadedmetadata", show);
+  }, [time]);
+
+  return (
+    <div className={`flex flex-col items-center gap-1 ${time == null ? "opacity-30" : "opacity-80"}`}>
+      <div className="h-32 overflow-hidden rounded-md bg-black" style={{ aspectRatio }}>
+        <video ref={ref} src={src} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+      </div>
+      <span className="text-xs text-neutral-400">{label}</span>
+    </div>
+  );
 }

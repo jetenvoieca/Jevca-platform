@@ -11,10 +11,13 @@ import { useEffect, useRef } from "react";
 // a browser will render it black by default, so a tiny nudge to
 // currentTime once metadata loads is enough to make the real first frame
 // visible, with no server round-trip.
-//
-// `at` (2026-10-17, Video Edit's neighbouring clips): show the frame at
-// that many seconds instead of the first.
-export default function VideoThumb({ src, className, at = 0.1 }: { src: string; className?: string; at?: number }) {
+export default function VideoThumb({
+  src,
+  className,
+}: {
+  src: string;
+  className?: string;
+}) {
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -23,7 +26,7 @@ export default function VideoThumb({ src, className, at = 0.1 }: { src: string; 
 
     const seekToFirstFrame = () => {
       try {
-        video.currentTime = at;
+        video.currentTime = 0.1;
       } catch {
         // Some browsers can briefly disallow seeking immediately on
         // metadata load — harmless to skip, worst case it stays black.
@@ -45,12 +48,7 @@ export default function VideoThumb({ src, className, at = 0.1 }: { src: string; 
     const showFirstFrame = () => {
       const playAttempt = video.play();
       if (playAttempt && typeof playAttempt.then === "function") {
-        playAttempt
-          .then(() => {
-            video.pause();
-            seekToFirstFrame();
-          })
-          .catch(seekToFirstFrame);
+        playAttempt.then(() => video.pause()).catch(seekToFirstFrame);
       } else {
         seekToFirstFrame();
       }
@@ -65,7 +63,16 @@ export default function VideoThumb({ src, className, at = 0.1 }: { src: string; 
     }
     video.addEventListener("loadedmetadata", showFirstFrame);
     return () => video.removeEventListener("loadedmetadata", showFirstFrame);
-  }, [at]);
+  }, []);
 
-  return <video ref={videoRef} src={src} muted playsInline preload="metadata" className={className} />;
+  return (
+    <video
+      ref={videoRef}
+      src={src}
+      muted
+      playsInline
+      preload="metadata"
+      className={className}
+    />
+  );
 }
