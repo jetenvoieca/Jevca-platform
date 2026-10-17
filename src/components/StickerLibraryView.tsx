@@ -10,8 +10,8 @@ import type { StickerRow } from "@/lib/stickers";
 // stickers for Video Edit — PNGs, usually with a see-through background
 // (shown here on a checked background so that's visible). Upload several
 // at once, rename, delete. Any picture the browser can open can be chosen
-// (2026-10-17 — a PNG with an unusual file name couldn't be picked); one
-// that isn't a PNG is made into one here first.
+// (2026-10-17 — a PNG with an unusual file name couldn't be picked); it's
+// made a PNG and trimmed of see-through edges here first (asSticker).
 
 // A checked background, to show see-through parts.
 export const CHECKERED_STYLE = {
@@ -22,11 +22,14 @@ export const CHECKERED_STYLE = {
   backgroundPosition: "0 0,0 8px,8px -8px,-8px 0",
 };
 
-// The picture as a PNG: as it is if it already is one, otherwise drawn
-// onto a canvas and saved as one (see-through parts are kept).
-async function asPng(file: File): Promise<Blob> {
-  const isPng = file.type === "image/png" || (!file.type && /\.png$/i.test(file.name));
-  if (isPng) return file;
+// The picture ready to be a sticker: a PNG with its see-through edges
+// trimmed off (2026-10-17), so a signature on a big empty canvas becomes
+// just the signature. A PNG with nothing to trim goes up as it is;
+// anything else is drawn onto a canvas and saved as a PNG (see-through
+// parts kept).
+const SEE_THROUGH = 8; // alpha at or below this counts as empty
+
+async function asSticker(file: File): Promise<Blob> {
   const url = URL.createObjectURL(file);
   try {
     const image = new Image();
@@ -34,13 +37,45 @@ async function asPng(file: File): Promise<Blob> {
     await image.decode().catch(() => {
       throw new Error("this browser can't open that picture — save it as a PNG and try again.");
     });
-    const canvas = document.createElement("canvas");
     // A drawing with no size of its own (some SVGs) is made 1000px wide.
-    canvas.width = image.naturalWidth || 1000;
-    canvas.height = image.naturalHeight || 1000;
-    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height);
+    const width = image.naturalWidth || 1000;
+    const height = image.naturalHeight || 1000;
+    const full = document.createElement("canvas");
+    full.width = width;
+    full.height = height;
+    const context = full.getContext("2d");
+    if (!context) throw new Error("couldn't be read.");
+    context.drawImage(image, 0, 0, width, height);
+
+    // The smallest box holding everything that isn't see-through.
+    const { data } = context.getImageData(0, 0, width, height);
+    let top = height,
+      left = width,
+      bottom = -1,
+      right = -1;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        if (data[(y * width + x) * 4 + 3] > SEE_THROUGH) {
+          if (y < top) top = y;
+          if (y > bottom) bottom = y;
+          if (x < left) left = x;
+          if (x > right) right = x;
+        }
+      }
+    }
+    if (bottom < 0) throw new Error("the picture is completely see-through.");
+    const untrimmed = top === 0 && left === 0 && bottom === height - 1 && right === width - 1;
+    const isPng = file.type === "image/png" || (!file.type && /\.png$/i.test(file.name));
+    if (untrimmed && isPng) return file;
+
+    const trimmed = document.createElement("canvas");
+    trimmed.width = right - left + 1;
+    trimmed.height = bottom - top + 1;
+    trimmed
+      .getContext("2d")
+      ?.drawImage(full, left, top, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
     return await new Promise<Blob>((resolve, reject) =>
-      canvas.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("couldn't be made into a PNG."))), "image/png"),
+      trimmed.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("couldn't be made into a PNG."))), "image/png"),
     );
   } finally {
     URL.revokeObjectURL(url);
@@ -69,7 +104,7 @@ export default function StickerLibraryView({
     for (const file of Array.from(files)) {
       setUploading(file.name);
       try {
-        const png = await asPng(file);
+        const png = await asSticker(file);
         const name = file.name.replace(/\.[^.]+$/, "");
         const step = await requestStickerUpload(artistId, `${name}.png`, "image/png");
         if ("error" in step) throw new Error(step.error);
