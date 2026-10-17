@@ -1,11 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type RefObject } from "react";
 import { useRouter } from "next/navigation";
 import { updateMedia, deleteMedia } from "@/lib/actions/mediaCatalogue";
 import { addMediaToBucket } from "@/lib/actions/videoEditor";
-import { nameRenderedVideo } from "@/lib/actions/render";
-import { createReelFromVideo } from "@/lib/actions/socialPosts";
 
 export type MediaDetail = {
   id: string;
@@ -26,8 +24,7 @@ export default function MediaDetailPanel({
   media,
   tagPresets,
   variant = "catalogue",
-  onDiscard,
-  discarding = false,
+  captionRef,
   onClose,
   onArchived,
   onDataChanged,
@@ -35,9 +32,11 @@ export default function MediaDetailPanel({
   siteId: string;
   media: MediaDetail;
   tagPresets: string[];
+  // "pendingRender": a just-rendered video in Video Edit's centre panel
+  // (2026-10-17) — no header; it's saved, posted or discarded from Video
+  // Edit's menu, which reads the Caption through `captionRef`.
   variant?: "catalogue" | "pendingRender";
-  onDiscard?: () => void;
-  discarding?: boolean;
+  captionRef?: RefObject<HTMLInputElement | null>;
   // Optional — when the parent manages selection as client-side state
   // (Media Catalogue, 2026-08-08 perf pass) it passes these to update its
   // own state directly instead of a full-page navigation. Falls back to
@@ -139,9 +138,7 @@ export default function MediaDetailPanel({
               >
                 Delete
               </button>
-              {deleteError && (
-                <p className="w-full text-xs text-red-600">{deleteError}</p>
-              )}
+              {deleteError && <p className="w-full text-xs text-red-600">{deleteError}</p>}
               {/* Modal close (2026-09-12, direct request) — an icon
                   reads as "dismiss this overlay" the way a text link
                   labelled "Close" doesn't, and matches the click-outside
@@ -243,6 +240,7 @@ export default function MediaDetailPanel({
           <input
             type="text"
             name="caption"
+            ref={captionRef}
             defaultValue={media.caption || ""}
             className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
@@ -270,9 +268,7 @@ export default function MediaDetailPanel({
           <label className="mb-1 block text-sm font-medium text-neutral-700">Tags</label>
           <input type="hidden" name="tags" value={tags.join(", ")} />
           {tagPresets.length === 0 ? (
-            <p className="text-xs text-neutral-400">
-              No tags set up yet — add some under Media Catalogue → Settings.
-            </p>
+            <p className="text-xs text-neutral-400">No tags set up yet — add some under Media Catalogue → Settings.</p>
           ) : (
             <div className="space-y-2">
               {/* 2026-08-19, direct request — used to show every preset
@@ -338,57 +334,7 @@ export default function MediaDetailPanel({
           )}
         </div>
 
-        <div className="flex items-center gap-3">
-          {saved && <span className="text-sm text-green-600">Saved</span>}
-          {/* Save (2026-10-15, Craig's mockup) — keeps the rendered video
-              in the Media Catalogue (Videos), under its Caption or
-              "Untitled video", and frees the editor for the next one. */}
-          {variant === "pendingRender" && (
-            <button
-              type="button"
-              onClick={(e) => {
-                const caption = new FormData(e.currentTarget.form!).get("caption");
-                startTransition(async () => {
-                  await nameRenderedVideo(siteId, media.id, String(caption ?? ""));
-                  router.refresh();
-                });
-              }}
-              disabled={isPending || discarding}
-              className="ml-auto rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-            >
-              Save
-            </button>
-          )}
-          {/* Save & post to Social (2026-10-16): saves it, then opens a new
-              Reel draft with it on the Social page. */}
-          {variant === "pendingRender" && (
-            <button
-              type="button"
-              onClick={(e) => {
-                const caption = new FormData(e.currentTarget.form!).get("caption");
-                startTransition(async () => {
-                  await nameRenderedVideo(siteId, media.id, String(caption ?? ""));
-                  const postId = await createReelFromVideo(media.id);
-                  router.push(`/sites/${siteId}/marketing/social${postId ? `?post=${postId}` : ""}`);
-                });
-              }}
-              disabled={isPending || discarding}
-              className="rounded-md border border-neutral-300 px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50"
-            >
-              Save &amp; post to Social
-            </button>
-          )}
-          {variant === "pendingRender" && onDiscard && (
-            <button
-              type="button"
-              onClick={onDiscard}
-              disabled={discarding}
-              className="rounded-md border border-red-300 px-4 py-2 text-sm font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-            >
-              {discarding ? "Discarding…" : "Discard"}
-            </button>
-          )}
-        </div>
+        <div className="flex items-center gap-3">{saved && <span className="text-sm text-green-600">Saved</span>}</div>
       </form>
     </div>
   );

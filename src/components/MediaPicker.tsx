@@ -49,11 +49,7 @@ function matchesKind(kind: string, videoOnly: boolean, mediaKinds?: ("PHOTO" | "
   return videoOnly ? kind === "VIDEO" : kind === "PHOTO";
 }
 
-function toPicked(
-  rows: MediaRow[],
-  videoOnly: boolean,
-  mediaKinds?: ("PHOTO" | "VIDEO")[]
-): PickedImage[] {
+function toPicked(rows: MediaRow[], videoOnly: boolean, mediaKinds?: ("PHOTO" | "VIDEO")[]): PickedImage[] {
   return rows
     .filter((img) => matchesKind(img.kind, videoOnly, mediaKinds))
     .map((img) => ({
@@ -78,7 +74,7 @@ export default function MediaPicker({
   previewKind = "image",
   previewClassName,
   variant = "tile",
-  buttonClassName,
+  onClose,
   onSelect,
   withArtworks = false,
 }: {
@@ -124,9 +120,12 @@ export default function MediaPicker({
   previewClassName?: string;
   // "button" (2026-10-08, a campaign mail's picture slots): a plain
   // button with `label` instead of the dashed tile, like ArtworkPicker's.
-  variant?: "tile" | "button";
-  // The button's own look, in place of the standard one.
-  buttonClassName?: string;
+  //
+  // "inline" (2026-10-17, Video Edit's Add Media panel): no trigger and no
+  // pop-up — the picker itself, open, where it's placed. `onClose` is
+  // called by its Close button and after adding.
+  variant?: "tile" | "button" | "inline";
+  onClose?: () => void;
   // Picked media, and (withArtworks) picked artworks — one call with
   // everything picked.
   onSelect: (images: PickedImage[], artworks: ArtworkListRow[]) => void;
@@ -270,35 +269,40 @@ export default function MediaPicker({
   const handlePick = (img: PickedImage) => {
     if (mode === "single") {
       onSelect([img], []);
-      setOpen(false);
+      close();
     } else {
-      setSelected((prev) =>
-        prev.some((p) => p.id === img.id)
-          ? prev.filter((p) => p.id !== img.id)
-          : [...prev, img]
-      );
+      setSelected((prev) => (prev.some((p) => p.id === img.id) ? prev.filter((p) => p.id !== img.id) : [...prev, img]));
     }
   };
 
   const handlePickArtwork = (artwork: ArtworkListRow) => {
     if (mode === "single") {
       onSelect([], [artwork]);
-      setOpen(false);
+      close();
     } else {
       setSelectedArtworks((prev) =>
-        prev.some((a) => a.id === artwork.id)
-          ? prev.filter((a) => a.id !== artwork.id)
-          : [...prev, artwork]
+        prev.some((a) => a.id === artwork.id) ? prev.filter((a) => a.id !== artwork.id) : [...prev, artwork],
       );
     }
+  };
+
+  const close = () => {
+    setOpen(false);
+    onClose?.();
   };
 
   const confirmMulti = () => {
     onSelect(selected, selectedArtworks);
     setSelected([]);
     setSelectedArtworks([]);
-    setOpen(false);
+    close();
   };
+
+  // Inline, the picker is open from the start.
+  useEffect(() => {
+    if (variant === "inline") handleOpen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Same trigger everywhere an image/video can be added — a blank dashed
   // tile, not a button — so adding media looks and behaves identically
@@ -318,10 +322,7 @@ export default function MediaPicker({
       <button
         type="button"
         onClick={handleOpen}
-        className={
-          buttonClassName ??
-          "rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
-        }
+        className="rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
       >
         {label}
       </button>
@@ -331,9 +332,7 @@ export default function MediaPicker({
       <button
         type="button"
         onClick={handleOpen}
-        className={`group relative block w-full overflow-hidden rounded-md ${
-          previewClassName ?? "aspect-[4/3]"
-        }`}
+        className={`group relative block w-full overflow-hidden rounded-md ${previewClassName ?? "aspect-[4/3]"}`}
       >
         {previewKind === "video" ? (
           <video src={previewUrl} muted playsInline className="h-full w-full object-cover" />
@@ -362,116 +361,78 @@ export default function MediaPicker({
     );
   }
 
-  const modal = (
+  const panel = (
     <div
-      className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-6"
-      onClick={(e) => {
-        if (e.target === e.currentTarget) setOpen(false);
-      }}
+      className={`flex w-full overflow-hidden rounded-lg bg-white ${
+        variant === "inline" ? "h-[60vh]" : "max-h-[85vh] shadow-xl"
+      }`}
     >
-      {/* Centering wrapper (2026-08-18) — previously the modal box itself
-          used h-full + items-center on the fixed overlay, which could
-          leave it flush against the viewport's bottom edge with nothing
-          to visually separate it from the page underneath, especially on
-          a shorter window. This wrapper gives a real, minimum py-6 gap
-          top and bottom in every case: min-h-full still centers the
-          panel vertically on a tall viewport, but if the panel is ever
-          taller than the space available, the overlay itself scrolls
-          (overflow-y-auto above) rather than the panel bleeding past the
-          edge. */}
-      <div className="mx-auto flex min-h-full max-w-6xl items-center justify-center py-6">
-        {/* Two-column layout (2026-08-18, direct request, replaces a
-            top-strip/bottom-strip split — search+toggle+Upload/Close lived
-            above the grid, selection-count+Add lived below it). Every
-            control now lives in one right-hand panel instead, so adding,
-            removing, or reordering a control only ever touches this one
-            panel — never the grid, and never a second location. Left
-            (grid) and right (panel) scroll independently of each other,
-            same "two flex siblings, each its own overflow-y-auto" pattern
-            already used for the Artwork editor's grid/detail-panel split. */}
-        <div className="flex max-h-[85vh] w-full overflow-hidden rounded-lg bg-white shadow-xl">
-          <div className="flex-1 overflow-y-auto p-4 pb-8">
-          {/* Visible loading state (2026-08-31) — previously there was no
+      <div className="flex-1 overflow-y-auto p-4 pb-8">
+        {/* Visible loading state (2026-08-31) — previously there was no
               indication a search was in flight at all, which is exactly
               what makes a picker feel unresponsive/broken rather than
               just "a bit slow". */}
-          {isPending && (
-            <p className="pb-3 text-xs text-neutral-400">Searching…</p>
-          )}
-          {source === "artworks" ? (
-            <div className="grid grid-cols-6 gap-3">
-              {artworks.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => handlePickArtwork(a)}
-                  disabled={!a.imageUrl}
-                  className="text-left disabled:opacity-40"
+        {isPending && <p className="pb-3 text-xs text-neutral-400">Searching…</p>}
+        {source === "artworks" ? (
+          <div className="grid grid-cols-6 gap-3">
+            {artworks.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => handlePickArtwork(a)}
+                disabled={!a.imageUrl}
+                className="text-left disabled:opacity-40"
+              >
+                <div
+                  className={`overflow-hidden rounded-md border-2 ${
+                    selectedArtworks.some((s) => s.id === a.id)
+                      ? "border-neutral-900"
+                      : "border-transparent hover:border-neutral-300"
+                  }`}
                 >
+                  {a.imageUrl ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={a.imageUrl} alt="" className="aspect-square w-full object-cover" />
+                  ) : (
+                    <div className="aspect-square w-full bg-neutral-100" />
+                  )}
+                </div>
+                <p className="mt-1 truncate text-xs text-neutral-500" title={a.catalogueName}>
+                  {a.catalogueName}
+                </p>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="grid grid-cols-6 gap-3">
+            {images.map((img) => {
+              const isSelected = selected.some((s) => s.id === img.id);
+              return (
+                <button key={img.id} type="button" onClick={() => handlePick(img)} className="text-left">
                   <div
                     className={`overflow-hidden rounded-md border-2 ${
-                      selectedArtworks.some((s) => s.id === a.id)
-                        ? "border-neutral-900"
-                        : "border-transparent hover:border-neutral-300"
+                      isSelected ? "border-neutral-900" : "border-transparent hover:border-neutral-300"
                     }`}
                   >
-                    {a.imageUrl ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.imageUrl} alt="" className="aspect-square w-full object-cover" />
+                    {img.kind === "VIDEO" ? (
+                      img.posterUrl ? (
+                        <img src={img.posterUrl} alt="" className="aspect-square w-full object-cover" />
+                      ) : (
+                        // Same fallback as the Media Catalogue grid
+                        // (MediaCatalogueView.tsx): videos uploaded via the
+                        // iPhone Shortcut have no posterUrl at all, so show
+                        // the video's own first frame live instead of a
+                        // plain placeholder. Previously this picker was the
+                        // one place still showing a grey "Video" box —
+                        // different code rendering the same data
+                        // differently (see decisions-log, 2026-08-16).
+                        <VideoThumb src={img.url} className="aspect-square w-full object-cover" />
+                      )
                     ) : (
-                      <div className="aspect-square w-full bg-neutral-100" />
+                      <img src={img.url} alt="" className="aspect-square w-full object-cover" />
                     )}
                   </div>
-                  <p className="mt-1 truncate text-xs text-neutral-500" title={a.catalogueName}>
-                    {a.catalogueName}
-                  </p>
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-6 gap-3">
-              {images.map((img) => {
-                const isSelected = selected.some((s) => s.id === img.id);
-                return (
-                  <button
-                    key={img.id}
-                    type="button"
-                    onClick={() => handlePick(img)}
-                    className="text-left"
-                  >
-                    <div
-                      className={`overflow-hidden rounded-md border-2 ${
-                        isSelected
-                          ? "border-neutral-900"
-                          : "border-transparent hover:border-neutral-300"
-                      }`}
-                    >
-                      {img.kind === "VIDEO" ? (
-                        img.posterUrl ? (
-                          <img
-                            src={img.posterUrl}
-                            alt=""
-                            className="aspect-square w-full object-cover"
-                          />
-                        ) : (
-                          // Same fallback as the Media Catalogue grid
-                          // (MediaCatalogueView.tsx): videos uploaded via the
-                          // iPhone Shortcut have no posterUrl at all, so show
-                          // the video's own first frame live instead of a
-                          // plain placeholder. Previously this picker was the
-                          // one place still showing a grey "Video" box —
-                          // different code rendering the same data
-                          // differently (see decisions-log, 2026-08-16).
-                          <VideoThumb
-                            src={img.url}
-                            className="aspect-square w-full object-cover"
-                          />
-                        )
-                      ) : (
-                        <img src={img.url} alt="" className="aspect-square w-full object-cover" />
-                      )}
-                    </div>
-                    {/* Caption/title under each thumbnail (2026-08-17,
+                  {/* Caption/title under each thumbnail (2026-08-17,
                         direct request) — this picker previously showed no
                         text at all, making genuinely similar-looking images
                         (e.g. several close variants of the same piece)
@@ -479,127 +440,122 @@ export default function MediaPicker({
                         rendered when there's an actual caption, so an
                         uncaptioned image doesn't leave an odd empty gap
                         that shifts the grid's alignment either way. */}
-                    {img.caption && (
-                      <p className="mt-1 truncate text-xs text-neutral-500" title={img.caption}>
-                        {img.caption}
-                      </p>
-                    )}
-                    {img.artwork && (
-                      <p
-                        className="truncate text-xs font-medium text-rose-600"
-                        title={img.artwork.catalogueName}
-                      >
-                        → {img.artwork.catalogueName}
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-          {source === "artworks" && artworks.length === 0 && !isPending && (
-            <p className="py-12 text-center text-sm text-neutral-400">No matches.</p>
-          )}
-          {source !== "artworks" && images.length === 0 && !isPending && (
-            <p className="py-12 text-center text-sm text-neutral-400">
-              {linkedArtworkId && purpose === "related"
-                ? `No images related to this ${words.item.toLowerCase()} yet.`
-                : "No matches. Try Upload new."}
-            </p>
-          )}
-        </div>
+                  {img.caption && (
+                    <p className="mt-1 truncate text-xs text-neutral-500" title={img.caption}>
+                      {img.caption}
+                    </p>
+                  )}
+                  {img.artwork && (
+                    <p className="truncate text-xs font-medium text-rose-600" title={img.artwork.catalogueName}>
+                      → {img.artwork.catalogueName}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+        {source === "artworks" && artworks.length === 0 && !isPending && (
+          <p className="py-12 text-center text-sm text-neutral-400">No matches.</p>
+        )}
+        {source !== "artworks" && images.length === 0 && !isPending && (
+          <p className="py-12 text-center text-sm text-neutral-400">
+            {linkedArtworkId && purpose === "related"
+              ? `No images related to this ${words.item.toLowerCase()} yet.`
+              : "No matches. Try Upload new."}
+          </p>
+        )}
+      </div>
 
-        {/* Right-hand control panel — everything lives here now: search,
+      {/* Right-hand control panel — everything lives here now: search,
             the Marketing/Related toggle (when scoped to one artwork),
             the upload button, the selection count, "Add"/"Add
             selected", and Close. Its own independent scroll (separate
             from the grid) means a long list of future controls never
             pushes Close off-screen or forces the grid to shrink. */}
-        <div className="flex w-72 flex-shrink-0 flex-col border-l border-neutral-200">
-          <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-8">
-            {/* Reordered above Search (2026-08-18, direct request) —
+      <div className="flex w-72 flex-shrink-0 flex-col border-l border-neutral-200">
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-8">
+          {/* Reordered above Search (2026-08-18, direct request) —
                 matches the reference layout's tabs-then-search order. */}
-            {withArtworks && (
-              <div className="flex flex-wrap gap-1.5 text-sm">
-                {sources.map((s) => (
-                  <button
-                    key={s}
-                    type="button"
-                    onClick={() => handleSourceChange(s)}
-                    className={`rounded-full border px-3 py-1 ${
-                      source === s
-                        ? "border-neutral-900 bg-neutral-900 text-white"
-                        : "border-neutral-300 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {s === "artworks" ? words.items : SOURCE_LABEL[s]}
-                  </button>
-                ))}
-              </div>
-            )}
-            {linkedArtworkId && (
-              // Same pill style as the Media Catalogue's own Marketing/
-              // Related toggle, for visual consistency.
-              <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
+          {withArtworks && (
+            <div className="flex flex-wrap gap-1.5 text-sm">
+              {sources.map((s) => (
                 <button
+                  key={s}
                   type="button"
-                  onClick={() => handlePurposeChange("marketing")}
-                  className={`px-4 py-1.5 ${
-                    purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                  onClick={() => handleSourceChange(s)}
+                  className={`rounded-full border px-3 py-1 ${
+                    source === s
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-300 hover:bg-neutral-50"
                   }`}
                 >
-                  Marketing
+                  {s === "artworks" ? words.items : SOURCE_LABEL[s]}
                 </button>
-                <button
-                  type="button"
-                  onClick={() => handlePurposeChange("related")}
-                  className={`px-4 py-1.5 font-medium ${
-                    purpose === "related"
-                      ? "bg-neutral-900 text-white"
-                      : "bg-rose-100 text-rose-700 hover:bg-rose-200"
-                  }`}
-                >
-                  Related ({relatedCount})
-                </button>
-              </div>
-            )}
+              ))}
+            </div>
+          )}
+          {linkedArtworkId && (
+            // Same pill style as the Media Catalogue's own Marketing/
+            // Related toggle, for visual consistency.
+            <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
+              <button
+                type="button"
+                onClick={() => handlePurposeChange("marketing")}
+                className={`px-4 py-1.5 ${
+                  purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                }`}
+              >
+                Marketing
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePurposeChange("related")}
+                className={`px-4 py-1.5 font-medium ${
+                  purpose === "related" ? "bg-neutral-900 text-white" : "bg-rose-100 text-rose-700 hover:bg-rose-200"
+                }`}
+              >
+                Related ({relatedCount})
+              </button>
+            </div>
+          )}
 
-            <input
-              type="text"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              placeholder={
-                source === "artworks"
-                  ? `Search ${words.items.toLowerCase()}…`
-                  : mediaKinds && mediaKinds.length > 1
+          <input
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder={
+              source === "artworks"
+                ? `Search ${words.items.toLowerCase()}…`
+                : mediaKinds && mediaKinds.length > 1
                   ? "Search images and videos…"
                   : videoOnly
                     ? "Search videos…"
                     : "Search images…"
-              }
-              autoFocus
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-            />
+            }
+            autoFocus
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+          />
 
-            {/* Upload new (2026-10-15, direct request) — goes to the
+          {/* Upload new (2026-10-15, direct request) — goes to the
                 Hopper, where new media comes in and is sorted, and
                 comes back here once an item is added to Media (the
                 Hopper's returnTo). Unsaved edits are saved on leaving
                 (useAutoSave); the newest media shows first here. */}
-            {source !== "artworks" && (
-              <button
-                type="button"
-                onClick={() => {
-                  const here = window.location.pathname + window.location.search;
-                  router.push(`/sites/${siteId}/hopper?returnTo=${encodeURIComponent(here)}`);
-                }}
-                className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-center text-sm hover:bg-neutral-50"
-              >
-                Upload new
-              </button>
-            )}
+          {source !== "artworks" && (
+            <button
+              type="button"
+              onClick={() => {
+                const here = window.location.pathname + window.location.search;
+                router.push(`/sites/${siteId}/hopper?returnTo=${encodeURIComponent(here)}`);
+              }}
+              className="block w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-center text-sm hover:bg-neutral-50"
+            >
+              Upload new
+            </button>
+          )}
 
-            {/* Selected items, shown as thumbnails with their own remove
+          {/* Selected items, shown as thumbnails with their own remove
                 control (2026-08-18, direct request) — previously this
                 was just a count ("N selected"), so once the grid was
                 scrolled away from a selected thumbnail, there was no way
@@ -608,95 +564,93 @@ export default function MediaPicker({
                 list stays visible in the panel regardless of grid scroll
                 position, and doubles as the way to deselect something
                 without hunting for it in the grid. */}
-            {mode === "multi" && (
-              <div>
-                <p className="mb-2 text-sm text-neutral-500">
-                  {selected.length + selectedArtworks.length} selected
-                </p>
-                {selected.length + selectedArtworks.length > 0 && (
-                  <div className="grid grid-cols-3 gap-2">
-                    {selectedArtworks.map((a) => (
-                      <div key={`artwork-${a.id}`} className="group relative">
-                        <div className="overflow-hidden rounded-md border border-neutral-200">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={a.imageUrl ?? ""} alt="" className="aspect-square w-full object-cover" />
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelectedArtworks((prev) => prev.filter((p) => p.id !== a.id))
-                          }
-                          aria-label={`Remove ${a.catalogueName} from selection`}
-                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white shadow hover:bg-neutral-700"
-                        >
-                          ×
-                        </button>
+          {mode === "multi" && (
+            <div>
+              <p className="mb-2 text-sm text-neutral-500">{selected.length + selectedArtworks.length} selected</p>
+              {selected.length + selectedArtworks.length > 0 && (
+                <div className="grid grid-cols-3 gap-2">
+                  {selectedArtworks.map((a) => (
+                    <div key={`artwork-${a.id}`} className="group relative">
+                      <div className="overflow-hidden rounded-md border border-neutral-200">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={a.imageUrl ?? ""} alt="" className="aspect-square w-full object-cover" />
                       </div>
-                    ))}
-                    {selected.map((img) => (
-                      <div key={img.id} className="group relative">
-                        <div className="overflow-hidden rounded-md border border-neutral-200">
-                          {img.kind === "VIDEO" ? (
-                            img.posterUrl ? (
-                              <img
-                                src={img.posterUrl}
-                                alt=""
-                                className="aspect-square w-full object-cover"
-                              />
-                            ) : (
-                              <VideoThumb
-                                src={img.url}
-                                className="aspect-square w-full object-cover"
-                              />
-                            )
+                      <button
+                        type="button"
+                        onClick={() => setSelectedArtworks((prev) => prev.filter((p) => p.id !== a.id))}
+                        aria-label={`Remove ${a.catalogueName} from selection`}
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white shadow hover:bg-neutral-700"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                  {selected.map((img) => (
+                    <div key={img.id} className="group relative">
+                      <div className="overflow-hidden rounded-md border border-neutral-200">
+                        {img.kind === "VIDEO" ? (
+                          img.posterUrl ? (
+                            <img src={img.posterUrl} alt="" className="aspect-square w-full object-cover" />
                           ) : (
-                            <img
-                              src={img.url}
-                              alt=""
-                              className="aspect-square w-full object-cover"
-                            />
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setSelected((prev) => prev.filter((p) => p.id !== img.id))
-                          }
-                          aria-label={`Remove ${img.caption || "image"} from selection`}
-                          className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white shadow hover:bg-neutral-700"
-                        >
-                          ×
-                        </button>
+                            <VideoThumb src={img.url} className="aspect-square w-full object-cover" />
+                          )
+                        ) : (
+                          <img src={img.url} alt="" className="aspect-square w-full object-cover" />
+                        )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelected((prev) => prev.filter((p) => p.id !== img.id))}
+                        aria-label={`Remove ${img.caption || "image"} from selection`}
+                        className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs leading-none text-white shadow hover:bg-neutral-700"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
 
-          <div className="space-y-2 border-t border-neutral-200 p-4">
-            {mode === "multi" && (
-              <button
-                type="button"
-                onClick={confirmMulti}
-                disabled={selected.length + selectedArtworks.length === 0}
-                className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
-              >
-                Add selected
-              </button>
-            )}
+        <div className="space-y-2 border-t border-neutral-200 p-4">
+          {mode === "multi" && (
             <button
               type="button"
-              onClick={() => setOpen(false)}
-              className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50"
+              onClick={confirmMulti}
+              disabled={selected.length + selectedArtworks.length === 0}
+              className="w-full rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-40"
             >
-              Close
+              Add selected
             </button>
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={close}
+            className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm hover:bg-neutral-50"
+          >
+            Close
+          </button>
         </div>
       </div>
-      </div>
+    </div>
+  );
+
+  if (variant === "inline") return panel;
+
+  const modal = (
+    <div
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-6"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setOpen(false);
+      }}
+    >
+      {/* Centering wrapper (2026-08-18): a real gap top and bottom; if the
+          panel is ever taller than the window, the overlay scrolls. The
+          panel itself is two columns (2026-08-18): the grid, and every
+          control in one right-hand panel, each scrolling on its own. */}
+      <div className="mx-auto flex min-h-full max-w-6xl items-center justify-center py-6">{panel}</div>
     </div>
   );
 

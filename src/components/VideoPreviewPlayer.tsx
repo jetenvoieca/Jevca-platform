@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useBackdropClose } from "@/lib/useBackdropClose";
 import {
   clipFadeIns,
   clipLength,
@@ -23,7 +22,8 @@ import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
 // videos between their trim points), each fading in over the one before
 // across the same overlap as the render, with their stickers, and the music
 // under it fading in and out — dipping under the voiceover, which plays
-// from its start. Close to the render, not exact to the frame.
+// from its start. Close to the render, not exact to the frame. Shown in
+// Video Edit's centre panel (2026-10-17), which closes it.
 //
 // Recording over the preview (2026-10-17): with `recordVoice`, the
 // preview plays silently after a 3-second countdown while the microphone
@@ -83,7 +83,6 @@ export default function VideoPreviewPlayer({
   const voiceRef = useRef<HTMLAudioElement>(null);
   const voiceStarted = useRef(false);
   const startedAt = useRef(0);
-  const backdrop = useBackdropClose(onClose);
   const stickers = new Map(stickerLibrary.map((s) => [s.id, s]));
   const musicVolume = music?.volume ?? 0;
   // The music's volume through the video — the same changes as the render.
@@ -91,7 +90,7 @@ export default function VideoPreviewPlayer({
   const musicChanges = musicVolumeChanges(
     musicVolume,
     total,
-    voice && voice.start < total ? { start: voice.start, end: voiceEnd, level: voice.musicUnderVoice } : null
+    voice && voice.start < total ? { start: voice.start, end: voiceEnd, level: voice.musicUnderVoice } : null,
   );
 
   const running = time != null && time < total;
@@ -207,105 +206,106 @@ export default function VideoPreviewPlayer({
       : undefined;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-6" {...backdrop}>
-      <div className="flex max-h-full flex-col items-center gap-3">
-        <div
-          className="relative h-[70vh] max-w-[90vw] overflow-hidden rounded-lg bg-black"
-          style={{ aspectRatio: `${size.width} / ${size.height}` }}
-        >
-          {showing.map(({ clip, i }) => (
-            <FadeIn key={`${clip.id}-${i}`} seconds={fadeIns[i]}>
-              {clip.kind === "PHOTO" ? (
+    <div className="flex flex-col items-center gap-3 rounded-lg bg-neutral-900 p-6">
+      <div
+        className="relative h-[60vh] max-w-full overflow-hidden rounded-lg bg-black"
+        style={{ aspectRatio: `${size.width} / ${size.height}` }}
+      >
+        {showing.map(({ clip, i }) => (
+          <FadeIn key={`${clip.id}-${i}`} seconds={fadeIns[i]}>
+            {clip.kind === "PHOTO" ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={clip.image.url} alt="" className="h-full w-full object-cover" />
+            ) : (
+              <video
+                src={clip.image.url}
+                muted={muteClips}
+                playsInline
+                className="h-full w-full object-cover"
+                onLoadedMetadata={(e) => {
+                  e.currentTarget.currentTime = clip.trimIn ?? 0;
+                  e.currentTarget.play().catch(() => {});
+                }}
+              />
+            )}
+            {(clip.stickers ?? []).map((s) => {
+              const sticker = stickers.get(s.stickerId);
+              return sticker ? (
                 // eslint-disable-next-line @next/next/no-img-element
-                <img src={clip.image.url} alt="" className="h-full w-full object-cover" />
-              ) : (
-                <video
-                  src={clip.image.url}
-                  muted={muteClips}
-                  playsInline
-                  className="h-full w-full object-cover"
-                  onLoadedMetadata={(e) => {
-                    e.currentTarget.currentTime = clip.trimIn ?? 0;
-                    e.currentTarget.play().catch(() => {});
-                  }}
-                />
-              )}
-              {(clip.stickers ?? []).map((s) => {
-                const sticker = stickers.get(s.stickerId);
-                return sticker ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img key={s.id} src={sticker.url} alt="" style={stickerPreviewStyle(s.position, s.size)} />
-                ) : null;
-              })}
-            </FadeIn>
-          ))}
-          {captionNow && captions && (
-            <div
-              className={`pointer-events-none absolute inset-x-[5%] text-center font-bold leading-tight text-white ${
-                captions.position === "top" ? "top-[8%]" : captions.position === "bottom" ? "bottom-[8%]" : "top-1/2 -translate-y-1/2"
-              } ${captions.style === "pop" ? "uppercase" : ""}`}
-              style={{ fontSize: "min(4.5vh, 5vw)", WebkitTextStroke: "1px #000", textShadow: "0 2px 4px rgba(0,0,0,0.8)" }}
-            >
-              {captionNow.text}
-            </div>
-          )}
-          {countdown != null ? (
-            <div className="absolute inset-0 flex items-center justify-center text-7xl font-bold text-white">
-              {countdown}
-            </div>
-          ) : saving ? (
-            <div className="absolute inset-0 flex items-center justify-center text-lg text-white">Saving the voiceover…</div>
-          ) : (
-            !running && (
-              <button
-                type="button"
-                onClick={recordVoice ? startRecording : play}
-                className="absolute inset-0 flex items-center justify-center text-white"
-              >
-                <span className="rounded-full bg-white/20 px-6 py-3 text-lg backdrop-blur hover:bg-white/30">
-                  {recordVoice ? "● Start recording" : time == null ? "▶ Play preview" : "↻ Play again"}
-                </span>
-              </button>
-            )
-          )}
-          {recorder.recording && running && (
-            <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-sm text-white">
-              <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" /> Recording
-            </div>
-          )}
-        </div>
-
-        <div className="flex items-center gap-4 text-sm text-white">
-          <span>
-            {current != null ? `Clip ${current + 1} of ${clips.length} · ` : ""}
-            {Math.min(time ?? 0, total).toFixed(0)}s / {total.toFixed(0)}s
-          </span>
-          {recorder.recording && running && (
+                <img key={s.id} src={sticker.url} alt="" style={stickerPreviewStyle(s.position, s.size)} />
+              ) : null;
+            })}
+          </FadeIn>
+        ))}
+        {captionNow && captions && (
+          <div
+            className={`pointer-events-none absolute inset-x-[5%] text-center font-bold leading-tight text-white ${
+              captions.position === "top"
+                ? "top-[8%]"
+                : captions.position === "bottom"
+                  ? "bottom-[8%]"
+                  : "top-1/2 -translate-y-1/2"
+            } ${captions.style === "pop" ? "uppercase" : ""}`}
+            style={{
+              fontSize: "min(4.5vh, 5vw)",
+              WebkitTextStroke: "1px #000",
+              textShadow: "0 2px 4px rgba(0,0,0,0.8)",
+            }}
+          >
+            {captionNow.text}
+          </div>
+        )}
+        {countdown != null ? (
+          <div className="absolute inset-0 flex items-center justify-center text-7xl font-bold text-white">
+            {countdown}
+          </div>
+        ) : saving ? (
+          <div className="absolute inset-0 flex items-center justify-center text-lg text-white">
+            Saving the voiceover…
+          </div>
+        ) : (
+          !running && (
             <button
               type="button"
-              onClick={() => setTime(total)}
-              className="rounded-md bg-red-600 px-3 py-1 font-medium hover:bg-red-500"
+              onClick={recordVoice ? startRecording : play}
+              className="absolute inset-0 flex items-center justify-center text-white"
             >
-              Stop
+              <span className="rounded-full bg-white/20 px-6 py-3 text-lg backdrop-blur hover:bg-white/30">
+                {recordVoice ? "● Start recording" : time == null ? "▶ Play preview" : "↻ Play again"}
+              </span>
             </button>
-          )}
+          )
+        )}
+        {recorder.recording && running && (
+          <div className="absolute left-3 top-3 flex items-center gap-2 rounded-full bg-black/60 px-3 py-1 text-sm text-white">
+            <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" /> Recording
+          </div>
+        )}
+      </div>
+
+      <div className="flex items-center gap-4 text-sm text-white">
+        <span>
+          {current != null ? `Clip ${current + 1} of ${clips.length} · ` : ""}
+          {Math.min(time ?? 0, total).toFixed(0)}s / {total.toFixed(0)}s
+        </span>
+        {recorder.recording && running && (
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-md border border-white/40 px-3 py-1 hover:bg-white/10"
+            onClick={() => setTime(total)}
+            className="rounded-md bg-red-600 px-3 py-1 font-medium hover:bg-red-500"
           >
-            {recorder.recording ? "Cancel" : "Close"}
+            Stop
           </button>
-        </div>
-        {recordError && <p className="text-sm text-red-300">{recordError}</p>}
-        <p className="text-xs text-white/60">
-          {recordVoice
-            ? "The video plays silently while you speak; recording stops at the end, or press Stop. It replaces any voiceover and starts at 0s."
-            : "A preview on the render's timing — the render itself is exact to the frame."}
-        </p>
-        {music && <audio ref={audioRef} src={music.url} preload="auto" />}
-        {voice && <audio ref={voiceRef} src={voice.url} preload="auto" />}
+        )}
       </div>
+      {recordError && <p className="text-sm text-red-300">{recordError}</p>}
+      <p className="text-xs text-white/60">
+        {recordVoice
+          ? "The video plays silently while you speak; recording stops at the end, or press Stop (closing the panel drops it). It replaces any voiceover and starts at 0s."
+          : "A preview on the render's timing — the render itself is exact to the frame."}
+      </p>
+      {music && <audio ref={audioRef} src={music.url} preload="auto" />}
+      {voice && <audio ref={voiceRef} src={voice.url} preload="auto" />}
     </div>
   );
 }

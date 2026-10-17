@@ -6,6 +6,7 @@ import { useVoiceRecorder } from "@/lib/useVoiceRecorder";
 import { uploadVoice } from "@/lib/voiceUpload";
 import { MUSIC_ACCEPT } from "@/lib/musicTracks";
 import { DEFAULT_MUSIC_UNDER_VOICE, type TimelineVoice } from "@/lib/videoTimeline";
+import { PANEL_BUTTON } from "@/components/videoEditorUi";
 
 // Video Edit's voiceover (2026-10-17): record one in the browser (iPad or
 // computer microphone) — on its own, or over the preview playing silently
@@ -53,7 +54,7 @@ export default function VoiceoverControl({
         start: voice?.start ?? 0,
         musicUnderVoice: voice?.musicUnderVoice ?? DEFAULT_MUSIC_UNDER_VOICE,
       },
-      "now"
+      "now",
     );
   };
 
@@ -100,101 +101,104 @@ export default function VoiceoverControl({
   const runsPastEnd = voice && voice.start + voice.durationSeconds > totalSeconds + 0.05;
 
   return (
-    <div className="mt-2 flex flex-wrap items-center gap-3 text-sm text-neutral-600">
-      <span>Voiceover</span>
-      {recording ? (
-        <>
-          <span className="flex items-center gap-1 text-red-600">
-            <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" /> Recording {elapsed.toFixed(0)}s
-          </span>
-          <button
-            type="button"
-            onClick={stopRecording}
-            className="rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700"
-          >
-            Stop
-          </button>
-        </>
-      ) : busy ? (
-        <span className="text-xs text-neutral-400">Saving…</span>
-      ) : (
-        <>
-          <button
-            type="button"
-            onClick={startRecording}
-            className="rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
-          >
-            ● {voice ? "Record again" : "Record"}
-          </button>
-          {canRecordOverPreview && (
-            <button
-              type="button"
-              onClick={onRecordOverPreview}
-              className="rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
-            >
-              ● Record over the preview
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => fileRef.current?.click()}
-            className="rounded-md border border-neutral-300 px-3 py-1 text-xs hover:bg-neutral-50"
-          >
-            {voice ? "Replace with a file" : "Upload a file"}
-          </button>
-          <input
-            ref={fileRef}
-            type="file"
-            accept={MUSIC_ACCEPT}
-            className="hidden"
-            onChange={(e) => upload(e.target.files?.[0])}
-          />
-        </>
-      )}
-
-      {voice && !recording && !busy && (
-        <>
-          <audio src={`/api/media/${voice.key}`} controls preload="none" className="h-8" />
-          <span className="text-xs text-neutral-400">{voice.durationSeconds.toFixed(0)}s</span>
-          <label className="flex items-center gap-1">
-            starts at
-            <input
-              type="number"
-              min={0}
-              step={0.5}
-              value={voice.start}
-              onChange={(e) => onChange({ ...voice, start: Math.max(0, Number(e.target.value) || 0) }, "soon")}
-              className="w-16 rounded-md border border-neutral-300 px-2 py-0.5 text-sm"
-            />
-            s
-          </label>
-          {hasMusic && (
-            <label className="flex items-center gap-2">
-              Music under voice
+    <div className="text-sm text-neutral-600">
+      <div className="flex flex-wrap gap-6">
+        {/* What to do — record, record over the preview, upload, remove. */}
+        <div className="flex w-48 flex-col gap-2">
+          {recording ? (
+            <>
+              <span className="flex items-center gap-2 py-1.5 text-red-600">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-red-600" /> Recording {elapsed.toFixed(0)}s
+              </span>
+              <button
+                type="button"
+                onClick={stopRecording}
+                className="w-full rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-700"
+              >
+                Stop
+              </button>
+            </>
+          ) : busy ? (
+            <span className="py-1.5 text-neutral-400">Saving…</span>
+          ) : (
+            <>
+              <button type="button" onClick={startRecording} className={PANEL_BUTTON}>
+                ● {voice ? "Record again" : "Record"}
+              </button>
+              {canRecordOverPreview && (
+                <button type="button" onClick={onRecordOverPreview} className={PANEL_BUTTON}>
+                  ● Record over the preview
+                </button>
+              )}
+              <button type="button" onClick={() => fileRef.current?.click()} className={PANEL_BUTTON}>
+                {voice ? "Replace with a file" : "Upload a file"}
+              </button>
+              {voice && (
+                <button type="button" onClick={() => onChange(null, "now")} className={PANEL_BUTTON}>
+                  Remove
+                </button>
+              )}
               <input
-                type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={voice.musicUnderVoice}
-                onChange={(e) => onChange({ ...voice, musicUnderVoice: Number(e.target.value) }, "soon")}
+                ref={fileRef}
+                type="file"
+                accept={MUSIC_ACCEPT}
+                className="hidden"
+                onChange={(e) => upload(e.target.files?.[0])}
               />
-              <span className="w-9 text-xs text-neutral-400">{Math.round(voice.musicUnderVoice * 100)}%</span>
-            </label>
+            </>
           )}
-          <button
-            type="button"
-            onClick={() => onChange(null, "now")}
-            className="text-xs text-neutral-400 hover:text-red-600"
-          >
-            Remove
-          </button>
-          {runsPastEnd && (
-            <span className="text-xs text-amber-600">Runs past the end of the video — the rest is cut.</span>
+        </div>
+
+        {/* The voiceover there is: listen, when it starts, the music under it. */}
+        <div className="min-w-0 flex-1">
+          {voice && !recording && !busy ? (
+            <div className="space-y-3">
+              <div className="flex flex-wrap items-center gap-3">
+                <audio src={`/api/media/${voice.key}`} controls preload="none" className="h-8" />
+                <span className="text-xs text-neutral-400">{voice.durationSeconds.toFixed(0)}s long</span>
+              </div>
+              <label className="flex items-center gap-2">
+                Starts at
+                <input
+                  type="number"
+                  min={0}
+                  step={0.5}
+                  value={voice.start}
+                  onChange={(e) => onChange({ ...voice, start: Math.max(0, Number(e.target.value) || 0) }, "soon")}
+                  className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                />
+                s
+              </label>
+              {hasMusic && (
+                <label className="flex items-center gap-2">
+                  Music under voice
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={voice.musicUnderVoice}
+                    onChange={(e) => onChange({ ...voice, musicUnderVoice: Number(e.target.value) }, "soon")}
+                  />
+                  <span className="w-9 text-xs text-neutral-400">{Math.round(voice.musicUnderVoice * 100)}%</span>
+                </label>
+              )}
+              {runsPastEnd && (
+                <p className="text-xs text-amber-600">Runs past the end of the video — the rest is cut.</p>
+              )}
+            </div>
+          ) : (
+            !recording &&
+            !busy && (
+              <p className="py-1.5 text-neutral-400">
+                No voiceover yet — record one here, record while the preview plays, or upload a voice memo (MP3, M4A or
+                WAV).
+              </p>
+            )
           )}
-        </>
-      )}
-      {error && <span className="text-xs text-red-600">{error}</span>}
+        </div>
+      </div>
+      {error && <p className="mt-3 text-xs text-red-600">{error}</p>}
     </div>
   );
 }

@@ -28,7 +28,10 @@ import ClipStickersEditor from "@/components/ClipStickersEditor";
 import VideoPreviewPlayer from "@/components/VideoPreviewPlayer";
 import type { ClipSticker, StickerRow } from "@/lib/stickers";
 import MediaPicker from "@/components/MediaPicker";
-import { renderVideo, discardRenderResult } from "@/lib/actions/render";
+import { renderVideo, discardRenderResult, nameRenderedVideo } from "@/lib/actions/render";
+import { createReelFromVideo } from "@/lib/actions/socialPosts";
+import MusicControl from "@/components/MusicControl";
+import { MENU_BUTTON, MENU_BUTTON_ACTIVE } from "@/components/videoEditorUi";
 import VideoThumb from "@/components/VideoThumb";
 import TrimScrubber from "@/components/TrimScrubber";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
@@ -73,9 +76,8 @@ type RenderStatus = {
   resultImage: MediaDetail | null;
 } | null;
 
-// The three buttons on the right of the header.
-const HEADER_BUTTON =
-  "w-full rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
+// What the centre panel shows, chosen in the menu.
+type Panel = "media" | "voice" | "captions" | "music" | "preview" | "record";
 
 export default function VideoEditorView({
   siteId,
@@ -181,8 +183,10 @@ export default function VideoEditorView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [rendering, setRendering] = useState(false);
-  // Preview: watching it, or recording a voiceover over it (silent).
-  const [previewing, setPreviewing] = useState<"watch" | "record" | null>(null);
+  // The centre panel — Preview, or recording a voiceover over it (silent).
+  const [panel, setPanel] = useState<Panel | null>(null);
+  const togglePanel = (next: Panel) =>
+    setPanel((open) => (open === next || (next === "preview" && open === "record") ? null : next));
   const [renderError, setRenderError] = useState<string | null>(null);
   const [clearing, setClearing] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
@@ -350,6 +354,7 @@ export default function VideoEditorView({
   };
 
   const handleRenderClick = async () => {
+    setPanel(null);
     setRendering(true);
     setRenderError(null);
     const result = await renderVideo(siteId, renderId);
@@ -363,7 +368,7 @@ export default function VideoEditorView({
 
   const [discarding, setDiscarding] = useState(false);
   const handleDiscard = async (statusId: string) => {
-    if (!confirm("Discard this render? This can't be undone.")) return;
+    if (!confirm("Delete this rendered video? This can't be undone.")) return;
     setDiscardedId(statusId);
     setDiscarding(true);
     await discardRenderResult(siteId, statusId);
@@ -371,437 +376,437 @@ export default function VideoEditorView({
     router.refresh();
   };
 
+  // The rendered video, kept in the Media Catalogue (Videos) under its
+  // Caption or "Untitled video" — and, for Social, a new Reel draft with
+  // it opened on the Social page. Either frees the editor for the next.
+  const renderCaptionRef = useRef<HTMLInputElement>(null);
+  const [savingRender, setSavingRender] = useState(false);
+  const saveRender = async (thenPost: boolean) => {
+    const result = renderStatus?.resultImage;
+    if (!result) return;
+    setSavingRender(true);
+    await nameRenderedVideo(siteId, result.id, renderCaptionRef.current?.value ?? "");
+    if (thenPost) {
+      const postId = await createReelFromVideo(result.id);
+      router.push(`/sites/${siteId}/marketing/social${postId ? `?post=${postId}` : ""}`);
+      return;
+    }
+    setSavingRender(false);
+    router.refresh();
+  };
+
+  // One video at a time: while a render is open, only its own choices
+  // (save, post, delete) are offered.
+  const editing = !renderStatus;
+  const renderDone = renderStatus?.status === "DONE" && !!renderStatus.resultImage;
+  const renderBusy = savingRender || discarding;
+
+  const menuButton = (label: string, opens: Panel, disabled = false) => (
+    <button
+      type="button"
+      onClick={() => togglePanel(opens)}
+      disabled={disabled}
+      className={panel === opens || (opens === "preview" && panel === "record") ? MENU_BUTTON_ACTIVE : MENU_BUTTON}
+    >
+      {label}
+    </button>
+  );
+
   return (
-    <div className="mx-auto max-w-6xl px-6 py-4">
-      {/* Sticky, per the standing "fixed headers, independently-scrolling
-          columns" layout rule (2026-08-03) — this page's own title/Render
-          bar stays visible while the clip strip and editor below scroll
-          underneath it, same as Media Catalogue's header. The negative
-          margin/padding pair cancels this wrapper's own px-6/py-4 so the
-          bar sits flush against the scrolling column's real edges once
-          stuck, rather than leaving a gap content can peek through. */}
-      <div className="sticky top-0 z-10 -mx-6 -mt-4 mb-4 border-b border-neutral-200 bg-white px-6 pb-4 pt-4">
-        <div className="flex items-start justify-between gap-6">
-          <div className="min-w-0">
-            <h1 className="text-2xl font-semibold text-neutral-900">Video Editor</h1>
-            <p className="text-sm text-neutral-500">
-              {headerClipCount} clip{headerClipCount === 1 ? "" : "s"} · {formatTotal(headerTotalSeconds)} total
-              {clips.length > 0 && totalSeconds > 90 && (
-                <span className="ml-2 text-amber-600">— over the 90s target</span>
-              )}
-              {clips.length > 0 && (
-                <>
-                  {" · "}
-                  <button
-                    type="button"
-                    onClick={handleClearAll}
-                    disabled={clearing}
-                    className="text-neutral-400 underline hover:text-neutral-700 disabled:opacity-50"
-                  >
-                    {clearing ? "Clearing…" : "Clear all"}
-                  </button>
-                </>
-              )}
-            </p>
-            {/* The whole video's settings (tidied 2026-10-17): shape,
-                voiceover, captions, music — hidden while a render is open,
-                like Add Media: one video at a time. */}
-            {!renderStatus && (
-              <div className="mt-3 space-y-3 text-sm text-neutral-600">
-                {/* Upright for Reels and Stories, portrait or square for the feed. */}
-                <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300">
-                  {VIDEO_SHAPES.map((s) => (
-                    <button
-                      key={s.value}
-                      type="button"
-                      onClick={() => changeShape(s.value)}
-                      className={`px-4 py-1 font-medium ${
-                        shape === s.value
-                          ? "bg-neutral-900 text-white"
-                          : "bg-white text-neutral-700 hover:bg-neutral-50"
-                      }`}
-                    >
-                      {s.label}
-                    </button>
-                  ))}
-                </div>
-                <VoiceoverControl
-                  artistId={artistId}
-                  voice={voice}
-                  totalSeconds={totalSeconds}
-                  hasMusic={!!music}
-                  canRecordOverPreview={clips.length > 0}
-                  onRecordOverPreview={() => setPreviewing("record")}
-                  onChange={changeVoice}
-                />
-                <CaptionsControl
-                  captions={captions}
-                  hasVoice={!!voice}
-                  totalSeconds={totalSeconds}
-                  onChange={changeCaptions}
-                />
-                {/* One track from the Music library under the whole video,
-                    fading in and out. */}
-                <div className="flex flex-wrap items-center gap-3">
-                  <label className="flex items-center gap-2">
-                    Music
-                    <select
-                      value={music?.trackId ?? ""}
-                      onChange={(e) =>
-                        changeMusic(
-                          e.target.value
-                            ? {
-                                trackId: e.target.value,
-                                volume: music?.volume ?? 0.8,
-                              }
-                            : null,
-                          muteClips,
-                        )
-                      }
-                      className="max-w-64 rounded-md border border-neutral-300 px-2 py-1 text-sm"
-                    >
-                      <option value="">None</option>
-                      {musicTracks.map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                  {musicTracks.length === 0 && (
-                    <a href={`/sites/${siteId}/media?purpose=music`} className="text-xs text-neutral-400 underline">
-                      Add music in the Media Catalogue
-                    </a>
-                  )}
-                  {music && (
-                    <>
-                      <label className="flex items-center gap-2">
-                        Volume
-                        <input
-                          type="range"
-                          min={0}
-                          max={1}
-                          step={0.05}
-                          value={music.volume}
-                          onChange={(e) => changeMusic({ ...music, volume: Number(e.target.value) }, muteClips)}
-                        />
-                        <span className="w-9 text-xs text-neutral-400">{Math.round(music.volume * 100)}%</span>
-                      </label>
-                      {musicTrack && <audio src={musicTrack.url} controls preload="none" className="h-8" />}
-                    </>
-                  )}
-                </div>
-                <label className="flex w-fit items-center gap-2">
-                  <input type="checkbox" checked={muteClips} onChange={(e) => changeMusic(music, e.target.checked)} />
-                  Mute the clips&apos; own sound
-                </label>
-              </div>
-            )}
-          </div>
-          <div className="flex w-40 flex-shrink-0 flex-col gap-2">
-            {!renderStatus && (
-              <MediaPicker
-                artistId={artistId}
-                siteId={siteId}
-                mode="multi"
-                mediaKinds={["PHOTO", "VIDEO"]}
-                variant="button"
-                label="Add Media"
-                buttonClassName={HEADER_BUTTON}
-                withArtworks
-                onSelect={(images, artworks) =>
-                  addPicks({
-                    imageIds: images.map((i) => i.id),
-                    artworkIds: artworks.map((a) => a.id),
-                  })
-                }
-              />
-            )}
-            {!renderStatus && (
+    <div className="mx-auto flex max-w-7xl gap-8 px-6 py-4">
+      {/* The menu (2026-10-17 layout, Craig's mockup): every option down
+          the left; Add Media, Voice over, Captions, Music and Preview open
+          the centre panel above the clips. Stays put while the page scrolls. */}
+      <aside className="sticky top-4 w-56 flex-shrink-0 self-start">
+        <h1 className="text-2xl font-semibold text-neutral-900">Video Editor</h1>
+        <p className="text-sm text-neutral-500">
+          {headerClipCount} clip{headerClipCount === 1 ? "" : "s"} · {formatTotal(headerTotalSeconds)} total
+          {clips.length > 0 && (
+            <>
+              {" · "}
               <button
                 type="button"
-                onClick={() => setPreviewing("watch")}
-                disabled={clips.length === 0}
-                className={HEADER_BUTTON}
+                onClick={handleClearAll}
+                disabled={clearing}
+                className="text-neutral-400 underline hover:text-neutral-700 disabled:opacity-50"
               >
-                Preview
+                {clearing ? "Clearing…" : "Clear all"}
               </button>
-            )}
-            <button
-              type="button"
-              onClick={handleRenderClick}
-              disabled={clips.length === 0 || rendering || blockedByUnresolvedRender}
-              className={HEADER_BUTTON}
-            >
-              {rendering ? "Sending…" : "Render"}
-            </button>
-            {/* A genuine error shows here; a greyed-out Render needs no
-                explanation (2026-08-18). */}
-            {renderError && <p className="text-xs text-red-600">{renderError}</p>}
-            {addError && <p className="text-xs text-red-600">{addError}</p>}
-          </div>
-        </div>
-      </div>
+            </>
+          )}
+        </p>
+        {clips.length > 0 && totalSeconds > 90 && <p className="text-xs text-amber-600">Over the 90s target</p>}
 
-      {renderStatus && (
-        <div className="mb-6 max-w-md">
-          {renderStatus.sourceClips.length > 0 && (
-            <div className="mb-3">
-              <p className="mb-2 text-xs font-medium text-neutral-500">
-                Clips used in this render — check against what you uploaded:
+        {/* Upright for Reels and Stories, portrait or square for the feed. */}
+        <div
+          className={`mt-4 flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm ${
+            editing ? "" : "pointer-events-none opacity-40"
+          }`}
+        >
+          {VIDEO_SHAPES.map((s) => (
+            <button
+              key={s.value}
+              type="button"
+              onClick={() => changeShape(s.value)}
+              className={`px-3 py-1 font-medium ${
+                shape === s.value ? "bg-neutral-900 text-white" : "bg-white text-neutral-700 hover:bg-neutral-50"
+              }`}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+
+        <nav className="mt-3 flex flex-col gap-2">
+          {menuButton("Add Media", "media", !editing)}
+          {menuButton("Voice over", "voice", !editing)}
+          {menuButton("Captions", "captions", !editing)}
+          {menuButton("Music", "music", !editing)}
+          {menuButton("Preview", "preview", !editing || clips.length === 0)}
+          <button
+            type="button"
+            onClick={handleRenderClick}
+            disabled={clips.length === 0 || rendering || blockedByUnresolvedRender}
+            className={MENU_BUTTON}
+          >
+            {rendering ? "Sending…" : "Render"}
+          </button>
+          <button
+            type="button"
+            onClick={() => saveRender(true)}
+            disabled={!renderDone || renderBusy}
+            className={MENU_BUTTON}
+          >
+            Save to social
+          </button>
+          <button
+            type="button"
+            onClick={() => saveRender(false)}
+            disabled={!renderDone || renderBusy}
+            className={MENU_BUTTON}
+          >
+            {savingRender ? "Saving…" : "Save to Catalogue"}
+          </button>
+          <button
+            type="button"
+            onClick={() => renderStatus && handleDiscard(renderStatus.id)}
+            disabled={!blockedByUnresolvedRender || renderBusy}
+            className={MENU_BUTTON}
+          >
+            {discarding ? "Deleting…" : "Delete"}
+          </button>
+        </nav>
+        {renderError && <p className="mt-2 text-xs text-red-600">{renderError}</p>}
+        {addError && <p className="mt-2 text-xs text-red-600">{addError}</p>}
+      </aside>
+
+      <main className="min-w-0 flex-1">
+        {/* The centre panel: the option chosen in the menu — or, while a
+            render is open, the render. */}
+        {renderStatus ? (
+          <CentrePanel title="Rendered video">
+            {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
+              // Pulses (2026-08-18): this can take a minute or two with
+              // nothing else changing (it checks every 4s).
+              <p className="animate-pulse text-sm text-neutral-600">
+                Rendering your video… this can take a minute or two.
               </p>
-              <div className="flex gap-2 overflow-x-auto pb-1">
+            ) : renderStatus.status === "FAILED" ? (
+              <div>
+                <p className="text-sm font-medium text-red-600">Render failed — Delete it to try again.</p>
+                {renderStatus.error && <p className="mt-1 text-sm text-red-600">{renderStatus.error}</p>}
+              </div>
+            ) : renderStatus.resultImage ? (
+              <div className="max-w-md">
+                <MediaDetailPanel
+                  key={renderStatus.resultImage.id}
+                  siteId={siteId}
+                  media={renderStatus.resultImage}
+                  tagPresets={tagPresets}
+                  variant="pendingRender"
+                  captionRef={renderCaptionRef}
+                />
+              </div>
+            ) : null}
+            {renderStatus.debugPayload && <DebugPayload json={renderStatus.debugPayload} />}
+          </CentrePanel>
+        ) : panel === "media" ? (
+          <CentrePanel title="Add Media" onClose={() => setPanel(null)}>
+            <MediaPicker
+              artistId={artistId}
+              siteId={siteId}
+              mode="multi"
+              mediaKinds={["PHOTO", "VIDEO"]}
+              variant="inline"
+              withArtworks
+              onClose={() => setPanel(null)}
+              onSelect={(images, artworks) =>
+                addPicks({ imageIds: images.map((i) => i.id), artworkIds: artworks.map((a) => a.id) })
+              }
+            />
+          </CentrePanel>
+        ) : panel === "voice" ? (
+          <CentrePanel title="Voice over" onClose={() => setPanel(null)}>
+            <VoiceoverControl
+              artistId={artistId}
+              voice={voice}
+              totalSeconds={totalSeconds}
+              hasMusic={!!music}
+              canRecordOverPreview={clips.length > 0}
+              onRecordOverPreview={() => setPanel("record")}
+              onChange={changeVoice}
+            />
+          </CentrePanel>
+        ) : panel === "captions" ? (
+          <CentrePanel title="Captions" onClose={() => setPanel(null)}>
+            <CaptionsControl
+              captions={captions}
+              hasVoice={!!voice}
+              totalSeconds={totalSeconds}
+              onChange={changeCaptions}
+            />
+          </CentrePanel>
+        ) : panel === "music" ? (
+          <CentrePanel title="Music" onClose={() => setPanel(null)}>
+            <MusicControl
+              siteId={siteId}
+              tracks={musicTracks}
+              music={music}
+              muteClips={muteClips}
+              onChange={changeMusic}
+            />
+          </CentrePanel>
+        ) : panel === "preview" || panel === "record" ? (
+          <CentrePanel
+            title={panel === "record" ? "Record over the preview" : "Preview"}
+            onClose={() => setPanel(null)}
+          >
+            <VideoPreviewPlayer
+              key={panel}
+              clips={clips}
+              shape={shape}
+              // Recording over it, the preview plays silently.
+              music={panel === "preview" && musicTrack && music ? { url: musicTrack.url, volume: music.volume } : null}
+              muteClips={panel === "record" || muteClips}
+              voice={panel === "preview" && voice ? { ...voice, url: `/api/media/${voice.key}` } : null}
+              captions={captions}
+              stickerLibrary={stickerLibrary}
+              recordVoice={panel === "record" ? saveVoiceOverPreview : undefined}
+              onClose={() => setPanel("voice")}
+            />
+          </CentrePanel>
+        ) : null}
+
+        {/* The clips — while a render is open, the ones that went into it. */}
+        {renderStatus ? (
+          renderStatus.sourceClips.length > 0 && (
+            <div>
+              <p className="mb-2 text-xs font-medium text-neutral-500">Clips used in this render</p>
+              <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
                 {renderStatus.sourceClips.map((clip) => (
-                  <div key={clip.id} className="w-16 flex-shrink-0">
-                    {clip.kind === "VIDEO" ? (
-                      clip.image.posterUrl ? (
-                        <img
-                          src={clip.image.posterUrl}
-                          alt=""
-                          className="aspect-square w-full rounded-md object-cover"
-                        />
-                      ) : (
-                        <VideoThumb src={clip.image.url} className="aspect-square w-full rounded-md object-cover" />
-                      )
-                    ) : (
-                      <img src={clip.image.url} alt="" className="aspect-square w-full rounded-md object-cover" />
-                    )}
+                  <div key={clip.id} className="w-32 flex-shrink-0 p-1">
+                    <ClipThumb kind={clip.kind} image={clip.image} />
                   </div>
                 ))}
               </div>
             </div>
-          )}
-          {renderStatus.status === "PENDING" || renderStatus.status === "RENDERING" ? (
-            <div className="rounded-lg border border-neutral-200 bg-white p-4">
-              {/* Pulses (2026-08-18, direct request) — this can sit here
-                  for a minute or two with nothing else on the page
-                  visibly changing (it polls every 4s via the effect
-                  above, but router.refresh() alone gives no visual cue
-                  in between), so a static sentence risked looking stalled
-                  or broken rather than genuinely still working. */}
-              <p className="animate-pulse text-sm text-neutral-600">
-                Rendering your video… this can take a minute or two.
-              </p>
-            </div>
-          ) : renderStatus.status === "FAILED" ? (
-            <div className="rounded-lg border border-red-200 bg-white p-4">
-              <div className="mb-2 flex items-center justify-between">
-                <p className="text-sm font-medium text-red-600">Render failed</p>
+          )
+        ) : clips.length === 0 ? (
+          <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
+            Nothing here yet — use Add Media to choose the pictures and videos.
+          </div>
+        ) : (
+          <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
+            {clips.map((clip, i) => (
+              <div
+                key={clip.id}
+                draggable
+                onDragStart={() => setDragIndex(i)}
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={() => handleDrop(i)}
+                onDragEnd={() => setDragIndex(null)}
+                onClick={() => setSelectedId(clip.id)}
+                className={`group relative w-32 flex-shrink-0 cursor-pointer rounded-lg border-2 p-1 ${
+                  selectedId === clip.id
+                    ? "border-neutral-900"
+                    : dragIndex === i
+                      ? "border-neutral-900 opacity-50"
+                      : "border-transparent"
+                }`}
+              >
+                <ClipThumb kind={clip.kind} image={clip.image} />
+                <div className="mt-1 truncate text-center text-xs text-neutral-500">
+                  {(clip.stickers?.length ?? 0) > 0 && <span title="Stickers">★ </span>}
+                  {clip.kind === "PHOTO"
+                    ? `${(clip.duration ?? 2).toFixed(1)}s`
+                    : clip.trimIn != null && clip.trimOut != null
+                      ? `${(clip.trimOut - clip.trimIn).toFixed(1)}s`
+                      : "…"}
+                </div>
                 <button
                   type="button"
-                  onClick={() => handleDiscard(renderStatus.id)}
-                  disabled={discarding}
-                  className="text-xs text-neutral-500 underline hover:text-neutral-800 disabled:opacity-50"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleRemove(clip.id);
+                  }}
+                  className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs text-white group-hover:flex"
                 >
-                  {discarding ? "Discarding…" : "Discard"}
+                  ×
                 </button>
               </div>
-              {renderStatus.error && <p className="text-sm text-red-600">{renderStatus.error}</p>}
-            </div>
-          ) : renderStatus.status === "DONE" && renderStatus.resultImage ? (
-            <MediaDetailPanel
-              key={renderStatus.resultImage.id}
-              siteId={siteId}
-              media={renderStatus.resultImage}
-              tagPresets={tagPresets}
-              variant="pendingRender"
-              onDiscard={() => handleDiscard(renderStatus.id)}
-              discarding={discarding}
-            />
-          ) : null}
+            ))}
+          </div>
+        )}
 
-          {renderStatus.debugPayload && <DebugPayload json={renderStatus.debugPayload} />}
-        </div>
-      )}
-
-      {/* Hidden entirely, not just disabled, while a render is
-          pending or unresolved — reconfirmed 2026-08-09: this must not
-          even appear to invite starting a second video until the
-          current one is Saved or Discarded. Same editor UI as always,
-          just conditionally rendered — not dead code, not CSS-hidden. */}
-      {!renderStatus && (
-        <>
-          {clips.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-              Nothing here yet — use Add Media to choose the pictures and videos.
-            </div>
-          ) : (
-            <div className="mb-6 flex gap-3 overflow-x-auto pb-2">
-              {clips.map((clip, i) => (
-                <div
-                  key={clip.id}
-                  draggable
-                  onDragStart={() => setDragIndex(i)}
-                  onDragOver={(e) => e.preventDefault()}
-                  onDrop={() => handleDrop(i)}
-                  onDragEnd={() => setDragIndex(null)}
-                  onClick={() => setSelectedId(clip.id)}
-                  className={`group relative w-32 flex-shrink-0 cursor-pointer rounded-lg border-2 p-1 ${
-                    selectedId === clip.id
-                      ? "border-neutral-900"
-                      : dragIndex === i
-                        ? "border-neutral-900 opacity-50"
-                        : "border-transparent"
-                  }`}
-                >
-                  {clip.kind === "VIDEO" ? (
-                    clip.image.posterUrl ? (
-                      <img src={clip.image.posterUrl} alt="" className="aspect-square w-full rounded-md object-cover" />
-                    ) : (
-                      <VideoThumb src={clip.image.url} className="aspect-square w-full rounded-md object-cover" />
-                    )
-                  ) : (
-                    <img src={clip.image.url} alt="" className="aspect-square w-full rounded-md object-cover" />
-                  )}
-                  <div className="mt-1 truncate text-center text-xs text-neutral-500">
-                    {(clip.stickers?.length ?? 0) > 0 && <span title="Stickers">★ </span>}
-                    {clip.kind === "PHOTO"
-                      ? `${(clip.duration ?? 2).toFixed(1)}s`
-                      : clip.trimIn != null && clip.trimOut != null
-                        ? `${(clip.trimOut - clip.trimIn).toFixed(1)}s`
-                        : "…"}
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleRemove(clip.id);
-                    }}
-                    className="absolute -right-1 -top-1 hidden h-5 w-5 items-center justify-center rounded-full bg-neutral-900 text-xs text-white group-hover:flex"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {selected && (
-            <div>
-              <h2 className="mb-2 text-base text-neutral-800">
-                {selected.image.caption || (selected.kind === "PHOTO" ? "Photo" : "Video")}
-              </h2>
-              <div className="rounded-lg border border-neutral-200 bg-white p-4">
-                {selected.kind === "PHOTO" ? (
-                  <img src={selected.image.url} alt="" className="mb-4 max-h-64 w-full rounded-md object-contain" />
-                ) : (
-                  <div className="mb-4">
-                    <TrimScrubber
-                      key={selected.id}
-                      videoUrl={selected.image.url}
-                      trimIn={selected.trimIn ?? 0}
-                      trimOut={selected.trimOut ?? selected.sourceDuration ?? 0}
-                      sourceDuration={selected.sourceDuration ?? null}
-                      onKnownDuration={(d) => handleKnownDuration(selected.id, d)}
-                      onTrimChange={(inS, outS) => handleTrimChange(selected.id, inS, outS)}
-                      onSplit={(start, end) => handleSplit(selected.id, start, end)}
-                    />
-                  </div>
-                )}
-                <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-600">
-                  {selected.kind === "PHOTO" && (
-                    <label className="flex items-center gap-2">
-                      On screen for
-                      <DurationInput
-                        key={selected.id}
-                        value={selected.duration ?? 2}
-                        onChange={(seconds) => handleDurationChange(selected.id, seconds)}
-                      />
-                      seconds
-                      <button
-                        type="button"
-                        onClick={() => handleAllPhotoDurations(selected.duration ?? 2)}
-                        className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
-                      >
-                        All photos
-                      </button>
-                    </label>
-                  )}
-                  {/* How this clip changes into the next — none after the last. */}
-                  {selected.id !== clips[clips.length - 1]?.id && (
-                    <div className="flex items-center gap-2" title="How this clip changes into the next one">
-                      Fade
-                      <div className="flex overflow-hidden rounded-full border border-neutral-300">
-                        {FADE_SPEEDS.map((f) => (
-                          <button
-                            key={f.value}
-                            type="button"
-                            onClick={() => handleFadeChange(selected.id, f.value)}
-                            className={`px-3 py-1 font-medium ${
-                              fadeSpeedOf(selected.fade).value === f.value
-                                ? "bg-neutral-900 text-white"
-                                : "bg-white text-neutral-700 hover:bg-neutral-50"
-                            }`}
-                          >
-                            {f.label}
-                          </button>
-                        ))}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => handleAllFades(fadeSpeedOf(selected.fade).value)}
-                        className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
-                      >
-                        All clips
-                      </button>
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => setStickersOpen(true)}
-                    className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
-                  >
-                    {(selected.stickers?.length ?? 0) > 0 ? `Stickers (${selected.stickers!.length})` : "Add Sticker"}
-                  </button>
-                </div>
-              </div>
-
-              {stickersOpen && (
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
-                  {...stickersBackdrop}
-                >
-                  <div className="max-h-full w-full max-w-3xl overflow-y-auto rounded-lg bg-white shadow-xl">
-                    <ClipStickersEditor
-                      key={`stickers-${selected.id}`}
-                      siteId={siteId}
-                      frame={selected.image}
-                      shape={shape}
-                      library={stickerLibrary}
-                      stickers={selected.stickers ?? []}
-                      onChange={(stickers) => handleStickersChange(selected.id, stickers)}
-                    />
-                    <div className="flex justify-end px-4 pb-4">
-                      <button
-                        type="button"
-                        onClick={closeStickers}
-                        className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
-                      >
-                        Done
-                      </button>
-                    </div>
-                  </div>
+        {/* The selected clip — not while previewing (just the clips then). */}
+        {editing && selected && panel !== "preview" && panel !== "record" && (
+          <div>
+            <h2 className="mb-2 text-base text-neutral-800">
+              {selected.image.caption || (selected.kind === "PHOTO" ? "Photo" : "Video")}
+            </h2>
+            <div className="rounded-lg border border-neutral-200 bg-white p-4">
+              {selected.kind === "PHOTO" ? (
+                <img src={selected.image.url} alt="" className="mb-4 max-h-64 w-full rounded-md object-contain" />
+              ) : (
+                <div className="mb-4">
+                  <TrimScrubber
+                    key={selected.id}
+                    videoUrl={selected.image.url}
+                    trimIn={selected.trimIn ?? 0}
+                    trimOut={selected.trimOut ?? selected.sourceDuration ?? 0}
+                    sourceDuration={selected.sourceDuration ?? null}
+                    onKnownDuration={(d) => handleKnownDuration(selected.id, d)}
+                    onTrimChange={(inS, outS) => handleTrimChange(selected.id, inS, outS)}
+                    onSplit={(start, end) => handleSplit(selected.id, start, end)}
+                  />
                 </div>
               )}
+              <div className="flex flex-wrap items-center gap-4 text-sm text-neutral-600">
+                {selected.kind === "PHOTO" && (
+                  <label className="flex items-center gap-2">
+                    On screen for
+                    <DurationInput
+                      key={selected.id}
+                      value={selected.duration ?? 2}
+                      onChange={(seconds) => handleDurationChange(selected.id, seconds)}
+                    />
+                    seconds
+                    <button
+                      type="button"
+                      onClick={() => handleAllPhotoDurations(selected.duration ?? 2)}
+                      className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+                    >
+                      All photos
+                    </button>
+                  </label>
+                )}
+                {/* How this clip changes into the next — none after the last. */}
+                {selected.id !== clips[clips.length - 1]?.id && (
+                  <div className="flex items-center gap-2" title="How this clip changes into the next one">
+                    Fade
+                    <div className="flex overflow-hidden rounded-full border border-neutral-300">
+                      {FADE_SPEEDS.map((f) => (
+                        <button
+                          key={f.value}
+                          type="button"
+                          onClick={() => handleFadeChange(selected.id, f.value)}
+                          className={`px-3 py-1 font-medium ${
+                            fadeSpeedOf(selected.fade).value === f.value
+                              ? "bg-neutral-900 text-white"
+                              : "bg-white text-neutral-700 hover:bg-neutral-50"
+                          }`}
+                        >
+                          {f.label}
+                        </button>
+                      ))}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleAllFades(fadeSpeedOf(selected.fade).value)}
+                      className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+                    >
+                      All clips
+                    </button>
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setStickersOpen(true)}
+                  className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+                >
+                  {(selected.stickers?.length ?? 0) > 0 ? `Stickers (${selected.stickers!.length})` : "Add Sticker"}
+                </button>
+              </div>
             </div>
-          )}
-        </>
-      )}
-      {previewing && (
-        <VideoPreviewPlayer
-          clips={clips}
-          shape={shape}
-          // Recording over it, the preview plays silently.
-          music={previewing === "watch" && musicTrack && music ? { url: musicTrack.url, volume: music.volume } : null}
-          muteClips={previewing === "record" || muteClips}
-          voice={previewing === "watch" && voice ? { ...voice, url: `/api/media/${voice.key}` } : null}
-          captions={captions}
-          stickerLibrary={stickerLibrary}
-          recordVoice={previewing === "record" ? saveVoiceOverPreview : undefined}
-          onClose={() => setPreviewing(null)}
-        />
-      )}
+
+            {stickersOpen && (
+              <div
+                className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+                {...stickersBackdrop}
+              >
+                <div className="max-h-full w-full max-w-3xl overflow-y-auto rounded-lg bg-white shadow-xl">
+                  <ClipStickersEditor
+                    key={`stickers-${selected.id}`}
+                    siteId={siteId}
+                    frame={selected.image}
+                    shape={shape}
+                    library={stickerLibrary}
+                    stickers={selected.stickers ?? []}
+                    onChange={(stickers) => handleStickersChange(selected.id, stickers)}
+                  />
+                  <div className="flex justify-end px-4 pb-4">
+                    <button
+                      type="button"
+                      onClick={closeStickers}
+                      className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </main>
     </div>
+  );
+}
+
+// The centre panel (2026-10-17): slides down above the clips, with its
+// title and a close button.
+function CentrePanel({ title, onClose, children }: { title: string; onClose?: () => void; children: React.ReactNode }) {
+  return (
+    <section className="mb-6 animate-studio-slide-down rounded-lg border border-neutral-200 bg-white">
+      <div className="flex items-center justify-between border-b border-neutral-200 px-4 py-2">
+        <h2 className="text-sm font-medium text-neutral-800">{title}</h2>
+        {onClose && (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close"
+            className="rounded-md p-1 text-neutral-400 hover:bg-neutral-50 hover:text-neutral-700"
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        )}
+      </div>
+      <div className="p-4">{children}</div>
+    </section>
+  );
+}
+
+// A clip's square thumbnail: a photo, or a video's still picture (its
+// first frame if it has none yet).
+function ClipThumb({ kind, image }: { kind: "PHOTO" | "VIDEO"; image: ImageInfo }) {
+  const className = "aspect-square w-full rounded-md object-cover";
+  if (kind === "PHOTO") return <img src={image.url} alt="" className={className} />;
+  return image.posterUrl ? (
+    <img src={image.posterUrl} alt="" className={className} />
+  ) : (
+    <VideoThumb src={image.url} className={className} />
   );
 }
 
