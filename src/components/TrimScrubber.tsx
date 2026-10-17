@@ -17,6 +17,8 @@ const AFTER = [
 
 type Mode = "trim" | "mark";
 
+const SEEK_GIVE_UP_MS = 1000;
+
 const SMALL_BUTTON =
   "rounded-md border border-neutral-300 px-3 py-1.5 text-sm hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-50";
 
@@ -138,7 +140,29 @@ export default function TrimScrubber({
   // trim handle, or the end of the section being marked.
   const showAt = (t: number) => {
     setPlayhead(t);
-    if (videoRef.current) videoRef.current.currentTime = t;
+    seekTo(t);
+  };
+
+  // One seek at a time (2026-10-17): asking the video for a new frame on
+  // every move of the pointer piles the seeks up until it stops showing
+  // any. While one is under way, only the latest point asked for is kept,
+  // and it's sought when that one finishes.
+  const seekWanted = useRef<number | null>(null);
+  const seekBusySince = useRef<number | null>(null);
+  const seekTo = (t: number) => {
+    const video = videoRef.current;
+    if (!video) return;
+    seekWanted.current = t;
+    // A seek that never reports finishing is given up on after a second.
+    if (seekBusySince.current != null && Date.now() - seekBusySince.current < SEEK_GIVE_UP_MS) return;
+    seekBusySince.current = Date.now();
+    seekWanted.current = null;
+    video.currentTime = t;
+  };
+  const handleSeeked = () => {
+    seekBusySince.current = null;
+    const next = seekWanted.current;
+    if (next != null) seekTo(next);
   };
 
   const [still, setStill] = useState<"idle" | "working" | "sent">("idle");
@@ -222,6 +246,7 @@ export default function TrimScrubber({
               src={videoUrl}
               onLoadedMetadata={handleLoadedMetadata}
               onTimeUpdate={handleTimeUpdate}
+              onSeeked={handleSeeked}
               className="h-full w-full object-cover"
               playsInline
             />
