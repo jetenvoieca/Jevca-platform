@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import type { CurationSummary } from "@/lib/actions/curations";
 
 // The artwork filters (Curation, Name, Location, Type) — shared by the
@@ -14,6 +15,7 @@ export type ArtworkFilterValues = {
 };
 
 export default function ArtworkFilterBar({
+  before,
   values,
   curations,
   names,
@@ -21,6 +23,8 @@ export default function ArtworkFilterBar({
   types,
   onChange,
 }: {
+  // Shown first in the row (2026-10-17 — the Artwork Catalogue's All/Sold).
+  before?: ReactNode;
   values: ArtworkFilterValues;
   curations: CurationSummary[];
   names: string[];
@@ -31,6 +35,7 @@ export default function ArtworkFilterBar({
   const selectCls = "rounded-md border border-neutral-300 px-2 py-[4.8px] text-sm";
   return (
     <div className="flex flex-wrap items-center gap-3">
+      {before}
       {curations.length > 0 && (
         <select
           name="curation"

@@ -156,7 +156,9 @@ export default function ArtworksCatalogueView({
   // navigation) so filters stay bookmarkable/shareable.
   const [name, setName] = useState(initialName);
   const [names, setNames] = useState(initialNames);
-  const [availability, setAvailability] = useState(initialAvailability);
+  // All or Sold (2026-10-17 — "Available" removed); an old link asking
+  // for Available shows All.
+  const [availability, setAvailability] = useState(initialAvailability === "SOLD" ? "SOLD" : "");
   const [location, setLocation] = useState(initialLocation);
   const [type, setType] = useState(initialType);
   const [curation, setCuration] = useState(initialCuration);
@@ -357,8 +359,7 @@ export default function ArtworksCatalogueView({
   // outside the active filters (see the note above it), which would
   // immediately close the very panel this is about to open for the new
   // derivative if the derivative doesn't happen to match the current
-  // filters (e.g. Availability defaults to AVAILABLE regardless of what
-  // the original's status was).
+  // filters (e.g. Sold is showing and the derivative isn't sold).
   const handleDuplicated = (newArtworkId: string) => {
     (async () => {
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
@@ -502,14 +503,10 @@ export default function ArtworksCatalogueView({
           header no longer needs to leave space for it. */}
       <div className="shrink-0 px-6 pt-4">
         {/* Row 1: title + view controls, together since they both govern
-            how the whole catalogue displays. All/Available/Sold moved
-            here (2026-09-07, direct request) — in line with the
-            "Artwork Catalogue" title, rather than sitting in the
-            filter row below. Order within this cluster (2026-09-09
-            correction) — All/Available/Sold, then PDF/CSV/Tile-List/
-            density, matching the design mockup; this had been reversed.
-            "Export PDF"/"Import from CSV" shortened to "PDF"/"CSV"
-            (2026-09-11, direct request) — CSV now opens a small
+            how the whole catalogue displays: PDF/CSV/Tile-List/density.
+            All/Sold is in the filter row below (2026-10-17, direct
+            request — "Available" removed). "Export PDF"/"Import from
+            CSV" shortened to "PDF"/"CSV" (2026-09-11, direct request) — CSV now opens a small
             Import/Export choice rather than going straight into the
             importer, since it covers both directions. Button/field
             heights cut ~20% throughout this row and the filter row
@@ -522,51 +519,6 @@ export default function ArtworksCatalogueView({
           <h1 className="text-2xl font-semibold text-neutral-900">{words.catalogue}</h1>
 
             <div className="flex items-center gap-3">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAvailability("");
-                    applyFilters({ availability: "" });
-                  }}
-                  className={`rounded-full px-3 py-[4.8px] text-sm ${
-                    !availability
-                      ? "bg-neutral-900 text-white"
-                      : "border border-neutral-300 hover:bg-neutral-50"
-                  }`}
-                >
-                  All
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAvailability("AVAILABLE");
-                    applyFilters({ availability: "AVAILABLE" });
-                  }}
-                  className={`rounded-full px-3 py-[4.8px] text-sm ${
-                    availability === "AVAILABLE"
-                      ? "bg-neutral-900 text-white"
-                      : "border border-neutral-300 hover:bg-neutral-50"
-                  }`}
-                >
-                  Available
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAvailability("SOLD");
-                    applyFilters({ availability: "SOLD" });
-                  }}
-                  className={`rounded-full px-3 py-[4.8px] text-sm ${
-                    availability === "SOLD"
-                      ? "bg-neutral-900 text-white"
-                      : "border border-neutral-300 hover:bg-neutral-50"
-                  }`}
-                >
-                  Sold
-                </button>
-              </div>
-
               <button
                 type="button"
                 onClick={() => setShowExportDialog(true)}
@@ -664,11 +616,34 @@ export default function ArtworksCatalogueView({
             </div>
           </div>
 
-          {/* Row 2: filtering — a separate functional group from the
-              view controls above (shared with the Media Catalogue's
-              Artworks view, see ArtworkFilterBar). */}
+          {/* Row 2: filtering — All/Sold, then the filters shared with the
+              Media Catalogue's Artworks view (ArtworkFilterBar). */}
           <div className="mb-3">
             <ArtworkFilterBar
+              before={
+                <div className="flex gap-2">
+                  {[
+                    { value: "", label: "All" },
+                    { value: "SOLD", label: "Sold" },
+                  ].map((option) => (
+                    <button
+                      key={option.label}
+                      type="button"
+                      onClick={() => {
+                        setAvailability(option.value);
+                        applyFilters({ availability: option.value });
+                      }}
+                      className={`rounded-full px-3 py-[4.8px] text-sm ${
+                        availability === option.value
+                          ? "bg-neutral-900 text-white"
+                          : "border border-neutral-300 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+              }
               values={{ curation, name, location, type }}
               curations={curations}
               names={names}
