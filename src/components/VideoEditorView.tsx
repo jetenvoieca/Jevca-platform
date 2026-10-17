@@ -400,16 +400,24 @@ export default function VideoEditorView({
     router.refresh();
   };
 
-  // The rendered video, kept in the Media Catalogue (Videos) under its
-  // Caption or "Untitled video" — and, for Social, a new Reel draft with
-  // it opened on the Social page. Either frees the editor for the next.
+  // The rendered video, kept in the Media Catalogue (Videos) under the
+  // name asked for on saving (2026-10-17) — and, for Social, a new Reel
+  // draft with it opened on the Social page. Either frees the editor for
+  // the next. The name starts as its Caption, if one's been typed.
   const renderCaptionRef = useRef<HTMLInputElement>(null);
   const [savingRender, setSavingRender] = useState(false);
-  const saveRender = async (thenPost: boolean) => {
+  const [naming, setNaming] = useState<"social" | "catalogue" | null>(null);
+  const [renderName, setRenderName] = useState("");
+  const askName = (for_: "social" | "catalogue") => {
+    setRenderName(renderCaptionRef.current?.value ?? "");
+    setNaming(for_);
+  };
+  const saveRender = async (thenPost: boolean, name: string) => {
     const result = renderStatus?.resultImage;
     if (!result) return;
+    setNaming(null);
     setSavingRender(true);
-    await nameRenderedVideo(siteId, result.id, renderCaptionRef.current?.value ?? "");
+    await nameRenderedVideo(siteId, result.id, name);
     if (thenPost) {
       const postId = await createReelFromVideo(result.id);
       router.push(`/sites/${siteId}/marketing/social${postId ? `?post=${postId}` : ""}`);
@@ -488,7 +496,7 @@ export default function VideoEditorView({
             </button>
             <button
               type="button"
-              onClick={() => saveRender(true)}
+              onClick={() => askName("social")}
               disabled={!renderDone || renderBusy}
               className={MENU_BUTTON}
             >
@@ -496,7 +504,7 @@ export default function VideoEditorView({
             </button>
             <button
               type="button"
-              onClick={() => saveRender(false)}
+              onClick={() => askName("catalogue")}
               disabled={!renderDone || renderBusy}
               className={MENU_BUTTON}
             >
@@ -519,6 +527,47 @@ export default function VideoEditorView({
               {clearing ? "Clearing…" : "Clear"}
             </button>
           </nav>
+          {naming && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6">
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  if (renderName.trim()) saveRender(naming === "social", renderName.trim());
+                }}
+                className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl"
+              >
+                <h2 className="text-base font-medium text-neutral-900">Name this video</h2>
+                <p className="mt-1 text-sm text-neutral-500">
+                  How it's known in the Media Catalogue{naming === "social" ? " and on the Social page" : ""}.
+                </p>
+                <input
+                  type="text"
+                  value={renderName}
+                  onChange={(e) => setRenderName(e.target.value)}
+                  maxLength={200}
+                  autoFocus
+                  placeholder="e.g. RUDE in motion"
+                  className="mt-4 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+                />
+                <div className="mt-5 flex justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setNaming(null)}
+                    className="rounded-md border border-neutral-300 px-4 py-2 text-sm hover:bg-neutral-50"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={!renderName.trim()}
+                    className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-40"
+                  >
+                    {naming === "social" ? "Save and go to Social" : "Save to Catalogue"}
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
           {renderError && <p className="mt-2 text-xs text-red-600">{renderError}</p>}
           {addError && <p className="mt-2 text-xs text-red-600">{addError}</p>}
         </aside>
