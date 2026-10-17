@@ -23,7 +23,7 @@ export const CHECKERED_STYLE = {
 };
 
 // The picture ready to be a sticker: a PNG — its white background made
-// see-through if it had no see-through parts (removeWhiteBackground) —
+// see-through if it's on one (removeWhiteBackground) —
 // with its see-through edges trimmed off (2026-10-17), so a signature on
 // a big empty canvas becomes just the signature. A PNG with nothing to trim goes up as it is;
 // anything else is drawn onto a canvas and saved as a PNG (see-through
@@ -34,7 +34,7 @@ const SEE_THROUGH = 8; // alpha at or below this counts as empty
 // near-white pixel — including the white inside letters, which on a
 // signature is background too — and the soft edge of the drawing blended
 // to see-through, so no white fringe shows on a dark video. Only for
-// pictures with no see-through parts of their own. False if there was no
+// pictures on a white background (edgeIsWhite). False if there was no
 // white to take out.
 const NEAR_WHITE = 235;
 
@@ -61,17 +61,61 @@ function removeWhiteBackground(data: Uint8ClampedArray, width: number, height: n
       (x < width - 1 && background[p + 1]) ||
       (p >= width && background[p - width]) ||
       (p < width * (height - 1) && background[p + width]);
-    if (!touchesBackground) continue;
     const i = p * 4;
+    // Already see-through (space around the picture) stays as it is.
+    if (!touchesBackground || data[i + 3] <= SEE_THROUGH) continue;
     const alpha = Math.max(255 - data[i], 255 - data[i + 1], 255 - data[i + 2]) / 255;
     if (alpha <= 0) {
       data[i + 3] = 0;
       continue;
     }
     for (let c = 0; c < 3; c++) data[i + c] = Math.round(255 - (255 - data[i + c]) / alpha);
-    data[i + 3] = Math.round(alpha * 255);
+    data[i + 3] = Math.round(alpha * data[i + 3]);
   }
   return true;
+}
+
+type Box = { top: number; left: number; bottom: number; right: number };
+
+// The smallest box holding everything that isn't see-through, or null.
+function contentBox(data: Uint8ClampedArray, width: number, height: number): Box | null {
+  let top = height,
+    left = width,
+    bottom = -1,
+    right = -1;
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      if (data[(y * width + x) * 4 + 3] > SEE_THROUGH) {
+        if (y < top) top = y;
+        if (y > bottom) bottom = y;
+        if (x < left) left = x;
+        if (x > right) right = x;
+      }
+    }
+  }
+  return bottom < 0 ? null : { top, left, bottom, right };
+}
+
+// Whether the edge of the box is (almost all) solid near-white.
+const WHITE_EDGE_SHARE = 0.9;
+
+function edgeIsWhite(data: Uint8ClampedArray, width: number, box: Box): boolean {
+  let white = 0,
+    total = 0;
+  const check = (x: number, y: number) => {
+    const i = (y * width + x) * 4;
+    total++;
+    if (data[i + 3] > 250 && data[i] >= NEAR_WHITE && data[i + 1] >= NEAR_WHITE && data[i + 2] >= NEAR_WHITE) white++;
+  };
+  for (let x = box.left; x <= box.right; x++) {
+    check(x, box.top);
+    check(x, box.bottom);
+  }
+  for (let y = box.top + 1; y < box.bottom; y++) {
+    check(box.left, y);
+    check(box.right, y);
+  }
+  return total > 0 && white / total >= WHITE_EDGE_SHARE;
 }
 
 async function asSticker(file: File): Promise<Blob> {
@@ -92,31 +136,21 @@ async function asSticker(file: File): Promise<Blob> {
     if (!context) throw new Error("couldn't be read.");
     context.drawImage(image, 0, 0, width, height);
 
-    // A picture with no see-through parts at all (e.g. a signature saved
-    // on white) has its white background made see-through.
     const pixels = context.getImageData(0, 0, width, height);
     const { data } = pixels;
-    let opaque = true;
-    for (let i = 3; i < data.length && opaque; i += 4) if (data[i] < 255) opaque = false;
-    const madeSeeThrough = opaque && removeWhiteBackground(data, width, height);
-    if (madeSeeThrough) context.putImageData(pixels, 0, 0);
+    let box = contentBox(data, width, height);
+    if (!box) throw new Error("the picture is completely see-through.");
 
-    // The smallest box holding everything that isn't see-through.
-    let top = height,
-      left = width,
-      bottom = -1,
-      right = -1;
-    for (let y = 0; y < height; y++) {
-      for (let x = 0; x < width; x++) {
-        if (data[(y * width + x) * 4 + 3] > SEE_THROUGH) {
-          if (y < top) top = y;
-          if (y > bottom) bottom = y;
-          if (x < left) left = x;
-          if (x > right) right = x;
-        }
-      }
+    // A picture on a white background — its edge all but entirely white,
+    // whether or not see-through space surrounds it — has the white made
+    // see-through, then is trimmed again.
+    const madeSeeThrough = edgeIsWhite(data, width, box) && removeWhiteBackground(data, width, height);
+    if (madeSeeThrough) {
+      context.putImageData(pixels, 0, 0);
+      box = contentBox(data, width, height);
+      if (!box) throw new Error("the picture is only white.");
     }
-    if (bottom < 0) throw new Error("the picture is completely see-through.");
+    const { top, left, bottom, right } = box;
     const untrimmed = top === 0 && left === 0 && bottom === height - 1 && right === width - 1;
     const isPng = file.type === "image/png" || (!file.type && /\.png$/i.test(file.name));
     if (untrimmed && isPng && !madeSeeThrough) return file;
