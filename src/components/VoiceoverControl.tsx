@@ -123,11 +123,11 @@ export default function VoiceoverControl({
           ) : (
             <>
               <button type="button" onClick={startRecording} className={PANEL_BUTTON}>
-                ● {voice ? "Record again" : "Record"}
+                {voice ? "Record again" : "Record"}
               </button>
               {canRecordOverPreview && (
                 <button type="button" onClick={onRecordOverPreview} className={PANEL_BUTTON}>
-                  ● Record over the preview
+                  Record over preview
                 </button>
               )}
               <button type="button" onClick={() => fileRef.current?.click()} className={PANEL_BUTTON}>

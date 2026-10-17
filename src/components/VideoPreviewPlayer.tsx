@@ -271,7 +271,7 @@ export default function VideoPreviewPlayer({
               className="absolute inset-0 flex items-center justify-center text-white"
             >
               <span className="rounded-full bg-white/20 px-6 py-3 text-lg backdrop-blur hover:bg-white/30">
-                {recordVoice ? "● Start recording" : time == null ? "▶ Play preview" : "↻ Play again"}
+                {recordVoice ? "Start recording" : time == null ? "▶ Play preview" : "↻ Play again"}
               </span>
             </button>
           )
