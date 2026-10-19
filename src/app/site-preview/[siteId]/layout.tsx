@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { headers } from "next/headers";
+import { db } from "@/lib/db";
 import { turnstileSiteKeyForHost } from "@/lib/turnstile";
 import { loadPublishedSite } from "./published";
 import PublishedSite from "@/components/PublishedSite";
@@ -24,16 +25,21 @@ export default async function SitePreviewLayout({
   if (!published) return children;
 
   const { snapshot } = published;
-  // The robot check for sign-up forms (2026-10-10), on the address the
-  // site is shown on — see lib/turnstile.ts.
-  const hasSignupForm = snapshot.pages.some((p) => p.signupForms.length > 0);
+  // The robot check for the visitor's forms — sign-up forms (2026-10-10)
+  // and the Presentation window's enquiry and payment forms
+  // (2026-10-19) — on the address the site is shown on (see
+  // lib/turnstile.ts); and whether works can be bought online, read live
+  // so Settings → Take payments applies without re-publishing.
   const host = ((await headers()).get("host") ?? "").toLowerCase().split(":")[0];
-  const siteKey = hasSignupForm ? await turnstileSiteKeyForHost(host) : null;
+  const [siteKey, site] = await Promise.all([
+    turnstileSiteKeyForHost(host),
+    db.site.findUnique({ where: { id: siteId }, select: { salesEnabled: true } }),
+  ]);
 
   return (
     <>
       {children}
-      <PublishedSite siteId={siteId} siteKey={siteKey} snapshot={snapshot} />
+      <PublishedSite siteId={siteId} siteKey={siteKey} salesEnabled={site?.salesEnabled ?? false} snapshot={snapshot} />
     </>
   );
 }

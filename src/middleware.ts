@@ -65,6 +65,8 @@ const NEWS_PATH_PREFIXES = ["/api/media/", "/unsubscribe/"];
 //   (2026-10-16)
 // - /api/video-stills     — the background function taking Video Edit's
 //   stills for the Hopper; authenticated the same way (2026-10-17)
+// - /api/payment-holds    — releases website buyers' holds that have run
+//   out, called by a scheduled function; safe for anyone (2026-10-19)
 // - /login                — has to be reachable before you're logged in
 // - /inbox-app/           — the Inbox's home-screen app manifest and icons
 //   (2026-10-09); the iPad fetches them without the login cookie, and
@@ -84,6 +86,7 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/campaigns/send-due",
   "/api/video-posters",
   "/api/video-stills",
+  "/api/payment-holds",
   "/login",
   "/inbox-app/",
   "/privacy",

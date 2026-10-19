@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { raiseSaleAlert, SALE_RECORDED_ALERT_TYPE } from "@/lib/alerts";
 import { revalidatePath } from "next/cache";
 import { findOrCreateCustomer } from "./customers";
 import {
@@ -47,6 +48,10 @@ export type CardEntry = {
   publishableKey: string;
   stripeAccount: string | null;
 };
+
+// `receipt`: Stripe emails the buyer its receipt (a website sale,
+// 2026-10-19 — the buyer pays themselves there).
+export type CardEntryOptions = { receipt?: boolean };
 
 function cardEntryFor(sale: SaleStripeFields, clientSecret: string): CardEntry {
   return {
@@ -234,7 +239,7 @@ async function resetAvailabilityIfNothingSoldOrActive(artworkId: string) {
 // Stripe sale from the Studio app).
 async function seedSaleTerms(
   artworkId: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const artwork = await db.artwork.findUnique({
     where: { id: artworkId },
@@ -242,8 +247,7 @@ async function seedSaleTerms(
   });
   if (!artwork) return { ok: false, error: "Not found — it may have been deleted." };
 
-  const priceRaw =
-    (formData.get("price") as string)?.trim() || artwork.offeredPrice?.toString();
+  const priceRaw = (formData.get("price") as string)?.trim() || artwork.offeredPrice?.toString();
   if (!priceRaw) {
     return { ok: false, error: "Set an Offered price on the Catalogue tab first." };
   }
@@ -267,9 +271,7 @@ async function seedSaleTerms(
     },
   });
   const chosenCount = parseInt((formData.get("instalmentCount") as string) ?? "", 10);
-  const instalmentCount = isValidInstalmentCount(chosenCount)
-    ? chosenCount
-    : artist?.defaultInstalmentCount || 1;
+  const instalmentCount = isValidInstalmentCount(chosenCount) ? chosenCount : artist?.defaultInstalmentCount || 1;
   const releaseMessage = artist?.defaultReleaseMessage ?? null;
   const releaseTriggerCount = artist?.defaultReleaseTriggerCount ?? null;
 
@@ -310,7 +312,7 @@ async function seedSaleTerms(
 async function startPurchase(
   artworkId: string,
   siteId: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
   const soldError = await assertArtworkAvailableForSale(artworkId);
   if (soldError) return { ok: false, error: soldError };
@@ -396,7 +398,7 @@ async function startPurchase(
 export async function startArtworkSaleAndGetLink(
   artworkId: string,
   siteId: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<{ ok: true; purchaseId: string; url: string } | { ok: false; error: string }> {
   const seeded = await seedSaleTerms(artworkId, formData);
   if (!seeded.ok) return seeded;
@@ -424,7 +426,8 @@ export async function startArtworkSaleAndGetLink(
 export async function startArtworkSaleAndEnterCard(
   artworkId: string,
   siteId: string,
-  formData: FormData
+  formData: FormData,
+  options: CardEntryOptions = {},
 ): Promise<({ ok: true; purchaseId: string } & CardEntry) | { ok: false; error: string }> {
   const seeded = await seedSaleTerms(artworkId, formData);
   if (!seeded.ok) return seeded;
@@ -434,7 +437,7 @@ export async function startArtworkSaleAndEnterCard(
 
   await db.artwork.update({ where: { id: artworkId }, data: { availability: "RESERVED" } });
 
-  const card = await createCardEntryIntent(started.purchaseId, siteId);
+  const card = await createCardEntryIntent(started.purchaseId, siteId, options);
   if (!card.ok) return { ok: false, error: card.error };
 
   return {
@@ -493,7 +496,7 @@ export async function startGallerySale(
   artworkId: string,
   customerId: string,
   siteId: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
   const soldError = await assertArtworkAvailableForSale(artworkId);
   if (soldError) return { ok: false, error: soldError };
@@ -569,7 +572,7 @@ export async function startGallerySale(
 export async function createGalleryCardIntent(
   purchaseId: string,
   siteId: string,
-  instalments?: number
+  instalments?: number,
 ): Promise<({ ok: true } & CardEntry) | { ok: false; error: string }> {
   try {
     const purchase = await db.purchase.findUnique({
@@ -624,7 +627,7 @@ function amountToCollect(
     status: string;
     stripeSubscriptionScheduleId: string | null;
   },
-  instalments?: number
+  instalments?: number,
 ): { ok: true; amount: number } | { ok: false; error: string } {
   if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
   if (purchase.status !== "ACTIVE") return { ok: false, error: "This sale has already been paid." };
@@ -670,7 +673,7 @@ export async function getGalleryInstalmentDefault(purchaseId: string): Promise<n
 export async function updateGallerySaleAmount(
   purchaseId: string,
   siteId: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Sale not found." };
@@ -732,7 +735,7 @@ export async function updateGallerySaleAmount(
 export async function recordPastSale(
   artworkId: string,
   siteId: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<{ ok: true; purchaseId: string } | { ok: false; error: string }> {
   const soldError = await assertArtworkAvailableForSale(artworkId);
   if (soldError) return { ok: false, error: soldError };
@@ -845,7 +848,7 @@ export async function recordPastSale(
 // deleted sale must not stay payable through a link already sent.
 export async function deleteGallerySale(
   purchaseId: string,
-  siteId: string
+  siteId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -884,7 +887,7 @@ export async function deleteGallerySale(
 // as deleteGallerySale/abandonPurchase.
 export async function forceDeleteCompletedSale(
   purchaseId: string,
-  siteId: string
+  siteId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -918,7 +921,7 @@ export async function forceDeleteCompletedSale(
 export async function recordGalleryPayment(
   purchaseId: string,
   siteId: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -965,7 +968,7 @@ export async function recordGalleryPayment(
 export async function markSalePaid(
   purchaseId: string,
   siteId: string,
-  formData: FormData
+  formData: FormData,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -1019,7 +1022,6 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
       releaseTriggerCount: releaseTriggerCountRaw ? parseInt(releaseTriggerCountRaw, 10) : null,
     },
   });
-
 }
 
 // The sale didn't go ahead — or, for a paid sale (2026-09-23), is being
@@ -1036,7 +1038,7 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
 // AVAILABLE. See resetAvailabilityIfNothingSoldOrActive.
 export async function abandonPurchase(
   purchaseId: string,
-  siteId: string
+  siteId: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
   if (!purchase) return { ok: false, error: "Purchase not found." };
@@ -1091,7 +1093,7 @@ async function getOrCreateStripeCustomer(
     stripeCustomerId: string | null;
     buyerName: string | null;
     buyerEmail: string;
-  }
+  },
 ) {
   if (purchase.stripeCustomerId) return purchase.stripeCustomerId;
 
@@ -1109,11 +1111,7 @@ async function getOrCreateStripeCustomer(
 
 // The amount charged right now — the first instalment if this Purchase is
 // an instalment sale, or the full amount otherwise.
-function firstChargeAmount(purchase: {
-  type: string;
-  totalAmount: unknown;
-  instalmentCount: number | null;
-}) {
+function firstChargeAmount(purchase: { type: string; totalAmount: unknown; instalmentCount: number | null }) {
   const total = parseFloat(purchase.totalAmount as string);
   if (purchase.type === "INSTALMENTS" && purchase.instalmentCount) {
     return splitIntoInstalments(total, purchase.instalmentCount)[0];
@@ -1126,7 +1124,7 @@ function firstChargeAmount(purchase: {
 async function createPaymentLink(
   purchaseId: string,
   siteId: string,
-  artworkId: string
+  artworkId: string,
 ): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
   try {
     const purchase = await db.purchase.findUnique({
@@ -1183,7 +1181,8 @@ async function createPaymentLink(
 
 export async function createCardEntryIntent(
   purchaseId: string,
-  siteId: string
+  siteId: string,
+  options: CardEntryOptions = {},
 ): Promise<({ ok: true } & CardEntry) | { ok: false; error: string }> {
   try {
     const purchase = await db.purchase.findUnique({ where: { id: purchaseId } });
@@ -1204,6 +1203,7 @@ export async function createCardEntryIntent(
       currency: purchase.currency.toLowerCase(),
       customer: customerId,
       setup_future_usage: "off_session",
+      ...(options.receipt ? { receipt_email: purchase.buyerEmail } : {}),
       metadata: { purchaseId: purchase.id, sequence: "1", siteId },
     });
 
@@ -1325,6 +1325,19 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
       stripePaymentIntentId,
     },
   });
+  // A website sale (2026-10-19): its hold (see lib/paymentHolds.ts) is
+  // no longer needed, and the artist is told — however the payment was
+  // recorded (the buyer's page, the webhook or the hold check).
+  if (purchase.holdUntil) {
+    await db.purchase.update({ where: { id: purchase.id }, data: { holdUntil: null } });
+    const amount = `${purchase.currency} ${total.toFixed(2)}`;
+    await raiseSaleAlert({
+      artistId: purchase.artwork.artistId,
+      purchaseId: purchase.id,
+      type: SALE_RECORDED_ALERT_TYPE,
+      message: `Website sale: "${purchase.artwork.catalogueName}" to ${purchase.buyerName ?? purchase.buyerEmail} — ${amount}${count > 1 ? ` in ${count} instalments, first one paid` : ""}.`,
+    });
+  }
 
   if (count > 1) {
     await scheduleRemainingInstalments({
@@ -1379,9 +1392,9 @@ export async function recordPaymentIntent(purchaseId: string, paymentIntentId: s
     paymentIntentId: intent.id,
     amountReceivedMinor: intent.amount_received,
     currency: intent.currency,
-    customerId: typeof intent.customer === "string" ? intent.customer : intent.customer?.id ?? null,
+    customerId: typeof intent.customer === "string" ? intent.customer : (intent.customer?.id ?? null),
     paymentMethodId:
-      typeof intent.payment_method === "string" ? intent.payment_method : intent.payment_method?.id ?? null,
+      typeof intent.payment_method === "string" ? intent.payment_method : (intent.payment_method?.id ?? null),
     instalments: Number.isFinite(instalments) ? instalments : null,
   });
 }

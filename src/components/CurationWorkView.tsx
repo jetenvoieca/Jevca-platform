@@ -12,7 +12,8 @@ import WorkPresentation, { usePresentation } from "@/components/WorkPresentation
 // (CurationWorkPresentation). Content comes from the page's site data
 // (lib/siteData.tsx) — live in the admin preview, the published snapshot
 // on the site. The enquiry form sends only from the published site
-// (siteData.signup, which also carries the robot check's key).
+// (siteData.forms, which also carries the robot check's key and
+// whether works can be bought online).
 
 export default function CurationWorkView({
   curationId,
@@ -76,7 +77,7 @@ export default function CurationWorkView({
             viewIndex={viewIndex}
             onView={setViewIndex}
             onClose={onClose}
-            site={siteData.signup}
+            site={siteData.forms}
           />
         )}
       </div>

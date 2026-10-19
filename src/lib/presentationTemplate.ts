@@ -36,9 +36,11 @@ export const PRESENTATION_PARTS = [
 ] as const;
 export type PresentationPart = (typeof PRESENTATION_PARTS)[number]["key"];
 
-// The wording, in two groups: the details and buttons, and the enquiry
-// form. {count}, {amount}, {location}, {artist} (the artist's first
-// name) and {instagram} are filled in.
+// The wording, in three groups: the details and buttons, the enquiry
+// form, and the payment form (whose name and email boxes are the enquiry
+// form's). {count}, {amount}, {location}, {artist} (the artist's first
+// name), {instagram}, {price} and {today} (what's paid now) are filled
+// in.
 export const PRESENTATION_LABELS = [
   { key: "purchase", group: "details", label: "Purchase button", hint: "" },
   { key: "instalments", group: "details", label: "Instalments button", hint: "{count} = number of payments" },
@@ -61,6 +63,22 @@ export const PRESENTATION_LABELS = [
   { key: "send", group: "enquiry", label: "Send button", hint: "" },
   { key: "instagram", group: "enquiry", label: "Instagram button", hint: "{instagram} = the artist's username" },
   { key: "sent", group: "enquiry", label: "Once sent", hint: "" },
+  { key: "payFull", group: "payment", label: "Paying in full", hint: "{price} = the price" },
+  {
+    key: "payInstalments",
+    group: "payment",
+    label: "Paying in instalments",
+    hint: "{count}, {amount}, {price}",
+  },
+  { key: "addressLabel", group: "payment", label: "Address", hint: "" },
+  { key: "addressPlaceholder", group: "payment", label: "Address box", hint: "" },
+  { key: "cityPlaceholder", group: "payment", label: "Town box", hint: "" },
+  { key: "postcodePlaceholder", group: "payment", label: "Postcode box", hint: "" },
+  { key: "countryPlaceholder", group: "payment", label: "Country box", hint: "" },
+  { key: "holdNote", group: "payment", label: "Holding note", hint: "" },
+  { key: "continue", group: "payment", label: "Continue button", hint: "" },
+  { key: "pay", group: "payment", label: "Pay button", hint: "{today} = what's paid now" },
+  { key: "paid", group: "payment", label: "Once paid", hint: "" },
 ] as const;
 export type PresentationLabel = (typeof PRESENTATION_LABELS)[number]["key"];
 
@@ -166,6 +184,17 @@ export const DEFAULT_PRESENTATION: PresentationSettings = {
     send: "Send message",
     instagram: "Or DM on Instagram @{instagram}",
     sent: "Thank you — your message has been sent.",
+    payFull: "Purchase — {price}",
+    payInstalments: "{count} monthly payments of {amount}",
+    addressLabel: "Delivery address",
+    addressPlaceholder: "Address",
+    cityPlaceholder: "Town or city",
+    postcodePlaceholder: "Postcode",
+    countryPlaceholder: "Country",
+    holdNote: "We'll hold this work for you for 30 minutes while you pay.",
+    continue: "Continue to payment",
+    pay: "Pay {today}",
+    paid: "Thank you — your payment has gone through. Your receipt is on its way by email.",
   },
 };
 
@@ -234,4 +263,20 @@ export function normalizePresentation(raw: unknown): PresentationSettings {
 // A label with its {placeholders} filled in.
 export function fillLabel(label: string, values: Record<string, string>): string {
   return label.replace(/\{(\w+)\}/g, (whole, name: string) => values[name] ?? whole);
+}
+
+// A price as the Presentation window shows it: whole amounts without
+// pence (£1,995), unless `pence` (£399.00).
+export function formatMoney(n: number, currency: string, pence = false): string {
+  const digits = pence || !Number.isInteger(n) ? 2 : 0;
+  try {
+    return new Intl.NumberFormat("en-GB", {
+      style: "currency",
+      currency,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: 2,
+    }).format(n);
+  } catch {
+    return `${currency} ${n.toFixed(digits)}`;
+  }
 }

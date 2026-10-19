@@ -173,6 +173,7 @@ export default function PresentationTemplateEditor({
           [
             ["details", "Wording"],
             ["enquiry", "Enquiry wording"],
+            ["payment", "Payment wording"],
           ] as const
         ).map(([group, title]) => (
           <Group key={group} title={title}>
@@ -194,7 +195,8 @@ export default function PresentationTemplateEditor({
 
         <p className="text-xs text-neutral-400">
           Chosen per Page Style (Templates → Page Styles → Presentation). Enquire opens the enquiry form; Purchase and
-          Instalments email the artist for now.
+          Instalments open the payment form when the site takes payments (Settings → Take payments), otherwise they
+          email the artist.
         </p>
       </div>
 

@@ -60,14 +60,18 @@ export type SiteData = {
   // Where a Logo links: the site's home page on the published site; null
   // in the admin preview, where it isn't a link.
   homeHref: string | null;
-  // Whether sign-up forms and the enquiry form (2026-10-19) can be used
-  // (2026-10-10): only on the
-  // published site, for its site, with the robot check's public key for
-  // the address it's shown on (null = no check set up for it yet, so
-  // signing up says it isn't available). Null in the admin preview,
-  // where forms are only shown.
-  signup: { siteId: string; siteKey: string | null } | null;
+  // Whether the visitor's forms can be used — sign-up forms
+  // (2026-10-10), and the Presentation window's enquiry and payment
+  // forms (2026-10-19): only on the published site. Null in the admin
+  // preview, where forms are only shown.
+  forms: SiteForms | null;
 };
+
+// For the published site's forms: which site, the robot check's public
+// key for the address it's shown on (null = no check set up for it yet,
+// so the forms say they aren't available), and whether it takes payments
+// (Settings → Take payments), so works can be bought online.
+export type SiteForms = { siteId: string; siteKey: string | null; salesEnabled: boolean };
 
 const SiteDataContext = createContext<SiteData | null>(null);
 
@@ -100,7 +104,7 @@ export function LiveSiteData({
       pageContentNow: () => null,
       canvasNow: () => null,
       homeHref: null,
-      signup: null,
+      forms: null,
     }),
     [siteId, artistId],
   );
@@ -108,15 +112,18 @@ export function LiveSiteData({
 }
 
 // The site as last published — for the site's own pages. `siteKey` is
-// the robot check's public key for the address the site is shown on.
+// the robot check's public key for the address the site is shown on;
+// `salesEnabled` whether it takes payments, read live.
 export function SnapshotSiteData({
   siteId,
   siteKey,
+  salesEnabled,
   snapshot,
   children,
 }: {
   siteId: string;
   siteKey: string | null;
+  salesEnabled: boolean;
   snapshot: SiteSnapshot;
   children: ReactNode;
 }) {
@@ -147,9 +154,9 @@ export function SnapshotSiteData({
         covers: snapshot.covers,
       }),
       homeHref: publishedHomePath(siteId),
-      signup: { siteId, siteKey },
+      forms: { siteId, siteKey, salesEnabled },
     }),
-    [snapshot, siteId, siteKey],
+    [snapshot, siteId, siteKey, salesEnabled],
   );
   return <SiteDataContext.Provider value={data}>{children}</SiteDataContext.Provider>;
 }

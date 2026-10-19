@@ -32,14 +32,17 @@ type Leaving = { page: SnapshotPage; scrollY: number };
 // cross-fade, 0.8 s), the menu staying where it is. Back and forward
 // work as usual, and every address still opens its page directly.
 // `siteKey` (2026-10-10): the robot check's public key for this address,
-// for sign-up forms.
+// for the visitor's forms; `salesEnabled` (2026-10-19): whether works can
+// be bought online.
 export default function PublishedSite({
   siteId,
   siteKey,
+  salesEnabled,
   snapshot,
 }: {
   siteId: string;
   siteKey: string | null;
+  salesEnabled: boolean;
   snapshot: SiteSnapshot;
 }) {
   const pathname = usePathname();
@@ -64,10 +67,7 @@ export default function PublishedSite({
     setChanged(true);
     setLeaving((list) => [...list.filter((l) => l.page.id !== before.id), gone]);
     window.scrollTo(0, 0);
-    const timer = window.setTimeout(
-      () => setLeaving((list) => list.filter((l) => l !== gone)),
-      FADE_MS
-    );
+    const timer = window.setTimeout(() => setLeaving((list) => list.filter((l) => l !== gone)), FADE_MS);
     return () => window.clearTimeout(timer);
   }, [page]);
 
@@ -119,7 +119,7 @@ export default function PublishedSite({
   ];
 
   return (
-    <SnapshotSiteData siteId={siteId} siteKey={siteKey} snapshot={snapshot}>
+    <SnapshotSiteData siteId={siteId} siteKey={siteKey} salesEnabled={salesEnabled} snapshot={snapshot}>
       <div onClick={followLink} onPointerOver={fetchPictures}>
         {layers.map(({ page: p, leaving: l }) => {
           const isCanvas = p.style?.type === "CANVAS";
@@ -136,21 +136,11 @@ export default function PublishedSite({
               style={l ? { top: -l.scrollY } : undefined}
               aria-hidden={l ? true : undefined}
             >
-              <PagePreview
-                pageId={p.id}
-                curationId={p.curationId}
-                style={p.style}
-                fullScreen
-              />
+              <PagePreview pageId={p.id} curationId={p.curationId} style={p.style} fullScreen />
             </main>
           );
         })}
-        <PublishedSiteMenu
-          siteId={siteId}
-          pages={snapshot.pages}
-          menus={snapshot.menus}
-          currentId={page?.id ?? null}
-        />
+        <PublishedSiteMenu siteId={siteId} pages={snapshot.pages} menus={snapshot.menus} currentId={page?.id ?? null} />
       </div>
     </SnapshotSiteData>
   );

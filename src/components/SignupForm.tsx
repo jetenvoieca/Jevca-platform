@@ -31,7 +31,7 @@ export default function SignupForm({
   look: SignupLook;
   textStyle: PageTextStyle;
 }) {
-  const { signup } = useSiteData();
+  const { forms: signup } = useSiteData();
   const siteKey = signup?.siteKey ?? null;
   const [email, setEmail] = useState("");
   const [sending, setSending] = useState(false);

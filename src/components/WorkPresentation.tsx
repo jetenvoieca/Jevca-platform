@@ -4,9 +4,11 @@ import { createContext, useContext, useState, type CSSProperties, type ReactNode
 import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 import { SITE_FONT_FAMILY } from "@/lib/siteFontFaces";
-import { DEFAULT_PRESENTATION, fillLabel, type PresentationSettings } from "@/lib/presentationTemplate";
+import { DEFAULT_PRESENTATION, fillLabel, formatMoney, type PresentationSettings } from "@/lib/presentationTemplate";
 import FadeImage from "@/components/FadeImage";
-import WorkEnquiryForm, { type EnquirySite } from "@/components/WorkEnquiryForm";
+import WorkEnquiryForm from "@/components/WorkEnquiryForm";
+import WorkPaymentForm from "@/components/WorkPaymentForm";
+import type { SiteForms } from "@/lib/siteData";
 
 // A work's details as a visitor sees them when they open it on a page
 // (2026-10-19), drawn from a Presentation Template's settings (see
@@ -14,9 +16,9 @@ import WorkEnquiryForm, { type EnquirySite } from "@/components/WorkEnquiryForm"
 // pictures beneath it, to switch between), the title and details, then
 // the medium, description, Purchase / Pay in instalments, the instalment
 // terms, Enquire and where it can be seen. Enquire slides the enquiry
-// form (WorkEnquiryForm) in over the words and buttons; Purchase and Pay in
-// instalments open an email to the artist for now (online buying comes
-// later). Shared by the
+// form (WorkEnquiryForm) in over the words and buttons; Purchase and Pay
+// in instalments the payment form (WorkPaymentForm) when the site takes
+// payments, otherwise they open an email to the artist. Shared by the
 // Presentation window (CurationWorkView) and Templates → Presentations'
 // preview.
 
@@ -29,21 +31,6 @@ export function PresentationProvider({ settings, children }: { settings: Present
 
 export function usePresentation(): PresentationSettings {
   return useContext(PresentationContext);
-}
-
-// Whole amounts without pence (£1,995), unless `pence` (£399.00).
-export function formatMoney(n: number, currency: string, pence = false): string {
-  const digits = pence || !Number.isInteger(n) ? 2 : 0;
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: digits,
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return `${currency} ${n.toFixed(digits)}`;
-  }
 }
 
 export default function WorkPresentation({
@@ -61,10 +48,11 @@ export default function WorkPresentation({
   // The window's close cross, inside the card's top-right corner.
   onClose?: () => void;
   // Where the enquiry form sends from — the published site only.
-  site?: EnquirySite | null;
+  site?: SiteForms | null;
 }) {
   const { colours, show, labels } = settings;
-  const [enquiring, setEnquiring] = useState(false);
+  // Which is showing: the words and buttons, or one of the forms over them.
+  const [panel, setPanel] = useState<"words" | "enquiry" | "full" | "instalments">("words");
   const viewed = data.images[viewIndex] ?? data.images[0] ?? null;
   const description = data.description ?? data.artworkDescription ?? "";
   const price = data.offeredPrice != null ? Number(data.offeredPrice) : null;
@@ -119,9 +107,24 @@ export default function WorkPresentation({
   };
 
   const side = settings.layout === "side";
-  // The hidden one of the words and the enquiry form takes no space,
-  // except beside the picture on a desktop (see below).
+  // The hidden ones of the words and the forms take no space, except
+  // beside the picture on a desktop (see below).
   const hiddenLayer = side ? "absolute inset-x-0 top-0 md:static" : "absolute inset-x-0 top-0";
+  const formLayer = (open: boolean, form: ReactNode) => (
+    <div
+      inert={!open}
+      className={`col-start-1 row-start-1 min-w-0 self-start transition-all duration-500 ease-out ${side ? "md:pt-6" : ""} ${
+        open ? "" : `invisible translate-x-full opacity-0 ${hiddenLayer}`
+      }`}
+    >
+      {form}
+    </div>
+  );
+  // Bought online when the site takes payments — and in the admin's
+  // previews (no `site`), so the payment form can be seen there.
+  const buyOnline = data.available && priced && (!site || site.salesEnabled);
+  const canBuyFull = buyOnline && show.purchase;
+  const canBuyInstalments = buyOnline && show.instalments && perInstalment != null;
 
   return (
     <div
@@ -207,17 +210,17 @@ export default function WorkPresentation({
         )}
       </div>
 
-      {/* The words and the buttons, and the enquiry form, which slides in
-          over them from the top of the column. Beside the picture on a
-          desktop the two share one space as tall as the taller, so the
-          window keeps its size when the form opens; elsewhere the hidden
-          one is lifted out of the way. Beside the picture the form starts
-          a little lower, clear of the close cross. */}
+      {/* The words and the buttons, and the forms, which slide in over
+          them from the top of the column. Beside the picture on a desktop
+          they all share one space as tall as the tallest, so the window
+          keeps its size when a form opens; elsewhere the hidden ones are
+          lifted out of the way. Beside the picture the forms start a
+          little lower, clear of the close cross. */}
       <div className="relative grid min-w-0 overflow-hidden">
         <div
-          inert={enquiring}
+          inert={panel !== "words"}
           className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-6 transition-all duration-500 ease-out ${
-            enquiring ? `invisible -translate-x-1/4 opacity-0 ${hiddenLayer}` : ""
+            panel !== "words" ? `invisible -translate-x-1/4 opacity-0 ${hiddenLayer}` : ""
           }`}
         >
           {show.medium && data.medium && (
@@ -242,7 +245,13 @@ export default function WorkPresentation({
               {priced && (show.purchase || (show.instalments && perInstalment != null)) && (
                 <div className="flex flex-wrap gap-4">
                   {show.purchase &&
-                    button(fillLabel(labels.purchase, values), colours.purchaseBackground, colours.purchaseText, false)}
+                    button(
+                      fillLabel(labels.purchase, values),
+                      colours.purchaseBackground,
+                      colours.purchaseText,
+                      false,
+                      canBuyFull ? () => setPanel("full") : undefined,
+                    )}
                   {show.instalments &&
                     perInstalment != null &&
                     button(
@@ -250,6 +259,7 @@ export default function WorkPresentation({
                       colours.instalmentsBackground,
                       colours.instalmentsText,
                       false,
+                      canBuyInstalments ? () => setPanel("instalments") : undefined,
                     )}
                 </div>
               )}
@@ -272,7 +282,7 @@ export default function WorkPresentation({
             <div className="flex flex-col gap-3">
               {show.enquire &&
                 button(fillLabel(labels.enquire, values), colours.enquireBackground, colours.enquireText, true, () =>
-                  setEnquiring(true),
+                  setPanel("enquiry"),
                 )}
               {show.location && data.viewingLocation && (
                 <p style={{ color: colours.muted, fontSize: small }}>{fillLabel(labels.location, values)}</p>
@@ -281,14 +291,32 @@ export default function WorkPresentation({
           )}
         </div>
 
-        <div
-          inert={!enquiring}
-          className={`col-start-1 row-start-1 min-w-0 self-start transition-all duration-500 ease-out ${side ? "md:pt-6" : ""} ${
-            enquiring ? "" : `invisible translate-x-full opacity-0 ${hiddenLayer}`
-          }`}
-        >
-          <WorkEnquiryForm data={data} settings={settings} site={site} active={enquiring} />
-        </div>
+        {formLayer(
+          panel === "enquiry",
+          <WorkEnquiryForm data={data} settings={settings} site={site} active={panel === "enquiry"} />,
+        )}
+        {canBuyFull &&
+          formLayer(
+            panel === "full",
+            <WorkPaymentForm
+              data={data}
+              settings={settings}
+              site={site}
+              active={panel === "full"}
+              instalments={false}
+            />,
+          )}
+        {canBuyInstalments &&
+          formLayer(
+            panel === "instalments",
+            <WorkPaymentForm
+              data={data}
+              settings={settings}
+              site={site}
+              active={panel === "instalments"}
+              instalments
+            />,
+          )}
       </div>
     </div>
   );

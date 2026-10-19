@@ -1672,6 +1672,11 @@ model Purchase {
 
   stripeCustomerId              String?
   stripeCheckoutSessionId       String?
+  // A sale started by a visitor on the website (2026-10-19, Craig's
+  // choice): the work is held as Sold - Not Paid until this time while
+  // they pay, then released if no payment has come in (see
+  // lib/paymentHolds.ts). Cleared once the first payment succeeds.
+  holdUntil                     DateTime?
   stripeSubscriptionScheduleId  String?
   stripeSubscriptionId          String?
 
@@ -1691,6 +1696,7 @@ model Purchase {
   @@index([parentPurchaseId])
   @@index([stripeAccountId])
   @@index([invoiceId])
+  @@index([holdUntil])
 }
 
 // An invoice — or, once paid, a receipt (2026-10-14, Craig's mockup: a
