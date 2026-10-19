@@ -22,6 +22,9 @@ export type AppShellNavItem = {
   // state as a normal link, just further indented and lighter-weight,
   // so it reads as a level below them rather than a peer.
   subtle?: boolean;
+  // A top-level link's button colour (as a section header's), e.g. the
+  // site's Website link (2026-10-19). Defaults to grey.
+  color?: string;
 };
 
 // A top-level entry can either be a plain link or a section — a header
@@ -151,7 +154,7 @@ function TopLevelLink({ item }: { item: AppShellNavItem }) {
     <Link
       href={item.href}
       prefetch={false}
-      style={{ backgroundColor: DEFAULT_SECTION_COLOR }}
+      style={{ backgroundColor: item.color ?? DEFAULT_SECTION_COLOR }}
       className="flex w-full items-center justify-between rounded-md px-3 py-1 text-sm font-medium text-white hover:brightness-90"
     >
       {item.label}

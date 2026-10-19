@@ -40,8 +40,6 @@ export type SiteNavKey =
 
 const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "curations", "galleries", "artworkSettings"];
 
-const WEBSITE_KEYS: SiteNavKey[] = ["pages", "analytics"];
-
 const FINANCIAL_KEYS: SiteNavKey[] = [
   "account",
   "sales",
@@ -61,6 +59,7 @@ const MARKETING_KEYS: SiteNavKey[] = [
   "mailCampaigns",
   "socialMedia",
   "pr",
+  "analytics",
   "marketingSettings",
 ];
 
@@ -94,14 +93,6 @@ export function buildSiteNavEntries({
       active: active === "artworkSettings",
       subtle: true,
     },
-  ];
-
-  // Menus are for navigating only (2026-10-04) — pages are created and
-  // managed on the Pages page itself, not inside this section.
-  // Analytics is a placeholder for now.
-  const websiteChildren: AppShellNavItem[] = [
-    { label: "Pages", href: `${base}/pages`, active: active === "pages" },
-    { label: "Analytics", href: `${base}/analytics`, active: active === "analytics" },
   ];
 
   // Sales and Customers sit behind salesEnabled; Account, Purchases and
@@ -143,6 +134,8 @@ export function buildSiteNavEntries({
     },
     { label: "Social Media", href: `${marketingBase}/social`, active: active === "socialMedia" },
     { label: "PR", href: `${marketingBase}/pr`, active: active === "pr" },
+    // Moved here from Website (2026-10-19, Craig's request). A placeholder for now.
+    { label: "Analytics", href: `${base}/analytics`, active: active === "analytics" },
     {
       label: "Settings",
       href: `${marketingBase}/settings`,
@@ -167,13 +160,13 @@ export function buildSiteNavEntries({
       active: sectionActive(ARTWORK_KEYS),
       children: artworkChildren,
     },
+    // Website goes straight to Pages (2026-10-19, Craig's request) — its
+    // only page now Analytics is in Marketing.
     {
       label: "Website",
-      section: true,
-      key: "website",
+      href: `${base}/pages`,
+      active: active === "pages",
       color: SITE_SECTION_COLOR,
-      active: sectionActive(WEBSITE_KEYS),
-      children: websiteChildren,
     },
     {
       label: "Financial",
