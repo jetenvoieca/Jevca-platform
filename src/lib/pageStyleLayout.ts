@@ -14,7 +14,13 @@ import {
   type RowBlock,
   type RowLayout,
 } from "@/lib/rowLayout";
-import { cleanBlockTextStyle, cleanTextStyles, type StyledBlock, type TextStyle, type TextStyles } from "@/lib/textStyle";
+import {
+  cleanBlockTextStyle,
+  cleanTextStyles,
+  type StyledBlock,
+  type TextStyle,
+  type TextStyles,
+} from "@/lib/textStyle";
 
 // The layout a Page Style holds (2026-10-04) — the arrangement of
 // components only, never content. Saved in PageStyle.layout (JSON).
@@ -133,6 +139,19 @@ export function cleanLogoPhoneWidth(raw: unknown): number {
   return cleanNumber(raw, LOGO_PHONE_WIDTH_LIMITS, DEFAULT_LOGO_PHONE_WIDTH, 0);
 }
 
+// How many images a Gallery shows across (2026-10-19, Craig's request),
+// on a desktop and on a phone. Set in Fine-tune.
+export type GalleryPerRow = { desktop: number; phone: number };
+export const GALLERY_PER_ROW_LIMITS = { min: 1, max: 8 } as const;
+export const DEFAULT_GALLERY_PER_ROW: GalleryPerRow = { desktop: 4, phone: 2 };
+
+export function cleanGalleryPerRow(raw: unknown): GalleryPerRow {
+  const value = (raw ?? {}) as Partial<Record<keyof GalleryPerRow, unknown>>;
+  const l = GALLERY_PER_ROW_LIMITS;
+  const d = DEFAULT_GALLERY_PER_ROW;
+  return { desktop: cleanNumber(value.desktop, l, d.desktop, 0), phone: cleanNumber(value.phone, l, d.phone, 0) };
+}
+
 // The text styles a Page Style holds use the site fonts.
 export type PageTextStyle = TextStyle<SiteFontId>;
 
@@ -146,7 +165,8 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 };
 
 // A Block Build component. `doors` is set on Sliding doors blocks only,
-// `signup` on Sign-up form blocks only, `phoneWidth` on Logo blocks only;
+// `signup` on Sign-up form blocks only, `phoneWidth` on Logo blocks only,
+// `perRow` on Gallery blocks only;
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -154,6 +174,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     doors?: SlidingDoorsSettings;
     signup?: SignupLook;
     phoneWidth?: number;
+    perRow?: GalleryPerRow;
   };
 
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {
@@ -202,8 +223,7 @@ export const CANVAS_LIMITS = {
 } as const;
 
 export type PageStyleLayout =
-  | { type: "BLOCK_BUILD"; layout: BlockBuildLayout }
-  | { type: "CANVAS"; layout: CanvasLayout };
+  { type: "BLOCK_BUILD"; layout: BlockBuildLayout } | { type: "CANVAS"; layout: CanvasLayout };
 
 export function emptyLayout(type: PageStyleType): PageStyleLayout {
   if (type === "CANVAS") return { type, layout: DEFAULT_CANVAS };
@@ -258,11 +278,14 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "logo") {
             clean.phoneWidth = cleanLogoPhoneWidth((b as Partial<LayoutBlock>).phoneWidth);
           }
+          if (clean.type === "gallery") {
+            clean.perRow = cleanGalleryPerRow((b as Partial<LayoutBlock>).perRow);
+          }
           const textStyle = cleanBlockTextStyle(clean.type, (b as Partial<LayoutBlock>).textStyle, isSiteFontId);
           if (textStyle) clean.textStyle = textStyle;
           return [clean];
         })
-      : []
+      : [],
   );
 
   return {
@@ -284,5 +307,6 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "slidingdoors") return { id, type, doors: DEFAULT_SLIDING_DOORS };
   if (type === "signup") return { id, type, signup: DEFAULT_SIGNUP_LOOK };
   if (type === "logo") return { id, type, phoneWidth: DEFAULT_LOGO_PHONE_WIDTH };
+  if (type === "gallery") return { id, type, perRow: DEFAULT_GALLERY_PER_ROW };
   return { id, type };
 }

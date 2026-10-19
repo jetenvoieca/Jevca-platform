@@ -1,9 +1,4 @@
-import {
-  blockTypeLabel,
-  type CanvasLayout,
-  type LayoutBlock,
-  type PageStyleLayout,
-} from "@/lib/pageStyleLayout";
+import { blockTypeLabel, type CanvasLayout, type LayoutBlock, type PageStyleLayout } from "@/lib/pageStyleLayout";
 import { blockWidthOf, groupBlocksByRow, rowKey, rowSettingsOf } from "@/lib/rowLayout";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
@@ -38,9 +33,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
         </span>
       )}
       {rows.length === 0 && (
-        <p className="py-10 text-center text-sm text-neutral-400">
-          No blocks yet. Use Edit to add some.
-        </p>
+        <p className="py-10 text-center text-sm text-neutral-400">No blocks yet. Use Edit to add some.</p>
       )}
       {rows.map((row, i) => {
         const key = rowKey(row);
@@ -55,7 +48,13 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
             {row.map((b) => (
               <div key={b.id} className={rowBlockClass()} style={rowBlockStyle(blockWidthOf(b))}>
                 <Labelled label={blockLabel(b)}>
-                  <BlockShape type={b.type} doors={b.doors} signup={b.signup} spacing={layout.gridSpacing} />
+                  <BlockShape
+                    type={b.type}
+                    doors={b.doors}
+                    signup={b.signup}
+                    perRow={b.perRow}
+                    spacing={layout.gridSpacing}
+                  />
                 </Labelled>
               </div>
             ))}

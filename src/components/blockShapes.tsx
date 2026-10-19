@@ -1,24 +1,31 @@
 import type { ReactNode } from "react";
-import type { LayoutBlockType, SignupLook, SlidingDoorsSettings } from "@/lib/pageStyleLayout";
+import type { GalleryPerRow, LayoutBlockType, SignupLook, SlidingDoorsSettings } from "@/lib/pageStyleLayout";
 import type { MailBlockType } from "@/lib/mailTemplateLayout";
 import type { GridSpacing } from "@/lib/rowLayout";
+import { perRowClass, perRowStyle, type PreviewDevice } from "@/components/pageRows";
 
 // A rough outline of each component (2026-10-04; moved here from
 // PageStylePreview 2026-10-08 so Mail Templates share it), so a layout
 // reads at a glance without content — used by the Page Styles and Mail
 // Templates previews, the visual editor (VisualLayoutEditor) and the
 // Pages page's Arrange (PageSectionsArranger), so a component looks the
-// same in all of them.
+// same in all of them. A Page Style's Gallery shows its own number
+// across — for `device` if given, otherwise as the screen's width
+// decides; a mail gallery is four across.
 export function BlockShape({
   type,
   spacing,
   doors,
   signup,
+  perRow,
+  device,
 }: {
   type: LayoutBlockType | MailBlockType;
   spacing: GridSpacing;
   doors?: SlidingDoorsSettings;
   signup?: SignupLook;
+  perRow?: GalleryPerRow;
+  device?: PreviewDevice;
 }) {
   switch (type) {
     case "header":
@@ -36,7 +43,7 @@ export function BlockShape({
     case "image":
       return <div className="h-40 rounded bg-neutral-200" />;
     case "gallery":
-      return <PlaceholderGrid count={8} spacing={spacing} />;
+      return <PlaceholderGrid perRow={perRow ?? MAIL_PER_ROW} spacing={spacing} device={device} />;
     case "artwork":
       return (
         <div className="flex gap-3">
@@ -49,9 +56,7 @@ export function BlockShape({
       );
     case "video":
       return (
-        <div className="flex h-40 items-center justify-center rounded bg-neutral-200 text-2xl text-neutral-400">
-          ▶
-        </div>
+        <div className="flex h-40 items-center justify-center rounded bg-neutral-200 text-2xl text-neutral-400">▶</div>
       );
     case "textgrid":
       return (
@@ -103,20 +108,29 @@ export function BlockShape({
         </div>
       );
     case "signature":
-      return (
-        <div className="flex h-16 items-center text-2xl italic text-neutral-300">Signature</div>
-      );
+      return <div className="flex h-16 items-center text-2xl italic text-neutral-300">Signature</div>;
   }
 }
 
 // Grey squares, four across, spaced as the layout's grid spacing.
-function PlaceholderGrid({ count, spacing }: { count: number; spacing: GridSpacing }) {
+const MAIL_PER_ROW: GalleryPerRow = { desktop: 4, phone: 4 };
+
+// Two rows of squares.
+function PlaceholderGrid({
+  perRow,
+  spacing,
+  device,
+}: {
+  perRow: GalleryPerRow;
+  spacing: GridSpacing;
+  device?: PreviewDevice;
+}) {
   return (
     <div
-      className="grid grid-cols-4"
-      style={{ rowGap: spacing.vertical, columnGap: spacing.horizontal }}
+      className={perRowClass(device)}
+      style={{ ...perRowStyle(perRow), rowGap: spacing.vertical, columnGap: spacing.horizontal }}
     >
-      {Array.from({ length: count }, (_, i) => (
+      {Array.from({ length: perRow.desktop * 2 }, (_, i) => (
         <div key={i} className="aspect-square rounded bg-neutral-200" />
       ))}
     </div>

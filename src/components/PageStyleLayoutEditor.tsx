@@ -1,10 +1,13 @@
 "use client";
 
 import {
+  DEFAULT_GALLERY_PER_ROW,
   DEFAULT_LOGO_PHONE_WIDTH,
+  GALLERY_PER_ROW_LIMITS,
   LAYOUT_BLOCK_TYPES,
   LOGO_PHONE_WIDTH_LIMITS,
   SLIDING_DOORS_LIMITS,
+  cleanGalleryPerRow,
   cleanLogoPhoneWidth,
   cleanSignupLook,
   cleanSlidingDoors,
@@ -42,8 +45,15 @@ export default function PageStyleLayoutEditor({
       onChange={onChange}
       components={LAYOUT_BLOCK_TYPES}
       newBlock={newLayoutBlock}
-      renderBlock={(b) => (
-        <BlockShape type={b.type} doors={b.doors} signup={b.signup} spacing={layout.gridSpacing} />
+      renderBlock={(b, device) => (
+        <BlockShape
+          type={b.type}
+          doors={b.doors}
+          signup={b.signup}
+          perRow={b.perRow}
+          device={device}
+          spacing={layout.gridSpacing}
+        />
       )}
       settingsPanel={(b, onBlock) => {
         if (b.doors) {
@@ -51,10 +61,7 @@ export default function PageStyleLayoutEditor({
             button: "Settings",
             title: "Sliding doors",
             content: (
-              <DoorsSettings
-                doors={b.doors}
-                onChange={(doors) => onBlock({ ...b, doors: cleanSlidingDoors(doors) })}
-              />
+              <DoorsSettings doors={b.doors} onChange={(doors) => onBlock({ ...b, doors: cleanSlidingDoors(doors) })} />
             ),
           };
         }
@@ -81,6 +88,17 @@ export default function PageStyleLayoutEditor({
             }
           : null
       }
+      fineTune={(b, onBlock) => {
+        if (b.type !== "gallery") return null;
+        const perRow = b.perRow ?? DEFAULT_GALLERY_PER_ROW;
+        return (["desktop", "phone"] as const).map((device) => ({
+          label: `Images per row, ${device}`,
+          unit: "",
+          value: perRow[device],
+          limits: GALLERY_PER_ROW_LIMITS,
+          onCommit: (value: number) => onBlock({ ...b, perRow: cleanGalleryPerRow({ ...perRow, [device]: value }) }),
+        }));
+      }}
       textStyleFonts={SITE_TEXT_STYLE_FONTS}
       desktopWidth={PAGE_DESKTOP_WIDTH}
       backgroundColor={layout.backgroundColor}
@@ -176,22 +194,14 @@ function SignupSettings({ look, onChange }: { look: SignupLook; onChange: (look:
         onChange={(buttonTextColour) => onChange({ ...look, buttonTextColour })}
       />
       <p className="text-xs text-neutral-500">
-        The form&apos;s words use this style&apos;s Text look. The list and the wording are set on
-        each page, in Arrange.
+        The form&apos;s words use this style&apos;s Text look. The list and the wording are set on each page, in
+        Arrange.
       </p>
     </>
   );
 }
 
-function ColourRow({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
+function ColourRow({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="flex items-center gap-2 text-sm text-neutral-700">
       <span className="flex-1">{label}</span>

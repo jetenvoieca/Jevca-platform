@@ -27,11 +27,7 @@ const ITEMS: Record<VerticalAlign, { auto: string; desktop: string }> = {
   bottom: { auto: "md:items-end", desktop: "items-end" },
 };
 
-export function rowClass(
-  horizontal: HorizontalAlign,
-  vertical: VerticalAlign,
-  device?: PreviewDevice
-): string {
+export function rowClass(horizontal: HorizontalAlign, vertical: VerticalAlign, device?: PreviewDevice): string {
   if (device === "phone") return "flex flex-col";
   if (device === "desktop") {
     return `flex flex-row ${JUSTIFY[horizontal].desktop} ${ITEMS[vertical].desktop}`;
@@ -74,4 +70,16 @@ export function phoneSizedItemClass(device?: PreviewDevice): string {
 
 export function phoneSizedStyle(phoneWidth: number, maxWidth: number): CSSProperties {
   return { "--phone-width": `${phoneWidth}%`, maxWidth } as CSSProperties;
+}
+
+// A Gallery's images across (2026-10-19): `phone` of them on a phone,
+// `desktop` from md up. Without a `device` the screen's width decides.
+export function perRowClass(device?: PreviewDevice): string {
+  if (device === "phone") return "grid grid-cols-[repeat(var(--per-row-phone),minmax(0,1fr))]";
+  if (device === "desktop") return "grid grid-cols-[repeat(var(--per-row),minmax(0,1fr))]";
+  return "grid grid-cols-[repeat(var(--per-row-phone),minmax(0,1fr))] md:grid-cols-[repeat(var(--per-row),minmax(0,1fr))]";
+}
+
+export function perRowStyle(perRow: { desktop: number; phone: number }): CSSProperties {
+  return { "--per-row": perRow.desktop, "--per-row-phone": perRow.phone } as CSSProperties;
 }

@@ -7,7 +7,12 @@ import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections
 import { arrangeItems, contentFits, contentKindOf, type ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
-import { DEFAULT_LOGO_PHONE_WIDTH, type LayoutBlock } from "@/lib/pageStyleLayout";
+import {
+  DEFAULT_GALLERY_PER_ROW,
+  DEFAULT_LOGO_PHONE_WIDTH,
+  type GalleryPerRow,
+  type LayoutBlock,
+} from "@/lib/pageStyleLayout";
 import {
   blockWidthOf,
   groupBlocksByRow,
@@ -25,6 +30,8 @@ import {
   phoneSizedClass,
   phoneSizedItemClass,
   phoneSizedStyle,
+  perRowClass,
+  perRowStyle,
   rowBlockClass,
   rowBlockStyle,
   rowClass,
@@ -105,7 +112,7 @@ export default function PagePreview({
   // the page is drawn at once; the admin preview loads it.
   const now = useMemo(
     () => (curationId ? siteData.pageContentNow(pageId, curationId) : null),
-    [siteData, pageId, curationId]
+    [siteData, pageId, curationId],
   );
   const content = now ?? loaded;
 
@@ -120,9 +127,7 @@ export default function PagePreview({
     setLoading(true);
     Promise.all([
       siteData.getCuration(curationId),
-      blockBuild
-        ? siteData.listSections(curationId)
-        : Promise.resolve<CurationSectionData[]>([]),
+      blockBuild ? siteData.listSections(curationId) : Promise.resolve<CurationSectionData[]>([]),
       blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
       blockBuild ? siteData.getSignupForms(pageId) : Promise.resolve<SignupFormContent[]>([]),
       siteData.getArtist(),
@@ -238,9 +243,7 @@ function BlockBuildPage({
   const formByBlock = new Map(signupForms.map((f) => [f.blockId, f]));
 
   const textStyleOf = (block: LayoutBlock) =>
-    isTextComponent(block.type)
-      ? mergeTextStyle(layout.textStyles[block.type], block.textStyle)
-      : undefined;
+    isTextComponent(block.type) ? mergeTextStyle(layout.textStyles[block.type], block.textStyle) : undefined;
 
   const works = (block: LayoutBlock, content: ComponentContent): ReactNode => {
     const shown = arrangeItems(curation.works, (w) => w.artworkId, content);
@@ -265,6 +268,7 @@ function BlockBuildPage({
         <ImageGrid
           images={shown.map((w) => ({ id: w.artworkId, url: w.imageUrl, title: w.catalogueName }))}
           spacing={layout.gridSpacing}
+          perRow={block.perRow ?? DEFAULT_GALLERY_PER_ROW}
           onOpen={onOpen}
         />
       );
@@ -294,10 +298,7 @@ function BlockBuildPage({
         <div className={phoneSizedClass(horizontal)}>
           <div
             className={phoneSizedItemClass()}
-            style={phoneSizedStyle(
-              block.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH,
-              designedWidth(block, layout.margins)
-            )}
+            style={phoneSizedStyle(block.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH, designedWidth(block, layout.margins))}
           >
             {homeHref ? <a href={homeHref}>{logo}</a> : logo}
           </div>
@@ -347,6 +348,7 @@ function BlockBuildPage({
         <ImageGrid
           images={section.media.map((m) => ({ id: m.imageId, url: m.url }))}
           spacing={layout.gridSpacing}
+          perRow={block.perRow ?? DEFAULT_GALLERY_PER_ROW}
         />
       );
     }
@@ -374,12 +376,7 @@ function BlockBuildPage({
       rows={rows}
       empty="Nothing on this page yet — use Arrange to type its header and drag the curation's works and sections onto it."
       footer={
-        artist && (
-          <SiteFooter
-            footer={artist.footer}
-            fontFamily={bodyTextCss(layout.textStyles.text).fontFamily}
-          />
-        )
+        artist && <SiteFooter footer={artist.footer} fontFamily={bodyTextCss(layout.textStyles.text).fontFamily} />
       }
     />
   );
@@ -442,13 +439,7 @@ function StyledFrame({
 }
 
 // No Display Style: the works with the Description boxed beside them.
-function PlainPage({
-  curation,
-  onOpen,
-}: {
-  curation: CurationDetail;
-  onOpen: (artworkId: string) => void;
-}) {
+function PlainPage({ curation, onOpen }: { curation: CurationDetail; onOpen: (artworkId: string) => void }) {
   return (
     <div className="flex items-start gap-6">
       <div className="min-w-0 flex-1">
@@ -457,28 +448,17 @@ function PlainPage({
         ) : (
           <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] items-start gap-4">
             {curation.works.map((w) => (
-              <button
-                key={w.artworkId}
-                type="button"
-                onClick={() => onOpen(w.artworkId)}
-                className="text-left"
-              >
+              <button key={w.artworkId} type="button" onClick={() => onOpen(w.artworkId)} className="text-left">
                 <div className="aspect-square overflow-hidden rounded-md bg-neutral-100 hover:opacity-90">
                   {w.imageUrl ? (
-                    <FadeImage
-                      src={w.imageUrl}
-                      alt={w.catalogueName}
-                      className="h-full w-full object-cover"
-                    />
+                    <FadeImage src={w.imageUrl} alt={w.catalogueName} className="h-full w-full object-cover" />
                   ) : (
                     <div className="flex h-full w-full items-center justify-center text-xs text-neutral-400">
                       No image
                     </div>
                   )}
                 </div>
-                <span className="mt-1.5 block truncate text-sm text-neutral-800">
-                  {w.catalogueName}
-                </span>
+                <span className="mt-1.5 block truncate text-sm text-neutral-800">{w.catalogueName}</span>
               </button>
             ))}
           </div>
@@ -488,9 +468,7 @@ function PlainPage({
       <div className="w-[27%] min-w-[14rem] shrink-0 rounded-xl border border-neutral-300 p-4">
         <h4 className="mb-2 text-center text-lg text-neutral-900">Description</h4>
         {curation.description ? (
-          <p className="whitespace-pre-line break-words text-sm text-neutral-800">
-            {curation.description}
-          </p>
+          <p className="whitespace-pre-line break-words text-sm text-neutral-800">{curation.description}</p>
         ) : (
           <p className="text-center text-sm text-neutral-400">No description yet.</p>
         )}
@@ -503,21 +481,24 @@ function PlainPage({
 // Supporting Image (image only).
 type GridImage = { id: string; url: string | null; title?: string };
 
-// Images four across, in order, spaced as the style's grid spacing.
-// With `onOpen`, clicking one opens it.
+// Images in order, the Gallery's number across on a desktop and on a
+// phone, spaced as the style's grid spacing. With `onOpen`, clicking one
+// opens it.
 function ImageGrid({
   images,
   spacing,
+  perRow,
   onOpen,
 }: {
   images: GridImage[];
   spacing: GridSpacing;
+  perRow: GalleryPerRow;
   onOpen?: (id: string) => void;
 }) {
   return (
     <div
-      className="grid grid-cols-4"
-      style={{ rowGap: spacing.vertical, columnGap: spacing.horizontal }}
+      className={perRowClass()}
+      style={{ ...perRowStyle(perRow), rowGap: spacing.vertical, columnGap: spacing.horizontal }}
     >
       {images.map((img) => {
         const picture = img.url ? (

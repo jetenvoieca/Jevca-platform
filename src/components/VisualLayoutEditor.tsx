@@ -113,6 +113,16 @@ export type BlockPhoneWidth = {
   onCommit: (value: number) => void;
 };
 
+// A component's own number settings at the end of Fine-tune (a Page
+// Style's Gallery's images per row, 2026-10-19).
+export type BlockFineTuneField = {
+  label: string;
+  unit: string;
+  value: number;
+  limits: { min: number; max: number };
+  onCommit: (value: number) => void;
+};
+
 // An on / off switch on a component's bar, after Remove (e.g. a mail
 // gallery's Regularise, 2026-10-09): shown highlighted while on.
 export type BlockToggle = { label: string; on: boolean; onToggle: () => void };
@@ -132,6 +142,7 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
   settingsPanel,
   blockToggle,
   phoneWidth,
+  fineTune,
   textStyleFonts,
   desktopWidth,
   backgroundColor,
@@ -144,14 +155,17 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
   onChange: (layout: L) => void;
   components: readonly EditorComponent<B["type"]>[];
   newBlock: (type: B["type"]) => B;
-  // How a component is drawn: its outline, or its content to type into.
-  renderBlock: (block: B) => ReactNode;
+  // How a component is drawn on `device`: its outline, or its content to
+  // type into.
+  renderBlock: (block: B, device: PreviewDevice) => ReactNode;
   // A component's own settings, if it has any; `onBlock` saves them.
   settingsPanel?: (block: B, onBlock: (block: B) => void) => BlockSettingsPanel | null;
   // A component's on / off switch, if it has one.
   blockToggle?: (block: B) => BlockToggle | null;
   // A component's own width on a phone, if it has one; `onBlock` saves it.
   phoneWidth?: (block: B, onBlock: (block: B) => void) => BlockPhoneWidth | null;
+  // A component's own Fine-tune settings, if it has any; `onBlock` saves them.
+  fineTune?: (block: B, onBlock: (block: B) => void) => BlockFineTuneField[] | null;
   // Header, Text and Text grid components get a Text style button for
   // their own look, in these fonts.
   textStyleFonts?: TextStyleFonts;
@@ -177,7 +191,7 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
       onChange(removeLayoutBlock<B, L>(layout, blockId));
       setSelectedId((current) => (current === blockId ? null : current));
     },
-    [layout, onChange]
+    [layout, onChange],
   );
 
   const deselect = useCallback(() => setSelectedId(null), []);
@@ -224,9 +238,7 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
         target = null;
       }
     }
-    setDropTarget((current) =>
-      JSON.stringify(current) === JSON.stringify(target) ? current : target
-    );
+    setDropTarget((current) => (JSON.stringify(current) === JSON.stringify(target) ? current : target));
   };
 
   const handleDragEnd = () => {
@@ -271,12 +283,7 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
           </button>
           <DeviceSwitch device={device} onDevice={setDevice} />
         </div>
-        <ScaledFrame
-          device={device}
-          desktopWidth={desktopWidth}
-          surroundColor={surroundColor}
-          fluid={fluid}
-        >
+        <ScaledFrame device={device} desktopWidth={desktopWidth} surroundColor={surroundColor} fluid={fluid}>
           <PageFrame
             margins={layout.margins}
             device={device}
@@ -288,17 +295,14 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
             {rows.map((row, i) => {
               const key = rowKey(row);
               const settings = rowSettingsOf(layout, key);
-              const setRow = (patch: Partial<RowSettings>) =>
-                onChange(updateRowSettings(layout, key, patch));
+              const setRow = (patch: Partial<RowSettings>) => onChange(updateRowSettings(layout, key, patch));
               return (
                 <div key={key}>
                   {i > 0 && (
                     <SpacingHandle
                       direction="vertical"
                       value={rowSettingsOf(layout, rowKey(rows[i - 1])).below}
-                      onChange={(below) =>
-                        onChange(updateRowSettings(layout, rowKey(rows[i - 1]), { below }))
-                      }
+                      onChange={(below) => onChange(updateRowSettings(layout, rowKey(rows[i - 1]), { below }))}
                     />
                   )}
                   <DropLine show={dropTarget?.kind === "row" && dropTarget.index === i} />
@@ -323,16 +327,17 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
                           selected={b.id === selectedId}
                           faded={b.id === draggingId}
                           dropSide={
-                            dropTarget?.kind === "beside" && dropTarget.blockId === b.id
-                              ? dropTarget.side
-                              : null
+                            dropTarget?.kind === "beside" && dropTarget.blockId === b.id ? dropTarget.side : null
                           }
                           ownSettings={settingsPanel?.(b, (next) =>
-                            onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
+                            onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) }),
                           )}
                           toggle={blockToggle?.(b)}
                           phoneWidth={phoneWidth?.(b, (next) =>
-                            onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) })
+                            onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) }),
+                          )}
+                          fineTune={fineTune?.(b, (next) =>
+                            onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) }),
                           )}
                           textStyle={
                             textStyleFonts && isTextComponent(b.type)
@@ -357,7 +362,7 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
                           onRow={setRow}
                           onRemove={() => remove(b.id)}
                         >
-                          {renderBlock(b)}
+                          {renderBlock(b, device)}
                         </BlockItem>
                       </BlockWithGap>
                     ))}
@@ -474,6 +479,7 @@ function BlockItem<B extends RowBlock>({
   ownSettings,
   toggle,
   phoneWidth,
+  fineTune,
   textStyle,
   onSelect,
   onWidth,
@@ -495,6 +501,7 @@ function BlockItem<B extends RowBlock>({
   ownSettings: BlockSettingsPanel | null | undefined;
   toggle: BlockToggle | null | undefined;
   phoneWidth: BlockPhoneWidth | null | undefined;
+  fineTune: BlockFineTuneField[] | null | undefined;
   textStyle: BlockTextStyle | null;
   onSelect: () => void;
   onWidth: (width: number) => void;
@@ -529,9 +536,7 @@ function BlockItem<B extends RowBlock>({
       overlay={
         dropSide && (
           <div
-            className={`absolute inset-y-0 w-1 rounded bg-blue-500 ${
-              dropSide === "left" ? "-left-1" : "-right-1"
-            }`}
+            className={`absolute inset-y-0 w-1 rounded bg-blue-500 ${dropSide === "left" ? "-left-1" : "-right-1"}`}
           />
         )
       }
@@ -619,6 +624,18 @@ function BlockItem<B extends RowBlock>({
             ) : (
               <p className="text-xs text-neutral-400">On a phone every component is full width.</p>
             )}
+            {fineTune?.map((field) => (
+              <NumberField
+                key={field.label}
+                label={field.label}
+                unit={field.unit}
+                step={1}
+                value={field.value}
+                limits={field.limits}
+                onCommit={field.onCommit}
+                wide
+              />
+            ))}
           </PanelBox>
         ) : panel === "text" && textStyle ? (
           <PanelBox title="Text style" onClose={() => setPanel(null)}>

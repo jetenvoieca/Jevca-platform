@@ -22,11 +22,7 @@ import {
   setPageComponentText,
 } from "@/lib/actions/pageComponents";
 import type { CurationDetail } from "@/lib/actions/curations";
-import {
-  MAX_SECTION_TEXT,
-  curationSectionLabel,
-  type CurationSectionData,
-} from "@/lib/curationSections";
+import { MAX_SECTION_TEXT, curationSectionLabel, type CurationSectionData } from "@/lib/curationSections";
 import {
   MAX_TYPED_TEXT,
   arrangeItems,
@@ -85,9 +81,7 @@ type DragData =
 
 // What a droppable is, so a drag only meets the targets it can use.
 type DropData =
-  | { kind: "tray" }
-  | { kind: "block"; block: LayoutBlock }
-  | { kind: "item"; blockId: string; itemId: string };
+  { kind: "tray" } | { kind: "block"; block: LayoutBlock } | { kind: "item"; blockId: string; itemId: string };
 
 // One picture in a component: a work or a Supporting Image.
 type Item = { id: string; url: string | null; title: string };
@@ -178,7 +172,7 @@ export default function PageSectionsArranger({
         setContents(new Map(components.map((c) => [c.blockId, c])));
         setSignupsSetUp(new Set(signupForms.map((f) => f.blockId)));
       }),
-    [siteData, curationId, pageId]
+    [siteData, curationId, pageId],
   );
 
   useEffect(() => {
@@ -192,7 +186,7 @@ export default function PageSectionsArranger({
   // is refused, says why and reloads what's saved.
   const change = async (
     update: (prev: Map<string, ComponentContent>) => Map<string, ComponentContent>,
-    save: () => Promise<{ ok: true } | { error: string }>
+    save: () => Promise<{ ok: true } | { error: string }>,
   ) => {
     setError(null);
     setContents((prev) => update(new Map(prev)));
@@ -214,7 +208,7 @@ export default function PageSectionsArranger({
           hiddenIds: [],
           orderIds: [],
         }),
-      () => setPageComponent(siteId, pageId, blockId, sectionId)
+      () => setPageComponent(siteId, pageId, blockId, sectionId),
     );
 
   const move = (fromBlockId: string, toBlockId: string) =>
@@ -225,7 +219,7 @@ export default function PageSectionsArranger({
         if (moving) m.set(toBlockId, { ...moving, blockId: toBlockId });
         return m;
       },
-      () => movePageComponent(siteId, pageId, fromBlockId, toBlockId)
+      () => movePageComponent(siteId, pageId, fromBlockId, toBlockId),
     );
 
   const empty = (blockId: string) =>
@@ -234,7 +228,7 @@ export default function PageSectionsArranger({
         m.delete(blockId);
         return m;
       },
-      () => clearPageComponent(siteId, pageId, blockId)
+      () => clearPageComponent(siteId, pageId, blockId),
     );
 
   // A Header's typed text (blank empties it), or this page's
@@ -260,7 +254,7 @@ export default function PageSectionsArranger({
           : { ...current!, text };
         return m.set(block.id, next);
       },
-      () => setPageComponentText(siteId, pageId, block.id, text)
+      () => setPageComponentText(siteId, pageId, block.id, text),
     );
 
   const saveItems = (blockId: string, items: { hiddenIds: string[]; orderIds: string[] }) =>
@@ -269,7 +263,7 @@ export default function PageSectionsArranger({
         const current = m.get(blockId);
         return current ? m.set(blockId, { ...current, ...items }) : m;
       },
-      () => setPageComponentItems(siteId, pageId, blockId, items)
+      () => setPageComponentItems(siteId, pageId, blockId, items),
     );
 
   // A component's pictures — the curation's works or Supporting Images —
@@ -331,15 +325,10 @@ export default function PageSectionsArranger({
       onDragCancel={() => setDragging(null)}
     >
       <div className="flex min-h-0 flex-1 gap-4 p-4">
-        <Tray
-          sections={sections}
-          removing={dragging?.type === "content" && !!dragging.fromBlockId}
-        />
+        <Tray sections={sections} removing={dragging?.type === "content" && !!dragging.fromBlockId} />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
-          {error && (
-            <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>
-          )}
+          {error && <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
           <ScaledFrame device="desktop" desktopWidth={PAGE_DESKTOP_WIDTH}>
             <PageFrame
               margins={layout.margins}
@@ -349,8 +338,7 @@ export default function PageSectionsArranger({
             >
               {rows.length === 0 ? (
                 <p className="py-10 text-center text-sm text-neutral-400">
-                  This page&apos;s Display Style has no components yet — add them under Templates
-                  → Page Styles.
+                  This page&apos;s Display Style has no components yet — add them under Templates → Page Styles.
                 </p>
               ) : (
                 rows.map((row, i) => {
@@ -370,11 +358,7 @@ export default function PageSectionsArranger({
                           ? mergeTextStyle(layout.textStyles[b.type], b.textStyle)
                           : undefined;
                         return (
-                          <div
-                            key={b.id}
-                            className={rowBlockClass("desktop")}
-                            style={rowBlockStyle(blockWidthOf(b))}
-                          >
+                          <div key={b.id} className={rowBlockClass("desktop")} style={rowBlockStyle(blockWidthOf(b))}>
                             <Slot block={b} dragging={dragging}>
                               {b.type === "logo" ? (
                                 <Labelled label={blockTypeLabel(b.type)}>
@@ -408,6 +392,7 @@ export default function PageSectionsArranger({
                                     type={b.type}
                                     doors={b.doors}
                                     signup={b.signup}
+                                    perRow={b.perRow}
                                     spacing={layout.gridSpacing}
                                   />
                                 </Labelled>
@@ -416,9 +401,7 @@ export default function PageSectionsArranger({
                                   block={b}
                                   content={content}
                                   kind={kind}
-                                  section={
-                                    content.sectionId ? sectionById.get(content.sectionId) : undefined
-                                  }
+                                  section={content.sectionId ? sectionById.get(content.sectionId) : undefined}
                                   items={itemsOf(content)}
                                   textStyle={textStyle ? bodyTextCss(textStyle) : undefined}
                                   dragging={dragging}
@@ -484,13 +467,7 @@ export default function PageSectionsArranger({
 // The list on the left: the works and the curation's sections, to drag
 // onto the page — and, while a component's content is being dragged,
 // the place to drop it to empty that component.
-function Tray({
-  sections,
-  removing,
-}: {
-  sections: CurationSectionData[] | null;
-  removing: boolean;
-}) {
+function Tray({ sections, removing }: { sections: CurationSectionData[] | null; removing: boolean }) {
   const { setNodeRef, isOver } = useDroppable({ id: TRAY_ID, data: { kind: "tray" } });
   const outline = !removing
     ? "border-neutral-300"
@@ -544,15 +521,7 @@ function TrayItem({ content }: { content: Content }) {
 
 // One component on the page, as a drop target: while something is
 // dragged it's outlined in blue if that fits it, or faded if not.
-function Slot({
-  block,
-  dragging,
-  children,
-}: {
-  block: LayoutBlock;
-  dragging: DragData | null;
-  children: ReactNode;
-}) {
+function Slot({ block, dragging, children }: { block: LayoutBlock; dragging: DragData | null; children: ReactNode }) {
   const { setNodeRef, isOver } = useDroppable({
     id: `block:${block.id}`,
     data: { kind: "block", block },
@@ -621,7 +590,13 @@ function SignupSlot({
   return (
     <div className="relative">
       <Labelled label={blockTypeLabel(block.type)}>
-        <BlockShape type={block.type} doors={block.doors} signup={block.signup} spacing={gridSpacing} />
+        <BlockShape
+          type={block.type}
+          doors={block.doors}
+          signup={block.signup}
+          perRow={block.perRow}
+          spacing={gridSpacing}
+        />
       </Labelled>
       <div className="absolute inset-0 flex items-center justify-center rounded-md bg-white/85 p-3">
         <div className="flex items-center gap-4 rounded-md border border-neutral-300 bg-white px-4 py-3 shadow-sm">
@@ -669,8 +644,7 @@ function FilledSlot({
   onSaveText: (text: string | null) => void;
   onSaveItems: (items: { hiddenIds: string[]; orderIds: string[] }) => void;
 }) {
-  const barContent: Content =
-    kind === "WORKS" || !section ? WORKS : sectionContent(section);
+  const barContent: Content = kind === "WORKS" || !section ? WORKS : sectionContent(section);
   const edited = kind === "DESCRIPTION" && content.text !== null;
 
   let body: ReactNode = null;
@@ -704,9 +678,7 @@ function FilledSlot({
         <video src={video.url} className="aspect-video w-full rounded bg-black" />
       )
     ) : (
-      <p className="py-6 text-center text-sm text-neutral-400">
-        No video yet — choose one on the Curations page.
-      </p>
+      <p className="py-6 text-center text-sm text-neutral-400">No video yet — choose one on the Curations page.</p>
     );
   }
 
@@ -717,9 +689,7 @@ function FilledSlot({
         label={blockTypeLabel(block.type)}
         content={barContent}
         note={edited ? "Edited for this page" : null}
-        action={
-          edited ? { label: "Use the curation's", onClick: () => onSaveText(null) } : null
-        }
+        action={edited ? { label: "Use the curation's", onClick: () => onSaveText(null) } : null}
         onEmpty={onEmpty}
       />
       {body}
@@ -754,9 +724,7 @@ function ContentBar({
       ref={setNodeRef}
       {...attributes}
       {...listeners}
-      className={`mb-2 flex cursor-grab items-center gap-3 active:cursor-grabbing ${
-        isDragging ? "opacity-40" : ""
-      }`}
+      className={`mb-2 flex cursor-grab items-center gap-3 active:cursor-grabbing ${isDragging ? "opacity-40" : ""}`}
     >
       <p className="text-[10px] uppercase tracking-wide text-neutral-400">{label}</p>
       <p className="text-sm font-medium text-neutral-900">{content.label}</p>
@@ -869,9 +837,7 @@ function ItemsGrid({
       )}
       {removed.length > 0 && (
         <div className="mt-3 border-t border-neutral-200 pt-2">
-          <p className="mb-1.5 text-xs text-neutral-500">
-            Removed from this page — click one to put it back:
-          </p>
+          <p className="mb-1.5 text-xs text-neutral-500">Removed from this page — click one to put it back:</p>
           <div className="flex flex-wrap gap-2">
             {removed.map((item) => (
               <button
@@ -921,10 +887,7 @@ function ItemTile({
     data: { kind: "item", blockId, itemId: item.id } satisfies DropData,
   });
   const target =
-    dragging?.type === "item" &&
-    dragging.blockId === blockId &&
-    dragging.itemId !== item.id &&
-    drop.isOver;
+    dragging?.type === "item" && dragging.blockId === blockId && dragging.itemId !== item.id && drop.isOver;
   return (
     <div
       ref={(node) => {
