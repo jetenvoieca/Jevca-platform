@@ -496,10 +496,7 @@ function ImageGrid({
   onOpen?: (id: string) => void;
 }) {
   return (
-    <div
-      className={perRowClass()}
-      style={{ ...perRowStyle(perRow), rowGap: spacing.vertical, columnGap: spacing.horizontal }}
-    >
+    <div className={perRowClass()} style={perRowStyle(perRow, spacing)}>
       {images.map((img) => {
         const picture = img.url ? (
           <FadeImage src={img.url} alt={img.title ?? ""} className="aspect-square w-full object-cover" />

@@ -126,10 +126,7 @@ function PlaceholderGrid({
   device?: PreviewDevice;
 }) {
   return (
-    <div
-      className={perRowClass(device)}
-      style={{ ...perRowStyle(perRow), rowGap: spacing.vertical, columnGap: spacing.horizontal }}
-    >
+    <div className={perRowClass(device)} style={perRowStyle(perRow, spacing)}>
       {Array.from({ length: perRow.desktop * 2 }, (_, i) => (
         <div key={i} className="aspect-square rounded bg-neutral-200" />
       ))}

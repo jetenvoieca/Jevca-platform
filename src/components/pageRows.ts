@@ -72,14 +72,34 @@ export function phoneSizedStyle(phoneWidth: number, maxWidth: number): CSSProper
   return { "--phone-width": `${phoneWidth}%`, maxWidth } as CSSProperties;
 }
 
-// A Gallery's images across (2026-10-19): `phone` of them on a phone,
-// `desktop` from md up. Without a `device` the screen's width decides.
+// A Gallery's images across (2026-10-19): `phone` of them on a phone;
+// from md up as many as fit, never more than `desktop` and none
+// narrower than GALLERY_MIN_TILE unless only one fits — so 3 across on
+// a desktop steps down to 2 on a small screen. With a `device` (the
+// visual editor) exactly that device's number.
+export const GALLERY_MIN_TILE = 240;
+
 export function perRowClass(device?: PreviewDevice): string {
   if (device === "phone") return "grid grid-cols-[repeat(var(--per-row-phone),minmax(0,1fr))]";
   if (device === "desktop") return "grid grid-cols-[repeat(var(--per-row),minmax(0,1fr))]";
-  return "grid grid-cols-[repeat(var(--per-row-phone),minmax(0,1fr))] md:grid-cols-[repeat(var(--per-row),minmax(0,1fr))]";
+  return "grid grid-cols-[repeat(var(--per-row-phone),minmax(0,1fr))] md:grid-cols-[repeat(auto-fill,minmax(var(--per-row-track),1fr))]";
 }
 
-export function perRowStyle(perRow: { desktop: number; phone: number }): CSSProperties {
-  return { "--per-row": perRow.desktop, "--per-row-phone": perRow.phone } as CSSProperties;
+// The numbers across and the grid's spacing. `--per-row-track` is the
+// narrowest a tile may be from md up: the larger of GALLERY_MIN_TILE and
+// the width that fits exactly `desktop` across (a hair less, so rounding
+// never drops one), but never wider than the grid.
+export function perRowStyle(
+  perRow: { desktop: number; phone: number },
+  spacing: { horizontal: number; vertical: number },
+): CSSProperties {
+  const n = perRow.desktop;
+  const exact = `calc((100% - ${(n - 1) * spacing.horizontal}px) / ${n} - 0.1px)`;
+  return {
+    "--per-row": n,
+    "--per-row-phone": perRow.phone,
+    "--per-row-track": `min(100%, max(${GALLERY_MIN_TILE}px, ${exact}))`,
+    rowGap: spacing.vertical,
+    columnGap: spacing.horizontal,
+  } as CSSProperties;
 }
