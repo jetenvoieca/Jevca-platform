@@ -110,13 +110,23 @@ export default function WorkPresentation({
   // The hidden ones of the words and the forms take no space, except
   // beside the picture on a desktop (see below).
   const hiddenLayer = side ? "absolute inset-x-0 top-0 md:static" : "absolute inset-x-0 top-0";
+  // A form, with Back above it to return to the words (the close cross
+  // closes the whole window).
   const formLayer = (open: boolean, form: ReactNode) => (
     <div
       inert={!open}
-      className={`col-start-1 row-start-1 min-w-0 self-start transition-all duration-500 ease-out ${side ? "md:pt-6" : ""} ${
+      className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-3 self-start transition-all duration-500 ease-out ${
         open ? "" : `invisible translate-x-full opacity-0 ${hiddenLayer}`
       }`}
     >
+      <button
+        type="button"
+        onClick={() => setPanel("words")}
+        className="self-start uppercase tracking-[0.15em] opacity-70 transition-opacity hover:opacity-100"
+        style={{ color: colours.text, fontSize: Math.round(settings.textSize * 0.75) }}
+      >
+        {labels.back}
+      </button>
       {form}
     </div>
   );
@@ -214,8 +224,8 @@ export default function WorkPresentation({
           them from the top of the column. Beside the picture on a desktop
           they all share one space as tall as the tallest, so the window
           keeps its size when a form opens; elsewhere the hidden ones are
-          lifted out of the way. Beside the picture the forms start a
-          little lower, clear of the close cross. */}
+          lifted out of the way. A form's Back sits above it, clear of
+          the close cross. */}
       <div className="relative grid min-w-0 overflow-hidden">
         <div
           inert={panel !== "words"}
