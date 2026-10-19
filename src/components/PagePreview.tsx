@@ -34,6 +34,8 @@ import SiteFooter from "@/components/SiteFooter";
 import { PAGE_DESKTOP_WIDTH } from "@/components/visualEditorParts";
 import { bodyTextCss } from "@/components/textStyleCss";
 import CurationWorkView from "@/components/CurationWorkView";
+import { PresentationProvider } from "@/components/WorkPresentation";
+import { DEFAULT_PRESENTATION } from "@/lib/presentationTemplate";
 import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
 import CanvasPlayer from "@/components/CanvasPlayer";
@@ -173,20 +175,26 @@ export default function PagePreview({
     <CurationWorkView curationId={curation.id} artworkId={viewingId} onClose={closeView} />
   );
 
+  // Works open with the Page Style's Presentation Template (2026-10-19)
+  // — also those opened from a Canvas's curations (CurationPanel).
+  const presentation = style?.presentation ?? DEFAULT_PRESENTATION;
+
   if (fullScreen) {
     return (
-      <>
+      <PresentationProvider settings={presentation}>
         {body}
         {viewer}
-      </>
+      </PresentationProvider>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
-      {viewer}
-    </div>
+    <PresentationProvider settings={presentation}>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="min-h-0 flex-1 overflow-y-auto">{body}</div>
+        {viewer}
+      </div>
+    </PresentationProvider>
   );
 }
 

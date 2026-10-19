@@ -1338,8 +1338,31 @@ model PageStyle {
 
   layout Json @default("{}")
 
+  // How a work's details look when it's opened on these pages
+  // (2026-10-19) — null = the built-in look. See PresentationTemplate.
+  presentationTemplateId String?
+  presentationTemplate   PresentationTemplate? @relation(fields: [presentationTemplateId], references: [id], onDelete: SetNull)
+
   // Pages displayed with this style — see Page.pageStyleId.
   pages Page[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A Presentation Template (2026-10-19, Craig's request) — how a work's
+// details look when a visitor opens it on a page (the Presentation
+// window): layout, colours, fonts, which details show and the buttons'
+// wording. Shared by every site, managed under Templates → Presentations,
+// chosen per Page Style. `settings` is JSON (see
+// lib/presentationTemplate.ts).
+model PresentationTemplate {
+  id   String @id @default(cuid())
+  name String @unique
+
+  settings Json @default("{}")
+
+  pageStyles PageStyle[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { EMAIL_DOMAIN } from "@/lib/email";
 import { publicMediaUrl } from "@/lib/r2";
 import { artworkDetailLines } from "@/lib/artworkDetails";
 import { toArtworkImages, type ArtworkImage } from "@/lib/artworkImages";
@@ -71,6 +72,20 @@ export type CurationWorkPresentation = {
   defaultInstalmentCount: number;
   // Main first — this curation's main image is images[0].
   images: ArtworkImage[];
+  // For the Presentation window's details (2026-10-19 — see
+  // lib/presentationTemplate.ts): the artwork's own description, its
+  // Presentation medium (else Medium), edition, type, size, where it can
+  // be seen, whether it's still for sale, the artist's release message
+  // (shown with the instalment terms) and where enquiries go.
+  artworkDescription: string | null;
+  medium: string | null;
+  edition: string | null;
+  type: string | null;
+  size: string | null;
+  viewingLocation: string | null;
+  available: boolean;
+  releaseMessage: string;
+  enquiryEmail: string | null;
 };
 
 // A work's images in a curation: up to 4, main first — the same limit as
@@ -384,14 +399,26 @@ export async function getCurationWorkPresentation(
       artwork: {
         select: {
           catalogueName: true,
+          description: true,
           type: true,
           size: true,
           medium: true,
+          presentationMedium: true,
+          edition: true,
+          viewingLocation: true,
+          availability: true,
           offeredPrice: true,
           priceCurrency: true,
           mainImageId: true,
           images: { select: IMAGE_FIELDS },
-          artist: { select: { defaultInstalmentCount: true } },
+          artist: {
+            select: {
+              defaultInstalmentCount: true,
+              defaultReleaseMessage: true,
+              emailSlug: true,
+              email: true,
+            },
+          },
         },
       },
     },
@@ -413,6 +440,16 @@ export async function getCurationWorkPresentation(
           null
         )
       : toArtworkImages(artwork.images, artwork.mainImageId),
+    artworkDescription: artwork.description,
+    medium: artwork.presentationMedium || artwork.medium,
+    edition: artwork.edition,
+    type: artwork.type,
+    size: artwork.size,
+    viewingLocation: artwork.viewingLocation,
+    available: artwork.availability === "AVAILABLE",
+    releaseMessage: artwork.artist.defaultReleaseMessage,
+    // The artist's own address, so enquiries arrive in the Inbox.
+    enquiryEmail: artwork.artist.emailSlug ? `${artwork.artist.emailSlug}@${EMAIL_DOMAIN}` : artwork.artist.email,
   };
 }
 

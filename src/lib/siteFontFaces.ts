@@ -8,6 +8,21 @@ import type { SiteFontId } from "@/lib/siteFonts";
 // by visitors. Not preloaded — a browser only downloads a font a page
 // actually uses. next/font needs every path written out in full.
 
+// Jost (2026-10-19 — the first Presentation template, from Louise's
+// website): light 300 too, for large titles.
+const jost = localFont({
+  src: [
+    { path: "../../node_modules/@fontsource/jost/files/jost-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/jost/files/jost-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../node_modules/@fontsource/jost/files/jost-latin-500-normal.woff2", weight: "500", style: "normal" },
+    { path: "../../node_modules/@fontsource/jost/files/jost-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../../node_modules/@fontsource/jost/files/jost-latin-400-italic.woff2", weight: "400", style: "italic" },
+  ],
+  display: "swap",
+  preload: false,
+  fallback: ["sans-serif"],
+});
+
 const lato = localFont({
   src: [
     { path: "../../node_modules/@fontsource/lato/files/lato-latin-400-normal.woff2", weight: "400", style: "normal" },
@@ -143,6 +158,7 @@ const spaceMono = localFont({
 // Each font's CSS font-family, by id.
 export const SITE_FONT_FAMILY: Record<SiteFontId, string> = {
   "dm-sans": dmSans.style.fontFamily,
+  jost: jost.style.fontFamily,
   lato: lato.style.fontFamily,
   montserrat: montserrat.style.fontFamily,
   raleway: raleway.style.fontFamily,

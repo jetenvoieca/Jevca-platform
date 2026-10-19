@@ -1,5 +1,6 @@
 "use server";
 
+import { normalizePresentation } from "@/lib/presentationTemplate";
 import { db } from "@/lib/db";
 import { getSiteArtist } from "@/lib/actions/siteArtist";
 import {
@@ -181,7 +182,14 @@ export async function getPublishedSite(
     ...p,
     style:
       p.style && isPageStyleType(p.style.type)
-        ? { id: p.style.id, name: p.style.name, ...normalizeLayout(p.style.type, p.style.layout) }
+        ? {
+            id: p.style.id,
+            name: p.style.name,
+            presentationTemplateId: p.style.presentationTemplateId ?? null,
+            // Published before Presentation Templates (2026-10-19): the built-in look.
+            presentation: normalizePresentation(p.style.presentation),
+            ...normalizeLayout(p.style.type, p.style.layout),
+          }
         : null,
     components: p.components ?? [],
     signupForms: p.signupForms ?? [],

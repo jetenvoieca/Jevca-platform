@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { isPageStyleType } from "@/lib/pageStyleTypes";
 import { normalizeLayout, type PageStyleLayout } from "@/lib/pageStyleLayout";
+import { normalizePresentation, type PresentationSettings } from "@/lib/presentationTemplate";
 
 // Page Styles (2026-10-04) — see the note on PageStyle in schema.prisma.
 // Shared by every site, so nothing here is scoped to a site or artist.
@@ -11,9 +12,22 @@ import { normalizeLayout, type PageStyleLayout } from "@/lib/pageStyleLayout";
 
 // A style's type and its layout travel together (PageStyleLayout), so
 // the layout's shape always matches the type.
-export type PageStyleSummary = { id: string; name: string } & PageStyleLayout;
+// `presentation` (2026-10-19) is how a work's details look when opened
+// on these pages: its Presentation Template's settings, or the built-in
+// look when it has none.
+export type PageStyleSummary = {
+  id: string;
+  name: string;
+  presentationTemplateId: string | null;
+  presentation: PresentationSettings;
+} & PageStyleLayout;
 
-export type PageStyleInput = { name: string; type: string; layout: unknown };
+export type PageStyleInput = {
+  name: string;
+  type: string;
+  layout: unknown;
+  presentationTemplateId: string | null;
+};
 
 type Result = { ok: true } | { error: string };
 
@@ -24,30 +38,51 @@ function isUniqueViolation(err: unknown): boolean {
 
 // The layout is cleaned with the same rules the editor uses, so whatever
 // is saved is always valid for the type.
-function validate(
+async function validate(
   input: PageStyleInput
-): { error: string } | { data: { name: string } & PageStyleLayout } {
+): Promise<{ error: string } | { data: { name: string; presentationTemplateId: string | null } & PageStyleLayout }> {
   const name = input.name.trim();
   if (!name) return { error: "Give the style a name." };
   if (!isPageStyleType(input.type)) return { error: "Choose a Style Type." };
-  return { data: { name, ...normalizeLayout(input.type, input.layout) } };
+  const templateId = input.presentationTemplateId || null;
+  if (templateId && !(await db.presentationTemplate.findUnique({ where: { id: templateId }, select: { id: true } }))) {
+    return { error: "That Presentation template no longer exists." };
+  }
+  return { data: { name, presentationTemplateId: templateId, ...normalizeLayout(input.type, input.layout) } };
 }
 
 // Alphabetical, so a style is easy to find as the list grows.
 export async function listPageStyles(): Promise<PageStyleSummary[]> {
   const rows = await db.pageStyle.findMany({
     orderBy: { name: "asc" },
-    select: { id: true, name: true, type: true, layout: true },
+    select: {
+      id: true,
+      name: true,
+      type: true,
+      layout: true,
+      presentationTemplateId: true,
+      presentationTemplate: { select: { settings: true } },
+    },
   });
   return rows.flatMap((r) =>
-    isPageStyleType(r.type) ? [{ id: r.id, name: r.name, ...normalizeLayout(r.type, r.layout) }] : []
+    isPageStyleType(r.type)
+      ? [
+          {
+            id: r.id,
+            name: r.name,
+            presentationTemplateId: r.presentationTemplateId,
+            presentation: normalizePresentation(r.presentationTemplate?.settings),
+            ...normalizeLayout(r.type, r.layout),
+          },
+        ]
+      : []
   );
 }
 
 export async function createPageStyle(
   input: PageStyleInput
 ): Promise<{ id: string } | { error: string }> {
-  const valid = validate(input);
+  const valid = await validate(input);
   if ("error" in valid) return valid;
   try {
     const style = await db.pageStyle.create({ data: valid.data, select: { id: true } });
@@ -59,7 +94,7 @@ export async function createPageStyle(
 }
 
 export async function updatePageStyle(id: string, input: PageStyleInput): Promise<Result> {
-  const valid = validate(input);
+  const valid = await validate(input);
   if ("error" in valid) return valid;
   try {
     await db.pageStyle.update({ where: { id }, data: valid.data });
@@ -78,7 +113,7 @@ export async function duplicatePageStyle(
 ): Promise<{ id: string } | { error: string }> {
   const source = await db.pageStyle.findUnique({
     where: { id },
-    select: { name: true, type: true, layout: true },
+    select: { name: true, type: true, layout: true, presentationTemplateId: true },
   });
   if (!source || !isPageStyleType(source.type)) return { error: "Style not found." };
 
@@ -89,7 +124,11 @@ export async function duplicatePageStyle(
 
   try {
     const style = await db.pageStyle.create({
-      data: { name, ...normalizeLayout(source.type, source.layout) },
+      data: {
+        name,
+        presentationTemplateId: source.presentationTemplateId,
+        ...normalizeLayout(source.type, source.layout),
+      },
       select: { id: true },
     });
     return { id: style.id };

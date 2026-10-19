@@ -33,7 +33,13 @@ import PageStyleLayoutEditor from "@/components/PageStyleLayoutEditor";
 // and saves itself shortly after (a new style is created the first
 // time it has both a name and a type — see useAutoSave).
 // Duplicate makes a copy and selects it, ready to Edit.
-export default function PageStylesManager({ styles }: { styles: PageStyleSummary[] }) {
+export default function PageStylesManager({
+  styles,
+  presentationTemplates,
+}: {
+  styles: PageStyleSummary[];
+  presentationTemplates: { id: string; name: string }[];
+}) {
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PageStyleDraft | null>(null);
@@ -45,6 +51,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
     name: d.name,
     type: d.type,
     layout: draftLayout(d)?.layout ?? {},
+    presentationTemplateId: d.presentationTemplateId,
   });
   const autoSave = useAutoSave<PageStyleDraft>({
     create: (d) => createPageStyle(toInput(d)),
@@ -182,6 +189,7 @@ export default function PageStylesManager({ styles }: { styles: PageStyleSummary
         {draft ? (
           <PageStyleEditor
             draft={draft}
+            presentationTemplates={presentationTemplates}
             onChange={handleChange}
             status={isPending ? { text: "Saving…", isError: false } : autoSave.status}
             onClose={closeEditor}

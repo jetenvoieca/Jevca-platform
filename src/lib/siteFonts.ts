@@ -8,6 +8,7 @@ export const SITE_FONT_KINDS = ["Sans serif", "Serif", "Monospace"] as const;
 
 export const SITE_FONTS = [
   { id: "dm-sans", label: "DM Sans", kind: "Sans serif" },
+  { id: "jost", label: "Jost", kind: "Sans serif" },
   { id: "lato", label: "Lato", kind: "Sans serif" },
   { id: "montserrat", label: "Montserrat", kind: "Sans serif" },
   { id: "raleway", label: "Raleway", kind: "Sans serif" },

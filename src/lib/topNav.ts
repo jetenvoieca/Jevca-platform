@@ -6,6 +6,7 @@ export type TopNavKey =
   | "clients"
   | "pageStyles"
   | "menuStyles"
+  | "presentationTemplates"
   | "mailTemplates"
   | "inbox"
   | "subscriptions"
@@ -95,6 +96,11 @@ export function buildTemplatesSection(active: TopNavKey | null): AppShellNavEntr
         active: active === "pageStyles",
       },
       { label: "Menus", href: "/templates/menus", active: active === "menuStyles" },
+      {
+        label: "Presentations",
+        href: "/templates/presentations",
+        active: active === "presentationTemplates",
+      },
       { label: "Mail Templates", href: "/templates/mail", active: active === "mailTemplates" },
     ],
   };

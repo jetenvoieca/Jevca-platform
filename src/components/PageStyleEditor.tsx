@@ -21,6 +21,8 @@ export type PageStyleDraft = {
   type: PageStyleType | "";
   blockBuild: BlockBuildLayout;
   canvas: CanvasLayout;
+  // How a work's details look when opened (2026-10-19); null = built-in.
+  presentationTemplateId: string | null;
 };
 
 export const EMPTY_BLOCK_BUILD = (
@@ -30,12 +32,16 @@ export const EMPTY_BLOCK_BUILD = (
 export const EMPTY_CANVAS = (emptyLayout("CANVAS") as Extract<PageStyleLayout, { type: "CANVAS" }>)
   .layout;
 
-export function draftFrom(name: string, style: PageStyleLayout | null): PageStyleDraft {
+export function draftFrom(
+  name: string,
+  style: (PageStyleLayout & { presentationTemplateId: string | null }) | null
+): PageStyleDraft {
   return {
     name,
     type: style?.type ?? "",
     blockBuild: style?.type === "BLOCK_BUILD" ? style.layout : EMPTY_BLOCK_BUILD,
     canvas: style?.type === "CANVAS" ? style.layout : EMPTY_CANVAS,
+    presentationTemplateId: style?.presentationTemplateId ?? null,
   };
 }
 
@@ -75,11 +81,14 @@ const smallButton =
 // Saving is automatic (see PageStylesManager); `status` reports it.
 export default function PageStyleEditor({
   draft,
+  presentationTemplates,
   onChange,
   status,
   onClose,
 }: {
   draft: PageStyleDraft;
+  // Templates → Presentations, to choose from.
+  presentationTemplates: { id: string; name: string }[];
   onChange: (draft: PageStyleDraft) => void;
   status: { text: string; isError: boolean };
   onClose: () => void;
@@ -128,6 +137,22 @@ export default function PageStyleEditor({
             </option>
           ))}
         </select>
+        {/* How a work's details look when it's opened on these pages. */}
+        <label className="flex items-center gap-2 text-sm text-neutral-700">
+          <span className="shrink-0">Presentation</span>
+          <select
+            value={draft.presentationTemplateId ?? ""}
+            onChange={(e) => onChange({ ...draft, presentationTemplateId: e.target.value || null })}
+            className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">Built-in</option>
+            {presentationTemplates.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        </label>
 
         {draft.type === "CANVAS" && (
           <div className="mt-2 flex flex-col gap-2.5">

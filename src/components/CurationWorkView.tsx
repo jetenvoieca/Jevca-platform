@@ -3,32 +3,15 @@
 import { useEffect, useState } from "react";
 import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import { useSiteData } from "@/lib/siteData";
-import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
-import FadeImage from "@/components/FadeImage";
+import WorkPresentation, { usePresentation } from "@/components/WorkPresentation";
 
-// One work's presentation within a curation, read-only (2026-10-05, from
-// Craig's mockup) — its details panel, opened from a page. Shows just
-// the contents, no field labels: the image being viewed, the work's
-// images beneath it (clicking one shows it above — it only changes
-// what's viewed here, nothing is saved), its name and this curation's
-// description, and its price with what it comes to in instalments.
-// Edited on the Curations page (CurationWorkPresentation). Content comes
-// from the page's site data (lib/siteData.tsx) — live in the admin
-// preview, the published snapshot on the site.
-
-function formatMoney(n: number, currency: string): string {
-  const digits = Number.isInteger(n) ? 0 : 2;
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: digits,
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return `${currency} ${n.toFixed(digits)}`;
-  }
-}
+// One work's details, opened from a page (2026-10-05; drawn from the
+// page's Presentation Template since 2026-10-19 — see WorkPresentation
+// and lib/presentationTemplate.ts). Clicking one of its other pictures
+// shows it instead; nothing is saved. Edited on the Curations page
+// (CurationWorkPresentation). Content comes from the page's site data
+// (lib/siteData.tsx) — live in the admin preview, the published snapshot
+// on the site.
 
 export default function CurationWorkView({
   curationId,
@@ -40,6 +23,7 @@ export default function CurationWorkView({
   onClose: () => void;
 }) {
   const siteData = useSiteData();
+  const settings = usePresentation();
   const [data, setData] = useState<CurationWorkPresentation | null>(null);
   const [loading, setLoading] = useState(true);
   const [viewIndex, setViewIndex] = useState(0);
@@ -66,107 +50,36 @@ export default function CurationWorkView({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  let body;
-  if (loading) {
-    body = <p className="py-10 text-center text-sm text-neutral-400">Loading…</p>;
-  } else if (!data) {
-    body = (
-      <p className="py-10 text-center text-sm text-neutral-400">
-        This work is no longer in the curation.
-      </p>
-    );
-  } else {
-    const viewed = data.images[viewIndex] ?? data.images[0] ?? null;
-    const description = data.description ?? data.defaultDescription ?? "";
-    const price = data.offeredPrice != null ? Number(data.offeredPrice) : null;
-    const count = data.defaultInstalmentCount;
-    const perInstalment =
-      price != null && price > 0 && isValidInstalmentCount(count)
-        ? splitIntoInstalments(price, count)[0]
-        : null;
-
-    body = (
-      <div className="flex flex-col gap-4">
-        {viewed &&
-          (viewed.kind === "VIDEO" ? (
-            <video
-              key={viewed.id}
-              src={viewed.displayUrl}
-              poster={viewed.posterUrl ?? undefined}
-              controls
-              className="max-h-[60vh] w-full rounded-md bg-black object-contain"
-            />
-          ) : (
-            <FadeImage
-              src={viewed.displayUrl}
-              alt={data.catalogueName}
-              className="max-h-[60vh] w-full rounded-md object-contain"
-            />
-          ))}
-
-        {data.images.length > 1 && (
-          <div className="grid grid-cols-4 gap-2">
-            {data.images.map((img, i) => (
-              <button
-                key={img.id}
-                type="button"
-                onClick={() => setViewIndex(i)}
-                className={`overflow-hidden rounded-md border-2 ${
-                  i === viewIndex ? "border-neutral-900" : "border-transparent hover:border-neutral-300"
-                }`}
-              >
-                <FadeImage
-                  src={img.kind === "VIDEO" ? (img.posterUrl ?? img.url) : img.url}
-                  alt=""
-                  className="aspect-square w-full object-cover"
-                />
-              </button>
-            ))}
-          </div>
-        )}
-
-        <div className="rounded-xl border border-neutral-300 p-4">
-          <p className="mb-3 text-center text-xl text-neutral-900">{data.catalogueName}</p>
-          {description && (
-            <p className="whitespace-pre-line break-words text-sm text-neutral-800">
-              {description}
-            </p>
-          )}
-        </div>
-
-        {price != null && (
-          <div className="rounded-xl border border-neutral-300 p-4 text-center text-sm text-neutral-800">
-            {formatMoney(price, data.priceCurrency)}
-            {perInstalment != null && (
-              <span className="text-neutral-500">
-                {" "}
-                or {count} instalments of {formatMoney(perInstalment, data.priceCurrency)}
-              </span>
-            )}
-          </div>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
+      className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4 sm:p-8"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="flex max-h-full w-full max-w-md flex-col rounded-lg bg-white shadow-xl">
-        <div className="flex shrink-0 justify-end border-b border-neutral-200 px-4 py-3">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
-          >
-            Close
-          </button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto p-4">{body}</div>
+      <div
+        className={`relative mx-auto my-auto w-full ${settings.layout === "side" ? "max-w-6xl" : "max-w-xl"}`}
+        onClick={(e) => {
+          if (e.target === e.currentTarget) onClose();
+        }}
+      >
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute -right-2 -top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-700 shadow-md hover:bg-neutral-50"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+        {loading || !data ? (
+          <div className="rounded-lg bg-white px-6 py-16 text-center text-sm text-neutral-400">
+            {loading ? "Loading…" : "This work is no longer in the curation."}
+          </div>
+        ) : (
+          <WorkPresentation data={data} settings={settings} viewIndex={viewIndex} onView={setViewIndex} />
+        )}
       </div>
     </div>
   );
