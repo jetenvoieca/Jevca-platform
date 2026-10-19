@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useState } from "react";
 import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import { useSiteData } from "@/lib/siteData";
@@ -52,7 +53,10 @@ export default function CurationWorkView({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  return (
+  // Drawn at the top of the page (a portal), so it sits above everything
+  // on it — the site's menu button included — whatever the page's own
+  // layering (a page fading in is a layer of its own).
+  return createPortal(
     <div
       className="fixed inset-0 z-50 overflow-y-auto bg-black/50 p-4 sm:p-8"
       onClick={(e) => {
@@ -81,6 +85,7 @@ export default function CurationWorkView({
           />
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }

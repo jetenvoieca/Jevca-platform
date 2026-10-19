@@ -1,5 +1,6 @@
 "use client";
 
+import { createPortal } from "react-dom";
 import { useEffect, useRef, useState, type ReactNode, type RefObject } from "react";
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { CurationSectionData } from "@/lib/curationSections";
@@ -46,14 +47,12 @@ export default function CurationPanel({
 
   useEffect(() => {
     let current = true;
-    Promise.all([siteData.getCuration(curationId), siteData.listSections(curationId)]).then(
-      ([detail, rows]) => {
-        if (!current) return;
-        setCuration(detail);
-        setSections(rows);
-        setLoading(false);
-      }
-    );
+    Promise.all([siteData.getCuration(curationId), siteData.listSections(curationId)]).then(([detail, rows]) => {
+      if (!current) return;
+      setCuration(detail);
+      setSections(rows);
+      setLoading(false);
+    });
     return () => {
       current = false;
     };
@@ -78,7 +77,9 @@ export default function CurationPanel({
   const work = curation?.works.find((w) => w.artworkId === currentId) ?? null;
   const others = curation?.works.filter((w) => w.artworkId !== currentId) ?? [];
 
-  return (
+  // Drawn at the top of the page (a portal), above everything on it —
+  // the site's menu button included (see CurationWorkView).
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
       onClick={(e) => {
@@ -100,9 +101,7 @@ export default function CurationPanel({
           {loading ? (
             <p className="py-10 text-center text-sm text-neutral-400">Loading…</p>
           ) : !curation || !work ? (
-            <p className="py-10 text-center text-sm text-neutral-400">
-              This work is no longer in the curation.
-            </p>
+            <p className="py-10 text-center text-sm text-neutral-400">This work is no longer in the curation.</p>
           ) : (
             <div className="flex flex-col gap-4">
               <button
@@ -139,11 +138,7 @@ export default function CurationPanel({
                   style={{ gridTemplateColumns: `repeat(${GRID_COLUMNS}, minmax(0, 1fr))` }}
                 >
                   {others.map((w, i) => (
-                    <FlyIn
-                      key={w.artworkId}
-                      root={bodyRef}
-                      delayMs={(i % GRID_COLUMNS) * FLY_STAGGER_MS}
-                    >
+                    <FlyIn key={w.artworkId} root={bodyRef} delayMs={(i % GRID_COLUMNS) * FLY_STAGGER_MS}>
                       <button
                         type="button"
                         onClick={() => showWork(w.artworkId)}
@@ -172,13 +167,10 @@ export default function CurationPanel({
       </div>
 
       {detailsOpen && work && (
-        <CurationWorkView
-          curationId={curationId}
-          artworkId={work.artworkId}
-          onClose={() => setDetailsOpen(false)}
-        />
+        <CurationWorkView curationId={curationId} artworkId={work.artworkId} onClose={() => setDetailsOpen(false)} />
       )}
-    </div>
+    </div>,
+    document.body,
   );
 }
 
@@ -213,7 +205,7 @@ function FlyIn({
           observer.disconnect();
         }
       },
-      { root: root.current, threshold: 0.15 }
+      { root: root.current, threshold: 0.15 },
     );
     observer.observe(el);
     return () => observer.disconnect();
@@ -224,9 +216,7 @@ function FlyIn({
       ref={ref}
       style={{
         opacity: shown ? 1 : 0,
-        transform: shown
-          ? "none"
-          : `translate3d(0, ${FLY_DISTANCE}px, 0) scale(${FLY_SCALE})`,
+        transform: shown ? "none" : `translate3d(0, ${FLY_DISTANCE}px, 0) scale(${FLY_SCALE})`,
         transition: `opacity ${FLY_DURATION}s ease-out ${delayMs}ms, transform ${FLY_DURATION}s ease-out ${delayMs}ms`,
       }}
     >
