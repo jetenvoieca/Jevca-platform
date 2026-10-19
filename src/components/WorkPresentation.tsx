@@ -48,11 +48,14 @@ export default function WorkPresentation({
   settings,
   viewIndex,
   onView,
+  onClose,
 }: {
   data: CurationWorkPresentation;
   settings: PresentationSettings;
   viewIndex: number;
   onView: (index: number) => void;
+  // The window's close cross, inside the card's top-right corner.
+  onClose?: () => void;
 }) {
   const { colours, show, labels } = settings;
   const viewed = data.images[viewIndex] ?? data.images[0] ?? null;
@@ -105,7 +108,7 @@ export default function WorkPresentation({
 
   return (
     <div
-      className={`flex flex-col gap-8 p-6 sm:p-8 ${side ? "md:grid md:items-start md:gap-12" : ""}`}
+      className={`relative flex flex-col gap-8 p-6 sm:p-8 ${side ? "md:grid md:items-start md:gap-12" : ""}`}
       style={{
         background: colours.background,
         border: settings.borderWidth > 0 ? `${settings.borderWidth}px solid ${colours.border}` : undefined,
@@ -115,6 +118,19 @@ export default function WorkPresentation({
         gridTemplateColumns: side ? `${settings.pictureShare}% 1fr` : undefined,
       }}
     >
+      {onClose && (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close"
+          className="absolute right-3.5 top-3.5 p-1 opacity-70 transition-opacity hover:opacity-100"
+          style={{ color: colours.text }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      )}
       {/* The picture, the work's other pictures, its title and details. */}
       <div className="flex min-w-0 flex-col">
         {!viewed && (

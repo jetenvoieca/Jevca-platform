@@ -128,7 +128,13 @@ export default function PresentationTemplatesManager({ templates }: { templates:
             <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{preview.name}</h3>
             <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-500/40 p-6">
               <div className={`mx-auto ${preview.settings.layout === "side" ? "max-w-6xl" : "max-w-xl"}`}>
-                <WorkPresentation data={SAMPLE} settings={preview.settings} viewIndex={0} onView={() => {}} />
+                <WorkPresentation
+                  data={SAMPLE}
+                  settings={preview.settings}
+                  viewIndex={0}
+                  onView={() => {}}
+                  onClose={() => {}}
+                />
               </div>
             </div>
           </div>

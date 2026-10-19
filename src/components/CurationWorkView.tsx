@@ -63,22 +63,18 @@ export default function CurationWorkView({
           if (e.target === e.currentTarget) onClose();
         }}
       >
-        <button
-          type="button"
-          onClick={onClose}
-          aria-label="Close"
-          className="absolute -right-2 -top-2 z-10 flex h-9 w-9 items-center justify-center rounded-full bg-white text-neutral-700 shadow-md hover:bg-neutral-50"
-        >
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} className="h-4 w-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-          </svg>
-        </button>
         {loading || !data ? (
           <div className="rounded-lg bg-white px-6 py-16 text-center text-sm text-neutral-400">
             {loading ? "Loading…" : "This work is no longer in the curation."}
           </div>
         ) : (
-          <WorkPresentation data={data} settings={settings} viewIndex={viewIndex} onView={setViewIndex} />
+          <WorkPresentation
+            data={data}
+            settings={settings}
+            viewIndex={viewIndex}
+            onView={setViewIndex}
+            onClose={onClose}
+          />
         )}
       </div>
     </div>
