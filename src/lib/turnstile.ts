@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { APP_URL } from "@/lib/appUrl";
 import { decryptSecret, encryptSecret } from "@/lib/secretBox";
@@ -78,7 +79,7 @@ type CloudflareWidget = { sitekey: string; secret: string };
 async function cloudflare(
   method: "POST" | "PUT" | "DELETE",
   path: string,
-  body?: object
+  body?: object,
 ): Promise<CloudflareWidget | null> {
   const cf = cloudflareConfig()!;
   const res = await fetch(`${API}/accounts/${cf.accountId}/challenges/widgets${path}`, {
@@ -101,7 +102,7 @@ async function cloudflare(
 class CloudflareError extends Error {
   constructor(
     message: string,
-    readonly status: number
+    readonly status: number,
   ) {
     super(message);
   }
@@ -150,8 +151,7 @@ function sameDomains(a: string[], b: string[]): boolean {
 export async function syncTurnstileDomains(): Promise<TurnstileSyncResult> {
   if (!cloudflareConfig()) {
     return {
-      error:
-        "Sign-up forms need Cloudflare: add CLOUDFLARE_TURNSTILE_API_TOKEN in Netlify.",
+      error: "Sign-up forms need Cloudflare: add CLOUDFLARE_TURNSTILE_API_TOKEN in Netlify.",
     };
   }
   try {
@@ -217,7 +217,7 @@ export async function syncTurnstileDomains(): Promise<TurnstileSyncResult> {
         }
         return { ok: true };
       },
-      { timeout: 60_000, maxWait: 15_000 }
+      { timeout: 60_000, maxWait: 15_000 },
     );
   } catch (err) {
     return await syncFailed(err);
@@ -264,4 +264,21 @@ export async function verifyTurnstile(host: string, token: string, ip: string | 
     console.error("verifyTurnstile", err);
     return false;
   }
+}
+
+// Whether a form sent from a website's page (a sign-up form, an enquiry)
+// came from a person on one of that site's own addresses — its domain,
+// or the admin's own address, where sites are previewed. "elsewhere"
+// when it wasn't (the form then says it isn't available), "robot" when
+// the check failed.
+export async function checkWebsiteVisitor(
+  siteDomain: string | null,
+  token: string,
+): Promise<"ok" | "elsewhere" | "robot"> {
+  const h = await headers();
+  const host = (h.get("host") ?? "").toLowerCase().split(":")[0];
+  const domain = siteDomain ? cleanDomain(siteDomain) : null;
+  if (host !== adminDomain() && !(domain && hostIsWithin(host, domain))) return "elsewhere";
+  const ip = h.get("x-nf-client-connection-ip") ?? h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  return (await verifyTurnstile(host, token, ip)) ? "ok" : "robot";
 }

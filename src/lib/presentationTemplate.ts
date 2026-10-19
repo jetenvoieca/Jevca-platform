@@ -8,6 +8,8 @@ import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 // Louise Dear's website: picture on the left with the title and details
 // under it; on the right the medium, the description, Purchase and Pay in
 // instalments, the instalment terms, Enquire, and where it can be seen.
+// Enquire opens the enquiry form in place of the price and buttons
+// (2026-10-19, see WorkEnquiryForm).
 
 export const PRESENTATION_LAYOUTS = [
   { value: "side", label: "Picture on the left" },
@@ -28,17 +30,37 @@ export const PRESENTATION_PARTS = [
   { key: "instalmentTerms", label: "Instalment terms" },
   { key: "enquire", label: "Enquire button" },
   { key: "location", label: "Where it can be seen" },
+  { key: "mailingList", label: "Enquiry: mailing list tick box" },
+  { key: "instagram", label: "Enquiry: Instagram button" },
+  { key: "enquiryEmail", label: "Enquiry: email address" },
 ] as const;
 export type PresentationPart = (typeof PRESENTATION_PARTS)[number]["key"];
 
-// The wording. {count}, {amount} and {location} are filled in.
+// The wording, in two groups: the details and buttons, and the enquiry
+// form. {count}, {amount}, {location}, {artist} (the artist's first
+// name) and {instagram} are filled in.
 export const PRESENTATION_LABELS = [
-  { key: "purchase", label: "Purchase button", hint: "" },
-  { key: "instalments", label: "Instalments button", hint: "{count} = number of payments" },
-  { key: "instalmentTerms", label: "Instalment terms", hint: "{count}, {amount}; the release message follows" },
-  { key: "enquire", label: "Enquire button", hint: "" },
-  { key: "location", label: "Where it can be seen", hint: "{location} = the place" },
-  { key: "sold", label: "When sold", hint: "" },
+  { key: "purchase", group: "details", label: "Purchase button", hint: "" },
+  { key: "instalments", group: "details", label: "Instalments button", hint: "{count} = number of payments" },
+  {
+    key: "instalmentTerms",
+    group: "details",
+    label: "Instalment terms",
+    hint: "{count}, {amount}; the release message follows",
+  },
+  { key: "enquire", group: "details", label: "Enquire button", hint: "" },
+  { key: "location", group: "details", label: "Where it can be seen", hint: "{location} = the place" },
+  { key: "sold", group: "details", label: "When sold", hint: "" },
+  { key: "nameLabel", group: "enquiry", label: "Name", hint: "" },
+  { key: "namePlaceholder", group: "enquiry", label: "Name box", hint: "" },
+  { key: "emailLabel", group: "enquiry", label: "Email", hint: "" },
+  { key: "emailPlaceholder", group: "enquiry", label: "Email box", hint: "" },
+  { key: "messageLabel", group: "enquiry", label: "Message", hint: "" },
+  { key: "messagePlaceholder", group: "enquiry", label: "Message box", hint: "{artist} = the artist's first name" },
+  { key: "mailingList", group: "enquiry", label: "Mailing list tick box", hint: "" },
+  { key: "send", group: "enquiry", label: "Send button", hint: "" },
+  { key: "instagram", group: "enquiry", label: "Instagram button", hint: "{instagram} = the artist's username" },
+  { key: "sent", group: "enquiry", label: "Once sent", hint: "" },
 ] as const;
 export type PresentationLabel = (typeof PRESENTATION_LABELS)[number]["key"];
 
@@ -53,6 +75,7 @@ export type PresentationColours = {
   instalmentsText: string;
   enquireBackground: string;
   enquireText: string;
+  fieldBackground: string;
 };
 
 export const PRESENTATION_COLOURS: { key: keyof PresentationColours; label: string }[] = [
@@ -66,6 +89,7 @@ export const PRESENTATION_COLOURS: { key: keyof PresentationColours; label: stri
   { key: "instalmentsText", label: "Instalments button text" },
   { key: "enquireBackground", label: "Enquire button" },
   { key: "enquireText", label: "Enquire button text" },
+  { key: "fieldBackground", label: "Enquiry boxes" },
 ];
 
 export type PresentationSettings = {
@@ -100,6 +124,7 @@ export const DEFAULT_PRESENTATION: PresentationSettings = {
     instalmentsText: "#dc7090",
     enquireBackground: "#1a1716",
     enquireText: "#ffffff",
+    fieldBackground: "#ffffff",
   },
   borderWidth: 1,
   rounding: 40,
@@ -120,6 +145,9 @@ export const DEFAULT_PRESENTATION: PresentationSettings = {
     instalmentTerms: true,
     enquire: true,
     location: true,
+    mailingList: true,
+    instagram: true,
+    enquiryEmail: true,
   },
   labels: {
     purchase: "Purchase",
@@ -128,6 +156,16 @@ export const DEFAULT_PRESENTATION: PresentationSettings = {
     enquire: "Enquire about this work",
     location: "This work can be viewed at {location}",
     sold: "Sold",
+    nameLabel: "Your name",
+    namePlaceholder: "Full name",
+    emailLabel: "Email address",
+    emailPlaceholder: "your@email.com",
+    messageLabel: "Message",
+    messagePlaceholder: "Tell {artist} what you have in mind...",
+    mailingList: "Join my mailing list for news and special releases (easy to cancel)",
+    send: "Send message",
+    instagram: "Or DM on Instagram @{instagram}",
+    sent: "Thank you — your message has been sent.",
   },
 };
 

@@ -169,25 +169,32 @@ export default function PresentationTemplateEditor({
           ))}
         </Group>
 
-        <Group title="Wording">
-          {PRESENTATION_LABELS.map(({ key, label, hint }) => (
-            <label key={key} className="flex flex-col gap-1 text-sm text-neutral-700">
-              <span>{label}</span>
-              <input
-                type="text"
-                value={settings.labels[key]}
-                maxLength={80}
-                onChange={(e) => set({ labels: { ...settings.labels, [key]: e.target.value } })}
-                className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
-              />
-              {hint && <span className="text-xs text-neutral-400">{hint}</span>}
-            </label>
-          ))}
-        </Group>
+        {(
+          [
+            ["details", "Wording"],
+            ["enquiry", "Enquiry wording"],
+          ] as const
+        ).map(([group, title]) => (
+          <Group key={group} title={title}>
+            {PRESENTATION_LABELS.filter((l) => l.group === group).map(({ key, label, hint }) => (
+              <label key={key} className="flex flex-col gap-1 text-sm text-neutral-700">
+                <span>{label}</span>
+                <input
+                  type="text"
+                  value={settings.labels[key]}
+                  maxLength={80}
+                  onChange={(e) => set({ labels: { ...settings.labels, [key]: e.target.value } })}
+                  className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                />
+                {hint && <span className="text-xs text-neutral-400">{hint}</span>}
+              </label>
+            ))}
+          </Group>
+        ))}
 
         <p className="text-xs text-neutral-400">
-          Chosen per Page Style (Templates → Page Styles → Presentation). The buttons email the artist for
-          now.
+          Chosen per Page Style (Templates → Page Styles → Presentation). Enquire opens the enquiry form; Purchase and
+          Instalments email the artist for now.
         </p>
       </div>
 

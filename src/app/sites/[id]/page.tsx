@@ -83,9 +83,7 @@ export default async function SiteSettingsPage({
             defaultCurrency: site.defaultCurrency,
             salesEnabled: site.salesEnabled,
             domainStatus: site.domainStatus,
-            domainRenewalDate: site.domainRenewalDate
-              ? site.domainRenewalDate.toISOString().slice(0, 10)
-              : "",
+            domainRenewalDate: site.domainRenewalDate ? site.domainRenewalDate.toISOString().slice(0, 10) : "",
           }}
           artist={{
             id: site.artist.id,
@@ -94,9 +92,7 @@ export default async function SiteSettingsPage({
             email: site.artist.email,
             phone: site.artist.phone,
             notes: site.artist.notes,
-            subscriptionAmount: site.artist.subscriptionAmount
-              ? site.artist.subscriptionAmount.toString()
-              : "",
+            subscriptionAmount: site.artist.subscriptionAmount ? site.artist.subscriptionAmount.toString() : "",
             paymentMethod: site.artist.paymentMethod,
             logoUrl: site.artist.logoUrl,
             // Structured postal address (2026-09-06, reformed from a
@@ -118,6 +114,7 @@ export default async function SiteSettingsPage({
             profileImageUrl: site.artist.profileImage?.url ?? null,
             story: site.artist.story,
             writingVoice: site.artist.writingVoice,
+            instagramHandle: site.artist.instagramHandle,
             signatureUrl: site.artist.signatureUrl,
             // This artist's own @jevca.art local part (2026-09-05, Email
             // Integration) — see the Owner card, now on the

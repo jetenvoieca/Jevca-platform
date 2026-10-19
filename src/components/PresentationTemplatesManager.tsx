@@ -43,7 +43,9 @@ const SAMPLE: CurationWorkPresentation = {
   viewingLocation: "La Galerie",
   available: true,
   releaseMessage: "Delivery after 2nd payment",
-  enquiryEmail: null,
+  enquiryEmail: "louise@jevca.art",
+  artistFirstName: "Louise",
+  instagramHandle: "louisedear",
 };
 
 export default function PresentationTemplatesManager({ templates }: { templates: PresentationTemplateSummary[] }) {
@@ -77,7 +79,7 @@ export default function PresentationTemplatesManager({ templates }: { templates:
     setDraft(
       mode === "edit" && selected
         ? { name: selected.name, settings: selected.settings }
-        : { name: "", settings: DEFAULT_PRESENTATION }
+        : { name: "", settings: DEFAULT_PRESENTATION },
     );
   };
 
@@ -147,7 +149,12 @@ export default function PresentationTemplatesManager({ templates }: { templates:
 
       <aside className="flex min-h-0 flex-col gap-4">
         <div className="grid grid-cols-4 gap-2">
-          <button type="button" onClick={() => openEditor("add")} disabled={!!draft || isPending} className={buttonClass}>
+          <button
+            type="button"
+            onClick={() => openEditor("add")}
+            disabled={!!draft || isPending}
+            className={buttonClass}
+          >
             Add
           </button>
           <button

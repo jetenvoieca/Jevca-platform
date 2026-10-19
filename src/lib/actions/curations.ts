@@ -76,7 +76,9 @@ export type CurationWorkPresentation = {
   // lib/presentationTemplate.ts): the artwork's own description, its
   // Presentation medium (else Medium), edition, type, size, where it can
   // be seen, whether it's still for sale, the artist's release message
-  // (shown with the instalment terms) and where enquiries go.
+  // (shown with the instalment terms) and where enquiries go; for the
+  // enquiry form, the artist's first name and Instagram username (absent
+  // from sites published before them).
   artworkDescription: string | null;
   medium: string | null;
   edition: string | null;
@@ -86,6 +88,8 @@ export type CurationWorkPresentation = {
   available: boolean;
   releaseMessage: string;
   enquiryEmail: string | null;
+  artistFirstName?: string;
+  instagramHandle?: string | null;
 };
 
 // A work's images in a curation: up to 4, main first — the same limit as
@@ -144,9 +148,7 @@ function tileUrls(item: {
 type Result<T> = T | { error: string };
 
 function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002"
-  );
+  return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
 }
 
 // What a work's Description shows until one is written for it: the
@@ -207,10 +209,7 @@ export async function listCurationCovers(artistId: string): Promise<CurationCove
 // One curation with its works, in their curated order, each with its
 // main image in this curation (see tileUrls), and its description (see
 // CurationDetail).
-export async function getCuration(
-  curationId: string,
-  artistId: string
-): Promise<CurationDetail | null> {
+export async function getCuration(curationId: string, artistId: string): Promise<CurationDetail | null> {
   const row = await db.curation.findFirst({
     where: { id: curationId, artistId },
     select: {
@@ -246,18 +245,14 @@ export async function getCuration(
     works: row.items.map((item) => ({
       artworkId: item.artwork.id,
       catalogueName: item.artwork.catalogueName,
-      offeredPrice:
-        item.artwork.offeredPrice != null ? item.artwork.offeredPrice.toString() : null,
+      offeredPrice: item.artwork.offeredPrice != null ? item.artwork.offeredPrice.toString() : null,
       priceCurrency: item.artwork.priceCurrency,
       ...tileUrls(item),
     })),
   };
 }
 
-export async function createCuration(
-  artistId: string,
-  nameRaw: string
-): Promise<Result<CurationSummary>> {
+export async function createCuration(artistId: string, nameRaw: string): Promise<Result<CurationSummary>> {
   const name = nameRaw.trim();
   if (!name) return { error: "A name is required." };
   try {
@@ -282,7 +277,7 @@ export async function createCuration(
 export async function renameCuration(
   curationId: string,
   artistId: string,
-  nameRaw: string
+  nameRaw: string,
 ): Promise<Result<CurationSummary>> {
   const name = nameRaw.trim();
   if (!name) return { error: "A name is required." };
@@ -311,7 +306,7 @@ export async function deleteCuration(curationId: string, artistId: string): Prom
 export async function addWorksToCuration(
   curationId: string,
   artistId: string,
-  artworkIds: string[]
+  artworkIds: string[],
 ): Promise<Result<CurationDetail>> {
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
 
@@ -334,9 +329,7 @@ export async function addWorksToCuration(
 
     const ownedIds = new Set(owned.map((a) => a.id));
     const existingIds = new Set(existing.map((e) => e.artworkId));
-    const toAdd = [...new Set(artworkIds)].filter(
-      (id) => ownedIds.has(id) && !existingIds.has(id)
-    );
+    const toAdd = [...new Set(artworkIds)].filter((id) => ownedIds.has(id) && !existingIds.has(id));
     const start = last ? last.position + 1 : 0;
 
     if (toAdd.length > 0) {
@@ -355,7 +348,7 @@ export async function addWorksToCuration(
 export async function removeWorkFromCuration(
   curationId: string,
   artistId: string,
-  artworkId: string
+  artworkId: string,
 ): Promise<Result<{ ok: true }>> {
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
   await db.curationItem.deleteMany({ where: { curationId, artworkId } });
@@ -368,7 +361,7 @@ export async function removeWorkFromCuration(
 export async function reorderCuration(
   curationId: string,
   artistId: string,
-  artworkIds: string[]
+  artworkIds: string[],
 ): Promise<Result<{ ok: true }>> {
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
   if (artworkIds.length === 0) return { ok: true };
@@ -388,7 +381,7 @@ export async function reorderCuration(
 export async function getCurationWorkPresentation(
   curationId: string,
   artistId: string,
-  artworkId: string
+  artworkId: string,
 ): Promise<CurationWorkPresentation | null> {
   const item = await db.curationItem.findFirst({
     where: { curationId, artworkId, curation: { artistId } },
@@ -417,6 +410,9 @@ export async function getCurationWorkPresentation(
               defaultReleaseMessage: true,
               emailSlug: true,
               email: true,
+              name: true,
+              firstName: true,
+              instagramHandle: true,
             },
           },
         },
@@ -437,7 +433,7 @@ export async function getCurationWorkPresentation(
     images: item.ownImages
       ? toArtworkImages(
           item.images.map((i) => i.image),
-          null
+          null,
         )
       : toArtworkImages(artwork.images, artwork.mainImageId),
     artworkDescription: artwork.description,
@@ -450,6 +446,8 @@ export async function getCurationWorkPresentation(
     releaseMessage: artwork.artist.defaultReleaseMessage,
     // The artist's own address, so enquiries arrive in the Inbox.
     enquiryEmail: artwork.artist.emailSlug ? `${artwork.artist.emailSlug}@${EMAIL_DOMAIN}` : artwork.artist.email,
+    artistFirstName: artwork.artist.firstName || artwork.artist.name,
+    instagramHandle: artwork.artist.instagramHandle,
   };
 }
 
@@ -463,7 +461,7 @@ export async function setCurationWorkImages(
   curationId: string,
   artistId: string,
   artworkId: string,
-  imageIds: string[]
+  imageIds: string[],
 ): Promise<Result<{ images: ArtworkImage[] }>> {
   const ids = [...new Set(imageIds)];
   if (ids.length > MAX_CURATION_IMAGES) {
@@ -507,7 +505,7 @@ export async function setCurationWorkImages(
   return {
     images: toArtworkImages(
       ids.map((id) => byId.get(id)!),
-      null
+      null,
     ),
   };
 }
@@ -519,7 +517,7 @@ export async function updateCurationWorkDescription(
   curationId: string,
   artistId: string,
   artworkId: string,
-  descriptionRaw: string
+  descriptionRaw: string,
 ): Promise<Result<{ description: string }>> {
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
   const description = descriptionRaw.trim();

@@ -70,6 +70,7 @@ type ArtistData = {
   profileImageUrl: string | null;
   story: string | null;
   writingVoice: string | null;
+  instagramHandle: string | null;
   // The Certificate of Authenticity's signature image (2026-09-03) —
   // see the matching note by saveArtistSignature in lib/actions.ts.
   signatureUrl: string | null;
@@ -89,14 +90,7 @@ type ArtistData = {
 // the Administration → Clients page); everything left in this file is
 // specific to this page's Financial/Personal Profile tabs.
 type FinancialField =
-  | "addressLine1"
-  | "city"
-  | "postcode"
-  | "country"
-  | "vatNumber"
-  | "vatRate"
-  | "invoiceFooterText"
-  | "invoiceLanguage";
+  "addressLine1" | "city" | "postcode" | "country" | "vatNumber" | "vatRate" | "invoiceFooterText" | "invoiceLanguage";
 
 type StripeConnectNotice = { tone: "ok" | "error"; text: string };
 
@@ -140,9 +134,7 @@ export default function SiteSettingsPanel({
   // someone glancing at a shared screen sees the harmless tab, not
   // payment details, unless they deliberately switch.
   // Opens on Financial when returning from connecting a Stripe account.
-  const [activeTab, setActiveTab] = useState<"financial" | "personal">(
-    stripeConnectNotice ? "financial" : "personal"
-  );
+  const [activeTab, setActiveTab] = useState<"financial" | "personal">(stripeConnectNotice ? "financial" : "personal");
   const router = useRouter();
 
   // Clears the Connect result from the address bar, so a later refresh
@@ -175,10 +167,7 @@ export default function SiteSettingsPanel({
   // lib/clientPanelTypes.ts for why this still has to resubmit every
   // other artist field unchanged.
   const saveFinancialField = (field: FinancialField, value: string) => {
-    const fd = buildArtistFormData(
-      toArtistFormFields(artist),
-      { [field]: value } as Partial<ArtistFormFields>
-    );
+    const fd = buildArtistFormData(toArtistFormFields(artist), { [field]: value } as Partial<ArtistFormFields>);
     startTransition(async () => {
       await updateArtist(artist.id, fd);
       router.refresh();
@@ -200,7 +189,7 @@ export default function SiteSettingsPanel({
       const confirmed = confirm(
         `Switch ${artist.name} to LIVE Stripe payments?\n\n` +
           `Every sale taken for this ${client} from now on will charge a real card. ` +
-          `Make sure you've already cleared out any test sales data first.`
+          `Make sure you've already cleared out any test sales data first.`,
       );
       if (!confirmed) return;
     }
@@ -216,7 +205,7 @@ export default function SiteSettingsPanel({
     if (!stripeConnection) return;
     const name = stripeConnection.accountName || stripeConnection.accountId;
     const confirmed = confirm(
-      `Disconnect ${name}?\n\nNew sales for ${artist.name} will be paid into Jetenvoieca's Stripe account instead. Sales already paid are unaffected.`
+      `Disconnect ${name}?\n\nNew sales for ${artist.name} will be paid into Jetenvoieca's Stripe account instead. Sales already paid are unaffected.`,
     );
     if (!confirmed) return;
     setConnectNotice(null);
@@ -245,7 +234,7 @@ export default function SiteSettingsPanel({
           `• ${preview.paymentCount} payment${preview.paymentCount === 1 ? "" : "s"}\n` +
           `• ${preview.saleTermsCount} sale terms (pricing) record${preview.saleTermsCount === 1 ? "" : "s"}\n` +
           `• ${preview.artworksToResetCount} ${preview.artworksToResetCount === 1 ? words.item.toLowerCase() : words.items.toLowerCase()} reset to Available\n\n` +
-          `This cannot be undone. Real sales made after this point are unaffected.`
+          `This cannot be undone. Real sales made after this point are unaffected.`,
       );
       if (!confirmed) return;
       const result = await resetArtistSalesData(artist.id);
@@ -318,7 +307,7 @@ export default function SiteSettingsPanel({
     });
   };
 
-  const handleProfileTextSave = (field: "story" | "writingVoice", value: string) => {
+  const handleProfileTextSave = (field: "story" | "writingVoice" | "instagramHandle", value: string) => {
     startTransition(async () => {
       await updateArtistProfileText(artist.id, field, value);
       router.refresh();
@@ -327,8 +316,7 @@ export default function SiteSettingsPanel({
   };
 
   const labelCls = "mb-1 block text-xs text-neutral-500";
-  const inputCls =
-    "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:opacity-50";
+  const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm disabled:opacity-50";
   const cardCls = "rounded-lg border border-neutral-200 bg-white p-4";
   const cardTitleCls = "mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-500";
   const tabBtnCls = (active: boolean) =>
@@ -351,411 +339,413 @@ export default function SiteSettingsPanel({
           reached from inside a site's own menu, is not the place for
           that admin-only data. */}
       <div className="mb-4 inline-flex rounded-full border border-neutral-300 bg-white p-1">
-            <button
-              type="button"
-              onClick={() => setActiveTab("financial")}
-              className={tabBtnCls(activeTab === "financial")}
-            >
-              Financial
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("personal")}
-              className={tabBtnCls(activeTab === "personal")}
-            >
-              Personal Profile
-            </button>
+        <button
+          type="button"
+          onClick={() => setActiveTab("financial")}
+          className={tabBtnCls(activeTab === "financial")}
+        >
+          Financial
+        </button>
+        <button type="button" onClick={() => setActiveTab("personal")} className={tabBtnCls(activeTab === "personal")}>
+          Personal Profile
+        </button>
+      </div>
+
+      {activeTab === "personal" ? (
+        <div className={cardCls}>
+          <p className={cardTitleCls}>Personal Profile</p>
+
+          <div className="mb-4 w-48">
+            <MediaPicker
+              artistId={artist.id}
+              siteId={site.id}
+              mode="single"
+              previewUrl={artist.profileImageUrl || undefined}
+              label="Image"
+              onSelect={(imgs) => {
+                if (imgs[0]) handleProfileImagePick(imgs[0].id);
+              }}
+            />
           </div>
 
-          {activeTab === "personal" ? (
-            <div className={cardCls}>
-              <p className={cardTitleCls}>Personal Profile</p>
+          <label className={labelCls}>Story</label>
+          <textarea
+            key={`story-${artist.id}`}
+            defaultValue={artist.story || ""}
+            onBlur={(e) => handleProfileTextSave("story", e.target.value)}
+            disabled={isPending}
+            rows={10}
+            placeholder={`This ${client}'s story…`}
+            className={inputCls}
+          />
+          {savedField === "story" && <p className="mt-1 text-xs text-green-600">Saved</p>}
 
-              <div className="mb-4 w-48">
-                <MediaPicker
-                  artistId={artist.id}
-                  siteId={site.id}
-                  mode="single"
-                  previewUrl={artist.profileImageUrl || undefined}
-                  label="Image"
-                  onSelect={(imgs) => {
-                    if (imgs[0]) handleProfileImagePick(imgs[0].id);
+          <label className={`${labelCls} mt-4`}>Writing voice</label>
+          <textarea
+            key={`voice-${artist.id}`}
+            defaultValue={artist.writingVoice || ""}
+            onBlur={(e) => handleProfileTextSave("writingVoice", e.target.value)}
+            disabled={isPending}
+            rows={4}
+            placeholder={`How this ${client} writes — e.g. warm, first-person, playful…`}
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-neutral-400">
+            Used when a campaign mail is translated into French, so it reads in this {client}&apos;s voice.
+          </p>
+          {savedField === "writingVoice" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+
+          <label className={`${labelCls} mt-4`}>Instagram username</label>
+          <input
+            key={`instagram-${artist.id}`}
+            type="text"
+            defaultValue={artist.instagramHandle || ""}
+            onBlur={(e) => handleProfileTextSave("instagramHandle", e.target.value)}
+            disabled={isPending}
+            placeholder="e.g. louisedear"
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-neutral-400">
+            Shown as &ldquo;Or DM on Instagram&rdquo; on the website&apos;s enquiry form. Re-publish the site after
+            changing it.
+          </p>
+          {savedField === "instagramHandle" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+            {/* ---- Financial: currency / take payments / Stripe mode / reset ---- */}
+            <div className={`${cardCls} lg:w-72 lg:shrink-0`}>
+              <p className={cardTitleCls}>Financial</p>
+
+              <label className={labelCls}>Default currency</label>
+              <select
+                key={`currency-${site.id}`}
+                defaultValue={site.defaultCurrency}
+                onChange={(e) => saveDefaultCurrency(e.target.value)}
+                disabled={isPending}
+                className={inputCls}
+              >
+                <option value="GBP">GBP</option>
+                <option value="EUR">EUR</option>
+              </select>
+              {savedField === "defaultCurrency" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+
+              <label className="mt-3 flex items-center gap-2 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={site.salesEnabled}
+                  disabled={isPending}
+                  onChange={(e) => {
+                    const enabled = e.target.checked;
+                    startTransition(async () => {
+                      await updateSalesEnabled(site.id, enabled);
+                      router.refresh();
+                    });
                   }}
                 />
-              </div>
+                Take payments
+              </label>
 
-              <label className={labelCls}>Story</label>
-              <textarea
-                key={`story-${artist.id}`}
-                defaultValue={artist.story || ""}
-                onBlur={(e) => handleProfileTextSave("story", e.target.value)}
-                disabled={isPending}
-                rows={10}
-                placeholder={`This ${client}'s story…`}
-                className={inputCls}
-              />
-              {savedField === "story" && <p className="mt-1 text-xs text-green-600">Saved</p>}
-
-              <label className={`${labelCls} mt-4`}>Writing voice</label>
-              <textarea
-                key={`voice-${artist.id}`}
-                defaultValue={artist.writingVoice || ""}
-                onBlur={(e) => handleProfileTextSave("writingVoice", e.target.value)}
-                disabled={isPending}
-                rows={4}
-                placeholder={`How this ${client} writes — e.g. warm, first-person, playful…`}
-                className={inputCls}
-              />
-              <p className="mt-1 text-xs text-neutral-400">
-                Used when a campaign mail is translated into French, so it reads in this {client}&apos;s voice.
-              </p>
-              {savedField === "writingVoice" && <p className="mt-1 text-xs text-green-600">Saved</p>}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-                {/* ---- Financial: currency / take payments / Stripe mode / reset ---- */}
-                <div className={`${cardCls} lg:w-72 lg:shrink-0`}>
-                <p className={cardTitleCls}>Financial</p>
-
-                <label className={labelCls}>Default currency</label>
-                <select
-                  key={`currency-${site.id}`}
-                  defaultValue={site.defaultCurrency}
-                  onChange={(e) => saveDefaultCurrency(e.target.value)}
-                  disabled={isPending}
-                  className={inputCls}
-                >
-                  <option value="GBP">GBP</option>
-                  <option value="EUR">EUR</option>
-                </select>
-                {savedField === "defaultCurrency" && (
-                  <p className="mt-1 text-xs text-green-600">Saved</p>
-                )}
-
-                <label className="mt-3 flex items-center gap-2 text-sm text-neutral-700">
-                  <input
-                    type="checkbox"
-                    checked={site.salesEnabled}
-                    disabled={isPending}
-                    onChange={(e) => {
-                      const enabled = e.target.checked;
-                      startTransition(async () => {
-                        await updateSalesEnabled(site.id, enabled);
-                        router.refresh();
-                      });
-                    }}
-                  />
-                  Take payments
-                </label>
-
-                {site.salesEnabled && (
-                  <>
-                    <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
-                      <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-600">
-                        Stripe Mode (this {client}&apos;s buyers)
+              {site.salesEnabled && (
+                <>
+                  <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3">
+                    <p className="mb-2 text-xs font-medium uppercase tracking-wide text-amber-600">
+                      Stripe Mode (this {client}&apos;s buyers)
+                    </p>
+                    <select
+                      value={artist.stripeMode}
+                      disabled={switchingStripeMode}
+                      onChange={(e) => handleStripeModeChange(e.target.value as "TEST" | "LIVE")}
+                      className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm font-medium disabled:opacity-50"
+                    >
+                      <option value="TEST">Test — no real charges</option>
+                      <option value="LIVE">Live — real payments</option>
+                    </select>
+                    {artist.stripeMode === "LIVE" && (
+                      <p className="mt-2 text-xs font-medium text-amber-700">
+                        ⚠ This {client} is live. Real cards will be charged.
                       </p>
-                      <select
-                        value={artist.stripeMode}
-                        disabled={switchingStripeMode}
-                        onChange={(e) => handleStripeModeChange(e.target.value as "TEST" | "LIVE")}
-                        className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm font-medium disabled:opacity-50"
-                      >
-                        <option value="TEST">Test — no real charges</option>
-                        <option value="LIVE">Live — real payments</option>
-                      </select>
-                      {artist.stripeMode === "LIVE" && (
-                        <p className="mt-2 text-xs font-medium text-amber-700">
-                          ⚠ This {client} is live. Real cards will be charged.
-                        </p>
-                      )}
+                    )}
 
-                      {/* Stripe Connect (2026-09-25) — which Stripe account
+                    {/* Stripe Connect (2026-09-25) — which Stripe account
                           this artist's NEW sales are paid into, for the
                           mode selected above. Test and Live are linked
                           separately. */}
-                      <div className="mt-3 border-t border-amber-200 pt-3">
-                        <p className="mb-1 text-xs text-neutral-500">
-                          Payments go to ({artist.stripeMode === "LIVE" ? "Live" : "Test"})
-                        </p>
-                        {stripeConnection ? (
-                          <>
-                            <p className="text-sm font-medium text-neutral-900">
-                              {stripeConnection.accountName || stripeConnection.accountId}
-                            </p>
-                            <p className="text-xs text-neutral-500">{stripeConnection.accountId}</p>
-                            <button
-                              type="button"
-                              onClick={handleDisconnectStripe}
-                              disabled={disconnectingStripe || switchingStripeMode}
-                              className="mt-2 text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
-                            >
-                              {disconnectingStripe ? "Disconnecting…" : "Disconnect"}
-                            </button>
-                          </>
-                        ) : (
-                          <>
-                            <p className="text-sm font-medium text-neutral-900">Jetenvoieca (default)</p>
-                            <a
-                              href={`/api/stripe/connect/start?artistId=${artist.id}&siteId=${site.id}`}
-                              className="mt-2 inline-block rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-50"
-                            >
-                              Connect Stripe account
-                            </a>
-                          </>
-                        )}
-                        {connectNotice && (
-                          <p
-                            className={`mt-2 text-xs ${
-                              connectNotice.tone === "error" ? "text-red-600" : "text-green-600"
-                            }`}
-                          >
-                            {connectNotice.text}
+                    <div className="mt-3 border-t border-amber-200 pt-3">
+                      <p className="mb-1 text-xs text-neutral-500">
+                        Payments go to ({artist.stripeMode === "LIVE" ? "Live" : "Test"})
+                      </p>
+                      {stripeConnection ? (
+                        <>
+                          <p className="text-sm font-medium text-neutral-900">
+                            {stripeConnection.accountName || stripeConnection.accountId}
                           </p>
-                        )}
-                      </div>
+                          <p className="text-xs text-neutral-500">{stripeConnection.accountId}</p>
+                          <button
+                            type="button"
+                            onClick={handleDisconnectStripe}
+                            disabled={disconnectingStripe || switchingStripeMode}
+                            className="mt-2 text-xs font-medium text-red-600 hover:underline disabled:opacity-50"
+                          >
+                            {disconnectingStripe ? "Disconnecting…" : "Disconnect"}
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <p className="text-sm font-medium text-neutral-900">Jetenvoieca (default)</p>
+                          <a
+                            href={`/api/stripe/connect/start?artistId=${artist.id}&siteId=${site.id}`}
+                            className="mt-2 inline-block rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-xs font-medium text-neutral-800 hover:bg-neutral-50"
+                          >
+                            Connect Stripe account
+                          </a>
+                        </>
+                      )}
+                      {connectNotice && (
+                        <p
+                          className={`mt-2 text-xs ${
+                            connectNotice.tone === "error" ? "text-red-600" : "text-green-600"
+                          }`}
+                        >
+                          {connectNotice.text}
+                        </p>
+                      )}
                     </div>
-
-                    <button
-                      type="button"
-                      onClick={handleResetSalesData}
-                      disabled={resettingSales}
-                      className="mt-4 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                    >
-                      {resettingSales ? "Checking…" : "Reset all sales data…"}
-                    </button>
-                    {resetError && <p className="mt-2 text-xs text-red-600">{resetError}</p>}
-                  </>
-                )}
-              </div>
-
-              {/* ---- Invoicing (only if this site takes payments) ---- */}
-              {site.salesEnabled && (
-                <div className={cardCls}>
-                  <p className={cardTitleCls}>Invoicing</p>
-
-                  <label className={labelCls}>Logo</label>
-                  <div className="mb-3 flex items-center gap-2">
-                    {artist.logoUrl ? (
-                      <img
-                        src={artist.logoUrl}
-                        alt=""
-                        className="h-10 w-10 rounded border border-neutral-200 object-contain"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded border border-dashed border-neutral-300" />
-                    )}
-                    <label className="cursor-pointer rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">
-                      {logoUploading ? "Uploading…" : "Upload…"}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={logoUploading}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleLogoUpload(file);
-                        }}
-                        className="hidden"
-                      />
-                    </label>
                   </div>
 
-                  {/* Certificate of Authenticity signature (2026-09-03)
+                  <button
+                    type="button"
+                    onClick={handleResetSalesData}
+                    disabled={resettingSales}
+                    className="mt-4 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                  >
+                    {resettingSales ? "Checking…" : "Reset all sales data…"}
+                  </button>
+                  {resetError && <p className="mt-2 text-xs text-red-600">{resetError}</p>}
+                </>
+              )}
+            </div>
+
+            {/* ---- Invoicing (only if this site takes payments) ---- */}
+            {site.salesEnabled && (
+              <div className={cardCls}>
+                <p className={cardTitleCls}>Invoicing</p>
+
+                <label className={labelCls}>Logo</label>
+                <div className="mb-3 flex items-center gap-2">
+                  {artist.logoUrl ? (
+                    <img
+                      src={artist.logoUrl}
+                      alt=""
+                      className="h-10 w-10 rounded border border-neutral-200 object-contain"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded border border-dashed border-neutral-300" />
+                  )}
+                  <label className="cursor-pointer rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">
+                    {logoUploading ? "Uploading…" : "Upload…"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={logoUploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleLogoUpload(file);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+
+                {/* Certificate of Authenticity signature (2026-09-03)
                       — its own upload, separate from Logo above, since
                       the two aren't always the same image for every
                       artist. */}
-                  <label className={labelCls}>Signature</label>
-                  <div className="mb-3 flex items-center gap-2">
-                    {artist.signatureUrl ? (
-                      <img
-                        src={artist.signatureUrl}
-                        alt=""
-                        className="h-10 w-10 rounded border border-neutral-200 object-contain"
-                      />
-                    ) : (
-                      <div className="h-10 w-10 rounded border border-dashed border-neutral-300" />
-                    )}
-                    <label className="cursor-pointer rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">
-                      {signatureUploading ? "Uploading…" : "Upload…"}
-                      <input
-                        type="file"
-                        accept="image/*"
-                        disabled={signatureUploading}
-                        onChange={(e) => {
-                          const file = e.target.files?.[0];
-                          if (file) handleSignatureUpload(file);
-                        }}
-                        className="hidden"
-                      />
-                    </label>
-                  </div>
+                <label className={labelCls}>Signature</label>
+                <div className="mb-3 flex items-center gap-2">
+                  {artist.signatureUrl ? (
+                    <img
+                      src={artist.signatureUrl}
+                      alt=""
+                      className="h-10 w-10 rounded border border-neutral-200 object-contain"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded border border-dashed border-neutral-300" />
+                  )}
+                  <label className="cursor-pointer rounded-md border border-neutral-300 px-2 py-1 text-xs hover:bg-neutral-50">
+                    {signatureUploading ? "Uploading…" : "Upload…"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      disabled={signatureUploading}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) handleSignatureUpload(file);
+                      }}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
 
-                  {/* Structured address (2026-09-06, reformed from a single
+                {/* Structured address (2026-09-06, reformed from a single
                       freeform field, direct request) — addressLine1 stays
                       a textarea (a street address can be more than one
                       line); City/Postcode/Country are their own fields so
                       other documents can pull just the piece they need
                       (e.g. the Certificate of Authenticity's signature
                       block needs only Postcode + Country). */}
-                  <label className={labelCls}>{words.client} address (for invoices)</label>
-                  <textarea
-                    key={`owner-address-line1-${artist.id}`}
-                    defaultValue={artist.addressLine1 || ""}
-                    onBlur={(e) => saveFinancialField("addressLine1", e.target.value.trim())}
-                    disabled={isPending}
-                    rows={2}
-                    placeholder="Street address"
-                    className={`${inputCls} mb-2`}
-                  />
-                  <div className="mb-3 grid grid-cols-3 gap-2">
-                    <div>
-                      <label className={labelCls}>City</label>
-                      <input
-                        key={`owner-city-${artist.id}`}
-                        type="text"
-                        defaultValue={artist.city || ""}
-                        onBlur={(e) => saveFinancialField("city", e.target.value.trim())}
-                        disabled={isPending}
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Postcode</label>
-                      <input
-                        key={`owner-postcode-${artist.id}`}
-                        type="text"
-                        defaultValue={artist.postcode || ""}
-                        onBlur={(e) => saveFinancialField("postcode", e.target.value.trim())}
-                        disabled={isPending}
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>Country</label>
-                      <input
-                        key={`owner-country-${artist.id}`}
-                        type="text"
-                        defaultValue={artist.country || ""}
-                        onBlur={(e) => saveFinancialField("country", e.target.value.trim())}
-                        disabled={isPending}
-                        className={inputCls}
-                      />
-                    </div>
+                <label className={labelCls}>{words.client} address (for invoices)</label>
+                <textarea
+                  key={`owner-address-line1-${artist.id}`}
+                  defaultValue={artist.addressLine1 || ""}
+                  onBlur={(e) => saveFinancialField("addressLine1", e.target.value.trim())}
+                  disabled={isPending}
+                  rows={2}
+                  placeholder="Street address"
+                  className={`${inputCls} mb-2`}
+                />
+                <div className="mb-3 grid grid-cols-3 gap-2">
+                  <div>
+                    <label className={labelCls}>City</label>
+                    <input
+                      key={`owner-city-${artist.id}`}
+                      type="text"
+                      defaultValue={artist.city || ""}
+                      onBlur={(e) => saveFinancialField("city", e.target.value.trim())}
+                      disabled={isPending}
+                      className={inputCls}
+                    />
                   </div>
-
-                  <div className="mb-3 grid grid-cols-2 gap-2">
-                    <div>
-                      <label className={labelCls}>VAT number</label>
-                      <input
-                        key={`owner-vat-number-${artist.id}`}
-                        type="text"
-                        defaultValue={artist.vatNumber || ""}
-                        onBlur={(e) => saveFinancialField("vatNumber", e.target.value.trim())}
-                        disabled={isPending}
-                        placeholder="Blank = not VAT registered"
-                        className={inputCls}
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>VAT rate %</label>
-                      <input
-                        key={`owner-vat-rate-${artist.id}`}
-                        type="text"
-                        inputMode="decimal"
-                        defaultValue={artist.vatRate}
-                        onBlur={(e) => saveFinancialField("vatRate", e.target.value.trim())}
-                        disabled={isPending}
-                        placeholder="e.g. 20"
-                        className={inputCls}
-                      />
-                    </div>
+                  <div>
+                    <label className={labelCls}>Postcode</label>
+                    <input
+                      key={`owner-postcode-${artist.id}`}
+                      type="text"
+                      defaultValue={artist.postcode || ""}
+                      onBlur={(e) => saveFinancialField("postcode", e.target.value.trim())}
+                      disabled={isPending}
+                      className={inputCls}
+                    />
                   </div>
-
-                  <label className={labelCls}>Invoice language</label>
-                  <select
-                    key={`owner-invoice-language-${artist.id}`}
-                    defaultValue={artist.invoiceLanguage || "EN"}
-                    onChange={(e) => saveFinancialField("invoiceLanguage", e.target.value)}
-                    disabled={isPending}
-                    className={`${inputCls} mb-3`}
-                  >
-                    <option value="EN">English</option>
-                    <option value="FR">French</option>
-                  </select>
-
-                  <label className={labelCls}>Invoice footer text</label>
-                  <textarea
-                    key={`owner-invoice-footer-${artist.id}`}
-                    defaultValue={artist.invoiceFooterText || ""}
-                    onBlur={(e) => saveFinancialField("invoiceFooterText", e.target.value.trim())}
-                    disabled={isPending}
-                    placeholder="e.g. VAT exemption note, bank details, thank-you message…"
-                    rows={3}
-                    className={`${inputCls} mb-3`}
-                  />
-
-                  <label className={labelCls}>Next invoice number</label>
-                  <input
-                    key={`owner-next-invoice-${artist.id}`}
-                    type="number"
-                    defaultValue={artist.nextInvoiceNumber}
-                    onBlur={(e) =>
-                      e.target.value.trim() && saveNextInvoiceNumber(e.target.value.trim())
-                    }
-                    disabled={isPending}
-                    className={inputCls}
-                  />
-                  <p className="mt-1 text-xs text-neutral-400">
-                    Set once as a starting point — increments automatically after that each time an
-                    invoice is actually generated.
-                  </p>
-
-                  {(savedField === "addressLine1" ||
-                    savedField === "city" ||
-                    savedField === "postcode" ||
-                    savedField === "country" ||
-                    savedField === "vatNumber" ||
-                    savedField === "vatRate" ||
-                    savedField === "invoiceFooterText" ||
-                    savedField === "invoiceLanguage" ||
-                    savedField === "nextInvoiceNumber") && (
-                    <p className="mt-2 text-xs text-green-600">Saved</p>
-                  )}
+                  <div>
+                    <label className={labelCls}>Country</label>
+                    <input
+                      key={`owner-country-${artist.id}`}
+                      type="text"
+                      defaultValue={artist.country || ""}
+                      onBlur={(e) => saveFinancialField("country", e.target.value.trim())}
+                      disabled={isPending}
+                      className={inputCls}
+                    />
+                  </div>
                 </div>
-              )}
-              </div>
 
-              {/* Certificate of Authenticity templates (2026-09-04) —
+                <div className="mb-3 grid grid-cols-2 gap-2">
+                  <div>
+                    <label className={labelCls}>VAT number</label>
+                    <input
+                      key={`owner-vat-number-${artist.id}`}
+                      type="text"
+                      defaultValue={artist.vatNumber || ""}
+                      onBlur={(e) => saveFinancialField("vatNumber", e.target.value.trim())}
+                      disabled={isPending}
+                      placeholder="Blank = not VAT registered"
+                      className={inputCls}
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>VAT rate %</label>
+                    <input
+                      key={`owner-vat-rate-${artist.id}`}
+                      type="text"
+                      inputMode="decimal"
+                      defaultValue={artist.vatRate}
+                      onBlur={(e) => saveFinancialField("vatRate", e.target.value.trim())}
+                      disabled={isPending}
+                      placeholder="e.g. 20"
+                      className={inputCls}
+                    />
+                  </div>
+                </div>
+
+                <label className={labelCls}>Invoice language</label>
+                <select
+                  key={`owner-invoice-language-${artist.id}`}
+                  defaultValue={artist.invoiceLanguage || "EN"}
+                  onChange={(e) => saveFinancialField("invoiceLanguage", e.target.value)}
+                  disabled={isPending}
+                  className={`${inputCls} mb-3`}
+                >
+                  <option value="EN">English</option>
+                  <option value="FR">French</option>
+                </select>
+
+                <label className={labelCls}>Invoice footer text</label>
+                <textarea
+                  key={`owner-invoice-footer-${artist.id}`}
+                  defaultValue={artist.invoiceFooterText || ""}
+                  onBlur={(e) => saveFinancialField("invoiceFooterText", e.target.value.trim())}
+                  disabled={isPending}
+                  placeholder="e.g. VAT exemption note, bank details, thank-you message…"
+                  rows={3}
+                  className={`${inputCls} mb-3`}
+                />
+
+                <label className={labelCls}>Next invoice number</label>
+                <input
+                  key={`owner-next-invoice-${artist.id}`}
+                  type="number"
+                  defaultValue={artist.nextInvoiceNumber}
+                  onBlur={(e) => e.target.value.trim() && saveNextInvoiceNumber(e.target.value.trim())}
+                  disabled={isPending}
+                  className={inputCls}
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  Set once as a starting point — increments automatically after that each time an invoice is actually
+                  generated.
+                </p>
+
+                {(savedField === "addressLine1" ||
+                  savedField === "city" ||
+                  savedField === "postcode" ||
+                  savedField === "country" ||
+                  savedField === "vatNumber" ||
+                  savedField === "vatRate" ||
+                  savedField === "invoiceFooterText" ||
+                  savedField === "invoiceLanguage" ||
+                  savedField === "nextInvoiceNumber") && <p className="mt-2 text-xs text-green-600">Saved</p>}
+              </div>
+            )}
+          </div>
+
+          {/* Certificate of Authenticity templates (2026-09-04) —
                   full width, below the Financial/Invoicing row, same
                   "only relevant once this site takes payments" gating
                   as Invoicing above. */}
-              {site.salesEnabled && (
-                <CertificateTemplatesCard
-                  artistId={artist.id}
-                  siteId={site.id}
-                  templates={certificateTemplates}
-                />
-              )}
+          {site.salesEnabled && (
+            <CertificateTemplatesCard artistId={artist.id} siteId={site.id} templates={certificateTemplates} />
+          )}
 
-              {/* Payment plan defaults (2026-09-07) — moved here from
+          {/* Payment plan defaults (2026-09-07) — moved here from
                   the Artwork Catalogue's own Settings page: these are
                   financial terms, so they belong on the Financial tab,
                   not Catalogue/Type/Group settings. Same "only relevant
                   once this site takes payments" gating as Invoicing/
                   Certificate above. */}
-              {site.salesEnabled && (
-                <div className="lg:w-72">
-                  <PaymentDefaultsCard
-                    artistId={artist.id}
-                    siteId={site.id}
-                    defaultInstalmentCount={artist.defaultInstalmentCount}
-                    defaultReleaseMessage={artist.defaultReleaseMessage}
-                    defaultReleaseTriggerCount={artist.defaultReleaseTriggerCount}
-                  />
-                </div>
-              )}
+          {site.salesEnabled && (
+            <div className="lg:w-72">
+              <PaymentDefaultsCard
+                artistId={artist.id}
+                siteId={site.id}
+                defaultInstalmentCount={artist.defaultInstalmentCount}
+                defaultReleaseMessage={artist.defaultReleaseMessage}
+                defaultReleaseTriggerCount={artist.defaultReleaseTriggerCount}
+              />
             </div>
           )}
+        </div>
+      )}
     </div>
   );
 }

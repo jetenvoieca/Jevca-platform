@@ -1,19 +1,22 @@
 "use client";
 
-import { createContext, useContext, type CSSProperties, type ReactNode } from "react";
+import { createContext, useContext, useState, type CSSProperties, type ReactNode } from "react";
 import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 import { SITE_FONT_FAMILY } from "@/lib/siteFontFaces";
 import { DEFAULT_PRESENTATION, fillLabel, type PresentationSettings } from "@/lib/presentationTemplate";
 import FadeImage from "@/components/FadeImage";
+import WorkEnquiryForm, { type EnquirySite } from "@/components/WorkEnquiryForm";
 
 // A work's details as a visitor sees them when they open it on a page
 // (2026-10-19), drawn from a Presentation Template's settings (see
 // lib/presentationTemplate.ts): the picture (and the work's other
 // pictures beneath it, to switch between), the title and details, then
 // the medium, description, Purchase / Pay in instalments, the instalment
-// terms, Enquire and where it can be seen. The buttons open an email to
-// the artist for now (online buying comes later). Shared by the
+// terms, Enquire and where it can be seen. Enquire swaps the price and
+// buttons for the enquiry form (WorkEnquiryForm); Purchase and Pay in
+// instalments open an email to the artist for now (online buying comes
+// later). Shared by the
 // Presentation window (CurationWorkView) and Templates → Presentations'
 // preview.
 
@@ -49,6 +52,7 @@ export default function WorkPresentation({
   viewIndex,
   onView,
   onClose,
+  site = null,
 }: {
   data: CurationWorkPresentation;
   settings: PresentationSettings;
@@ -56,8 +60,11 @@ export default function WorkPresentation({
   onView: (index: number) => void;
   // The window's close cross, inside the card's top-right corner.
   onClose?: () => void;
+  // Where the enquiry form sends from — the published site only.
+  site?: EnquirySite | null;
 }) {
   const { colours, show, labels } = settings;
+  const [enquiring, setEnquiring] = useState(false);
   const viewed = data.images[viewIndex] ?? data.images[0] ?? null;
   const description = data.description ?? data.artworkDescription ?? "";
   const price = data.offeredPrice != null ? Number(data.offeredPrice) : null;
@@ -83,7 +90,7 @@ export default function WorkPresentation({
     return `mailto:${data.enquiryEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
-  const button = (label: string, background: string, color: string, wide: boolean) => {
+  const button = (label: string, background: string, color: string, wide: boolean, onClick?: () => void) => {
     const style: CSSProperties = {
       background,
       color,
@@ -92,6 +99,13 @@ export default function WorkPresentation({
       fontSize: Math.round(settings.textSize * 0.8),
     };
     const className = `${wide ? "w-full" : "flex-1"} inline-flex min-h-14 items-center justify-center whitespace-nowrap px-6 py-4 text-center uppercase tracking-[0.2em] transition-opacity hover:opacity-90`;
+    if (onClick) {
+      return (
+        <button type="button" onClick={onClick} className={className} style={style}>
+          {label}
+        </button>
+      );
+    }
     const href = mailto(label);
     return href ? (
       <a href={href} className={className} style={style}>
@@ -151,7 +165,11 @@ export default function WorkPresentation({
               className="max-h-[70vh] w-full bg-black object-contain"
             />
           ) : (
-            <FadeImage src={viewed.displayUrl} alt={data.catalogueName} className="max-h-[70vh] w-full object-contain" />
+            <FadeImage
+              src={viewed.displayUrl}
+              alt={data.catalogueName}
+              className="max-h-[70vh] w-full object-contain"
+            />
           ))}
         {data.images.length > 1 && (
           <div className="mt-3 grid grid-cols-4 gap-2">
@@ -201,11 +219,12 @@ export default function WorkPresentation({
             {description}
           </p>
         )}
-        {show.price && priced && (
+        {enquiring && <WorkEnquiryForm data={data} settings={settings} site={site} />}
+        {!enquiring && show.price && priced && (
           <p style={{ fontSize: settings.textSize }}>{formatMoney(price, data.priceCurrency)}</p>
         )}
 
-        {data.available ? (
+        {enquiring ? null : data.available ? (
           <>
             {priced && (show.purchase || (show.instalments && perInstalment != null)) && (
               <div className="flex flex-wrap gap-4">
@@ -236,10 +255,12 @@ export default function WorkPresentation({
           )
         )}
 
-        {(show.enquire || (show.location && data.viewingLocation)) && (
+        {!enquiring && (show.enquire || (show.location && data.viewingLocation)) && (
           <div className="flex flex-col gap-3">
             {show.enquire &&
-              button(fillLabel(labels.enquire, values), colours.enquireBackground, colours.enquireText, true)}
+              button(fillLabel(labels.enquire, values), colours.enquireBackground, colours.enquireText, true, () =>
+                setEnquiring(true),
+              )}
             {show.location && data.viewingLocation && (
               <p style={{ color: colours.muted, fontSize: small }}>{fillLabel(labels.location, values)}</p>
             )}

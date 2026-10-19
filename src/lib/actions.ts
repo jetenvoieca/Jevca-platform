@@ -22,10 +22,7 @@ export async function getArtistsForPicker() {
 
 export type CreateSiteState = { error?: string };
 
-export async function createSite(
-  _prevState: CreateSiteState,
-  formData: FormData
-): Promise<CreateSiteState> {
+export async function createSite(_prevState: CreateSiteState, formData: FormData): Promise<CreateSiteState> {
   const siteName = (formData.get("siteName") as string)?.trim();
   const existingArtistId = (formData.get("artistId") as string) || "";
   const newArtistName = (formData.get("newArtistName") as string)?.trim() || "";
@@ -81,7 +78,10 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
   // Store domains without a leading protocol/www so they're consistent
   // however someone happens to type them in.
   const domain = domainRaw
-    ? domainRaw.replace(/^https?:\/\//, "").replace(/^www\./, "").replace(/\/$/, "")
+    ? domainRaw
+        .replace(/^https?:\/\//, "")
+        .replace(/^www\./, "")
+        .replace(/\/$/, "")
     : null;
   if (!name) return;
 
@@ -236,12 +236,22 @@ export async function setArtistProfileImage(artistId: string, imageId: string): 
 // through unchanged.
 export async function updateArtistProfileText(
   artistId: string,
-  field: "story" | "writingVoice",
-  value: string
+  field: "story" | "writingVoice" | "instagramHandle",
+  value: string,
 ): Promise<void> {
+  // An Instagram username is kept bare: "@louisedear" or a link to the
+  // profile both become "louisedear".
+  const clean =
+    field === "instagramHandle"
+      ? value
+          .trim()
+          .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+          .replace(/^@/, "")
+          .replace(/[/?#].*$/, "")
+      : value.trim();
   await db.artist.update({
     where: { id: artistId },
-    data: { [field]: value.trim() || null },
+    data: { [field]: clean || null },
   });
   revalidatePath("/");
 }
@@ -268,10 +278,7 @@ export async function regenerateHopperToken(artistId: string): Promise<{ token: 
 // it's always been the exact same underlying field as every other
 // status. Folded in here so there's one action and one control for the
 // whole thing, not two mechanisms doing the same kind of update.
-export async function updateSiteStatus(
-  id: string,
-  status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT"
-) {
+export async function updateSiteStatus(id: string, status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT") {
   await db.site.update({
     where: { id },
     data: { status },

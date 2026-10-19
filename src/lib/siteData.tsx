@@ -60,7 +60,8 @@ export type SiteData = {
   // Where a Logo links: the site's home page on the published site; null
   // in the admin preview, where it isn't a link.
   homeHref: string | null;
-  // Whether sign-up forms can be used (2026-10-10): only on the
+  // Whether sign-up forms and the enquiry form (2026-10-19) can be used
+  // (2026-10-10): only on the
   // published site, for its site, with the robot check's public key for
   // the address it's shown on (null = no check set up for it yet, so
   // signing up says it isn't available). Null in the admin preview,
@@ -90,8 +91,7 @@ export function LiveSiteData({
     () => ({
       getCuration: (curationId) => getCuration(curationId, artistId),
       listSections: (curationId) => listCurationSections(curationId, artistId),
-      getPresentation: (curationId, artworkId) =>
-        getCurationWorkPresentation(curationId, artistId, artworkId),
+      getPresentation: (curationId, artworkId) => getCurationWorkPresentation(curationId, artistId, artworkId),
       getCanvas: (pageId) => getPageCanvas(siteId, pageId),
       getComponents: (pageId) => getPageComponents(siteId, pageId),
       getSignupForms: (pageId) => getPageSignupForms(siteId, pageId),
@@ -102,7 +102,7 @@ export function LiveSiteData({
       homeHref: null,
       signup: null,
     }),
-    [siteId, artistId]
+    [siteId, artistId],
   );
   return <SiteDataContext.Provider value={data}>{children}</SiteDataContext.Provider>;
 }
@@ -127,10 +127,8 @@ export function SnapshotSiteData({
       getPresentation: async (curationId, artworkId) =>
         snapshot.curations[curationId]?.presentations[artworkId] ?? null,
       getCanvas: async (pageId) => snapshot.pages.find((p) => p.id === pageId)?.canvas ?? [],
-      getComponents: async (pageId) =>
-        snapshot.pages.find((p) => p.id === pageId)?.components ?? [],
-      getSignupForms: async (pageId) =>
-        snapshot.pages.find((p) => p.id === pageId)?.signupForms ?? [],
+      getComponents: async (pageId) => snapshot.pages.find((p) => p.id === pageId)?.components ?? [],
+      getSignupForms: async (pageId) => snapshot.pages.find((p) => p.id === pageId)?.signupForms ?? [],
       listCovers: async () => snapshot.covers,
       getArtist: async () => snapshot.artist,
       pageContentNow: (pageId, curationId) => {
@@ -151,7 +149,7 @@ export function SnapshotSiteData({
       homeHref: publishedHomePath(siteId),
       signup: { siteId, siteKey },
     }),
-    [snapshot, siteId, siteKey]
+    [snapshot, siteId, siteKey],
   );
   return <SiteDataContext.Provider value={data}>{children}</SiteDataContext.Provider>;
 }

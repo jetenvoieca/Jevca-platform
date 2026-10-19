@@ -187,6 +187,9 @@ model Artist {
   // campaign mail is translated into French, so the French reads in
   // their voice (lib/actions/translateMail.ts).
   writingVoice   String?
+  // The artist's Instagram username, without the @ (2026-10-19) — the
+  // Presentation window's enquiry form offers "Or DM on Instagram".
+  instagramHandle String?
 
   hopperToken String @unique @default(cuid())
 
@@ -774,8 +777,10 @@ model InboundEmail {
   // ever redelivered (Resend's own retry behaviour), and needed to fetch
   // the full HTML/Plain Text body from the Receiving API (webhooks only
   // carry metadata — see processInboundEmail in
-  // lib/actions/inboundEmail.ts).
-  resendEmailId String  @unique
+  // lib/actions/inboundEmail.ts). Null for an enquiry sent from a
+  // website's Presentation window (2026-10-19, see
+  // lib/actions/websiteEnquiry.ts), which never passes through Resend.
+  resendEmailId String?  @unique
   // RFC Message-ID header, always stored with its angle brackets (see
   // canonicalMessageId, lib/emailThreading.ts) — used as In-Reply-To when
   // replying, and to link a later reply back to a task.
