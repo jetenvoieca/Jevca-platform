@@ -9,7 +9,8 @@ import { SITE_FONT_FAMILY } from "@/lib/siteFontFaces";
 import { useTurnstile } from "@/lib/useTurnstile";
 
 // The Presentation window's enquiry form (2026-10-19, Craig's mock-up),
-// shown in place of the price and buttons when Enquire is pressed: name,
+// sliding in over the work's words and buttons when Enquire is pressed
+// (see WorkPresentation): name,
 // email and message, the mailing list tick box, Send message, "Or DM on
 // Instagram" and the artist's email address — in the template's look and
 // wording (lib/presentationTemplate.ts). Sending is
@@ -29,10 +30,13 @@ export default function WorkEnquiryForm({
   data,
   settings,
   site,
+  active,
 }: {
   data: CurationWorkPresentation;
   settings: PresentationSettings;
   site: EnquirySite | null;
+  // Open — the robot check only runs while it is.
+  active: boolean;
 }) {
   const { colours, show, labels } = settings;
   const [name, setName] = useState("");
@@ -42,7 +46,7 @@ export default function WorkEnquiryForm({
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const check = useTurnstile(site?.siteKey ?? null, !sent);
+  const check = useTurnstile(site?.siteKey ?? null, active && !sent);
   const shownError = error ?? (check.failed ? UNAVAILABLE : null);
 
   const values = { artist: data.artistFirstName ?? "", instagram: data.instagramHandle ?? "" };

@@ -13,8 +13,8 @@ import WorkEnquiryForm, { type EnquirySite } from "@/components/WorkEnquiryForm"
 // lib/presentationTemplate.ts): the picture (and the work's other
 // pictures beneath it, to switch between), the title and details, then
 // the medium, description, Purchase / Pay in instalments, the instalment
-// terms, Enquire and where it can be seen. Enquire swaps the price and
-// buttons for the enquiry form (WorkEnquiryForm); Purchase and Pay in
+// terms, Enquire and where it can be seen. Enquire slides the enquiry
+// form (WorkEnquiryForm) in over the words and buttons; Purchase and Pay in
 // instalments open an email to the artist for now (online buying comes
 // later). Shared by the
 // Presentation window (CurationWorkView) and Templates → Presentations'
@@ -119,6 +119,9 @@ export default function WorkPresentation({
   };
 
   const side = settings.layout === "side";
+  // The hidden one of the words and the enquiry form takes no space,
+  // except beside the picture on a desktop (see below).
+  const hiddenLayer = side ? "absolute inset-x-0 top-0 md:static" : "absolute inset-x-0 top-0";
 
   return (
     <div
@@ -204,68 +207,88 @@ export default function WorkPresentation({
         )}
       </div>
 
-      {/* The words and the buttons. */}
-      <div className="flex min-w-0 flex-col gap-6">
-        {show.medium && data.medium && (
-          <p className="italic" style={{ color: colours.muted, fontSize: small, lineHeight: 1.6 }}>
-            {data.medium}
-          </p>
-        )}
-        {show.description && description && (
-          <p
-            className="whitespace-pre-line break-words"
-            style={{ fontSize: settings.textSize, lineHeight: settings.lineSpacing }}
-          >
-            {description}
-          </p>
-        )}
-        {enquiring && <WorkEnquiryForm data={data} settings={settings} site={site} />}
-        {!enquiring && show.price && priced && (
-          <p style={{ fontSize: settings.textSize }}>{formatMoney(price, data.priceCurrency)}</p>
-        )}
-
-        {enquiring ? null : data.available ? (
-          <>
-            {priced && (show.purchase || (show.instalments && perInstalment != null)) && (
-              <div className="flex flex-wrap gap-4">
-                {show.purchase &&
-                  button(fillLabel(labels.purchase, values), colours.purchaseBackground, colours.purchaseText, false)}
-                {show.instalments &&
-                  perInstalment != null &&
-                  button(
-                    fillLabel(labels.instalments, values),
-                    colours.instalmentsBackground,
-                    colours.instalmentsText,
-                    false,
-                  )}
-              </div>
-            )}
-            {show.instalmentTerms && perInstalment != null && (
-              <p style={{ color: colours.muted, fontSize: small }}>
-                {fillLabel(labels.instalmentTerms, values)}
-                {data.releaseMessage && ` · ${data.releaseMessage}`}
-              </p>
-            )}
-          </>
-        ) : (
-          labels.sold && (
-            <p className="uppercase tracking-[0.2em]" style={{ color: colours.muted, fontSize: small }}>
-              {labels.sold}
+      {/* The words and the buttons, and the enquiry form, which slides in
+          over them from the top of the column. Beside the picture on a
+          desktop the two share one space as tall as the taller, so the
+          window keeps its size when the form opens; elsewhere the hidden
+          one is lifted out of the way. Beside the picture the form starts
+          a little lower, clear of the close cross. */}
+      <div className="relative grid min-w-0 overflow-hidden">
+        <div
+          inert={enquiring}
+          className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-6 transition-all duration-500 ease-out ${
+            enquiring ? `invisible -translate-x-1/4 opacity-0 ${hiddenLayer}` : ""
+          }`}
+        >
+          {show.medium && data.medium && (
+            <p className="italic" style={{ color: colours.muted, fontSize: small, lineHeight: 1.6 }}>
+              {data.medium}
             </p>
-          )
-        )}
+          )}
+          {show.description && description && (
+            <p
+              className="whitespace-pre-line break-words"
+              style={{ fontSize: settings.textSize, lineHeight: settings.lineSpacing }}
+            >
+              {description}
+            </p>
+          )}
+          {show.price && priced && (
+            <p style={{ fontSize: settings.textSize }}>{formatMoney(price, data.priceCurrency)}</p>
+          )}
 
-        {!enquiring && (show.enquire || (show.location && data.viewingLocation)) && (
-          <div className="flex flex-col gap-3">
-            {show.enquire &&
-              button(fillLabel(labels.enquire, values), colours.enquireBackground, colours.enquireText, true, () =>
-                setEnquiring(true),
+          {data.available ? (
+            <>
+              {priced && (show.purchase || (show.instalments && perInstalment != null)) && (
+                <div className="flex flex-wrap gap-4">
+                  {show.purchase &&
+                    button(fillLabel(labels.purchase, values), colours.purchaseBackground, colours.purchaseText, false)}
+                  {show.instalments &&
+                    perInstalment != null &&
+                    button(
+                      fillLabel(labels.instalments, values),
+                      colours.instalmentsBackground,
+                      colours.instalmentsText,
+                      false,
+                    )}
+                </div>
               )}
-            {show.location && data.viewingLocation && (
-              <p style={{ color: colours.muted, fontSize: small }}>{fillLabel(labels.location, values)}</p>
-            )}
-          </div>
-        )}
+              {show.instalmentTerms && perInstalment != null && (
+                <p style={{ color: colours.muted, fontSize: small }}>
+                  {fillLabel(labels.instalmentTerms, values)}
+                  {data.releaseMessage && ` · ${data.releaseMessage}`}
+                </p>
+              )}
+            </>
+          ) : (
+            labels.sold && (
+              <p className="uppercase tracking-[0.2em]" style={{ color: colours.muted, fontSize: small }}>
+                {labels.sold}
+              </p>
+            )
+          )}
+
+          {(show.enquire || (show.location && data.viewingLocation)) && (
+            <div className="flex flex-col gap-3">
+              {show.enquire &&
+                button(fillLabel(labels.enquire, values), colours.enquireBackground, colours.enquireText, true, () =>
+                  setEnquiring(true),
+                )}
+              {show.location && data.viewingLocation && (
+                <p style={{ color: colours.muted, fontSize: small }}>{fillLabel(labels.location, values)}</p>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div
+          inert={!enquiring}
+          className={`col-start-1 row-start-1 min-w-0 self-start transition-all duration-500 ease-out ${side ? "md:pt-6" : ""} ${
+            enquiring ? "" : `invisible translate-x-full opacity-0 ${hiddenLayer}`
+          }`}
+        >
+          <WorkEnquiryForm data={data} settings={settings} site={site} active={enquiring} />
+        </div>
       </div>
     </div>
   );
