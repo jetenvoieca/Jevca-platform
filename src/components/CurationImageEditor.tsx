@@ -15,8 +15,8 @@ import type { ArtworkImage } from "@/lib/artworkImages";
 //   image has no ✕ (2026-10-04, direct request) — it's only ever changed
 //   by making another image main, so a work always keeps one once it has
 //   one. setCurationWorkImages enforces the same rule.
-// - "+" picks an image to add — the artwork's own (Related) or any other
-//   in the Media Catalogue (Marketing).
+// - "+" picks a picture or video to add — the artwork's own, or any other
+//   in the Media Catalogue (Marketing, Videos, Related; 2026-10-20).
 export default function CurationImageEditor({
   curationId,
   artworkId,
@@ -68,6 +68,7 @@ export default function CurationImageEditor({
         label={label}
         linkedArtworkId={artworkId}
         mediaKinds={["PHOTO", "VIDEO"]}
+        catalogueViews
         previewClassName="aspect-square h-full w-full"
         onSelect={add}
       />

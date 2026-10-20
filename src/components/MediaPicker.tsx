@@ -35,9 +35,10 @@ type MediaRow = {
 // was always meant to include video — see the original Hopper spec).
 // When mediaKinds is given it takes over entirely; otherwise videoOnly's
 // old true/false logic applies unchanged.
-type PickerSource = MediaTab | "media";
+// "work": the media related to `linkedArtworkId` (catalogueViews).
+type PickerSource = MediaTab | "media" | "work";
 
-const SOURCE_LABEL: Record<Exclude<PickerSource, "artworks">, string> = {
+const SOURCE_LABEL: Record<Exclude<PickerSource, "artworks" | "work">, string> = {
   marketing: "Marketing",
   videos: "Videos",
   related: "Related",
@@ -77,6 +78,7 @@ export default function MediaPicker({
   onClose,
   onSelect,
   withArtworks = false,
+  catalogueViews = false,
 }: {
   artistId: string;
   // For the "Upload new" link to this site's Hopper.
@@ -134,6 +136,11 @@ export default function MediaPicker({
   // Artworks, like the Media Catalogue. Picked artworks come to onSelect
   // as its second list. In multi mode both can be ticked together.
   withArtworks?: boolean;
+  // (2026-10-20 — a curation's work Presentation): the Media Catalogue's
+  // views without the artworks — Marketing, Videos and Related (every
+  // artwork's) — led by the media related to `linkedArtworkId`, so any
+  // picture or video in the catalogue can be picked.
+  catalogueViews?: boolean;
 }) {
   const words = useClientWords();
   const router = useRouter();
@@ -148,9 +155,12 @@ export default function MediaPicker({
   // holding a kind this picker takes. Otherwise one list, "media".
   const takesPhotos = matchesKind("PHOTO", videoOnly, mediaKinds);
   const takesVideos = matchesKind("VIDEO", videoOnly, mediaKinds);
-  const sources: PickerSource[] = withArtworks
+  const tabbed = withArtworks || catalogueViews;
+  const sources: PickerSource[] = tabbed
     ? [
-        ...(takesPhotos ? (["artworks", "marketing"] as const) : []),
+        ...(catalogueViews && linkedArtworkId ? (["work"] as const) : []),
+        ...(withArtworks && takesPhotos ? (["artworks"] as const) : []),
+        ...(takesPhotos ? (["marketing"] as const) : []),
         ...(takesVideos ? (["videos"] as const) : []),
         "related",
       ]
@@ -206,9 +216,24 @@ export default function MediaPicker({
     });
   };
 
+  // The media related to the linked artwork (catalogueViews).
+  const loadWorkMedia = (q: string) => {
+    startTransition(async () => {
+      const { rows } = await listMedia(artistId, {
+        purpose: "related",
+        artworkId: linkedArtworkId,
+        q: q || undefined,
+        limit: PICKER_FETCH_LIMIT,
+        newestFirst: true,
+      });
+      setImages(toPicked(rows, videoOnly, mediaKinds));
+    });
+  };
+
   const loadSource = (next: PickerSource, q: string) => {
     if (next === "artworks") loadArtworks(q);
     else if (next === "media") load(q, purpose);
+    else if (next === "work") loadWorkMedia(q);
     else loadMediaTab(q, next);
   };
 
@@ -232,7 +257,7 @@ export default function MediaPicker({
     // Fetch the Related count up front too, so the tab badge is correct
     // even before switching to it — otherwise it'd read "Related (0)"
     // until clicked once.
-    if (linkedArtworkId && purpose !== "related") {
+    if (linkedArtworkId && !tabbed && purpose !== "related") {
       startTransition(async () => {
         const { rows } = await listMedia(artistId, {
           purpose: "related",
@@ -460,7 +485,7 @@ export default function MediaPicker({
         )}
         {source !== "artworks" && images.length === 0 && !isPending && (
           <p className="py-12 text-center text-sm text-neutral-400">
-            {linkedArtworkId && purpose === "related"
+            {source === "work" || (linkedArtworkId && purpose === "related" && !tabbed)
               ? `No images related to this ${words.item.toLowerCase()} yet.`
               : "No matches. Try Upload new."}
           </p>
@@ -477,7 +502,7 @@ export default function MediaPicker({
         <div className="flex-1 space-y-4 overflow-y-auto p-4 pb-8">
           {/* Reordered above Search (2026-08-18, direct request) —
                 matches the reference layout's tabs-then-search order. */}
-          {withArtworks && (
+          {tabbed && (
             <div className="flex flex-wrap gap-1.5 text-sm">
               {sources.map((s) => (
                 <button
@@ -490,12 +515,12 @@ export default function MediaPicker({
                       : "border-neutral-300 hover:bg-neutral-50"
                   }`}
                 >
-                  {s === "artworks" ? words.items : SOURCE_LABEL[s]}
+                  {s === "artworks" ? words.items : s === "work" ? `This ${words.item.toLowerCase()}` : SOURCE_LABEL[s]}
                 </button>
               ))}
             </div>
           )}
-          {linkedArtworkId && (
+          {linkedArtworkId && !tabbed && (
             // Same pill style as the Media Catalogue's own Marketing/
             // Related toggle, for visual consistency.
             <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
