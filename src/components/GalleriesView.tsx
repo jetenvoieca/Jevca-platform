@@ -693,6 +693,7 @@ export default function GalleriesView({
                 label={`Add ${words.items.toLowerCase()}`}
                 allowCreate={false}
                 availableOnly
+                small
                 excludeIds={selectedDetail.consignedWorks.map((w) => w.id)}
                 onSelect={(picked) => addWorksHere(selectedDetail, picked.map((p) => p.id))}
               />

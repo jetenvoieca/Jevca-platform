@@ -18,6 +18,7 @@ export default function ArtworkPicker({
   allowCreate = true,
   excludeIds = [],
   availableOnly = false,
+  small = false,
   onSelect,
 }: {
   artistId: string;
@@ -40,6 +41,9 @@ export default function ArtworkPicker({
   excludeIds?: string[];
   // Only works still for sale (2026-10-20) — e.g. Locations' Add works.
   availableOnly?: boolean;
+  // The "button" trigger at the small size of the buttons beside it
+  // (2026-10-20 — Locations' Add works).
+  small?: boolean;
   onSelect: (artworks: PickedArtwork[]) => void;
 }) {
   const words = useClientWords();
@@ -212,7 +216,9 @@ export default function ArtworkPicker({
       <button
         type="button"
         onClick={handleOpen}
-        className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
+        className={`rounded-md border border-neutral-300 bg-white hover:bg-neutral-50 ${
+          small ? "px-3 py-[4px] text-xs" : "px-4 py-2 text-sm"
+        }`}
       >
         {triggerLabel}
       </button>
