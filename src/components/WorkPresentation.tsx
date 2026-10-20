@@ -222,14 +222,15 @@ export default function WorkPresentation({
         >
           {data.catalogueName}
         </h2>
-        {((show.edition && editionLine) || (show.size && data.size)) && (
-          <div className="mt-4" style={{ fontSize: settings.textSize }}>
-            {show.edition && editionLine && <p>{editionLine}</p>}
-            {show.size && data.size && <p>{data.size}</p>}
-          </div>
-        )}
-        {/* The price and the buttons, a little narrower than the picture. */}
-        <div className="mt-10 flex w-4/5 flex-col gap-6 self-center">
+        {/* The details, price and buttons, a little narrower than the
+            picture, all lined up on the left. */}
+        <div className="mt-6 flex w-4/5 flex-col gap-6 self-center">
+          {((show.edition && editionLine) || (show.size && data.size)) && (
+            <div style={{ fontSize: settings.textSize }}>
+              {show.edition && editionLine && <p>{editionLine}</p>}
+              {show.size && data.size && <p>{data.size}</p>}
+            </div>
+          )}
           {show.price && priced && (
             <p style={{ fontSize: settings.textSize }}>{formatMoney(price, data.priceCurrency)}</p>
           )}
