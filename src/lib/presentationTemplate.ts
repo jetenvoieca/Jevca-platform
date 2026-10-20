@@ -121,6 +121,9 @@ export type PresentationSettings = {
   borderWidth: number;
   rounding: number;
   buttonRounding: number;
+  // Every button's height, in pixels (2026-10-20) — a little taller if
+  // its words go onto two lines.
+  buttonHeight: number;
   titleFont: SiteFontId;
   textFont: SiteFontId;
   titleSize: number;
@@ -140,17 +143,18 @@ export const DEFAULT_PRESENTATION: PresentationSettings = {
     border: "#a8a8a8",
     text: "#1f1f1f",
     muted: "#8a8a8a",
-    purchaseBackground: "#dc7090",
+    purchaseBackground: "#e48aa5",
     purchaseText: "#ffffff",
-    instalmentsBackground: "#f3d3de",
-    instalmentsText: "#dc7090",
-    enquireBackground: "#1a1716",
+    instalmentsBackground: "#f7e1e8",
+    instalmentsText: "#d77d99",
+    enquireBackground: "#3b3735",
     enquireText: "#ffffff",
     fieldBackground: "#ffffff",
   },
   borderWidth: 1,
   rounding: 40,
   buttonRounding: 0,
+  buttonHeight: 44,
   titleFont: "jost",
   textFont: "jost",
   titleSize: 40,
@@ -209,6 +213,7 @@ export const PRESENTATION_LIMITS = {
   borderWidth: { min: 0, max: 4 },
   rounding: { min: 0, max: 48 },
   buttonRounding: { min: 0, max: 30 },
+  buttonHeight: { min: 32, max: 72 },
   titleSize: { min: 16, max: 60 },
   textSize: { min: 12, max: 24 },
   lineSpacing: { min: 1, max: 2.6 },
@@ -250,6 +255,7 @@ export function normalizePresentation(raw: unknown): PresentationSettings {
     borderWidth: cleanNumber(v.borderWidth, l.borderWidth, d.borderWidth),
     rounding: cleanNumber(v.rounding, l.rounding, d.rounding),
     buttonRounding: cleanNumber(v.buttonRounding, l.buttonRounding, d.buttonRounding),
+    buttonHeight: cleanNumber(v.buttonHeight, l.buttonHeight, d.buttonHeight),
     titleFont: isSiteFontId(v.titleFont) ? v.titleFont : d.titleFont,
     textFont: isSiteFontId(v.textFont) ? v.textFont : d.textFont,
     titleSize: cleanNumber(v.titleSize, l.titleSize, d.titleSize),

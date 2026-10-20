@@ -163,6 +163,15 @@ export default function PresentationTemplateEditor({
             onCommit={(buttonRounding) => set({ buttonRounding })}
             wide
           />
+          <NumberField
+            label="Button height"
+            unit="pixels"
+            step={1}
+            value={settings.buttonHeight}
+            limits={l.buttonHeight}
+            onCommit={(buttonHeight) => set({ buttonHeight })}
+            wide
+          />
         </Group>
 
         <Group title="Show">

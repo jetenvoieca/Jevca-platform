@@ -153,10 +153,11 @@ export default function WorkEnquiryForm({
                 href={`https://instagram.com/${encodeURIComponent(data.instagramHandle)}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex min-h-14 flex-1 items-center justify-center px-4 py-3 text-center transition-opacity hover:opacity-80 sm:whitespace-nowrap"
+                className="inline-flex flex-1 items-center justify-center px-4 py-1 text-center transition-opacity hover:opacity-80 sm:whitespace-nowrap"
                 style={{
                   border: `1px solid ${colours.border}`,
                   color: colours.text,
+                  minHeight: settings.buttonHeight,
                   borderRadius: settings.buttonRounding,
                   fontSize: Math.round(settings.textSize * 0.95),
                 }}

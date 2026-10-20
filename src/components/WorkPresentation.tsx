@@ -83,6 +83,7 @@ export default function WorkPresentation({
     const style: CSSProperties = {
       background,
       color,
+      minHeight: settings.buttonHeight,
       borderRadius: settings.buttonRounding,
       fontFamily: textFont,
       // Purchase and Pay in instalments (not `wide`) are a little smaller
@@ -91,8 +92,8 @@ export default function WorkPresentation({
       fontSize: Math.round(settings.textSize * (wide ? 0.8 : 0.7)),
     };
     const className = `${
-      wide ? "w-full whitespace-nowrap px-6 tracking-[0.2em]" : "min-w-0 flex-1 px-3 tracking-[0.15em]"
-    } inline-flex min-h-14 items-center justify-center py-4 text-center uppercase transition-opacity hover:opacity-90`;
+      wide ? "w-full whitespace-nowrap px-6 tracking-[0.2em]" : "min-w-0 flex-auto px-3 tracking-[0.15em]"
+    } inline-flex items-center justify-center py-1 text-center uppercase transition-opacity hover:opacity-90`;
     if (onClick) {
       return (
         <button type="button" onClick={onClick} className={className} style={style}>

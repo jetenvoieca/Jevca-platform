@@ -21,10 +21,11 @@ export function formLook(settings: PresentationSettings) {
     fieldClass: "w-full min-w-0 border-0 px-5 py-3 outline-none focus:ring-1 focus:ring-current",
     small: Math.round(settings.textSize * 0.75),
     buttonClass:
-      "inline-flex min-h-14 items-center justify-center px-6 py-3 text-center uppercase tracking-[0.2em] transition-opacity hover:opacity-90 disabled:opacity-60",
+      "inline-flex items-center justify-center px-6 py-1 text-center uppercase tracking-[0.2em] transition-opacity hover:opacity-90 disabled:opacity-60",
     button: (background: string, color: string): CSSProperties => ({
       background,
       color,
+      minHeight: settings.buttonHeight,
       borderRadius: settings.buttonRounding,
       fontSize: Math.round(settings.textSize * 0.8),
     }),
