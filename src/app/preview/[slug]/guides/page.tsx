@@ -8,7 +8,8 @@ export const dynamic = "force-dynamic";
 // no "+ New Topic" (2026-09-13, direct request: "show user guides from
 // guides in Administration guides", "remove edit/delete buttons - PDF
 // can stay", "remove the add new topic buttons"). Technical-category
-// guides are developer documentation, not shown here.
+// guides are developer documentation, not shown here. Each point is
+// marked with a quiet dash, not a number (2026-10-20, Craig's request).
 export default async function PreviewGuidesPage() {
   const guides = (await listGuides()).filter((g) => g.category === "USER");
 
@@ -35,10 +36,10 @@ export default async function PreviewGuidesPage() {
               {guide.steps.length === 0 ? (
                 <p className="text-sm text-neutral-400">Nothing here yet.</p>
               ) : (
-                <ol className="flex flex-col gap-3">
-                  {guide.steps.map((step, idx) => (
+                <ul className="flex flex-col gap-3">
+                  {guide.steps.map((step) => (
                     <li key={step.id} className="flex gap-3">
-                      <span className="shrink-0 font-semibold text-amber-700">{idx + 1}</span>
+                      <span className="shrink-0 text-amber-700">–</span>
                       <div>
                         <p className="text-sm text-neutral-700">{step.text}</p>
                         {step.imageUrl && (
@@ -51,7 +52,7 @@ export default async function PreviewGuidesPage() {
                       </div>
                     </li>
                   ))}
-                </ol>
+                </ul>
               )}
             </div>
           ))}
