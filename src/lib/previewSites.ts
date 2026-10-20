@@ -3,7 +3,7 @@
 // is reachable at /preview/<slug>, showing that one site's own content
 // through the artists' version of the nav (see previewNav.ts): just
 // Artworks — Catalogue (with its Add Artworks page), Curations and
-// Locations.
+// Locations — and the read-only Guides.
 //
 // To make another site reachable the same way later, add another
 // "slug": "siteId" entry here — nothing else needs to change.
