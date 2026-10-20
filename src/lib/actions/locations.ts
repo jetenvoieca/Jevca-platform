@@ -192,3 +192,36 @@ export async function updateLocationType(
   revalidatePath(`/sites/${siteId}/galleries`);
   return { ok: true };
 }
+
+// Locations' Add works (2026-10-20, Craig's request): puts the chosen
+// works at this Location — the same Location field the Artwork Catalogue
+// and the Studio app's Consign set, which is what lists a work under
+// "Works at …". Like them, it also fills "Can be viewed at" with the
+// location's name where that's still empty. Only the artist's own works
+// still for sale are moved; any others chosen are left as they are.
+export async function moveArtworksToLocation(
+  artistId: string,
+  locationName: string,
+  artworkIds: string[]
+): Promise<{ moved: number; skipped: number } | { error: string }> {
+  const location = await db.location.findUnique({
+    where: { artistId_name: { artistId, name: locationName } },
+    select: { name: true },
+  });
+  if (!location) return { error: "That location isn't on the list." };
+
+  const ids = [...new Set(artworkIds)];
+  const works = await db.artwork.findMany({
+    where: { id: { in: ids }, artistId, availability: "AVAILABLE" },
+    select: { id: true, viewingLocation: true },
+  });
+  const unseen = works.filter((w) => !w.viewingLocation).map((w) => w.id);
+  await db.$transaction([
+    db.artwork.updateMany({
+      where: { id: { in: works.map((w) => w.id) } },
+      data: { location: location.name },
+    }),
+    db.artwork.updateMany({ where: { id: { in: unseen } }, data: { viewingLocation: location.name } }),
+  ]);
+  return { moved: works.length, skipped: ids.length - works.length };
+}

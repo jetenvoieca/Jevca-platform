@@ -17,6 +17,7 @@ export default function ArtworkPicker({
   variant = "tile",
   allowCreate = true,
   excludeIds = [],
+  availableOnly = false,
   onSelect,
 }: {
   artistId: string;
@@ -37,6 +38,8 @@ export default function ArtworkPicker({
   // Artworks to leave out of the list (2026-09-24) — e.g. works already
   // in the curation being added to, so they can't be picked twice.
   excludeIds?: string[];
+  // Only works still for sale (2026-10-20) — e.g. Locations' Add works.
+  availableOnly?: boolean;
   onSelect: (artworks: PickedArtwork[]) => void;
 }) {
   const words = useClientWords();
@@ -76,6 +79,7 @@ export default function ArtworkPicker({
       location: f.location || undefined,
       type: f.type || undefined,
       excludeIds,
+      availableOnly,
       offset,
     });
   };

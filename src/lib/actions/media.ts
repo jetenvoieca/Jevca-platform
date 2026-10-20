@@ -199,13 +199,16 @@ export async function getArtworksForArtist(
   artistId: string,
   filters: Pick<ArtworkFilterInput, "q" | "location" | "type"> & {
     excludeIds?: string[];
+    // Only works still for sale (2026-10-20 — Locations' Add works).
+    availableOnly?: boolean;
     offset?: number;
   } = {}
 ): Promise<{ rows: PickerArtwork[]; total: number }> {
-  const { excludeIds = [], offset = 0, ...rest } = filters;
+  const { excludeIds = [], availableOnly = false, offset = 0, ...rest } = filters;
   const where = {
     ...buildArtworkWhere(artistId, rest),
     ...(excludeIds.length > 0 ? { id: { notIn: excludeIds } } : {}),
+    ...(availableOnly ? { availability: "AVAILABLE" as const } : {}),
   };
   const [rows, total] = await Promise.all([
     db.artwork.findMany({

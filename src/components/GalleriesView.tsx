@@ -11,6 +11,7 @@ import {
   createLocation,
   renameLocationByCustomer,
   deleteLocationByCustomer,
+  moveArtworksToLocation,
   type LocationCustomerSummary,
   type LocationType,
 } from "@/lib/actions/locations";
@@ -21,6 +22,7 @@ import { openStatement } from "@/lib/actions/statements";
 import { netOwed } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
+import ArtworkPicker from "@/components/ArtworkPicker";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import { ACTION_BUTTON_LOOK } from "@/components/ActionPanel";
@@ -237,6 +239,24 @@ export default function GalleriesView({
   // which is specifically for switching to a different gallery.
   const refreshGalleryDetail = (customerId: string) => {
     getGalleryDetail(customerId).then((detail) => setSelectedDetail(detail));
+  };
+
+  // Add works: moves the chosen works here, then shows them.
+  const [addWorksError, setAddWorksError] = useState<string | null>(null);
+  const addWorksHere = (location: GalleryDetail, artworkIds: string[]) => {
+    if (artworkIds.length === 0) return;
+    setAddWorksError(null);
+    startTransition(async () => {
+      const result = await moveArtworksToLocation(artistId, location.name, artworkIds);
+      if ("error" in result) {
+        setAddWorksError(result.error);
+        return;
+      }
+      if (result.skipped > 0) {
+        setAddWorksError(`${result.skipped} of them couldn't be moved — already sold or in a sale.`);
+      }
+      refreshGalleryDetail(location.id);
+    });
   };
 
   // `purchaseId` (optional) — the sale a Sales-tab row was clicked for;
@@ -663,15 +683,30 @@ export default function GalleriesView({
             </h1>
           </div>
           {selectedDetail && (
-            <button
-              type="button"
-              onClick={() => setMobileStep("details")}
-              className="shrink-0 rounded-md bg-neutral-900 px-3 py-[4px] text-xs font-medium text-white hover:bg-neutral-700 xl:hidden"
-            >
-              Details &amp; Sales →
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              {/* Add works (2026-10-20, Craig's request): puts works still
+                  for sale at this location — see moveArtworksToLocation. */}
+              <ArtworkPicker
+                artistId={artistId}
+                mode="multi"
+                variant="button"
+                label={`Add ${words.items.toLowerCase()}`}
+                allowCreate={false}
+                availableOnly
+                excludeIds={selectedDetail.consignedWorks.map((w) => w.id)}
+                onSelect={(picked) => addWorksHere(selectedDetail, picked.map((p) => p.id))}
+              />
+              <button
+                type="button"
+                onClick={() => setMobileStep("details")}
+                className="rounded-md bg-neutral-900 px-3 py-[4px] text-xs font-medium text-white hover:bg-neutral-700 xl:hidden"
+              >
+                Details &amp; Sales →
+              </button>
+            </div>
           )}
         </div>
+        {addWorksError && <p className="mb-3 text-sm text-red-600">{addWorksError}</p>}
         {!selectedDetail ? (
           <p className="text-sm text-neutral-400">
             Select a location to see the works currently there.
