@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { saleBreakdown } from "@/lib/saleMath";
-import { deactivatePaymentLink, retireStatementPaymentLinks } from "@/lib/paymentLinks";
+import { deactivatePaymentLink, getArtistStripeTarget, retireStatementPaymentLinks } from "@/lib/paymentLinks";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import type { SaleInvoice } from "@/lib/actions/payments";
 
@@ -175,6 +175,73 @@ export async function retireSalePaymentLink(sale: {
     });
   }
   await retireStatementPaymentLinks({ closedAt: null, lines: { some: { purchaseId: sale.id } } });
+}
+
+// Moves unpaid sales still set to an older Stripe account or mode onto the
+// artist's current one (2026-10-20, Craig's choice — e.g. a sale recorded
+// before the artist connected their own Stripe account couldn't share a
+// statement's link with later ones). Only sales nothing has been paid on
+// through Stripe and not on Stripe instalments; a sale on an unpaid
+// invoice moves only with every other sale on it, and the invoice too.
+// Old links (and any statement link listing a moved sale) are switched
+// off first. Used before a statement or invoice is made.
+export async function moveUnpaidSalesToCurrentStripeAccount(saleIds: string[]) {
+  const sales = await db.purchase.findMany({
+    where: { id: { in: saleIds }, status: "ACTIVE" },
+    select: { id: true, invoiceId: true, artwork: { select: { artistId: true } } },
+  });
+  const done = new Set<string>();
+  for (const sale of sales) {
+    if (done.has(sale.id)) continue;
+    const target = await getArtistStripeTarget(sale.artwork.artistId);
+    // The sale, or every sale on its unpaid invoice.
+    const invoice = sale.invoiceId
+      ? await db.invoice.findFirst({
+          where: { id: sale.invoiceId, paidAt: null, cancelledAt: null },
+          select: { id: true, stripeMode: true, stripeAccountId: true, stripePaymentLinkId: true },
+        })
+      : null;
+    const group = await db.purchase.findMany({
+      where: invoice ? { invoiceId: invoice.id } : { id: sale.id },
+      select: {
+        id: true,
+        status: true,
+        stripeMode: true,
+        stripeAccountId: true,
+        stripePaymentLinkId: true,
+        stripeSubscriptionScheduleId: true,
+        payments: { select: { stripePaymentIntentId: true, stripeInvoiceId: true } },
+      },
+    });
+    group.forEach((g) => done.add(g.id));
+    const elsewhere = (x: { stripeMode: string | null; stripeAccountId: string | null }) =>
+      x.stripeMode !== target.mode || x.stripeAccountId !== target.accountId;
+    if (!group.some(elsewhere) && !(invoice && elsewhere(invoice))) continue;
+    const movable = group.every(
+      (g) =>
+        g.status === "ACTIVE" &&
+        !g.stripeSubscriptionScheduleId &&
+        g.payments.every((p) => !p.stripePaymentIntentId && !p.stripeInvoiceId)
+    );
+    if (!movable) continue;
+
+    for (const g of group) await retireSalePaymentLink(g);
+    if (invoice) await retireInvoicePaymentLink(invoice);
+    await db.$transaction([
+      db.purchase.updateMany({
+        where: { id: { in: group.map((g) => g.id) } },
+        data: { stripeMode: target.mode, stripeAccountId: target.accountId, stripeCustomerId: null },
+      }),
+      ...(invoice
+        ? [
+            db.invoice.update({
+              where: { id: invoice.id },
+              data: { stripeMode: target.mode, stripeAccountId: target.accountId },
+            }),
+          ]
+        : []),
+    ]);
+  }
 }
 
 // Cancels an unpaid invoice: kept on record, marked Cancelled (its lines

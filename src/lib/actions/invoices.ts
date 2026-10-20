@@ -12,6 +12,7 @@ import {
   invoiceExtras,
   invoiceParty,
   loadInvoice,
+  moveUnpaidSalesToCurrentStripeAccount,
   type DocumentSale,
   type LoadedInvoice,
 } from "@/lib/invoices";
@@ -66,6 +67,9 @@ export async function produceInvoice(
 ): Promise<Result<{ invoiceId: string }>> {
   const ids = [...new Set(purchaseIds)];
   if (ids.length === 0) return { ok: false, error: "Tick at least one sale." };
+  // Unpaid sales still set to an older Stripe account move to the
+  // artist's current one, so they can share the invoice's link.
+  await moveUnpaidSalesToCurrentStripeAccount(ids);
 
   const sales = await db.purchase.findMany({
     where: { id: { in: ids } },

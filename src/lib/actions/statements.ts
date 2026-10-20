@@ -9,6 +9,7 @@ import { artistFromAddress } from "@/lib/email";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import { currencySymbol } from "@/lib/pdfParts";
 import { retireStatementPaymentLinks } from "@/lib/paymentLinks";
+import { moveUnpaidSalesToCurrentStripeAccount } from "@/lib/invoices";
 import { isOwed, payFromLabel, workLineItem } from "@/lib/saleLinks";
 import { payBalancesInFull } from "@/lib/salePayments";
 import {
@@ -98,17 +99,33 @@ export async function makeStatement(customerId: string, purchaseIds: string[]): 
   if (!gallery.ok) return gallery;
   const chosen = new Set(purchaseIds);
   if (chosen.size === 0) return { ok: false, error: "Tick at least one work." };
+  // Unpaid works still set to an older Stripe account move to the
+  // artist's current one, so they can share the statement's link.
+  await moveUnpaidSalesToCurrentStripeAccount([...chosen]);
   // Only works the gallery still owes for, in their usual order.
   const owed = (await owedGallerySales(customerId)).filter((s) => chosen.has(s.id));
   if (owed.length !== chosen.size) return { ok: false, error: "One of these works is no longer owed — please reopen Statement." };
   // One link pays the whole statement, so its works must share a currency
   // and Stripe account.
   const first = owed[0];
-  if (owed.some((s) => s.currency !== first.currency)) {
-    return { ok: false, error: "The works on one statement must all be in the same currency." };
+  const names = (list: typeof owed) => list.map((s) => `"${s.artwork.catalogueName}"`).join(", ");
+  const otherCurrency = owed.filter((s) => s.currency !== first.currency);
+  if (otherCurrency.length > 0) {
+    return {
+      ok: false,
+      error: `${names(otherCurrency)} ${otherCurrency.length === 1 ? "is" : "are"} not in ${first.currency} like the other works — one statement is paid in one currency, so put ${otherCurrency.length === 1 ? "it" : "them"} on a statement of ${otherCurrency.length === 1 ? "its" : "their"} own.`,
+    };
   }
-  if (owed.some((s) => s.stripeMode !== first.stripeMode || s.stripeAccountId !== first.stripeAccountId)) {
-    return { ok: false, error: "These works were taken into different Stripe accounts, so they can't share a payment link." };
+  // Left on another account only if something was already paid on it
+  // through Stripe there (see moveUnpaidSalesToCurrentStripeAccount).
+  const otherAccount = owed.filter(
+    (s) => s.stripeMode !== first.stripeMode || s.stripeAccountId !== first.stripeAccountId
+  );
+  if (otherAccount.length > 0) {
+    return {
+      ok: false,
+      error: `${names(otherAccount)} already had a payment through a different Stripe account, so ${otherAccount.length === 1 ? "it needs" : "they need"} a statement of ${otherAccount.length === 1 ? "its" : "their"} own.`,
+    };
   }
 
   const current = await db.statement.findFirst({
