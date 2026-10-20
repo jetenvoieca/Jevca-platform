@@ -9,51 +9,65 @@ import { deleteFromR2 } from "@/lib/r2";
 // checked by Claude as it arrives (see processInboundEmail): spam goes to
 // the Spam view instead of the Inbox, raises no alert, and is deleted 30
 // days after arriving (deleteOldSpam, run daily). Not spam moves it back
-// and trusts its sender from then on (TrustedSender).
+// and trusts its sender from then on; Mark as spam moves an email there
+// and blocks its sender, so their emails go straight to Spam (SenderRule,
+// whichever was chosen last; the address only, never a whole domain).
 //
-// Senders already known are never checked: a trusted sender, an artist
-// or customer it was matched to, a reply to an email sent from a task, or
-// anyone the Inbox has sent to. When unsure, or if the check can't run,
-// the email goes to the Inbox — a missed spam is a nuisance, a missed
-// enquiry is a lost sale.
+// See spamVerdict for the order things are decided in. When unsure, or
+// if the check can't run, the email goes to the Inbox — a missed spam is
+// a nuisance, a missed enquiry is a lost sale.
 
 const MODEL = "claude-haiku-5-5";
 const MAX_INPUT_CHARS = 6000;
 export const SPAM_KEEP_DAYS = 30;
+const BLOCKED_REASON = "Blocked sender";
+export const MARKED_REASON = "Marked as spam";
 // How many old spam emails one daily run deletes — far more than arrive
 // in a day, so the backlog can never grow.
 const DELETE_BATCH = 500;
 
-export function normaliseAddress(address: string): string {
+function normaliseAddress(address: string): string {
   return address.trim().toLowerCase();
-}
-
-// True if this sender is never checked: trusted by Not spam, or sent to
-// from the Inbox before (any mailbox, any kind of send).
-export async function isKnownSender(address: string): Promise<boolean> {
-  const sender = normaliseAddress(address);
-  if (!sender) return false;
-  const [trusted, sentTo] = await Promise.all([
-    db.trustedSender.findUnique({ where: { address: sender }, select: { id: true } }),
-    db.outboundEmail.findFirst({
-      where: { toAddress: { equals: sender, mode: "insensitive" } },
-      select: { id: true },
-    }),
-  ]);
-  return trusted !== null || sentTo !== null;
 }
 
 export type SpamVerdict = { spam: false } | { spam: true; reason: string };
 
-// Asks Claude whether a received email is spam. Anything that goes wrong
-// counts as not spam (see above).
-export async function checkForSpam(email: {
+type ReceivedEmail = {
   fromAddress: string;
   fromName: string | null;
   toAddress: string;
   subject: string | null;
   text: string;
-}): Promise<SpamVerdict> {
+};
+
+// Decides whether a received email (or contact form message) is spam, in
+// this order: a blocked sender always is; a trusted sender, one the
+// caller already knows (`knownSender`: a client artist, a customer, a
+// reply to a task's email) or anyone the Inbox has sent to never is;
+// anything else is checked by Claude.
+export async function spamVerdict(email: ReceivedEmail, knownSender: boolean): Promise<SpamVerdict> {
+  const sender = normaliseAddress(email.fromAddress);
+  const rule = await db.senderRule.findUnique({ where: { address: sender }, select: { kind: true } });
+  if (rule?.kind === "BLOCKED") return { spam: true, reason: BLOCKED_REASON };
+  if (rule?.kind === "TRUSTED" || knownSender) return { spam: false };
+  const sentTo = await db.outboundEmail.findFirst({
+    where: { toAddress: { equals: sender, mode: "insensitive" } },
+    select: { id: true },
+  });
+  return sentTo ? { spam: false } : checkForSpam(email);
+}
+
+// Records Not spam (TRUSTED) or Mark as spam (BLOCKED) for a sender,
+// replacing whichever was there.
+export async function setSenderRule(address: string, kind: "TRUSTED" | "BLOCKED"): Promise<void> {
+  const sender = normaliseAddress(address);
+  if (!sender) return;
+  await db.senderRule.upsert({ where: { address: sender }, create: { address: sender, kind }, update: { kind } });
+}
+
+// Asks Claude whether a received email is spam. Anything that goes wrong
+// counts as not spam (see above).
+async function checkForSpam(email: ReceivedEmail): Promise<SpamVerdict> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.warn("Spam filter skipped: ANTHROPIC_API_KEY is missing.");

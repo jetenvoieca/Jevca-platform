@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { isValidEmail, normalizeEmail } from "@/lib/emailAddress";
 import { checkWebsiteVisitor } from "@/lib/turnstile";
 import { BUSINESS_WEBSITE_DOMAIN, CONTACT_MAX_MESSAGE, CONTACT_MAX_NAME } from "@/lib/businessWebsite";
-import { checkForSpam, isKnownSender } from "@/lib/spamFilter";
+import { spamVerdict } from "@/lib/spamFilter";
 
 // The contact form on the business website's Home page (2026-10-20,
 // direct request — the address shown there drew spam, so it's no longer
@@ -52,15 +52,15 @@ export async function sendBusinessContact(input: {
   );
 
   // As for email to the business: matched to the client artist who sent
-  // it, if any, and never spam-checked for a known sender.
+  // it, if any, and spam-checked the same way (a client artist is known).
   const artist = await db.artist.findFirst({
     where: { email: { equals: email, mode: "insensitive" } },
     select: { id: true },
   });
-  const verdict =
-    artist || (await isKnownSender(email))
-      ? ({ spam: false } as const)
-      : await checkForSpam({ fromAddress: email, fromName: name, toAddress: home.email, subject, text: message });
+  const verdict = await spamVerdict(
+    { fromAddress: email, fromName: name, toAddress: home.email, subject, text: message },
+    artist !== null
+  );
 
   await db.inboundEmail.create({
     data: {

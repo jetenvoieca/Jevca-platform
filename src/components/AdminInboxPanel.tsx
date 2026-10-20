@@ -9,6 +9,7 @@ import {
   archiveInboundEmail,
   unarchiveInboundEmail,
   markNotSpam,
+  markAsSpam,
   deleteInboundEmail,
   deleteOutboundEmail,
   type InboxSummaryItem,
@@ -62,7 +63,15 @@ import ForwardEmailPopup from "@/components/ForwardEmailPopup";
 import SwipeRow from "@/components/SwipeRow";
 import { parisToday, parisWeekStart, parisNextDay, msUntilParisMidnight } from "@/lib/parisTime";
 import { MiniActionBar, MiniActionButton } from "@/components/ActionPanel";
-import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, ReinstateIcon } from "@/components/ActionIcons";
+import {
+  TaskIcon,
+  TaskRemoveIcon,
+  ArchiveIcon,
+  UnarchiveIcon,
+  TrashIcon,
+  ReinstateIcon,
+  SpamIcon,
+} from "@/components/ActionIcons";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every message received in one list,
@@ -151,7 +160,9 @@ import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, Reinst
 // offers Spam — what the spam filter caught (see lib/spamFilter.ts),
 // deleted automatically after 30 days. Its rows show why they were caught
 // and offer Not spam (moves it to the Inbox and trusts the sender) and
-// Delete; an opened spam email shows the reason and Not spam too.
+// Delete; an opened spam email shows the reason and Not spam too. Every
+// other received email offers Mark as spam (moves it to Spam and blocks
+// the sender), on its row and when opened.
 //
 // Today (2026-10-09, direct request) — an open task can be marked Today
 // from the same swipe/hover on its row (a full swipe marks it). Today's
@@ -683,12 +694,12 @@ export default function AdminInboxPanel({
     runRowAction(id, deleteInboundEmail);
   };
 
-  // Not spam on the opened email: it leaves the Spam view, so the email
-  // closes once it's moved.
-  const handleNotSpamOpen = (id: string) => {
+  // Not spam / Mark as spam on the opened email: it leaves the list
+  // showing, so the email closes once it's moved.
+  const moveOpenEmail = (id: string, move: (id: string) => Promise<void>) => {
     setBusyId(id);
     startTransition(async () => {
-      await markNotSpam(id);
+      await move(id);
       setBusyId(null);
       setOpenId(null);
       setThread(null);
@@ -1413,6 +1424,11 @@ export default function AdminInboxPanel({
                                     primary: true,
                                     onClick: () => runRowAction(m.id, archiveInboundEmail),
                                   },
+                              {
+                                label: "Mark as spam",
+                                icon: <SpamIcon />,
+                                onClick: () => runRowAction(m.id, markAsSpam),
+                              },
                             ]),
                         { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteRow(m.id) },
                       ]}
@@ -1948,10 +1964,18 @@ export default function AdminInboxPanel({
                           </MiniActionButton>
                           {item.direction === "IN" && openListItem?.spamReason && (
                             <MiniActionButton
-                              onClick={() => handleNotSpamOpen(item.id)}
+                              onClick={() => moveOpenEmail(item.id, markNotSpam)}
                               disabled={busyId === item.id || isPending}
                             >
                               Not spam
+                            </MiniActionButton>
+                          )}
+                          {item.direction === "IN" && !openListItem?.spamReason && (
+                            <MiniActionButton
+                              onClick={() => moveOpenEmail(item.id, markAsSpam)}
+                              disabled={busyId === item.id || isPending}
+                            >
+                              Mark as spam
                             </MiniActionButton>
                           )}
                           {item.direction === "IN" && !openListItem?.spamReason && (

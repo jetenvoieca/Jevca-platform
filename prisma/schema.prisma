@@ -824,8 +824,8 @@ model InboundEmail {
   // When it was filed as spam on arrival (2026-10-20, see lib/spamFilter.ts)
   // — null for everything else. Spam shows only in the Spam view, raises
   // no alert, and is deleted 30 days after arriving; Not spam clears it
-  // and trusts the sender from then on. `spamReason` is the filter's
-  // short reason, shown on the opened email.
+  // and trusts the sender from then on, Mark as spam sets it and blocks
+  // the sender. `spamReason` is the short reason shown on the email.
   spamAt     DateTime?
   spamReason String?
 
@@ -851,13 +851,21 @@ model InboundEmail {
   @@index([messageId])
 }
 
-// A sender address the spam filter never applies to (2026-10-20, see
-// lib/spamFilter.ts) — added by Not spam on an email in the Spam view.
-// Stored lower case.
-model TrustedSender {
-  id        String   @id @default(cuid())
-  address   String   @unique
-  createdAt DateTime @default(now())
+// TRUSTED: never spam-checked — set by Not spam. BLOCKED: always filed
+// as spam — set by Mark as spam (2026-10-20, see lib/spamFilter.ts).
+enum SenderRuleKind {
+  TRUSTED
+  BLOCKED
+}
+
+// What the spam filter does with one sender address, whichever was
+// chosen last (Not spam / Mark as spam). Stored lower case.
+model SenderRule {
+  id        String         @id @default(cuid())
+  address   String         @unique
+  kind      SenderRuleKind
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
 }
 
 // A file attached to an inbound email (2026-09-24). Resend only offers

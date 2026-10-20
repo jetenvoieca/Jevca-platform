@@ -10,7 +10,7 @@ import { uploadToR2 } from "@/lib/r2";
 import { readableEmailText } from "@/lib/emailText";
 import { mailboxForAddress, type Mailbox } from "@/lib/email";
 import { canonicalMessageId, headerValue, findTaskForReply, recordSentMessageId } from "@/lib/emailThreading";
-import { checkForSpam, isKnownSender, deleteInboundAttachmentFiles, normaliseAddress } from "@/lib/spamFilter";
+import { spamVerdict, setSenderRule, deleteInboundAttachmentFiles, MARKED_REASON } from "@/lib/spamFilter";
 
 // The unified admin inbox (2026-09-05, Email Integration) — processing
 // of inbound webhook events, plus reading/replying to what lands here.
@@ -116,23 +116,18 @@ export async function processInboundEmail(eventData: {
   // conversation) is linked to the task — see lib/emailThreading.ts.
   const taskId = await findTaskForReply(resend, full.headers, from.address);
 
-  // Spam check — skipped for a sender already known: a client artist
-  // writing to the business, a customer, a reply to a task's email, or a
-  // trusted or previously emailed address (see lib/spamFilter.ts).
-  const knownSender =
-    (mailbox === "BUSINESS" && artist !== null) ||
-    customer !== null ||
-    taskId !== null ||
-    (await isKnownSender(from.address));
-  const verdict = knownSender
-    ? ({ spam: false } as const)
-    : await checkForSpam({
-        fromAddress: from.address,
-        fromName: from.name,
-        toAddress: to.address,
-        subject: eventData.subject || full.subject || null,
-        text: readableEmailText(full.text || null, full.html || null),
-      });
+  // Spam check (see lib/spamFilter.ts). Known here: a client artist
+  // writing to the business, a customer, or a reply to a task's email.
+  const verdict = await spamVerdict(
+    {
+      fromAddress: from.address,
+      fromName: from.name,
+      toAddress: to.address,
+      subject: eventData.subject || full.subject || null,
+      text: readableEmailText(full.text || null, full.html || null),
+    },
+    (mailbox === "BUSINESS" && artist !== null) || customer !== null || taskId !== null
+  );
 
   const inbound = await db.inboundEmail.create({
     data: {
@@ -551,12 +546,31 @@ export async function archiveInboundEmail(id: string): Promise<void> {
 export async function markNotSpam(id: string): Promise<void> {
   const existing = await db.inboundEmail.findUnique({ where: { id }, select: { fromAddress: true } });
   if (!existing) return;
-  const address = normaliseAddress(existing.fromAddress);
-  await db.$transaction([
-    db.inboundEmail.update({ where: { id }, data: { spamAt: null, spamReason: null } }),
-    db.trustedSender.upsert({ where: { address }, create: { address }, update: {} }),
-  ]);
+  await db.inboundEmail.update({ where: { id }, data: { spamAt: null, spamReason: null } });
+  await setSenderRule(existing.fromAddress, "TRUSTED");
   revalidatePath("/accounts/inbox");
+}
+
+// Mark as spam (2026-10-20): moves a message from the Inbox or Archived
+// into Spam, and blocks its sender so their emails go straight to Spam
+// from then on (see lib/spamFilter.ts). It counts as dealt with, like
+// archiving: marked read, and its artist's open reply alert cleared.
+export async function markAsSpam(id: string): Promise<void> {
+  const existing = await db.inboundEmail.findUnique({
+    where: { id },
+    select: { fromAddress: true, artistId: true, isRead: true },
+  });
+  if (!existing) return;
+  await db.inboundEmail.update({
+    where: { id },
+    data: { spamAt: new Date(), spamReason: MARKED_REASON, isRead: true },
+  });
+  await setSenderRule(existing.fromAddress, "BLOCKED");
+  if (!existing.isRead && existing.artistId) {
+    await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);
+  }
+  revalidatePath("/accounts/inbox");
+  revalidatePath("/alerts");
 }
 
 // Moves an archived message back into the Inbox (2026-09-27). It stays

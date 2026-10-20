@@ -119,3 +119,13 @@ export function CheckIcon() {
     </Icon>
   );
 }
+
+// A circle with a slash — Mark as spam (2026-10-20, blocks the sender).
+export function SpamIcon() {
+  return (
+    <Icon>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M6 6l12 12" />
+    </Icon>
+  );
+}
