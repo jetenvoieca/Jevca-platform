@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { saleBreakdown } from "@/lib/saleMath";
-import { deactivatePaymentLink } from "@/lib/paymentLinks";
+import { deactivatePaymentLink, retireStatementPaymentLinks } from "@/lib/paymentLinks";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import type { SaleInvoice } from "@/lib/actions/payments";
 
@@ -8,6 +8,24 @@ import type { SaleInvoice } from "@/lib/actions/payments";
 // schema.prisma. Kept out of the "use server" actions files so payments,
 // the PDF and the emails can all use them without them becoming actions
 // the browser could call directly.
+
+// What a sale needs to be listed on a document (invoice or statement)
+// and charged by a payment link: its artwork (name, details, picture),
+// location/customer and payments.
+export const documentSaleInclude = {
+  artwork: {
+    select: {
+      catalogueName: true,
+      type: true,
+      size: true,
+      medium: true,
+      mainImage: { select: { displayKey: true } },
+      images: { take: 1, select: { displayKey: true } },
+    },
+  },
+  customer: true,
+  payments: { orderBy: { sequence: "asc" as const } },
+};
 
 // An invoice with everything its document, email and payment link need:
 // each sale on it in order (cancelled invoices included), with its
@@ -21,31 +39,14 @@ export async function loadInvoice(invoiceId: string) {
       payments: { orderBy: { sequence: "asc" } },
       lines: {
         orderBy: { position: "asc" },
-        include: {
-          purchase: {
-            include: {
-              artwork: {
-                select: {
-                  catalogueName: true,
-                  type: true,
-                  size: true,
-                  medium: true,
-                  mainImage: { select: { displayKey: true } },
-                  images: { take: 1, select: { displayKey: true } },
-                },
-              },
-              customer: true,
-              payments: { orderBy: { sequence: "asc" } },
-            },
-          },
-        },
+        include: { purchase: { include: documentSaleInclude } },
       },
     },
   });
 }
 
 export type LoadedInvoice = NonNullable<Awaited<ReturnType<typeof loadInvoice>>>;
-export type InvoiceSale = LoadedInvoice["lines"][number]["purchase"];
+export type DocumentSale = LoadedInvoice["lines"][number]["purchase"];
 
 function num(value: { toString(): string } | null | undefined): number {
   return value == null ? 0 : parseFloat(value.toString()) || 0;
@@ -84,7 +85,7 @@ export function invoiceBalance(invoice: LoadedInvoice): number {
 // the buyer recorded on the sale. Every sale on one invoice has the same
 // location and buyer (checked when it's produced), so the first sale
 // speaks for them all.
-export function invoiceParty(sale: InvoiceSale) {
+export function invoiceParty(sale: DocumentSale) {
   const isGallery = sale.customer?.kind === "GALLERY";
   const email = isGallery
     ? sale.customer?.contactEmail || sale.customer?.email || null
@@ -157,20 +158,23 @@ export async function salePaymentRule(invoiceId: string | null): Promise<SalePay
 }
 
 // Switches off a sale's own payment link (see Purchase.stripePaymentLinkId)
-// and clears it: the sale was paid, its balance changed, or it was
-// cancelled or deleted. A fresh one is made when it's next needed.
+// and clears it — and the Pay all link of any current statement listing
+// it: the sale was paid, its balance changed, or it was cancelled or
+// deleted. Fresh ones are made when they're next needed.
 export async function retireSalePaymentLink(sale: {
   id: string;
   stripeMode: "TEST" | "LIVE";
   stripeAccountId: string | null;
   stripePaymentLinkId: string | null;
 }) {
-  if (!sale.stripePaymentLinkId) return;
-  await deactivatePaymentLink(sale, sale.stripePaymentLinkId);
-  await db.purchase.updateMany({
-    where: { id: sale.id },
-    data: { stripePaymentLinkId: null, stripePaymentLinkUrl: null },
-  });
+  if (sale.stripePaymentLinkId) {
+    await deactivatePaymentLink(sale, sale.stripePaymentLinkId);
+    await db.purchase.updateMany({
+      where: { id: sale.id },
+      data: { stripePaymentLinkId: null, stripePaymentLinkUrl: null },
+    });
+  }
+  await retireStatementPaymentLinks({ closedAt: null, lines: { some: { purchaseId: sale.id } } });
 }
 
 // Cancels an unpaid invoice: kept on record, marked Cancelled (its lines
@@ -224,15 +228,17 @@ export async function retireInvoicePaymentLink(invoice: {
 }
 
 // Every unpaid invoice with one of this artwork's sales on it loses its
-// payment link, and so does each of the artwork's open sales — used when
-// the artwork is renamed, since the name is fixed inside Stripe when a
-// link is made. Fresh links are made when they're next needed.
+// payment link, and so do each of the artwork's sales and any statement
+// listing one — used when the artwork is renamed, since the name is fixed
+// inside Stripe when a link is made. Fresh links are made when they're
+// next needed.
 export async function retireArtworkPaymentLinks(artworkId: string) {
   const sales = await db.purchase.findMany({
     where: { artworkId, stripePaymentLinkId: { not: null } },
     select: { id: true, stripeMode: true, stripeAccountId: true, stripePaymentLinkId: true },
   });
   for (const sale of sales) await retireSalePaymentLink(sale);
+  await retireStatementPaymentLinks({ closedAt: null, lines: { some: { purchase: { artworkId } } } });
 
   const invoices = await db.invoice.findMany({
     where: {

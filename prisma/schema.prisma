@@ -353,6 +353,8 @@ model Artist {
   mailLists   MailList[]
   // Every invoice/receipt document (2026-10-14) — see Invoice below.
   invoices Invoice[]
+  // Statements sent to its galleries (2026-10-20) — see Statement below.
+  statements Statement[]
 }
 
 // An artist's own Stripe account, linked to the platform (Jetenvoieca)
@@ -558,6 +560,8 @@ model Customer {
   notes String?
 
   purchases Purchase[]
+  // A gallery location's statements (2026-10-20) — see Statement.
+  statements Statement[]
 
   // Best-effort tags on inbound/outbound email (2026-09-05, Email
   // Integration) — matched by comparing the sender's/recipient's address
@@ -924,7 +928,8 @@ model OutboundEmail {
 
   // What this send actually was, for the Sent list: "ADMIN" (ad hoc
   // Compose), "REPLY" (from an open thread), "TASK" (sent from a task,
-  // 2026-09-27), "INVOICE", "RECEIPT", or "CERTIFICATE". INVOICE vs
+  // 2026-09-27), "INVOICE", "RECEIPT", "CERTIFICATE" or "STATEMENT"
+  // (2026-10-20, to a gallery location: customerId). INVOICE vs
   // RECEIPT is decided by invoiceEmail.ts from the sale's paid status at
   // the moment it's sent — same distinction already used for the email
   // wording itself. Free string, not an enum, same convention as
@@ -1698,6 +1703,8 @@ model Purchase {
   invoice   Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   // Every invoice the sale has been on, cancelled ones included.
   invoiceLines InvoiceLine[]
+  // Every statement it has been listed on (2026-10-20).
+  statementLines StatementLine[]
 
   // This work's own payment link (2026-10-20, direct request — galleries
   // pay for each work as its buyer pays them): a persistent Stripe Payment
@@ -1836,6 +1843,60 @@ model InvoiceLine {
   position   Int
 
   @@id([invoiceId, purchaseId])
+  @@index([purchaseId])
+}
+
+// A statement for a Gallery location (2026-10-20, direct request —
+// galleries often pay only once their own buyer has paid them): every
+// sale at that gallery still owed something, invoiced or not, with a
+// payment link for each work (Purchase.stripePaymentLinkUrl) and one for
+// them all (its own `stripePaymentLink*`). One per gallery is current
+// (`closedAt` null): opening Statement again reuses it while it lists the
+// same sales, otherwise it's closed and a new one made. Its Pay all link
+// is switched off whenever what a listed sale owes changes; paying it pays
+// each listed sale still owed (see lib/actions/statements.ts). Pay all is
+// only offered when every listed sale shares one currency and Stripe
+// account — `currency` / `stripeMode` / `stripeAccountId`, all null
+// otherwise.
+model Statement {
+  id         String   @id @default(cuid())
+  artistId   String
+  artist     Artist   @relation(fields: [artistId], references: [id])
+  customerId String
+  // Deleted with its gallery (its links are switched off first — see
+  // retireStatementLinks).
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  currency        String?
+  stripeMode      StripeMode?
+  stripeAccountId String?
+
+  stripePaymentLinkId  String?
+  stripePaymentLinkUrl String?
+
+  emailedAt DateTime?
+  emailedTo String?
+  // When its Pay all link was paid.
+  paidAt    DateTime?
+  // When a newer statement replaced it.
+  closedAt  DateTime?
+
+  lines StatementLine[]
+
+  createdAt DateTime @default(now())
+
+  @@index([customerId, closedAt])
+}
+
+// One sale on one statement, in the order listed. Removed with either.
+model StatementLine {
+  statementId String
+  statement   Statement @relation(fields: [statementId], references: [id], onDelete: Cascade)
+  purchaseId  String
+  purchase    Purchase  @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  position    Int
+
+  @@id([statementId, purchaseId])
   @@index([purchaseId])
 }
 

@@ -99,6 +99,7 @@ export async function resetArtistSalesData(
       db.purchase.deleteMany({ where: { artwork: { artistId } } }),
       // Removes the invoices' own payments with them.
       db.invoice.deleteMany({ where: { artistId } }),
+      db.statement.deleteMany({ where: { artistId } }),
       db.saleTerms.deleteMany({ where: { artwork: { artistId } } }),
       db.artwork.updateMany({
         where: { artistId, availability: { not: "AVAILABLE" } },

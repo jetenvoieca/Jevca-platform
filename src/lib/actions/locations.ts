@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
+import { retireStatementPaymentLinks } from "@/lib/paymentLinks";
 import { createCustomer, type CustomerKind, type CustomerSummary } from "./customers";
 
 export type LocationType = "GALLERY" | "OWN";
@@ -143,6 +144,8 @@ export async function renameLocationByCustomer(
 // resolve to anywhere until repointed at a real Location.
 export async function deleteLocationByCustomer(customerId: string, siteId: string): Promise<void> {
   const loc = await db.location.findUnique({ where: { customerId } });
+  // Its statements go with it (cascade) — their links switched off first.
+  await retireStatementPaymentLinks({ customerId });
   if (loc) await db.location.delete({ where: { id: loc.id } });
   await db.customer.delete({ where: { id: customerId } }).catch(() => {});
   revalidatePath(`/sites/${siteId}/artworks/settings`);

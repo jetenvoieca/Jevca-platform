@@ -245,6 +245,7 @@ const KIND_LABELS: Record<string, string> = {
   INVOICE: "Invoice",
   RECEIPT: "Receipt",
   CERTIFICATE: "Certificate",
+  STATEMENT: "Statement",
 };
 
 const DELETE_MESSAGE_CONFIRM =

@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
 import { saleTitle, netOfCommission } from "@/lib/saleMath";
 import { buyerKey } from "@/lib/invoices";
+import { retireStatementPaymentLinks } from "@/lib/paymentLinks";
 
 export type CustomerKind = "INDIVIDUAL" | "GALLERY" | "OWN";
 
@@ -500,6 +501,8 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
 // cascade, so calling this directly on one would fail with a foreign
 // key error rather than leaving an orphaned Location behind.
 export async function deleteCustomer(customerId: string): Promise<void> {
+  // Any statements go with it (cascade) — their links switched off first.
+  await retireStatementPaymentLinks({ customerId });
   await db.customer.delete({ where: { id: customerId } });
   revalidatePath(`/sites`);
 }

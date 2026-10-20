@@ -1,36 +1,12 @@
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
-import { APP_URL } from "@/lib/appUrl";
 import { saleBreakdown, saleTitle } from "@/lib/saleMath";
 import { invoiceExtras, loadInvoice } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
+import { addressLines, currencySymbol, embedLogo, fitText } from "@/lib/pdfParts";
 
 // Not a "use server" file (2026-10-14): only the invoice route and the
 // invoice email call this, on the server, so it isn't offered to the
 // browser as an action.
-
-function currencySymbol(currency: string) {
-  return currency === "EUR" ? "€" : currency === "USD" ? "$" : "£";
-}
-
-// Builds the printed address block from the artist's structured fields
-// (2026-09-06, reformed from a single freeform `invoiceAddress` field) —
-// addressLine1 can itself be more than one line (a street address
-// genuinely can be), followed by city, then postcode + country on one
-// line. Blank fields are simply skipped rather than leaving an empty
-// line.
-function addressLines(artist: {
-  addressLine1: string | null;
-  city: string | null;
-  postcode: string | null;
-  country: string | null;
-}): string[] {
-  const lines = [
-    ...(artist.addressLine1 || "").split("\n").map((l) => l.trim()).filter(Boolean),
-    artist.city?.trim() || null,
-    [artist.postcode?.trim(), artist.country?.trim()].filter(Boolean).join(", ") || null,
-  ];
-  return lines.filter((l): l is string => !!l);
-}
 
 // Document wording (2026-08-13). Language is the customer's own choice
 // if they have one, else the artist's (Settings → Invoice language) —
@@ -131,13 +107,6 @@ export async function generateInvoicePdf(
   const textRightAt = (x: number, text: string, f: PDFFont = font, size = 10, color = rgb(0, 0, 0)) => {
     page.drawText(text, { x: x - f.widthOfTextAtSize(text, size), y, size, font: f, color });
   };
-  // Shortens text to fit a width, ending in "…".
-  const fit = (text: string, maxWidth: number, f: PDFFont, size: number) => {
-    if (f.widthOfTextAtSize(text, size) <= maxWidth) return text;
-    let cut = text;
-    while (cut.length > 1 && f.widthOfTextAtSize(`${cut}…`, size) > maxWidth) cut = cut.slice(0, -1);
-    return `${cut.trimEnd()}…`;
-  };
   // Starts a new page when fewer than `needed` points are left.
   const ensureSpace = (needed: number) => {
     if (y - needed >= 60) return;
@@ -156,22 +125,11 @@ export async function generateInvoicePdf(
   };
 
   // ---- Logo (best-effort — still generates fine without one) ----
-  if (artist.logoUrl) {
-    try {
-      const url = artist.logoUrl.startsWith("http") ? artist.logoUrl : `${APP_URL}${artist.logoUrl}`;
-      const res = await fetch(url);
-      if (res.ok) {
-        const bytes = new Uint8Array(await res.arrayBuffer());
-        const contentType = res.headers.get("content-type") || "";
-        const img = contentType.includes("png") ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
-        const logoHeight = 50;
-        const scale = logoHeight / img.height;
-        page.drawImage(img, { x: left, y: y - logoHeight + 12, width: img.width * scale, height: logoHeight });
-      }
-    } catch {
-      // Fetching or embedding the logo failed — proceed without it rather
-      // than fail the whole document over a decorative image.
-    }
+  const logo = await embedLogo(doc, artist.logoUrl);
+  if (logo) {
+    const logoHeight = 50;
+    const scale = logoHeight / logo.height;
+    page.drawImage(logo, { x: left, y: y - logoHeight + 12, width: logo.width * scale, height: logoHeight });
   }
 
   // ---- Document number + date, top right ----
@@ -248,7 +206,7 @@ export async function generateInvoicePdf(
         !isPaid && sale.status === "COMPLETED" && sale.closedAt
           ? ` · ${t.paidOn} ${sale.closedAt.toLocaleDateString(dateLocale)}`
           : "";
-      const title = fit(
+      const title = fitText(
         `${saleTitle(sale.artwork.catalogueName, sale.chargeKind)}${paidNote}`,
         colSale - left - 80,
         font,
@@ -287,7 +245,7 @@ export async function generateInvoicePdf(
     drawRule();
     y -= 22;
     const total = parseFloat(first.totalAmount.toString());
-    const title = fit(saleTitle(first.artwork.catalogueName, first.chargeKind), 360, bold, 11);
+    const title = fitText(saleTitle(first.artwork.catalogueName, first.chargeKind), 360, bold, 11);
     page.drawText(title, { x: left, y, size: 11, font: bold });
     textRightAt(right, fmt(total), font, 11);
     y -= 25;

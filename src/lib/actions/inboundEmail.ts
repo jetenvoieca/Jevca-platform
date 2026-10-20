@@ -331,7 +331,7 @@ export async function getArtistOptions(): Promise<{ id: string; name: string }[]
 
 export type SentSummaryItem = {
   id: string;
-  kind: string; // "ADMIN" | "REPLY" | "TASK" | "INVOICE" | "RECEIPT" | "CERTIFICATE"
+  kind: string; // "ADMIN" | "REPLY" | "TASK" | "INVOICE" | "RECEIPT" | "CERTIFICATE" | "STATEMENT"
   fromAddress: string;
   toAddress: string;
   subject: string | null;

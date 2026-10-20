@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { saleBreakdown, saleTitle } from "@/lib/saleMath";
 import { getPublishableKey, getStripeClientForSale, toMinorUnits } from "@/lib/stripe";
 import type { CardEntry } from "@/lib/actions/payments";
-import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
+import { nextSequence, payBalancesInFull, readPaidDetails, type PaidDetails } from "@/lib/salePayments";
 import {
   buyerKey,
   cancelUnpaidInvoice,
@@ -12,12 +12,11 @@ import {
   invoiceExtras,
   invoiceParty,
   loadInvoice,
-  type InvoiceSale,
+  type DocumentSale,
   type LoadedInvoice,
 } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
-import { artworkDetailLines } from "@/lib/artworkDetails";
-import { publicMediaUrl } from "@/lib/r2";
+import { ensureWorkPaymentLink, isOwed, payFromLabel, workLineItem, type LineItem } from "@/lib/saleLinks";
 
 // Invoices (2026-10-14, Craig's mockups) — see Invoice in schema.prisma.
 // Consigned sales are ticked on their Location's Sales tab and put on one
@@ -262,67 +261,22 @@ function notOpenError(invoice: LoadedInvoice): string | null {
 
 // ---------- Paying ----------
 
-// Payment links are persistent Stripe Payment Links (not Checkout
-// Sessions, which expire within a day). An invoice has one for its whole
-// balance ("Pay all"); a gallery's invoice also has one per work, since
+// An invoice's payment links (see lib/saleLinks.ts): one for its whole
+// balance ("Pay all", invoiceId in the PaymentIntent's metadata →
+// recordInvoicePaymentIntent) and, on a gallery's invoice, one per work —
 // galleries pay for each work as its buyer pays them (2026-10-20, direct
-// request — see salePaymentRule, lib/invoices.ts). Each work shows as its
-// own product: its name, picture and details (type, size, medium, and how
-// the amount was reached), with who it's from and the invoice number at
-// the start of its details (under the page's "View details") and by the
-// Pay button. The page's own heading is the Stripe account's name, which
-// can't be set per invoice. The id that recognises the payment rides on
-// the PaymentIntent's own metadata (Payment Link metadata doesn't reach
-// it): invoiceId for Pay all (recordInvoicePaymentIntent), purchaseId for
-// one work (recordPaymentIntent, lib/actions/payments.ts). Made once and
-// reused; switched off when what they charge changes or is paid.
+// request; purchaseId → recordPaymentIntent, lib/actions/payments.ts).
+// Made once and reused; switched off when what they charge changes or
+// is paid.
 
-// Who an invoice is from, and its number — shown by the Pay button and
-// at the start of each work's details.
+// Who an invoice is from, and its number.
 async function invoicePayLabel(invoice: LoadedInvoice): Promise<string> {
-  const site = await db.site.findFirst({
-    where: { artistId: invoice.artistId, status: { not: "ARCHIVED" } },
-    orderBy: { createdAt: "asc" },
-    select: { name: true },
-  });
-  const from = [invoice.artist.name, site?.name].filter(Boolean).join(" – ");
-  return `${from} · Invoice ${formatInvoiceNumber(invoice.number)}`;
+  return `${await payFromLabel(invoice.artist)} · Invoice ${formatInvoiceNumber(invoice.number)}`;
 }
 
-// One work as a Stripe price for its balance, with its product.
-async function workPrice(
-  stripe: ReturnType<typeof getStripeClientForSale>,
-  sale: InvoiceSale,
-  label: string,
-  currency: string
-): Promise<string> {
-  const money = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-  const b = saleBreakdown(sale);
-  const deductions = [
-    b.commission ? `less ${b.commissionPercent}% commission` : null,
-    b.deposit ? `less ${money(b.deposit)} deposit paid` : null,
-    b.paid ? `less ${money(b.paid)} already paid` : null,
-  ].filter(Boolean);
-  const description = [
-    label,
-    artworkDetailLines(sale.artwork).join(" · "),
-    deductions.length ? `Sale price ${money(b.salePrice)}, ${deductions.join(", ")}` : null,
-  ]
-    .filter(Boolean)
-    .join(" — ");
-  const imageKey = sale.artwork.mainImage?.displayKey ?? sale.artwork.images[0]?.displayKey;
-  const imageUrl = publicMediaUrl(imageKey);
-  const product = await stripe.products.create({
-    name: saleTitle(sale.artwork.catalogueName, sale.chargeKind),
-    ...(description ? { description } : {}),
-    ...(imageUrl?.startsWith("https://") ? { images: [imageUrl] } : {}),
-  });
-  const price = await stripe.prices.create({
-    product: product.id,
-    unit_amount: toMinorUnits(b.balance),
-    currency: currency.toLowerCase(),
-  });
-  return price.id;
+// The sales on an invoice still owed something.
+function openSales(invoice: LoadedInvoice): DocumentSale[] {
+  return invoice.lines.map((l) => l.purchase).filter((s) => s.invoiceId === invoice.id && isOwed(s));
 }
 
 // The invoice's Pay all link: every work still owed, then its framing
@@ -337,10 +291,8 @@ async function createInvoicePaymentLink(invoiceId: string): Promise<Result<{ url
 
     const stripe = getStripeClientForSale(invoice);
     const label = await invoicePayLabel(invoice);
-    const lineItems: { price: string; quantity: number }[] = [];
-    for (const sale of openSales(invoice)) {
-      lineItems.push({ price: await workPrice(stripe, sale, label, invoice.currency), quantity: 1 });
-    }
+    const lineItems: LineItem[] = [];
+    for (const sale of openSales(invoice)) lineItems.push(await workLineItem(sale, label));
     const extras = invoiceExtras(invoice);
     if (extras.balance > 0) {
       for (const [name, amount] of [
@@ -377,33 +329,6 @@ async function createInvoicePaymentLink(invoiceId: string): Promise<Result<{ url
   }
 }
 
-// The sales on an invoice still owed something.
-function openSales(invoice: LoadedInvoice): InvoiceSale[] {
-  return invoice.lines
-    .map((l) => l.purchase)
-    .filter((s) => s.invoiceId === invoice.id && s.status === "ACTIVE" && saleBreakdown(s).balance > 0);
-}
-
-// One work's own link on a gallery's invoice, for its whole balance —
-// kept on the sale (Purchase.stripePaymentLinkUrl).
-async function createWorkPaymentLink(invoice: LoadedInvoice, sale: InvoiceSale, label: string) {
-  if (sale.stripePaymentLinkUrl) return;
-  const stripe = getStripeClientForSale(sale);
-  const link = await stripe.paymentLinks.create({
-    line_items: [{ price: await workPrice(stripe, sale, label, invoice.currency), quantity: 1 }],
-    custom_text: { submit: { message: label } },
-    metadata: { purchaseId: sale.id },
-    payment_intent_data: {
-      description: `Invoice ${formatInvoiceNumber(invoice.number)} · ${saleTitle(sale.artwork.catalogueName, sale.chargeKind)}`,
-      metadata: { purchaseId: sale.id },
-    },
-  });
-  await db.purchase.update({
-    where: { id: sale.id },
-    data: { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
-  });
-}
-
 // Every link an unpaid invoice's email offers: Pay all, and on a gallery's
 // invoice each work still owed while there are two or more (one left is
 // paid with Pay all). Made now if missing — when it's produced and when
@@ -418,7 +343,10 @@ export async function ensureInvoicePaymentLinks(invoiceId: string): Promise<Resu
   if (owed.length < 2) return { ok: true };
   try {
     const label = await invoicePayLabel(invoice);
-    for (const sale of owed) await createWorkPaymentLink(invoice, sale, label);
+    for (const sale of owed) {
+      const title = saleTitle(sale.artwork.catalogueName, sale.chargeKind);
+      await ensureWorkPaymentLink(sale, label, `Invoice ${formatInvoiceNumber(invoice.number)} · ${title}`);
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: stripeErrorMessage(err) };
@@ -461,49 +389,29 @@ export async function createInvoiceCardIntent(invoiceId: string): Promise<Result
 // payment, and its framing and delivery as the invoice's own — then
 // completes the sales, which marks the invoice paid (settleInvoiceIfPaid,
 // lib/invoices.ts). Shared by Record Payment and card / link payments.
-async function payInvoice(
-  invoice: LoadedInvoice,
-  payment: { paidDate: Date; method: string | null; stripePaymentIntentId?: string }
-) {
-  const paidFields = {
-    status: "PAID" as const,
-    paidDate: payment.paidDate,
-    method: payment.method,
-    stripePaymentIntentId: payment.stripePaymentIntentId ?? null,
-  };
+async function payInvoice(invoice: LoadedInvoice, paid: PaidDetails) {
   const sales = invoice.lines.map((l) => l.purchase).filter((s) => s.invoiceId === invoice.id);
   const extras = invoiceExtras(invoice);
-
-  await db.$transaction([
-    ...sales
-      .map((sale) => ({ sale, balance: saleBreakdown(sale).balance }))
-      .filter(({ balance }) => balance > 0)
-      .map(({ sale, balance }) =>
-        db.payment.create({
-          data: {
-            ...paidFields,
-            purchaseId: sale.id,
-            sequence: nextSequence(sale.payments),
-            amount: balance.toFixed(2),
-            currency: sale.currency,
-          },
-        })
-      ),
-    ...(extras.balance > 0
+  await payBalancesInFull(
+    sales,
+    paid,
+    extras.balance > 0
       ? [
           db.payment.create({
             data: {
-              ...paidFields,
               invoiceId: invoice.id,
               sequence: nextSequence(invoice.payments),
               amount: extras.balance.toFixed(2),
               currency: invoice.currency,
+              status: "PAID",
+              paidDate: paid.paidDate,
+              method: paid.method,
+              stripePaymentIntentId: paid.stripePaymentIntentId ?? null,
             },
           }),
         ]
-      : []),
-  ]);
-  for (const sale of sales) await completeIfSettled(sale.id, payment.paidDate);
+      : []
+  );
 }
 
 // "Record Payment" on a sale that's on an unpaid invoice: the whole

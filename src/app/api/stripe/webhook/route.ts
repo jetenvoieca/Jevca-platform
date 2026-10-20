@@ -9,6 +9,7 @@ import {
   handleInstalmentInvoiceFailed,
 } from "@/lib/actions/payments";
 import { recordInvoicePaymentIntent } from "@/lib/actions/invoices";
+import { recordStatementPaymentIntent } from "@/lib/actions/statements";
 
 // Extracts the subscription ID from an Invoice, handling both API shapes:
 // old (`invoice.subscription`, versions before 2025-03-31) and new
@@ -98,9 +99,12 @@ export async function POST(req: NextRequest) {
         const intent = event.data.object as Stripe.PaymentIntent;
         const purchaseId = intent.metadata?.purchaseId;
         const invoiceId = intent.metadata?.invoiceId;
+        const statementId = intent.metadata?.statementId;
         if (purchaseId) await recordPaymentIntent(purchaseId, intent.id);
         // An invoice's payment link (2026-10-14) pays every sale on it.
         else if (invoiceId) await recordInvoicePaymentIntent(invoiceId, intent.id);
+        // A statement's Pay all (2026-10-20) pays every work on it.
+        else if (statementId) await recordStatementPaymentIntent(statementId, intent.id);
         break;
       }
 

@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import type { Prisma } from "@/generated/prisma/client";
 import { getStripeClientForSale, type SaleStripeFields, type StripeTarget } from "@/lib/stripe";
 
 // Shared server-side helpers for Stripe accounts and payment links. Kept
@@ -36,5 +37,29 @@ export async function deactivatePaymentLink(sale: SaleStripeFields, linkId: stri
     await getStripeClientForSale(sale).paymentLinks.update(linkId, { active: false });
   } catch {
     // See note above.
+  }
+}
+
+// Switches off the Pay all link of every current, unpaid statement
+// matching `where` (2026-10-20, see Statement in schema.prisma) — what it
+// charges has changed (a listed sale paid, edited, cancelled or deleted),
+// or its gallery is being deleted. A fresh statement is made the next
+// time Statement is opened.
+export async function retireStatementPaymentLinks(where: Prisma.StatementWhereInput) {
+  const statements = await db.statement.findMany({
+    where: { ...where, paidAt: null, stripePaymentLinkId: { not: null } },
+    select: { id: true, stripeMode: true, stripeAccountId: true, stripePaymentLinkId: true },
+  });
+  for (const statement of statements) {
+    if (statement.stripeMode) {
+      await deactivatePaymentLink(
+        { stripeMode: statement.stripeMode, stripeAccountId: statement.stripeAccountId },
+        statement.stripePaymentLinkId
+      );
+    }
+    await db.statement.update({
+      where: { id: statement.id },
+      data: { stripePaymentLinkId: null, stripePaymentLinkUrl: null },
+    });
   }
 }

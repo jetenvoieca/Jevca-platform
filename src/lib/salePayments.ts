@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { saleBreakdown } from "@/lib/saleMath";
+import type { Prisma } from "@/generated/prisma/client";
+import { saleBreakdown, type SaleAmounts } from "@/lib/saleMath";
 import { retireInvoicePaymentLink, retireSalePaymentLink, settleInvoiceIfPaid } from "@/lib/invoices";
 
 // Shared server-side steps for recording payments against a sale — used
@@ -47,6 +48,48 @@ export async function completeIfSettled(purchaseId: string, closedAt: Date = new
     });
     if (invoice && !invoice.paidAt) await retireInvoicePaymentLink(invoice);
   }
+}
+
+// How a payment was made: when, by what method, and the Stripe payment
+// if it came through Stripe.
+export type PaidDetails = { paidDate: Date; method: string | null; stripePaymentIntentId?: string };
+
+// Pays several sales in full at once — each still-owed sale's whole
+// balance as its own PAID payment (with `extra` writes, e.g. an invoice's
+// own framing/delivery, in the same transaction) — then completes them.
+// Shared by paying a whole invoice and a statement's Pay all.
+export async function payBalancesInFull(
+  sales: (SaleAmounts & {
+    id: string;
+    status: string;
+    currency: string;
+    payments: { sequence: number; amount: { toString(): string }; status: string }[];
+  })[],
+  paid: PaidDetails,
+  extra: Prisma.PrismaPromise<unknown>[] = []
+) {
+  const owed = sales
+    .filter((sale) => sale.status === "ACTIVE")
+    .map((sale) => ({ sale, balance: saleBreakdown(sale).balance }))
+    .filter(({ balance }) => balance > 0);
+  await db.$transaction([
+    ...owed.map(({ sale, balance }) =>
+      db.payment.create({
+        data: {
+          purchaseId: sale.id,
+          sequence: nextSequence(sale.payments),
+          amount: balance.toFixed(2),
+          currency: sale.currency,
+          status: "PAID",
+          paidDate: paid.paidDate,
+          method: paid.method,
+          stripePaymentIntentId: paid.stripePaymentIntentId ?? null,
+        },
+      })
+    ),
+    ...extra,
+  ]);
+  for (const { sale } of owed) await completeIfSettled(sale.id, paid.paidDate);
 }
 
 // The next Payment.sequence for a sale — payments on a consigned sale
