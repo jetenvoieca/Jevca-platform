@@ -18,7 +18,6 @@ import {
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
 import { produceInvoice } from "@/lib/actions/invoices";
-import { openStatement } from "@/lib/actions/statements";
 import { netOwed } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
@@ -180,11 +179,9 @@ export default function GalleriesView({
   const [invoiceTicks, setInvoiceTicks] = useState<string[]>([]);
   const [invoiceError, setInvoiceError] = useState<string | null>(null);
   const [invoiceModalId, setInvoiceModalId] = useState<string | null>(null);
-  // Statement (2026-10-20): a Gallery location's current statement — every
-  // sale there still owed, with payment links — opened in its window.
-  const [statementId, setStatementId] = useState<string | null>(null);
-  const [statementError, setStatementError] = useState<string | null>(null);
-  const [openingStatement, startOpeningStatement] = useTransition();
+  // Statement (2026-10-20): a Gallery location's statement window — the
+  // works still owed there to choose from, then the statement and email.
+  const [statementOpen, setStatementOpen] = useState(false);
   const [producingInvoice, startInvoiceTransition] = useTransition();
   // An Own location's invoice can carry framing and delivery costs for
   // the whole invoice (2026-10-14 — a gallery arranges its own): pressing
@@ -204,7 +201,6 @@ export default function GalleriesView({
     setSelectedDetail(null);
     setInvoiceTicks([]);
     setInvoiceError(null);
-    setStatementError(null);
     setAskingCosts(false);
     setSelectedWorkId(null);
     setSelectedWorkDetail(null);
@@ -381,21 +377,6 @@ export default function GalleriesView({
   // Framing and delivery are asked for on an Own location's unpaid
   // invoice only (not a receipt).
   const asksCosts = selectedLocationType === "OWN" && firstTicked?.status === "ACTIVE";
-
-  // Statement: the gallery's current statement (made now if needed),
-  // opened in its window.
-  const handleOpenStatement = () => {
-    if (!selectedId) return;
-    setStatementError(null);
-    startOpeningStatement(async () => {
-      const res = await openStatement(selectedId);
-      if (!res.ok) {
-        setStatementError(res.error);
-        return;
-      }
-      setStatementId(res.statementId);
-    });
-  };
 
   const handleProduceInvoice = () => {
     if (!selectedDetail || !selectedId) return;
@@ -797,11 +778,10 @@ export default function GalleriesView({
                 {selectedLocationType === "GALLERY" && (
                   <button
                     type="button"
-                    onClick={handleOpenStatement}
-                    disabled={openingStatement}
-                    className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50 disabled:opacity-50"
+                    onClick={() => setStatementOpen(true)}
+                    className="rounded-md border border-neutral-300 px-2 py-[2px] text-xs hover:bg-neutral-50"
                   >
-                    {openingStatement ? "Statement…" : "Statement"}
+                    Statement
                   </button>
                 )}
                 <button
@@ -847,8 +827,6 @@ export default function GalleriesView({
                 </button>
               </div>
             </div>
-
-            {statementError && <p className="mb-3 text-sm text-red-600">{statementError}</p>}
 
             <div className="flex-1 overflow-y-auto">
             {detailTab === "sales" ? (
@@ -1476,8 +1454,12 @@ export default function GalleriesView({
         />
       )}
 
-      {statementId && (
-        <StatementModal statementId={statementId} onClose={() => setStatementId(null)} />
+      {statementOpen && selectedId && selectedDetail && (
+        <StatementModal
+          customerId={selectedId}
+          galleryName={selectedDetail.name}
+          onClose={() => setStatementOpen(false)}
+        />
       )}
 
       {invoiceModalId && (

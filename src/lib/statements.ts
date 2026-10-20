@@ -32,12 +32,16 @@ export type LoadedStatement = NonNullable<Awaited<ReturnType<typeof loadStatemen
 export type StatementSale = LoadedStatement["lines"][number]["purchase"];
 
 // Every sale at a gallery still owed something, oldest first — what a
-// new statement lists.
+// statement can list.
 export async function owedGallerySales(customerId: string) {
   const sales = await db.purchase.findMany({
     where: { customerId, channel: "GALLERY", status: "ACTIVE" },
     orderBy: { createdAt: "asc" },
-    include: { payments: true },
+    include: {
+      payments: true,
+      artwork: { select: { catalogueName: true } },
+      invoice: { select: { number: true, createdAt: true, paidAt: true, cancelledAt: true } },
+    },
     relationLoadStrategy: "query",
   });
   return sales.filter((s) => saleBreakdown(s).balance > 0);

@@ -20,12 +20,14 @@ import {
   type StatementSale,
 } from "@/lib/statements";
 import { generateStatementPdf } from "@/lib/statementPdf";
+import { isSaleOverdue } from "@/lib/overdue";
 
 // Statements (2026-10-20, direct request — galleries often pay only once
 // their own buyer has paid them) — see Statement in schema.prisma. From a
-// Gallery location's Statement button: every sale there still owed, with
-// a payment link for each work and one for them all, emailed with the
-// statement attached as a PDF.
+// Gallery location's Statement button: the works chosen from those still
+// owed there (overdue ones ticked to start with), with a payment link for
+// each work and one for them all, emailed with the statement attached as
+// a PDF.
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -33,31 +35,82 @@ function stripeErrorMessage(err: unknown): string {
   return err instanceof Error ? err.message : "Something went wrong talking to Stripe.";
 }
 
-// ---------- Opening ----------
+// ---------- Choosing and making ----------
 
-// The gallery's current statement, made now if there isn't one listing
-// exactly the sales it owes for today (an older one is closed and its
-// Pay all link switched off), with its payment links.
-export async function openStatement(customerId: string): Promise<Result<{ statementId: string }>> {
+// One work a statement can list: a sale at the gallery still owed.
+export type StatementChoice = {
+  purchaseId: string;
+  title: string;
+  soldAt: string; // ISO
+  invoiceNumber: string | null; // on an unpaid invoice now
+  amount: string; // still owed
+  currency: string;
+  overdue: boolean;
+};
+
+// Is this a gallery location of a known artist? Its artist, or an error.
+async function galleryArtist(customerId: string): Promise<Result<{ artistId: string; overdueDays: number }>> {
   const location = await db.location.findUnique({
     where: { customerId },
-    select: { type: true, artistId: true },
+    select: { type: true, artistId: true, artist: { select: { invoiceOverdueDays: true } } },
   });
   if (!location || location.type !== "GALLERY") return { ok: false, error: "Statements are for gallery locations." };
+  return { ok: true, artistId: location.artistId, overdueDays: location.artist.invoiceOverdueDays };
+}
 
+// The works a gallery's statement can list — every sale there still owed,
+// oldest first, overdue ones marked (see lib/overdue.ts) — and which the
+// gallery's current statement lists, to start the choice from.
+export async function getStatementChoices(
+  customerId: string
+): Promise<Result<{ choices: StatementChoice[]; current: string[] }>> {
+  const gallery = await galleryArtist(customerId);
+  if (!gallery.ok) return gallery;
   const owed = await owedGallerySales(customerId);
-  if (owed.length === 0) return { ok: false, error: "Nothing is owed at this gallery." };
+  const current = await db.statement.findFirst({
+    where: { customerId, closedAt: null, paidAt: null },
+    select: { lines: { select: { purchaseId: true } } },
+  });
+  const ids = new Set(owed.map((s) => s.id));
+  return {
+    ok: true,
+    choices: owed.map((s) => {
+      const invoice = s.invoice && !s.invoice.paidAt && !s.invoice.cancelledAt ? s.invoice : null;
+      return {
+        purchaseId: s.id,
+        title: saleTitle(s.artwork.catalogueName, s.chargeKind),
+        soldAt: s.createdAt.toISOString(),
+        invoiceNumber: invoice ? formatInvoiceNumber(invoice.number) : null,
+        amount: saleBreakdown(s).balance.toFixed(2),
+        currency: s.currency,
+        overdue: isSaleOverdue(s, gallery.overdueDays),
+      };
+    }),
+    current: (current?.lines ?? []).map((l) => l.purchaseId).filter((id) => ids.has(id)),
+  };
+}
+
+// A statement of the chosen works — the gallery's current one if it lists
+// exactly these, otherwise a new one (the old one closed and its Pay all
+// link switched off) — with its payment links.
+export async function makeStatement(customerId: string, purchaseIds: string[]): Promise<Result<{ statementId: string }>> {
+  const gallery = await galleryArtist(customerId);
+  if (!gallery.ok) return gallery;
+  const chosen = new Set(purchaseIds);
+  if (chosen.size === 0) return { ok: false, error: "Tick at least one work." };
+  // Only works the gallery still owes for, in their usual order.
+  const owed = (await owedGallerySales(customerId)).filter((s) => chosen.has(s.id));
+  if (owed.length !== chosen.size) return { ok: false, error: "One of these works is no longer owed — please reopen Statement." };
 
   const current = await db.statement.findFirst({
     where: { customerId, closedAt: null },
     include: { lines: { select: { purchaseId: true } } },
   });
-  const ids = owed.map((s) => s.id);
   const same =
     current &&
     !current.paidAt &&
-    current.lines.length === ids.length &&
-    current.lines.every((l) => ids.includes(l.purchaseId));
+    current.lines.length === owed.length &&
+    current.lines.every((l) => chosen.has(l.purchaseId));
 
   let statementId: string;
   if (same) {
@@ -81,7 +134,7 @@ export async function openStatement(customerId: string): Promise<Result<{ statem
       );
     const statement = await db.statement.create({
       data: {
-        artistId: location.artistId,
+        artistId: gallery.artistId,
         customerId,
         ...(shared
           ? { currency: first.currency, stripeMode: first.stripeMode, stripeAccountId: first.stripeAccountId }
@@ -183,7 +236,6 @@ export type StatementWindowData = {
   emailedAt: string | null;
   emailedTo: string | null;
   paidAt: string | null;
-  closed: boolean;
   workCount: number;
   // What's owed, per currency.
   totals: { currency: string; amount: string }[];
@@ -208,7 +260,6 @@ export async function getStatementWindow(statementId: string): Promise<Statement
     emailedAt: statement.emailedAt?.toISOString() ?? null,
     emailedTo: statement.emailedTo,
     paidAt: statement.paidAt?.toISOString() ?? null,
-    closed: !!statement.closedAt,
     workCount: statement.lines.length,
     totals: owedTotals(statement).map((t) => ({ currency: t.currency, amount: t.amount.toFixed(2) })),
   };
