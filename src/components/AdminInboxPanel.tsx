@@ -8,10 +8,12 @@ import {
   getSentList,
   archiveInboundEmail,
   unarchiveInboundEmail,
+  markNotSpam,
   deleteInboundEmail,
   deleteOutboundEmail,
   type InboxSummaryItem,
   type InboxThreadItem,
+  type InboxView,
   type SentSummaryItem,
 } from "@/lib/actions/inboundEmail";
 import { sendAdminEmail, forwardEmail, type ComposeRecipient, type ForwardSource } from "@/lib/actions/adminEmail";
@@ -144,6 +146,12 @@ import { TaskIcon, TaskRemoveIcon, ArchiveIcon, UnarchiveIcon, TrashIcon, Reinst
 // and Done tasks can be deleted from their lists the same way (same day,
 // direct requests), as can processed alerts — there Delete is the only
 // action, so a full swipe deletes (after the usual confirm).
+//
+// Spam (2026-10-20, direct request): the Inbox / Archived filter also
+// offers Spam — what the spam filter caught (see lib/spamFilter.ts),
+// deleted automatically after 30 days. Its rows show why they were caught
+// and offer Not spam (moves it to the Inbox and trusts the sender) and
+// Delete; an opened spam email shows the reason and Not spam too.
 //
 // Today (2026-10-09, direct request) — an open task can be marked Today
 // from the same swipe/hover on its row (a full swipe marks it). Today's
@@ -299,16 +307,16 @@ const PANEL_STYLES = {
 
 type InboxUrlParams = {
   mailbox: Mailbox;
-  archived: boolean;
+  view: InboxView;
   alertId?: string;
 };
 
-// The Inbox's address, with the mailbox, Inbox/Archived and (optionally)
-// the selected alert in the query string.
-function inboxUrl({ mailbox, archived, alertId }: InboxUrlParams): string {
+// The Inbox's address, with the mailbox, Inbox/Archived/Spam and
+// (optionally) the selected alert in the query string.
+function inboxUrl({ mailbox, view, alertId }: InboxUrlParams): string {
   const params = new URLSearchParams();
   if (mailbox === "BUSINESS") params.set("mailbox", "business");
-  if (archived) params.set("archived", "1");
+  if (view !== "inbox") params.set("view", view);
   if (alertId) params.set("alert", alertId);
   const qs = params.toString();
   return qs ? `/accounts/inbox?${qs}` : "/accounts/inbox";
@@ -317,7 +325,7 @@ function inboxUrl({ mailbox, archived, alertId }: InboxUrlParams): string {
 export default function AdminInboxPanel({
   mailbox,
   initialList,
-  showArchived,
+  view,
   initialTasks,
   initialInsights,
   initialToday,
@@ -336,7 +344,7 @@ export default function AdminInboxPanel({
 }: {
   mailbox: Mailbox;
   initialList: InboxSummaryItem[];
-  showArchived: boolean;
+  view: InboxView;
   initialTasks: TaskItem[];
   initialInsights: TaskItem[];
   initialToday: string; // "YYYY-MM-DD", Paris
@@ -529,7 +537,7 @@ export default function AdminInboxPanel({
 
   // The Inbox's address with the current filters, changed as given.
   const currentUrl = (changes: Partial<InboxUrlParams> = {}) =>
-    inboxUrl({ mailbox, archived: showArchived, ...changes });
+    inboxUrl({ mailbox, view, ...changes });
 
   const refreshRight = () => setRightRefreshKey((k) => k + 1);
 
@@ -615,7 +623,7 @@ export default function AdminInboxPanel({
     resetModal();
     const nextMailbox = mailboxOf(next);
     if (nextMailbox && nextMailbox !== mailbox) {
-      router.push(currentUrl({ mailbox: nextMailbox, archived: false }));
+      router.push(currentUrl({ mailbox: nextMailbox, view: "inbox" }));
     } else if (selectedAlertId) {
       router.replace(currentUrl());
     }
@@ -653,9 +661,9 @@ export default function AdminInboxPanel({
     setComposing(false);
   };
 
-  const handleArchivedViewChange = (value: string) => {
+  const handleViewChange = (value: InboxView) => {
     setSwipedId(null);
-    router.push(currentUrl({ archived: value === "archived" }));
+    router.push(currentUrl({ view: value }));
   };
 
   // Archive, Move to Inbox, or Delete, straight from the left-hand list
@@ -673,6 +681,19 @@ export default function AdminInboxPanel({
   const handleDeleteRow = (id: string) => {
     if (!confirm(DELETE_MESSAGE_CONFIRM)) return;
     runRowAction(id, deleteInboundEmail);
+  };
+
+  // Not spam on the opened email: it leaves the Spam view, so the email
+  // closes once it's moved.
+  const handleNotSpamOpen = (id: string) => {
+    setBusyId(id);
+    startTransition(async () => {
+      await markNotSpam(id);
+      setBusyId(null);
+      setOpenId(null);
+      setThread(null);
+      router.refresh();
+    });
   };
 
   // Switches to Task mode — or Insight mode, for one kept as an insight —
@@ -1305,12 +1326,13 @@ export default function AdminInboxPanel({
           <h1 className="text-xl font-semibold text-neutral-900">Inbox</h1>
           {isMailMode ? (
             <select
-              value={showArchived ? "archived" : "inbox"}
-              onChange={(e) => handleArchivedViewChange(e.target.value)}
+              value={view}
+              onChange={(e) => handleViewChange(e.target.value as InboxView)}
               className={filterCls}
             >
               <option value="inbox">Inbox</option>
               <option value="archived">Archived</option>
+              <option value="spam">Spam</option>
             </select>
           ) : (
             <select
@@ -1343,7 +1365,7 @@ export default function AdminInboxPanel({
               <p className="p-4 text-center text-sm text-neutral-400">Loading…</p>
             ) : initialList.length === 0 ? (
               <p className="p-4 text-center text-sm text-neutral-400">
-                {showArchived ? "Nothing archived." : "Nothing here yet."}
+                {view === "archived" ? "Nothing archived." : view === "spam" ? "No spam." : "Nothing here yet."}
               </p>
             ) : (
               <ul className="divide-y divide-neutral-100">
@@ -1354,33 +1376,44 @@ export default function AdminInboxPanel({
                       onOpenChange={(open) => setSwipedId(open ? m.id : null)}
                       busy={isPending && rowBusyId === m.id}
                       actions={[
-                        {
-                          label: m.taskId ? "Open task" : "Make task",
-                          icon: <TaskIcon />,
-                          onClick: () => handleMakeTask(m.id),
-                        },
-                        ...(m.taskId
+                        ...(view === "spam"
                           ? [
                               {
-                                label: "Remove task",
-                                icon: <TaskRemoveIcon />,
-                                onClick: () => handleRemoveTask(m.taskId as string),
+                                label: "Not spam",
+                                icon: <UnarchiveIcon />,
+                                primary: true,
+                                onClick: () => runRowAction(m.id, markNotSpam),
                               },
                             ]
-                          : []),
-                        showArchived
-                          ? {
-                              label: "Move to Inbox",
-                              icon: <UnarchiveIcon />,
-                              primary: true,
-                              onClick: () => runRowAction(m.id, unarchiveInboundEmail),
-                            }
-                          : {
-                              label: "Archive",
-                              icon: <ArchiveIcon />,
-                              primary: true,
-                              onClick: () => runRowAction(m.id, archiveInboundEmail),
-                            },
+                          : [
+                              {
+                                label: m.taskId ? "Open task" : "Make task",
+                                icon: <TaskIcon />,
+                                onClick: () => handleMakeTask(m.id),
+                              },
+                              ...(m.taskId
+                                ? [
+                                    {
+                                      label: "Remove task",
+                                      icon: <TaskRemoveIcon />,
+                                      onClick: () => handleRemoveTask(m.taskId as string),
+                                    },
+                                  ]
+                                : []),
+                              view === "archived"
+                                ? {
+                                    label: "Move to Inbox",
+                                    icon: <UnarchiveIcon />,
+                                    primary: true,
+                                    onClick: () => runRowAction(m.id, unarchiveInboundEmail),
+                                  }
+                                : {
+                                    label: "Archive",
+                                    icon: <ArchiveIcon />,
+                                    primary: true,
+                                    onClick: () => runRowAction(m.id, archiveInboundEmail),
+                                  },
+                            ]),
                         { label: "Delete", icon: <TrashIcon />, danger: true, onClick: () => handleDeleteRow(m.id) },
                       ]}
                     >
@@ -1410,7 +1443,10 @@ export default function AdminInboxPanel({
                           {capitaliseParagraphs(m.subject) || "(no subject)"}
                         </p>
                         <p className="mt-0.5 truncate text-xs text-neutral-400">
-                          {m.artistName ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}` : "General"}
+                          {m.spamReason ??
+                            (m.artistName
+                              ? `${m.artistName}${m.customerName ? ` — ${m.customerName}` : ""}`
+                              : "General")}
                         </p>
                       </button>
                     </SwipeRow>
@@ -1910,7 +1946,15 @@ export default function AdminInboxPanel({
                           >
                             {translation.label(item.id)}
                           </MiniActionButton>
-                          {item.direction === "IN" && (
+                          {item.direction === "IN" && openListItem?.spamReason && (
+                            <MiniActionButton
+                              onClick={() => handleNotSpamOpen(item.id)}
+                              disabled={busyId === item.id || isPending}
+                            >
+                              Not spam
+                            </MiniActionButton>
+                          )}
+                          {item.direction === "IN" && !openListItem?.spamReason && (
                             <MiniActionButton onClick={() => handleMakeTask(item.id)} disabled={isPending}>
                               {openListItem?.taskId ? "Open task" : "Make task"}
                             </MiniActionButton>
@@ -1927,6 +1971,12 @@ export default function AdminInboxPanel({
                       </div>
 
                       <div className="p-3">
+                        {item.direction === "IN" && openListItem?.spamReason && (
+                          <p className="mb-2 rounded-md bg-neutral-100 px-2 py-1.5 text-xs text-neutral-600">
+                            Filed as spam: {openListItem.spamReason}. Deleted 30 days after it arrived unless
+                            marked Not spam.
+                          </p>
+                        )}
                         {translation.error(item.id) && (
                           <p className="mb-2 text-sm text-red-600">{translation.error(item.id)}</p>
                         )}

@@ -5,7 +5,7 @@ import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
 import { getOpenAlerts } from "@/lib/alerts";
 import { parseClientAlertId } from "@/lib/clientAlertIds";
-import { getInboxList, getArtistOptions, getUnreadCounts } from "@/lib/actions/inboundEmail";
+import { getInboxList, getArtistOptions, getUnreadCounts, type InboxView } from "@/lib/actions/inboundEmail";
 import { getComposeRecipients, getMailboxAddresses } from "@/lib/actions/adminEmail";
 import { getOpenTasks, getInsights, getGmailTaskLinks } from "@/lib/actions/tasks";
 import { getGmailConnection } from "@/lib/gmail";
@@ -27,9 +27,9 @@ export const metadata: Metadata = {
 };
 
 // The unified admin inbox (2026-09-05, Email Integration). Which mailbox
-// is showing (?mailbox=business, else Art) and whether it's the Inbox or
-// the Archived messages (?archived=1) are in the URL (2026-09-27), so a
-// link can land on them. (The artist filter that used to be here too,
+// is showing (?mailbox=business, else Art) and which of its lists — the
+// Inbox, Archived (?view=archived, 2026-09-27) or Spam (?view=spam,
+// 2026-10-20) — are in the URL, so a link can land on them. (The artist filter that used to be here too,
 // ?artistId=, was removed 2026-10-10, direct request.)
 //
 // ?personal=1 opens the Personal tab (Craig's own Gmail, 2026-10-09) —
@@ -44,7 +44,7 @@ export default async function InboxPage({
 }: {
   searchParams: Promise<{
     alert?: string;
-    archived?: string;
+    view?: string;
     mailbox?: string;
     personal?: string;
     gmailError?: string;
@@ -52,12 +52,12 @@ export default async function InboxPage({
 }) {
   const {
     alert: alertId,
-    archived,
+    view: viewParam,
     mailbox: mailboxParam,
     personal,
     gmailError,
   } = await searchParams;
-  const showArchived = archived === "1";
+  const view: InboxView = viewParam === "archived" || viewParam === "spam" ? viewParam : "inbox";
   const mailbox: Mailbox = mailboxParam === "business" ? "BUSINESS" : "ART";
 
   const [
@@ -75,7 +75,7 @@ export default async function InboxPage({
     gmailTaskIds,
   ] = await Promise.all([
     getOpenAlerts(),
-    getInboxList(mailbox, showArchived),
+    getInboxList(mailbox, view),
     getArtistOptions(),
     getComposeRecipients(),
     getMailboxAddresses(),
@@ -104,7 +104,7 @@ export default async function InboxPage({
         <AdminInboxPanel
           mailbox={mailbox}
           initialList={list}
-          showArchived={showArchived}
+          view={view}
           initialTasks={tasks}
           initialInsights={insights}
           initialToday={parisToday()}

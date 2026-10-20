@@ -6,10 +6,11 @@ import { revalidatePath } from "next/cache";
 import { raiseAlertIfNotAlreadyOpen, resolveAlertsOfType } from "@/lib/alerts";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import { saleTitle } from "@/lib/saleMath";
-import { uploadToR2, deleteFromR2 } from "@/lib/r2";
+import { uploadToR2 } from "@/lib/r2";
 import { readableEmailText } from "@/lib/emailText";
 import { mailboxForAddress, type Mailbox } from "@/lib/email";
 import { canonicalMessageId, headerValue, findTaskForReply, recordSentMessageId } from "@/lib/emailThreading";
+import { checkForSpam, isKnownSender, deleteInboundAttachmentFiles, normaliseAddress } from "@/lib/spamFilter";
 
 // The unified admin inbox (2026-09-05, Email Integration) — processing
 // of inbound webhook events, plus reading/replying to what lands here.
@@ -17,6 +18,7 @@ import { canonicalMessageId, headerValue, findTaskForReply, recordSentMessageId 
 // overall design ("one box with a filter", direct decision), and
 // lib/email.ts for the two mailboxes, Art and Business (2026-09-27), and
 // lib/emailThreading.ts for how replies are linked back to a task.
+// Spam is filtered as it arrives (2026-10-20) — see lib/spamFilter.ts.
 
 const EMAIL_REPLY_ALERT = "EMAIL_REPLY_RECEIVED";
 
@@ -114,6 +116,24 @@ export async function processInboundEmail(eventData: {
   // conversation) is linked to the task — see lib/emailThreading.ts.
   const taskId = await findTaskForReply(resend, full.headers, from.address);
 
+  // Spam check — skipped for a sender already known: a client artist
+  // writing to the business, a customer, a reply to a task's email, or a
+  // trusted or previously emailed address (see lib/spamFilter.ts).
+  const knownSender =
+    (mailbox === "BUSINESS" && artist !== null) ||
+    customer !== null ||
+    taskId !== null ||
+    (await isKnownSender(from.address));
+  const verdict = knownSender
+    ? ({ spam: false } as const)
+    : await checkForSpam({
+        fromAddress: from.address,
+        fromName: from.name,
+        toAddress: to.address,
+        subject: eventData.subject || full.subject || null,
+        text: readableEmailText(full.text || null, full.html || null),
+      });
+
   const inbound = await db.inboundEmail.create({
     data: {
       resendEmailId: eventData.email_id,
@@ -128,6 +148,7 @@ export async function processInboundEmail(eventData: {
       subject: eventData.subject || full.subject || null,
       textBody: full.text || null,
       htmlBody: full.html || null,
+      ...(verdict.spam ? { spamAt: new Date(), spamReason: verdict.reason } : {}),
     },
     select: { id: true },
   });
@@ -137,8 +158,8 @@ export async function processInboundEmail(eventData: {
   }
 
   // Only a reply to an artist's own address raises an alert — a Business
-  // message isn't a reply on the artist's behalf.
-  if (mailbox === "ART" && artist) {
+  // message isn't a reply on the artist's behalf — and never spam.
+  if (mailbox === "ART" && artist && !verdict.spam) {
     await raiseAlertIfNotAlreadyOpen({
       artistId: artist.id,
       type: EMAIL_REPLY_ALERT,
@@ -239,21 +260,32 @@ export type InboxSummaryItem = {
   customerName: string | null;
   // Set when this is a reply to an email sent from a task (2026-09-27).
   taskId: string | null;
+  // Why it was filed as spam — set only in the Spam view (2026-10-20).
+  spamReason: string | null;
   isRead: boolean;
   receivedAt: string;
 };
 
+// Which list of a mailbox is showing: the Inbox, Archived (2026-09-27)
+// or Spam (2026-10-20).
+export type InboxView = "inbox" | "archived" | "spam";
+
 // The inbox list — one mailbox's InboundEmail (Art or Business), newest
 // first (the artist filter was removed 2026-10-10, direct request — each
-// row still shows its artist). Either the Inbox itself (not archived) or the
-// Archived view (2026-09-27), never both mixed together. OutboundEmail
+// row still shows its artist). One view at a time: the Inbox itself, the
+// Archived view (2026-09-27) or the Spam view (2026-10-20) — spam never
+// shows in the other two. OutboundEmail
 // rows only ever show up inside an opened thread (getThread below), not
 // in this list — keeps the main list to "things you might need to act
 // on", not a mix of sent-and-received. See getSentList below for the
 // separate Sent view.
-export async function getInboxList(mailbox: Mailbox, archived = false): Promise<InboxSummaryItem[]> {
+export async function getInboxList(mailbox: Mailbox, view: InboxView): Promise<InboxSummaryItem[]> {
+  const where =
+    view === "spam"
+      ? { mailbox, spamAt: { not: null } }
+      : { mailbox, spamAt: null, archivedAt: view === "archived" ? { not: null } : null };
   const rows = await db.inboundEmail.findMany({
-    where: { mailbox, archivedAt: archived ? { not: null } : null },
+    where,
     orderBy: { receivedAt: "desc" },
     take: 200,
     include: {
@@ -272,17 +304,18 @@ export async function getInboxList(mailbox: Mailbox, archived = false): Promise<
     customerId: r.customerId,
     customerName: r.customer?.name || null,
     taskId: r.taskId,
+    spamReason: r.spamAt ? r.spamReason || "Spam" : null,
     isRead: r.isRead,
     receivedAt: r.receivedAt.toISOString(),
   }));
 }
 
 // The unread count on the Art and Business pills (2026-10-10): received
-// messages in each mailbox's Inbox (not archived) not yet opened.
+// messages in each mailbox's Inbox (not archived, not spam) not yet opened.
 export async function getUnreadCounts(): Promise<Record<Mailbox, number>> {
   const rows = await db.inboundEmail.groupBy({
     by: ["mailbox"],
-    where: { isRead: false, archivedAt: null },
+    where: { isRead: false, archivedAt: null, spamAt: null },
     _count: { _all: true },
   });
   const counts: Record<Mailbox, number> = { ART: 0, BUSINESS: 0 };
@@ -512,6 +545,20 @@ export async function archiveInboundEmail(id: string): Promise<void> {
   revalidatePath("/alerts");
 }
 
+// Not spam (2026-10-20): moves a message from Spam into the Inbox, and
+// trusts its sender so their emails are never filtered again (see
+// lib/spamFilter.ts).
+export async function markNotSpam(id: string): Promise<void> {
+  const existing = await db.inboundEmail.findUnique({ where: { id }, select: { fromAddress: true } });
+  if (!existing) return;
+  const address = normaliseAddress(existing.fromAddress);
+  await db.$transaction([
+    db.inboundEmail.update({ where: { id }, data: { spamAt: null, spamReason: null } }),
+    db.trustedSender.upsert({ where: { address }, create: { address }, update: {} }),
+  ]);
+  revalidatePath("/accounts/inbox");
+}
+
 // Moves an archived message back into the Inbox (2026-09-27). It stays
 // read — it has already been dealt with once.
 export async function unarchiveInboundEmail(id: string): Promise<void> {
@@ -528,22 +575,15 @@ export async function unarchiveInboundEmail(id: string): Promise<void> {
 // EMAIL_REPLY_RECEIVED alert this message might still have raised, so
 // deleting it can't leave a dangling alert with nothing to open. Its
 // attachments' stored files are removed from R2 too (their database rows
-// go with the email automatically — ON DELETE CASCADE); a file that
-// fails to delete never blocks deleting the email itself.
+// go with the email automatically — ON DELETE CASCADE; see
+// deleteInboundAttachmentFiles).
 export async function deleteInboundEmail(id: string): Promise<void> {
   const existing = await db.inboundEmail.findUnique({
     where: { id },
     select: { artistId: true, attachments: { select: { r2Key: true } } },
   });
   if (!existing) return;
-  for (const { r2Key } of existing.attachments) {
-    if (!r2Key) continue;
-    try {
-      await deleteFromR2(r2Key);
-    } catch {
-      // See note above.
-    }
-  }
+  await deleteInboundAttachmentFiles(existing.attachments.map((a) => a.r2Key));
   await db.inboundEmail.delete({ where: { id } });
   if (existing.artistId) {
     await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);

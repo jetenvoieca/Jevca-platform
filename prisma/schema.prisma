@@ -821,6 +821,14 @@ model InboundEmail {
   // lib/actions/inboundEmail.ts.
   archivedAt DateTime?
 
+  // When it was filed as spam on arrival (2026-10-20, see lib/spamFilter.ts)
+  // — null for everything else. Spam shows only in the Spam view, raises
+  // no alert, and is deleted 30 days after arriving; Not spam clears it
+  // and trusts the sender from then on. `spamReason` is the filter's
+  // short reason, shown on the opened email.
+  spamAt     DateTime?
+  spamReason String?
+
   // The task this is a reply to (2026-09-27) — set when its In-Reply-To/
   // References headers point at an email sent from a task, or at an
   // earlier message already linked to one (see findTaskForReply,
@@ -838,8 +846,18 @@ model InboundEmail {
   @@index([customerId])
   @@index([toAddress])
   @@index([mailbox, archivedAt, receivedAt])
+  @@index([spamAt])
   @@index([taskId])
   @@index([messageId])
+}
+
+// A sender address the spam filter never applies to (2026-10-20, see
+// lib/spamFilter.ts) — added by Not spam on an email in the Spam view.
+// Stored lower case.
+model TrustedSender {
+  id        String   @id @default(cuid())
+  address   String   @unique
+  createdAt DateTime @default(now())
 }
 
 // A file attached to an inbound email (2026-09-24). Resend only offers
