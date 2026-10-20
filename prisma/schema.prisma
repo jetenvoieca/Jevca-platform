@@ -1706,16 +1706,6 @@ model Purchase {
   // Every statement it has been listed on (2026-10-20).
   statementLines StatementLine[]
 
-  // This work's own payment link (2026-10-20, direct request — galleries
-  // pay for each work as its buyer pays them): a persistent Stripe Payment
-  // Link for the sale's whole balance, listed beside the invoice's Pay all
-  // link. Made when a gallery invoice's email is drafted; switched off
-  // whenever the balance changes (a payment, a price edit), the sale is
-  // cancelled or deleted, or its artwork renamed. See
-  // createSalePaymentLink in lib/actions/invoices.ts.
-  stripePaymentLinkId  String?
-  stripePaymentLinkUrl String?
-
   // When the Certificate of Authenticity was last emailed, and to whom
   // (2026-09-03). Re-sending overwrites both.
   certificateEmailedAt DateTime?

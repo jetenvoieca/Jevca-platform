@@ -5,11 +5,11 @@ import { artworkDetailLines } from "@/lib/artworkDetails";
 import { publicMediaUrl } from "@/lib/r2";
 import type { DocumentSale } from "@/lib/invoices";
 
-// Payment links for consigned sales (2026-10-20) — persistent Stripe
-// Payment Links (not Checkout Sessions, which expire within a day), used
-// by invoices (lib/actions/invoices.ts) and statements
-// (lib/actions/statements.ts). Not a "use server" file, so none of this
-// can be called from the browser.
+// Building payment links for consigned sales (2026-10-20) — persistent
+// Stripe Payment Links (not Checkout Sessions, which expire within a
+// day): one per invoice (lib/actions/invoices.ts) and one per statement
+// (lib/actions/statements.ts), each listing its works. Not a "use server"
+// file, so none of this can be called from the browser.
 //
 // Each work shows as its own product: its name, picture and details
 // (type, size, medium, and how the amount was reached), with `label` —
@@ -63,26 +63,8 @@ export async function workLineItem(sale: DocumentSale, label: string): Promise<L
   return { price: price.id, quantity: 1 };
 }
 
-// A sale still owed something, and payable on its own by link (not being
+// A sale still owed something, and payable by link (not being
 // paid by Stripe instalments).
 export function isOwed(sale: DocumentSale): boolean {
   return sale.status === "ACTIVE" && !sale.stripeSubscriptionScheduleId && saleBreakdown(sale).balance > 0;
-}
-
-// One work's own link, for its whole balance — kept on the sale
-// (Purchase.stripePaymentLinkUrl) and reused until retired
-// (retireSalePaymentLink, lib/invoices.ts). `description` is what the
-// payment is listed as in Stripe.
-export async function ensureWorkPaymentLink(sale: DocumentSale, label: string, description: string) {
-  if (sale.stripePaymentLinkUrl || !isOwed(sale)) return;
-  const link = await getStripeClientForSale(sale).paymentLinks.create({
-    line_items: [await workLineItem(sale, label)],
-    custom_text: { submit: { message: label } },
-    metadata: { purchaseId: sale.id },
-    payment_intent_data: { description, metadata: { purchaseId: sale.id } },
-  });
-  await db.purchase.update({
-    where: { id: sale.id },
-    data: { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
-  });
 }

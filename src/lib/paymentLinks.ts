@@ -40,7 +40,13 @@ export async function deactivatePaymentLink(sale: SaleStripeFields, linkId: stri
   }
 }
 
-// Switches off the Pay all link of every current, unpaid statement
+// What a sale owes has changed (paid, edited, moved, cancelled or
+// deleted): the link of any current statement listing it is switched off.
+export async function retireStatementLinksListing(saleId: string) {
+  await retireStatementPaymentLinks({ closedAt: null, lines: { some: { purchaseId: saleId } } });
+}
+
+// Switches off the payment link of every current, unpaid statement
 // matching `where` (2026-10-20, see Statement in schema.prisma) — what it
 // charges has changed (a listed sale paid, edited, cancelled or deleted),
 // or its gallery is being deleted. A fresh statement is made the next

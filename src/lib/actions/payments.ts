@@ -12,7 +12,7 @@ import {
   saleBreakdown,
   splitIntoInstalments,
 } from "@/lib/saleMath";
-import { saleStripeFieldsForArtist } from "@/lib/paymentLinks";
+import { retireStatementLinksListing, saleStripeFieldsForArtist } from "@/lib/paymentLinks";
 import {
   getStripeClientForSale,
   getPublishableKey,
@@ -22,7 +22,7 @@ import {
 } from "@/lib/stripe";
 import { APP_URL } from "@/lib/appUrl";
 import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
-import { invoiceLockError, cancelUnpaidInvoicesOf, retireSalePaymentLink, salePaymentRule } from "@/lib/invoices";
+import { invoiceLockError, cancelUnpaidInvoicesOf, salePaymentRule } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import { isCurrency } from "@/lib/currencies";
 
@@ -712,8 +712,8 @@ export async function updateGallerySaleAmount(
           }),
         ]),
   ]);
-  // Its payment link charges the old amount.
-  await retireSalePaymentLink(purchase);
+  // A statement listing it charges the old amount.
+  await retireStatementLinksListing(purchase.id);
 
   return { ok: true };
 }
@@ -876,7 +876,7 @@ export async function deleteGallerySale(
   }
 
   await cancelUnpaidInvoicesOf([purchase, ...purchase.charges]);
-  for (const sale of [purchase, ...purchase.charges]) await retireSalePaymentLink(sale);
+  for (const sale of [purchase, ...purchase.charges]) await retireStatementLinksListing(sale.id);
 
   await db.purchase.delete({ where: { id: purchaseId } });
   await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
@@ -970,8 +970,8 @@ export async function recordGalleryPayment(
     },
   });
 
-  // Its payment link charges the balance as it was.
-  await retireSalePaymentLink(purchase);
+  // A statement listing it charges the balance as it was.
+  await retireStatementLinksListing(purchase.id);
   await completeIfSettled(purchase.id, paid.paidDate);
   return { ok: true };
 }
@@ -1068,7 +1068,7 @@ export async function abandonPurchase(
     select: { id: true, invoiceId: true },
   });
   await cancelUnpaidInvoicesOf([purchase, ...openCharges]);
-  await retireSalePaymentLink(purchase);
+  await retireStatementLinksListing(purchase.id);
   for (const charge of openCharges) await abandonPurchase(charge.id, siteId);
 
   try {
@@ -1380,10 +1380,11 @@ export async function handleFirstPaymentSucceeded(purchaseId: string, stripePaym
 // safe to call from the browser, and both handlers it routes to are
 // idempotent, so the webhook and the form can both call it.
 //
-// A consigned (GALLERY) sale is paid through its own payment links or
-// Take Card — the full balance or an instalment plan's first instalment
+// A consigned (GALLERY) sale is paid this way through Take Card — the
+// full balance or an instalment plan's first instalment
 // (recordGalleryStripePayment); a direct Stripe sale goes through
-// handleFirstPaymentSucceeded.
+// handleFirstPaymentSucceeded. (Invoices and statements have their own
+// links: recordInvoicePaymentIntent / recordStatementPaymentIntent.)
 export async function recordPaymentIntent(purchaseId: string, paymentIntentId: string) {
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
@@ -1459,8 +1460,8 @@ async function recordGalleryStripePayment(payment: {
       stripePaymentIntentId: payment.paymentIntentId,
     },
   });
-  // Its payment link was for the balance as it stood.
-  await retireSalePaymentLink(purchase);
+  // A statement listing it charges the balance as it stood.
+  await retireStatementLinksListing(purchase.id);
 
   const count = payment.instalments;
   if (count && count >= 2 && payment.customerId) {

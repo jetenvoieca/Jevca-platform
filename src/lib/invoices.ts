@@ -1,6 +1,11 @@
 import { db } from "@/lib/db";
 import { saleBreakdown } from "@/lib/saleMath";
-import { deactivatePaymentLink, getArtistStripeTarget, retireStatementPaymentLinks } from "@/lib/paymentLinks";
+import {
+  deactivatePaymentLink,
+  getArtistStripeTarget,
+  retireStatementLinksListing,
+  retireStatementPaymentLinks,
+} from "@/lib/paymentLinks";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import type { SaleInvoice } from "@/lib/actions/payments";
 
@@ -157,34 +162,14 @@ export async function salePaymentRule(invoiceId: string | null): Promise<SalePay
   return { kind: "locked", error: `This sale is on invoice ${number} — it's paid as a whole, from the invoice.` };
 }
 
-// Switches off a sale's own payment link (see Purchase.stripePaymentLinkId)
-// and clears it — and the Pay all link of any current statement listing
-// it: the sale was paid, its balance changed, or it was cancelled or
-// deleted. Fresh ones are made when they're next needed.
-export async function retireSalePaymentLink(sale: {
-  id: string;
-  stripeMode: "TEST" | "LIVE";
-  stripeAccountId: string | null;
-  stripePaymentLinkId: string | null;
-}) {
-  if (sale.stripePaymentLinkId) {
-    await deactivatePaymentLink(sale, sale.stripePaymentLinkId);
-    await db.purchase.updateMany({
-      where: { id: sale.id },
-      data: { stripePaymentLinkId: null, stripePaymentLinkUrl: null },
-    });
-  }
-  await retireStatementPaymentLinks({ closedAt: null, lines: { some: { purchaseId: sale.id } } });
-}
-
 // Moves unpaid sales still set to an older Stripe account or mode onto the
 // artist's current one (2026-10-20, Craig's choice — e.g. a sale recorded
 // before the artist connected their own Stripe account couldn't share a
 // statement's link with later ones). Only sales nothing has been paid on
 // through Stripe and not on Stripe instalments; a sale on an unpaid
 // invoice moves only with every other sale on it, and the invoice too.
-// Old links (and any statement link listing a moved sale) are switched
-// off first. Used before a statement or invoice is made.
+// Old links (the invoice's, and any statement's listing a moved sale) are
+// switched off first. Used before a statement or invoice is made.
 export async function moveUnpaidSalesToCurrentStripeAccount(saleIds: string[]) {
   const sales = await db.purchase.findMany({
     where: { id: { in: saleIds }, status: "ACTIVE" },
@@ -208,7 +193,6 @@ export async function moveUnpaidSalesToCurrentStripeAccount(saleIds: string[]) {
         status: true,
         stripeMode: true,
         stripeAccountId: true,
-        stripePaymentLinkId: true,
         stripeSubscriptionScheduleId: true,
         payments: { select: { stripePaymentIntentId: true, stripeInvoiceId: true } },
       },
@@ -225,7 +209,7 @@ export async function moveUnpaidSalesToCurrentStripeAccount(saleIds: string[]) {
     );
     if (!movable) continue;
 
-    for (const g of group) await retireSalePaymentLink(g);
+    for (const g of group) await retireStatementLinksListing(g.id);
     if (invoice) await retireInvoicePaymentLink(invoice);
     await db.$transaction([
       db.purchase.updateMany({
@@ -295,16 +279,10 @@ export async function retireInvoicePaymentLink(invoice: {
 }
 
 // Every unpaid invoice with one of this artwork's sales on it loses its
-// payment link, and so do each of the artwork's sales and any statement
-// listing one — used when the artwork is renamed, since the name is fixed
-// inside Stripe when a link is made. Fresh links are made when they're
-// next needed.
+// payment link, and so does any statement listing one — used when the
+// artwork is renamed, since the name is fixed inside Stripe when a link
+// is made. Fresh links are made when they're next needed.
 export async function retireArtworkPaymentLinks(artworkId: string) {
-  const sales = await db.purchase.findMany({
-    where: { artworkId, stripePaymentLinkId: { not: null } },
-    select: { id: true, stripeMode: true, stripeAccountId: true, stripePaymentLinkId: true },
-  });
-  for (const sale of sales) await retireSalePaymentLink(sale);
   await retireStatementPaymentLinks({ closedAt: null, lines: { some: { purchase: { artworkId } } } });
 
   const invoices = await db.invoice.findMany({

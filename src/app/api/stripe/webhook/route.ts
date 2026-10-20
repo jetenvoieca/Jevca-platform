@@ -103,7 +103,7 @@ export async function POST(req: NextRequest) {
         if (purchaseId) await recordPaymentIntent(purchaseId, intent.id);
         // An invoice's payment link (2026-10-14) pays every sale on it.
         else if (invoiceId) await recordInvoicePaymentIntent(invoiceId, intent.id);
-        // A statement's Pay all (2026-10-20) pays every work on it.
+        // A statement's payment link (2026-10-20) pays every work on it.
         else if (statementId) await recordStatementPaymentIntent(statementId, intent.id);
         break;
       }

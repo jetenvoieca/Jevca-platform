@@ -1,7 +1,8 @@
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import { saleBreakdown, type SaleAmounts } from "@/lib/saleMath";
-import { retireInvoicePaymentLink, retireSalePaymentLink, settleInvoiceIfPaid } from "@/lib/invoices";
+import { retireInvoicePaymentLink, settleInvoiceIfPaid } from "@/lib/invoices";
+import { retireStatementLinksListing } from "@/lib/paymentLinks";
 
 // Shared server-side steps for recording payments against a sale — used
 // by a sale's own payments (lib/actions/payments.ts) and by paying a
@@ -17,9 +18,10 @@ import { retireInvoicePaymentLink, retireSalePaymentLink, settleInvoiceIfPaid } 
 //   - STRIPE (direct): every scheduled Payment row is PAID — a Full
 //     sale has one; an instalment sale completes once the last clears.
 // The sale's invoice is then marked paid too, once every sale on it is.
-// Its own payment link is switched off, and so is its invoice's Pay all
-// link while other works on it are still owed — that amount has just
-// changed (2026-10-20, works on a gallery invoice paid one at a time).
+// Its invoice's payment link is switched off while other works on it are
+// still owed — that amount has just changed (2026-10-20, works on a
+// gallery invoice paid one at a time) — and so is any statement's
+// listing it.
 // Safe to call after any payment; does nothing until the sale is settled.
 export async function completeIfSettled(purchaseId: string, closedAt: Date = new Date()) {
   const purchase = await db.purchase.findUnique({
@@ -39,7 +41,7 @@ export async function completeIfSettled(purchaseId: string, closedAt: Date = new
   if (!purchase.parentPurchaseId) {
     await db.artwork.update({ where: { id: purchase.artworkId }, data: { availability: "SOLD" } });
   }
-  await retireSalePaymentLink(purchase);
+  await retireStatementLinksListing(purchase.id);
   await settleInvoiceIfPaid(purchase.invoiceId);
   if (purchase.invoiceId) {
     const invoice = await db.invoice.findUnique({
@@ -57,7 +59,7 @@ export type PaidDetails = { paidDate: Date; method: string | null; stripePayment
 // Pays several sales in full at once — each still-owed sale's whole
 // balance as its own PAID payment (with `extra` writes, e.g. an invoice's
 // own framing/delivery, in the same transaction) — then completes them.
-// Shared by paying a whole invoice and a statement's Pay all.
+// Shared by paying a whole invoice and a statement.
 export async function payBalancesInFull(
   sales: (SaleAmounts & {
     id: string;

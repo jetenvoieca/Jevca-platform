@@ -10,14 +10,13 @@ import {
   cancelUnpaidInvoice,
   invoiceBalance,
   invoiceExtras,
-  invoiceParty,
   loadInvoice,
   moveUnpaidSalesToCurrentStripeAccount,
   type DocumentSale,
   type LoadedInvoice,
 } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
-import { ensureWorkPaymentLink, isOwed, payFromLabel, workLineItem, type LineItem } from "@/lib/saleLinks";
+import { isOwed, payFromLabel, workLineItem, type LineItem } from "@/lib/saleLinks";
 
 // Invoices (2026-10-14, Craig's mockups) — see Invoice in schema.prisma.
 // Consigned sales are ticked on their Location's Sales tab and put on one
@@ -25,8 +24,8 @@ import { ensureWorkPaymentLink, isOwed, payFromLabel, workLineItem, type LineIte
 // sale's invoice is an invoice of one (invoiceForSale). An unpaid invoice
 // is paid — or cancelled: kept on record, its sales freed. A gallery's
 // invoice is paid work by work (2026-10-20): Take Card or Record Payment
-// on one of its sales, or that work's own payment link, pays that work in
-// full; its Pay all link pays the rest. Any other invoice is paid as a
+// on one of its sales pays that work in full; its payment link pays
+// everything still owed. Any other invoice is paid as a
 // whole (salePaymentRule, lib/invoices.ts). While unpaid, its sales'
 // prices can't be changed (invoiceLockError).
 
@@ -57,10 +56,10 @@ function readCost(raw: string | undefined, label: string): { ok: true; value: st
 //
 // An unpaid invoice at an Own location can carry framing and delivery
 // costs for the whole invoice (`costs`, 2026-10-14 — a gallery arranges
-// its own). It gets the next number, today's date, and its payment links
-// (ensureInvoicePaymentLinks) so the emailed invoice always includes a way
-// to pay (if Stripe can't make them, the invoice is still produced and the
-// links are made when the email is drafted).
+// its own). It gets the next number, today's date, and its payment link
+// (ensureInvoicePaymentLink) so the emailed invoice always includes a way
+// to pay (if Stripe can't make it, the invoice is still produced and the
+// link is made when the email is drafted).
 export async function produceInvoice(
   purchaseIds: string[],
   costs?: { framing?: string; delivery?: string }
@@ -133,7 +132,7 @@ export async function produceInvoice(
   });
   if (!created.ok || paid) return created;
 
-  await ensureInvoicePaymentLinks(created.invoiceId);
+  await ensureInvoicePaymentLink(created.invoiceId);
   return created;
 }
 
@@ -265,13 +264,12 @@ function notOpenError(invoice: LoadedInvoice): string | null {
 
 // ---------- Paying ----------
 
-// An invoice's payment links (see lib/saleLinks.ts): one for its whole
-// balance ("Pay all", invoiceId in the PaymentIntent's metadata →
-// recordInvoicePaymentIntent) and, on a gallery's invoice, one per work —
-// galleries pay for each work as its buyer pays them (2026-10-20, direct
-// request; purchaseId → recordPaymentIntent, lib/actions/payments.ts).
-// Made once and reused; switched off when what they charge changes or
-// is paid.
+// An invoice's payment link (see lib/saleLinks.ts): one link for
+// everything still owed on it (2026-10-20, Craig: "just one link — keep
+// it simple"), invoiceId in the PaymentIntent's metadata →
+// recordInvoicePaymentIntent. Made once and reused; switched off when
+// what it charges changes (e.g. one work on a gallery's invoice paid by
+// itself) or it's paid, and made again when next needed.
 
 // Who an invoice is from, and its number.
 async function invoicePayLabel(invoice: LoadedInvoice): Promise<string> {
@@ -283,9 +281,10 @@ function openSales(invoice: LoadedInvoice): DocumentSale[] {
   return invoice.lines.map((l) => l.purchase).filter((s) => s.invoiceId === invoice.id && isOwed(s));
 }
 
-// The invoice's Pay all link: every work still owed, then its framing
-// and delivery.
-async function createInvoicePaymentLink(invoiceId: string): Promise<Result<{ url: string }>> {
+// The invoice's link — every work still owed, then its framing and
+// delivery — made now if missing: when it's produced and when its email
+// is drafted.
+export async function ensureInvoicePaymentLink(invoiceId: string): Promise<Result<{ url: string }>> {
   try {
     const invoice = await loadInvoice(invoiceId);
     if (!invoice) return { ok: false, error: "Invoice not found." };
@@ -328,30 +327,6 @@ async function createInvoicePaymentLink(invoiceId: string): Promise<Result<{ url
       data: { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
     });
     return { ok: true, url: link.url };
-  } catch (err) {
-    return { ok: false, error: stripeErrorMessage(err) };
-  }
-}
-
-// Every link an unpaid invoice's email offers: Pay all, and on a gallery's
-// invoice each work still owed while there are two or more (one left is
-// paid with Pay all). Made now if missing — when it's produced and when
-// its email is drafted. A failure is returned, and leaves what was made.
-export async function ensureInvoicePaymentLinks(invoiceId: string): Promise<Result> {
-  const all = await createInvoicePaymentLink(invoiceId);
-  if (!all.ok) return all;
-  const invoice = await loadInvoice(invoiceId);
-  const first = invoice?.lines[0]?.purchase;
-  if (!invoice || !first || !invoiceParty(first).isGallery) return { ok: true };
-  const owed = openSales(invoice);
-  if (owed.length < 2) return { ok: true };
-  try {
-    const label = await invoicePayLabel(invoice);
-    for (const sale of owed) {
-      const title = saleTitle(sale.artwork.catalogueName, sale.chargeKind);
-      await ensureWorkPaymentLink(sale, label, `Invoice ${formatInvoiceNumber(invoice.number)} · ${title}`);
-    }
-    return { ok: true };
   } catch (err) {
     return { ok: false, error: stripeErrorMessage(err) };
   }
