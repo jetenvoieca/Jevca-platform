@@ -25,8 +25,8 @@ function formatMoney(amount: string, currency: string) {
 // what goes on it) — the current statement's works ticked, or else the
 // OVERDUE ones, or else all. Make statement then shows the same layout as
 // the invoice window (InvoiceModal): the real PDF (the one that's
-// emailed) and the email, whose message lists each work with its payment
-// link, then the link for them all; Change works goes back to the list.
+// emailed) and the email, whose message lists each work, then the one
+// link to pay the whole statement; Change works goes back to the list.
 // See lib/actions/statements.ts.
 export default function StatementModal({
   customerId,

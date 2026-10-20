@@ -1847,17 +1847,15 @@ model InvoiceLine {
 }
 
 // A statement for a Gallery location (2026-10-20, direct request —
-// galleries often pay only once their own buyer has paid them): every
-// sale at that gallery still owed something, invoiced or not, with a
-// payment link for each work (Purchase.stripePaymentLinkUrl) and one for
-// them all (its own `stripePaymentLink*`). One per gallery is current
-// (`closedAt` null): opening Statement again reuses it while it lists the
-// same sales, otherwise it's closed and a new one made. Its Pay all link
-// is switched off whenever what a listed sale owes changes; paying it pays
-// each listed sale still owed (see lib/actions/statements.ts). Pay all is
-// only offered when every listed sale shares one currency and Stripe
-// account — `currency` / `stripeMode` / `stripeAccountId`, all null
-// otherwise.
+// galleries often pay only once their own buyer has paid them): the
+// works chosen from those still owed there, invoiced or not, with one
+// payment link for the whole statement (its `stripePaymentLink*`). One per
+// gallery is current (`closedAt` null): it's reused while the same works
+// are chosen, otherwise it's closed and a new one made. Its link is
+// switched off whenever what a listed work owes changes; paying it pays
+// each listed work still owed (see lib/actions/statements.ts). Its works
+// share one currency and Stripe account — `currency` / `stripeMode` /
+// `stripeAccountId` (nullable only for statements made before that rule).
 model Statement {
   id         String   @id @default(cuid())
   artistId   String

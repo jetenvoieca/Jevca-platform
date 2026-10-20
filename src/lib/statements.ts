@@ -32,7 +32,8 @@ export type LoadedStatement = NonNullable<Awaited<ReturnType<typeof loadStatemen
 export type StatementSale = LoadedStatement["lines"][number]["purchase"];
 
 // Every sale at a gallery still owed something, oldest first — what a
-// statement can list.
+// statement can list. Not one being paid by Stripe instalments, which
+// collect themselves.
 export async function owedGallerySales(customerId: string) {
   const sales = await db.purchase.findMany({
     where: { customerId, channel: "GALLERY", status: "ACTIVE" },
@@ -44,7 +45,7 @@ export async function owedGallerySales(customerId: string) {
     },
     relationLoadStrategy: "query",
   });
-  return sales.filter((s) => saleBreakdown(s).balance > 0);
+  return sales.filter((s) => !s.stripeSubscriptionScheduleId && saleBreakdown(s).balance > 0);
 }
 
 // The invoice a listed sale is on now — an unpaid one not cancelled.

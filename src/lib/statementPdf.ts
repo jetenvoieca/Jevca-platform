@@ -24,7 +24,6 @@ const LABELS = {
     days: "Days",
     owed: "Amount owed",
     paid: "Paid",
-    instalments: "By instalments",
     totalOwed: "Total owed",
     vatNo: "VAT No",
   },
@@ -39,7 +38,6 @@ const LABELS = {
     days: "Jours",
     owed: "Montant dû",
     paid: "Payé",
-    instalments: "En plusieurs fois",
     totalOwed: "Total dû",
     vatNo: "N° TVA",
   },
@@ -155,10 +153,6 @@ export async function generateStatementPdf(
       textRightAt(right, money(owed, sale.currency));
     } else {
       textRightAt(right, t.paid, font, 10, rgb(0.1, 0.5, 0.2));
-    }
-    if (owed > 0 && sale.stripeSubscriptionScheduleId) {
-      y -= 12;
-      page.drawText(t.instalments, { x: colWork, y, size: 8, font, color: grey });
     }
     y -= 20;
   }

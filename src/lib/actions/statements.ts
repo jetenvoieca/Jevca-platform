@@ -9,7 +9,7 @@ import { artistFromAddress } from "@/lib/email";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import { currencySymbol } from "@/lib/pdfParts";
 import { retireStatementPaymentLinks } from "@/lib/paymentLinks";
-import { ensureWorkPaymentLink, isOwed, payFromLabel, workLineItem } from "@/lib/saleLinks";
+import { isOwed, payFromLabel, workLineItem } from "@/lib/saleLinks";
 import { payBalancesInFull } from "@/lib/salePayments";
 import {
   liveInvoiceNumber,
@@ -25,9 +25,9 @@ import { isSaleOverdue } from "@/lib/overdue";
 // Statements (2026-10-20, direct request — galleries often pay only once
 // their own buyer has paid them) — see Statement in schema.prisma. From a
 // Gallery location's Statement button: the works chosen from those still
-// owed there (overdue ones ticked to start with), with a payment link for
-// each work and one for them all, emailed with the statement attached as
-// a PDF.
+// owed there (overdue ones ticked to start with), with one payment link
+// for the whole statement (2026-10-20, Craig after testing — not one per
+// work), emailed with the statement attached as a PDF.
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string };
 
@@ -91,8 +91,8 @@ export async function getStatementChoices(
 }
 
 // A statement of the chosen works — the gallery's current one if it lists
-// exactly these, otherwise a new one (the old one closed and its Pay all
-// link switched off) — with its payment links.
+// exactly these, otherwise a new one (the old one closed and its link
+// switched off) — with its payment link.
 export async function makeStatement(customerId: string, purchaseIds: string[]): Promise<Result<{ statementId: string }>> {
   const gallery = await galleryArtist(customerId);
   if (!gallery.ok) return gallery;
@@ -101,6 +101,15 @@ export async function makeStatement(customerId: string, purchaseIds: string[]): 
   // Only works the gallery still owes for, in their usual order.
   const owed = (await owedGallerySales(customerId)).filter((s) => chosen.has(s.id));
   if (owed.length !== chosen.size) return { ok: false, error: "One of these works is no longer owed — please reopen Statement." };
+  // One link pays the whole statement, so its works must share a currency
+  // and Stripe account.
+  const first = owed[0];
+  if (owed.some((s) => s.currency !== first.currency)) {
+    return { ok: false, error: "The works on one statement must all be in the same currency." };
+  }
+  if (owed.some((s) => s.stripeMode !== first.stripeMode || s.stripeAccountId !== first.stripeAccountId)) {
+    return { ok: false, error: "These works were taken into different Stripe accounts, so they can't share a payment link." };
+  }
 
   const current = await db.statement.findFirst({
     where: { customerId, closedAt: null },
@@ -120,25 +129,13 @@ export async function makeStatement(customerId: string, purchaseIds: string[]): 
       await retireStatementPaymentLinks({ id: current.id });
       await db.statement.update({ where: { id: current.id }, data: { closedAt: new Date() } });
     }
-    // Pay all only when every work payable by link shares one currency
-    // and Stripe account.
-    const payable = owed.filter((s) => !s.stripeSubscriptionScheduleId);
-    const first = payable[0];
-    const shared =
-      first &&
-      payable.every(
-        (s) =>
-          s.currency === first.currency &&
-          s.stripeMode === first.stripeMode &&
-          s.stripeAccountId === first.stripeAccountId
-      );
     const statement = await db.statement.create({
       data: {
         artistId: gallery.artistId,
         customerId,
-        ...(shared
-          ? { currency: first.currency, stripeMode: first.stripeMode, stripeAccountId: first.stripeAccountId }
-          : {}),
+        currency: first.currency,
+        stripeMode: first.stripeMode,
+        stripeAccountId: first.stripeAccountId,
         lines: { create: owed.map((s, position) => ({ purchaseId: s.id, position })) },
       },
       select: { id: true },
@@ -146,9 +143,9 @@ export async function makeStatement(customerId: string, purchaseIds: string[]): 
     statementId = statement.id;
   }
 
-  // A failure to make links still opens the statement — they're made
+  // A failure to make the link still opens the statement — it's made
   // again when its email is drafted.
-  await ensureStatementLinks(statementId);
+  await ensureStatementLink(statementId);
   return { ok: true, statementId };
 }
 
@@ -158,57 +155,43 @@ function statementLabelDate(statement: { createdAt: Date }): string {
   return statement.createdAt.toLocaleDateString("en-GB");
 }
 
-// The works on a statement payable by link now.
-function payableSales(statement: LoadedStatement): StatementSale[] {
-  return statement.lines.map((l) => l.purchase).filter(isOwed);
-}
-
-// Every link a statement's email offers: Pay all (when its works share a
-// currency and Stripe account) and each work's own while there are two
-// or more (one left is paid with Pay all). Made now if missing.
-async function ensureStatementLinks(statementId: string): Promise<Result> {
+// The statement's payment link, for everything on it still owed — made
+// now if missing (and switched off whenever what a listed work owes
+// changes; see retireSalePaymentLink).
+async function ensureStatementLink(statementId: string): Promise<Result> {
   const statement = await loadStatement(statementId);
-  if (!statement || statement.closedAt || statement.paidAt) return { ok: true };
-  const payable = payableSales(statement);
-  if (payable.length === 0) return { ok: true };
+  if (!statement?.stripeMode || statement.closedAt || statement.paidAt || statement.stripePaymentLinkUrl) {
+    return { ok: true };
+  }
+  const owed = statement.lines.map((l) => l.purchase).filter(isOwed);
+  if (owed.length === 0) return { ok: true };
   try {
     const label = `${await payFromLabel(statement.artist)} · Statement ${statementLabelDate(statement)}`;
-
-    if (statement.stripeMode && statement.currency && !statement.stripePaymentLinkUrl) {
-      const lineItems = [];
-      for (const sale of payable) lineItems.push(await workLineItem(sale, label));
-      const link = await getStripeClientForSale({
-        stripeMode: statement.stripeMode,
-        stripeAccountId: statement.stripeAccountId,
-      }).paymentLinks.create({
-        line_items: lineItems,
-        custom_text: { submit: { message: label } },
+    const lineItems = [];
+    for (const sale of owed) lineItems.push(await workLineItem(sale, label));
+    const link = await getStripeClientForSale({
+      stripeMode: statement.stripeMode,
+      stripeAccountId: statement.stripeAccountId,
+    }).paymentLinks.create({
+      line_items: lineItems,
+      custom_text: { submit: { message: label } },
+      metadata: { statementId: statement.id },
+      payment_intent_data: {
+        description: `Statement ${statementLabelDate(statement)} · ${statement.customer.name}`,
         metadata: { statementId: statement.id },
-        payment_intent_data: {
-          description: `Statement ${statementLabelDate(statement)} · ${statement.customer.name}`,
-          metadata: { statementId: statement.id },
-        },
-      });
-      await db.statement.update({
-        where: { id: statement.id },
-        data: { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
-      });
-    }
-
-    const needWorkLinks = payable.length >= 2 || !statement.stripeMode;
-    if (needWorkLinks) {
-      for (const sale of payable) {
-        const title = saleTitle(sale.artwork.catalogueName, sale.chargeKind);
-        await ensureWorkPaymentLink(sale, label, `Statement ${statementLabelDate(statement)} · ${title}`);
-      }
-    }
+      },
+    });
+    await db.statement.update({
+      where: { id: statement.id },
+      data: { stripePaymentLinkId: link.id, stripePaymentLinkUrl: link.url },
+    });
     return { ok: true };
   } catch (err) {
     return { ok: false, error: stripeErrorMessage(err) };
   }
 }
 
-// A statement's Pay all, from Stripe's webhook: pays each listed work
+// A statement's payment link paid, from Stripe's webhook: pays each listed work
 // still owed in full. Retrieved from the statement's own Stripe account,
 // so a PaymentIntent from anywhere else isn't found; a repeat for the
 // same PaymentIntent is ignored.
@@ -276,10 +259,10 @@ function recipientFor(statement: LoadedStatement): { ok: true; to: string } | { 
 }
 
 // The default subject and message — still editable before sending
-// (StatementModal): each work still owed with its amount, invoice and
-// payment link, then the link for them all.
+// (StatementModal): each work still owed with its invoice and amount,
+// then the one link to pay the whole statement.
 export async function getStatementEmailDraft(statementId: string): Promise<StatementEmailDraft | { error: string }> {
-  await ensureStatementLinks(statementId);
+  await ensureStatementLink(statementId);
   const statement = await loadStatement(statementId);
   if (!statement) return { error: "Statement not found." };
   if (statement.closedAt) return { error: "A newer statement has replaced this one." };
@@ -287,8 +270,7 @@ export async function getStatementEmailDraft(statementId: string): Promise<State
   if (!recipient.ok) return { error: recipient.error };
 
   const owed = statement.lines.map((l) => l.purchase).filter((s) => s.status === "ACTIVE");
-  const payable = owed.filter(isOwed);
-  const payAll = statement.stripePaymentLinkUrl;
+  const payLink = statement.stripePaymentLinkUrl;
   const money = (s: StatementSale) => `${currencySymbol(s.currency)}${saleBreakdown(s).balance.toFixed(2)}`;
   const totals = owedTotals(statement)
     .map((t) => `${currencySymbol(t.currency)}${t.amount.toFixed(2)}`)
@@ -297,11 +279,7 @@ export async function getStatementEmailDraft(statementId: string): Promise<State
   const workLines = owed.map((s) => {
     const invoiceNumber = liveInvoiceNumber(s);
     const where = invoiceNumber ? `invoice ${formatInvoiceNumber(invoiceNumber)}` : "not yet invoiced";
-    const line = `- ${saleTitle(s.artwork.catalogueName, s.chargeKind)} (${where}, ${money(s)})`;
-    if (s.stripeSubscriptionScheduleId) return `${line}: being paid by instalments`;
-    // A single work left is paid with Pay all.
-    const url = s.stripePaymentLinkUrl ?? (payable.length === 1 ? payAll : null);
-    return url ? `${line}: ${url}` : line;
+    return `- ${saleTitle(s.artwork.catalogueName, s.chargeKind)} (${where}): ${money(s)}`;
   });
 
   const body = [
@@ -309,10 +287,11 @@ export async function getStatementEmailDraft(statementId: string): Promise<State
     "",
     `Please find attached our statement of works sold at ${statement.customer.name} and still to be paid for — ${owed.length} work${owed.length === 1 ? "" : "s"}, ${totals} in all.`,
     "",
-    "Payment by transfer to our account on the statement, or by secure payment link — for each work as its buyer pays you, or all at once:",
-    "",
     ...workLines,
-    ...(payable.length > 1 && payAll ? ["", `- All ${payable.length} works: ${payAll}`] : []),
+    "",
+    payLink
+      ? `Payment by transfer to our account on the statement, or by this secure payment link for the whole statement: ${payLink}`
+      : "Payment by transfer to our account on the statement.",
     "",
     "Many thanks,",
     statement.artist.name,
