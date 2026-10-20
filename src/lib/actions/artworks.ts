@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { retireArtworkInvoiceLinks, saleInvoicesInclude, toSaleInvoices } from "@/lib/invoices";
+import { retireArtworkPaymentLinks, saleInvoicesInclude, toSaleInvoices } from "@/lib/invoices";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
@@ -605,7 +605,7 @@ export async function updateCatalogue(
   // rename retires the links of its unpaid invoices; a fresh one is made
   // with the new name.
   if (catalogueName && current && catalogueName !== current.catalogueName) {
-    await retireArtworkInvoiceLinks(id);
+    await retireArtworkPaymentLinks(id);
   }
 }
 
@@ -658,7 +658,7 @@ export async function updateArtworkName(
   if (current.catalogueName === catalogueName) return { ok: true, catalogueName };
 
   await db.artwork.update({ where: { id: artworkId }, data: { catalogueName } });
-  await retireArtworkInvoiceLinks(artworkId);
+  await retireArtworkPaymentLinks(artworkId);
   return { ok: true, catalogueName };
 }
 

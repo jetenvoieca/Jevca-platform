@@ -4,10 +4,10 @@ import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { generateInvoicePdf } from "./invoice";
 import { artistFromAddress } from "@/lib/email";
-import { saleTitle } from "@/lib/saleMath";
+import { saleBreakdown, saleTitle } from "@/lib/saleMath";
 import { invoiceParty, loadInvoice, type LoadedInvoice } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
-import { createInvoicePaymentLink } from "./invoices";
+import { ensureInvoicePaymentLinks } from "./invoices";
 
 // Emailing an invoice, or its receipt once paid (Part Three, 2026-09-01;
 // by invoice since 2026-10-14, so one email covers every sale on it).
@@ -44,16 +44,17 @@ function recipientFor(invoice: LoadedInvoice): { ok: true; to: string } | { ok: 
 
 // The default subject and message, filled from the invoice — still fully
 // editable before sending (InvoiceModal). An unpaid invoice asks
-// for payment (mentioning its payment link if it has one, since it's as
-// often settled by bank transfer); a paid one thanks them and encloses
-// the receipt, with no payment request at all. A gallery is
+// for payment (mentioning its payment links if it has them, since it's as
+// often settled by bank transfer) — a gallery's with a link for each work
+// still owed as well as Pay all (2026-10-20); a paid one thanks them and
+// encloses the receipt, with no payment request at all. A gallery is
 // congratulated on its sale(s); anyone else thanked for their purchase.
 export async function getInvoiceEmailDraft(invoiceId: string): Promise<InvoiceEmailDraft | { error: string }> {
-  // An unpaid invoice's payment link is made when it's produced; if that
-  // didn't work then (or it was retired since, e.g. an artwork renamed),
-  // it's made now so the email can include it. A failure just leaves the
-  // email without a link.
-  await createInvoicePaymentLink(invoiceId);
+  // An unpaid invoice's payment links are made when it's produced; if
+  // that didn't work then (or they were retired since — a work paid, an
+  // artwork renamed), they're made now so the email can include them. A
+  // failure just leaves the email without them.
+  await ensureInvoicePaymentLinks(invoiceId);
   const invoice = await loadInvoice(invoiceId);
   if (!invoice) return { error: "Invoice not found." };
   const recipient = recipientFor(invoice);
@@ -88,13 +89,7 @@ export async function getInvoiceEmailDraft(invoiceId: string): Promise<InvoiceEm
 
   const middle = isPaid
     ? ["Thank you for the payment — I enclose our receipt for your records."]
-    : [
-        "I enclose our invoice for your attention.",
-        "",
-        invoice.stripePaymentLinkUrl
-          ? `Payment by transfer to our account on the invoice, or by this secure payment link: ${invoice.stripePaymentLinkUrl}`
-          : "Payment by transfer to our account on the invoice.",
-      ];
+    : ["I enclose our invoice for your attention.", "", ...paymentLines(invoice, sym)];
 
   const body = [
     `Dear ${party.firstName || "there"},`,
@@ -113,6 +108,33 @@ export async function getInvoiceEmailDraft(invoiceId: string): Promise<InvoiceEm
       : `Sale "${saleTitle(first.artwork.catalogueName, first.chargeKind)}"`;
 
   return { to: recipient.to, subject, body };
+}
+
+// How an unpaid invoice can be paid. A gallery's invoice for several
+// works lists each with its own secure link (or "paid"), then one for
+// everything still owed, so it can pay each work as its buyer pays it;
+// any other invoice has one link.
+function paymentLines(invoice: LoadedInvoice, sym: string): string[] {
+  const transfer = "Payment by transfer to our account on the invoice";
+  const sales = invoice.lines.map((l) => l.purchase).filter((s) => s.invoiceId === invoice.id);
+  const payAll = invoice.stripePaymentLinkUrl;
+  if (!invoiceParty(sales[0]).isGallery || sales.length < 2) {
+    return [payAll ? `${transfer}, or by this secure payment link: ${payAll}` : `${transfer}.`];
+  }
+  const owed = sales.filter((s) => s.status === "ACTIVE");
+  return [
+    `${transfer}, or by secure payment link — for each work as it's paid for, or all at once:`,
+    "",
+    ...sales.map((s) => {
+      const title = saleTitle(s.artwork.catalogueName, s.chargeKind);
+      if (s.status !== "ACTIVE") return `- ${title}: paid, thank you`;
+      // The last work still owed is paid with Pay all.
+      const url = s.stripePaymentLinkUrl ?? (owed.length === 1 ? payAll : null);
+      const line = `- ${title} (${sym}${saleBreakdown(s).balance.toFixed(2)})`;
+      return url ? `${line}: ${url}` : line;
+    }),
+    ...(owed.length > 1 && payAll ? ["", `- All ${owed.length} works still owed: ${payAll}`] : []),
+  ];
 }
 
 // Sends it, with the invoice (or receipt) PDF attached. The recipient is

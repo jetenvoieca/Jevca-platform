@@ -112,10 +112,9 @@ export function buyerKey(sale: {
   ].join("|");
 }
 
-// Why a sale can't be changed or paid on its own right now: it's on an
-// invoice that hasn't been paid. Null when it's free. (Cancelling or
-// deleting the sale cancels the invoice instead — see
-// cancelUnpaidInvoicesOf.)
+// Why a sale's price can't be changed right now: it's on an invoice that
+// hasn't been paid. Null when it's free. (Cancelling or deleting the sale
+// cancels the invoice instead — see cancelUnpaidInvoicesOf.)
 export async function invoiceLockError(invoiceId: string | null): Promise<string | null> {
   if (!invoiceId) return null;
   const invoice = await db.invoice.findUnique({
@@ -124,6 +123,54 @@ export async function invoiceLockError(invoiceId: string | null): Promise<string
   });
   if (!invoice || invoice.paidAt) return null;
   return `This sale is on invoice ${formatInvoiceNumber(invoice.number)} — cancel the invoice first.`;
+}
+
+// How a sale can be paid on its own (Take Card, Record Payment), given
+// the invoice it's on (2026-10-20, direct request — galleries pay for
+// each work as its buyer pays them):
+//   - "free": not on an unpaid invoice — any amount up to its balance;
+//   - "inFull": on a gallery's unpaid invoice — this work, in full, by
+//     itself; the invoice is paid once every work on it is;
+//   - "locked": on any other unpaid invoice (an Own location's, which can
+//     carry framing and delivery for the whole invoice), paid only as a
+//     whole — `error` says so.
+export type SalePaymentRule =
+  | { kind: "free" }
+  | { kind: "inFull"; invoiceNumber: string }
+  | { kind: "locked"; error: string };
+
+export async function salePaymentRule(invoiceId: string | null): Promise<SalePaymentRule> {
+  if (!invoiceId) return { kind: "free" };
+  const invoice = await db.invoice.findUnique({
+    where: { id: invoiceId },
+    select: {
+      number: true,
+      paidAt: true,
+      cancelledAt: true,
+      sales: { take: 1, select: { customer: { select: { kind: true } } } },
+    },
+  });
+  if (!invoice || invoice.paidAt || invoice.cancelledAt) return { kind: "free" };
+  const number = formatInvoiceNumber(invoice.number);
+  if (invoice.sales[0]?.customer?.kind === "GALLERY") return { kind: "inFull", invoiceNumber: number };
+  return { kind: "locked", error: `This sale is on invoice ${number} — it's paid as a whole, from the invoice.` };
+}
+
+// Switches off a sale's own payment link (see Purchase.stripePaymentLinkId)
+// and clears it: the sale was paid, its balance changed, or it was
+// cancelled or deleted. A fresh one is made when it's next needed.
+export async function retireSalePaymentLink(sale: {
+  id: string;
+  stripeMode: "TEST" | "LIVE";
+  stripeAccountId: string | null;
+  stripePaymentLinkId: string | null;
+}) {
+  if (!sale.stripePaymentLinkId) return;
+  await deactivatePaymentLink(sale, sale.stripePaymentLinkId);
+  await db.purchase.updateMany({
+    where: { id: sale.id },
+    data: { stripePaymentLinkId: null, stripePaymentLinkUrl: null },
+  });
 }
 
 // Cancels an unpaid invoice: kept on record, marked Cancelled (its lines
@@ -177,10 +224,16 @@ export async function retireInvoicePaymentLink(invoice: {
 }
 
 // Every unpaid invoice with one of this artwork's sales on it loses its
-// payment link — used when the artwork is renamed, since the name is
-// fixed inside Stripe when a link is made. A fresh link is made when the
-// invoice's email is next drafted.
-export async function retireArtworkInvoiceLinks(artworkId: string) {
+// payment link, and so does each of the artwork's open sales — used when
+// the artwork is renamed, since the name is fixed inside Stripe when a
+// link is made. Fresh links are made when they're next needed.
+export async function retireArtworkPaymentLinks(artworkId: string) {
+  const sales = await db.purchase.findMany({
+    where: { artworkId, stripePaymentLinkId: { not: null } },
+    select: { id: true, stripeMode: true, stripeAccountId: true, stripePaymentLinkId: true },
+  });
+  for (const sale of sales) await retireSalePaymentLink(sale);
+
   const invoices = await db.invoice.findMany({
     where: {
       paidAt: null,

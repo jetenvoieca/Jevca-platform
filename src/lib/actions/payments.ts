@@ -22,7 +22,7 @@ import {
 } from "@/lib/stripe";
 import { APP_URL } from "@/lib/appUrl";
 import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
-import { invoiceLockError, cancelUnpaidInvoicesOf } from "@/lib/invoices";
+import { invoiceLockError, cancelUnpaidInvoicesOf, retireSalePaymentLink, salePaymentRule } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import { isCurrency } from "@/lib/currencies";
 
@@ -581,8 +581,13 @@ export async function createGalleryCardIntent(
       relationLoadStrategy: "query",
     });
     if (!purchase) return { ok: false, error: "Sale not found." };
-    const locked = await invoiceLockError(purchase.invoiceId);
-    if (locked) return { ok: false, error: locked };
+    // On a gallery's invoice, a work is paid in full by itself (see
+    // salePaymentRule).
+    const rule = await salePaymentRule(purchase.invoiceId);
+    if (rule.kind === "locked") return { ok: false, error: rule.error };
+    if (rule.kind === "inFull" && instalments !== undefined) {
+      return { ok: false, error: `This sale is on invoice ${rule.invoiceNumber}, so it's paid in full.` };
+    }
 
     const due = amountToCollect(purchase, instalments);
     if (!due.ok) return due;
@@ -704,6 +709,8 @@ export async function updateGallerySaleAmount(
           }),
         ]),
   ]);
+  // Its payment link charges the old amount.
+  await retireSalePaymentLink(purchase);
 
   return { ok: true };
 }
@@ -866,6 +873,7 @@ export async function deleteGallerySale(
   }
 
   await cancelUnpaidInvoicesOf([purchase, ...purchase.charges]);
+  for (const sale of [purchase, ...purchase.charges]) await retireSalePaymentLink(sale);
 
   await db.purchase.delete({ where: { id: purchaseId } });
   await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
@@ -930,8 +938,8 @@ export async function recordGalleryPayment(
   if (!purchase) return { ok: false, error: "Sale not found." };
   if (purchase.channel !== "GALLERY") return { ok: false, error: "This isn't a consigned sale." };
   if (purchase.status !== "ACTIVE") return { ok: false, error: "This sale has already been paid." };
-  const locked = await invoiceLockError(purchase.invoiceId);
-  if (locked) return { ok: false, error: locked };
+  const rule = await salePaymentRule(purchase.invoiceId);
+  if (rule.kind === "locked") return { ok: false, error: rule.error };
 
   const paid = readPaidDetails(formData);
   if ("error" in paid) return { ok: false, error: paid.error };
@@ -941,6 +949,10 @@ export async function recordGalleryPayment(
   const { balance } = saleBreakdown(purchase);
   if (Math.round(amount * 100) > Math.round(balance * 100)) {
     return { ok: false, error: `That's more than the ${balance.toFixed(2)} still due.` };
+  }
+  // On a gallery's invoice, a work is paid in full (see salePaymentRule).
+  if (rule.kind === "inFull" && Math.round(amount * 100) !== Math.round(balance * 100)) {
+    return { ok: false, error: `This sale is on invoice ${rule.invoiceNumber}, so it's paid in full: ${balance.toFixed(2)}.` };
   }
 
   await db.payment.create({
@@ -955,6 +967,8 @@ export async function recordGalleryPayment(
     },
   });
 
+  // Its payment link charges the balance as it was.
+  await retireSalePaymentLink(purchase);
   await completeIfSettled(purchase.id, paid.paidDate);
   return { ok: true };
 }
@@ -1051,6 +1065,7 @@ export async function abandonPurchase(
     select: { id: true, invoiceId: true },
   });
   await cancelUnpaidInvoicesOf([purchase, ...openCharges]);
+  await retireSalePaymentLink(purchase);
   for (const charge of openCharges) await abandonPurchase(charge.id, siteId);
 
   try {
@@ -1441,6 +1456,8 @@ async function recordGalleryStripePayment(payment: {
       stripePaymentIntentId: payment.paymentIntentId,
     },
   });
+  // Its payment link was for the balance as it stood.
+  await retireSalePaymentLink(purchase);
 
   const count = payment.instalments;
   if (count && count >= 2 && payment.customerId) {

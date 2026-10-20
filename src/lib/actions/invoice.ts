@@ -242,7 +242,18 @@ export async function generateInvoicePdf(
 
     for (const { sale, b } of amounts) {
       ensureSpace(20);
-      const title = fit(saleTitle(sale.artwork.catalogueName, sale.chargeKind), colSale - left - 80, font, 10);
+      // A work already paid on a gallery's unpaid invoice — paid work by
+      // work (2026-10-20) — says so beside its name.
+      const paidNote =
+        !isPaid && sale.status === "COMPLETED" && sale.closedAt
+          ? ` · ${t.paidOn} ${sale.closedAt.toLocaleDateString(dateLocale)}`
+          : "";
+      const title = fit(
+        `${saleTitle(sale.artwork.catalogueName, sale.chargeKind)}${paidNote}`,
+        colSale - left - 80,
+        font,
+        10
+      );
       page.drawText(title, { x: left, y, size: 10, font });
       textRightAt(colSale, fmt(b.salePrice));
       textRightAt(colCommission, b.commission ? `-${fmt(b.commission)}` : "—");

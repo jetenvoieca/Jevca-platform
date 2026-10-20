@@ -1692,11 +1692,22 @@ model Purchase {
   // The invoice this sale is on now (2026-10-14) — null until one is
   // produced, and again if that invoice is cancelled. An invoice can
   // cover several sales; see Invoice below. While the invoice is unpaid,
-  // the sale's price, extras and payments are locked.
+  // the sale's price and extras are locked, and its payments too unless
+  // it's a gallery's invoice, which is paid work by work (2026-10-20).
   invoiceId String?
   invoice   Invoice?      @relation(fields: [invoiceId], references: [id], onDelete: SetNull)
   // Every invoice the sale has been on, cancelled ones included.
   invoiceLines InvoiceLine[]
+
+  // This work's own payment link (2026-10-20, direct request — galleries
+  // pay for each work as its buyer pays them): a persistent Stripe Payment
+  // Link for the sale's whole balance, listed beside the invoice's Pay all
+  // link. Made when a gallery invoice's email is drafted; switched off
+  // whenever the balance changes (a payment, a price edit), the sale is
+  // cancelled or deleted, or its artwork renamed. See
+  // createSalePaymentLink in lib/actions/invoices.ts.
+  stripePaymentLinkId  String?
+  stripePaymentLinkUrl String?
 
   // When the Certificate of Authenticity was last emailed, and to whom
   // (2026-09-03). Re-sending overwrites both.

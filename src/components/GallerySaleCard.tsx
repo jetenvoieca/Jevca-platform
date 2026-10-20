@@ -388,11 +388,13 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
   const isCancelled = purchase.status === "ABANDONED";
   const isCharge = purchase.chargeKind !== null;
   const isLine = view === "line";
-  // On an unpaid invoice, Take Card / Record Payment pay the whole
-  // invoice (no part payment of an invoice; the invoice window has no
-  // payment buttons).
+  // On an unpaid invoice, Take Card / Record Payment pay this work in full
+  // on a gallery's invoice (paid work by work, 2026-10-20), and the whole
+  // invoice on any other (the invoice window has no payment buttons).
   const invoice = liveInvoice(purchase);
-  const payingInvoice = invoice && !invoice.paidAt ? invoice : null;
+  const unpaidInvoice = invoice && !invoice.paidAt ? invoice : null;
+  const payingWork = unpaidInvoice && purchase.location?.kind === "GALLERY" ? unpaidInvoice : null;
+  const payingInvoice = unpaidInvoice && !payingWork ? unpaidInvoice : null;
   const liveCharges = purchase.charges.filter((c) => c.status !== "ABANDONED");
   const onInstalmentPlan = purchase.type === "INSTALMENTS";
   const balance = isPaid ? 0 : saleBreakdown(purchase).balance;
@@ -436,6 +438,9 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
       });
     } else if (kind === "payment") {
       setPayAmount(balance.toFixed(2));
+    } else if (payingWork) {
+      // This work in full, so the card form is set up straight away.
+      handleChooseCard("full");
     } else if (!instalmentCount) {
       getGalleryInstalmentDefault(purchase.id).then((n) => setInstalmentCount(String(n)));
     }
@@ -588,7 +593,9 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
                         }`
                       : ""
                   }`
-                : DRAWER_TITLE[drawerKind]}
+                : payingWork
+                  ? `This work in full — ${money(balance)} (invoice ${formatInvoiceNumber(payingWork.number)})`
+                  : DRAWER_TITLE[drawerKind]}
             </p>
 
             {drawerKind === "payment" && (
@@ -601,8 +608,9 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
                   aria-label="Date"
                   className={`flex-1 ${drawerInputCls}`}
                 />
-                {/* An invoice is paid in full, so no amount to type. */}
-                {!payingInvoice && (
+                {/* A whole invoice, or a work on a gallery's invoice, is
+                    paid in full, so no amount to type. */}
+                {!unpaidInvoice && (
                   <input
                     type="text"
                     inputMode="decimal"
@@ -669,15 +677,19 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
                 </p>
               ) : (
                 <>
-                  <AmountOptions
-                    balanceLabel={money(balance)}
-                    perInstalmentLabel={perInstalment !== null ? money(perInstalment) : "—"}
-                    instalmentCount={instalmentCount}
-                    onCountChange={handleCountChange}
-                    selected={cardOption}
-                    onSelect={handleChooseCard}
-                    disabled={isPending}
-                  />
+                  {/* A work on a gallery's invoice is paid in full — no
+                      choice of amount. */}
+                  {!payingWork && (
+                    <AmountOptions
+                      balanceLabel={money(balance)}
+                      perInstalmentLabel={perInstalment !== null ? money(perInstalment) : "—"}
+                      instalmentCount={instalmentCount}
+                      onCountChange={handleCountChange}
+                      selected={cardOption}
+                      onSelect={handleChooseCard}
+                      disabled={isPending}
+                    />
+                  )}
                   {cardOption && (
                     <div className="mt-4">
                       {cardIntent ? (
