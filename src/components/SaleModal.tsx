@@ -4,7 +4,8 @@ import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
-import { deleteGallerySale, forceDeleteCompletedSale } from "@/lib/actions/payments";
+import { deleteGallerySale, forceDeleteCompletedSale, type PurchaseDetail } from "@/lib/actions/payments";
+import { invoiceCancelNote } from "@/lib/saleInvoice";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import PurchasePanel from "@/components/PurchasePanel";
 import SaleDetailCard from "@/components/SaleDetailCard";
@@ -102,16 +103,16 @@ export default function SaleModal({
     router.refresh();
   };
 
-  const handleDeleteSale = (purchaseId: string, siteId: string) => {
+  const handleDeleteSale = (purchase: PurchaseDetail, siteId: string) => {
     setPendingConfirm({
       title: "Delete this sale permanently?",
-      message: "This removes the sale entirely — it cannot be undone.",
+      message: `This removes the sale entirely — it cannot be undone.${invoiceCancelNote(purchase)}`,
       confirmLabel: "Delete permanently",
       danger: true,
       onConfirm: () => {
         setPendingConfirm(null);
         startTransition(async () => {
-          const res = await deleteGallerySale(purchaseId, siteId);
+          const res = await deleteGallerySale(purchase.id, siteId);
           if (!res.ok) {
             alert(res.error);
             return;
@@ -226,7 +227,7 @@ export default function SaleModal({
                     artworkMedium={selectedDetail.medium}
                     onDelete={
                       selectedPurchase.status !== "COMPLETED"
-                        ? () => handleDeleteSale(selectedPurchase.id, target.siteId!)
+                        ? () => handleDeleteSale(selectedPurchase, target.siteId!)
                         : undefined
                     }
                     onForceDelete={

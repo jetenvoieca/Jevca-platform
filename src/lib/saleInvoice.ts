@@ -1,5 +1,6 @@
 import { invoiceForSale } from "@/lib/actions/invoices";
 import type { PurchaseDetail } from "@/lib/actions/payments";
+import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 
 // Which invoice to open for a sale (2026-10-14) — its current invoice,
 // or (for a cancelled sale) the last one it was on; otherwise one is
@@ -21,4 +22,18 @@ export async function invoiceToOpen(
 // if it was ever invoiced.
 export function hasInvoiceToOpen(sale: Pick<PurchaseDetail, "status" | "invoices">): boolean {
   return sale.status !== "ABANDONED" || sale.invoices.length > 0;
+}
+
+// The line a Cancel / Delete sale confirmation adds when the sale is on
+// an unpaid invoice (2026-10-20), which cancelling or deleting it cancels
+// too — see cancelUnpaidInvoicesOf. Empty when it isn't.
+export function invoiceCancelNote(sale: Pick<PurchaseDetail, "invoices">): string {
+  const live = sale.invoices.find((i) => !i.cancelledAt && !i.paidAt);
+  if (!live) return "";
+  const otherCount = live.saleCount - 1;
+  const others =
+    otherCount === 0
+      ? ""
+      : ` Its other ${otherCount === 1 ? "sale is" : `${otherCount} sales are`} freed, ready to invoice again.`;
+  return ` This also cancels invoice ${formatInvoiceNumber(live.number)} and switches off its payment link.${others}`;
 }

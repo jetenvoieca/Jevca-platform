@@ -18,7 +18,7 @@ import StripeCardForm from "@/components/StripeCardForm";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 import InvoiceModal from "@/components/InvoiceModal";
-import { hasInvoiceToOpen, invoiceToOpen } from "@/lib/saleInvoice";
+import { hasInvoiceToOpen, invoiceCancelNote, invoiceToOpen } from "@/lib/saleInvoice";
 
 function formatMoney(amount: string, currency: string) {
   const n = parseFloat(amount);
@@ -92,7 +92,7 @@ export default function PurchasePanel({
   const handleAbandon = () => {
     setPendingConfirm({
       title: "Cancel this sale?",
-      message: "It'll be kept in the history below, marked as abandoned.",
+      message: `It'll be kept in the history below, marked as abandoned.${invoiceCancelNote(activePurchase)}`,
       confirmLabel: "Cancel sale",
       danger: true,
       onConfirm: () => {
@@ -114,7 +114,7 @@ export default function PurchasePanel({
   const handleDeleteHistoryItem = (p: PurchaseDetail) => {
     setPendingConfirm({
       title: "Delete this sale permanently?",
-      message: "This removes the sale entirely, not just from this list — it cannot be undone.",
+      message: `This removes the sale entirely, not just from this list — it cannot be undone.${invoiceCancelNote(p)}`,
       confirmLabel: "Delete permanently",
       danger: true,
       onConfirm: () => {
@@ -161,7 +161,7 @@ export default function PurchasePanel({
   const handleDeleteActiveSale = () => {
     setPendingConfirm({
       title: "Delete this sale permanently?",
-      message: "This removes the sale entirely — it cannot be undone.",
+      message: `This removes the sale entirely — it cannot be undone.${invoiceCancelNote(activePurchase)}`,
       confirmLabel: "Delete permanently",
       danger: true,
       onConfirm: () => {

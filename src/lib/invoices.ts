@@ -112,8 +112,10 @@ export function buyerKey(sale: {
   ].join("|");
 }
 
-// Why a sale can't be changed, paid or cancelled on its own right now:
-// it's on an invoice that hasn't been paid. Null when it's free.
+// Why a sale can't be changed or paid on its own right now: it's on an
+// invoice that hasn't been paid. Null when it's free. (Cancelling or
+// deleting the sale cancels the invoice instead — see
+// cancelUnpaidInvoicesOf.)
 export async function invoiceLockError(invoiceId: string | null): Promise<string | null> {
   if (!invoiceId) return null;
   const invoice = await db.invoice.findUnique({
@@ -122,6 +124,39 @@ export async function invoiceLockError(invoiceId: string | null): Promise<string
   });
   if (!invoice || invoice.paidAt) return null;
   return `This sale is on invoice ${formatInvoiceNumber(invoice.number)} — cancel the invoice first.`;
+}
+
+// Cancels an unpaid invoice: kept on record, marked Cancelled (its lines
+// and costs kept), its sales freed and its payment link switched off.
+// Shared by Cancel invoice and by cancelling or deleting one of its
+// sales. Does nothing to a paid or already cancelled invoice.
+export async function cancelUnpaidInvoice(invoiceId: string): Promise<void> {
+  const invoice = await db.invoice.findUnique({
+    where: { id: invoiceId },
+    select: {
+      id: true,
+      paidAt: true,
+      cancelledAt: true,
+      stripeMode: true,
+      stripeAccountId: true,
+      stripePaymentLinkId: true,
+    },
+  });
+  if (!invoice || invoice.paidAt || invoice.cancelledAt) return;
+  await db.$transaction([
+    db.invoice.update({ where: { id: invoice.id }, data: { cancelledAt: new Date() } }),
+    db.purchase.updateMany({ where: { invoiceId: invoice.id }, data: { invoiceId: null } }),
+  ]);
+  await retireInvoicePaymentLink(invoice);
+}
+
+// Cancel Sale / Delete Sale on a sale that's on an unpaid invoice
+// (2026-10-20, direct request — was "cancel the invoice first"): the
+// whole invoice is cancelled, freeing any other sales on it to be
+// invoiced again. Takes the sale and its framing/delivery charges.
+export async function cancelUnpaidInvoicesOf(sales: { invoiceId: string | null }[]): Promise<void> {
+  const ids = new Set(sales.map((s) => s.invoiceId).filter((id): id is string => id !== null));
+  for (const id of ids) await cancelUnpaidInvoice(id);
 }
 
 // Switches off an invoice's payment link in Stripe (it's been paid, or

@@ -7,10 +7,10 @@ import type { CardEntry } from "@/lib/actions/payments";
 import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
 import {
   buyerKey,
+  cancelUnpaidInvoice,
   invoiceBalance,
   invoiceExtras,
   loadInvoice,
-  retireInvoicePaymentLink,
   type LoadedInvoice,
 } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
@@ -486,10 +486,6 @@ export async function cancelInvoice(invoiceId: string): Promise<Result> {
   if (invoice.cancelledAt) return { ok: false, error: "This invoice was already cancelled." };
   if (invoice.paidAt) return { ok: false, error: "This invoice has been paid, so it can't be cancelled." };
 
-  await db.$transaction([
-    db.invoice.update({ where: { id: invoice.id }, data: { cancelledAt: new Date() } }),
-    db.purchase.updateMany({ where: { invoiceId: invoice.id }, data: { invoiceId: null } }),
-  ]);
-  await retireInvoicePaymentLink(invoice);
+  await cancelUnpaidInvoice(invoice.id);
   return { ok: true };
 }

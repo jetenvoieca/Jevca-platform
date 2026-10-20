@@ -33,6 +33,7 @@ import InvoiceModal from "@/components/InvoiceModal";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 import StripeCardForm from "@/components/StripeCardForm";
 import { ACTION_BUTTON_LOOK } from "@/components/ActionPanel";
+import { invoiceCancelNote } from "@/lib/saleInvoice";
 
 // Every action-panel button: the shared outlined look (ActionPanel.tsx).
 const actionButtonCls = `rounded-md px-3 py-2 ${ACTION_BUTTON_LOOK}`;
@@ -516,7 +517,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
       title: `Cancel this ${saleNoun}?`,
       message: isPaid
         ? `This ${saleNoun} has been paid. Cancelling keeps it on record, marked as cancelled — any refund has to be made outside the app.`
-        : `It'll be kept in the history, marked as cancelled.`,
+        : `It'll be kept in the history, marked as cancelled.${invoiceCancelNote(purchase)}`,
       confirmLabel: `Cancel ${saleNoun}`,
       danger: true,
       onConfirm: () => {
@@ -536,7 +537,7 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
       liveCharges.length > 0 ? " Its framing/delivery charges are deleted with it." : "";
     const message = isPaid
       ? `This ${saleNoun} has been paid. Deleting removes it and its payments from your records entirely, permanently — including from your accounts. Only do this for test or clearly wrong data, never for a real transaction.${chargesNote}`
-      : `This removes the ${saleNoun} entirely — it cannot be undone.${chargesNote}`;
+      : `This removes the ${saleNoun} entirely — it cannot be undone.${chargesNote}${invoiceCancelNote(purchase)}`;
     setPendingConfirm({
       title: `Delete this ${saleNoun} permanently?`,
       message,

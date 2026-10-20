@@ -22,7 +22,7 @@ import {
 } from "@/lib/stripe";
 import { APP_URL } from "@/lib/appUrl";
 import { completeIfSettled, nextSequence, readPaidDetails } from "@/lib/salePayments";
-import { invoiceLockError } from "@/lib/invoices";
+import { invoiceLockError, cancelUnpaidInvoicesOf } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import { isCurrency } from "@/lib/currencies";
 
@@ -845,7 +845,9 @@ export async function recordPastSale(
 //
 // Any payment link on the sale, or on its framing/delivery charges
 // (deleted with it), is switched off in Stripe first (2026-09-25) — a
-// deleted sale must not stay payable through a link already sent.
+// deleted sale must not stay payable through a link already sent. An
+// unpaid invoice it's on is cancelled first, freeing any other sales on
+// it (2026-10-20, see cancelUnpaidInvoicesOf).
 export async function deleteGallerySale(
   purchaseId: string,
   siteId: string,
@@ -863,10 +865,7 @@ export async function deleteGallerySale(
     };
   }
 
-  for (const sale of [purchase, ...purchase.charges]) {
-    const locked = await invoiceLockError(sale.invoiceId);
-    if (locked) return { ok: false, error: locked };
-  }
+  await cancelUnpaidInvoicesOf([purchase, ...purchase.charges]);
 
   await db.purchase.delete({ where: { id: purchaseId } });
   await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
@@ -1044,16 +1043,14 @@ export async function abandonPurchase(
   if (!purchase) return { ok: false, error: "Purchase not found." };
   // A cancelled sale takes its still-open framing/delivery charges with
   // it (paid ones stay, as the real records they are), and nothing about
-  // it should stay payable through an old link. Neither it nor a charge
-  // can be on an unpaid invoice — that's cancelled first.
+  // it should stay payable through an old link: an unpaid invoice it or
+  // a charge is on is cancelled, freeing any other sales on it
+  // (2026-10-20, see cancelUnpaidInvoicesOf).
   const openCharges = await db.purchase.findMany({
     where: { parentPurchaseId: purchase.id, status: "ACTIVE" },
     select: { id: true, invoiceId: true },
   });
-  for (const sale of [purchase, ...openCharges]) {
-    const locked = await invoiceLockError(sale.invoiceId);
-    if (locked) return { ok: false, error: locked };
-  }
+  await cancelUnpaidInvoicesOf([purchase, ...openCharges]);
   for (const charge of openCharges) await abandonPurchase(charge.id, siteId);
 
   try {
