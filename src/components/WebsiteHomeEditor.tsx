@@ -57,8 +57,18 @@ export default function WebsiteHomeEditor({
 
   // ---- Home fields ----
 
+  // A problem saving the address, or with the contact form's robot
+  // check, shows under the fields.
   function saveHome(next: WebsiteHomeData) {
-    run(() => updateWebsiteHome(next));
+    setError(null);
+    startSaving(async () => {
+      try {
+        const res = await updateWebsiteHome(next);
+        if (res.error) setError(res.error);
+      } catch {
+        setError("Couldn't save — please try again.");
+      }
+    });
   }
 
   async function handleImageFile(file: File) {
@@ -209,7 +219,7 @@ export default function WebsiteHomeEditor({
         )}
       </div>
 
-      {/* Wordmark + email */}
+      {/* Wordmark + the contact form's address */}
       <div>
         <label className={labelCls}>Wordmark</label>
         <input
@@ -220,13 +230,18 @@ export default function WebsiteHomeEditor({
         />
       </div>
       <div>
-        <label className={labelCls}>Email</label>
+        <label className={labelCls}>Contact form sends to</label>
         <input
+          type="email"
+          placeholder="name@jetenvoieca.com"
           value={home.email ?? ""}
           onChange={(e) => setHome({ ...home, email: e.target.value })}
           onBlur={() => saveHome(home)}
           className={inputCls}
         />
+        <p className="mt-1 text-xs text-neutral-400">
+          Not shown on the site. Messages arrive in Inbox → Business. Empty = no Contact.
+        </p>
       </div>
 
       {/* Menu items */}

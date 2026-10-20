@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { APP_URL } from "@/lib/appUrl";
 import { decryptSecret, encryptSecret } from "@/lib/secretBox";
+import { BUSINESS_WEBSITE_DOMAIN } from "@/lib/businessWebsite";
 
 // Cloudflare Turnstile (2026-10-10, Marketing step 5) — checks that a
 // website sign-up comes from a person, not a robot, usually without the
@@ -11,11 +12,12 @@ import { decryptSecret, encryptSecret } from "@/lib/secretBox";
 // covers its subdomains, so "example.com" covers "www.example.com"); the
 // free plan allows 10 domains per widget and 20 widgets, so 200 domains.
 // Craig's choice: the app lists the domains itself, through Cloudflare's
-// API — every site's domain plus the admin's own address (where
-// published sites are previewed) — creating widgets as they fill up and
-// removing domains no site uses any more. See TurnstileWidget in
-// schema.prisma. Runs when a site's domain is saved and when a site is
-// published.
+// API — every site's domain, the business website's (its Home page's
+// contact form, 2026-10-20) and the admin's own address (where published
+// sites are previewed) — creating widgets as they fill up and removing
+// domains no site uses any more. See TurnstileWidget in schema.prisma.
+// Runs when a site's domain is saved, when a site is published and when
+// the business website's Home page is saved.
 //
 // Uses the Cloudflare account already set in Netlify for media storage
 // (R2_ACCOUNT_ID — the same account), plus CLOUDFLARE_TURNSTILE_API_TOKEN
@@ -144,7 +146,7 @@ function sameDomains(a: string[], b: string[]): boolean {
 }
 
 // Brings the widgets in line with the domains wanted: every site's
-// domain and the admin's address. A domain already on a widget stays
+// domain, the business website's and the admin's address. A domain already on a widget stays
 // there; new ones fill the widgets with room, then new widgets. What's
 // done before a Cloudflare call fails is kept, and the next run carries
 // on from there.
@@ -163,7 +165,7 @@ export async function syncTurnstileDomains(): Promise<TurnstileSyncResult> {
           where: { domain: { not: null } },
           select: { domain: true },
         });
-        const wanted = new Set<string>([adminDomain()]);
+        const wanted = new Set<string>([adminDomain(), BUSINESS_WEBSITE_DOMAIN]);
         for (const s of sites) {
           const d = cleanDomain(s.domain ?? "");
           if (d) wanted.add(d);

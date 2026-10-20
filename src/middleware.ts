@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { BUSINESS_WEBSITE_DOMAIN, BUSINESS_WEBSITE_HOST } from "@/lib/businessWebsite";
 
 // The business website, jetenvoieca.com (2026-09-29). Requests to these
 // addresses never reach the admin tool: they're served from the public
@@ -7,9 +8,9 @@ import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 // WebsiteContentView the editor previews), with no login. The bare
 // domain is sent to the www address, the site's main address (direct
 // decision). Only /api/media (the home image) is reachable from the
-// website; every other /api route is a 404 there.
-const WEBSITE_HOST = "www.jetenvoieca.com";
-const WEBSITE_BARE_HOST = "jetenvoieca.com";
+// website; every other /api route is a 404 there. The Home page's
+// contact form (2026-10-20) sends with a server action, posted to the
+// page itself.
 const WEBSITE_ROUTE_PREFIX = "/public-website";
 
 // Campaign mails' own address, news.jevca.art (2026-10-08): it serves
@@ -100,10 +101,10 @@ export async function middleware(request: NextRequest) {
   const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
 
   // ---- The business website ----
-  if (host === WEBSITE_BARE_HOST) {
-    return NextResponse.redirect(`https://${WEBSITE_HOST}${pathname}${search}`, 301);
+  if (host === BUSINESS_WEBSITE_DOMAIN) {
+    return NextResponse.redirect(`https://${BUSINESS_WEBSITE_HOST}${pathname}${search}`, 301);
   }
-  if (host === WEBSITE_HOST) {
+  if (host === BUSINESS_WEBSITE_HOST) {
     if (pathname.startsWith("/api/media")) return NextResponse.next();
     if (pathname.startsWith("/api/")) return new NextResponse(null, { status: 404 });
     const url = request.nextUrl.clone();

@@ -2,10 +2,12 @@
 
 import { useState } from "react";
 import { websiteSans, websiteSerif } from "@/lib/websiteFonts";
+import WebsiteContactForm from "@/components/WebsiteContactForm";
 
 export type WebsiteHomeViewData = {
   imageUrl: string | null;
   wordmark: string;
+  // Where the contact form sends to — never shown; no address = no form.
   email: string | null;
 };
 
@@ -26,18 +28,27 @@ export type WebsiteHomeViewItem = {
 // Image on the left, shown whole (object-contain — direct decision) and
 // aligned to the top of the sidebar. Beige sidebar on the right:
 // wordmark and menu items (label + text) as one block centred in the
-// sidebar, email at the bottom. The wordmark's size follows the
+// sidebar, Contact at the bottom. The wordmark's size follows the
 // sidebar's width (container query units) so it always fits inside.
 // Hovering a menu item reveals its hover text beneath it. Colours
 // sampled from the design mockups.
+//
+// Contact (2026-10-20, direct request — replaces the email address,
+// which drew spam): opens the contact form, sliding in over the sidebar's
+// menu (WebsiteContactForm). Both sit in the same grid cell, so the
+// sidebar is as tall as the taller of the two. `contactSiteKey` is the
+// robot check's key on the live site; left out in the editor's preview.
 export default function WebsiteHomeView({
   home,
   items,
+  contactSiteKey,
 }: {
   home: WebsiteHomeViewData;
   items: WebsiteHomeViewItem[];
+  contactSiteKey?: string | null;
 }) {
   const [openId, setOpenId] = useState<string | null>(null);
+  const [contactOpen, setContactOpen] = useState(false);
 
   return (
     <div className={`${websiteSans.className} flex h-full min-h-[560px] flex-col md:flex-row`}>
@@ -47,8 +58,13 @@ export default function WebsiteHomeView({
         )}
       </div>
 
-      <aside className="relative flex w-full flex-col justify-center bg-[#EEE7CB] px-10 pb-24 pt-16 [container-type:inline-size] md:w-[26%] md:min-w-[300px]">
-        <div className="mx-auto w-full max-w-[340px]">
+      <aside className="relative grid w-full items-center overflow-hidden bg-[#EEE7CB] px-10 pb-24 pt-16 [container-type:inline-size] md:w-[26%] md:min-w-[300px]">
+        <div
+          aria-hidden={contactOpen}
+          className={`mx-auto w-full max-w-[340px] transition-all duration-500 ease-out [grid-area:1/1] ${
+            contactOpen ? "pointer-events-none -translate-x-8 opacity-0" : ""
+          }`}
+        >
           <h1
             className={`${websiteSerif.className} whitespace-nowrap text-[clamp(24px,12cqw,44px)] font-medium leading-none text-[#555555]`}
           >
@@ -102,12 +118,29 @@ export default function WebsiteHomeView({
         </div>
 
         {home.email && (
-          <a
-            href={`mailto:${home.email}`}
-            className="absolute bottom-10 right-10 text-[10px] uppercase tracking-[0.2em] text-[#AB5C2E]"
-          >
-            {home.email}
-          </a>
+          <>
+            <div
+              aria-hidden={!contactOpen}
+              className={`transition-all duration-500 ease-out [grid-area:1/1] ${
+                contactOpen ? "" : "pointer-events-none invisible translate-x-full opacity-0"
+              }`}
+            >
+              <WebsiteContactForm
+                siteKey={contactSiteKey}
+                active={contactOpen}
+                onClose={() => setContactOpen(false)}
+              />
+            </div>
+            {!contactOpen && (
+              <button
+                type="button"
+                onClick={() => setContactOpen(true)}
+                className="absolute bottom-10 right-10 text-[10px] uppercase tracking-[0.2em] text-[#AB5C2E] hover:underline"
+              >
+                Contact
+              </button>
+            )}
+          </>
         )}
       </aside>
     </div>

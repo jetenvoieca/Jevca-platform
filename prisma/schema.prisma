@@ -2239,7 +2239,9 @@ model Guide {
 // The one Home page — always id "singleton", same pattern as
 // PlatformSettings. imageUrl is a direct upload (like Artist.logoUrl),
 // not an Image row: Image belongs to an Artist's Media Catalogue.
-// `email` is also what the Contact page shows (one address, one place).
+// `email` is the address the Home page's contact form sends to — the
+// message lands in the Inbox's Business mailbox as sent to it, so replies
+// go from it. Never shown on the site (2026-10-20, direct request — spam).
 model WebsiteHome {
   id String @id @default("singleton")
 
@@ -2250,24 +2252,14 @@ model WebsiteHome {
   updatedAt DateTime @updatedAt
 }
 
-// CONTENT = an ordinary content page. CONTACT = the one fixed Contact
-// page (2026-09-29): same fields, plus WebsiteHome.email shown as a
-// link, and it can't be deleted. Created by migration, never by the
-// editor.
-enum WebsitePageKind {
-  CONTENT
-  CONTACT
-}
-
 // A content page — e.g. "Artists". `name` is what the editor's page
 // dropdown shows; `slug` is its web address (jetenvoieca.com/<slug>),
 // set from the name and editable. title/caption/text are what the page
 // shows: small orange label, large serif heading, body text.
 model WebsitePage {
-  id   String          @id @default(cuid())
-  kind WebsitePageKind @default(CONTENT)
+  id   String @id @default(cuid())
   name String
-  slug String          @unique
+  slug String @unique
 
   title   String @default("")
   caption String @default("")

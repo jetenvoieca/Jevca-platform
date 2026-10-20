@@ -5,16 +5,14 @@ import { randomUUID } from "crypto";
 import { getPresignedUploadUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
 import { sanitizeFilename } from "@/lib/sanitizeFilename";
+import { BUSINESS_EMAIL_DOMAIN } from "@/lib/email";
+import { isValidEmail, normalizeEmail } from "@/lib/emailAddress";
+import { syncTurnstileDomains } from "@/lib/turnstile";
 
 // The business's own website, jetenvoieca.com (2026-09-29) — platform-
 // level, not tied to any Artist or Site. Edits go live on save (no
 // draft/publish, direct decision). See WebsiteHome / WebsitePage /
 // WebsiteMenuItem in schema.prisma.
-
-// CONTENT = an ordinary content page. CONTACT = the one fixed Contact
-// page: same fields, plus the Home page's email shown as a link, and it
-// can't be deleted.
-export type WebsitePageKind = "CONTENT" | "CONTACT";
 
 export type WebsitePageSummary = {
   id: string;
@@ -24,7 +22,6 @@ export type WebsitePageSummary = {
 
 export type WebsitePageData = {
   id: string;
-  kind: WebsitePageKind;
   name: string;
   slug: string;
   title: string;
@@ -51,7 +48,6 @@ const DEFAULT_WORDMARK = "JETENVOIECA";
 
 const pageSelect = {
   id: true,
-  kind: true,
   name: true,
   slug: true,
   title: true,
@@ -106,7 +102,6 @@ export async function getWebsitePageBySlug(slug: string): Promise<WebsitePageDat
 }
 
 // "+ Add content page" — creates an empty page at the end of the list.
-// Always a CONTENT page: the one Contact page is created by migration.
 export async function createWebsitePage(): Promise<{ id: string }> {
   const name = "New page";
   const highest = await db.websitePage.findFirst({
@@ -133,7 +128,7 @@ export async function createWebsitePage(): Promise<{ id: string }> {
 // address actually saved.
 export async function updateWebsitePage(
   id: string,
-  data: Omit<WebsitePageData, "id" | "kind">
+  data: Omit<WebsitePageData, "id">
 ): Promise<{ slug: string } | { error: string }> {
   const name = data.name.trim();
   if (!name) return { error: "Page name is required." };
@@ -154,11 +149,10 @@ export async function updateWebsitePage(
   return { slug };
 }
 
-// Content pages only — the Contact page is never deleted. Any Home menu
-// item pointing at a deleted page keeps its text but loses its link
-// (onDelete: SetNull in schema.prisma).
+// Any Home menu item pointing at a deleted page keeps its text but loses
+// its link (onDelete: SetNull in schema.prisma).
 export async function deleteWebsitePage(id: string): Promise<void> {
-  await db.websitePage.deleteMany({ where: { id, kind: "CONTENT" } });
+  await db.websitePage.deleteMany({ where: { id } });
   revalidateWebsite();
 }
 
@@ -175,11 +169,21 @@ export async function getWebsiteHome(): Promise<WebsiteHomeData> {
   };
 }
 
-export async function updateWebsiteHome(data: WebsiteHomeData): Promise<void> {
+// Saves the Home page. Its email is where the contact form sends to
+// (see lib/actions/businessContact.ts), so it must be a business address
+// (@jetenvoieca.com) — the message lands in the Business mailbox and is
+// answered from it. Saving also makes sure Cloudflare's robot check
+// covers the website (see lib/turnstile.ts); a problem there is reported
+// without stopping the save.
+export async function updateWebsiteHome(data: WebsiteHomeData): Promise<{ error: string | null }> {
+  const email = data.email ? normalizeEmail(data.email) : "";
+  if (email && (!isValidEmail(email) || !email.endsWith(`@${BUSINESS_EMAIL_DOMAIN}`))) {
+    return { error: `The contact form's address must be an @${BUSINESS_EMAIL_DOMAIN} address.` };
+  }
   const values = {
     imageUrl: data.imageUrl,
     wordmark: data.wordmark.trim(),
-    email: data.email?.trim() || null,
+    email: email || null,
   };
   await db.websiteHome.upsert({
     where: { id: HOME_ID },
@@ -187,6 +191,8 @@ export async function updateWebsiteHome(data: WebsiteHomeData): Promise<void> {
     update: values,
   });
   revalidateWebsite();
+  const sync = await syncTurnstileDomains();
+  return { error: "error" in sync ? sync.error : null };
 }
 
 // Direct-to-R2 upload for the Home image — same presigned-URL mechanism
