@@ -141,10 +141,21 @@ function formatMoney(amount: string, currency: string) {
 // Consolidated Sales). Not shown inside the card itself — the card's
 // own status area replaces it there.
 // PAID / UNPAID, or Cancelled (2026-10-14, Craig's mockup — whether
-// it's been invoiced is its own column now).
-export function SaleStatusBadge({ status }: { status: "ACTIVE" | "COMPLETED" | "ABANDONED" }) {
+// it's been invoiced is its own column now). OVERDUE instead of UNPAID
+// once its invoice is past the client's overdue days (2026-10-20, see
+// lib/overdue.ts).
+export function SaleStatusBadge({
+  status,
+  overdue = false,
+}: {
+  status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+  overdue?: boolean;
+}) {
   if (status === "ABANDONED") {
     return <span className="text-sm text-neutral-400">Cancelled</span>;
+  }
+  if (status === "ACTIVE" && overdue) {
+    return <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-medium text-red-700">OVERDUE</span>;
   }
   return (
     <span className="rounded bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">
@@ -193,7 +204,10 @@ function SaleFigures({ purchase, aside }: { purchase: PurchaseDetail; aside?: Re
           {amounts.delivery > 0 && <p>Delivery {money(amounts.delivery)}</p>}
           {amounts.paid > 0 && <p>Paid {money(amounts.paid)}</p>}
         </div>
-        <p>Net Due {money(isPaid ? 0 : amounts.balance)}</p>
+        <div className="flex items-center gap-2">
+          {purchase.overdue && <SaleStatusBadge status={purchase.status} overdue />}
+          <p>Net Due {money(isPaid ? 0 : amounts.balance)}</p>
+        </div>
       </div>
 
       <div className="mt-3 flex items-start justify-between gap-4">

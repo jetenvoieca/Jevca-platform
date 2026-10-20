@@ -6,6 +6,7 @@ import { publicMediaUrl } from "@/lib/r2";
 import { saleTitle, netOfCommission } from "@/lib/saleMath";
 import { buyerKey } from "@/lib/invoices";
 import { retireStatementPaymentLinks } from "@/lib/paymentLinks";
+import { isSaleOverdue } from "@/lib/overdue";
 
 export type CustomerKind = "INDIVIDUAL" | "GALLERY" | "OWN";
 
@@ -53,6 +54,8 @@ export type CustomerDetail = {
     netAmount: string;
     currency: string;
     status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+    // Shown as OVERDUE instead of UNPAID — see lib/overdue.ts.
+    overdue: boolean;
     channel: "STRIPE" | "GALLERY";
     createdAt: string;
     // For the Sales tab's Invoiced column (2026-10-14): the sale's
@@ -169,10 +172,11 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
               images: { take: 1, select: { url: true, thumbnailKey: true } },
             },
           },
-          invoice: { select: { id: true, createdAt: true } },
+          invoice: { select: { id: true, createdAt: true, paidAt: true, cancelledAt: true } },
         },
         orderBy: { createdAt: "desc" },
       },
+      artist: { select: { invoiceOverdueDays: true } },
     },
   });
   if (!customer) return null;
@@ -231,6 +235,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
         netAmount: netOfCommission(p).toFixed(2),
         currency: p.currency,
         status: p.status,
+        overdue: isSaleOverdue(p, customer.artist.invoiceOverdueDays),
         channel: p.channel,
         createdAt: p.createdAt.toISOString(),
         invoice: p.invoice ? { id: p.invoice.id, createdAt: p.invoice.createdAt.toISOString() } : null,

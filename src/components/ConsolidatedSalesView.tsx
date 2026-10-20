@@ -18,6 +18,7 @@ export type ConsolidatedSaleRow = {
   commissionPercent: number | null;
   currency: string;
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+  overdue: boolean;
   // ISO string, not a Date — Server Components can only hand plain
   // serializable data across to a Client Component like this one.
   createdAt: string;
@@ -96,7 +97,7 @@ export default function ConsolidatedSalesView({ months }: { months: Consolidated
                       {r.currency} {r.netAmount.toFixed(2)}
                     </td>
                     <td className="whitespace-nowrap px-3 py-1.5">
-                      <SaleStatusBadge status={r.status} />
+                      <SaleStatusBadge status={r.status} overdue={r.overdue} />
                     </td>
                   </tr>
                 ))}

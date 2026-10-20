@@ -8,6 +8,7 @@ import { getRecentSites } from "@/lib/recentSites";
 import ConsolidatedSalesView, {
   type ConsolidatedMonthGroup,
 } from "@/components/ConsolidatedSalesView";
+import { isSaleOverdue, overdueInvoiceSelect } from "@/lib/overdue";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export default async function ConsolidatedSalesPage() {
         buyerName: true,
         createdAt: true,
         chargeKind: true,
+        invoice: overdueInvoiceSelect,
         artwork: {
           select: {
             id: true,
@@ -36,6 +38,7 @@ export default async function ConsolidatedSalesPage() {
               select: {
                 id: true,
                 name: true,
+                invoiceOverdueDays: true,
                 sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
               },
             },
@@ -83,6 +86,7 @@ export default async function ConsolidatedSalesPage() {
       commissionPercent,
       currency: p.currency,
       status: p.status,
+      overdue: isSaleOverdue(p, p.artwork.artist.invoiceOverdueDays),
       createdAt: p.createdAt.toISOString(),
     });
   }

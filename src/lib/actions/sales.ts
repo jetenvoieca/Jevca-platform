@@ -2,6 +2,7 @@
 
 import { db } from "@/lib/db";
 import { saleTitle, netOfCommission } from "@/lib/saleMath";
+import { isSaleOverdue, overdueInvoiceSelect } from "@/lib/overdue";
 
 export type SaleRow = {
   purchaseId: string;
@@ -16,6 +17,8 @@ export type SaleRow = {
   netAmount: string;
   currency: string;
   status: "ACTIVE" | "COMPLETED" | "ABANDONED";
+  // Shown as OVERDUE instead of UNPAID — see lib/overdue.ts.
+  overdue: boolean;
   createdAt: string;
   closedAt: string | null;
 };
@@ -27,7 +30,10 @@ export type SaleRow = {
 export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
   const purchases = await db.purchase.findMany({
     where: { artwork: { artistId } },
-    include: { artwork: { include: { images: { take: 1 }, mainImage: true } } },
+    include: {
+      artwork: { include: { images: { take: 1 }, mainImage: true, artist: { select: { invoiceOverdueDays: true } } } },
+      invoice: overdueInvoiceSelect,
+    },
     relationLoadStrategy: "query",
     orderBy: { createdAt: "desc" },
   });
@@ -46,6 +52,7 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
     netAmount: netOfCommission(p).toFixed(2),
     currency: p.currency,
     status: p.status,
+    overdue: isSaleOverdue(p, p.artwork.artist.invoiceOverdueDays),
     createdAt: p.createdAt.toISOString(),
     closedAt: p.closedAt ? p.closedAt.toISOString() : null,
   }));

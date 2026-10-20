@@ -16,6 +16,7 @@ import { isCurrency } from "@/lib/currencies";
 import { toArtworkImages } from "@/lib/artworkImages";
 import { getArtistDefaultCurrency } from "@/lib/primarySite";
 import type { PurchaseDetail } from "./payments";
+import { isSaleOverdue, overdueInvoiceSelect } from "@/lib/overdue";
 
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
@@ -406,10 +407,12 @@ export async function getArtworkDetail(id: string) {
         include: {
           payments: { orderBy: { sequence: "asc" } },
           invoiceLines: saleInvoicesInclude,
+          invoice: overdueInvoiceSelect,
           customer: { select: { kind: true } },
         },
         orderBy: { createdAt: "desc" },
       },
+      artist: { select: { invoiceOverdueDays: true } },
       // Only the catalogue number is actually shown ("Derived from
       // #AW-0021") — 2026-09-11, see the matching note on
       // Artwork.derivedFromId in schema.prisma.
@@ -463,6 +466,7 @@ export async function getArtworkDetailForClient(id: string) {
     // matching schema.prisma/payments.ts comments.
     certificateEmailedAt: p.certificateEmailedAt ? p.certificateEmailedAt.toISOString() : null,
     certificateEmailedTo: p.certificateEmailedTo,
+    overdue: isSaleOverdue(p, artwork.artist.invoiceOverdueDays),
     totalAmount: p.totalAmount.toString(),
     currency: p.currency,
     instalmentCount: p.instalmentCount,

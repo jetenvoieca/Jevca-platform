@@ -132,6 +132,9 @@ export type PurchaseDetail = {
   // emailed, and to whom.
   certificateEmailedAt: string | null;
   certificateEmailedTo: string | null;
+  // Still owed on an invoice past its client's overdue days (2026-10-20,
+  // see lib/overdue.ts) — shown as OVERDUE instead of UNPAID.
+  overdue: boolean;
   totalAmount: string;
   currency: string;
   instalmentCount: number | null;

@@ -184,7 +184,7 @@ export default function SaleModal({
                   </p>
                 ) : selectedPurchase.channel === "GALLERY" ? (
                   <div className="space-y-5">
-                    <SaleStatusBadge status={selectedPurchase.status} />
+                    <SaleStatusBadge status={selectedPurchase.status} overdue={selectedPurchase.overdue} />
                     <ConsignedSaleSummary purchase={selectedPurchase} />
                     {selectedPurchase.location ? (
                       <button
