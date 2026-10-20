@@ -114,6 +114,14 @@ export default function WorkPresentation({
   };
 
   const side = settings.layout === "side";
+  // With no medium or description to show, the column beside the picture
+  // folds away and the window narrows to the picture's width (2026-10-20,
+  // Craig's request) — until a form opens there.
+  const hasWords = (show.medium && !!data.medium) || (show.description && !!description);
+  const folded = side && !hasWords && panel === "words";
+  // The picture column's width when unfolded (the window's width less its
+  // padding and the gap between the columns), plus the padding.
+  const foldedWidth = `calc((${settings.maxWidth}px - 4rem - 3rem) * ${settings.pictureShare / 100} + 4rem)`;
   // The hidden ones of the words and the forms take no space, except
   // beside the picture on a desktop (see below).
   const hiddenLayer = side ? "absolute inset-x-0 top-0 md:static" : "absolute inset-x-0 top-0";
@@ -145,14 +153,17 @@ export default function WorkPresentation({
 
   return (
     <div
-      className={`relative flex flex-col gap-8 p-6 sm:p-8 ${side ? "md:grid md:items-start md:gap-12" : ""}`}
+      className={`relative mx-auto flex w-full flex-col gap-8 p-6 transition-[max-width] duration-500 ease-out sm:p-8 ${
+        side && !folded ? "md:grid md:items-start md:gap-12" : ""
+      }`}
       style={{
         background: colours.background,
         border: settings.borderWidth > 0 ? `${settings.borderWidth}px solid ${colours.border}` : undefined,
         borderRadius: settings.rounding,
         color: colours.text,
         fontFamily: textFont,
-        gridTemplateColumns: side ? `${settings.pictureShare}% 1fr` : undefined,
+        gridTemplateColumns: side && !folded ? `${settings.pictureShare}% 1fr` : undefined,
+        maxWidth: folded ? foldedWidth : settings.maxWidth,
       }}
     >
       {onClose && (
@@ -293,7 +304,7 @@ export default function WorkPresentation({
           keeps its size when a form opens; elsewhere the hidden ones are
           lifted out of the way. A form's Back sits above it, clear of
           the close cross. */}
-      <div className="relative grid min-w-0 overflow-hidden">
+      <div className={`relative grid min-w-0 overflow-hidden ${!hasWords && panel === "words" ? "hidden" : ""}`}>
         <div
           inert={panel !== "words"}
           className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-6 transition-all duration-500 ease-out ${
