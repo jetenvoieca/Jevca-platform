@@ -1,5 +1,6 @@
 "use client";
 
+import GuidePoint from "@/components/GuidePoint";
 import { useState, useTransition } from "react";
 import { randomId } from "@/lib/randomId";
 import { useRouter } from "next/navigation";
@@ -265,7 +266,7 @@ export default function GuidesPanel({ guides }: { guides: GuideWithSteps[] }) {
                         }
                         onBlur={() => persist(editTitle, editSteps)}
                         rows={2}
-                        placeholder={`Step ${idx + 1}`}
+                        placeholder={`Point ${idx + 1} — its first line shows in bold`}
                         className={inputCls}
                       />
                       <div className="mt-2">
@@ -362,23 +363,11 @@ export default function GuidesPanel({ guides }: { guides: GuideWithSteps[] }) {
                       No steps have been added to this guide yet.
                     </p>
                   ) : (
-                    <ol className="flex flex-col gap-4">
-                      {guide.steps.map((step, idx) => (
-                        <li key={step.id} className="flex gap-3">
-                          <span className="shrink-0 font-semibold text-amber-700">{idx + 1}</span>
-                          <div>
-                            <p className="text-sm text-neutral-900">{step.text}</p>
-                            {step.imageUrl && (
-                              <img
-                                src={step.imageUrl}
-                                alt=""
-                                className="mt-2 max-h-48 rounded border border-neutral-200 object-contain"
-                              />
-                            )}
-                          </div>
-                        </li>
+                    <ul className="flex flex-col gap-4">
+                      {guide.steps.map((step) => (
+                        <GuidePoint key={step.id} step={step} />
                       ))}
-                    </ol>
+                    </ul>
                   )}
                 </div>
               )}

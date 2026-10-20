@@ -4,12 +4,14 @@ import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { APP_URL } from "@/lib/appUrl";
 import type { GuideStep } from "@/lib/actions/guides";
+import { splitGuidePoint } from "@/lib/guideText";
 
 // Guide PDF (2026-09-04) — same pdf-lib approach as invoice.ts/
 // certificate.ts, but its own generator: a guide isn't a financial
 // document, so it has no letterhead, totals, or artist-specific fields —
-// just a title and numbered steps, each with optional wrapped text and
-// an optional image.
+// just a title and its points, each marked with a dash, its first line
+// bold as a soft heading (2026-10-20 — see lib/guideText.ts), with
+// optional wrapped text and an optional image.
 
 const PAGE_SIZE: [number, number] = [595.28, 841.89]; // A4
 const MARGIN = 60;
@@ -45,9 +47,7 @@ async function embedImageFromUrl(doc: PDFDocument, url: string | null) {
   }
 }
 
-export async function generateGuidePdf(
-  guideId: string
-): Promise<{ bytes: Uint8Array; filename: string }> {
+export async function generateGuidePdf(guideId: string): Promise<{ bytes: Uint8Array; filename: string }> {
   const guide = await db.guide.findUnique({ where: { id: guideId } });
   if (!guide) throw new Error("Guide not found.");
 
@@ -78,20 +78,24 @@ export async function generateGuidePdf(
   }
   y -= 20;
 
-  // ---- Steps, numbered ----
+  // ---- Points, each with a dash ----
   const textSize = 12;
   const lineHeight = 17;
-  for (let i = 0; i < steps.length; i++) {
-    const step = steps[i];
-    const label = `${i + 1}.`;
-    const labelWidth = bold.widthOfTextAtSize(label, textSize) + 10;
-    const lines = wrapLines(step.text || "", font, textSize, contentWidth - labelWidth);
+  const label = "–";
+  const labelWidth = font.widthOfTextAtSize(label, textSize) + 10;
+  const amber = rgb(0.71, 0.33, 0.04);
+  for (const step of steps) {
+    const { heading, lines: body } = splitGuidePoint(step.text || "");
+    const lines = [
+      ...wrapLines(heading, bold, textSize, contentWidth - labelWidth).map((text) => ({ text, font: bold })),
+      ...body.flatMap((l) => wrapLines(l, font, textSize, contentWidth - labelWidth).map((text) => ({ text, font }))),
+    ];
 
     newPageIfNeeded(lineHeight * Math.max(lines.length, 1) + 10);
-    page.drawText(label, { x: MARGIN, y, size: textSize, font: bold });
+    page.drawText(label, { x: MARGIN, y, size: textSize, font, color: amber });
     for (const line of lines) {
       newPageIfNeeded(lineHeight);
-      page.drawText(line, { x: MARGIN + labelWidth, y, size: textSize, font });
+      page.drawText(line.text, { x: MARGIN + labelWidth, y, size: textSize, font: line.font });
       y -= lineHeight;
     }
     y -= 6;
@@ -128,6 +132,9 @@ export async function generateGuidePdf(
   }
 
   const bytes = await doc.save();
-  const safeTitle = guide.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+  const safeTitle = guide.title
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
   return { bytes, filename: `guide-${safeTitle || guide.id}.pdf` };
 }

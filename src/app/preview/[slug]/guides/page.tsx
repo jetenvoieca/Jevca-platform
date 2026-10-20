@@ -1,4 +1,5 @@
 import { listGuides } from "@/lib/actions/guides";
+import GuidePoint from "@/components/GuidePoint";
 
 export const dynamic = "force-dynamic";
 
@@ -9,7 +10,7 @@ export const dynamic = "force-dynamic";
 // guides in Administration guides", "remove edit/delete buttons - PDF
 // can stay", "remove the add new topic buttons"). Technical-category
 // guides are developer documentation, not shown here. Each point is
-// marked with a quiet dash, not a number (2026-10-20, Craig's request).
+// drawn by GuidePoint: a quiet dash, its first line bold (2026-10-20).
 export default async function PreviewGuidesPage() {
   const guides = (await listGuides()).filter((g) => g.category === "USER");
 
@@ -38,19 +39,7 @@ export default async function PreviewGuidesPage() {
               ) : (
                 <ul className="flex flex-col gap-3">
                   {guide.steps.map((step) => (
-                    <li key={step.id} className="flex gap-3">
-                      <span className="shrink-0 text-amber-700">–</span>
-                      <div>
-                        <p className="text-sm text-neutral-700">{step.text}</p>
-                        {step.imageUrl && (
-                          <img
-                            src={step.imageUrl}
-                            alt=""
-                            className="mt-2 max-h-48 rounded border border-neutral-200 object-contain"
-                          />
-                        )}
-                      </div>
-                    </li>
+                    <GuidePoint key={step.id} step={step} />
                   ))}
                 </ul>
               )}
