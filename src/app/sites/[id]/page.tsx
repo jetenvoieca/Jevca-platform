@@ -107,6 +107,7 @@ export default async function SiteSettingsPage({
             invoiceFooterText: site.artist.invoiceFooterText,
             invoiceLanguage: site.artist.invoiceLanguage,
             nextInvoiceNumber: site.artist.nextInvoiceNumber,
+            invoiceOverdueDays: site.artist.invoiceOverdueDays,
             hopperToken: site.artist.hopperToken,
             stripeMode: site.artist.stripeMode,
             stripeSubscriptionCustomerId: site.artist.stripeSubscriptionCustomerId,

@@ -10,6 +10,7 @@ import {
   updateSalesEnabled,
   saveArtistLogo,
   saveArtistSignature,
+  saveInvoiceOverdueDays,
   setArtistProfileImage,
   updateArtistProfileText,
 } from "@/lib/actions";
@@ -63,6 +64,8 @@ type ArtistData = {
   invoiceFooterText: string | null;
   invoiceLanguage: string;
   nextInvoiceNumber: number;
+  // Days after an invoice is produced before Alerts shows it overdue.
+  invoiceOverdueDays: number;
   hopperToken: string;
   stripeMode: "TEST" | "LIVE";
   stripeSubscriptionCustomerId: string | null;
@@ -181,6 +184,16 @@ export default function SiteSettingsPanel({
       await updateArtist(artist.id, fd);
       router.refresh();
       flash("nextInvoiceNumber");
+    });
+  };
+
+  const saveOverdueDays = (value: string) => {
+    const days = Number(value);
+    if (!Number.isInteger(days) || days < 1 || days > 365 || days === artist.invoiceOverdueDays) return;
+    startTransition(async () => {
+      await saveInvoiceOverdueDays(artist.id, days);
+      router.refresh();
+      flash("invoiceOverdueDays");
     });
   };
 
@@ -706,6 +719,21 @@ export default function SiteSettingsPanel({
                   generated.
                 </p>
 
+                <label className={`${labelCls} mt-3`}>Invoice overdue after (days)</label>
+                <input
+                  key={`owner-invoice-overdue-${artist.id}`}
+                  type="number"
+                  min={1}
+                  max={365}
+                  defaultValue={artist.invoiceOverdueDays}
+                  onBlur={(e) => saveOverdueDays(e.target.value.trim())}
+                  disabled={isPending}
+                  className={inputCls}
+                />
+                <p className="mt-1 text-xs text-neutral-400">
+                  An unpaid invoice shows in Alerts this many days after it was produced.
+                </p>
+
                 {(savedField === "addressLine1" ||
                   savedField === "city" ||
                   savedField === "postcode" ||
@@ -714,7 +742,8 @@ export default function SiteSettingsPanel({
                   savedField === "vatRate" ||
                   savedField === "invoiceFooterText" ||
                   savedField === "invoiceLanguage" ||
-                  savedField === "nextInvoiceNumber") && <p className="mt-2 text-xs text-green-600">Saved</p>}
+                  savedField === "nextInvoiceNumber" ||
+                  savedField === "invoiceOverdueDays") && <p className="mt-2 text-xs text-green-600">Saved</p>}
               </div>
             )}
           </div>

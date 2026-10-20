@@ -1,12 +1,13 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 import { randomUUID } from "crypto";
 import { generateUniqueEmailSlug } from "@/lib/emailSlug";
 import { parseClientKind } from "@/lib/clientKind";
 import { syncTurnstileDomains } from "@/lib/turnstile";
+import { OPEN_ALERTS_TAG } from "@/lib/alerts";
 
 // ---- Reading data for the "Add New Site" picker ----
 
@@ -213,6 +214,16 @@ export async function saveArtistSignature(artistId: string, key: string): Promis
     where: { id: artistId },
     data: { signatureUrl: `/api/media/${key}` },
   });
+  revalidatePath("/");
+}
+
+// How many days after an invoice is produced before it shows as overdue
+// in Alerts if unpaid (2026-10-20, direct request — per client; see
+// lib/alerts.ts). A whole number from 1 to 365; anything else is ignored.
+export async function saveInvoiceOverdueDays(artistId: string, days: number): Promise<void> {
+  if (!Number.isInteger(days) || days < 1 || days > 365) return;
+  await db.artist.update({ where: { id: artistId }, data: { invoiceOverdueDays: days } });
+  updateTag(OPEN_ALERTS_TAG);
   revalidatePath("/");
 }
 

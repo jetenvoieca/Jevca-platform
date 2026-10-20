@@ -284,6 +284,9 @@ model Artist {
   // buyer, so this is the artist's own explicit choice, not inferred.
   invoiceLanguage   String   @default("EN")
   nextInvoiceNumber Int      @default(1)
+  // Days after an invoice is produced before it shows as overdue in
+  // Alerts if still unpaid (2026-10-20, direct request — per client).
+  invoiceOverdueDays Int @default(21)
 
   // The artist's signature image for the Certificate of Authenticity
   // (2026-09-03) — deliberately its own upload, separate from `logoUrl`
@@ -1809,7 +1812,7 @@ model Invoice {
   createdAt DateTime @default(now())
 
   @@unique([artistId, number])
-  @@index([paidAt, cancelledAt, emailedAt])
+  @@index([paidAt, cancelledAt, createdAt])
 }
 
 // One sale on one invoice (2026-10-14), in the order produced. Removed

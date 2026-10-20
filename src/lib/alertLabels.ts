@@ -8,7 +8,8 @@ export const ALERT_TYPE_LABELS: Record<string, string> = {
   SUBSCRIPTION_PAYMENT_OVERDUE: "Payment overdue",
   SUBSCRIPTION_METHOD_MISSING: "No payment method",
   SALE_INVOICE_UNPAID: "Invoice unpaid",
-  // 2026-09-19 — invoice emailed over 30 days ago with no payment.
+  // 2026-09-19 — an invoice unpaid past the client's overdue days
+  // (counted from the date invoiced since 2026-10-20).
   SALE_INVOICE_OVERDUE: "Invoice overdue",
   // 2026-09-21 — raised by the Studio app; see raiseSaleAlert in
   // lib/alerts.ts.

@@ -16,10 +16,23 @@ import { clientAlertId } from "@/lib/clientAlertIds";
 // cancelled (2026-10-09, see cancelSubscription).
 const MANUAL_OVERDUE_DAYS = 30 + 14;
 
-// 2026-09-19 decision: an invoice that has been emailed but not paid is
-// overdue once more than 30 days have passed since that email went out.
-// See SALE_INVOICE_OVERDUE below.
-const INVOICE_OVERDUE_DAYS = 30;
+// An invoice still unpaid is overdue once more than the client's own
+// Artist.invoiceOverdueDays (default 21) have passed since it was
+// produced — whether or not it has been emailed (2026-10-20, direct
+// request; was 30 days from emailing). It turns critical this many days
+// after that. See SALE_INVOICE_OVERDUE below.
+const INVOICE_CRITICAL_AFTER_DAYS = 30;
+
+// The ids of every overdue invoice (see above). In SQL, since each
+// invoice is measured against its own client's number of days.
+async function findOverdueInvoiceIds(): Promise<string[]> {
+  const rows = await db.$queryRaw<{ id: string }[]>`
+    SELECT i."id" FROM "Invoice" i
+    JOIN "Artist" a ON a."id" = i."artistId"
+    WHERE i."paidAt" IS NULL AND i."cancelledAt" IS NULL
+      AND i."createdAt" < NOW() - make_interval(days => a."invoiceOverdueDays")`;
+  return rows.map((r) => r.id);
+}
 
 // Stored alert types that link somewhere other than a site's Settings
 // page — see storedAlertLink below. EMAIL_REPLY_RECEIVED (2026-09-05,
@@ -250,52 +263,51 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
         },
         orderBy: { dueDate: "asc" },
       }),
-      // An invoice emailed more than INVOICE_OVERDUE_DAYS ago and still
-      // unpaid (2026-09-19; by invoice since 2026-10-14, so an invoice
-      // covering several sales is one alert). Gallery sales have no
-      // Payment rows until they're paid, so the Payment-based check above
-      // can never see them.
-      db.invoice.findMany({
-        where: {
-          paidAt: null,
-          cancelledAt: null,
-          emailedAt: { lt: new Date(now - INVOICE_OVERDUE_DAYS * 24 * 60 * 60 * 1000) },
-        },
-        relationLoadStrategy: "query",
-        select: {
-          id: true,
-          number: true,
-          currency: true,
-          emailedAt: true,
-          artistId: true,
-          framingCost: true,
-          deliveryCost: true,
-          payments: { select: { amount: true, status: true } },
-          artist: {
-            select: {
-              name: true,
-              sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+      // An overdue invoice (2026-09-19; by invoice since 2026-10-14, so an
+      // invoice covering several sales is one alert). Gallery sales have
+      // no Payment rows until they're paid, so the Payment-based check
+      // above can never see them.
+      findOverdueInvoiceIds().then((ids) =>
+        db.invoice.findMany({
+          where: { id: { in: ids } },
+          relationLoadStrategy: "query",
+          select: {
+            id: true,
+            number: true,
+            currency: true,
+            createdAt: true,
+            emailedAt: true,
+            artistId: true,
+            framingCost: true,
+            deliveryCost: true,
+            payments: { select: { amount: true, status: true } },
+            artist: {
+              select: {
+                name: true,
+                invoiceOverdueDays: true,
+                sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 },
+              },
+            },
+            sales: {
+              orderBy: { createdAt: "asc" },
+              select: {
+                id: true,
+                artworkId: true,
+                buyerName: true,
+                totalAmount: true,
+                commissionPercent: true,
+                depositPaid: true,
+                framingCost: true,
+                deliveryCost: true,
+                chargeKind: true,
+                artwork: { select: { catalogueName: true } },
+                payments: { select: { amount: true, status: true } },
+              },
             },
           },
-          sales: {
-            orderBy: { createdAt: "asc" },
-            select: {
-              id: true,
-              artworkId: true,
-              buyerName: true,
-              totalAmount: true,
-              commissionPercent: true,
-              depositPaid: true,
-              framingCost: true,
-              deliveryCost: true,
-              chargeKind: true,
-              artwork: { select: { catalogueName: true } },
-              payments: { select: { amount: true, status: true } },
-            },
-          },
-        },
-        orderBy: { emailedAt: "asc" },
-      }),
+          orderBy: { createdAt: "asc" },
+        })
+      ),
     ]);
 
   const storedItems: AlertItem[] = stored.map((a) => {
@@ -395,8 +407,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     const first = invoice.sales[0];
     if (!first) return [];
     const siteId = invoice.artist.sites[0]?.id || null;
-    const sentAt = invoice.emailedAt!; // Never null — the query above requires it.
-    const days = daysSince(sentAt, now);
+    const days = daysSince(invoice.createdAt, now);
     // What's still owed — each sale's balance (lib/saleMath.ts) plus the
     // invoice's own framing and delivery (lib/invoices.ts).
     const owed =
@@ -410,14 +421,14 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       {
         id: `invoice-overdue-${invoice.id}`,
         type: "SALE_INVOICE_OVERDUE",
-        severity: days - INVOICE_OVERDUE_DAYS > 30 ? "CRITICAL" : "WARNING",
-        message: `${invoice.artist.name}: invoice ${formatInvoiceNumber(invoice.number)} to ${buyer} for ${what} — ${invoice.currency} ${owed.toFixed(2)}, sent ${formatDate(sentAt)} (${days} days ago) and still unpaid.`,
+        severity: days - invoice.artist.invoiceOverdueDays > INVOICE_CRITICAL_AFTER_DAYS ? "CRITICAL" : "WARNING",
+        message: `${invoice.artist.name}: invoice ${formatInvoiceNumber(invoice.number)} to ${buyer} for ${what} — ${invoice.currency} ${owed.toFixed(2)}, invoiced ${formatDate(invoice.createdAt)} (${days} days ago), ${invoice.emailedAt ? `sent ${formatDate(invoice.emailedAt)}` : "not emailed"}, still unpaid.`,
         artistId: invoice.artistId,
         artistName: invoice.artist.name,
         siteId,
         linkHref: null,
         linkLabel: "View sale",
-        createdAt: sentAt.toISOString(),
+        createdAt: invoice.createdAt.toISOString(),
         dismissable: false,
         sale: { purchaseId: first.id, artworkId: first.artworkId, artistId: invoice.artistId, siteId },
       },
