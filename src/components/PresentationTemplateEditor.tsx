@@ -66,6 +66,15 @@ export default function PresentationTemplateEditor({
               ))}
             </select>
           </label>
+          <NumberField
+            label="Window width, max"
+            unit="pixels"
+            step={10}
+            value={settings.maxWidth}
+            limits={l.maxWidth}
+            onCommit={(maxWidth) => set({ maxWidth })}
+            wide
+          />
           {settings.layout === "side" && (
             <NumberField
               label="Picture width"

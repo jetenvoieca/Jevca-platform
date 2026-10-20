@@ -13,12 +13,13 @@ import type { SiteForms } from "@/lib/siteData";
 // A work's details as a visitor sees them when they open it on a page
 // (2026-10-19), drawn from a Presentation Template's settings (see
 // lib/presentationTemplate.ts): the picture (and the work's other
-// pictures beneath it, to switch between), the title and details, then
-// the medium, description, Purchase / Pay in instalments, the instalment
-// terms, Enquire and where it can be seen. Enquire slides the enquiry
-// form (WorkEnquiryForm) in over the words and buttons; Purchase and Pay
-// in instalments the payment form (WorkPaymentForm) when the site takes
-// payments, otherwise they open an email to the artist. Shared by the
+// pictures beneath it, to switch between), the title and details, the
+// price, Purchase / Pay in instalments, the instalment terms, Enquire and
+// where it can be seen; beside them the medium and description. Enquire
+// slides the enquiry form (WorkEnquiryForm) in over the medium and
+// description; Purchase and Pay in instalments the payment form
+// (WorkPaymentForm) when the site takes payments, otherwise they open an
+// email to the artist. Shared by the
 // Presentation window (CurationWorkView) and Templates → Presentations'
 // preview.
 
@@ -161,7 +162,10 @@ export default function WorkPresentation({
           </svg>
         </button>
       )}
-      {/* The picture, the work's other pictures, its title and details. */}
+      {/* The picture, the work's other pictures, its title and details,
+          then the price, Purchase / Pay in instalments, the instalment
+          terms, Enquire and where it can be seen (2026-10-20, Craig's
+          mock-up). */}
       <div className="flex min-w-0 flex-col">
         {!viewed && (
           <div
@@ -218,34 +222,8 @@ export default function WorkPresentation({
             {show.size && data.size && <p>{data.size}</p>}
           </div>
         )}
-      </div>
-
-      {/* The words and the buttons, and the forms, which slide in over
-          them from the top of the column. Beside the picture on a desktop
-          they all share one space as tall as the tallest, so the window
-          keeps its size when a form opens; elsewhere the hidden ones are
-          lifted out of the way. A form's Back sits above it, clear of
-          the close cross. */}
-      <div className="relative grid min-w-0 overflow-hidden">
-        <div
-          inert={panel !== "words"}
-          className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-6 transition-all duration-500 ease-out ${
-            panel !== "words" ? `invisible -translate-x-1/4 opacity-0 ${hiddenLayer}` : ""
-          }`}
-        >
-          {show.medium && data.medium && (
-            <p className="italic" style={{ color: colours.muted, fontSize: small, lineHeight: 1.6 }}>
-              {data.medium}
-            </p>
-          )}
-          {show.description && description && (
-            <p
-              className="whitespace-pre-line break-words"
-              style={{ fontSize: settings.textSize, lineHeight: settings.lineSpacing }}
-            >
-              {description}
-            </p>
-          )}
+        {/* The price and the buttons, a little narrower than the picture. */}
+        <div className="mt-10 flex w-4/5 flex-col gap-6 self-center">
           {show.price && priced && (
             <p style={{ fontSize: settings.textSize }}>{formatMoney(price, data.priceCurrency)}</p>
           )}
@@ -298,6 +276,35 @@ export default function WorkPresentation({
                 <p style={{ color: colours.muted, fontSize: small }}>{fillLabel(labels.location, values)}</p>
               )}
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* The medium and description, and the forms, which slide in over
+          them from the top of the column. Beside the picture on a desktop
+          they all share one space as tall as the tallest, so the window
+          keeps its size when a form opens; elsewhere the hidden ones are
+          lifted out of the way. A form's Back sits above it, clear of
+          the close cross. */}
+      <div className="relative grid min-w-0 overflow-hidden">
+        <div
+          inert={panel !== "words"}
+          className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-6 transition-all duration-500 ease-out ${
+            panel !== "words" ? `invisible -translate-x-1/4 opacity-0 ${hiddenLayer}` : ""
+          }`}
+        >
+          {show.medium && data.medium && (
+            <p className="italic" style={{ color: colours.muted, fontSize: small, lineHeight: 1.6 }}>
+              {data.medium}
+            </p>
+          )}
+          {show.description && description && (
+            <p
+              className="whitespace-pre-line break-words"
+              style={{ fontSize: settings.textSize, lineHeight: settings.lineSpacing }}
+            >
+              {description}
+            </p>
           )}
         </div>
 

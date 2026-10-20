@@ -113,6 +113,8 @@ export const PRESENTATION_COLOURS: { key: keyof PresentationColours; label: stri
 
 export type PresentationSettings = {
   layout: PresentationLayout;
+  // The window's widest, in pixels — it's narrower on a smaller screen.
+  maxWidth: number;
   // The picture's share of the width, beside the words.
   pictureShare: number;
   colours: PresentationColours;
@@ -131,6 +133,7 @@ export type PresentationSettings = {
 
 export const DEFAULT_PRESENTATION: PresentationSettings = {
   layout: "side",
+  maxWidth: 1000,
   pictureShare: 48,
   colours: {
     background: "#f7f6f2",
@@ -201,6 +204,7 @@ export const DEFAULT_PRESENTATION: PresentationSettings = {
 };
 
 export const PRESENTATION_LIMITS = {
+  maxWidth: { min: 500, max: 1600 },
   pictureShare: { min: 30, max: 70 },
   borderWidth: { min: 0, max: 4 },
   rounding: { min: 0, max: 48 },
@@ -238,6 +242,7 @@ export function normalizePresentation(raw: unknown): PresentationSettings {
   const labels = record(v.labels);
   return {
     layout: PRESENTATION_LAYOUTS.some((o) => o.value === v.layout) ? (v.layout as PresentationLayout) : d.layout,
+    maxWidth: cleanNumber(v.maxWidth, l.maxWidth, d.maxWidth),
     pictureShare: cleanNumber(v.pictureShare, l.pictureShare, d.pictureShare),
     colours: Object.fromEntries(
       PRESENTATION_COLOURS.map(({ key }) => [key, cleanColour(colours[key], d.colours[key])]),

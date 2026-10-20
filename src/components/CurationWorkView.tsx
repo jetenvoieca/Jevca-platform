@@ -64,7 +64,8 @@ export default function CurationWorkView({
       }}
     >
       <div
-        className={`relative mx-auto my-auto w-full ${settings.layout === "side" ? "max-w-6xl" : "max-w-xl"}`}
+        className="relative mx-auto my-auto w-full"
+        style={{ maxWidth: settings.maxWidth }}
         onClick={(e) => {
           if (e.target === e.currentTarget) onClose();
         }}

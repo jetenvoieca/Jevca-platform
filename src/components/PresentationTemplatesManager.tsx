@@ -129,7 +129,7 @@ export default function PresentationTemplatesManager({ templates }: { templates:
           <div className="flex min-h-0 flex-1 flex-col">
             <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{preview.name}</h3>
             <div className="min-h-0 flex-1 overflow-y-auto bg-neutral-500/40 p-6">
-              <div className={`mx-auto ${preview.settings.layout === "side" ? "max-w-6xl" : "max-w-xl"}`}>
+              <div className="mx-auto" style={{ maxWidth: preview.settings.maxWidth }}>
                 <WorkPresentation
                   data={SAMPLE}
                   settings={preview.settings}
