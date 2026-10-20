@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   recordGalleryPayment,
@@ -176,8 +176,9 @@ function ChargeHeading({ charge }: { charge: PurchaseDetail }) {
 
 // A sale's figures and history: price, framing/delivery, paid and Net
 // Due, then each payment and what has been sent. The top of every sale
-// panel, and each line of the summary list.
-function SaleFigures({ purchase }: { purchase: PurchaseDetail }) {
+// panel, and each line of the summary list. `aside` sits to the right of
+// the history (2026-10-20, Craig's mockup: the line view's View Invoice).
+function SaleFigures({ purchase, aside }: { purchase: PurchaseDetail; aside?: ReactNode }) {
   const isPaid = purchase.status === "COMPLETED";
   const amounts = saleBreakdown(purchase);
   const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
@@ -195,7 +196,8 @@ function SaleFigures({ purchase }: { purchase: PurchaseDetail }) {
         <p>Net Due {money(isPaid ? 0 : amounts.balance)}</p>
       </div>
 
-      <div className="mt-3 min-h-[1.25rem] space-y-0.5 text-xs text-neutral-500">
+      <div className="mt-3 flex items-start justify-between gap-4">
+      <div className="min-h-[1.25rem] min-w-0 space-y-0.5 text-xs text-neutral-500">
         {purchase.status === "ABANDONED" && (
           <p className="text-red-700">Cancelled{purchase.closedAt ? ` ${formatDate(purchase.closedAt)}` : ""}</p>
         )}
@@ -237,6 +239,8 @@ function SaleFigures({ purchase }: { purchase: PurchaseDetail }) {
         {purchase.certificateEmailedAt && (
           <p>Certificate of authenticity sent {formatDate(purchase.certificateEmailedAt)}</p>
         )}
+      </div>
+      {aside}
       </div>
     </>
   );
@@ -565,9 +569,23 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
     });
   };
 
+  // Line view: the sale's invoice (or receipt), beside its history — to
+  // see it while recording the payment.
+  const viewInvoice =
+    isLine && invoice ? (
+      <button
+        type="button"
+        onClick={() => setInvoiceModalId(invoice.id)}
+        disabled={isPending}
+        className="shrink-0 rounded-md border border-neutral-300 px-4 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+      >
+        View {invoice.paidAt ? "Receipt" : "Invoice"}
+      </button>
+    ) : null;
+
   return (
     <div>
-      <SaleFigures purchase={purchase} />
+      <SaleFigures purchase={purchase} aside={viewInvoice} />
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
@@ -715,49 +733,42 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
       {/* ---- Actions (line view only — the picture view is read only) ---- */}
       {isLine && (
         <>
-          {/* The sale's invoice, to see it while recording the payment. */}
-          {invoice && (
-            <button
-              type="button"
-              onClick={() => setInvoiceModalId(invoice.id)}
-              disabled={isPending}
-              className="mt-4 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
-            >
-              View {invoice.paidAt ? "receipt" : "invoice"} {formatInvoiceNumber(invoice.number)}
-            </button>
-          )}
-
-          {purchase.status === "ACTIVE" ? (
-            <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
-              <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
-                Take Card
-              </button>
-              <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
-                Record Payment
-              </button>
-            </div>
-          ) : isPaid && !isCharge ? (
-            <div className="mt-4 grid grid-cols-1 gap-2 rounded-lg bg-[#F9F6EE] p-3">
+          {/* Every action in one panel, two to a row (2026-10-20,
+              Craig's mockup): paying (unpaid) or the certificate (paid),
+              then Cancel / Delete — a cancelled sale can only be deleted. */}
+          <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
+            {purchase.status === "ACTIVE" && (
+              <>
+                <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
+                  Take Card
+                </button>
+                <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
+                  Record Payment
+                </button>
+              </>
+            )}
+            {isPaid && !isCharge && (
               <button
                 type="button"
                 onClick={() => setShowCertificateModal(true)}
                 disabled={isPending}
-                className={actionButtonCls}
+                className={`col-span-2 ${actionButtonCls}`}
               >
                 Certificate of Authenticity
               </button>
-            </div>
-          ) : null}
-
-          {/* A cancelled sale can only be deleted. */}
-          <div className={`mt-6 grid text-center text-sm text-red-700 ${isCancelled ? "grid-cols-1" : "grid-cols-2"}`}>
+            )}
             {!isCancelled && (
-              <button type="button" onClick={handleCancelSale} disabled={isPending} className="hover:underline disabled:opacity-50">
-                {isCharge ? "Cancel Charge" : "Cancel Sale"}
+              <button type="button" onClick={handleCancelSale} disabled={isPending} className={actionButtonCls}>
+                Cancel {saleNoun}
               </button>
             )}
-            <button type="button" onClick={handleDeleteSale} disabled={isPending} className="hover:underline disabled:opacity-50">
-              {isCharge ? "Delete Charge" : "Delete Sale"}
+            <button
+              type="button"
+              onClick={handleDeleteSale}
+              disabled={isPending}
+              className={`${isCancelled ? "col-span-2 " : ""}${actionButtonCls}`}
+            >
+              Delete {saleNoun}
             </button>
           </div>
         </>
