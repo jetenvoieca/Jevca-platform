@@ -1006,6 +1006,8 @@ model Task {
   inboundEmails  InboundEmail[]
   notes          TaskNote[]
   files          TaskFile[]
+  // Its action lines (2026-10-20, see TaskAction).
+  actions        TaskAction[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1013,6 +1015,25 @@ model Task {
   @@index([artistId])
   @@index([completedAt])
   @@index([keptOn])
+}
+
+// One action line in a task's list (2026-10-20, direct request): a tick
+// box and a line of text, under the description. Kept in the order shown
+// (`position`): open lines first, in the order they were dragged into,
+// ticked lines after them — a line moves to the bottom when ticked. Saved
+// with the task, which replaces its lines as a whole (see saveTask).
+model TaskAction {
+  id     String @id @default(cuid())
+  taskId String
+  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+
+  text     String
+  done     Boolean @default(false)
+  position Int
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId, position])
 }
 
 // A file or image added to a task (2026-10-11, direct request) — shown

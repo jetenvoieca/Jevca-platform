@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import type { TaskInput } from "@/lib/actions/tasks";
 import { ActionPanel, ActionButton } from "@/components/ActionPanel";
 import LinkifiedText from "@/components/LinkifiedText";
+import TaskActionsList, { insertActionLine, newActionLine } from "@/components/TaskActionsList";
 import { CopyIcon, CheckIcon } from "@/components/ActionIcons";
 import { formatDate } from "@/lib/formatDate";
 
@@ -44,6 +45,11 @@ import { formatDate } from "@/lib/formatDate";
 // Owner — and its buttons are Email, Activity and Make task (back to the
 // Task list). A task's buttons are Email, Activity, Keep this (makes it an
 // Insight) and Completed.
+//
+// Actions (2026-10-20, direct request — see mock-up): the Action button
+// (last, on tasks and insights) adds an action line under the
+// description and puts the cursor in it; see TaskActionsList. The buttons
+// sit in columns, three to a row.
 export default function TaskForm({
   form,
   dateAdded,
@@ -81,6 +87,13 @@ export default function TaskForm({
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const [editingDescription, setEditingDescription] = useState(!form.description.trim());
   const [copied, setCopied] = useState(false);
+  // The action line to put the cursor in once it's drawn (a new one).
+  const [focusActionKey, setFocusActionKey] = useState<string | null>(null);
+  const addAction = () => {
+    const line = newActionLine();
+    onChange({ actions: insertActionLine(form.actions, line) });
+    setFocusActionKey(line.key);
+  };
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 1500);
@@ -215,6 +228,13 @@ export default function TaskForm({
       )}
       </div>
 
+      <TaskActionsList
+        actions={form.actions}
+        focusKey={focusActionKey}
+        onChange={(actions) => onChange({ actions })}
+        onFocusKey={setFocusActionKey}
+      />
+
       {onOpenEmail && (
         <button
           type="button"
@@ -234,7 +254,7 @@ export default function TaskForm({
 
       <div className="pt-3">
         <ActionPanel>
-          <div className="flex w-full flex-wrap justify-between gap-3">
+          <div className="grid w-full grid-cols-[repeat(auto-fill,10rem)] justify-between gap-3">
             <ActionButton onClick={onEmail} disabled={saving}>
               Email
             </ActionButton>
@@ -255,6 +275,9 @@ export default function TaskForm({
                 </ActionButton>
               </>
             )}
+            <ActionButton onClick={addAction} disabled={saving}>
+              Action
+            </ActionButton>
           </div>
         </ActionPanel>
       </div>

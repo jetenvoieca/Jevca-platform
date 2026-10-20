@@ -27,6 +27,25 @@ import { parisToday, parisWeekStart } from "@/lib/parisTime";
 // information in the Inbox's Insight pill rather than cluttering the Task
 // list. See Task.keptOn, keepTask and makeTaskFromInsight. Every list and
 // Today / This week action here leaves insights out.
+//
+// Actions (2026-10-20, direct request): a task (or insight) can hold a
+// list of action lines, each a tick box and text — see TaskAction. They
+// come with every TaskItem and are saved with the task by saveTask.
+
+// One action line. `key` identifies it in the form (its id once saved,
+// a new random key for a line just added); saving doesn't use it, since
+// saveTask replaces the task's lines as a whole, in the order given.
+export type TaskActionLine = { key: string; text: string; done: boolean };
+
+const MAX_ACTIONS = 100;
+const MAX_ACTION_LENGTH = 500;
+
+// What every task query loads with the task: its owner's name and its
+// action lines in order.
+const TASK_INCLUDE = {
+  artist: { select: { name: true } },
+  actions: { orderBy: { position: "asc" as const }, select: { id: true, text: true, done: true } },
+};
 
 export type TaskItem = {
   id: string;
@@ -42,6 +61,7 @@ export type TaskItem = {
   weekOf: string | null; // "YYYY-MM-DD", a Monday — in the This week panel only during that week
   gmailThreadId: string | null; // the Personal (Gmail) conversation it was made from
   keptOn: string | null; // "YYYY-MM-DD", Paris — set = an Insight (its Date added)
+  actions: TaskActionLine[];
 };
 
 // What the task form submits — every field a plain string (empty string
@@ -56,6 +76,7 @@ export type TaskInput = {
   targetDate: string; // "YYYY-MM-DD" or ""
   category: string;
   artistId: string;
+  actions: TaskActionLine[];
 };
 
 function toTaskItem(r: {
@@ -72,6 +93,7 @@ function toTaskItem(r: {
   gmailThreadId: string | null;
   keptOn: Date | null;
   artist: { name: string } | null;
+  actions: { id: string; text: string; done: boolean }[];
 }): TaskItem {
   return {
     id: r.id,
@@ -87,6 +109,7 @@ function toTaskItem(r: {
     weekOf: r.weekOf ? r.weekOf.toISOString().slice(0, 10) : null,
     gmailThreadId: r.gmailThreadId,
     keptOn: r.keptOn ? r.keptOn.toISOString().slice(0, 10) : null,
+    actions: r.actions.map((a) => ({ key: a.id, text: a.text, done: a.done })),
   };
 }
 
@@ -97,7 +120,7 @@ export async function getOpenTasks(): Promise<TaskItem[]> {
     where: { completedAt: null, keptOn: null },
     orderBy: [{ targetDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
     take: 200,
-    include: { artist: { select: { name: true } } },
+    include: TASK_INCLUDE,
   });
   return rows.map(toTaskItem);
 }
@@ -110,7 +133,7 @@ export async function getCompletedTasks(): Promise<TaskItem[]> {
     where: { completedAt: { not: null }, keptOn: null },
     orderBy: { completedAt: "desc" },
     take: 200,
-    include: { artist: { select: { name: true } } },
+    include: TASK_INCLUDE,
   });
   return rows.map(toTaskItem);
 }
@@ -121,7 +144,7 @@ export async function getInsights(): Promise<TaskItem[]> {
     where: { keptOn: { not: null } },
     orderBy: [{ keptOn: "desc" }, { updatedAt: "desc" }],
     take: 500,
-    include: { artist: { select: { name: true } } },
+    include: TASK_INCLUDE,
   });
   return rows.map(toTaskItem);
 }
@@ -142,6 +165,16 @@ export async function saveTask(
     if (Number.isNaN(targetDate.getTime())) return { ok: false, error: "That target date isn't valid." };
   }
 
+  // Action lines, in the order shown; empty lines are dropped.
+  const actions = input.actions
+    .map((a) => ({ text: a.text.trim(), done: a.done }))
+    .filter((a) => a.text);
+  if (actions.length > MAX_ACTIONS) return { ok: false, error: `A task can have up to ${MAX_ACTIONS} actions.` };
+  if (actions.some((a) => a.text.length > MAX_ACTION_LENGTH)) {
+    return { ok: false, error: `An action can be up to ${MAX_ACTION_LENGTH} characters.` };
+  }
+  const actionRows = actions.map((a, position) => ({ ...a, position }));
+
   const data = {
     name,
     description: input.description.trim() || null,
@@ -154,12 +187,18 @@ export async function saveTask(
   if (input.id) {
     const existing = await db.task.findUnique({ where: { id: input.id }, select: { id: true } });
     if (!existing) return { ok: false, error: "Task not found — it may have been removed." };
-    await db.task.update({ where: { id: input.id }, data });
+    await db.task.update({
+      where: { id: input.id },
+      data: { ...data, actions: { deleteMany: {}, create: actionRows } },
+    });
     revalidatePath("/accounts/inbox");
     return { ok: true, id: input.id };
   }
 
-  const created = await db.task.create({ data, select: { id: true } });
+  const created = await db.task.create({
+    data: { ...data, actions: { create: actionRows } },
+    select: { id: true },
+  });
   revalidatePath("/accounts/inbox");
   return { ok: true, id: created.id };
 }
@@ -371,7 +410,7 @@ export async function createTaskFromEmail(
   if (inbound.taskId) {
     const existing = await db.task.findUnique({
       where: { id: inbound.taskId },
-      include: { artist: { select: { name: true } } },
+      include: TASK_INCLUDE,
     });
     if (existing) return { ok: true, task: toTaskItem(existing) };
   }
@@ -382,7 +421,7 @@ export async function createTaskFromEmail(
       email: inbound.fromAddress,
       artistId: inbound.artistId,
     },
-    include: { artist: { select: { name: true } } },
+    include: TASK_INCLUDE,
   });
   await db.inboundEmail.update({ where: { id: inboundEmailId }, data: { taskId: task.id } });
   revalidatePath("/accounts/inbox");
@@ -404,8 +443,7 @@ export async function createTaskFromGmail(input: {
   address: string;
 }): Promise<{ ok: true; task: TaskItem } | { ok: false; error: string }> {
   if (!input.threadId) return { ok: false, error: "Email not found." };
-  const include = { artist: { select: { name: true } } };
-  const existing = await db.task.findUnique({ where: { gmailThreadId: input.threadId }, include });
+  const existing = await db.task.findUnique({ where: { gmailThreadId: input.threadId }, include: TASK_INCLUDE });
   if (existing) return { ok: true, task: toTaskItem(existing) };
 
   const task = await db.task.create({
@@ -415,7 +453,7 @@ export async function createTaskFromGmail(input: {
       email: input.address.trim() || null,
       gmailThreadId: input.threadId,
     },
-    include,
+    include: TASK_INCLUDE,
   });
   revalidatePath("/accounts/inbox");
   return { ok: true, task: toTaskItem(task) };
@@ -424,7 +462,7 @@ export async function createTaskFromGmail(input: {
 // One task, open, completed or an Insight — for an email's Open task
 // (2026-10-11).
 export async function getTask(id: string): Promise<TaskItem | null> {
-  const row = await db.task.findUnique({ where: { id }, include: { artist: { select: { name: true } } } });
+  const row = await db.task.findUnique({ where: { id }, include: TASK_INCLUDE });
   return row ? toTaskItem(row) : null;
 }
 

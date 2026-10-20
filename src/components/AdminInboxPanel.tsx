@@ -249,6 +249,7 @@ const EMPTY_TASK_FORM: TaskInput = {
   targetDate: "",
   category: "",
   artistId: "",
+  actions: [],
 };
 
 // The mailbox a mail mode shows; null for Task, Insight and Alert.
@@ -818,7 +819,15 @@ export default function AdminInboxPanel({
                 {t.targetDate ? formatDate(t.targetDate) : ""}
               </span>
             </div>
-            <p className={`truncate text-xs ${style.text}`}>{t.category || "No category"}</p>
+            <div className="flex items-center justify-between gap-2">
+              <p className={`truncate text-xs ${style.text}`}>{t.category || "No category"}</p>
+              {/* Actions ticked / in all (2026-10-20), when it has any. */}
+              {t.actions.length > 0 && (
+                <span className={`shrink-0 text-[10px] ${style.faint}`}>
+                  {t.actions.filter((a) => a.done).length}/{t.actions.length}
+                </span>
+              )}
+            </div>
             <p className={`mt-0.5 truncate text-xs ${style.faint}`}>{t.artistName || "General"}</p>
           </button>
         </SwipeRow>
@@ -1042,6 +1051,7 @@ export default function AdminInboxPanel({
       targetDate: t.targetDate ?? "",
       category: t.category ?? "",
       artistId: t.artistId ?? "",
+      actions: t.actions,
     });
     setTaskEmail(t.email ?? "");
     setTaskGmailThreadId(t.gmailThreadId);
