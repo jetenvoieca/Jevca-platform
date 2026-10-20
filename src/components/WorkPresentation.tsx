@@ -85,9 +85,14 @@ export default function WorkPresentation({
       color,
       borderRadius: settings.buttonRounding,
       fontFamily: textFont,
-      fontSize: Math.round(settings.textSize * 0.8),
+      // Purchase and Pay in instalments (not `wide`) are a little smaller
+      // and always side by side under the picture — on a narrow window
+      // their words go onto two lines rather than the buttons stacking.
+      fontSize: Math.round(settings.textSize * (wide ? 0.8 : 0.7)),
     };
-    const className = `${wide ? "w-full" : "flex-1"} inline-flex min-h-14 items-center justify-center whitespace-nowrap px-6 py-4 text-center uppercase tracking-[0.2em] transition-opacity hover:opacity-90`;
+    const className = `${
+      wide ? "w-full whitespace-nowrap px-6 tracking-[0.2em]" : "min-w-0 flex-1 px-3 tracking-[0.15em]"
+    } inline-flex min-h-14 items-center justify-center py-4 text-center uppercase transition-opacity hover:opacity-90`;
     if (onClick) {
       return (
         <button type="button" onClick={onClick} className={className} style={style}>
@@ -231,7 +236,7 @@ export default function WorkPresentation({
           {data.available ? (
             <>
               {priced && (show.purchase || (show.instalments && perInstalment != null)) && (
-                <div className="flex flex-wrap gap-4">
+                <div className="flex gap-3">
                   {show.purchase &&
                     button(
                       fillLabel(labels.purchase, values),
