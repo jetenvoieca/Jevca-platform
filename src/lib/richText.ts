@@ -16,16 +16,21 @@ export type RichText = { type: "doc"; content: RichParagraph[] };
 export const EMPTY_RICH_TEXT: RichText = { type: "doc", content: [{ type: "paragraph" }] };
 
 // A link must go to a web page or an email address; a bare
-// "www.example.com" becomes https://www.example.com. Anything else
-// (javascript:, data:, …) is refused.
+// "www.example.com" becomes https://www.example.com, and a bare
+// "name@example.com" an email link (mailto:, 2026-10-21 — it used to
+// become a web address that opened example.com). Anything else
+// (javascript:, data:, a web address with a name@ in front, …) is
+// refused.
 export function cleanLinkUrl(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const url = raw.trim();
   if (!url) return null;
   if (/^mailto:[^\s@]+@[^\s@]+$/i.test(url)) return url;
+  if (/^[^\s@/:]+@[^\s@/:]+\.[^\s@/:]+$/.test(url)) return `mailto:${url}`;
   const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(url) ? url : `https://${url}`;
   try {
     const parsed = new URL(withScheme);
+    if (parsed.username || parsed.password) return null;
     return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : null;
   } catch {
     return null;
