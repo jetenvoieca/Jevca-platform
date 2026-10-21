@@ -18,6 +18,7 @@ export async function getSiteArtist(artistId: string): Promise<SiteArtist | null
       postcode: true,
       city: true,
       country: true,
+      showFooterAddress: true,
     },
   });
   if (!artist) return null;
@@ -25,7 +26,7 @@ export async function getSiteArtist(artistId: string): Promise<SiteArtist | null
     logoUrl: artist.logoUrl ? storedFileUrl(artist.logoUrl) : null,
     footer: {
       name: artist.name,
-      town: artistTownLine(artist),
+      town: artist.showFooterAddress ? artistTownLine(artist) : null,
       email: artist.emailSlug ? `${artist.emailSlug}@${EMAIL_DOMAIN}` : null,
     },
   };

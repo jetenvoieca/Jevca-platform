@@ -13,6 +13,7 @@ import {
   saveInvoiceOverdueDays,
   setArtistProfileImage,
   updateArtistProfileText,
+  updateArtistFooterAddress,
 } from "@/lib/actions";
 import {
   toArtistFormFields,
@@ -74,6 +75,7 @@ type ArtistData = {
   story: string | null;
   writingVoice: string | null;
   instagramHandle: string | null;
+  showFooterAddress: boolean;
   // The Certificate of Authenticity's signature image (2026-09-03) —
   // see the matching note by saveArtistSignature in lib/actions.ts.
   signatureUrl: string | null;
@@ -423,6 +425,28 @@ export default function SiteSettingsPanel({
             changing it.
           </p>
           {savedField === "instagramHandle" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+
+          <label className="mt-4 flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              defaultChecked={artist.showFooterAddress}
+              disabled={isPending}
+              onChange={(e) => {
+                const show = e.target.checked;
+                startTransition(async () => {
+                  await updateArtistFooterAddress(artist.id, show);
+                  router.refresh();
+                  flash("showFooterAddress");
+                });
+              }}
+            />
+            Show address in mail and website footers
+          </label>
+          <p className="mt-1 text-xs text-neutral-400">
+            The address in Financial. Mails sent to people in the USA legally need one. Re-publish the site after
+            changing it.
+          </p>
+          {savedField === "showFooterAddress" && <p className="mt-1 text-xs text-green-600">Saved</p>}
         </div>
       ) : (
         <div className="flex flex-col gap-4">

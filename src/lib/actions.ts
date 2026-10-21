@@ -245,6 +245,12 @@ export async function setArtistProfileImage(artistId: string, imageId: string): 
 // own action rather than folded into updateArtist's big multi-field
 // form, so saving one doesn't require passing every other Owner field
 // through unchanged.
+// The Personal Profile's "Show address in footers" tick (2026-10-21).
+export async function updateArtistFooterAddress(artistId: string, show: boolean): Promise<void> {
+  await db.artist.update({ where: { id: artistId }, data: { showFooterAddress: show === true } });
+  revalidatePath("/");
+}
+
 export async function updateArtistProfileText(
   artistId: string,
   field: "story" | "writingVoice" | "instagramHandle",

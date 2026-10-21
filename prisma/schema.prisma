@@ -190,6 +190,10 @@ model Artist {
   // The artist's Instagram username, without the @ (2026-10-19) — the
   // Presentation window's enquiry form offers "Or DM on Instagram".
   instagramHandle String?
+  // Whether the artist's address shows in the footer of their campaign
+  // mails and website pages (2026-10-21, Craig's choice — per artist).
+  // Mails sent to people in the USA legally need a postal address.
+  showFooterAddress Boolean @default(true)
 
   hopperToken String @unique @default(cuid())
 

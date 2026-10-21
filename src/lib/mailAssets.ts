@@ -90,6 +90,7 @@ export async function loadMailAssets(
           city: true,
           postcode: true,
           country: true,
+          showFooterAddress: true,
         },
       },
     },
@@ -178,7 +179,7 @@ export async function loadMailAssets(
     artworks,
     footer: {
       name: artist.name,
-      address: artistAddressLines(artist),
+      address: artist.showFooterAddress ? artistAddressLines(artist) : [],
       website: site.domain ? { label: site.domain, url: `https://${site.domain}` } : null,
     },
   };
