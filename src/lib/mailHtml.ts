@@ -64,7 +64,6 @@ const LOGO_WIDTH = 200;
 const SIGNATURE_WIDTH = 180;
 const ARTWORK_GAP = 16;
 
-const TEXT_BLOCKS = new Set<MailBlock["type"]>(["header", "byline", "text", "textgrid", "artwork"]);
 
 const FOOTER_LABELS: Record<MailLanguage, { unsubscribe: string }> = {
   en: { unsubscribe: "Unsubscribe" },
@@ -291,9 +290,11 @@ function rowHtml(input: MailHtmlInput, row: MailBlock[], settings: RowSettings, 
   const inner = row.map((b, i) => blockHtml(input, b, widths[i], settings.horizontal));
   if (inner.every((html) => html === "")) return "";
   // The row's alignment places pictures, the Logo, Signature and Button
-  // within their space; text always reads from the left, as on a page.
+  // within their space, and aligns text (2026-10-20, Craig's request —
+  // centred text stays centred); an Artwork's picture and details still
+  // read from the left.
   const cells = inner.map((html, i) => {
-    const align = TEXT_BLOCKS.has(row[i].type) ? "left" : settings.horizontal;
+    const align = row[i].type === "artwork" ? "left" : settings.horizontal;
     return {
       width: widths[i],
       valign: settings.vertical,

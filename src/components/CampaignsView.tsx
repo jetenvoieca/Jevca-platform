@@ -42,6 +42,14 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAutoSave } from "@/components/useAutoSave";
 import { mailTextLook, styleOf } from "@/lib/mailHtml";
 import { isTextComponent } from "@/lib/textStyle";
+import { groupBlocksByRow, rowKey, rowSettingsOf } from "@/lib/rowLayout";
+
+// The alignment of the row a component is in — text is typed aligned as
+// it will be in the mail (2026-10-20; see rowHtml in lib/mailHtml.ts).
+function rowAlignOf(layout: MailTemplateLayout, blockId: string) {
+  const row = groupBlocksByRow(layout.blocks).find((r) => r.some((b) => b.id === blockId));
+  return row ? rowSettingsOf(layout, rowKey(row)).horizontal : "left";
+}
 
 // Marketing → Mail Campaigns (2026-10-08, step 3a; reworked the same day
 // from Craig's annotated mockup), laid out like it: on the left, the
@@ -348,7 +356,14 @@ export default function CampaignsView({
         content={contentOf(draft.content, block as MailBlock & { type: BlockContent["type"] })}
         language={language}
         revision={revision}
-        look={isTextComponent(block.type) ? mailTextLook(styleOf(draft.layout, block.type, block), block.type) : undefined}
+        look={
+          isTextComponent(block.type)
+            ? {
+                ...mailTextLook(styleOf(draft.layout, block.type, block), block.type),
+                textAlign: rowAlignOf(draft.layout, block.id),
+              }
+            : undefined
+        }
         onChange={(next) => changeBlockContent(block.id, next)}
         pickers={pickers}
       />
