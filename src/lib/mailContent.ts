@@ -46,12 +46,26 @@ export type ImageContent = { type: "image"; picture: MailPicture | null };
 // square, cropped from its centre; off, each keeps its own shape.
 export type GalleryContent = { type: "gallery"; pictures: MailPicture[]; regular: boolean };
 export type ArtworkContent = { type: "artwork"; artworkId: string | null };
+// `payment` (2026-10-21, Craig's request — a deposit for a commission):
+// the button pays a fixed amount through a Stripe payment link in the
+// artist's Stripe account, made with lib/actions/mailPayments.ts; `url`
+// is then that link. Null: `url` is any web or email address.
+export type ButtonPayment = {
+  amount: string;
+  currency: string;
+  description: string;
+  linkId: string;
+  mode: "TEST" | "LIVE";
+  accountId: string | null;
+};
+
 export type ButtonContent = {
   type: "button";
   label: Localized<string>;
   url: string | null;
   colour: string | null;
   textColour: string | null;
+  payment: ButtonPayment | null;
 };
 
 export type BlockContent =
@@ -83,6 +97,20 @@ function localized<T>(raw: unknown, clean: (v: unknown) => T): Localized<T> {
   return { en: clean(value.en), fr: clean(value.fr) };
 }
 
+function cleanButtonPayment(raw: unknown): ButtonPayment | null {
+  const v = (raw ?? null) as Partial<Record<keyof ButtonPayment, unknown>> | null;
+  if (!v || typeof v.linkId !== "string" || !v.linkId) return null;
+  if (v.mode !== "TEST" && v.mode !== "LIVE") return null;
+  return {
+    amount: typeof v.amount === "string" ? v.amount : "",
+    currency: typeof v.currency === "string" ? v.currency : "GBP",
+    description: cleanLine(v.description),
+    linkId: v.linkId,
+    mode: v.mode,
+    accountId: typeof v.accountId === "string" && v.accountId ? v.accountId : null,
+  };
+}
+
 function cleanPicture(raw: unknown): MailPicture | null {
   const value = raw as { kind?: unknown; id?: unknown } | null;
   if (typeof value?.id !== "string" || !value.id) return null;
@@ -106,7 +134,7 @@ export function emptyContent(type: ContentBlockType): BlockContent {
     case "artwork":
       return { type, artworkId: null };
     case "button":
-      return { type, label: { en: "", fr: "" }, url: null, colour: null, textColour: null };
+      return { type, label: { en: "", fr: "" }, url: null, colour: null, textColour: null, payment: null };
   }
 }
 
@@ -152,6 +180,7 @@ function cleanBlockContent(type: ContentBlockType, raw: unknown): BlockContent {
         url: cleanLinkUrl(value.url),
         colour: cleanColour(value.colour),
         textColour: cleanColour(value.textColour),
+        payment: cleanButtonPayment(value.payment),
       };
   }
 }
@@ -171,13 +200,10 @@ export function cleanMailContent(raw: unknown, layout: MailTemplateLayout): Mail
 // A component's content, or empty content for its type.
 export function contentOf<T extends ContentBlockType>(
   content: MailContent,
-  block: MailBlock & { type: T }
+  block: MailBlock & { type: T },
 ): Extract<BlockContent, { type: T }> {
   const found = content[block.id];
-  return (found?.type === block.type ? found : emptyContent(block.type)) as Extract<
-    BlockContent,
-    { type: T }
-  >;
+  return (found?.type === block.type ? found : emptyContent(block.type)) as Extract<BlockContent, { type: T }>;
 }
 
 // Every picture and artwork the mail shows, so they can be looked up in
@@ -263,7 +289,7 @@ function placeComponents(from: MailTemplateLayout, to: MailTemplateLayout): Map<
 export function moveMailContent(
   content: MailContent,
   from: MailTemplateLayout,
-  to: MailTemplateLayout
+  to: MailTemplateLayout,
 ): { content: MailContent; dropped: string[] } {
   const placed = placeComponents(from, to);
   const moved: MailContent = {};
@@ -286,7 +312,7 @@ export function moveMailContent(
 export function followTemplate(
   layout: MailTemplateLayout,
   content: MailContent,
-  template: MailTemplateLayout
+  template: MailTemplateLayout,
 ): { layout: MailTemplateLayout; content: MailContent; dropped: string[] } {
   const placed = placeComponents(layout, template);
   const ownStyle = new Map<string, MailBlock["textStyle"]>();

@@ -10,6 +10,7 @@ import {
 } from "@/lib/actions/payments";
 import { recordInvoicePaymentIntent } from "@/lib/actions/invoices";
 import { recordStatementPaymentIntent } from "@/lib/actions/statements";
+import { recordMailDeposit } from "@/lib/actions/mailPayments";
 
 // Extracts the subscription ID from an Invoice, handling both API shapes:
 // old (`invoice.subscription`, versions before 2025-03-31) and new
@@ -83,7 +84,7 @@ export async function POST(req: NextRequest) {
   }
   console.log(
     `Stripe webhook verified as ${verifiedMode} mode${event.account ? ` (account ${event.account})` : ""}:`,
-    event.type
+    event.type,
   );
 
   try {
@@ -105,6 +106,10 @@ export async function POST(req: NextRequest) {
         else if (invoiceId) await recordInvoicePaymentIntent(invoiceId, intent.id);
         // A statement's payment link (2026-10-20) pays every work on it.
         else if (statementId) await recordStatementPaymentIntent(statementId, intent.id);
+        // A mail's payment button (2026-10-21) — a deposit, no sale.
+        else if (intent.metadata?.kind === "mailDeposit" && verifiedMode) {
+          await recordMailDeposit(intent.id, { mode: verifiedMode, accountId: event.account ?? null });
+        }
         break;
       }
 

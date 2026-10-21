@@ -13,6 +13,8 @@ import {
   type MailPicture,
 } from "@/lib/mailContent";
 import { cleanLinkUrl, EMPTY_RICH_TEXT } from "@/lib/richText";
+import { CURRENCIES } from "@/lib/currencies";
+import { createMailPaymentLink, deactivateMailPaymentLink } from "@/lib/actions/mailPayments";
 import type { MailPictureThumb } from "@/lib/actions/campaigns";
 import RichTextField from "@/components/RichTextField";
 import MediaPicker from "@/components/MediaPicker";
@@ -71,9 +73,7 @@ export default function MailBlockContent({
         <input
           type="text"
           value={content.text[language]}
-          onChange={(e) =>
-            onChange({ ...content, text: { ...content.text, [language]: e.target.value } })
-          }
+          onChange={(e) => onChange({ ...content, text: { ...content.text, [language]: e.target.value } })}
           placeholder="Type header in here"
           aria-label={`Header in ${inLanguage}`}
           style={look}
@@ -85,9 +85,7 @@ export default function MailBlockContent({
         <input
           type="text"
           value={content.text[language]}
-          onChange={(e) =>
-            onChange({ ...content, text: { ...content.text, [language]: e.target.value } })
-          }
+          onChange={(e) => onChange({ ...content, text: { ...content.text, [language]: e.target.value } })}
           placeholder="Type byline in here"
           aria-label={`Byline in ${inLanguage}`}
           style={look}
@@ -128,9 +126,7 @@ export default function MailBlockContent({
                 {content.cells.length > 1 && (
                   <RemoveButton
                     label={`Remove column ${i + 1}`}
-                    onClick={() =>
-                      onChange({ ...content, cells: content.cells.filter((_, j) => j !== i) })
-                    }
+                    onClick={() => onChange({ ...content, cells: content.cells.filter((_, j) => j !== i) })}
                   />
                 )}
               </div>
@@ -174,9 +170,7 @@ export default function MailBlockContent({
                 pickers={pickers}
                 className="aspect-square"
                 onPick={(next) => onChange({ ...content, pictures: [...content.pictures, next] })}
-                onRemove={() =>
-                  onChange({ ...content, pictures: content.pictures.filter((_, j) => j !== i) })
-                }
+                onRemove={() => onChange({ ...content, pictures: content.pictures.filter((_, j) => j !== i) })}
               />
             );
           })}
@@ -196,9 +190,7 @@ export default function MailBlockContent({
           <input
             type="text"
             value={content.label[language]}
-            onChange={(e) =>
-              onChange({ ...content, label: { ...content.label, [language]: e.target.value } })
-            }
+            onChange={(e) => onChange({ ...content, label: { ...content.label, [language]: e.target.value } })}
             placeholder="Button text"
             aria-label={`Button text in ${inLanguage}`}
             className="w-48 rounded-md px-3 py-2 text-center text-sm placeholder:opacity-60"
@@ -218,14 +210,30 @@ export default function MailBlockContent({
 
 // A Button's link and colours, opened from the component's bar.
 export function ButtonSettings({
+  artistId,
   content,
   onChange,
 }: {
+  artistId: string;
   content: ButtonContent;
   onChange: (content: ButtonContent) => void;
 }) {
-  const [url, setUrl] = useState(content.url ?? "");
+  // What the button does: open a web or email address, or take a
+  // payment (2026-10-21 — see lib/actions/mailPayments.ts).
+  const [kind, setKind] = useState<"link" | "payment">(content.payment ? "payment" : "link");
+  const [url, setUrl] = useState(content.payment ? "" : (content.url ?? ""));
   const [urlError, setUrlError] = useState(false);
+  const [amount, setAmount] = useState(content.payment?.amount ?? "");
+  const [currency, setCurrency] = useState(content.payment?.currency ?? CURRENCIES[0]);
+  const [description, setDescription] = useState(content.payment?.description ?? "");
+  const [busy, setBusy] = useState(false);
+  const [paymentError, setPaymentError] = useState<string | null>(null);
+  const payment = content.payment;
+  const paymentChanged =
+    !payment ||
+    Number(amount) !== Number(payment.amount) ||
+    currency !== payment.currency ||
+    description.trim() !== payment.description;
 
   const commitUrl = () => {
     if (!url.trim()) {
@@ -241,26 +249,120 @@ export function ButtonSettings({
     }
   };
 
+  const chooseLink = async () => {
+    setKind("link");
+    if (!payment) return;
+    // Back to an ordinary link: the payment link is switched off.
+    await deactivateMailPaymentLink(payment);
+    onChange({ ...content, payment: null, url: null });
+  };
+
+  const makePaymentLink = async () => {
+    setBusy(true);
+    setPaymentError(null);
+    const result = await createMailPaymentLink(artistId, { amount, currency, description, previous: payment });
+    setBusy(false);
+    if ("error" in result) return setPaymentError(result.error);
+    setAmount(result.payment.amount);
+    onChange({ ...content, payment: result.payment, url: result.url });
+  };
+
   return (
     <>
-      <div className="flex flex-col gap-1">
-        <input
-          type="text"
-          value={url}
-          onChange={(e) => {
-            setUrl(e.target.value);
-            setUrlError(false);
-          }}
-          onBlur={commitUrl}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commitUrl();
-          }}
-          placeholder="Link — https://…"
-          aria-label="Button link"
-          className={inputClass}
-        />
-        {urlError && <p className="text-xs text-red-600">That isn&apos;t a web or email address.</p>}
+      <div className="flex w-fit overflow-hidden rounded-md border border-neutral-300 text-xs">
+        {(
+          [
+            ["link", "Link"],
+            ["payment", "Payment"],
+          ] as const
+        ).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => (value === "link" ? chooseLink() : setKind("payment"))}
+            className={`px-3 py-1 ${kind === value ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"}`}
+          >
+            {label}
+          </button>
+        ))}
       </div>
+
+      {kind === "link" ? (
+        <div className="flex flex-col gap-1">
+          <input
+            type="text"
+            value={url}
+            onChange={(e) => {
+              setUrl(e.target.value);
+              setUrlError(false);
+            }}
+            onBlur={commitUrl}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commitUrl();
+            }}
+            placeholder="Link — https://…"
+            aria-label="Button link"
+            className={inputClass}
+          />
+          {urlError && <p className="text-xs text-red-600">That isn&apos;t a web or email address.</p>}
+        </div>
+      ) : (
+        <div className="flex flex-col gap-2">
+          <input
+            type="text"
+            value={description}
+            maxLength={120}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="What it's for — e.g. Christmas portrait deposit"
+            aria-label="What the payment is for"
+            className={inputClass}
+          />
+          <div className="flex gap-2">
+            <input
+              type="number"
+              min={0}
+              step="0.01"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+              placeholder="Amount"
+              aria-label="Amount"
+              className={`${inputClass} min-w-0 flex-1`}
+            />
+            <select
+              value={currency}
+              onChange={(e) => setCurrency(e.target.value)}
+              aria-label="Currency"
+              className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+            >
+              {CURRENCIES.map((c) => (
+                <option key={c} value={c}>
+                  {c}
+                </option>
+              ))}
+            </select>
+          </div>
+          {(paymentChanged || !payment) && (
+            <button
+              type="button"
+              onClick={makePaymentLink}
+              disabled={busy}
+              className="w-fit rounded-md bg-neutral-900 px-3 py-1 text-xs font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
+            >
+              {busy ? "Making…" : payment ? "Update payment link" : "Make payment link"}
+            </button>
+          )}
+          {paymentError && <p className="text-xs text-red-600">{paymentError}</p>}
+          {payment && !paymentChanged && content.url && (
+            <p className="text-xs text-neutral-500">
+              Payment link ready{payment.mode === "TEST" ? " (Stripe test mode)" : ""} —{" "}
+              <a href={content.url} target="_blank" rel="noopener noreferrer" className="underline">
+                open it
+              </a>
+              . Anyone receiving the mail can pay it; payments show in the Inbox and the payer is added to Customers.
+            </p>
+          )}
+        </div>
+      )}
       <ColourControl
         label="Button colour"
         initial={BUTTON_DEFAULT_COLOUR}
@@ -273,7 +375,7 @@ export function ButtonSettings({
         value={content.textColour}
         onChange={(textColour) => onChange({ ...content, textColour })}
       />
-      <p className="text-xs text-neutral-400">A button shows only when it has text and a link.</p>
+      <p className="text-xs text-neutral-400">A button shows only when it has text and a link or payment.</p>
     </>
   );
 }
@@ -294,13 +396,7 @@ function PictureSlot({
   onRemove: () => void;
 }) {
   if (picture) {
-    return (
-      <Filled
-        thumb={pickers.thumbs[pictureKey(picture)]}
-        className={className}
-        onRemove={onRemove}
-      />
-    );
+    return <Filled thumb={pickers.thumbs[pictureKey(picture)]} className={className} onRemove={onRemove} />;
   }
   return (
     <EmptySlot className={className}>
@@ -345,9 +441,7 @@ function ArtworkSlot({
         <Filled thumb={thumb} className="aspect-square w-1/3" onRemove={() => onChange(null)} />
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm text-neutral-800">{thumb?.label || words.item}</p>
-          <p className="text-xs text-neutral-400">
-            Shows its image, name, type, size, medium and price.
-          </p>
+          <p className="text-xs text-neutral-400">Shows its image, name, type, size, medium and price.</p>
         </div>
       </div>
     );

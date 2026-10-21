@@ -788,6 +788,10 @@ model InboundEmail {
   // website's Presentation window (2026-10-19, see
   // lib/actions/websiteEnquiry.ts), which never passes through Resend.
   resendEmailId String?  @unique
+  // A deposit paid with a mail's payment button (2026-10-21, see
+  // lib/actions/mailPayments.ts) — its Stripe PaymentIntent, so the same
+  // payment is never noted twice.
+  stripePaymentIntentId String? @unique
   // RFC Message-ID header, always stored with its angle brackets (see
   // canonicalMessageId, lib/emailThreading.ts) — used as In-Reply-To when
   // replying, and to link a later reply back to a task.

@@ -380,6 +380,7 @@ export default function CampaignsView({
       content: (
         <ButtonSettings
           key={block.id}
+          artistId={artistId}
           content={content}
           onChange={(next) => changeBlockContent(block.id, next)}
         />
