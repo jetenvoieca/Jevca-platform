@@ -14,6 +14,7 @@ import {
   TEXT_COMPONENT_TYPES,
   TEXT_LOOKS,
   TEXT_SIZE_LIMITS,
+  LETTER_SPACING_LIMITS,
   cleanTextStyle,
   type FontChoice,
   type TextStyle,
@@ -172,18 +173,21 @@ function PageMarginControl({
 
 // How the text in each text component type looks (2026-10-07, from
 // Craig's mockup) — one box each for Header, Text and Text grid, with
-// the layout's own font list.
+// the layout's own font list. `scales`: a page's texts, which can have a
+// smallest size.
 export function TextStylesControl<F extends string>({
   value,
   fonts,
   kinds,
   isFont,
+  scales = false,
   onChange,
 }: {
   value: TextStyles<F>;
   fonts: readonly FontChoice<F>[];
   kinds: readonly string[];
   isFont: (value: unknown) => value is F;
+  scales?: boolean;
   onChange: (value: TextStyles<F>) => void;
 }) {
   return (
@@ -196,6 +200,7 @@ export function TextStylesControl<F extends string>({
           fonts={fonts}
           kinds={kinds}
           isFont={isFont}
+          scales={scales}
           onChange={(style) => onChange({ ...value, [t.value]: style })}
         />
       ))}
@@ -204,13 +209,16 @@ export function TextStylesControl<F extends string>({
 }
 
 // One component type's (or one component's) Font and Size, then Style
-// and Colour. Anything left blank keeps the text's own look.
+// and Colour, then the smallest size (`scales`, a page's text — once it
+// has a size) and the letter spacing. Anything left blank keeps the
+// text's own look.
 export function TextStyleBox<F extends string>({
   label,
   value,
   fonts,
   kinds,
   isFont,
+  scales = false,
   onChange,
 }: {
   label: string;
@@ -218,6 +226,7 @@ export function TextStyleBox<F extends string>({
   fonts: readonly FontChoice<F>[];
   kinds: readonly string[];
   isFont: (value: unknown) => value is F;
+  scales?: boolean;
   onChange: (value: TextStyle<F>) => void;
 }) {
   const set = (patch: Partial<TextStyle<F>>) =>
@@ -249,7 +258,14 @@ export function TextStyleBox<F extends string>({
             </optgroup>
           ))}
         </select>
-        <SizeField label={label} value={value.size} onCommit={(size) => set({ size })} />
+        <OptionalNumberField
+          label={`${label} size`}
+          placeholder="Size"
+          unit="px"
+          limits={TEXT_SIZE_LIMITS}
+          value={value.size}
+          onCommit={(size) => set({ size })}
+        />
       </div>
       <div className="flex items-center gap-2">
         <select
@@ -269,18 +285,49 @@ export function TextStyleBox<F extends string>({
         </select>
         <ColourField label={label} value={value.colour} onChange={(colour) => set({ colour })} />
       </div>
+      <div className="flex items-center justify-end gap-2">
+        {scales && value.size !== null && (
+          <span className="flex flex-1 items-center gap-1 text-xs text-neutral-500">
+            Smallest
+            <OptionalNumberField
+              label={`${label} smallest size`}
+              placeholder="—"
+              unit="px"
+              limits={{ min: TEXT_SIZE_LIMITS.min, max: value.size }}
+              value={value.smallest}
+              onCommit={(smallest) => set({ smallest })}
+            />
+          </span>
+        )}
+        <span className="flex items-center gap-1 text-xs text-neutral-500">
+          Letter spacing
+          <OptionalNumberField
+            label={`${label} letter spacing`}
+            placeholder="—"
+            unit="%"
+            limits={LETTER_SPACING_LIMITS}
+            value={value.spacing}
+            onCommit={(spacing) => set({ spacing })}
+          />
+        </span>
+      </div>
     </div>
   );
 }
 
-// Text size in pixels, applied when the box is left (or Enter); blank =
-// the text's own size.
-function SizeField({
+// A number applied when the box is left (or Enter); blank = not set.
+function OptionalNumberField({
   label,
+  placeholder,
+  unit,
+  limits,
   value,
   onCommit,
 }: {
   label: string;
+  placeholder: string;
+  unit: string;
+  limits: { min: number; max: number };
   value: number | null;
   onCommit: (value: number | null) => void;
 }) {
@@ -305,8 +352,8 @@ function SizeField({
     <label className="flex shrink-0 items-center gap-1">
       <input
         type="number"
-        min={TEXT_SIZE_LIMITS.min}
-        max={TEXT_SIZE_LIMITS.max}
+        min={limits.min}
+        max={limits.max}
         step={1}
         value={text}
         onChange={(e) => setText(e.target.value)}
@@ -314,11 +361,11 @@ function SizeField({
         onKeyDown={(e) => {
           if (e.key === "Enter") e.currentTarget.blur();
         }}
-        placeholder="Size"
-        aria-label={`${label} size`}
+        placeholder={placeholder}
+        aria-label={label}
         className="w-16 rounded-md border border-neutral-300 px-2 py-1 text-sm"
       />
-      <span className="text-xs text-neutral-400">px</span>
+      <span className="text-xs text-neutral-400">{unit}</span>
     </label>
   );
 }

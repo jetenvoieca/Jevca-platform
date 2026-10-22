@@ -16,6 +16,7 @@ import {
   type RowLayout,
 } from "@/lib/rowLayout";
 import {
+  NO_TEXT_STYLE,
   cleanBlockTextStyle,
   cleanTextStyle,
   cleanTextStyles,
@@ -150,7 +151,7 @@ export function cleanLogoPhoneWidth(raw: unknown): number {
 export type LogoByline = { style: TextStyle<SiteFontId>; align: "left" | "center" | "right" };
 
 export const DEFAULT_LOGO_BYLINE: LogoByline = {
-  style: { font: "cormorant-garamond", size: 32, look: "italic", colour: "#d4708f" },
+  style: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 32, look: "italic", colour: "#d4708f" },
   align: "right",
 };
 
@@ -193,6 +194,7 @@ export function cleanGalleryNames(raw: unknown): PageTextStyle | null {
 }
 
 export const DEFAULT_GALLERY_NAMES: PageTextStyle = {
+  ...NO_TEXT_STYLE,
   font: "cormorant-garamond",
   size: 20,
   look: "italic",
@@ -222,9 +224,9 @@ export const DEFAULT_HERO: HeroSettings = {
   fade: 1.5,
   pictureShare: 45,
   height: 70,
-  kicker: { font: "jost", size: 15, look: "regular", colour: "#6b6b6b" },
-  headline: { font: "cormorant-garamond", size: 72, look: "regular", colour: "#1f1f1f" },
-  accent: { font: "cormorant-garamond", size: 72, look: "italic", colour: "#d4708f" },
+  kicker: { ...NO_TEXT_STYLE, font: "jost", size: 15, look: "regular", colour: "#6b6b6b" },
+  headline: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 72, look: "regular", colour: "#1f1f1f" },
+  accent: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 72, look: "italic", colour: "#d4708f" },
 };
 
 export const HERO_LIMITS = {
@@ -250,13 +252,11 @@ export function cleanHero(raw: unknown): HeroSettings {
   };
 }
 
-const DEFAULT_TEXT_STYLE: PageTextStyle = { font: null, size: null, look: null, colour: null };
-
 const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
-  header: DEFAULT_TEXT_STYLE,
-  byline: DEFAULT_TEXT_STYLE,
-  text: DEFAULT_TEXT_STYLE,
-  textgrid: DEFAULT_TEXT_STYLE,
+  header: NO_TEXT_STYLE,
+  byline: NO_TEXT_STYLE,
+  text: NO_TEXT_STYLE,
+  textgrid: NO_TEXT_STYLE,
 };
 
 // A Block Build component. `doors` is set on Sliding doors blocks only,
@@ -299,6 +299,12 @@ export const DEFAULT_PAGE_MAX_WIDTH = 1100;
 
 export function pageDesignWidth(layout: Pick<BlockBuildLayout, "maxWidth">): number {
   return Math.min(PAGE_DESKTOP_WIDTH, layout.maxWidth ?? PAGE_DESKTOP_WIDTH);
+}
+
+// The width of the page's contents as designed: its design width inside
+// the desktop margins.
+export function pageContentWidth(layout: Pick<BlockBuildLayout, "maxWidth" | "margins">): number {
+  return pageDesignWidth(layout) - 2 * layout.margins.desktop.horizontal;
 }
 
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {

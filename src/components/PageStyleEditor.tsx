@@ -256,6 +256,7 @@ export default function PageStyleEditor({
                 fonts={SITE_FONTS}
                 kinds={SITE_FONT_KINDS}
                 isFont={isSiteFontId}
+                scales
                 onChange={(textStyles) => setBlockBuild({ ...blockBuild, textStyles })}
               />
             </FineTuneSection>

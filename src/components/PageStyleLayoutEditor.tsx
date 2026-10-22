@@ -42,7 +42,12 @@ import { SITE_FONTS, SITE_FONT_KINDS, isSiteFontId } from "@/lib/siteFonts";
 // own settings on its bar.
 // A Header, Text or Text grid component's own Text style (2026-10-10),
 // in the website fonts.
-const SITE_TEXT_STYLE_FONTS: TextStyleFonts = { fonts: SITE_FONTS, kinds: SITE_FONT_KINDS, isFont: isSiteFontId };
+const SITE_TEXT_STYLE_FONTS: TextStyleFonts = {
+  fonts: SITE_FONTS,
+  kinds: SITE_FONT_KINDS,
+  isFont: isSiteFontId,
+  scales: true,
+};
 
 export default function PageStyleLayoutEditor({
   layout,
@@ -96,6 +101,7 @@ export default function PageStyleLayoutEditor({
                   fonts={SITE_FONTS}
                   kinds={SITE_FONT_KINDS}
                   isFont={isSiteFontId}
+                  scales
                   onChange={(style) => onBlock({ ...b, byline: cleanLogoByline({ ...byline, style }) })}
                 />
                 <label className="flex items-center gap-2 text-sm text-neutral-700">

@@ -12,7 +12,7 @@ import {
   type RowBlock,
   type RowLayout,
 } from "@/lib/rowLayout";
-import { cleanBlockTextStyle, cleanTextStyles, type StyledBlock, type TextStyle, type TextStyles } from "@/lib/textStyle";
+import { NO_TEXT_STYLE, cleanBlockTextStyle, cleanTextStyles, type StyledBlock, type TextStyle, type TextStyles } from "@/lib/textStyle";
 
 // The layout a Mail Template holds (2026-10-08, Marketing step 2) — a
 // starting point for a campaign's mails: its components, rows, widths,
@@ -83,8 +83,6 @@ const DEFAULT_MAIL_MARGINS: PageMargins = {
   phone: { vertical: 16, horizontal: 16 },
 };
 
-const DEFAULT_TEXT_STYLE: MailTextStyle = { font: null, size: null, look: null, colour: null };
-
 // A new template starts with the Logo at the top, which can then be
 // moved or removed like any other component.
 export function newMailTemplateLayout(): MailTemplateLayout {
@@ -94,10 +92,10 @@ export function newMailTemplateLayout(): MailTemplateLayout {
     gridSpacing: DEFAULT_GRID_SPACING,
     margins: DEFAULT_MAIL_MARGINS,
     textStyles: {
-      header: DEFAULT_TEXT_STYLE,
-      byline: DEFAULT_TEXT_STYLE,
-      text: DEFAULT_TEXT_STYLE,
-      textgrid: DEFAULT_TEXT_STYLE,
+      header: NO_TEXT_STYLE,
+      byline: NO_TEXT_STYLE,
+      text: NO_TEXT_STYLE,
+      textgrid: NO_TEXT_STYLE,
     },
     rows: {},
     blocks: [newMailBlock("logo")],

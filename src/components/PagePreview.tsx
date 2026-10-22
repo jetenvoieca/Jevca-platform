@@ -10,7 +10,7 @@ import type { SiteArtist } from "@/lib/siteArtist";
 import {
   DEFAULT_GALLERY_PER_ROW,
   DEFAULT_LOGO_PHONE_WIDTH,
-  pageDesignWidth,
+  pageContentWidth,
   type BlockBuildLayout,
   type GalleryPerRow,
   type LayoutBlock,
@@ -261,6 +261,7 @@ export function blockFiller({
   const contentByBlock = new Map(components.map((c) => [c.blockId, c]));
   const formByBlock = new Map(signupForms.map((f) => [f.blockId, f]));
 
+  const contentWidth = pageContentWidth(layout);
   const textStyleOf = (block: LayoutBlock) =>
     isTextComponent(block.type) ? mergeTextStyle(layout.textStyles[block.type], block.textStyle) : undefined;
 
@@ -289,6 +290,7 @@ export function blockFiller({
           spacing={layout.gridSpacing}
           perRow={block.perRow ?? DEFAULT_GALLERY_PER_ROW}
           names={block.names ?? null}
+          contentWidth={contentWidth}
           onOpen={onOpen}
         />
       );
@@ -323,7 +325,7 @@ export function blockFiller({
           {byline && (
             <p
               className="mt-1 whitespace-nowrap leading-none"
-              style={{ ...bodyTextCss(block.byline!.style), textAlign: block.byline!.align }}
+              style={{ ...bodyTextCss(block.byline!.style, contentWidth), textAlign: block.byline!.align }}
             >
               {artist.logoByline}
             </p>
@@ -354,21 +356,15 @@ export function blockFiller({
     if (content.source === "TYPED") {
       if (!content.text) return null;
       const style = textStyleOf(block);
-      const css = style
-        ? { ...bodyTextCss(style), ...scaledSize(style.size, designedWidth(block, layout)) }
-        : undefined;
-      return (
-        <div style={{ containerType: "inline-size" }}>
-          {block.type === "byline" ? (
-            <p className="whitespace-pre-line break-words text-base text-neutral-600" style={css}>
-              {content.text}
-            </p>
-          ) : (
-            <h2 className="whitespace-pre-line break-words text-2xl text-neutral-900" style={css}>
-              {content.text}
-            </h2>
-          )}
-        </div>
+      const css = style ? bodyTextCss(style, contentWidth) : undefined;
+      return block.type === "byline" ? (
+        <p className="whitespace-pre-line break-words text-base text-neutral-600" style={css}>
+          {content.text}
+        </p>
+      ) : (
+        <h2 className="whitespace-pre-line break-words text-2xl text-neutral-900" style={css}>
+          {content.text}
+        </h2>
       );
     }
     const curated = content.sectionId ? sectionById.get(content.sectionId) : undefined;
@@ -394,7 +390,7 @@ export function blockFiller({
         />
       );
     }
-    return <CurationSectionView section={section} textStyle={textStyleOf(block)} />;
+    return <CurationSectionView section={section} textStyle={textStyleOf(block)} contentWidth={contentWidth} />;
   };
 
   return fill;
@@ -453,25 +449,17 @@ function BlockBuildPage({
   );
 }
 
-// A Header's or Byline's size, shrinking with the space it's in
-// (2026-10-22, Craig's request — so a heading isn't too dominant in a
-// small window): its set size at the width it was designed at, smaller
-// in proportion when narrower, but never below half.
-function scaledSize(size: number | null, designed: number): CSSProperties {
-  if (!size) return {};
-  return { fontSize: `clamp(${Math.round(size / 2)}px, ${((size * 100) / designed).toFixed(3)}cqi, ${size}px)` };
-}
-
 // A component's width in pixels on the page as designed: its share of
-// the page's design width (pageDesignWidth) inside the desktop margins.
+// the page's contents as designed (pageContentWidth).
 function designedWidth(block: LayoutBlock, layout: BlockBuildLayout): number {
-  const inner = pageDesignWidth(layout) - 2 * layout.margins.desktop.horizontal;
-  return Math.round((blockWidthOf(block) / 100) * inner);
+  return Math.round((blockWidthOf(block) / 100) * pageContentWidth(layout));
 }
 
 // The page's background and margin around its rows, then the site's
 // footer, no wider than the page's maximum width (2026-10-22), centred.
-// Unfilled blocks are dropped, and so is any row left empty. It grows to
+// The contents are the container a text's shrinking size measures (see
+// bodyTextCss). Unfilled blocks are dropped, and so is any row left
+// empty. It grows to
 // fill the space it's in (the whole window on the published site), so
 // the background reaches the bottom — and both sides — however short or
 // narrow the page, as it does in the admin preview.
@@ -498,7 +486,7 @@ function StyledFrame({
     <div className="flex min-h-full grow flex-col" style={{ backgroundColor: backgroundColor ?? undefined }}>
       <div
         className={`mx-auto flex w-full grow flex-col ${PAGE_MARGIN_CLASS}`}
-        style={{ ...pageMarginStyle(margins), maxWidth: maxWidth ?? undefined }}
+        style={{ ...pageMarginStyle(margins), maxWidth: maxWidth ?? undefined, containerType: "inline-size" }}
       >
         {rows.length === 0 ? (
           <Message text={empty} />
@@ -575,12 +563,14 @@ function ImageGrid({
   spacing,
   perRow,
   names = null,
+  contentWidth,
   onOpen,
 }: {
   images: GridImage[];
   spacing: PageGridSpacing;
   perRow: GalleryPerRow;
   names?: PageTextStyle | null;
+  contentWidth?: number;
   onOpen?: (id: string) => void;
 }) {
   return (
@@ -595,7 +585,7 @@ function ImageGrid({
           <>
             <div className="overflow-hidden rounded">{picture}</div>
             {names && img.title && (
-              <p className="mt-3 px-1 text-left" style={bodyTextCss(names)}>
+              <p className="mt-3 px-1 text-left" style={bodyTextCss(names, contentWidth)}>
                 {img.title}
               </p>
             )}

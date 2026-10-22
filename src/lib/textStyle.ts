@@ -1,13 +1,16 @@
 import { cleanColour, cleanNumber } from "@/lib/rowLayout";
 
 // How the text in a layout's Header, Byline, Text and Text grid
-// components looks
-// (2026-10-07, from Craig's mockup; shared with Mail Templates
-// 2026-10-08) — one setting per component type, for the whole layout,
-// the same on desktop and phone: a font from the layout's own set list
-// (lib/siteFonts.ts for Page Styles, lib/mailFonts.ts for Mail
-// Templates), a size in pixels, a style (regular, bold or italic) and a
-// colour (#rrggbb). Anything null keeps the text's own look.
+// components looks (2026-10-07, from Craig's mockup; shared with Mail
+// Templates 2026-10-08) — one setting per component type, for the whole
+// layout: a font from the layout's own set list (lib/siteFonts.ts for
+// Page Styles, lib/mailFonts.ts for Mail Templates), a size in pixels, a
+// style (regular, bold, italic, light or light italic), a colour
+// (#rrggbb) and the space between letters, as a % of the size
+// (2026-10-22, from louisedear.com). On a page (not in a mail) a text
+// can also have a smallest size (2026-10-22): it's its size on the page
+// as designed and shrinks in proportion as the page narrows, down to
+// that — see bodyTextCss. Anything null keeps the text's own look.
 
 export const TEXT_COMPONENT_TYPES = [
   { value: "header", label: "Header" },
@@ -27,44 +30,69 @@ export const TEXT_LOOKS = [
   { value: "regular", label: "Regular" },
   { value: "bold", label: "Bold" },
   { value: "italic", label: "Italic" },
+  { value: "light", label: "Light" },
+  { value: "lightitalic", label: "Light italic" },
 ] as const;
 
 export type TextLook = (typeof TEXT_LOOKS)[number]["value"];
 
+// How a look is drawn: its weight and whether it's italic.
+export function textLookCss(look: TextLook): { weight: 300 | 400 | 700; italic: boolean } {
+  return {
+    weight: look === "bold" ? 700 : look === "light" || look === "lightitalic" ? 300 : 400,
+    italic: look === "italic" || look === "lightitalic",
+  };
+}
+
 export type TextStyle<F extends string = string> = {
   font: F | null;
   size: number | null;
+  smallest: number | null;
   look: TextLook | null;
   colour: string | null;
+  spacing: number | null;
+};
+
+export const NO_TEXT_STYLE: TextStyle<never> = {
+  font: null,
+  size: null,
+  smallest: null,
+  look: null,
+  colour: null,
+  spacing: null,
 };
 
 export type TextStyles<F extends string = string> = Record<TextComponentType, TextStyle<F>>;
 
 export const TEXT_SIZE_LIMITS = { min: 8, max: 200 } as const;
+export const LETTER_SPACING_LIMITS = { min: -10, max: 100 } as const;
 
 // A font offered in a layout's font list.
 export type FontChoice<F extends string = string> = { id: F; label: string; kind: string };
 
-// One text component's look; a font not in the list is dropped, a size
-// left blank (or not a number) stays blank, any other size is kept
-// within its limits.
+// One text component's look; a font not in the list is dropped, a
+// number left blank (or not a number) stays blank, any other is kept
+// within its limits — a smallest size only with a size, and smaller.
 export function cleanTextStyle<F extends string>(
   raw: unknown,
   isFont: (value: unknown) => value is F
 ): TextStyle<F> {
   const value = (raw ?? {}) as Partial<Record<keyof TextStyle, unknown>>;
-  const size =
-    value.size === null || value.size === undefined || value.size === ""
-      ? null
-      : Number.isFinite(Number(value.size))
-        ? cleanNumber(value.size, TEXT_SIZE_LIMITS, TEXT_SIZE_LIMITS.min, 0)
-        : null;
+  const size = optionalNumber(value.size, TEXT_SIZE_LIMITS, 0);
+  const smallest = size === null ? null : optionalNumber(value.smallest, { min: TEXT_SIZE_LIMITS.min, max: size }, 0);
   return {
     font: isFont(value.font) ? value.font : null,
     size,
+    smallest: smallest === size ? null : smallest,
     look: TEXT_LOOKS.find((l) => l.value === value.look)?.value ?? null,
     colour: cleanColour(value.colour),
+    spacing: optionalNumber(value.spacing, LETTER_SPACING_LIMITS, 1),
   };
+}
+
+function optionalNumber(raw: unknown, limits: { min: number; max: number }, decimals: number): number | null {
+  if (raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw))) return null;
+  return cleanNumber(raw, limits, limits.min, decimals);
 }
 
 // A layout saved before text styles existed keeps every text's own look.
@@ -88,18 +116,28 @@ export function cleanTextStyles<F extends string>(
 export type StyledBlock<F extends string = string> = { textStyle?: TextStyle<F> };
 
 export function isTextStyleEmpty(style: TextStyle): boolean {
-  return !style.font && style.size === null && !style.look && !style.colour;
+  return (
+    !style.font &&
+    style.size === null &&
+    style.smallest === null &&
+    !style.look &&
+    !style.colour &&
+    style.spacing === null
+  );
 }
 
 // What a text component is drawn with: its own settings, and the
-// layout's for anything it leaves blank.
+// layout's for anything it leaves blank. Its own size comes with its own
+// smallest size (blank = it doesn't shrink).
 export function mergeTextStyle<F extends string>(base: TextStyle<F>, own: TextStyle<F> | undefined): TextStyle<F> {
   if (!own) return base;
   return {
     font: own.font ?? base.font,
     size: own.size ?? base.size,
+    smallest: own.size !== null ? own.smallest : base.smallest,
     look: own.look ?? base.look,
     colour: own.colour ?? base.colour,
+    spacing: own.spacing ?? base.spacing,
   };
 }
 

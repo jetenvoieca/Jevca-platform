@@ -192,6 +192,9 @@ export function PageFrame({
       style={{
         padding: `${margin.vertical}px ${margin.horizontal}px`,
         backgroundColor: backgroundColor ?? undefined,
+        // The page's contents are what a shrinking text's size measures
+        // (see bodyTextCss), as on the site.
+        containerType: "inline-size",
       }}
     >
       {onMargins && (

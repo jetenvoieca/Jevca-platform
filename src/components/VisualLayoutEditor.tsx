@@ -38,6 +38,7 @@ import { TextStyleBox } from "@/components/layoutControls";
 import {
   isTextComponent,
   isTextStyleEmpty,
+  NO_TEXT_STYLE,
   type FontChoice,
   type StyledBlock,
   type TextStyle,
@@ -101,9 +102,9 @@ export type TextStyleFonts = {
   fonts: readonly FontChoice[];
   kinds: readonly string[];
   isFont: (value: unknown) => value is string;
+  // A page's texts, which can have a smallest size (2026-10-22).
+  scales?: boolean;
 };
-
-const NO_TEXT_STYLE: TextStyle = { font: null, size: null, look: null, colour: null };
 
 // A component's own width on a phone, in Fine-tune (a Page Style's Logo,
 // 2026-10-13) — every other component is full width there.
@@ -645,6 +646,7 @@ function BlockItem<B extends RowBlock>({
               fonts={textStyle.fonts.fonts}
               kinds={textStyle.fonts.kinds}
               isFont={textStyle.fonts.isFont}
+              scales={textStyle.fonts.scales}
               onChange={textStyle.onChange}
             />
             <p className="text-xs text-neutral-400">

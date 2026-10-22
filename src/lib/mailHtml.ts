@@ -10,7 +10,7 @@ import {
 import { MAIL_WIDTH, type MailBlock, type MailTemplateLayout, type MailTextStyle } from "@/lib/mailTemplateLayout";
 import { blockWidthOf, groupBlocksByRow, rowKey, rowSettingsOf, type RowSettings } from "@/lib/rowLayout";
 import { escapeHtml, isRichTextEmpty, richTextToHtml, type RichText } from "@/lib/richText";
-import { mergeTextStyle } from "@/lib/textStyle";
+import { mergeTextStyle, textLookCss } from "@/lib/textStyle";
 
 // A campaign mail as the email itself (2026-10-08, Marketing step 3) —
 // the one HTML used both for the Preview and for sending, so what's
@@ -96,20 +96,22 @@ export type MailTextLook = {
   fontSize: number;
   lineHeight: number;
   color: string;
-  fontWeight: "bold" | "normal";
+  fontWeight: 300 | 400 | 700;
   fontStyle: "italic" | "normal";
+  letterSpacing: string | undefined;
 };
 
 export function mailTextLook(style: MailTextStyle, kind: TextKind, extraSize = 0): MailTextLook {
   const defaults = TEXT_DEFAULTS[kind];
-  const look = style.look ?? defaults.look;
+  const look = textLookCss(style.look ?? defaults.look);
   return {
     fontFamily: mailFontStack(style.font ?? "arial"),
     fontSize: (style.size ?? defaults.size) + extraSize,
     lineHeight: defaults.lineHeight,
     color: style.colour ?? DEFAULT_TEXT_COLOUR,
-    fontWeight: look === "bold" ? "bold" : "normal",
-    fontStyle: look === "italic" ? "italic" : "normal",
+    fontWeight: look.weight,
+    fontStyle: look.italic ? "italic" : "normal",
+    letterSpacing: style.spacing !== null ? `${style.spacing / 100}em` : undefined,
   };
 }
 
@@ -122,6 +124,7 @@ function textCss(style: MailTextStyle, kind: TextKind, extraSize = 0): string {
     `color:${look.color}`,
     `font-weight:${look.fontWeight}`,
     `font-style:${look.fontStyle}`,
+    ...(look.letterSpacing ? [`letter-spacing:${look.letterSpacing}`] : []),
   ].join(";");
 }
 

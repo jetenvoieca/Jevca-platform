@@ -2,17 +2,20 @@ import localFont from "next/font/local";
 import type { SiteFontId } from "@/lib/siteFonts";
 
 // The font files for lib/siteFonts.ts (2026-10-07) — regular, bold and
-// italic of each, Latin. From the @fontsource npm packages, served from
+// italic of each, Latin, and light and light italic (2026-10-22, the
+// Light looks) where the font has them; a font without draws Light as
+// regular. From the @fontsource npm packages, served from
 // the site itself like the business website's fonts (see
 // websiteFonts.ts): nothing is fetched from Google, during the build or
 // by visitors. Not preloaded — a browser only downloads a font a page
 // actually uses. next/font needs every path written out in full.
 
 // Jost (2026-10-19 — the first Presentation template, from Louise's
-// website): light 300 too, for large titles.
+// website): medium 500 too.
 const jost = localFont({
   src: [
     { path: "../../node_modules/@fontsource/jost/files/jost-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/jost/files/jost-latin-300-italic.woff2", weight: "300", style: "italic" },
     { path: "../../node_modules/@fontsource/jost/files/jost-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../../node_modules/@fontsource/jost/files/jost-latin-500-normal.woff2", weight: "500", style: "normal" },
     { path: "../../node_modules/@fontsource/jost/files/jost-latin-700-normal.woff2", weight: "700", style: "normal" },
@@ -25,6 +28,8 @@ const jost = localFont({
 
 const lato = localFont({
   src: [
+    { path: "../../node_modules/@fontsource/lato/files/lato-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/lato/files/lato-latin-300-italic.woff2", weight: "300", style: "italic" },
     { path: "../../node_modules/@fontsource/lato/files/lato-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../../node_modules/@fontsource/lato/files/lato-latin-700-normal.woff2", weight: "700", style: "normal" },
     { path: "../../node_modules/@fontsource/lato/files/lato-latin-400-italic.woff2", weight: "400", style: "italic" },
@@ -36,6 +41,8 @@ const lato = localFont({
 
 const montserrat = localFont({
   src: [
+    { path: "../../node_modules/@fontsource/montserrat/files/montserrat-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/montserrat/files/montserrat-latin-300-italic.woff2", weight: "300", style: "italic" },
     { path: "../../node_modules/@fontsource/montserrat/files/montserrat-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../../node_modules/@fontsource/montserrat/files/montserrat-latin-700-normal.woff2", weight: "700", style: "normal" },
     { path: "../../node_modules/@fontsource/montserrat/files/montserrat-latin-400-italic.woff2", weight: "400", style: "italic" },
@@ -47,6 +54,8 @@ const montserrat = localFont({
 
 const workSans = localFont({
   src: [
+    { path: "../../node_modules/@fontsource/work-sans/files/work-sans-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/work-sans/files/work-sans-latin-300-italic.woff2", weight: "300", style: "italic" },
     { path: "../../node_modules/@fontsource/work-sans/files/work-sans-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../../node_modules/@fontsource/work-sans/files/work-sans-latin-700-normal.woff2", weight: "700", style: "normal" },
     { path: "../../node_modules/@fontsource/work-sans/files/work-sans-latin-400-italic.woff2", weight: "400", style: "italic" },
@@ -58,6 +67,8 @@ const workSans = localFont({
 
 const dmSans = localFont({
   src: [
+    { path: "../../node_modules/@fontsource/dm-sans/files/dm-sans-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/dm-sans/files/dm-sans-latin-300-italic.woff2", weight: "300", style: "italic" },
     { path: "../../node_modules/@fontsource/dm-sans/files/dm-sans-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../../node_modules/@fontsource/dm-sans/files/dm-sans-latin-700-normal.woff2", weight: "700", style: "normal" },
     { path: "../../node_modules/@fontsource/dm-sans/files/dm-sans-latin-400-italic.woff2", weight: "400", style: "italic" },
@@ -69,6 +80,8 @@ const dmSans = localFont({
 
 const raleway = localFont({
   src: [
+    { path: "../../node_modules/@fontsource/raleway/files/raleway-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/raleway/files/raleway-latin-300-italic.woff2", weight: "300", style: "italic" },
     { path: "../../node_modules/@fontsource/raleway/files/raleway-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../../node_modules/@fontsource/raleway/files/raleway-latin-700-normal.woff2", weight: "700", style: "normal" },
     { path: "../../node_modules/@fontsource/raleway/files/raleway-latin-400-italic.woff2", weight: "400", style: "italic" },
@@ -80,6 +93,8 @@ const raleway = localFont({
 
 const sourceSans3 = localFont({
   src: [
+    { path: "../../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-300-italic.woff2", weight: "300", style: "italic" },
     { path: "../../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-700-normal.woff2", weight: "700", style: "normal" },
     { path: "../../node_modules/@fontsource/source-sans-3/files/source-sans-3-latin-400-italic.woff2", weight: "400", style: "italic" },
@@ -113,6 +128,8 @@ const lora = localFont({
 
 const cormorantGaramond = localFont({
   src: [
+    { path: "../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-300-normal.woff2", weight: "300", style: "normal" },
+    { path: "../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-300-italic.woff2", weight: "300", style: "italic" },
     { path: "../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-400-normal.woff2", weight: "400", style: "normal" },
     { path: "../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-700-normal.woff2", weight: "700", style: "normal" },
     { path: "../../node_modules/@fontsource/cormorant-garamond/files/cormorant-garamond-latin-400-italic.woff2", weight: "400", style: "italic" },

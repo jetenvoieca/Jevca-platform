@@ -9,16 +9,19 @@ import FadeImage from "@/components/FadeImage";
 // (PagePreview). The Description is plain text; in a page's Header, Text
 // or Text grid component it takes that component's font, size, style and
 // colour from the page's style (`textStyle`, 2026-10-07 — see
-// textStyleCss.ts). An empty section shows nothing.
+// textStyleCss.ts; `contentWidth`, the page's contents as designed, for
+// a text that shrinks). An empty section shows nothing.
 export default function CurationSectionView({
   section,
   textStyle,
+  contentWidth,
 }: {
   section: CurationSectionData;
   textStyle?: PageTextStyle;
+  contentWidth?: number;
 }) {
   if (sectionIsEmpty(section)) return null;
-  const body = textStyle ? bodyTextCss(textStyle) : undefined;
+  const body = textStyle ? bodyTextCss(textStyle, contentWidth) : undefined;
 
   switch (section.type) {
     case "DESCRIPTION":
