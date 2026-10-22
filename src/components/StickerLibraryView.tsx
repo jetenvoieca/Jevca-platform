@@ -5,13 +5,14 @@ import MediaCatalogueTabs from "@/components/MediaCatalogueTabs";
 import { putToR2 } from "@/lib/putToR2";
 import { addSticker, deleteSticker, renameSticker, requestStickerUpload } from "@/lib/actions/stickers";
 import type { StickerRow } from "@/lib/stickers";
+import { seeThroughPicture } from "@/lib/seeThroughPicture";
 
 // The Media Catalogue's Stickers view (2026-10-16): the artist's picture
 // stickers for Video Edit — PNGs, usually with a see-through background
 // (shown here on a checked background so that's visible). Upload several
 // at once, rename, delete. Any picture the browser can open can be chosen
 // (2026-10-17 — a PNG with an unusual file name couldn't be picked); it's
-// made a PNG and trimmed of see-through edges here first (asSticker).
+// made see-through and trimmed here first (lib/seeThroughPicture.ts).
 
 // A checked background, to show see-through parts.
 export const CHECKERED_STYLE = {
@@ -21,156 +22,6 @@ export const CHECKERED_STYLE = {
   backgroundSize: "16px 16px",
   backgroundPosition: "0 0,0 8px,8px -8px,-8px 0",
 };
-
-// The picture ready to be a sticker: a PNG — its white background made
-// see-through if it's on one (removeWhiteBackground) —
-// with its see-through edges trimmed off (2026-10-17), so a signature on
-// a big empty canvas becomes just the signature. A PNG with nothing to trim goes up as it is;
-// anything else is drawn onto a canvas and saved as a PNG (see-through
-// parts kept).
-const SEE_THROUGH = 8; // alpha at or below this counts as empty
-
-// Makes a picture's white background see-through (2026-10-17): every
-// near-white pixel — including the white inside letters, which on a
-// signature is background too — and the soft edge of the drawing blended
-// to see-through, so no white fringe shows on a dark video. Only for
-// pictures on a white background (edgeIsWhite). False if there was no
-// white to take out.
-const NEAR_WHITE = 235;
-
-function removeWhiteBackground(data: Uint8ClampedArray, width: number, height: number): boolean {
-  const background = new Uint8Array(width * height);
-  let found = false;
-  for (let p = 0; p < width * height; p++) {
-    const i = p * 4;
-    if (data[i] >= NEAR_WHITE && data[i + 1] >= NEAR_WHITE && data[i + 2] >= NEAR_WHITE) {
-      background[p] = 1;
-      found = true;
-    }
-  }
-  if (!found) return false;
-  for (let p = 0; p < width * height; p++) {
-    if (background[p]) {
-      data[p * 4 + 3] = 0;
-      continue;
-    }
-    // The edge of the drawing: white taken out of its colour.
-    const x = p % width;
-    const touchesBackground =
-      (x > 0 && background[p - 1]) ||
-      (x < width - 1 && background[p + 1]) ||
-      (p >= width && background[p - width]) ||
-      (p < width * (height - 1) && background[p + width]);
-    const i = p * 4;
-    // Already see-through (space around the picture) stays as it is.
-    if (!touchesBackground || data[i + 3] <= SEE_THROUGH) continue;
-    const alpha = Math.max(255 - data[i], 255 - data[i + 1], 255 - data[i + 2]) / 255;
-    if (alpha <= 0) {
-      data[i + 3] = 0;
-      continue;
-    }
-    for (let c = 0; c < 3; c++) data[i + c] = Math.round(255 - (255 - data[i + c]) / alpha);
-    data[i + 3] = Math.round(alpha * data[i + 3]);
-  }
-  return true;
-}
-
-type Box = { top: number; left: number; bottom: number; right: number };
-
-// The smallest box holding everything that isn't see-through, or null.
-function contentBox(data: Uint8ClampedArray, width: number, height: number): Box | null {
-  let top = height,
-    left = width,
-    bottom = -1,
-    right = -1;
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] > SEE_THROUGH) {
-        if (y < top) top = y;
-        if (y > bottom) bottom = y;
-        if (x < left) left = x;
-        if (x > right) right = x;
-      }
-    }
-  }
-  return bottom < 0 ? null : { top, left, bottom, right };
-}
-
-// Whether the edge of the box is (almost all) near-white — counting only
-// its pixels that aren't see-through, however soft (a white box may have
-// soft or rounded edges).
-const WHITE_EDGE_SHARE = 0.9;
-
-function edgeIsWhite(data: Uint8ClampedArray, width: number, box: Box): boolean {
-  let white = 0,
-    total = 0;
-  const check = (x: number, y: number) => {
-    const i = (y * width + x) * 4;
-    if (data[i + 3] <= SEE_THROUGH) return;
-    total++;
-    if (data[i] >= NEAR_WHITE && data[i + 1] >= NEAR_WHITE && data[i + 2] >= NEAR_WHITE) white++;
-  };
-  for (let x = box.left; x <= box.right; x++) {
-    check(x, box.top);
-    check(x, box.bottom);
-  }
-  for (let y = box.top + 1; y < box.bottom; y++) {
-    check(box.left, y);
-    check(box.right, y);
-  }
-  return total > 0 && white / total >= WHITE_EDGE_SHARE;
-}
-
-async function asSticker(file: File): Promise<Blob> {
-  const url = URL.createObjectURL(file);
-  try {
-    const image = new Image();
-    image.src = url;
-    await image.decode().catch(() => {
-      throw new Error("this browser can't open that picture — save it as a PNG and try again.");
-    });
-    // A drawing with no size of its own (some SVGs) is made 1000px wide.
-    const width = image.naturalWidth || 1000;
-    const height = image.naturalHeight || 1000;
-    const full = document.createElement("canvas");
-    full.width = width;
-    full.height = height;
-    const context = full.getContext("2d");
-    if (!context) throw new Error("couldn't be read.");
-    context.drawImage(image, 0, 0, width, height);
-
-    const pixels = context.getImageData(0, 0, width, height);
-    const { data } = pixels;
-    let box = contentBox(data, width, height);
-    if (!box) throw new Error("the picture is completely see-through.");
-
-    // A picture on a white background — its edge all but entirely white,
-    // whether or not see-through space surrounds it — has the white made
-    // see-through, then is trimmed again.
-    const madeSeeThrough = edgeIsWhite(data, width, box) && removeWhiteBackground(data, width, height);
-    if (madeSeeThrough) {
-      context.putImageData(pixels, 0, 0);
-      box = contentBox(data, width, height);
-      if (!box) throw new Error("the picture is only white.");
-    }
-    const { top, left, bottom, right } = box;
-    const untrimmed = top === 0 && left === 0 && bottom === height - 1 && right === width - 1;
-    const isPng = file.type === "image/png" || (!file.type && /\.png$/i.test(file.name));
-    if (untrimmed && isPng && !madeSeeThrough) return file;
-
-    const trimmed = document.createElement("canvas");
-    trimmed.width = right - left + 1;
-    trimmed.height = bottom - top + 1;
-    trimmed
-      .getContext("2d")
-      ?.drawImage(full, left, top, trimmed.width, trimmed.height, 0, 0, trimmed.width, trimmed.height);
-    return await new Promise<Blob>((resolve, reject) =>
-      trimmed.toBlob((blob) => (blob ? resolve(blob) : reject(new Error("couldn't be made into a PNG."))), "image/png"),
-    );
-  } finally {
-    URL.revokeObjectURL(url);
-  }
-}
 
 export default function StickerLibraryView({
   siteId,
@@ -194,7 +45,7 @@ export default function StickerLibraryView({
     for (const file of Array.from(files)) {
       setUploading(file.name);
       try {
-        const png = await asSticker(file);
+        const png = await seeThroughPicture(file);
         const name = file.name.replace(/\.[^.]+$/, "");
         const step = await requestStickerUpload(artistId, `${name}.png`, "image/png");
         if ("error" in step) throw new Error(step.error);
