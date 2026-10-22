@@ -23,7 +23,7 @@ export function BlockShape({
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
-  spacing: GridSpacing;
+  spacing: GridSpacing & { phoneVertical?: number };
   doors?: SlidingDoorsSettings;
   signup?: SignupLook;
   perRow?: GalleryPerRow;
@@ -142,7 +142,7 @@ function PlaceholderGrid({
   names,
 }: {
   perRow: GalleryPerRow;
-  spacing: GridSpacing;
+  spacing: GridSpacing & { phoneVertical?: number };
   device?: PreviewDevice;
   names: boolean;
 }) {

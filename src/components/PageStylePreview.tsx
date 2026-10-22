@@ -7,7 +7,8 @@ import { BlockShape, Labelled } from "@/components/blockShapes";
 // Draws a Page Style's layout as grey placeholders (2026-10-04) — what
 // goes where on the page, with no content. Used by the Page Styles
 // page's Preview panel. Uses the style's grid spacing, block spacing,
-// block widths, page margin (2026-10-06) and row alignment (2026-10-07),
+// block widths, page margin (2026-10-06), row alignment (2026-10-07) and
+// maximum width (2026-10-22),
 // drawn the same way as the site's pages (see components/pageRows.ts).
 // Each block's outline is drawn by BlockShape (components/blockShapes),
 // so a block looks the same here as in the visual editor and Arrange.
@@ -19,11 +20,12 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
 
   return (
     <div
-      className={`relative flex min-h-full flex-col rounded-md ${PAGE_MARGIN_CLASS} ${
+      className={`relative mx-auto flex min-h-full w-full flex-col rounded-md ${PAGE_MARGIN_CLASS} ${
         layout.backgroundImage ? "border-2 border-dashed border-neutral-300" : ""
       }`}
       style={{
         ...pageMarginStyle(layout.margins),
+        maxWidth: layout.maxWidth ?? undefined,
         backgroundColor: layout.backgroundColor ?? undefined,
       }}
     >

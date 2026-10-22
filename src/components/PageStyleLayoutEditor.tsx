@@ -21,6 +21,7 @@ import {
   cleanSignupLook,
   cleanSlidingDoors,
   newLayoutBlock,
+  pageDesignWidth,
   type BlockBuildLayout,
   type LayoutBlock,
   type SignupLook,
@@ -33,7 +34,6 @@ import NumberField from "@/components/NumberField";
 import { TextStyleBox } from "@/components/layoutControls";
 import VisualLayoutEditor, { type TextStyleFonts } from "@/components/VisualLayoutEditor";
 import { SITE_FONTS, SITE_FONT_KINDS, isSiteFontId } from "@/lib/siteFonts";
-import { PAGE_DESKTOP_WIDTH } from "@/components/visualEditorParts";
 
 // The visual editor for a Block Build Page Style (2026-10-07; split out
 // of VisualLayoutEditor 2026-10-08, which is now shared with Mail
@@ -184,7 +184,7 @@ export default function PageStyleLayoutEditor({
         ];
       }}
       textStyleFonts={SITE_TEXT_STYLE_FONTS}
-      desktopWidth={PAGE_DESKTOP_WIDTH}
+      desktopWidth={pageDesignWidth(layout)}
       backgroundColor={layout.backgroundColor}
       backgroundImage={layout.backgroundImage}
     />

@@ -37,6 +37,7 @@ import {
 } from "@/lib/pageComponents";
 import {
   blockTypeLabel,
+  pageDesignWidth,
   type BlockBuildLayout,
   type HeroSettings,
   type LayoutBlock,
@@ -48,7 +49,7 @@ import { useSiteData } from "@/lib/siteData";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 import { BlockShape, Labelled } from "@/components/blockShapes";
 import { bodyTextCss } from "@/components/textStyleCss";
-import { PAGE_DESKTOP_WIDTH, PageFrame, ScaledFrame } from "@/components/visualEditorParts";
+import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 import SignupFormSetup from "@/components/SignupFormSetup";
 
 // Arrange for a Block Build page (2026-10-07; 2026-10-13 from Craig's
@@ -356,7 +357,7 @@ export default function PageSectionsArranger({
 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
           {error && <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
-          <ScaledFrame device="desktop" desktopWidth={PAGE_DESKTOP_WIDTH}>
+          <ScaledFrame device="desktop" desktopWidth={pageDesignWidth(layout)}>
             <PageFrame
               margins={layout.margins}
               device="desktop"

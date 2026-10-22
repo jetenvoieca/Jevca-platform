@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import type { HorizontalAlign, VerticalAlign } from "@/lib/rowLayout";
+import type { GridSpacing, HorizontalAlign, VerticalAlign } from "@/lib/rowLayout";
 
 // How a Display Style's rows are drawn (2026-10-07) — shared by the
 // site's pages (PagePreview), the Page Styles preview (PageStylePreview)
@@ -77,27 +77,30 @@ export function phoneSizedStyle(phoneWidth: number, maxWidth: number): CSSProper
 // as fit with none narrower than `smallest` pixels, but never more than
 // `desktop` nor fewer than `phone` — so 4 across on a desktop steps down
 // as the window narrows, to 2 on a phone. With a `device` (the visual
-// editor) exactly that device's number.
+// editor) exactly that device's number. The space between rows is the
+// grid's phone spacing on a phone (2026-10-22).
 export function perRowClass(device?: PreviewDevice): string {
-  if (device === "phone") return "grid grid-cols-[repeat(var(--per-row-phone),minmax(0,1fr))]";
-  if (device === "desktop") return "grid grid-cols-[repeat(var(--per-row),minmax(0,1fr))]";
-  return "grid grid-cols-[repeat(auto-fill,minmax(var(--per-row-track),1fr))]";
+  if (device === "phone") return "grid grid-cols-[repeat(var(--per-row-phone),minmax(0,1fr))] gap-y-[var(--grid-vp)]";
+  if (device === "desktop") return "grid grid-cols-[repeat(var(--per-row),minmax(0,1fr))] gap-y-[var(--grid-v)]";
+  return "grid grid-cols-[repeat(auto-fill,minmax(var(--per-row-track),1fr))] gap-y-[var(--grid-vp)] site:gap-y-[var(--grid-v)]";
 }
 
 // The numbers across and the grid's spacing. `--per-row-track` is the
 // narrowest a tile may be: the larger of `smallest` and the width that
 // fits exactly `desktop` across, but no wider than fits `phone` across
-// (each a hair less, so rounding never drops one).
+// (each a hair less, so rounding never drops one). Without a phone
+// vertical spacing (a mail's grid) the vertical spacing is used.
 export function perRowStyle(
   perRow: { desktop: number; phone: number; smallest: number },
-  spacing: { horizontal: number; vertical: number },
+  spacing: GridSpacing & { phoneVertical?: number },
 ): CSSProperties {
   const exact = (n: number) => `calc((100% - ${(n - 1) * spacing.horizontal}px) / ${n} - 0.1px)`;
   return {
     "--per-row": perRow.desktop,
     "--per-row-phone": perRow.phone,
     "--per-row-track": `min(${exact(perRow.phone)}, max(${perRow.smallest}px, ${exact(perRow.desktop)}))`,
-    rowGap: spacing.vertical,
+    "--grid-v": `${spacing.vertical}px`,
+    "--grid-vp": `${spacing.phoneVertical ?? spacing.vertical}px`,
     columnGap: spacing.horizontal,
   } as CSSProperties;
 }

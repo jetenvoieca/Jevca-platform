@@ -3,12 +3,15 @@
 import { PAGE_STYLE_TYPES, isPageStyleType, type PageStyleType } from "@/lib/pageStyleTypes";
 import {
   CANVAS_LIMITS,
+  DEFAULT_PAGE_MAX_WIDTH,
+  PAGE_MAX_WIDTH_LIMITS,
   cleanCanvas,
   emptyLayout,
   type CanvasLayout,
   type BlockBuildLayout,
   type PageStyleLayout,
 } from "@/lib/pageStyleLayout";
+import { GRID_SPACING_LIMITS } from "@/lib/rowLayout";
 import { SITE_FONTS, SITE_FONT_KINDS, isSiteFontId } from "@/lib/siteFonts";
 import NumberField from "@/components/NumberField";
 import { ColourControl, FineTuneSection, TextStylesControl } from "@/components/layoutControls";
@@ -243,8 +246,11 @@ export default function PageStyleEditor({
               margins={blockBuild.margins}
               gridSpacing={blockBuild.gridSpacing}
               onMargins={(margins) => setBlockBuild({ ...blockBuild, margins })}
-              onGridSpacing={(gridSpacing) => setBlockBuild({ ...blockBuild, gridSpacing })}
+              onGridSpacing={(gridSpacing) =>
+                setBlockBuild({ ...blockBuild, gridSpacing: { ...blockBuild.gridSpacing, ...gridSpacing } })
+              }
             >
+              <PageWidthAndPhoneSpacing layout={blockBuild} onChange={setBlockBuild} />
               <TextStylesControl
                 value={blockBuild.textStyles}
                 fonts={SITE_FONTS}
@@ -269,6 +275,49 @@ export default function PageStyleEditor({
           Close
         </button>
       </div>
+    </div>
+  );
+}
+
+// A Block Build style's maximum page width (2026-10-22) — off = the
+// window's full width — and its grids' vertical spacing on a phone.
+function PageWidthAndPhoneSpacing({
+  layout,
+  onChange,
+}: {
+  layout: BlockBuildLayout;
+  onChange: (layout: BlockBuildLayout) => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={layout.maxWidth !== null}
+          onChange={(e) => onChange({ ...layout, maxWidth: e.target.checked ? DEFAULT_PAGE_MAX_WIDTH : null })}
+        />
+        Limit the page&apos;s width
+      </label>
+      {layout.maxWidth !== null && (
+        <NumberField
+          label="Maximum page width"
+          unit="pixels"
+          step={10}
+          value={layout.maxWidth}
+          limits={PAGE_MAX_WIDTH_LIMITS}
+          onCommit={(maxWidth) => onChange({ ...layout, maxWidth })}
+          wide
+        />
+      )}
+      <NumberField
+        label="Vertical grid spacing, phone"
+        unit="pixels"
+        step={1}
+        value={layout.gridSpacing.phoneVertical}
+        limits={GRID_SPACING_LIMITS.vertical}
+        onCommit={(phoneVertical) => onChange({ ...layout, gridSpacing: { ...layout.gridSpacing, phoneVertical } })}
+        wide
+      />
     </div>
   );
 }

@@ -24,17 +24,17 @@ import {
   type PageMargins,
   type VerticalAlign,
 } from "@/lib/rowLayout";
+import { PAGE_DESKTOP_WIDTH } from "@/lib/pageStyleLayout";
 import { rowBlockClass, rowBlockStyle, type PreviewDevice } from "@/components/pageRows";
 
 // The pieces of the visual editor (VisualLayoutEditor, 2026-10-07) —
 // the frame also shared with the Pages page's Arrange for a Block Build
 // page (PageSectionsArranger). The layout is drawn at its desktop width
-// (1280px for a page, 600px for a mail) or a phone's (390px), shrunk to
-// fit the panel; its margins, gaps and components' edges are dragged by
-// hand, and a selected component has a bar for alignment and its other
-// actions.
+// (a page's design width — see pageDesignWidth — or 600px for a mail)
+// or a phone's (390px), shrunk to fit the panel; its margins, gaps and
+// components' edges are dragged by hand, and a selected component has a
+// bar for alignment and its other actions.
 
-export const PAGE_DESKTOP_WIDTH = 1280;
 const PHONE_WIDTH = 390;
 
 // How much the page is shrunk to fit — pointer movements on screen are

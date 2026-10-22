@@ -3,6 +3,7 @@ import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 import {
   DEFAULT_GRID_SPACING,
   DEFAULT_PAGE_MARGINS,
+  GRID_SPACING_LIMITS,
   cleanColour,
   cleanGridSpacing,
   cleanNumber,
@@ -274,14 +275,40 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     byline?: LogoByline;
   };
 
+// A page's grid spacing: the spacing for every Gallery, with its own
+// vertical spacing on a phone (2026-10-22, from louisedear.com: 36px
+// between rows on a desktop, 20px on a phone). A style saved before
+// then uses its vertical spacing on phones too.
+export type PageGridSpacing = GridSpacing & { phoneVertical: number };
+
+function cleanPageGridSpacing(raw: unknown): PageGridSpacing {
+  const spacing = cleanGridSpacing(raw);
+  const phone = (raw as { phoneVertical?: unknown } | null)?.phoneVertical;
+  return { ...spacing, phoneVertical: cleanNumber(phone, GRID_SPACING_LIMITS.vertical, spacing.vertical, 0) };
+}
+
+// The width a page is designed at, in the editors and for sizing text:
+// a desktop's (1280px), or the page's maximum width when narrower.
+export const PAGE_DESKTOP_WIDTH = 1280;
+
+// The widest a page gets (2026-10-22, from louisedear.com's 1100px),
+// margins included, centred — a wider window shows the background
+// colour either side. null = the window's full width.
+export const PAGE_MAX_WIDTH_LIMITS = { min: 600, max: 2400 } as const;
+export const DEFAULT_PAGE_MAX_WIDTH = 1100;
+
+export function pageDesignWidth(layout: Pick<BlockBuildLayout, "maxWidth">): number {
+  return Math.min(PAGE_DESKTOP_WIDTH, layout.maxWidth ?? PAGE_DESKTOP_WIDTH);
+}
+
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {
   // A colour is styling, so the style keeps it; null = none.
   backgroundColor: string | null;
   // Whether the page has a background image — the image itself is
   // content, chosen on the page later.
   backgroundImage: boolean;
-  // Spacing for every Gallery block.
-  gridSpacing: GridSpacing;
+  maxWidth: number | null;
+  gridSpacing: PageGridSpacing;
   // How the text in its Header, Text and Text grid components looks.
   textStyles: TextStyles<SiteFontId>;
 };
@@ -329,7 +356,8 @@ export function emptyLayout(type: PageStyleType): PageStyleLayout {
     layout: {
       backgroundColor: null,
       backgroundImage: false,
-      gridSpacing: DEFAULT_GRID_SPACING,
+      maxWidth: null,
+      gridSpacing: cleanPageGridSpacing(DEFAULT_GRID_SPACING),
       margins: DEFAULT_PAGE_MARGINS,
       textStyles: DEFAULT_TEXT_STYLES,
       rows: {},
@@ -395,7 +423,11 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
     layout: {
       backgroundColor: cleanColour(value.backgroundColor),
       backgroundImage: value.backgroundImage === true,
-      gridSpacing: cleanGridSpacing(value.gridSpacing),
+      maxWidth:
+        value.maxWidth === null || value.maxWidth === undefined
+          ? null
+          : cleanNumber(value.maxWidth, PAGE_MAX_WIDTH_LIMITS, DEFAULT_PAGE_MAX_WIDTH, 0),
+      gridSpacing: cleanPageGridSpacing(value.gridSpacing),
       margins: cleanPageMargins(value.margins),
       textStyles: cleanTextStyles(value.textStyles, isSiteFontId),
       rows: cleanRows(value.rows ?? value.rowSpacing, blocks),

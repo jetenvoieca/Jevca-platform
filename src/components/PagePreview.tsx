@@ -10,9 +10,11 @@ import type { SiteArtist } from "@/lib/siteArtist";
 import {
   DEFAULT_GALLERY_PER_ROW,
   DEFAULT_LOGO_PHONE_WIDTH,
+  pageDesignWidth,
   type BlockBuildLayout,
   type GalleryPerRow,
   type LayoutBlock,
+  type PageGridSpacing,
   type PageTextStyle,
 } from "@/lib/pageStyleLayout";
 import {
@@ -20,7 +22,6 @@ import {
   groupBlocksByRow,
   rowKey,
   rowSettingsOf,
-  type GridSpacing,
   type HorizontalAlign,
   type PageMargins,
   type VerticalAlign,
@@ -40,7 +41,6 @@ import {
 } from "@/components/pageRows";
 import CurationSectionView from "@/components/CurationSectionView";
 import SiteFooter from "@/components/SiteFooter";
-import { PAGE_DESKTOP_WIDTH } from "@/components/visualEditorParts";
 import { bodyTextCss } from "@/components/textStyleCss";
 import CurationWorkView from "@/components/CurationWorkView";
 import { PresentationProvider } from "@/components/WorkPresentation";
@@ -334,7 +334,7 @@ export function blockFiller({
         <div className={phoneSizedClass(horizontal)}>
           <div
             className={phoneSizedItemClass()}
-            style={phoneSizedStyle(block.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH, designedWidth(block, layout.margins))}
+            style={phoneSizedStyle(block.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH, designedWidth(block, layout))}
           >
             {homeHref ? <a href={homeHref}>{logo}</a> : logo}
           </div>
@@ -355,7 +355,7 @@ export function blockFiller({
       if (!content.text) return null;
       const style = textStyleOf(block);
       const css = style
-        ? { ...bodyTextCss(style), ...scaledSize(style.size, designedWidth(block, layout.margins)) }
+        ? { ...bodyTextCss(style), ...scaledSize(style.size, designedWidth(block, layout)) }
         : undefined;
       return (
         <div style={{ containerType: "inline-size" }}>
@@ -442,6 +442,7 @@ function BlockBuildPage({
   return (
     <StyledFrame
       margins={layout.margins}
+      maxWidth={layout.maxWidth}
       backgroundColor={layout.backgroundColor}
       rows={rows}
       empty="Nothing on this page yet — use Arrange to type its header and drag the curation's works and sections onto it."
@@ -461,26 +462,29 @@ function scaledSize(size: number | null, designed: number): CSSProperties {
   return { fontSize: `clamp(${Math.round(size / 2)}px, ${((size * 100) / designed).toFixed(3)}cqi, ${size}px)` };
 }
 
-// A component's width in pixels on the page as designed: its share of a
-// desktop page (PAGE_DESKTOP_WIDTH) inside the desktop margins.
-function designedWidth(block: LayoutBlock, margins: PageMargins): number {
-  const inner = PAGE_DESKTOP_WIDTH - 2 * margins.desktop.horizontal;
+// A component's width in pixels on the page as designed: its share of
+// the page's design width (pageDesignWidth) inside the desktop margins.
+function designedWidth(block: LayoutBlock, layout: BlockBuildLayout): number {
+  const inner = pageDesignWidth(layout) - 2 * layout.margins.desktop.horizontal;
   return Math.round((blockWidthOf(block) / 100) * inner);
 }
 
 // The page's background and margin around its rows, then the site's
-// footer. Unfilled blocks are dropped, and so is any row left empty. It
-// grows to fill the space it's in (the whole window on the published
-// site), so the background reaches the bottom however short the page,
-// as it does in the admin preview.
+// footer, no wider than the page's maximum width (2026-10-22), centred.
+// Unfilled blocks are dropped, and so is any row left empty. It grows to
+// fill the space it's in (the whole window on the published site), so
+// the background reaches the bottom — and both sides — however short or
+// narrow the page, as it does in the admin preview.
 function StyledFrame({
   margins,
+  maxWidth,
   backgroundColor,
   rows: allRows,
   empty,
   footer,
 }: {
   margins: PageMargins;
+  maxWidth: number | null;
   backgroundColor: string | null;
   rows: Row[];
   empty: string;
@@ -491,28 +495,30 @@ function StyledFrame({
     .filter((r) => r.cells.length > 0);
 
   return (
-    <div
-      className={`flex min-h-full grow flex-col ${PAGE_MARGIN_CLASS}`}
-      style={{ ...pageMarginStyle(margins), backgroundColor: backgroundColor ?? undefined }}
-    >
-      {rows.length === 0 ? (
-        <Message text={empty} />
-      ) : (
-        rows.map((row, i) => (
-          <div
-            key={row.key}
-            className={rowClass(row.horizontal, row.vertical)}
-            style={{ marginTop: i > 0 ? rows[i - 1].below : 0, gap: row.between }}
-          >
-            {row.cells.map((c) => (
-              <div key={c.id} className={rowBlockClass()} style={rowBlockStyle(c.width)}>
-                {c.content}
-              </div>
-            ))}
-          </div>
-        ))
-      )}
-      {footer && <div className="mt-auto">{footer}</div>}
+    <div className="flex min-h-full grow flex-col" style={{ backgroundColor: backgroundColor ?? undefined }}>
+      <div
+        className={`mx-auto flex w-full grow flex-col ${PAGE_MARGIN_CLASS}`}
+        style={{ ...pageMarginStyle(margins), maxWidth: maxWidth ?? undefined }}
+      >
+        {rows.length === 0 ? (
+          <Message text={empty} />
+        ) : (
+          rows.map((row, i) => (
+            <div
+              key={row.key}
+              className={rowClass(row.horizontal, row.vertical)}
+              style={{ marginTop: i > 0 ? rows[i - 1].below : 0, gap: row.between }}
+            >
+              {row.cells.map((c) => (
+                <div key={c.id} className={rowBlockClass()} style={rowBlockStyle(c.width)}>
+                  {c.content}
+                </div>
+              ))}
+            </div>
+          ))
+        )}
+        {footer && <div className="mt-auto">{footer}</div>}
+      </div>
     </div>
   );
 }
@@ -572,7 +578,7 @@ function ImageGrid({
   onOpen,
 }: {
   images: GridImage[];
-  spacing: GridSpacing;
+  spacing: PageGridSpacing;
   perRow: GalleryPerRow;
   names?: PageTextStyle | null;
   onOpen?: (id: string) => void;
