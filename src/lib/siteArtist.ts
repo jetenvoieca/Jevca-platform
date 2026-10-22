@@ -16,6 +16,8 @@ export type SiteFooter = {
 
 export type SiteArtist = {
   logoUrl: string | null;
+  // Words under the Logo (2026-10-22); absent from sites published before.
+  logoByline?: string | null;
   footer: SiteFooter;
 };
 

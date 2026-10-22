@@ -77,6 +77,7 @@ type ArtistData = {
   writingVoice: string | null;
   instagramHandle: string | null;
   showFooterAddress: boolean;
+  logoByline: string | null;
   // The Certificate of Authenticity's signature image (2026-09-03) —
   // see the matching note by saveArtistSignature in lib/actions.ts.
   signatureUrl: string | null;
@@ -335,7 +336,10 @@ export default function SiteSettingsPanel({
     });
   };
 
-  const handleProfileTextSave = (field: "story" | "writingVoice" | "instagramHandle", value: string) => {
+  const handleProfileTextSave = (
+    field: "story" | "writingVoice" | "instagramHandle" | "logoByline",
+    value: string,
+  ) => {
     startTransition(async () => {
       await updateArtistProfileText(artist.id, field, value);
       router.refresh();
@@ -422,6 +426,23 @@ export default function SiteSettingsPanel({
             Used when a campaign mail is translated into French, so it reads in this {client}&apos;s voice.
           </p>
           {savedField === "writingVoice" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+
+          <label className={`${labelCls} mt-4`}>Words under the logo</label>
+          <input
+            key={`byline-${artist.id}`}
+            type="text"
+            defaultValue={artist.logoByline || ""}
+            onBlur={(e) => handleProfileTextSave("logoByline", e.target.value)}
+            disabled={isPending}
+            maxLength={80}
+            placeholder="e.g. Painter of Passion"
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-neutral-400">
+            Shown under the Logo on the website; its look is set on the Logo in Page Styles. Re-publish the site
+            after changing it.
+          </p>
+          {savedField === "logoByline" && <p className="mt-1 text-xs text-green-600">Saved</p>}
 
           <label className={`${labelCls} mt-4`}>Instagram username</label>
           <input

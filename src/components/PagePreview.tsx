@@ -305,7 +305,20 @@ function BlockBuildPage({
   const fill = (block: LayoutBlock, horizontal: HorizontalAlign): ReactNode => {
     if (block.type === "logo") {
       if (!artist?.logoUrl) return null;
-      const logo = <FadeImage src={artist.logoUrl} alt="" className="block w-full" />;
+      const byline = artist.logoByline && block.byline;
+      const logo = (
+        <>
+          <FadeImage src={artist.logoUrl} alt="" className="block w-full" />
+          {byline && (
+            <p
+              className="mt-1 whitespace-nowrap leading-none"
+              style={{ ...bodyTextCss(block.byline!.style), textAlign: block.byline!.align }}
+            >
+              {artist.logoByline}
+            </p>
+          )}
+        </>
+      );
       return (
         <div className={phoneSizedClass(horizontal)}>
           <div

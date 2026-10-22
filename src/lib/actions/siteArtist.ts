@@ -19,11 +19,13 @@ export async function getSiteArtist(artistId: string): Promise<SiteArtist | null
       city: true,
       country: true,
       showFooterAddress: true,
+      logoByline: true,
     },
   });
   if (!artist) return null;
   return {
     logoUrl: artist.logoUrl ? storedFileUrl(artist.logoUrl) : null,
+    logoByline: artist.logoByline,
     footer: {
       name: artist.name,
       town: artist.showFooterAddress ? artistTownLine(artist) : null,

@@ -190,6 +190,9 @@ model Artist {
   // The artist's Instagram username, without the @ (2026-10-19) — the
   // Presentation window's enquiry form offers "Or DM on Instagram".
   instagramHandle String?
+  // Words shown under the artist's Logo on their website (2026-10-22,
+  // e.g. "Painter of Passion") — its look is set on the Logo component.
+  logoByline      String?
   // Whether the artist's address shows in the footer of their campaign
   // mails and website pages (2026-10-21, Craig's choice — per artist).
   // Mails sent to people in the USA legally need a postal address.

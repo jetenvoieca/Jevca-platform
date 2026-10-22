@@ -143,6 +143,24 @@ export function cleanLogoPhoneWidth(raw: unknown): number {
   return cleanNumber(raw, LOGO_PHONE_WIDTH_LIMITS, DEFAULT_LOGO_PHONE_WIDTH, 0);
 }
 
+// The words under a Logo (2026-10-22, from Louise Dear's site — typed
+// once per artist in Settings → Personal Profile): their look, and where
+// they sit under the logo.
+export type LogoByline = { style: TextStyle<SiteFontId>; align: "left" | "center" | "right" };
+
+export const DEFAULT_LOGO_BYLINE: LogoByline = {
+  style: { font: "cormorant-garamond", size: 32, look: "italic", colour: "#d4708f" },
+  align: "right",
+};
+
+export function cleanLogoByline(raw: unknown): LogoByline {
+  const value = (raw ?? {}) as Partial<Record<keyof LogoByline, unknown>>;
+  return {
+    style: value.style ? cleanTextStyle(value.style, isSiteFontId) : DEFAULT_LOGO_BYLINE.style,
+    align: value.align === "left" || value.align === "center" ? value.align : "right",
+  };
+}
+
 // How many images a Gallery shows across (2026-10-19, Craig's request),
 // on a desktop and on a phone. Set in Fine-tune.
 export type GalleryPerRow = { desktop: number; phone: number };
@@ -245,6 +263,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     perRow?: GalleryPerRow;
     names?: PageTextStyle | null;
     hero?: HeroSettings;
+    byline?: LogoByline;
   };
 
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {
@@ -347,6 +366,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           }
           if (clean.type === "logo") {
             clean.phoneWidth = cleanLogoPhoneWidth((b as Partial<LayoutBlock>).phoneWidth);
+            clean.byline = cleanLogoByline((b as Partial<LayoutBlock>).byline);
           }
           if (clean.type === "gallery") {
             clean.perRow = cleanGalleryPerRow((b as Partial<LayoutBlock>).perRow);
@@ -380,7 +400,7 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   const id = crypto.randomUUID();
   if (type === "slidingdoors") return { id, type, doors: DEFAULT_SLIDING_DOORS };
   if (type === "signup") return { id, type, signup: DEFAULT_SIGNUP_LOOK };
-  if (type === "logo") return { id, type, phoneWidth: DEFAULT_LOGO_PHONE_WIDTH };
+  if (type === "logo") return { id, type, phoneWidth: DEFAULT_LOGO_PHONE_WIDTH, byline: DEFAULT_LOGO_BYLINE };
   if (type === "gallery") return { id, type, perRow: DEFAULT_GALLERY_PER_ROW, names: null };
   if (type === "hero") return { id, type, hero: DEFAULT_HERO };
   return { id, type };

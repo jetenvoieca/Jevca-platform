@@ -253,7 +253,7 @@ export async function updateArtistFooterAddress(artistId: string, show: boolean)
 
 export async function updateArtistProfileText(
   artistId: string,
-  field: "story" | "writingVoice" | "instagramHandle",
+  field: "story" | "writingVoice" | "instagramHandle" | "logoByline",
   value: string,
 ): Promise<void> {
   // An Instagram username is kept bare: "@louisedear" or a link to the

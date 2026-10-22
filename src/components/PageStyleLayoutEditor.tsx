@@ -8,6 +8,8 @@ import {
   LOGO_PHONE_WIDTH_LIMITS,
   SLIDING_DOORS_LIMITS,
   DEFAULT_GALLERY_NAMES,
+  DEFAULT_LOGO_BYLINE,
+  cleanLogoByline,
   HERO_LIMITS,
   cleanGalleryNames,
   cleanHero,
@@ -70,6 +72,40 @@ export default function PageStyleLayoutEditor({
             button: "Settings",
             title: "Hero",
             content: <HeroSettingsPanel hero={b.hero} onChange={(hero) => onBlock({ ...b, hero: cleanHero(hero) })} />,
+          };
+        }
+        if (b.type === "logo") {
+          const byline = b.byline ?? DEFAULT_LOGO_BYLINE;
+          return {
+            button: "Byline",
+            title: "Words under the logo",
+            content: (
+              <>
+                <TextStyleBox
+                  label="Look"
+                  value={byline.style}
+                  fonts={SITE_FONTS}
+                  kinds={SITE_FONT_KINDS}
+                  isFont={isSiteFontId}
+                  onChange={(style) => onBlock({ ...b, byline: cleanLogoByline({ ...byline, style }) })}
+                />
+                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                  <span className="flex-1">Sits</span>
+                  <select
+                    value={byline.align}
+                    onChange={(e) => onBlock({ ...b, byline: cleanLogoByline({ ...byline, align: e.target.value }) })}
+                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                  >
+                    <option value="left">Left</option>
+                    <option value="center">Centred</option>
+                    <option value="right">Right</option>
+                  </select>
+                </label>
+                <p className="text-xs text-neutral-400">
+                  The words are typed once per artist, in Settings → Personal Profile.
+                </p>
+              </>
+            ),
           };
         }
         if (b.type === "gallery") {
