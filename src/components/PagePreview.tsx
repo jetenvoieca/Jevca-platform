@@ -595,8 +595,8 @@ type GridImage = { id: string; url: string | null; title?: string; price?: strin
 // phone, spaced as the style's grid spacing. With `onOpen`, clicking one
 // opens it. With `names` (2026-10-22), each work's name under it in that
 // look. `tiles` (2026-10-22): names on one line, the hover zoom and veil
-// with the price, and the outline round `outlinedId` (the work showing
-// in the page's Hero).
+// with the price, the outline round `outlinedId` (the work showing in
+// the page's Hero) and the corners' rounding.
 function ImageGrid({
   images,
   spacing,
@@ -623,7 +623,7 @@ function ImageGrid({
         const outline = tiles.heroOutline && img.id === outlinedId ? tiles.heroOutline : null;
         const inside = (
           <>
-            <div className="relative overflow-hidden rounded">
+            <div className="relative overflow-hidden" style={{ borderRadius: tiles.rounding }}>
               <div className={tiles.zoom ? "transition-transform duration-[400ms] group-hover:scale-[1.04]" : ""}>
                 {img.url ? (
                   <FadeImage src={img.url} alt={img.title ?? ""} className="aspect-square w-full object-cover" />

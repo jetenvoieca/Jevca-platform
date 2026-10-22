@@ -196,10 +196,25 @@ export function cleanGalleryNames(raw: unknown): PageTextStyle | null {
 // How a Gallery's works behave (2026-10-22, from louisedear.com): names
 // on one line, cut with "…" when too long; on hover the picture zooms a
 // little and/or a dark veil shows the price; and the work showing in a
-// Hero on the same page outlined in `heroOutline` (null = not).
-export type GalleryTiles = { oneLineNames: boolean; zoom: boolean; veil: boolean; heroOutline: string | null };
+// Hero on the same page outlined in `heroOutline` (null = not); the
+// pictures' corners rounded by `rounding` pixels (0 = square).
+export type GalleryTiles = {
+  oneLineNames: boolean;
+  zoom: boolean;
+  veil: boolean;
+  heroOutline: string | null;
+  rounding: number;
+};
 
-export const DEFAULT_GALLERY_TILES: GalleryTiles = { oneLineNames: false, zoom: false, veil: false, heroOutline: null };
+export const GALLERY_ROUNDING_LIMITS = { min: 0, max: 40 } as const;
+
+export const DEFAULT_GALLERY_TILES: GalleryTiles = {
+  oneLineNames: false,
+  zoom: false,
+  veil: false,
+  heroOutline: null,
+  rounding: 4,
+};
 
 export function cleanGalleryTiles(raw: unknown): GalleryTiles {
   const value = (raw ?? {}) as Partial<Record<keyof GalleryTiles, unknown>>;
@@ -208,6 +223,7 @@ export function cleanGalleryTiles(raw: unknown): GalleryTiles {
     zoom: value.zoom === true,
     veil: value.veil === true,
     heroOutline: cleanColour(value.heroOutline),
+    rounding: cleanNumber(value.rounding, GALLERY_ROUNDING_LIMITS, DEFAULT_GALLERY_TILES.rounding, 0),
   };
 }
 

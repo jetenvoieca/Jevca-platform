@@ -10,6 +10,7 @@ import {
   SLIDING_DOORS_LIMITS,
   DEFAULT_GALLERY_NAMES,
   DEFAULT_GALLERY_TILES,
+  GALLERY_ROUNDING_LIMITS,
   cleanGalleryTiles,
   type GalleryTiles,
   DEFAULT_LOGO_BYLINE,
@@ -432,8 +433,8 @@ function HeroSettingsPanel({ hero, onChange }: { hero: HeroSettings; onChange: (
 
 // A Gallery's settings (2026-10-22): its works' names under them, on or
 // off, their look and whether they stay on one line; the hover zoom and
-// veil with the price; and the outline round the work showing in the
-// page's Hero.
+// veil with the price; the outline round the work showing in the page's
+// Hero; and the pictures' rounded corners.
 function GallerySettingsPanel({
   names,
   tiles,
@@ -475,6 +476,15 @@ function GallerySettingsPanel({
           {tick("oneLineNames", "Names on one line, cut with … when too long")}
         </>
       )}
+      <NumberField
+        label="Rounded corners"
+        unit="pixels"
+        step={1}
+        value={tiles.rounding}
+        limits={GALLERY_ROUNDING_LIMITS}
+        onCommit={(rounding) => onTiles({ ...tiles, rounding })}
+        wide
+      />
       {tick("zoom", "On hover: the picture zooms a little")}
       {tick("veil", "On hover: a dark veil with the price")}
       <label className="flex items-center gap-2 text-sm text-neutral-700">
