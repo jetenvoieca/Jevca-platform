@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   createPageStyle,
@@ -10,11 +10,7 @@ import {
   type PageStyleSummary,
 } from "@/lib/actions/pageStyles";
 import { pageStyleTypeLabel } from "@/lib/pageStyleTypes";
-import PageStyleEditor, {
-  draftFrom,
-  draftLayout,
-  type PageStyleDraft,
-} from "@/components/PageStyleEditor";
+import PageStyleEditor, { draftFrom, draftLayout, type PageStyleDraft } from "@/components/PageStyleEditor";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAutoSave } from "@/components/useAutoSave";
 import PageStylePreview from "@/components/PageStylePreview";
@@ -36,13 +32,22 @@ import PageStyleLayoutEditor from "@/components/PageStyleLayoutEditor";
 export default function PageStylesManager({
   styles,
   presentationTemplates,
+  initialEditId = null,
+  backHref = null,
 }: {
   styles: PageStyleSummary[];
   presentationTemplates: { id: string; name: string }[];
+  // Opened from a page's Template button (2026-10-22): that style's
+  // editor open at once, and Close (or Back to page) goes back there.
+  initialEditId?: string | null;
+  backHref?: string | null;
 }) {
   const router = useRouter();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [draft, setDraft] = useState<PageStyleDraft | null>(null);
+  const initialStyle = styles.find((s) => s.id === initialEditId) ?? null;
+  const [selectedId, setSelectedId] = useState<string | null>(initialStyle?.id ?? null);
+  const [draft, setDraft] = useState<PageStyleDraft | null>(() =>
+    initialStyle ? draftFrom(initialStyle.name, initialStyle) : null,
+  );
   const [listError, setListError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -65,6 +70,13 @@ export default function PageStylesManager({
 
   const selected = styles.find((s) => s.id === selectedId) ?? null;
 
+  // Opened for one style: its saves go to it.
+  useEffect(() => {
+    if (initialStyle) autoSave.begin(initialStyle.id);
+    // Only when first opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleChange = (next: PageStyleDraft) => {
     setDraft(next);
     autoSave.schedule(next);
@@ -77,10 +89,12 @@ export default function PageStylesManager({
   };
 
   // Saves anything still waiting before closing, so nothing is lost.
+  // Opened from a page, Close goes back to it.
   const closeEditor = () => {
     startTransition(async () => {
       await autoSave.flush();
-      setDraft(null);
+      if (backHref) router.push(backHref);
+      else setDraft(null);
     });
   };
 
@@ -120,9 +134,17 @@ export default function PageStylesManager({
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col rounded-lg border border-neutral-300 bg-white p-4">
-        <h2 className="text-center text-base text-neutral-800">
-          {editingVisually ? "Layout" : "Preview"}
-        </h2>
+        {backHref && (
+          <button
+            type="button"
+            onClick={closeEditor}
+            disabled={isPending}
+            className="self-start rounded-md border border-neutral-300 px-2 py-1 text-xs text-neutral-700 hover:bg-neutral-50"
+          >
+            ← Back to the page
+          </button>
+        )}
+        <h2 className="text-center text-base text-neutral-800">{editingVisually ? "Layout" : "Preview"}</h2>
         {previewName !== undefined ? (
           <div className="flex min-h-0 flex-1 flex-col">
             <h3 className="mb-4 mt-2 text-center text-xl text-neutral-900">{previewName}</h3>
@@ -136,9 +158,7 @@ export default function PageStylesManager({
                 {previewStyle ? (
                   <PageStylePreview style={previewStyle} />
                 ) : (
-                  <p className="py-10 text-center text-sm text-neutral-400">
-                    Choose a Style Type to see its layout.
-                  </p>
+                  <p className="py-10 text-center text-sm text-neutral-400">Choose a Style Type to see its layout.</p>
                 )}
               </div>
             )}
@@ -200,9 +220,7 @@ export default function PageStylesManager({
             {listError && <p className="mb-2 text-xs text-red-600">{listError}</p>}
             <div className="flex flex-1 flex-col gap-1 overflow-y-auto">
               {styles.length === 0 && (
-                <p className="py-4 text-center text-xs text-neutral-400">
-                  No styles yet. Use Add to create one.
-                </p>
+                <p className="py-4 text-center text-xs text-neutral-400">No styles yet. Use Add to create one.</p>
               )}
               {styles.map((s) => (
                 <button
@@ -216,9 +234,7 @@ export default function PageStylesManager({
                   }`}
                 >
                   <span className="truncate">{s.name}</span>
-                  <span className="shrink-0 text-xs text-neutral-400">
-                    {pageStyleTypeLabel(s.type)}
-                  </span>
+                  <span className="shrink-0 text-xs text-neutral-400">{pageStyleTypeLabel(s.type)}</span>
                 </button>
               ))}
             </div>

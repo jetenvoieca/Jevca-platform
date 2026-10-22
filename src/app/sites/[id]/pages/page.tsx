@@ -9,8 +9,15 @@ export const dynamic = "force-dynamic";
 
 // Website → Pages (2026-10-04): the one place a site's pages are listed,
 // ordered and managed — see PagesManager.tsx.
-export default async function PagesPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PagesPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ page?: string }>;
+}) {
   const { id } = await params;
+  const { page: initialPageId } = await searchParams;
   const site = await db.site.findUnique({
     where: { id },
     select: { artistId: true, menuStyleId: true },
@@ -44,6 +51,7 @@ export default async function PagesPage({ params }: { params: Promise<{ id: stri
       pageStyles={pageStyles}
       menuStyles={menuStyles}
       siteMenuStyleId={site.menuStyleId}
+      initialPageId={initialPageId ?? null}
     />
   );
 }

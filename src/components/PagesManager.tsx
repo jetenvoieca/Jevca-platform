@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createPage,
@@ -66,6 +67,7 @@ export default function PagesManager({
   pageStyles,
   menuStyles,
   siteMenuStyleId,
+  initialPageId = null,
 }: {
   siteId: string;
   artistId: string;
@@ -74,17 +76,19 @@ export default function PagesManager({
   pageStyles: PageStyleSummary[];
   menuStyles: MenuStyleSummary[];
   siteMenuStyleId: string | null;
+  // The page to start on (coming back from its Display Style).
+  initialPageId?: string | null;
 }) {
   const router = useRouter();
   const [live, setLive] = useState(() => pages.filter((p) => p.visible));
   const [hidden, setHidden] = useState(() => pages.filter((p) => !p.visible));
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(
+    initialPageId && pages.some((p) => p.id === initialPageId) ? initialPageId : null,
+  );
   const [dragged, setDragged] = useState<{ id: string; from: ListKey } | null>(null);
   // Where the dragged page would land: before `beforeId` in `list`, or at
   // the end of `list` when beforeId is null.
-  const [dropTarget, setDropTarget] = useState<{ list: ListKey; beforeId: string | null } | null>(
-    null
-  );
+  const [dropTarget, setDropTarget] = useState<{ list: ListKey; beforeId: string | null } | null>(null);
   const [isPending, startTransition] = useTransition();
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
@@ -107,14 +111,11 @@ export default function PagesManager({
   }, [pages]);
 
   const selected = [...live, ...hidden].find((p) => p.id === selectedId) ?? null;
-  const selectedStyle = selected
-    ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null)
-    : null;
+  const selectedStyle = selected ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null) : null;
   const canvasStyle = selectedStyle?.type === "CANVAS" ? selectedStyle : null;
   // A Block Build page is arranged from its curation's sections, so
   // it needs one.
-  const blockBuildStyle =
-    selectedStyle?.type === "BLOCK_BUILD" && selected?.curationId ? selectedStyle : null;
+  const blockBuildStyle = selectedStyle?.type === "BLOCK_BUILD" && selected?.curationId ? selectedStyle : null;
   const canArrange = !!canvasStyle || !!blockBuildStyle;
   const arrangingSections = arranging && !!blockBuildStyle;
 
@@ -140,9 +141,7 @@ export default function PagesManager({
       const moved = { ...page, visible: dropTarget.list === "live" };
       const without = remove(list);
       const index =
-        dropTarget.beforeId === null
-          ? without.length
-          : without.findIndex((p) => p.id === dropTarget.beforeId);
+        dropTarget.beforeId === null ? without.length : without.findIndex((p) => p.id === dropTarget.beforeId);
       return [...without.slice(0, index), moved, ...without.slice(index)];
     };
 
@@ -150,7 +149,7 @@ export default function PagesManager({
     setDropTarget(null);
     saveLists(
       dropTarget.list === "live" ? insert(live) : remove(live),
-      dropTarget.list === "hidden" ? insert(hidden) : remove(hidden)
+      dropTarget.list === "hidden" ? insert(hidden) : remove(hidden),
     );
   };
 
@@ -162,8 +161,8 @@ export default function PagesManager({
       reorderPages(
         siteId,
         nextLive.map((p) => p.id),
-        nextHidden.map((p) => p.id)
-      )
+        nextHidden.map((p) => p.id),
+      ),
     );
   };
 
@@ -238,28 +237,43 @@ export default function PagesManager({
           return (
             <div key={p.id}>
               {showLine && <div className="mb-1 h-0.5 rounded bg-neutral-900" />}
-              <button
-                type="button"
-                draggable
-                onDragStart={() => setDragged({ id: p.id, from: key })}
-                onDragEnd={() => {
-                  setDragged(null);
-                  setDropTarget(null);
-                }}
-                onDragOver={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setDropTarget({ list: key, beforeId: p.id });
-                }}
-                onClick={() => selectPage(p.id)}
-                className={`w-full cursor-grab truncate rounded-md border px-3 py-2 text-left text-sm active:cursor-grabbing ${
-                  p.id === selectedId
-                    ? "border-neutral-900 bg-neutral-100 text-neutral-900"
-                    : "border-neutral-200 text-neutral-700 hover:bg-neutral-50"
-                } ${dragged?.id === p.id ? "opacity-40" : ""}`}
-              >
-                {p.title}
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  draggable
+                  onDragStart={() => setDragged({ id: p.id, from: key })}
+                  onDragEnd={() => {
+                    setDragged(null);
+                    setDropTarget(null);
+                  }}
+                  onDragOver={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setDropTarget({ list: key, beforeId: p.id });
+                  }}
+                  onClick={() => selectPage(p.id)}
+                  className={`min-w-0 flex-1 cursor-grab truncate rounded-md border px-3 py-2 text-left text-sm active:cursor-grabbing ${
+                    p.id === selectedId
+                      ? "border-neutral-900 bg-neutral-100 text-neutral-900"
+                      : "border-neutral-200 text-neutral-700 hover:bg-neutral-50"
+                  } ${dragged?.id === p.id ? "opacity-40" : ""}`}
+                >
+                  {p.title}
+                </button>
+                {/* Straight to the page's Display Style (2026-10-22, Craig's
+                  request), and back to this page from there. */}
+                {p.pageStyleId && (
+                  <Link
+                    href={`/templates/page-styles?edit=${p.pageStyleId}&back=${encodeURIComponent(
+                      `/sites/${siteId}/pages?page=${p.id}`,
+                    )}`}
+                    title="Edit this page's Display Style"
+                    className="shrink-0 rounded-md border border-neutral-200 px-2 py-2 text-xs text-neutral-600 hover:bg-neutral-50"
+                  >
+                    Template
+                  </Link>
+                )}
+              </div>
             </div>
           );
         })}
@@ -304,12 +318,7 @@ export default function PagesManager({
 
       <aside className="flex min-h-0 flex-col gap-4">
         <div className="grid grid-cols-4 gap-2">
-          <button
-            type="button"
-            onClick={() => openModal("add")}
-            disabled={isPending}
-            className={buttonClass}
-          >
+          <button type="button" onClick={() => openModal("add")} disabled={isPending} className={buttonClass}>
             Add
           </button>
           <button
