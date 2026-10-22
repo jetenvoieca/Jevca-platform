@@ -2,11 +2,11 @@
 
 import {
   DEFAULT_GALLERY_PER_ROW,
-  DEFAULT_LOGO_PHONE_WIDTH,
+  DEFAULT_LOGO_HEIGHT,
   GALLERY_PER_ROW_LIMITS,
   GALLERY_SMALLEST_LIMITS,
   LAYOUT_BLOCK_TYPES,
-  LOGO_PHONE_WIDTH_LIMITS,
+  LOGO_HEIGHT_LIMITS,
   SLIDING_DOORS_LIMITS,
   DEFAULT_GALLERY_NAMES,
   DEFAULT_GALLERY_TILES,
@@ -22,7 +22,7 @@ import {
   type HeroSettings,
   type PageTextStyle,
   cleanGalleryPerRow,
-  cleanLogoPhoneWidth,
+  cleanLogoHeight,
   cleanSignupLook,
   cleanSlidingDoors,
   newLayoutBlock,
@@ -165,16 +165,17 @@ export default function PageStyleLayoutEditor({
         }
         return null;
       }}
-      phoneWidth={(b, onBlock) =>
-        b.type === "logo"
-          ? {
-              value: b.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH,
-              limits: LOGO_PHONE_WIDTH_LIMITS,
-              onCommit: (value) => onBlock({ ...b, phoneWidth: cleanLogoPhoneWidth(value) }),
-            }
-          : null
-      }
       fineTune={(b, onBlock) => {
+        if (b.type === "logo") {
+          const height = b.logoHeight ?? DEFAULT_LOGO_HEIGHT;
+          return (["desktop", "phone"] as const).map((device) => ({
+            label: `Height, ${device}`,
+            unit: "pixels",
+            value: height[device],
+            limits: LOGO_HEIGHT_LIMITS,
+            onCommit: (value: number) => onBlock({ ...b, logoHeight: cleanLogoHeight({ ...height, [device]: value }) }),
+          }));
+        }
         if (b.type !== "gallery") return null;
         const perRow = b.perRow ?? DEFAULT_GALLERY_PER_ROW;
         const save = (patch: Partial<typeof perRow>) =>

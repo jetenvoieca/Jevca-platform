@@ -106,14 +106,6 @@ export type TextStyleFonts = {
   scales?: boolean;
 };
 
-// A component's own width on a phone, in Fine-tune (a Page Style's Logo,
-// 2026-10-13) — every other component is full width there.
-export type BlockPhoneWidth = {
-  value: number;
-  limits: { min: number; max: number };
-  onCommit: (value: number) => void;
-};
-
 // A component's own number settings at the end of Fine-tune (a Page
 // Style's Gallery's images per row, 2026-10-19).
 export type BlockFineTuneField = {
@@ -142,7 +134,6 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
   renderBlock,
   settingsPanel,
   blockToggle,
-  phoneWidth,
   fineTune,
   textStyleFonts,
   desktopWidth,
@@ -163,8 +154,6 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
   settingsPanel?: (block: B, onBlock: (block: B) => void) => BlockSettingsPanel | null;
   // A component's on / off switch, if it has one.
   blockToggle?: (block: B) => BlockToggle | null;
-  // A component's own width on a phone, if it has one; `onBlock` saves it.
-  phoneWidth?: (block: B, onBlock: (block: B) => void) => BlockPhoneWidth | null;
   // A component's own Fine-tune settings, if it has any; `onBlock` saves them.
   fineTune?: (block: B, onBlock: (block: B) => void) => BlockFineTuneField[] | null;
   // Header, Text and Text grid components get a Text style button for
@@ -334,9 +323,6 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
                             onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) }),
                           )}
                           toggle={blockToggle?.(b)}
-                          phoneWidth={phoneWidth?.(b, (next) =>
-                            onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) }),
-                          )}
                           fineTune={fineTune?.(b, (next) =>
                             onChange({ ...layout, blocks: replaceBlock(layout.blocks, next) }),
                           )}
@@ -479,7 +465,6 @@ function BlockItem<B extends RowBlock>({
   dropSide,
   ownSettings,
   toggle,
-  phoneWidth,
   fineTune,
   textStyle,
   onSelect,
@@ -501,7 +486,6 @@ function BlockItem<B extends RowBlock>({
   dropSide: "left" | "right" | null;
   ownSettings: BlockSettingsPanel | null | undefined;
   toggle: BlockToggle | null | undefined;
-  phoneWidth: BlockPhoneWidth | null | undefined;
   fineTune: BlockFineTuneField[] | null | undefined;
   textStyle: BlockTextStyle | null;
   onSelect: () => void;
@@ -612,19 +596,7 @@ function BlockItem<B extends RowBlock>({
                 wide
               />
             )}
-            {phoneWidth ? (
-              <NumberField
-                label="Width, phone"
-                unit="%"
-                step={1}
-                value={phoneWidth.value}
-                limits={phoneWidth.limits}
-                onCommit={phoneWidth.onCommit}
-                wide
-              />
-            ) : (
-              <p className="text-xs text-neutral-400">On a phone every component is full width.</p>
-            )}
+            <p className="text-xs text-neutral-400">On a phone every component is full width.</p>
             {fineTune?.map((field) => (
               <NumberField
                 key={field.label}

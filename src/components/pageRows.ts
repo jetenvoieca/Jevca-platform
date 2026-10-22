@@ -47,30 +47,16 @@ export function rowBlockStyle(width: number): CSSProperties {
   return { "--block-width": `${width}%` } as CSSProperties;
 }
 
-// A component with its own width on a phone (a Logo, 2026-10-13): placed
-// by its row's alignment and `phoneWidth` % of the screen on a phone,
-// full width of its component from md up — and never wider than
-// `maxWidth` pixels, its size on the page as designed, so it doesn't
-// grow on a tablet or a wide screen. Without a `device` the screen's
-// width decides.
-const PHONE_JUSTIFY: Record<HorizontalAlign, string> = {
+// Something narrower than its component (a Logo, 2026-10-13), placed
+// by its row's alignment.
+const JUSTIFY_INSIDE: Record<HorizontalAlign, string> = {
   left: "justify-start",
   center: "justify-center",
   right: "justify-end",
 };
 
-export function phoneSizedClass(horizontal: HorizontalAlign): string {
-  return `flex ${PHONE_JUSTIFY[horizontal]}`;
-}
-
-export function phoneSizedItemClass(device?: PreviewDevice): string {
-  if (device === "phone") return "w-[var(--phone-width)]";
-  if (device === "desktop") return "w-full";
-  return "w-[var(--phone-width)] site:w-full";
-}
-
-export function phoneSizedStyle(phoneWidth: number, maxWidth: number): CSSProperties {
-  return { "--phone-width": `${phoneWidth}%`, maxWidth } as CSSProperties;
+export function alignedInsideClass(horizontal: HorizontalAlign): string {
+  return `flex ${JUSTIFY_INSIDE[horizontal]}`;
 }
 
 // A Gallery's images across (2026-10-19; reworked 2026-10-22): as many

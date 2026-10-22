@@ -10,12 +10,13 @@ import type { SiteArtist } from "@/lib/siteArtist";
 import {
   DEFAULT_GALLERY_PER_ROW,
   DEFAULT_GALLERY_TILES,
-  DEFAULT_LOGO_PHONE_WIDTH,
+  DEFAULT_LOGO_HEIGHT,
   pageContentWidth,
   type BlockBuildLayout,
   type GalleryPerRow,
   type GalleryTiles,
   type LayoutBlock,
+  type LogoHeight,
   type PageGridSpacing,
   type PageTextStyle,
 } from "@/lib/pageStyleLayout";
@@ -32,9 +33,7 @@ import { isTextComponent, mergeTextStyle } from "@/lib/textStyle";
 import { useSiteData, type PageContent } from "@/lib/siteData";
 import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
 import {
-  phoneSizedClass,
-  phoneSizedItemClass,
-  phoneSizedStyle,
+  alignedInsideClass,
   perRowClass,
   perRowStyle,
   rowBlockClass,
@@ -72,9 +71,9 @@ import FadeImage from "@/components/FadeImage";
 //   and images removed on this page are left out, in the order chosen
 //   here (2026-10-13). A Sign-up form (2026-10-10) shows once it's set
 //   up in Arrange — see SignupForm. A Logo (2026-10-13) is the artist's
-//   Logo from Settings, as wide as the component (its phone width on a
-//   phone), never bigger than on the page as designed, linking to the
-//   site's home page on the published site.
+//   Logo from Settings, at its height on a desktop or a phone (never
+//   wider than the component), linking to the site's home page on the
+//   published site.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Every page but a Canvas ends with the site's footer (2026-10-13) — see
 // SiteFooter.
@@ -345,7 +344,11 @@ export function blockFiller({
       const byline = artist.logoByline && block.byline;
       const logo = (
         <>
-          <FadeImage src={artist.logoUrl} alt="" className="block w-full" />
+          <FadeImage
+            src={artist.logoUrl}
+            alt=""
+            className="block h-[var(--logo-h-phone)] w-auto max-w-full object-contain site:h-[var(--logo-h)]"
+          />
           {byline && (
             <p
               className="mt-1 whitespace-nowrap leading-none"
@@ -357,11 +360,8 @@ export function blockFiller({
         </>
       );
       return (
-        <div className={phoneSizedClass(horizontal)}>
-          <div
-            className={phoneSizedItemClass()}
-            style={phoneSizedStyle(block.phoneWidth ?? DEFAULT_LOGO_PHONE_WIDTH, designedWidth(block, layout))}
-          >
+        <div className={alignedInsideClass(horizontal)}>
+          <div className="min-w-0" style={logoHeightStyle(block.logoHeight ?? DEFAULT_LOGO_HEIGHT)}>
             {homeHref ? <a href={homeHref}>{logo}</a> : logo}
           </div>
         </div>
@@ -486,10 +486,9 @@ function BlockBuildPage({
   );
 }
 
-// A component's width in pixels on the page as designed: its share of
-// the page's contents as designed (pageContentWidth).
-function designedWidth(block: LayoutBlock, layout: BlockBuildLayout): number {
-  return Math.round((blockWidthOf(block) / 100) * pageContentWidth(layout));
+// A Logo's height on a desktop and on a phone (2026-10-22).
+function logoHeightStyle(height: LogoHeight): CSSProperties {
+  return { "--logo-h": `${height.desktop}px`, "--logo-h-phone": `${height.phone}px` } as CSSProperties;
 }
 
 // The page's background and margin around its rows, then the site's

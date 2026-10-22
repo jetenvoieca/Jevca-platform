@@ -50,8 +50,7 @@ export const LAYOUT_BLOCK_TYPES = [
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },
   { value: "signup", label: "Sign-up form" },
-  // The artist's Logo from Settings (2026-10-13), as wide as the
-  // component on desktop and `phoneWidth` % of the screen on a phone,
+  // The artist's Logo from Settings (2026-10-13), at its `logoHeight`,
   // linking to the site's home page.
   { value: "logo", label: "Logo" },
 ] as const;
@@ -136,13 +135,19 @@ export function cleanSignupLook(raw: unknown): SignupLook {
   };
 }
 
-// A Logo's width on a phone (2026-10-13, Craig's choice), as a % of the
-// screen — every other component is full width there. Set in Fine-tune.
-export const LOGO_PHONE_WIDTH_LIMITS = { min: 10, max: 100 } as const;
-export const DEFAULT_LOGO_PHONE_WIDTH = 50;
+// A Logo's height in pixels on a desktop and on a phone (2026-10-22,
+// Craig's choice, as louisedear.com: 74 and 48), its width following
+// its shape — never wider than its component. Set in Fine-tune.
+export type LogoHeight = { desktop: number; phone: number };
+export const LOGO_HEIGHT_LIMITS = { min: 16, max: 400 } as const;
+export const DEFAULT_LOGO_HEIGHT: LogoHeight = { desktop: 74, phone: 48 };
 
-export function cleanLogoPhoneWidth(raw: unknown): number {
-  return cleanNumber(raw, LOGO_PHONE_WIDTH_LIMITS, DEFAULT_LOGO_PHONE_WIDTH, 0);
+export function cleanLogoHeight(raw: unknown): LogoHeight {
+  const value = (raw ?? {}) as Partial<Record<keyof LogoHeight, unknown>>;
+  return {
+    desktop: cleanNumber(value.desktop, LOGO_HEIGHT_LIMITS, DEFAULT_LOGO_HEIGHT.desktop, 0),
+    phone: cleanNumber(value.phone, LOGO_HEIGHT_LIMITS, DEFAULT_LOGO_HEIGHT.phone, 0),
+  };
 }
 
 // The words under a Logo (2026-10-22, from Louise Dear's site — typed
@@ -339,7 +344,7 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 };
 
 // A Block Build component. `doors` is set on Sliding doors blocks only,
-// `signup` on Sign-up form blocks only, `phoneWidth` on Logo blocks only,
+// `signup` on Sign-up form blocks only, `logoHeight` on Logo blocks only,
 // `perRow`, `names` and `tiles` on Gallery blocks only, `hero` on Hero blocks only;
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
@@ -347,7 +352,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
   StyledBlock<SiteFontId> & {
     doors?: SlidingDoorsSettings;
     signup?: SignupLook;
-    phoneWidth?: number;
+    logoHeight?: LogoHeight;
     perRow?: GalleryPerRow;
     names?: PageTextStyle | null;
     tiles?: GalleryTiles;
@@ -487,7 +492,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
             clean.signup = cleanSignupLook((b as Partial<LayoutBlock>).signup);
           }
           if (clean.type === "logo") {
-            clean.phoneWidth = cleanLogoPhoneWidth((b as Partial<LayoutBlock>).phoneWidth);
+            clean.logoHeight = cleanLogoHeight((b as Partial<LayoutBlock>).logoHeight);
             clean.byline = cleanLogoByline((b as Partial<LayoutBlock>).byline);
           }
           if (clean.type === "gallery") {
@@ -527,7 +532,7 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   const id = crypto.randomUUID();
   if (type === "slidingdoors") return { id, type, doors: DEFAULT_SLIDING_DOORS };
   if (type === "signup") return { id, type, signup: DEFAULT_SIGNUP_LOOK };
-  if (type === "logo") return { id, type, phoneWidth: DEFAULT_LOGO_PHONE_WIDTH, byline: DEFAULT_LOGO_BYLINE };
+  if (type === "logo") return { id, type, logoHeight: DEFAULT_LOGO_HEIGHT, byline: DEFAULT_LOGO_BYLINE };
   if (type === "gallery")
     return { id, type, perRow: DEFAULT_GALLERY_PER_ROW, names: null, tiles: DEFAULT_GALLERY_TILES };
   if (type === "hero") return { id, type, hero: DEFAULT_HERO };
