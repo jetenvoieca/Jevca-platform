@@ -12,6 +12,7 @@ import {
   DEFAULT_LOGO_BYLINE,
   cleanLogoByline,
   HERO_LIMITS,
+  HERO_SHAPES,
   cleanGalleryNames,
   cleanHero,
   type HeroSettings,
@@ -74,7 +75,7 @@ export default function PageStyleLayoutEditor({
             signup={b.signup}
             perRow={b.perRow}
             names={!!b.names}
-            heroShare={b.hero?.pictureShare}
+            hero={b.hero}
             device={device}
             spacing={layout.gridSpacing}
           />
@@ -307,45 +308,118 @@ function ColourRow({ label, value, onChange }: { label: string; value: string; o
 }
 
 // A Hero's settings (2026-10-22): how long each picture shows and how
-// long it takes to fade to the next, the picture's width and height, and
-// the look of each of its three lines.
-const HERO_FIELDS: { key: keyof typeof HERO_LIMITS; label: string; unit: string; step: number }[] = [
-  { key: "seconds", label: "Each picture", unit: "seconds", step: 0.5 },
-  { key: "fade", label: "Fade", unit: "seconds", step: 0.5 },
-  { key: "pictureShare", label: "Picture width", unit: "%", step: 1 },
-  { key: "height", label: "Picture height", unit: "% of screen", step: 1 },
+// long it takes to fade to the next, the picture's share of the width,
+// the gap beside it, the picture box's shape and whether the picture
+// comes first on a phone, and the look of each line.
+const HERO_NUMBERS: {
+  label: string;
+  unit: string;
+  step: number;
+  get: (h: HeroSettings) => number;
+  set: (h: HeroSettings, v: number) => HeroSettings;
+  limits: { min: number; max: number };
+}[] = [
+  {
+    label: "Each picture",
+    unit: "seconds",
+    step: 0.5,
+    get: (h) => h.seconds,
+    set: (h, v) => ({ ...h, seconds: v }),
+    limits: HERO_LIMITS.seconds,
+  },
+  {
+    label: "Fade",
+    unit: "seconds",
+    step: 0.1,
+    get: (h) => h.fade,
+    set: (h, v) => ({ ...h, fade: v }),
+    limits: HERO_LIMITS.fade,
+  },
+  {
+    label: "Picture width",
+    unit: "%",
+    step: 1,
+    get: (h) => h.pictureShare,
+    set: (h, v) => ({ ...h, pictureShare: v }),
+    limits: HERO_LIMITS.pictureShare,
+  },
+  {
+    label: "Gap, desktop",
+    unit: "pixels",
+    step: 1,
+    get: (h) => h.gap.desktop,
+    set: (h, v) => ({ ...h, gap: { ...h.gap, desktop: v } }),
+    limits: HERO_LIMITS.gap,
+  },
+  {
+    label: "Gap, phone",
+    unit: "pixels",
+    step: 1,
+    get: (h) => h.gap.phone,
+    set: (h, v) => ({ ...h, gap: { ...h.gap, phone: v } }),
+    limits: HERO_LIMITS.gap,
+  },
 ];
 
 function HeroSettingsPanel({ hero, onChange }: { hero: HeroSettings; onChange: (hero: HeroSettings) => void }) {
-  const look = (key: "kicker" | "headline" | "accent", label: string) => (
+  const look = (key: "kicker" | "headline" | "accent" | "below", label: string) => (
     <TextStyleBox
       label={label}
       value={hero[key]}
       fonts={SITE_FONTS}
       kinds={SITE_FONT_KINDS}
       isFont={isSiteFontId}
+      scales
       onChange={(style) => onChange({ ...hero, [key]: style })}
     />
   );
+  const shape = (device: "desktop" | "phone") => (
+    <label className="flex items-center gap-2 text-sm text-neutral-700">
+      <span className="flex-1">Picture shape, {device}</span>
+      <select
+        value={hero.shape[device]}
+        onChange={(e) => onChange(cleanHero({ ...hero, shape: { ...hero.shape, [device]: e.target.value } }))}
+        className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+      >
+        {HERO_SHAPES.map((s) => (
+          <option key={s.value} value={s.value}>
+            {s.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
   return (
     <>
-      {HERO_FIELDS.map((f) => (
+      {HERO_NUMBERS.map((f) => (
         <NumberField
-          key={f.key}
+          key={f.label}
           label={f.label}
           unit={f.unit}
           step={f.step}
-          value={hero[f.key]}
-          limits={HERO_LIMITS[f.key]}
-          onCommit={(value) => onChange({ ...hero, [f.key]: value })}
+          value={f.get(hero)}
+          limits={f.limits}
+          onCommit={(value) => onChange(f.set(hero, value))}
           wide
         />
       ))}
+      {shape("desktop")}
+      {shape("phone")}
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={hero.pictureFirstOnPhone}
+          onChange={(e) => onChange({ ...hero, pictureFirstOnPhone: e.target.checked })}
+        />
+        Picture first on a phone
+      </label>
       {look("kicker", "Small line (in capitals)")}
       {look("headline", "Headline")}
       {look("accent", "Headline, second line")}
+      {look("below", "Line under")}
       <p className="text-xs text-neutral-400">
-        The words are typed on each page (Pages → Arrange); the pictures are the page&apos;s curation&apos;s works.
+        The words are typed on each page (Pages → Arrange); the pictures are the page&apos;s curation&apos;s works, each
+        shown whole in its box.
       </p>
     </>
   );

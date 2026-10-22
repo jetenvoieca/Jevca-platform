@@ -296,7 +296,15 @@ export function blockFiller({
       );
     }
     if (block.type === "hero" && block.hero) {
-      return <HeroBlock works={shown} text={readHeroText(content.text)} hero={block.hero} onOpen={onOpen} />;
+      return (
+        <HeroBlock
+          works={shown}
+          text={readHeroText(content.text)}
+          hero={block.hero}
+          contentWidth={contentWidth}
+          onOpen={onOpen}
+        />
+      );
     }
     if (block.type === "slidingdoors" && block.doors && shown.some((w) => w.displayUrl)) {
       return (

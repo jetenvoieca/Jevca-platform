@@ -267,7 +267,7 @@ export default function PageSectionsArranger({
       () => setPageComponentText(siteId, pageId, block.id, text),
     );
 
-  // A Hero's three lines (JSON — see readHeroText). A Hero shows the
+  // A Hero's words (JSON — see readHeroText). A Hero shows the
   // curation's works, so typing into an empty one fills it with them.
   const saveHeroText = (block: LayoutBlock, text: string | null) =>
     change(
@@ -432,7 +432,7 @@ export default function PageSectionsArranger({
                                     signup={b.signup}
                                     perRow={b.perRow}
                                     names={!!b.names}
-                                    heroShare={b.hero?.pictureShare}
+                                    hero={b.hero}
                                     spacing={layout.gridSpacing}
                                   />
                                 </Labelled>
@@ -636,7 +636,7 @@ function SignupSlot({
           signup={block.signup}
           perRow={block.perRow}
           names={!!block.names}
-          heroShare={block.hero?.pictureShare}
+          hero={block.hero}
           spacing={gridSpacing}
         />
       </Labelled>
@@ -971,9 +971,9 @@ function ContentText({ content }: { content: Content }) {
   );
 }
 
-// A Hero (2026-10-22): its three lines typed straight in, saved when
-// left, in the Hero's looks; then the curation's works it shows, to
-// order or take out.
+// A Hero (2026-10-22): its words typed straight in, saved when left, in
+// the Hero's looks; then the curation's works it shows, to order or take
+// out.
 function HeroSlot({
   block,
   hero,
@@ -1002,7 +1002,10 @@ function HeroSlot({
   const big = (style: PageTextStyle): CSSProperties => ({ ...bodyTextCss(style), lineHeight: 1.1 });
   return (
     <Labelled label={blockTypeLabel(block.type)}>
-      <div className="grid items-start gap-6" style={{ gridTemplateColumns: `1fr ${hero.pictureShare}%` }}>
+      <div
+        className="grid items-start gap-6"
+        style={{ gridTemplateColumns: `${100 - hero.pictureShare}fr ${hero.pictureShare}fr` }}
+      >
         <div className="flex flex-col gap-3">
           <input
             type="text"
@@ -1011,7 +1014,7 @@ function HeroSlot({
             onBlur={save}
             maxLength={MAX_TYPED_TEXT}
             placeholder="Small line — e.g. Beautiful paintings · London & South of France"
-            className={`${box} uppercase tracking-[0.2em]`}
+            className={`${box} uppercase`}
             style={bodyTextCss(hero.kicker)}
           />
           <textarea
@@ -1033,6 +1036,16 @@ function HeroSlot({
             placeholder="Second line — e.g. Unapologetically joyful."
             className={box}
             style={big(hero.accent)}
+          />
+          <textarea
+            rows={2}
+            value={text.below}
+            onChange={(e) => setText({ ...text, below: e.target.value })}
+            onBlur={save}
+            maxLength={MAX_TYPED_TEXT}
+            placeholder="Line under — e.g. London & South of France"
+            className={box}
+            style={bodyTextCss(hero.below)}
           />
         </div>
         <div>

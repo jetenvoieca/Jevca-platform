@@ -64,7 +64,7 @@ export function isTypedBlock(block: LayoutBlockType): boolean {
 // id — null if its section is no longer in the curation.
 export function contentKindOf(
   content: ComponentContent,
-  sectionTypes: Map<string, CurationSectionType>
+  sectionTypes: Map<string, CurationSectionType>,
 ): ContentKind | null {
   if (content.source === "WORKS") return "WORKS";
   if (content.source === "TYPED") return "TYPED";
@@ -77,7 +77,7 @@ export function contentKindOf(
 export function arrangeItems<T>(
   items: T[],
   idOf: (item: T) => string,
-  content: Pick<ComponentContent, "hiddenIds" | "orderIds">
+  content: Pick<ComponentContent, "hiddenIds" | "orderIds">,
 ): T[] {
   const hidden = new Set(content.hiddenIds);
   const shown = items.filter((item) => !hidden.has(idOf(item)));
@@ -91,7 +91,7 @@ export function arrangeItems<T>(
 export function hiddenItems<T>(
   items: T[],
   idOf: (item: T) => string,
-  content: Pick<ComponentContent, "hiddenIds">
+  content: Pick<ComponentContent, "hiddenIds">,
 ): T[] {
   const hidden = new Set(content.hiddenIds);
   return items.filter((item) => hidden.has(idOf(item)));
@@ -100,25 +100,28 @@ export function hiddenItems<T>(
 // The longest Header or Byline that can be typed.
 export const MAX_TYPED_TEXT = 300;
 
-// A Hero's three lines (2026-10-22), typed on the page and kept as JSON
-// in its content's `text` — the content itself is the curation's works.
-// `headline` and `accent` may run over several lines.
-export type HeroText = { kicker: string; headline: string; accent: string };
+// A Hero's words (2026-10-22): the small line, the headline, its second
+// line and the line under them (`below`, 2026-10-22), typed on the page
+// and kept as JSON in its content's `text` — the content itself is the
+// curation's works. `headline` and `accent` may run over several lines.
+const HERO_LINES = ["kicker", "headline", "accent", "below"] as const;
 
-export const EMPTY_HERO_TEXT: HeroText = { kicker: "", headline: "", accent: "" };
+export type HeroText = Record<(typeof HERO_LINES)[number], string>;
+
+export const EMPTY_HERO_TEXT: HeroText = { kicker: "", headline: "", accent: "", below: "" };
 
 export function readHeroText(text: string | null): HeroText {
   if (!text) return EMPTY_HERO_TEXT;
   try {
     const v = JSON.parse(text) as Partial<Record<keyof HeroText, unknown>>;
     const line = (x: unknown) => (typeof x === "string" ? x.slice(0, MAX_TYPED_TEXT) : "");
-    return { kicker: line(v.kicker), headline: line(v.headline), accent: line(v.accent) };
+    return Object.fromEntries(HERO_LINES.map((k) => [k, line(v[k])])) as HeroText;
   } catch {
     return EMPTY_HERO_TEXT;
   }
 }
 
 export function writeHeroText(hero: HeroText): string | null {
-  const clean = { kicker: hero.kicker.trim(), headline: hero.headline.trim(), accent: hero.accent.trim() };
-  return clean.kicker || clean.headline || clean.accent ? JSON.stringify(clean) : null;
+  const clean = Object.fromEntries(HERO_LINES.map((k) => [k, hero[k].trim()])) as HeroText;
+  return HERO_LINES.some((k) => clean[k]) ? JSON.stringify(clean) : null;
 }

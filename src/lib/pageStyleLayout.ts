@@ -201,43 +201,78 @@ export const DEFAULT_GALLERY_NAMES: PageTextStyle = {
   colour: "#1f1f1f",
 };
 
-// A Hero (2026-10-22, from Louise Dear's home page): on the left, three
-// lines typed on each page — a small line in spaced capitals, the
-// headline and a second headline line in its own look (e.g. pink
-// italic) — and on the right the page's works, one at a time, fading to
-// the next every `seconds`. `pictureShare` is the picture's share of the
-// width on a desktop; `height` its tallest, as a % of the screen height.
-// On a phone the words sit above the picture. Each line's look is set
-// here, so every page using the style looks the same.
+// A Hero (2026-10-22, from Louise Dear's home page): beside each
+// other on a desktop, the words typed on each page — a small line in
+// capitals, the headline, a second headline line in its own look (e.g.
+// pink italic) and a line under them — and the page's works, one at a
+// time, fading to the next every `seconds` (paused while the pointer is
+// over it). `pictureShare` is the picture's share of the width beside
+// the `gap`. Each picture is shown whole in a box of the chosen shape
+// (2026-10-22, as louisedear.com: square on a desktop, 4:3 on a phone),
+// so it grows and shrinks with the width. On a phone the words and the
+// picture stack — the picture first with `pictureFirstOnPhone`. Each
+// line's look is set here, so every page using the style looks the
+// same.
+export const HERO_SHAPES = [
+  { value: "square", label: "Square", ratio: "1 / 1" },
+  { value: "landscape", label: "Landscape (4:3)", ratio: "4 / 3" },
+  { value: "portrait", label: "Portrait (3:4)", ratio: "3 / 4" },
+] as const;
+
+export type HeroShape = (typeof HERO_SHAPES)[number]["value"];
+
+export function heroShapeRatio(shape: HeroShape): string {
+  return HERO_SHAPES.find((s) => s.value === shape)!.ratio;
+}
+
 export type HeroSettings = {
   seconds: number;
   fade: number;
   pictureShare: number;
-  height: number;
+  gap: { desktop: number; phone: number };
+  shape: { desktop: HeroShape; phone: HeroShape };
+  pictureFirstOnPhone: boolean;
   kicker: PageTextStyle;
   headline: PageTextStyle;
   accent: PageTextStyle;
+  below: PageTextStyle;
 };
 
 export const DEFAULT_HERO: HeroSettings = {
   seconds: 5,
-  fade: 1.5,
-  pictureShare: 45,
-  height: 70,
-  kicker: { ...NO_TEXT_STYLE, font: "jost", size: 15, look: "regular", colour: "#6b6b6b" },
-  headline: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 72, look: "regular", colour: "#1f1f1f" },
-  accent: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 72, look: "italic", colour: "#d4708f" },
+  fade: 1,
+  pictureShare: 50,
+  gap: { desktop: 64, phone: 32 },
+  shape: { desktop: "square", phone: "landscape" },
+  pictureFirstOnPhone: true,
+  kicker: { ...NO_TEXT_STYLE, font: "jost", size: 12, look: "light", colour: "#6b6b6b", spacing: 16 },
+  headline: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 68, smallest: 42, look: "light", colour: "#1f1f1f" },
+  accent: {
+    ...NO_TEXT_STYLE,
+    font: "cormorant-garamond",
+    size: 68,
+    smallest: 42,
+    look: "lightitalic",
+    colour: "#d4708f",
+  },
+  below: { ...NO_TEXT_STYLE, font: "jost", size: 15, look: "light", colour: "#6b6b6b" },
 };
 
 export const HERO_LIMITS = {
   seconds: { min: 2, max: 60 },
   fade: { min: 0, max: 5 },
   pictureShare: { min: 25, max: 75 },
-  height: { min: 20, max: 100 },
+  gap: { min: 0, max: 200 },
 } as const;
+
+function cleanHeroShape(raw: unknown, fallback: HeroShape): HeroShape {
+  return HERO_SHAPES.find((s) => s.value === raw)?.value ?? fallback;
+}
 
 export function cleanHero(raw: unknown): HeroSettings {
   const value = (raw ?? {}) as Partial<Record<keyof HeroSettings, unknown>>;
+  const gap = (value.gap ?? {}) as Partial<Record<"desktop" | "phone", unknown>>;
+  const shape = (value.shape ?? {}) as Partial<Record<"desktop" | "phone", unknown>>;
   const d = DEFAULT_HERO;
   const l = HERO_LIMITS;
   const style = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
@@ -245,10 +280,20 @@ export function cleanHero(raw: unknown): HeroSettings {
     seconds: cleanNumber(value.seconds, l.seconds, d.seconds, 1),
     fade: cleanNumber(value.fade, l.fade, d.fade, 1),
     pictureShare: cleanNumber(value.pictureShare, l.pictureShare, d.pictureShare, 0),
-    height: cleanNumber(value.height, l.height, d.height, 0),
+    gap: {
+      desktop: cleanNumber(gap.desktop, l.gap, d.gap.desktop, 0),
+      phone: cleanNumber(gap.phone, l.gap, d.gap.phone, 0),
+    },
+    shape: {
+      desktop: cleanHeroShape(shape.desktop, d.shape.desktop),
+      phone: cleanHeroShape(shape.phone, d.shape.phone),
+    },
+    pictureFirstOnPhone:
+      typeof value.pictureFirstOnPhone === "boolean" ? value.pictureFirstOnPhone : d.pictureFirstOnPhone,
     kicker: style(value.kicker, d.kicker),
     headline: style(value.headline, d.headline),
     accent: style(value.accent, d.accent),
+    below: style(value.below, d.below),
   };
 }
 

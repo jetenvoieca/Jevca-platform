@@ -164,7 +164,7 @@ export async function setPageComponentText(
   if ("error" in found) return found;
   const text = textRaw === null ? null : textRaw.trim();
 
-  // A Hero's three lines (JSON — see readHeroText); the Hero shows the
+  // A Hero's words (JSON — see readHeroText); the Hero shows the
   // curation's works, so typing into an empty one fills it with them.
   if (found.block.type === "hero") {
     const heroText = writeHeroText(readHeroText(text));

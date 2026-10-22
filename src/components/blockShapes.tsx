@@ -1,5 +1,12 @@
 import type { ReactNode } from "react";
-import type { GalleryPerRow, LayoutBlockType, SignupLook, SlidingDoorsSettings } from "@/lib/pageStyleLayout";
+import {
+  heroShapeRatio,
+  type GalleryPerRow,
+  type HeroSettings,
+  type LayoutBlockType,
+  type SignupLook,
+  type SlidingDoorsSettings,
+} from "@/lib/pageStyleLayout";
 import type { MailBlockType } from "@/lib/mailTemplateLayout";
 import type { GridSpacing } from "@/lib/rowLayout";
 import { perRowClass, perRowStyle, type PreviewDevice } from "@/components/pageRows";
@@ -19,7 +26,7 @@ export function BlockShape({
   signup,
   perRow,
   names = false,
-  heroShare,
+  hero,
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
@@ -27,26 +34,37 @@ export function BlockShape({
   doors?: SlidingDoorsSettings;
   signup?: SignupLook;
   perRow?: GalleryPerRow;
-  // A Gallery showing its works' names; a Hero's picture share (%).
+  // A Gallery showing its works' names; a Hero's settings.
   names?: boolean;
-  heroShare?: number;
+  hero?: HeroSettings;
   device?: PreviewDevice;
 }) {
   switch (type) {
-    case "hero":
+    case "hero": {
+      // Drawn for a desktop unless `device` is a phone.
+      const phone = device === "phone";
+      const share = hero?.pictureShare ?? 50;
       return (
         <div
-          className={device === "phone" ? "flex flex-col gap-4" : "grid items-center gap-[6%]"}
-          style={device === "phone" ? undefined : { gridTemplateColumns: `1fr ${heroShare ?? 45}%` }}
+          className={phone ? "flex flex-col" : "grid items-center"}
+          style={{
+            gap: phone ? (hero?.gap.phone ?? 32) : (hero?.gap.desktop ?? 64),
+            gridTemplateColumns: phone ? undefined : `${100 - share}fr ${share}fr`,
+          }}
         >
           <div className="flex flex-col gap-3">
             <Bar className="h-2.5 w-2/3" />
             <Bar className="h-8 w-4/5" />
             <Bar className="h-8 w-3/5 bg-rose-100" />
+            <Bar className="h-2.5 w-1/2" />
           </div>
-          <div className="h-48 rounded bg-neutral-200" />
+          <div
+            className={`w-full rounded bg-neutral-200 ${phone && (hero?.pictureFirstOnPhone ?? true) ? "order-first" : ""}`}
+            style={{ aspectRatio: heroShapeRatio(hero ? (phone ? hero.shape.phone : hero.shape.desktop) : "square") }}
+          />
         </div>
       );
+    }
     case "header":
       return <Bar className="h-7 w-2/3" />;
     case "byline":
