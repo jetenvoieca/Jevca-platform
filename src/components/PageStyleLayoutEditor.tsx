@@ -9,6 +9,9 @@ import {
   LOGO_PHONE_WIDTH_LIMITS,
   SLIDING_DOORS_LIMITS,
   DEFAULT_GALLERY_NAMES,
+  DEFAULT_GALLERY_TILES,
+  cleanGalleryTiles,
+  type GalleryTiles,
   DEFAULT_LOGO_BYLINE,
   cleanLogoByline,
   HERO_LIMITS,
@@ -126,12 +129,14 @@ export default function PageStyleLayoutEditor({
         }
         if (b.type === "gallery") {
           return {
-            button: "Names",
-            title: "Works' names",
+            button: "Settings",
+            title: "Gallery",
             content: (
-              <GalleryNamesPanel
+              <GallerySettingsPanel
                 names={b.names ?? null}
-                onChange={(names) => onBlock({ ...b, names: cleanGalleryNames(names) })}
+                tiles={b.tiles ?? DEFAULT_GALLERY_TILES}
+                onNames={(names) => onBlock({ ...b, names: cleanGalleryNames(names) })}
+                onTiles={(tiles) => onBlock({ ...b, tiles: cleanGalleryTiles(tiles) })}
               />
             ),
           };
@@ -425,35 +430,70 @@ function HeroSettingsPanel({ hero, onChange }: { hero: HeroSettings; onChange: (
   );
 }
 
-// A Gallery's works' names under their pictures (2026-10-22), on or off,
-// and their look.
-function GalleryNamesPanel({
+// A Gallery's settings (2026-10-22): its works' names under them, on or
+// off, their look and whether they stay on one line; the hover zoom and
+// veil with the price; and the outline round the work showing in the
+// page's Hero.
+function GallerySettingsPanel({
   names,
-  onChange,
+  tiles,
+  onNames,
+  onTiles,
 }: {
   names: PageTextStyle | null;
-  onChange: (names: PageTextStyle | null) => void;
+  tiles: GalleryTiles;
+  onNames: (names: PageTextStyle | null) => void;
+  onTiles: (tiles: GalleryTiles) => void;
 }) {
+  const tick = (key: "oneLineNames" | "zoom" | "veil", label: string) => (
+    <label className="flex items-center gap-2 text-sm text-neutral-700">
+      <input type="checkbox" checked={tiles[key]} onChange={(e) => onTiles({ ...tiles, [key]: e.target.checked })} />
+      {label}
+    </label>
+  );
   return (
     <>
       <label className="flex items-center gap-2 text-sm text-neutral-700">
         <input
           type="checkbox"
           checked={names !== null}
-          onChange={(e) => onChange(e.target.checked ? DEFAULT_GALLERY_NAMES : null)}
+          onChange={(e) => onNames(e.target.checked ? DEFAULT_GALLERY_NAMES : null)}
         />
         Show each work&apos;s name under it
       </label>
       {names && (
-        <TextStyleBox
-          label="Names"
-          value={names}
-          fonts={SITE_FONTS}
-          kinds={SITE_FONT_KINDS}
-          isFont={isSiteFontId}
-          onChange={onChange}
-        />
+        <>
+          <TextStyleBox
+            label="Names"
+            value={names}
+            fonts={SITE_FONTS}
+            kinds={SITE_FONT_KINDS}
+            isFont={isSiteFontId}
+            scales
+            onChange={onNames}
+          />
+          {tick("oneLineNames", "Names on one line, cut with … when too long")}
+        </>
       )}
+      {tick("zoom", "On hover: the picture zooms a little")}
+      {tick("veil", "On hover: a dark veil with the price")}
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={tiles.heroOutline !== null}
+          onChange={(e) => onTiles({ ...tiles, heroOutline: e.target.checked ? "#e8698a" : null })}
+        />
+        <span className="flex-1">Outline the work showing in the Hero</span>
+        {tiles.heroOutline !== null && (
+          <input
+            type="color"
+            value={tiles.heroOutline}
+            onChange={(e) => onTiles({ ...tiles, heroOutline: e.target.value })}
+            aria-label="Outline colour"
+            className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+          />
+        )}
+      </label>
     </>
   );
 }

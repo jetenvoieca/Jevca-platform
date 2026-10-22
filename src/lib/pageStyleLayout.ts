@@ -193,6 +193,24 @@ export function cleanGalleryNames(raw: unknown): PageTextStyle | null {
   return raw ? cleanTextStyle(raw, isSiteFontId) : null;
 }
 
+// How a Gallery's works behave (2026-10-22, from louisedear.com): names
+// on one line, cut with "…" when too long; on hover the picture zooms a
+// little and/or a dark veil shows the price; and the work showing in a
+// Hero on the same page outlined in `heroOutline` (null = not).
+export type GalleryTiles = { oneLineNames: boolean; zoom: boolean; veil: boolean; heroOutline: string | null };
+
+export const DEFAULT_GALLERY_TILES: GalleryTiles = { oneLineNames: false, zoom: false, veil: false, heroOutline: null };
+
+export function cleanGalleryTiles(raw: unknown): GalleryTiles {
+  const value = (raw ?? {}) as Partial<Record<keyof GalleryTiles, unknown>>;
+  return {
+    oneLineNames: value.oneLineNames === true,
+    zoom: value.zoom === true,
+    veil: value.veil === true,
+    heroOutline: cleanColour(value.heroOutline),
+  };
+}
+
 export const DEFAULT_GALLERY_NAMES: PageTextStyle = {
   ...NO_TEXT_STYLE,
   font: "cormorant-garamond",
@@ -306,7 +324,7 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 
 // A Block Build component. `doors` is set on Sliding doors blocks only,
 // `signup` on Sign-up form blocks only, `phoneWidth` on Logo blocks only,
-// `perRow` and `names` on Gallery blocks only, `hero` on Hero blocks only;
+// `perRow`, `names` and `tiles` on Gallery blocks only, `hero` on Hero blocks only;
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -316,6 +334,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     phoneWidth?: number;
     perRow?: GalleryPerRow;
     names?: PageTextStyle | null;
+    tiles?: GalleryTiles;
     hero?: HeroSettings;
     byline?: LogoByline;
   };
@@ -458,6 +477,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "gallery") {
             clean.perRow = cleanGalleryPerRow((b as Partial<LayoutBlock>).perRow);
             clean.names = cleanGalleryNames((b as Partial<LayoutBlock>).names);
+            clean.tiles = cleanGalleryTiles((b as Partial<LayoutBlock>).tiles);
           }
           if (clean.type === "hero") {
             clean.hero = cleanHero((b as Partial<LayoutBlock>).hero);
@@ -492,7 +512,8 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "slidingdoors") return { id, type, doors: DEFAULT_SLIDING_DOORS };
   if (type === "signup") return { id, type, signup: DEFAULT_SIGNUP_LOOK };
   if (type === "logo") return { id, type, phoneWidth: DEFAULT_LOGO_PHONE_WIDTH, byline: DEFAULT_LOGO_BYLINE };
-  if (type === "gallery") return { id, type, perRow: DEFAULT_GALLERY_PER_ROW, names: null };
+  if (type === "gallery")
+    return { id, type, perRow: DEFAULT_GALLERY_PER_ROW, names: null, tiles: DEFAULT_GALLERY_TILES };
   if (type === "hero") return { id, type, hero: DEFAULT_HERO };
   return { id, type };
 }

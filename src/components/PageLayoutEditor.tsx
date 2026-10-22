@@ -30,6 +30,7 @@ export default function PageLayoutEditor({
 }) {
   const { content, loading } = usePageContent(pageId, curationId, true);
   const [layout, setLayout] = useState<BlockBuildLayout>(style.layout);
+  const [heroShowing, setHeroShowing] = useState<string | null>(null);
   const autoSave = useAutoSave<BlockBuildLayout>({
     update: (id, next) =>
       updatePageStyle(id, {
@@ -77,6 +78,8 @@ export default function PageLayoutEditor({
     artist: content.artist,
     homeHref: null,
     onOpen: () => {},
+    heroShowing,
+    onHeroShowing: setHeroShowing,
   });
   const rowAlign = new Map(
     groupBlocksByRow(layout.blocks).flatMap((row) =>

@@ -9,10 +9,12 @@ import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
 import {
   DEFAULT_GALLERY_PER_ROW,
+  DEFAULT_GALLERY_TILES,
   DEFAULT_LOGO_PHONE_WIDTH,
   pageContentWidth,
   type BlockBuildLayout,
   type GalleryPerRow,
+  type GalleryTiles,
   type LayoutBlock,
   type PageGridSpacing,
   type PageTextStyle,
@@ -44,7 +46,7 @@ import SiteFooter from "@/components/SiteFooter";
 import { bodyTextCss } from "@/components/textStyleCss";
 import CurationWorkView from "@/components/CurationWorkView";
 import { PresentationProvider } from "@/components/WorkPresentation";
-import { DEFAULT_PRESENTATION } from "@/lib/presentationTemplate";
+import { DEFAULT_PRESENTATION, formatMoney } from "@/lib/presentationTemplate";
 import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
 import HeroBlock from "@/components/HeroBlock";
@@ -233,6 +235,8 @@ type Row = {
 // with the page's layout editor, PageLayoutEditor, so a component looks
 // there as it does on the page) — null when it has nothing to show. See
 // the note at the top.
+// A Hero tells the page which work it's showing (`onHeroShowing`), so a
+// Gallery can outline it (`heroShowing`, 2026-10-22).
 export type BlockFillerInput = {
   pageId: string;
   layout: BlockBuildLayout;
@@ -243,6 +247,8 @@ export type BlockFillerInput = {
   artist: SiteArtist | null;
   homeHref: string | null;
   onOpen: (artworkId: string) => void;
+  heroShowing?: string | null;
+  onHeroShowing?: (artworkId: string | null) => void;
 };
 
 export function blockFiller({
@@ -255,6 +261,8 @@ export function blockFiller({
   artist,
   homeHref,
   onOpen,
+  heroShowing = null,
+  onHeroShowing,
 }: BlockFillerInput): (block: LayoutBlock, horizontal: HorizontalAlign) => ReactNode {
   const sectionById = new Map(sections.map((s) => [s.id, s]));
   const sectionTypes = new Map(sections.map((s) => [s.id, s.type]));
@@ -286,10 +294,17 @@ export function blockFiller({
     if (block.type === "gallery" && shown.length > 0) {
       return (
         <ImageGrid
-          images={shown.map((w) => ({ id: w.artworkId, url: w.imageUrl, title: w.catalogueName }))}
+          images={shown.map((w) => ({
+            id: w.artworkId,
+            url: w.imageUrl,
+            title: w.catalogueName,
+            price: w.offeredPrice != null ? formatMoney(Number(w.offeredPrice), w.priceCurrency) : null,
+          }))}
           spacing={layout.gridSpacing}
           perRow={block.perRow ?? DEFAULT_GALLERY_PER_ROW}
           names={block.names ?? null}
+          tiles={block.tiles ?? DEFAULT_GALLERY_TILES}
+          outlinedId={heroShowing}
           contentWidth={contentWidth}
           onOpen={onOpen}
         />
@@ -303,6 +318,7 @@ export function blockFiller({
           hero={block.hero}
           contentWidth={contentWidth}
           onOpen={onOpen}
+          onShowing={onHeroShowing}
         />
       );
     }
@@ -427,7 +443,20 @@ function BlockBuildPage({
   onOpen: (artworkId: string) => void;
 }) {
   const { layout } = style;
-  const fill = blockFiller({ pageId, layout, curation, sections, components, signupForms, artist, homeHref, onOpen });
+  const [heroShowing, setHeroShowing] = useState<string | null>(null);
+  const fill = blockFiller({
+    pageId,
+    layout,
+    curation,
+    sections,
+    components,
+    signupForms,
+    artist,
+    homeHref,
+    onOpen,
+    heroShowing,
+    onHeroShowing: setHeroShowing,
+  });
 
   const rows: Row[] = groupBlocksByRow(layout.blocks).map((row) => {
     const key = rowKey(row);
@@ -558,19 +587,23 @@ function PlainPage({ curation, onOpen }: { curation: CurationDetail; onOpen: (ar
   );
 }
 
-// One image in a grid: a work (clickable, opens its presentation) or an
-// Supporting Image (image only).
-type GridImage = { id: string; url: string | null; title?: string };
+// One image in a grid: a work (clickable, opens its presentation, with
+// its price) or a Supporting Image (image only).
+type GridImage = { id: string; url: string | null; title?: string; price?: string | null };
 
 // Images in order, the Gallery's number across on a desktop and on a
 // phone, spaced as the style's grid spacing. With `onOpen`, clicking one
 // opens it. With `names` (2026-10-22), each work's name under it in that
-// look.
+// look. `tiles` (2026-10-22): names on one line, the hover zoom and veil
+// with the price, and the outline round `outlinedId` (the work showing
+// in the page's Hero).
 function ImageGrid({
   images,
   spacing,
   perRow,
   names = null,
+  tiles = DEFAULT_GALLERY_TILES,
+  outlinedId = null,
   contentWidth,
   onOpen,
 }: {
@@ -578,22 +611,47 @@ function ImageGrid({
   spacing: PageGridSpacing;
   perRow: GalleryPerRow;
   names?: PageTextStyle | null;
+  tiles?: GalleryTiles;
+  outlinedId?: string | null;
   contentWidth?: number;
   onOpen?: (id: string) => void;
 }) {
+  const plainHover = !tiles.zoom && !tiles.veil;
   return (
     <div className={perRowClass()} style={perRowStyle(perRow, spacing)}>
       {images.map((img) => {
-        const picture = img.url ? (
-          <FadeImage src={img.url} alt={img.title ?? ""} className="aspect-square w-full object-cover" />
-        ) : (
-          <div className="aspect-square w-full bg-neutral-100" />
-        );
+        const outline = tiles.heroOutline && img.id === outlinedId ? tiles.heroOutline : null;
         const inside = (
           <>
-            <div className="overflow-hidden rounded">{picture}</div>
+            <div className="relative overflow-hidden rounded">
+              <div className={tiles.zoom ? "transition-transform duration-[400ms] group-hover:scale-[1.04]" : ""}>
+                {img.url ? (
+                  <FadeImage src={img.url} alt={img.title ?? ""} className="aspect-square w-full object-cover" />
+                ) : (
+                  <div className="aspect-square w-full bg-neutral-100" />
+                )}
+              </div>
+              {tiles.veil && (
+                <div className="absolute inset-0 flex items-end bg-[rgba(26,23,20,0)] p-6 transition-colors duration-300 group-hover:bg-[rgba(26,23,20,0.55)]">
+                  {img.price && (
+                    <span className="translate-y-2 text-xs tracking-[0.1em] text-white/80 opacity-0 transition duration-300 group-hover:translate-y-0 group-hover:opacity-100">
+                      {img.price}
+                    </span>
+                  )}
+                </div>
+              )}
+              {outline && (
+                <div
+                  className="pointer-events-none absolute inset-0"
+                  style={{ boxShadow: `inset 0 0 0 2px ${outline}` }}
+                />
+              )}
+            </div>
             {names && img.title && (
-              <p className="mt-3 px-1 text-left" style={bodyTextCss(names, contentWidth)}>
+              <p
+                className={`px-[0.15rem] pt-[0.6rem] text-left ${tiles.oneLineNames ? "truncate" : ""}`}
+                style={bodyTextCss(names, contentWidth)}
+              >
                 {img.title}
               </p>
             )}
@@ -605,12 +663,14 @@ function ImageGrid({
             type="button"
             onClick={() => onOpen(img.id)}
             title={img.title}
-            className="block text-left hover:opacity-90"
+            className={`group block min-w-0 text-left ${plainHover ? "hover:opacity-90" : ""}`}
           >
             {inside}
           </button>
         ) : (
-          <div key={img.id}>{inside}</div>
+          <div key={img.id} className="min-w-0">
+            {inside}
+          </div>
         );
       })}
     </div>
