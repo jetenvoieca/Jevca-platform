@@ -10,7 +10,9 @@ import { bodyTextCss } from "@/components/textStyleCss";
 // HeroSettings in lib/pageStyleLayout.ts): the small line in spaced
 // capitals, the headline and its second line on the left; on the right
 // the works, one at a time, each fading into the next every
-// `hero.seconds`. Clicking the picture opens that work. Beside each
+// `hero.seconds`. Clicking the picture opens that work. On a desktop the
+// picture sits against the right edge, lining up with the components
+// below it (2026-10-22); on a phone it's centred. Beside each
 // other from md (768px) up, the words above the picture on a phone. The
 // headline sizes shrink with a narrow screen, never below about half.
 export default function HeroBlock({
@@ -68,7 +70,7 @@ export default function HeroBlock({
           type="button"
           onClick={() => onOpen(current.artworkId)}
           title={current.catalogueName}
-          className="grid min-w-0 cursor-pointer"
+          className="grid min-w-0 cursor-pointer justify-items-center md:justify-items-end"
         >
           {shown.map((w, i) => (
             <img
@@ -76,7 +78,7 @@ export default function HeroBlock({
               src={w.displayUrl!}
               alt={w.catalogueName}
               aria-hidden={i !== index}
-              className="col-start-1 row-start-1 mx-auto w-auto max-w-full self-center object-contain"
+              className="col-start-1 row-start-1 w-auto max-w-full self-center object-contain"
               style={{
                 maxHeight: `${hero.height}vh`,
                 opacity: i === index ? 1 : 0,
