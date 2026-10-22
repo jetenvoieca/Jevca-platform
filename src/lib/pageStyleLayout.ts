@@ -161,17 +161,25 @@ export function cleanLogoByline(raw: unknown): LogoByline {
   };
 }
 
-// How many images a Gallery shows across (2026-10-19, Craig's request),
-// on a desktop and on a phone. Set in Fine-tune.
-export type GalleryPerRow = { desktop: number; phone: number };
+// How many images a Gallery shows across (2026-10-19, Craig's request):
+// at most `desktop`, at least `phone`, and in between as many as fit
+// with none narrower than `smallest` pixels (2026-10-22 — so a small
+// window can still show 4 across, as Louise Dear's site does). Set in
+// Fine-tune; see perRowStyle (components/pageRows.ts).
+export type GalleryPerRow = { desktop: number; phone: number; smallest: number };
 export const GALLERY_PER_ROW_LIMITS = { min: 1, max: 8 } as const;
-export const DEFAULT_GALLERY_PER_ROW: GalleryPerRow = { desktop: 4, phone: 2 };
+export const GALLERY_SMALLEST_LIMITS = { min: 60, max: 600 } as const;
+export const DEFAULT_GALLERY_PER_ROW: GalleryPerRow = { desktop: 4, phone: 2, smallest: 240 };
 
 export function cleanGalleryPerRow(raw: unknown): GalleryPerRow {
   const value = (raw ?? {}) as Partial<Record<keyof GalleryPerRow, unknown>>;
   const l = GALLERY_PER_ROW_LIMITS;
   const d = DEFAULT_GALLERY_PER_ROW;
-  return { desktop: cleanNumber(value.desktop, l, d.desktop, 0), phone: cleanNumber(value.phone, l, d.phone, 0) };
+  return {
+    desktop: cleanNumber(value.desktop, l, d.desktop, 0),
+    phone: cleanNumber(value.phone, l, d.phone, 0),
+    smallest: cleanNumber(value.smallest, GALLERY_SMALLEST_LIMITS, d.smallest, 0),
+  };
 }
 
 // The text styles a Page Style holds use the site fonts.

@@ -132,7 +132,7 @@ export function BlockShape({
 }
 
 // Grey squares, four across, spaced as the layout's grid spacing.
-const MAIL_PER_ROW: GalleryPerRow = { desktop: 4, phone: 4 };
+const MAIL_PER_ROW: GalleryPerRow = { desktop: 4, phone: 4, smallest: 60 };
 
 // Two rows of squares.
 function PlaceholderGrid({

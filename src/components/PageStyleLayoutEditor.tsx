@@ -4,6 +4,7 @@ import {
   DEFAULT_GALLERY_PER_ROW,
   DEFAULT_LOGO_PHONE_WIDTH,
   GALLERY_PER_ROW_LIMITS,
+  GALLERY_SMALLEST_LIMITS,
   LAYOUT_BLOCK_TYPES,
   LOGO_PHONE_WIDTH_LIMITS,
   SLIDING_DOORS_LIMITS,
@@ -163,13 +164,24 @@ export default function PageStyleLayoutEditor({
       fineTune={(b, onBlock) => {
         if (b.type !== "gallery") return null;
         const perRow = b.perRow ?? DEFAULT_GALLERY_PER_ROW;
-        return (["desktop", "phone"] as const).map((device) => ({
-          label: `Images per row, ${device}`,
-          unit: "",
-          value: perRow[device],
-          limits: GALLERY_PER_ROW_LIMITS,
-          onCommit: (value: number) => onBlock({ ...b, perRow: cleanGalleryPerRow({ ...perRow, [device]: value }) }),
-        }));
+        const save = (patch: Partial<typeof perRow>) =>
+          onBlock({ ...b, perRow: cleanGalleryPerRow({ ...perRow, ...patch }) });
+        return [
+          ...(["desktop", "phone"] as const).map((device) => ({
+            label: `Images per row, ${device}`,
+            unit: "",
+            value: perRow[device],
+            limits: GALLERY_PER_ROW_LIMITS,
+            onCommit: (value: number) => save({ [device]: value }),
+          })),
+          {
+            label: "Smallest image, in between",
+            unit: "pixels",
+            value: perRow.smallest,
+            limits: GALLERY_SMALLEST_LIMITS,
+            onCommit: (value: number) => save({ smallest: value }),
+          },
+        ];
       }}
       textStyleFonts={SITE_TEXT_STYLE_FONTS}
       desktopWidth={PAGE_DESKTOP_WIDTH}
