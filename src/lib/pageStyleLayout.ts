@@ -151,20 +151,35 @@ export function cleanLogoHeight(raw: unknown): LogoHeight {
 }
 
 // The words under a Logo (2026-10-22, from Louise Dear's site — typed
-// once per artist in Settings → Personal Profile): their look, and where
-// they sit under the logo.
-export type LogoByline = { style: TextStyle<SiteFontId>; align: "left" | "center" | "right" };
+// once per artist in Settings → Personal Profile): their font, style and
+// colour (`style`; its size isn't used), and, all scaling with the logo
+// (Craig's choice, as her site): their size as a % of the logo's height,
+// tucked `up` into the logo by a % of its height and `across` from its
+// left edge by a % of its width.
+export type LogoByline = { style: TextStyle<SiteFontId>; size: number; up: number; across: number };
+
+export const LOGO_BYLINE_LIMITS = {
+  size: { min: 10, max: 100 },
+  up: { min: 0, max: 100 },
+  across: { min: 0, max: 100 },
+} as const;
 
 export const DEFAULT_LOGO_BYLINE: LogoByline = {
-  style: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 32, look: "italic", colour: "#d4708f" },
-  align: "right",
+  style: { ...NO_TEXT_STYLE, font: "cormorant-garamond", look: "lightitalic", colour: "#e8698a" },
+  size: 46,
+  up: 30,
+  across: 57,
 };
 
 export function cleanLogoByline(raw: unknown): LogoByline {
   const value = (raw ?? {}) as Partial<Record<keyof LogoByline, unknown>>;
+  const d = DEFAULT_LOGO_BYLINE;
+  const l = LOGO_BYLINE_LIMITS;
   return {
-    style: value.style ? cleanTextStyle(value.style, isSiteFontId) : DEFAULT_LOGO_BYLINE.style,
-    align: value.align === "left" || value.align === "center" ? value.align : "right",
+    style: value.style ? { ...cleanTextStyle(value.style, isSiteFontId), size: null, smallest: null } : d.style,
+    size: cleanNumber(value.size, l.size, d.size, 0),
+    up: cleanNumber(value.up, l.up, d.up, 0),
+    across: cleanNumber(value.across, l.across, d.across, 0),
   };
 }
 

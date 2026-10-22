@@ -210,8 +210,9 @@ export function TextStylesControl<F extends string>({
 
 // One component type's (or one component's) Font and Size, then Style
 // and Colour, then the smallest size (`scales`, a page's text — once it
-// has a size) and the letter spacing. Anything left blank keeps the
-// text's own look.
+// has a size) and the letter spacing. `noSize`: its size is set
+// elsewhere (the words under a Logo, a % of the logo's height). Anything
+// left blank keeps the text's own look.
 export function TextStyleBox<F extends string>({
   label,
   value,
@@ -219,6 +220,7 @@ export function TextStyleBox<F extends string>({
   kinds,
   isFont,
   scales = false,
+  noSize = false,
   onChange,
 }: {
   label: string;
@@ -227,6 +229,7 @@ export function TextStyleBox<F extends string>({
   kinds: readonly string[];
   isFont: (value: unknown) => value is F;
   scales?: boolean;
+  noSize?: boolean;
   onChange: (value: TextStyle<F>) => void;
 }) {
   const set = (patch: Partial<TextStyle<F>>) =>
@@ -258,14 +261,16 @@ export function TextStyleBox<F extends string>({
             </optgroup>
           ))}
         </select>
-        <OptionalNumberField
-          label={`${label} size`}
-          placeholder="Size"
-          unit="px"
-          limits={TEXT_SIZE_LIMITS}
-          value={value.size}
-          onCommit={(size) => set({ size })}
-        />
+        {!noSize && (
+          <OptionalNumberField
+            label={`${label} size`}
+            placeholder="Size"
+            unit="px"
+            limits={TEXT_SIZE_LIMITS}
+            value={value.size}
+            onCommit={(size) => set({ size })}
+          />
+        )}
       </div>
       <div className="flex items-center gap-2">
         <select
@@ -286,7 +291,7 @@ export function TextStyleBox<F extends string>({
         <ColourField label={label} value={value.colour} onChange={(colour) => set({ colour })} />
       </div>
       <div className="flex items-center justify-end gap-2">
-        {scales && value.size !== null && (
+        {scales && !noSize && value.size !== null && (
           <span className="flex flex-1 items-center gap-1 text-xs text-neutral-500">
             Smallest
             <OptionalNumberField

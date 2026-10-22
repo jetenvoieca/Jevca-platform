@@ -72,8 +72,9 @@ import FadeImage from "@/components/FadeImage";
 //   here (2026-10-13). A Sign-up form (2026-10-10) shows once it's set
 //   up in Arrange — see SignupForm. A Logo (2026-10-13) is the artist's
 //   Logo from Settings, at its height on a desktop or a phone (never
-//   wider than the component), linking to the site's home page on the
-//   published site.
+//   wider than the component), with the words typed under it tucked in
+//   as its Byline sets (2026-10-22), linking to the site's home page on
+//   the published site.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Every page but a Canvas ends with the site's footer (2026-10-13) — see
 // SiteFooter.
@@ -341,29 +342,48 @@ export function blockFiller({
   const fill = (block: LayoutBlock, horizontal: HorizontalAlign): ReactNode => {
     if (block.type === "logo") {
       if (!artist?.logoUrl) return null;
-      const byline = artist.logoByline && block.byline;
+      const byline = artist.logoByline ? block.byline : undefined;
       const logo = (
         <>
           <FadeImage
             src={artist.logoUrl}
             alt=""
-            className="block h-[var(--logo-h-phone)] w-auto max-w-full object-contain site:h-[var(--logo-h)]"
+            className="block h-[var(--logo-now)] w-auto max-w-full object-contain"
           />
           {byline && (
-            <p
-              className="mt-1 whitespace-nowrap leading-none"
-              style={{ ...bodyTextCss(block.byline!.style, contentWidth), textAlign: block.byline!.align }}
+            <span
+              className="absolute whitespace-nowrap leading-none"
+              style={{
+                ...bodyTextCss(byline.style),
+                fontSize: `calc(var(--logo-now) * ${byline.size / 100})`,
+                left: `${byline.across}%`,
+                top: `calc(100% - var(--logo-now) * ${byline.up / 100})`,
+              }}
             >
               {artist.logoByline}
-            </p>
+            </span>
           )}
         </>
       );
+      // The byline's height below the logo, kept clear of what follows.
+      const below = byline ? Math.max(0, byline.size - byline.up) / 100 : 0;
+      const box = {
+        ...logoHeightStyle(block.logoHeight ?? DEFAULT_LOGO_HEIGHT),
+        marginBottom: `calc(var(--logo-now) * ${below})`,
+      };
+      const boxClass =
+        "relative block w-fit max-w-full [--logo-now:var(--logo-h-phone)] site:[--logo-now:var(--logo-h)]";
       return (
         <div className={alignedInsideClass(horizontal)}>
-          <div className="min-w-0" style={logoHeightStyle(block.logoHeight ?? DEFAULT_LOGO_HEIGHT)}>
-            {homeHref ? <a href={homeHref}>{logo}</a> : logo}
-          </div>
+          {homeHref ? (
+            <a href={homeHref} className={boxClass} style={box}>
+              {logo}
+            </a>
+          ) : (
+            <div className={boxClass} style={box}>
+              {logo}
+            </div>
+          )}
         </div>
       );
     }
@@ -486,7 +506,8 @@ function BlockBuildPage({
   );
 }
 
-// A Logo's height on a desktop and on a phone (2026-10-22).
+// A Logo's height on a desktop and on a phone (2026-10-22); `--logo-now`
+// is the one in use, which the words under it scale with.
 function logoHeightStyle(height: LogoHeight): CSSProperties {
   return { "--logo-h": `${height.desktop}px`, "--logo-h-phone": `${height.phone}px` } as CSSProperties;
 }

@@ -15,6 +15,7 @@ import {
   type GalleryTiles,
   DEFAULT_LOGO_BYLINE,
   cleanLogoByline,
+  LOGO_BYLINE_LIMITS,
   HERO_LIMITS,
   HERO_SHAPES,
   cleanGalleryNames,
@@ -106,21 +107,21 @@ export default function PageStyleLayoutEditor({
                   fonts={SITE_FONTS}
                   kinds={SITE_FONT_KINDS}
                   isFont={isSiteFontId}
-                  scales
+                  noSize
                   onChange={(style) => onBlock({ ...b, byline: cleanLogoByline({ ...byline, style }) })}
                 />
-                <label className="flex items-center gap-2 text-sm text-neutral-700">
-                  <span className="flex-1">Sits</span>
-                  <select
-                    value={byline.align}
-                    onChange={(e) => onBlock({ ...b, byline: cleanLogoByline({ ...byline, align: e.target.value }) })}
-                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
-                  >
-                    <option value="left">Left</option>
-                    <option value="center">Centred</option>
-                    <option value="right">Right</option>
-                  </select>
-                </label>
+                {LOGO_BYLINE_FIELDS.map((f) => (
+                  <NumberField
+                    key={f.key}
+                    label={f.label}
+                    unit={f.unit}
+                    step={1}
+                    value={byline[f.key]}
+                    limits={LOGO_BYLINE_LIMITS[f.key]}
+                    onCommit={(value) => onBlock({ ...b, byline: cleanLogoByline({ ...byline, [f.key]: value }) })}
+                    wide
+                  />
+                ))}
                 <p className="text-xs text-neutral-400">
                   The words are typed once per artist, in Settings → Personal Profile.
                 </p>
@@ -204,6 +205,14 @@ export default function PageStyleLayoutEditor({
     />
   );
 }
+
+// Where the words under a Logo sit and how big they are, all scaling
+// with the logo (2026-10-22).
+const LOGO_BYLINE_FIELDS: { key: keyof typeof LOGO_BYLINE_LIMITS; label: string; unit: string }[] = [
+  { key: "size", label: "Size", unit: "% of logo height" },
+  { key: "up", label: "Up", unit: "% of logo height" },
+  { key: "across", label: "Across", unit: "% of logo width" },
+];
 
 // The Sliding doors number settings, in order. Gap only applies to pairs.
 const DOORS_FIELDS: {
