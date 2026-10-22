@@ -14,7 +14,7 @@ import { bodyTextCss } from "@/components/textStyleCss";
 // picture sits against the right edge, lining up with the components
 // below it (2026-10-22); on a phone it's centred. Beside each
 // other from md (768px) up, the words above the picture on a phone. The
-// headline sizes shrink with a narrow screen, never below about half.
+// headline shrinks to fit the space for the words (see headlineCss).
 export default function HeroBlock({
   works,
   text,
@@ -37,13 +37,16 @@ export default function HeroBlock({
   }, [shown.length, hero.seconds]);
 
   const current = shown[index];
+  // The longest word in the headline, in letters — the headline shrinks
+  // so it always fits beside the picture.
+  const longest = Math.max(4, ...`${text.headline} ${text.accent}`.split(/\s+/).map((w) => w.length));
 
   return (
     <div
       className="flex flex-col gap-10 md:grid md:items-center md:gap-[6%]"
       style={{ gridTemplateColumns: `1fr ${hero.pictureShare}%` }}
     >
-      <div className="flex min-w-0 flex-col gap-6">
+      <div className="flex min-w-0 flex-col gap-6" style={{ containerType: "inline-size" }}>
         {text.kicker && (
           <p className="uppercase tracking-[0.2em]" style={bodyTextCss(hero.kicker)}>
             {text.kicker}
@@ -52,12 +55,12 @@ export default function HeroBlock({
         {(text.headline || text.accent) && (
           <h1 className="font-normal">
             {text.headline && (
-              <span className="block whitespace-pre-line" style={headlineCss(hero.headline)}>
+              <span className="block whitespace-pre-line" style={headlineCss(hero.headline, longest)}>
                 {text.headline}
               </span>
             )}
             {text.accent && (
-              <span className="block whitespace-pre-line" style={headlineCss(hero.accent)}>
+              <span className="block whitespace-pre-line" style={headlineCss(hero.accent, longest)}>
                 {text.accent}
               </span>
             )}
@@ -92,13 +95,18 @@ export default function HeroBlock({
   );
 }
 
-// A headline line: its look, tightly spaced, its size shrinking on a
-// narrow screen.
-function headlineCss(style: PageTextStyle): CSSProperties {
+// A headline line: its look, tightly spaced, at its size — or smaller,
+// when the space for the words is too narrow for its longest word
+// (`longest` letters, each taken as about half its size wide) to fit:
+// the size follows the width of the words' column (2026-10-22), so the
+// words never run under the picture, however narrow the window.
+const LETTER_WIDTH = 0.5;
+
+function headlineCss(style: PageTextStyle, longest: number): CSSProperties {
   const size = style.size ?? 48;
   return {
     ...bodyTextCss(style),
-    fontSize: `clamp(${Math.round(size * 0.55)}px, ${(size / 14).toFixed(2)}vw, ${size}px)`,
+    fontSize: `min(${size}px, ${(100 / (LETTER_WIDTH * longest)).toFixed(2)}cqi)`,
     lineHeight: 1.1,
   };
 }
