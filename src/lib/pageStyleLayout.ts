@@ -16,6 +16,7 @@ import {
 } from "@/lib/rowLayout";
 import {
   cleanBlockTextStyle,
+  cleanTextStyle,
   cleanTextStyles,
   type StyledBlock,
   type TextStyle,
@@ -33,6 +34,9 @@ import {
 // Custom) is built from, as empty placeholders — each filled from the
 // page's curation in the page's Arrange (see lib/pageComponents.ts).
 export const LAYOUT_BLOCK_TYPES = [
+  // A home page's opening (2026-10-22, from Louise Dear's site): typed
+  // words beside the curation's works, one at a time.
+  { value: "hero", label: "Hero" },
   { value: "header", label: "Header" },
   // Typed on each page, usually under the Header (2026-10-13).
   { value: "byline", label: "Byline" },
@@ -155,6 +159,70 @@ export function cleanGalleryPerRow(raw: unknown): GalleryPerRow {
 // The text styles a Page Style holds use the site fonts.
 export type PageTextStyle = TextStyle<SiteFontId>;
 
+// A Gallery's works' names under their pictures (2026-10-22, from
+// Louise Dear's site), in this look; null = no names.
+export function cleanGalleryNames(raw: unknown): PageTextStyle | null {
+  return raw ? cleanTextStyle(raw, isSiteFontId) : null;
+}
+
+export const DEFAULT_GALLERY_NAMES: PageTextStyle = {
+  font: "cormorant-garamond",
+  size: 20,
+  look: "italic",
+  colour: "#1f1f1f",
+};
+
+// A Hero (2026-10-22, from Louise Dear's home page): on the left, three
+// lines typed on each page — a small line in spaced capitals, the
+// headline and a second headline line in its own look (e.g. pink
+// italic) — and on the right the page's works, one at a time, fading to
+// the next every `seconds`. `pictureShare` is the picture's share of the
+// width on a desktop; `height` its tallest, as a % of the screen height.
+// On a phone the words sit above the picture. Each line's look is set
+// here, so every page using the style looks the same.
+export type HeroSettings = {
+  seconds: number;
+  fade: number;
+  pictureShare: number;
+  height: number;
+  kicker: PageTextStyle;
+  headline: PageTextStyle;
+  accent: PageTextStyle;
+};
+
+export const DEFAULT_HERO: HeroSettings = {
+  seconds: 5,
+  fade: 1.5,
+  pictureShare: 45,
+  height: 70,
+  kicker: { font: "jost", size: 15, look: "regular", colour: "#6b6b6b" },
+  headline: { font: "cormorant-garamond", size: 72, look: "regular", colour: "#1f1f1f" },
+  accent: { font: "cormorant-garamond", size: 72, look: "italic", colour: "#d4708f" },
+};
+
+export const HERO_LIMITS = {
+  seconds: { min: 2, max: 60 },
+  fade: { min: 0, max: 5 },
+  pictureShare: { min: 25, max: 75 },
+  height: { min: 20, max: 100 },
+} as const;
+
+export function cleanHero(raw: unknown): HeroSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof HeroSettings, unknown>>;
+  const d = DEFAULT_HERO;
+  const l = HERO_LIMITS;
+  const style = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
+  return {
+    seconds: cleanNumber(value.seconds, l.seconds, d.seconds, 1),
+    fade: cleanNumber(value.fade, l.fade, d.fade, 1),
+    pictureShare: cleanNumber(value.pictureShare, l.pictureShare, d.pictureShare, 0),
+    height: cleanNumber(value.height, l.height, d.height, 0),
+    kicker: style(value.kicker, d.kicker),
+    headline: style(value.headline, d.headline),
+    accent: style(value.accent, d.accent),
+  };
+}
+
 const DEFAULT_TEXT_STYLE: PageTextStyle = { font: null, size: null, look: null, colour: null };
 
 const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
@@ -166,7 +234,7 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 
 // A Block Build component. `doors` is set on Sliding doors blocks only,
 // `signup` on Sign-up form blocks only, `phoneWidth` on Logo blocks only,
-// `perRow` on Gallery blocks only;
+// `perRow` and `names` on Gallery blocks only, `hero` on Hero blocks only;
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -175,6 +243,8 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     signup?: SignupLook;
     phoneWidth?: number;
     perRow?: GalleryPerRow;
+    names?: PageTextStyle | null;
+    hero?: HeroSettings;
   };
 
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {
@@ -280,6 +350,10 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           }
           if (clean.type === "gallery") {
             clean.perRow = cleanGalleryPerRow((b as Partial<LayoutBlock>).perRow);
+            clean.names = cleanGalleryNames((b as Partial<LayoutBlock>).names);
+          }
+          if (clean.type === "hero") {
+            clean.hero = cleanHero((b as Partial<LayoutBlock>).hero);
           }
           const textStyle = cleanBlockTextStyle(clean.type, (b as Partial<LayoutBlock>).textStyle, isSiteFontId);
           if (textStyle) clean.textStyle = textStyle;
@@ -307,6 +381,7 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "slidingdoors") return { id, type, doors: DEFAULT_SLIDING_DOORS };
   if (type === "signup") return { id, type, signup: DEFAULT_SIGNUP_LOOK };
   if (type === "logo") return { id, type, phoneWidth: DEFAULT_LOGO_PHONE_WIDTH };
-  if (type === "gallery") return { id, type, perRow: DEFAULT_GALLERY_PER_ROW };
+  if (type === "gallery") return { id, type, perRow: DEFAULT_GALLERY_PER_ROW, names: null };
+  if (type === "hero") return { id, type, hero: DEFAULT_HERO };
   return { id, type };
 }

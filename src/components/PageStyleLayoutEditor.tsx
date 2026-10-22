@@ -7,6 +7,12 @@ import {
   LAYOUT_BLOCK_TYPES,
   LOGO_PHONE_WIDTH_LIMITS,
   SLIDING_DOORS_LIMITS,
+  DEFAULT_GALLERY_NAMES,
+  HERO_LIMITS,
+  cleanGalleryNames,
+  cleanHero,
+  type HeroSettings,
+  type PageTextStyle,
   cleanGalleryPerRow,
   cleanLogoPhoneWidth,
   cleanSignupLook,
@@ -19,6 +25,7 @@ import {
 } from "@/lib/pageStyleLayout";
 import { BlockShape } from "@/components/blockShapes";
 import NumberField from "@/components/NumberField";
+import { TextStyleBox } from "@/components/layoutControls";
 import VisualLayoutEditor, { type TextStyleFonts } from "@/components/VisualLayoutEditor";
 import { SITE_FONTS, SITE_FONT_KINDS, isSiteFontId } from "@/lib/siteFonts";
 import { PAGE_DESKTOP_WIDTH } from "@/components/visualEditorParts";
@@ -51,11 +58,32 @@ export default function PageStyleLayoutEditor({
           doors={b.doors}
           signup={b.signup}
           perRow={b.perRow}
+          names={!!b.names}
+          heroShare={b.hero?.pictureShare}
           device={device}
           spacing={layout.gridSpacing}
         />
       )}
       settingsPanel={(b, onBlock) => {
+        if (b.hero) {
+          return {
+            button: "Settings",
+            title: "Hero",
+            content: <HeroSettingsPanel hero={b.hero} onChange={(hero) => onBlock({ ...b, hero: cleanHero(hero) })} />,
+          };
+        }
+        if (b.type === "gallery") {
+          return {
+            button: "Names",
+            title: "Works' names",
+            content: (
+              <GalleryNamesPanel
+                names={b.names ?? null}
+                onChange={(names) => onBlock({ ...b, names: cleanGalleryNames(names) })}
+              />
+            ),
+          };
+        }
         if (b.doors) {
           return {
             button: "Settings",
@@ -213,5 +241,83 @@ function ColourRow({ label, value, onChange }: { label: string; value: string; o
       />
       <span className="w-16 text-xs text-neutral-400">{value}</span>
     </label>
+  );
+}
+
+// A Hero's settings (2026-10-22): how long each picture shows and how
+// long it takes to fade to the next, the picture's width and height, and
+// the look of each of its three lines.
+const HERO_FIELDS: { key: keyof typeof HERO_LIMITS; label: string; unit: string; step: number }[] = [
+  { key: "seconds", label: "Each picture", unit: "seconds", step: 0.5 },
+  { key: "fade", label: "Fade", unit: "seconds", step: 0.5 },
+  { key: "pictureShare", label: "Picture width", unit: "%", step: 1 },
+  { key: "height", label: "Picture height", unit: "% of screen", step: 1 },
+];
+
+function HeroSettingsPanel({ hero, onChange }: { hero: HeroSettings; onChange: (hero: HeroSettings) => void }) {
+  const look = (key: "kicker" | "headline" | "accent", label: string) => (
+    <TextStyleBox
+      label={label}
+      value={hero[key]}
+      fonts={SITE_FONTS}
+      kinds={SITE_FONT_KINDS}
+      isFont={isSiteFontId}
+      onChange={(style) => onChange({ ...hero, [key]: style })}
+    />
+  );
+  return (
+    <>
+      {HERO_FIELDS.map((f) => (
+        <NumberField
+          key={f.key}
+          label={f.label}
+          unit={f.unit}
+          step={f.step}
+          value={hero[f.key]}
+          limits={HERO_LIMITS[f.key]}
+          onCommit={(value) => onChange({ ...hero, [f.key]: value })}
+          wide
+        />
+      ))}
+      {look("kicker", "Small line (in capitals)")}
+      {look("headline", "Headline")}
+      {look("accent", "Headline, second line")}
+      <p className="text-xs text-neutral-400">
+        The words are typed on each page (Pages → Arrange); the pictures are the page&apos;s curation&apos;s works.
+      </p>
+    </>
+  );
+}
+
+// A Gallery's works' names under their pictures (2026-10-22), on or off,
+// and their look.
+function GalleryNamesPanel({
+  names,
+  onChange,
+}: {
+  names: PageTextStyle | null;
+  onChange: (names: PageTextStyle | null) => void;
+}) {
+  return (
+    <>
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={names !== null}
+          onChange={(e) => onChange(e.target.checked ? DEFAULT_GALLERY_NAMES : null)}
+        />
+        Show each work&apos;s name under it
+      </label>
+      {names && (
+        <TextStyleBox
+          label="Names"
+          value={names}
+          fonts={SITE_FONTS}
+          kinds={SITE_FONT_KINDS}
+          isFont={isSiteFontId}
+          onChange={onChange}
+        />
+      )}
+    </>
   );
 }

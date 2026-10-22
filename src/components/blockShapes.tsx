@@ -18,6 +18,8 @@ export function BlockShape({
   doors,
   signup,
   perRow,
+  names = false,
+  heroShare,
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
@@ -25,9 +27,26 @@ export function BlockShape({
   doors?: SlidingDoorsSettings;
   signup?: SignupLook;
   perRow?: GalleryPerRow;
+  // A Gallery showing its works' names; a Hero's picture share (%).
+  names?: boolean;
+  heroShare?: number;
   device?: PreviewDevice;
 }) {
   switch (type) {
+    case "hero":
+      return (
+        <div
+          className={device === "phone" ? "flex flex-col gap-4" : "grid items-center gap-[6%]"}
+          style={device === "phone" ? undefined : { gridTemplateColumns: `1fr ${heroShare ?? 45}%` }}
+        >
+          <div className="flex flex-col gap-3">
+            <Bar className="h-2.5 w-2/3" />
+            <Bar className="h-8 w-4/5" />
+            <Bar className="h-8 w-3/5 bg-rose-100" />
+          </div>
+          <div className="h-48 rounded bg-neutral-200" />
+        </div>
+      );
     case "header":
       return <Bar className="h-7 w-2/3" />;
     case "byline":
@@ -43,7 +62,7 @@ export function BlockShape({
     case "image":
       return <div className="h-40 rounded bg-neutral-200" />;
     case "gallery":
-      return <PlaceholderGrid perRow={perRow ?? MAIL_PER_ROW} spacing={spacing} device={device} />;
+      return <PlaceholderGrid perRow={perRow ?? MAIL_PER_ROW} spacing={spacing} device={device} names={names} />;
     case "artwork":
       return (
         <div className="flex gap-3">
@@ -120,15 +139,20 @@ function PlaceholderGrid({
   perRow,
   spacing,
   device,
+  names,
 }: {
   perRow: GalleryPerRow;
   spacing: GridSpacing;
   device?: PreviewDevice;
+  names: boolean;
 }) {
   return (
     <div className={perRowClass(device)} style={perRowStyle(perRow, spacing)}>
       {Array.from({ length: perRow.desktop * 2 }, (_, i) => (
-        <div key={i} className="aspect-square rounded bg-neutral-200" />
+        <div key={i}>
+          <div className="aspect-square rounded bg-neutral-200" />
+          {names && <Bar className="mt-2 h-2 w-1/2" />}
+        </div>
       ))}
     </div>
   );
@@ -144,5 +168,5 @@ export function Labelled({ label, children }: { label: string; children: ReactNo
 }
 
 function Bar({ className }: { className: string }) {
-  return <div className={`rounded bg-neutral-200 ${className}`} />;
+  return <div className={`rounded ${className.includes("bg-") ? "" : "bg-neutral-200"} ${className}`} />;
 }

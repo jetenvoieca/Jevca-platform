@@ -6,6 +6,8 @@ import {
   MAX_TYPED_TEXT,
   contentFits,
   isTypedBlock,
+  readHeroText,
+  writeHeroText,
   type ComponentContent,
   type ContentKind,
 } from "@/lib/pageComponents";
@@ -107,14 +109,15 @@ export async function setPageComponent(
   const data = {
     source: sectionId === null ? ("WORKS" as const) : ("SECTION" as const),
     sectionId,
-    text: null,
     hiddenIds: [],
     orderIds: [],
   };
+  // A Hero keeps the words typed on it (2026-10-22).
+  const keepText = found.block.type === "hero";
   await db.pageComponentContent.upsert({
     where: { pageId_blockId: { pageId, blockId } },
-    create: { pageId, blockId, ...data },
-    update: data,
+    create: { pageId, blockId, ...data, text: null },
+    update: keepText ? data : { ...data, text: null },
   });
   return { ok: true };
 }
@@ -160,6 +163,18 @@ export async function setPageComponentText(
   const found = await pageBlock(siteId, pageId, blockId);
   if ("error" in found) return found;
   const text = textRaw === null ? null : textRaw.trim();
+
+  // A Hero's three lines (JSON — see readHeroText); the Hero shows the
+  // curation's works, so typing into an empty one fills it with them.
+  if (found.block.type === "hero") {
+    const heroText = writeHeroText(readHeroText(text));
+    await db.pageComponentContent.upsert({
+      where: { pageId_blockId: { pageId, blockId } },
+      create: { pageId, blockId, source: "WORKS", sectionId: null, text: heroText, hiddenIds: [], orderIds: [] },
+      update: { text: heroText },
+    });
+    return { ok: true };
+  }
 
   if (isTypedBlock(found.block.type)) {
     if (!text) {

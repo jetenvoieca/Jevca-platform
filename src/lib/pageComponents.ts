@@ -45,6 +45,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   image: ["IMAGES", "WORKS"],
   gallery: ["IMAGES", "WORKS"],
   slidingdoors: ["WORKS"],
+  hero: ["WORKS"],
   artwork: [],
   signup: [],
   logo: [],
@@ -98,3 +99,26 @@ export function hiddenItems<T>(
 
 // The longest Header or Byline that can be typed.
 export const MAX_TYPED_TEXT = 300;
+
+// A Hero's three lines (2026-10-22), typed on the page and kept as JSON
+// in its content's `text` — the content itself is the curation's works.
+// `headline` and `accent` may run over several lines.
+export type HeroText = { kicker: string; headline: string; accent: string };
+
+export const EMPTY_HERO_TEXT: HeroText = { kicker: "", headline: "", accent: "" };
+
+export function readHeroText(text: string | null): HeroText {
+  if (!text) return EMPTY_HERO_TEXT;
+  try {
+    const v = JSON.parse(text) as Partial<Record<keyof HeroText, unknown>>;
+    const line = (x: unknown) => (typeof x === "string" ? x.slice(0, MAX_TYPED_TEXT) : "");
+    return { kicker: line(v.kicker), headline: line(v.headline), accent: line(v.accent) };
+  } catch {
+    return EMPTY_HERO_TEXT;
+  }
+}
+
+export function writeHeroText(hero: HeroText): string | null {
+  const clean = { kicker: hero.kicker.trim(), headline: hero.headline.trim(), accent: hero.accent.trim() };
+  return clean.kicker || clean.headline || clean.accent ? JSON.stringify(clean) : null;
+}

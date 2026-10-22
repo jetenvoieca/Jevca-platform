@@ -30,10 +30,18 @@ import {
   contentKindOf,
   hiddenItems,
   isTypedBlock,
+  readHeroText,
+  writeHeroText,
   type ComponentContent,
   type ContentKind,
 } from "@/lib/pageComponents";
-import { blockTypeLabel, type BlockBuildLayout, type LayoutBlock } from "@/lib/pageStyleLayout";
+import {
+  blockTypeLabel,
+  type BlockBuildLayout,
+  type HeroSettings,
+  type LayoutBlock,
+  type PageTextStyle,
+} from "@/lib/pageStyleLayout";
 import { blockWidthOf, groupBlocksByRow, rowKey, rowSettingsOf } from "@/lib/rowLayout";
 import { isTextComponent, mergeTextStyle } from "@/lib/textStyle";
 import { useSiteData } from "@/lib/siteData";
@@ -204,7 +212,8 @@ export default function PageSectionsArranger({
           blockId,
           source: sectionId === null ? "WORKS" : "SECTION",
           sectionId,
-          text: null,
+          // A Hero keeps its words when the works are dropped on it again.
+          text: sectionId === null ? (m.get(blockId)?.text ?? null) : null,
           hiddenIds: [],
           orderIds: [],
         }),
@@ -253,6 +262,24 @@ export default function PageSectionsArranger({
             }
           : { ...current!, text };
         return m.set(block.id, next);
+      },
+      () => setPageComponentText(siteId, pageId, block.id, text),
+    );
+
+  // A Hero's three lines (JSON — see readHeroText). A Hero shows the
+  // curation's works, so typing into an empty one fills it with them.
+  const saveHeroText = (block: LayoutBlock, text: string | null) =>
+    change(
+      (m) => {
+        const current = m.get(block.id);
+        return m.set(block.id, {
+          blockId: block.id,
+          source: "WORKS",
+          sectionId: null,
+          hiddenIds: current?.hiddenIds ?? [],
+          orderIds: current?.orderIds ?? [],
+          text,
+        });
       },
       () => setPageComponentText(siteId, pageId, block.id, text),
     );
@@ -370,6 +397,16 @@ export default function PageSectionsArranger({
                                     </p>
                                   )}
                                 </Labelled>
+                              ) : b.type === "hero" && b.hero ? (
+                                <HeroSlot
+                                  block={b}
+                                  hero={b.hero}
+                                  content={content}
+                                  items={content ? itemsOf(content) : []}
+                                  dragging={dragging}
+                                  onSaveText={(text) => saveHeroText(b, text)}
+                                  onSaveItems={(items) => saveItems(b.id, items)}
+                                />
                               ) : b.type === "signup" ? (
                                 <SignupSlot
                                   block={b}
@@ -393,6 +430,8 @@ export default function PageSectionsArranger({
                                     doors={b.doors}
                                     signup={b.signup}
                                     perRow={b.perRow}
+                                    names={!!b.names}
+                                    heroShare={b.hero?.pictureShare}
                                     spacing={layout.gridSpacing}
                                   />
                                 </Labelled>
@@ -595,6 +634,8 @@ function SignupSlot({
           doors={block.doors}
           signup={block.signup}
           perRow={block.perRow}
+          names={!!block.names}
+          heroShare={block.hero?.pictureShare}
           spacing={gridSpacing}
         />
       </Labelled>
@@ -926,5 +967,90 @@ function ContentText({ content }: { content: Content }) {
       <p className="text-sm font-medium text-neutral-900">{content.label}</p>
       <p className="truncate text-xs text-neutral-500">{content.detail}</p>
     </div>
+  );
+}
+
+// A Hero (2026-10-22): its three lines typed straight in, saved when
+// left, in the Hero's looks; then the curation's works it shows, to
+// order or take out.
+function HeroSlot({
+  block,
+  hero,
+  content,
+  items,
+  dragging,
+  onSaveText,
+  onSaveItems,
+}: {
+  block: LayoutBlock;
+  hero: HeroSettings;
+  content: ComponentContent | null;
+  items: Item[];
+  dragging: DragData | null;
+  onSaveText: (text: string | null) => void;
+  onSaveItems: (items: { hiddenIds: string[]; orderIds: string[] }) => void;
+}) {
+  const saved = readHeroText(content?.text ?? null);
+  const [text, setText] = useState(saved);
+  const save = () => {
+    const next = writeHeroText(text);
+    if (next !== writeHeroText(saved)) onSaveText(next);
+  };
+  const box =
+    "w-full resize-none rounded-md border border-neutral-200 bg-white px-3 py-2 focus:border-neutral-400 focus:outline-none";
+  const big = (style: PageTextStyle): CSSProperties => ({ ...bodyTextCss(style), lineHeight: 1.1 });
+  return (
+    <Labelled label={blockTypeLabel(block.type)}>
+      <div className="grid items-start gap-6" style={{ gridTemplateColumns: `1fr ${hero.pictureShare}%` }}>
+        <div className="flex flex-col gap-3">
+          <input
+            type="text"
+            value={text.kicker}
+            onChange={(e) => setText({ ...text, kicker: e.target.value })}
+            onBlur={save}
+            maxLength={MAX_TYPED_TEXT}
+            placeholder="Small line — e.g. Beautiful paintings · London & South of France"
+            className={`${box} uppercase tracking-[0.2em]`}
+            style={bodyTextCss(hero.kicker)}
+          />
+          <textarea
+            rows={2}
+            value={text.headline}
+            onChange={(e) => setText({ ...text, headline: e.target.value })}
+            onBlur={save}
+            maxLength={MAX_TYPED_TEXT}
+            placeholder="Headline — e.g. Bold. (new line) Glamorous."
+            className={box}
+            style={big(hero.headline)}
+          />
+          <textarea
+            rows={2}
+            value={text.accent}
+            onChange={(e) => setText({ ...text, accent: e.target.value })}
+            onBlur={save}
+            maxLength={MAX_TYPED_TEXT}
+            placeholder="Second line — e.g. Unapologetically joyful."
+            className={box}
+            style={big(hero.accent)}
+          />
+        </div>
+        <div>
+          {content ? (
+            <ItemsGrid
+              blockId={block.id}
+              items={items}
+              content={content}
+              note="Shown one at a time, in this order."
+              dragging={dragging}
+              onSave={onSaveItems}
+            />
+          ) : (
+            <p className="py-6 text-center text-sm text-neutral-400">
+              Shows the curation&apos;s works one at a time — type the words, or drag Works here.
+            </p>
+          )}
+        </div>
+      </div>
+    </Labelled>
   );
 }

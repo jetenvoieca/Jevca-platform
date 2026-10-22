@@ -4,7 +4,13 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
-import { arrangeItems, contentFits, contentKindOf, type ComponentContent } from "@/lib/pageComponents";
+import {
+  arrangeItems,
+  contentFits,
+  contentKindOf,
+  readHeroText,
+  type ComponentContent,
+} from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
 import {
@@ -12,6 +18,7 @@ import {
   DEFAULT_LOGO_PHONE_WIDTH,
   type GalleryPerRow,
   type LayoutBlock,
+  type PageTextStyle,
 } from "@/lib/pageStyleLayout";
 import {
   blockWidthOf,
@@ -45,6 +52,7 @@ import { PresentationProvider } from "@/components/WorkPresentation";
 import { DEFAULT_PRESENTATION } from "@/lib/presentationTemplate";
 import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
+import HeroBlock from "@/components/HeroBlock";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 
@@ -269,9 +277,13 @@ function BlockBuildPage({
           images={shown.map((w) => ({ id: w.artworkId, url: w.imageUrl, title: w.catalogueName }))}
           spacing={layout.gridSpacing}
           perRow={block.perRow ?? DEFAULT_GALLERY_PER_ROW}
+          names={block.names ?? null}
           onOpen={onOpen}
         />
       );
+    }
+    if (block.type === "hero" && block.hero) {
+      return <HeroBlock works={shown} text={readHeroText(content.text)} hero={block.hero} onOpen={onOpen} />;
     }
     if (block.type === "slidingdoors" && block.doors && shown.some((w) => w.displayUrl)) {
       return (
@@ -483,16 +495,19 @@ type GridImage = { id: string; url: string | null; title?: string };
 
 // Images in order, the Gallery's number across on a desktop and on a
 // phone, spaced as the style's grid spacing. With `onOpen`, clicking one
-// opens it.
+// opens it. With `names` (2026-10-22), each work's name under it in that
+// look.
 function ImageGrid({
   images,
   spacing,
   perRow,
+  names = null,
   onOpen,
 }: {
   images: GridImage[];
   spacing: GridSpacing;
   perRow: GalleryPerRow;
+  names?: PageTextStyle | null;
   onOpen?: (id: string) => void;
 }) {
   return (
@@ -503,20 +518,28 @@ function ImageGrid({
         ) : (
           <div className="aspect-square w-full bg-neutral-100" />
         );
+        const inside = (
+          <>
+            <div className="overflow-hidden rounded">{picture}</div>
+            {names && img.title && (
+              <p className="mt-3 px-1 text-left" style={bodyTextCss(names)}>
+                {img.title}
+              </p>
+            )}
+          </>
+        );
         return onOpen ? (
           <button
             key={img.id}
             type="button"
             onClick={() => onOpen(img.id)}
             title={img.title}
-            className="overflow-hidden rounded hover:opacity-90"
+            className="block text-left hover:opacity-90"
           >
-            {picture}
+            {inside}
           </button>
         ) : (
-          <div key={img.id} className="overflow-hidden rounded">
-            {picture}
-          </div>
+          <div key={img.id}>{inside}</div>
         );
       })}
     </div>

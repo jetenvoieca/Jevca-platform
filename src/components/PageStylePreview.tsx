@@ -53,6 +53,8 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
                     doors={b.doors}
                     signup={b.signup}
                     perRow={b.perRow}
+                    names={!!b.names}
+                    heroShare={b.hero?.pictureShare}
                     spacing={layout.gridSpacing}
                   />
                 </Labelled>
