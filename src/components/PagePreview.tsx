@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
@@ -354,15 +354,21 @@ export function blockFiller({
     if (content.source === "TYPED") {
       if (!content.text) return null;
       const style = textStyleOf(block);
-      const css = style ? bodyTextCss(style) : undefined;
-      return block.type === "byline" ? (
-        <p className="whitespace-pre-line break-words text-base text-neutral-600" style={css}>
-          {content.text}
-        </p>
-      ) : (
-        <h2 className="whitespace-pre-line break-words text-2xl text-neutral-900" style={css}>
-          {content.text}
-        </h2>
+      const css = style
+        ? { ...bodyTextCss(style), ...scaledSize(style.size, designedWidth(block, layout.margins)) }
+        : undefined;
+      return (
+        <div style={{ containerType: "inline-size" }}>
+          {block.type === "byline" ? (
+            <p className="whitespace-pre-line break-words text-base text-neutral-600" style={css}>
+              {content.text}
+            </p>
+          ) : (
+            <h2 className="whitespace-pre-line break-words text-2xl text-neutral-900" style={css}>
+              {content.text}
+            </h2>
+          )}
+        </div>
       );
     }
     const curated = content.sectionId ? sectionById.get(content.sectionId) : undefined;
@@ -444,6 +450,15 @@ function BlockBuildPage({
       }
     />
   );
+}
+
+// A Header's or Byline's size, shrinking with the space it's in
+// (2026-10-22, Craig's request — so a heading isn't too dominant in a
+// small window): its set size at the width it was designed at, smaller
+// in proportion when narrower, but never below half.
+function scaledSize(size: number | null, designed: number): CSSProperties {
+  if (!size) return {};
+  return { fontSize: `clamp(${Math.round(size / 2)}px, ${((size * 100) / designed).toFixed(3)}cqi, ${size}px)` };
 }
 
 // A component's width in pixels on the page as designed: its share of a
