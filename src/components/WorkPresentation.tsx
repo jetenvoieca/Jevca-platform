@@ -124,7 +124,7 @@ export default function WorkPresentation({
   const foldedWidth = `calc((${settings.maxWidth}px - 4rem - 3rem) * ${settings.pictureShare / 100} + 4rem)`;
   // The hidden ones of the words and the forms take no space, except
   // beside the picture on a desktop (see below).
-  const hiddenLayer = side ? "absolute inset-x-0 top-0 md:static" : "absolute inset-x-0 top-0";
+  const hiddenLayer = side ? "absolute inset-x-0 top-0 site:static" : "absolute inset-x-0 top-0";
   // A form, with Back above it to return to the words (the close cross
   // closes the whole window).
   const formLayer = (open: boolean, form: ReactNode) => (
@@ -154,7 +154,7 @@ export default function WorkPresentation({
   return (
     <div
       className={`relative mx-auto flex w-full flex-col gap-8 p-6 transition-[max-width] duration-500 ease-out sm:p-8 ${
-        side && !folded ? "md:grid md:items-start md:gap-12" : ""
+        side && !folded ? "site:grid site:items-start site:gap-12" : ""
       }`}
       style={{
         background: colours.background,

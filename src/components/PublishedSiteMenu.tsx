@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
 import { publishedPagePath } from "@/lib/siteSnapshot";
+import { SITE_PHONE_QUERY } from "@/lib/siteBreakpoint";
 import MenuView from "@/components/MenuView";
 
 // What the menu needs of each Live Page, in order — the first is the
@@ -13,9 +14,6 @@ type PublishedMenuPage = {
   slug: string;
   menuStyleId: string | null;
 };
-
-// Phones are narrower than this (Tailwind's md), as everywhere else.
-const PHONE_QUERY = "(max-width: 767px)";
 
 // A published site's menu (2026-10-06): drawn once with the site (see
 // PublishedSite), so it stays in place as pages change — a Fixed menu
@@ -63,7 +61,7 @@ export default function PublishedSiteMenu({
 function usePhone(): boolean {
   const [phone, setPhone] = useState(false);
   useEffect(() => {
-    const query = window.matchMedia(PHONE_QUERY);
+    const query = window.matchMedia(SITE_PHONE_QUERY);
     const update = () => setPhone(query.matches);
     update();
     query.addEventListener("change", update);

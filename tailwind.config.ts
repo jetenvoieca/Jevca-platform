@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import { SITE_DESKTOP_MIN } from "./src/lib/siteBreakpoint";
 
 const config: Config = {
   content: [
@@ -7,6 +8,8 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      // A published site's phone / desktop switch — see lib/siteBreakpoint.ts.
+      screens: { site: `${SITE_DESKTOP_MIN}px` },
       keyframes: {
         "studio-slide-down": {
           from: { opacity: "0", transform: "translateY(-1rem)" },

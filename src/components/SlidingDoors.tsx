@@ -4,9 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { CurationWork } from "@/lib/actions/curations";
 import type { DoorsHeight } from "@/lib/pageStyleLayout";
 import type { PageMargins } from "@/lib/rowLayout";
-
-// Phones are narrower than this (Tailwind's md), as for the page margin.
-const PHONE_WIDTH = 768;
+import { SITE_PHONE_QUERY } from "@/lib/siteBreakpoint";
 
 // Sliding doors (2026-10-05, from Craig's mockup) — a curation's main
 // images, a slide at a time, on a continuous loop. After `duration`
@@ -22,7 +20,7 @@ const PHONE_WIDTH = 768;
 // height inside the page's top & bottom `margins` — or smaller if the
 // space is too narrow, centred. On larger screens a pair sits side by
 // side and slides left/right (a single image slides left); on phones
-// (narrower than 768px) the pair is stacked and slides up/down (a single
+// (see lib/siteBreakpoint.ts) the pair is stacked and slides up/down (a single
 // image slides up). Works without an image are left out. Clicking an
 // image opens that work (onOpen).
 export default function SlidingDoors({
@@ -92,7 +90,7 @@ export default function SlidingDoors({
     const box = boxRef.current;
     if (!box) return;
     const measure = () => {
-      const phone = window.innerWidth < PHONE_WIDTH;
+      const phone = window.matchMedia(SITE_PHONE_QUERY).matches;
       const percent = phone ? phoneHeight : desktopHeight;
       const margin = phone ? phoneMargin : desktopMargin;
       const tall = ((window.innerHeight - 2 * margin) * percent) / 100;

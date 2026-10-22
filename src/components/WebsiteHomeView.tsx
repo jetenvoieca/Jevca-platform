@@ -51,14 +51,14 @@ export default function WebsiteHomeView({
   const [contactOpen, setContactOpen] = useState(false);
 
   return (
-    <div className={`${websiteSans.className} flex h-full min-h-[560px] flex-col md:flex-row`}>
-      <div className="flex h-[55vh] min-h-0 min-w-0 items-start justify-center md:h-auto md:flex-1">
+    <div className={`${websiteSans.className} flex h-full min-h-[560px] flex-col site:flex-row`}>
+      <div className="flex h-[55vh] min-h-0 min-w-0 items-start justify-center site:h-auto site:flex-1">
         {home.imageUrl && (
           <img src={home.imageUrl} alt="" className="h-full w-full object-contain object-top" />
         )}
       </div>
 
-      <aside className="relative grid w-full items-center overflow-hidden bg-[#EEE7CB] px-10 pb-24 pt-16 [container-type:inline-size] md:w-[26%] md:min-w-[300px]">
+      <aside className="relative grid w-full items-center overflow-hidden bg-[#EEE7CB] px-10 pb-24 pt-16 [container-type:inline-size] site:w-[26%] site:min-w-[300px]">
         <div
           aria-hidden={contactOpen}
           className={`mx-auto w-full max-w-[340px] transition-all duration-500 ease-out [grid-area:1/1] ${

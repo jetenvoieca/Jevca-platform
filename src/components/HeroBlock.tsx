@@ -13,7 +13,7 @@ import { bodyTextCss } from "@/components/textStyleCss";
 // `hero.seconds`. Clicking the picture opens that work. On a desktop the
 // picture sits against the right edge, lining up with the components
 // below it (2026-10-22); on a phone it's centred. Beside each
-// other from md (768px) up, the words above the picture on a phone. The
+// other from 700px up (lib/siteBreakpoint.ts), the words above the picture on a phone. The
 // headline shrinks to fit the space for the words (see headlineCss).
 export default function HeroBlock({
   works,
@@ -43,7 +43,7 @@ export default function HeroBlock({
 
   return (
     <div
-      className="flex flex-col gap-10 md:grid md:items-center md:gap-[6%]"
+      className="flex flex-col gap-10 site:grid site:items-center site:gap-[6%]"
       style={{ gridTemplateColumns: `1fr ${hero.pictureShare}%` }}
     >
       <div className="flex min-w-0 flex-col gap-6" style={{ containerType: "inline-size" }}>
@@ -73,7 +73,7 @@ export default function HeroBlock({
           type="button"
           onClick={() => onOpen(current.artworkId)}
           title={current.catalogueName}
-          className="grid min-w-0 cursor-pointer justify-items-center md:justify-items-end"
+          className="grid min-w-0 cursor-pointer justify-items-center site:justify-items-end"
         >
           {shown.map((w, i) => (
             <img

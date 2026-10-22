@@ -36,7 +36,7 @@ export function cleanColour(value: unknown): string | null {
 // The margin (2026-10-06, from Craig's request for more breathing
 // space): the space between the edges and the contents, in pixels —
 // vertical = top and bottom, horizontal = left and right — set
-// separately for desktop and phone (narrower than 768px). The
+// separately for desktop and phone (narrower than 700px — see lib/siteBreakpoint.ts). The
 // background colour shows in it.
 export type PageMargin = { vertical: number; horizontal: number };
 export type PageMargins = { desktop: PageMargin; phone: PageMargin };

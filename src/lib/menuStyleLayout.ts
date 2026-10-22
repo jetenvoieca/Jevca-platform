@@ -12,7 +12,7 @@
 //   of the left or right edge. The same on desktop and phone.
 // - behaviour: "fixed" — the menu stays open after a page is chosen;
 //   "floating" — it closes.
-// - On phones (narrower than 768px) either kind opens full screen.
+// - On phones (narrower than 700px — see lib/siteBreakpoint.ts) either kind opens full screen.
 // - Design: background colour and opacity (button/tab and the open
 //   menu), text colour and size, the current page's highlight colour,
 //   corner rounding, shadow and background blur. Font comes later.
