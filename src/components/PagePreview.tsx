@@ -4,18 +4,13 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
-import {
-  arrangeItems,
-  contentFits,
-  contentKindOf,
-  readHeroText,
-  type ComponentContent,
-} from "@/lib/pageComponents";
+import { arrangeItems, contentFits, contentKindOf, readHeroText, type ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
 import {
   DEFAULT_GALLERY_PER_ROW,
   DEFAULT_LOGO_PHONE_WIDTH,
+  type BlockBuildLayout,
   type GalleryPerRow,
   type LayoutBlock,
   type PageTextStyle,
@@ -112,42 +107,10 @@ export default function PagePreview({
   fullScreen?: boolean;
 }) {
   const siteData = useSiteData();
-  const [loaded, setLoaded] = useState<PageContent | null>(null);
-  const [loading, setLoading] = useState(false);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const blockBuild = style?.type === "BLOCK_BUILD";
-  // On the published site everything is already here (2026-10-13), so
-  // the page is drawn at once; the admin preview loads it.
-  const now = useMemo(
-    () => (curationId ? siteData.pageContentNow(pageId, curationId) : null),
-    [siteData, pageId, curationId],
-  );
-  const content = now ?? loaded;
-
-  useEffect(() => {
-    setViewingId(null);
-    if (!curationId || now) {
-      setLoaded(null);
-      return;
-    }
-    // Ignores a reply that arrives after a different page was selected.
-    let current = true;
-    setLoading(true);
-    Promise.all([
-      siteData.getCuration(curationId),
-      blockBuild ? siteData.listSections(curationId) : Promise.resolve<CurationSectionData[]>([]),
-      blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
-      blockBuild ? siteData.getSignupForms(pageId) : Promise.resolve<SignupFormContent[]>([]),
-      siteData.getArtist(),
-    ]).then(([curation, sections, components, signupForms, artist]) => {
-      if (!current) return;
-      setLoaded({ curation, sections, components, signupForms, artist });
-      setLoading(false);
-    });
-    return () => {
-      current = false;
-    };
-  }, [siteData, curationId, pageId, blockBuild, now]);
+  const { content, loading } = usePageContent(pageId, curationId, blockBuild);
+  useEffect(() => setViewingId(null), [pageId, curationId]);
 
   const closeView = useCallback(() => setViewingId(null), []);
   const curation = content?.curation ?? null;
@@ -211,6 +174,50 @@ export default function PagePreview({
   );
 }
 
+// Everything a page shows (2026-10-13; a hook since 2026-10-22, shared
+// with PageLayoutEditor): from the published snapshot on the site, drawn
+// at once; loaded in the admin preview. A Block Build page also has its
+// sections, components and sign-up forms.
+export function usePageContent(
+  pageId: string,
+  curationId: string | null,
+  blockBuild: boolean,
+): { content: PageContent | null; loading: boolean } {
+  const siteData = useSiteData();
+  const [loaded, setLoaded] = useState<PageContent | null>(null);
+  const [loading, setLoading] = useState(false);
+  const now = useMemo(
+    () => (curationId ? siteData.pageContentNow(pageId, curationId) : null),
+    [siteData, pageId, curationId],
+  );
+
+  useEffect(() => {
+    if (!curationId || now) {
+      setLoaded(null);
+      return;
+    }
+    // Ignores a reply that arrives after a different page was selected.
+    let current = true;
+    setLoading(true);
+    Promise.all([
+      siteData.getCuration(curationId),
+      blockBuild ? siteData.listSections(curationId) : Promise.resolve<CurationSectionData[]>([]),
+      blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
+      blockBuild ? siteData.getSignupForms(pageId) : Promise.resolve<SignupFormContent[]>([]),
+      siteData.getArtist(),
+    ]).then(([curation, sections, components, signupForms, artist]) => {
+      if (!current) return;
+      setLoaded({ curation, sections, components, signupForms, artist });
+      setLoading(false);
+    });
+    return () => {
+      current = false;
+    };
+  }, [siteData, curationId, pageId, blockBuild, now]);
+
+  return { content: now ?? loaded, loading };
+}
+
 // One row of the page as shown: its blocks' contents and widths, the
 // space below it, the space between its blocks and its alignment.
 type Row = {
@@ -222,20 +229,13 @@ type Row = {
   vertical: VerticalAlign;
 };
 
-// A Block Build page — see the note at the top.
-function BlockBuildPage({
-  pageId,
-  style,
-  curation,
-  sections,
-  components,
-  signupForms,
-  artist,
-  homeHref,
-  onOpen,
-}: {
+// What one Block Build component shows on the page (2026-10-22: shared
+// with the page's layout editor, PageLayoutEditor, so a component looks
+// there as it does on the page) — null when it has nothing to show. See
+// the note at the top.
+export type BlockFillerInput = {
   pageId: string;
-  style: Extract<PageStyleSummary, { type: "BLOCK_BUILD" }>;
+  layout: BlockBuildLayout;
   curation: CurationDetail;
   sections: CurationSectionData[];
   components: ComponentContent[];
@@ -243,8 +243,19 @@ function BlockBuildPage({
   artist: SiteArtist | null;
   homeHref: string | null;
   onOpen: (artworkId: string) => void;
-}) {
-  const { layout } = style;
+};
+
+export function blockFiller({
+  pageId,
+  layout,
+  curation,
+  sections,
+  components,
+  signupForms,
+  artist,
+  homeHref,
+  onOpen,
+}: BlockFillerInput): (block: LayoutBlock, horizontal: HorizontalAlign) => ReactNode {
   const sectionById = new Map(sections.map((s) => [s.id, s]));
   const sectionTypes = new Map(sections.map((s) => [s.id, s.type]));
   const contentByBlock = new Map(components.map((c) => [c.blockId, c]));
@@ -379,6 +390,34 @@ function BlockBuildPage({
     }
     return <CurationSectionView section={section} textStyle={textStyleOf(block)} />;
   };
+
+  return fill;
+}
+
+// A Block Build page — see the note at the top.
+function BlockBuildPage({
+  pageId,
+  style,
+  curation,
+  sections,
+  components,
+  signupForms,
+  artist,
+  homeHref,
+  onOpen,
+}: {
+  pageId: string;
+  style: Extract<PageStyleSummary, { type: "BLOCK_BUILD" }>;
+  curation: CurationDetail;
+  sections: CurationSectionData[];
+  components: ComponentContent[];
+  signupForms: SignupFormContent[];
+  artist: SiteArtist | null;
+  homeHref: string | null;
+  onOpen: (artworkId: string) => void;
+}) {
+  const { layout } = style;
+  const fill = blockFiller({ pageId, layout, curation, sections, components, signupForms, artist, homeHref, onOpen });
 
   const rows: Row[] = groupBlocksByRow(layout.blocks).map((row) => {
     const key = rowKey(row);

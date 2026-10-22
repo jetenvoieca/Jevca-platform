@@ -20,6 +20,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import PagePreview from "@/components/PagePreview";
 import CanvasArranger from "@/components/CanvasArranger";
 import PageSectionsArranger from "@/components/PageSectionsArranger";
+import PageLayoutEditor from "@/components/PageLayoutEditor";
 
 export type PageListItem = {
   id: string;
@@ -94,6 +95,8 @@ export default function PagesManager({
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [arranging, setArranging] = useState(false);
+  // The page's layout being edited on the page (2026-10-22).
+  const [layingOut, setLayingOut] = useState(false);
   // Bumped when Arrange closes, so the preview reloads what it shows.
   const [previewVersion, setPreviewVersion] = useState(0);
   const [siteMenuId, setSiteMenuId] = useState(siteMenuStyleId ?? "");
@@ -121,6 +124,13 @@ export default function PagesManager({
 
   const closeArrange = () => {
     setArranging(false);
+    setPreviewVersion((v) => v + 1);
+  };
+
+  // The style has changed: fresh styles from the server, then the preview.
+  const closeLayout = () => {
+    setLayingOut(false);
+    router.refresh();
     setPreviewVersion((v) => v + 1);
   };
 
@@ -169,10 +179,12 @@ export default function PagesManager({
   const selectPage = (id: string) => {
     setSelectedId(id === selectedId ? null : id);
     setArranging(false);
+    if (layingOut) closeLayout();
   };
 
   const openModal = (mode: "add" | "edit") => {
     setArranging(false);
+    if (layingOut) closeLayout();
     setModalError(null);
     setModal(mode);
   };
@@ -203,6 +215,7 @@ export default function PagesManager({
     setConfirmingDelete(false);
     setSelectedId(null);
     setArranging(false);
+    setLayingOut(false);
     startTransition(() => deletePage(siteId, selected.id));
   };
 
@@ -290,7 +303,17 @@ export default function PagesManager({
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white">
-        {selected && arrangingSections && blockBuildStyle && selected.curationId ? (
+        {selected && layingOut && blockBuildStyle && selected.curationId ? (
+          <LiveSiteData siteId={siteId} artistId={artistId}>
+            <PageLayoutEditor
+              key={selected.id}
+              pageId={selected.id}
+              curationId={selected.curationId}
+              style={blockBuildStyle}
+              onClose={closeLayout}
+            />
+          </LiveSiteData>
+        ) : selected && arrangingSections && blockBuildStyle && selected.curationId ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
             <PageSectionsArranger
               key={selected.id}
@@ -317,7 +340,7 @@ export default function PagesManager({
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-5 gap-2">
           <button type="button" onClick={() => openModal("add")} disabled={isPending} className={buttonClass}>
             Add
           </button>
@@ -331,7 +354,22 @@ export default function PagesManager({
           </button>
           <button
             type="button"
-            onClick={() => setArranging(true)}
+            onClick={() => {
+              setArranging(false);
+              setLayingOut(true);
+            }}
+            disabled={!blockBuildStyle || isPending}
+            title="Change this page's layout (its Display Style), seeing its real content"
+            className={buttonClass}
+          >
+            Layout
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setLayingOut(false);
+              setArranging(true);
+            }}
             disabled={!canArrange || isPending}
             title="For Canvas pages, and Block Build pages with a curation"
             className={buttonClass}

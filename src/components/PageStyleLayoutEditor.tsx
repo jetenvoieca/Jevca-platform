@@ -25,7 +25,9 @@ import {
   type SignupLook,
   type SlidingDoorsSettings,
 } from "@/lib/pageStyleLayout";
+import type { ReactNode } from "react";
 import { BlockShape } from "@/components/blockShapes";
+import type { PreviewDevice } from "@/components/pageRows";
 import NumberField from "@/components/NumberField";
 import { TextStyleBox } from "@/components/layoutControls";
 import VisualLayoutEditor, { type TextStyleFonts } from "@/components/VisualLayoutEditor";
@@ -44,9 +46,13 @@ const SITE_TEXT_STYLE_FONTS: TextStyleFonts = { fonts: SITE_FONTS, kinds: SITE_F
 export default function PageStyleLayoutEditor({
   layout,
   onChange,
+  renderBlock,
 }: {
   layout: BlockBuildLayout;
   onChange: (layout: BlockBuildLayout) => void;
+  // How a component is drawn instead of its outline (2026-10-22 — a
+  // page's real content, see PageLayoutEditor); null = its outline.
+  renderBlock?: (block: LayoutBlock, device: PreviewDevice) => ReactNode | null;
 }) {
   return (
     <VisualLayoutEditor<LayoutBlock, BlockBuildLayout>
@@ -54,18 +60,20 @@ export default function PageStyleLayoutEditor({
       onChange={onChange}
       components={LAYOUT_BLOCK_TYPES}
       newBlock={newLayoutBlock}
-      renderBlock={(b, device) => (
-        <BlockShape
-          type={b.type}
-          doors={b.doors}
-          signup={b.signup}
-          perRow={b.perRow}
-          names={!!b.names}
-          heroShare={b.hero?.pictureShare}
-          device={device}
-          spacing={layout.gridSpacing}
-        />
-      )}
+      renderBlock={(b, device) =>
+        renderBlock?.(b, device) ?? (
+          <BlockShape
+            type={b.type}
+            doors={b.doors}
+            signup={b.signup}
+            perRow={b.perRow}
+            names={!!b.names}
+            heroShare={b.hero?.pictureShare}
+            device={device}
+            spacing={layout.gridSpacing}
+          />
+        )
+      }
       settingsPanel={(b, onBlock) => {
         if (b.hero) {
           return {
