@@ -2,15 +2,23 @@
 
 import type { ReactNode } from "react";
 import {
+  DEFAULT_HIGHLIGHT,
+  DEFAULT_SOCIAL_TEXT,
+  DEFAULT_TOP_BAR,
   MENU_BEHAVIOURS,
   MENU_KINDS,
   MENU_POSITIONS,
   MENU_SHADOWS,
   MENU_STYLE_LIMITS,
   normalizeMenuStyle,
+  type MenuSideList,
   type MenuStyleLayout,
+  type MenuTopBar,
 } from "@/lib/menuStyleLayout";
+import { DEFAULT_LINE, LINE_THICKNESS_LIMITS, LOGO_BYLINE_LIMITS, LOGO_HEIGHT_LIMITS } from "@/lib/pageStyleLayout";
+import { SITE_FONTS, SITE_FONT_KINDS, isSiteFontId } from "@/lib/siteFonts";
 import NumberField from "@/components/NumberField";
+import { TextStyleBox } from "@/components/layoutControls";
 
 // What's being edited: the menu's name and settings. Held by
 // MenuStylesManager so its Preview shows every change straight away.
@@ -18,8 +26,10 @@ export type MenuStyleDraft = { name: string; layout: MenuStyleLayout };
 
 // Templates → Menus' Add / Edit panel (2026-10-06): sits in the
 // right-hand column, beside the Preview, and stays open until Close.
-// Name, then Layout (kind, position, behaviour), then Design (colours,
-// text size, rounding, shadow, blur) — see lib/menuStyleLayout.ts.
+// Name, then Layout (kind, position or side, behaviour), a Side list's
+// own settings (2026-10-23), the Top bar (2026-10-23), then Design
+// (colours, the pages' look, highlight, rounding, shadow, blur) — see
+// lib/menuStyleLayout.ts.
 // Saving is automatic (see MenuStylesManager); `status` reports it.
 export default function MenuStyleEditor({
   draft,
@@ -35,6 +45,10 @@ export default function MenuStyleEditor({
   const { layout } = draft;
   const set = (patch: Partial<MenuStyleLayout>) =>
     onChange({ ...draft, layout: normalizeMenuStyle({ ...layout, ...patch }) });
+  const setList = (patch: Partial<MenuSideList>) => set({ list: { ...layout.list, ...patch } });
+  const bar = layout.topBar;
+  const setBar = (patch: Partial<MenuTopBar>) => bar && set({ topBar: { ...bar, ...patch } });
+  const sideList = layout.kind === "sidelist";
   const l = MENU_STYLE_LIMITS;
 
   return (
@@ -51,18 +65,17 @@ export default function MenuStyleEditor({
         />
 
         <Group title="Layout">
-          <Choice
-            label="Type"
-            value={layout.kind}
-            choices={MENU_KINDS}
-            onChange={(kind) => set({ kind })}
-          />
-          <Choice
-            label="Position"
-            value={layout.position}
-            choices={MENU_POSITIONS}
-            onChange={(position) => set({ position })}
-          />
+          <Choice label="Type" value={layout.kind} choices={MENU_KINDS} onChange={(kind) => set({ kind })} />
+          {sideList ? (
+            <Choice label="Side" value={layout.list.side} choices={SIDES} onChange={(side) => setList({ side })} />
+          ) : (
+            <Choice
+              label="Position"
+              value={layout.position}
+              choices={MENU_POSITIONS}
+              onChange={(position) => set({ position })}
+            />
+          )}
           <Choice
             label="Behaviour"
             value={layout.behaviour}
@@ -71,76 +84,232 @@ export default function MenuStyleEditor({
           />
         </Group>
 
+        {sideList && (
+          <Group title="Side list">
+            <WholeNumber
+              label="Width"
+              unit="pixels"
+              value={layout.list.width}
+              limits={l.listWidth}
+              onCommit={(width) => setList({ width })}
+            />
+            <WholeNumber
+              label="Space above"
+              unit="pixels"
+              value={layout.list.top}
+              limits={l.listTop}
+              onCommit={(top) => setList({ top })}
+            />
+            <WholeNumber
+              label="Space between pages"
+              unit="pixels"
+              value={layout.list.gap}
+              limits={l.listGap}
+              onCommit={(gap) => setList({ gap })}
+            />
+            <Choice
+              label="Pages line up"
+              value={layout.list.align}
+              choices={ALIGNS}
+              onChange={(align) => setList({ align })}
+            />
+            <WholeNumber
+              label="Menu button below"
+              unit="pixels wide"
+              value={layout.list.hamburgerBelow}
+              limits={l.hamburgerBelow}
+              onCommit={(hamburgerBelow) => setList({ hamburgerBelow })}
+            />
+            <label className="flex items-center gap-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                checked={layout.list.social !== null}
+                onChange={(e) =>
+                  setList({ social: e.target.checked ? { text: DEFAULT_SOCIAL_TEXT, capitals: true } : null })
+                }
+              />
+              Instagram and Facebook under the list
+            </label>
+            {layout.list.social && (
+              <>
+                <TextStyleBox
+                  label="Links"
+                  value={layout.list.social.text}
+                  fonts={SITE_FONTS}
+                  kinds={SITE_FONT_KINDS}
+                  isFont={isSiteFontId}
+                  onChange={(text) => setList({ social: { ...layout.list.social!, text } })}
+                />
+                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={layout.list.social.capitals}
+                    onChange={(e) => setList({ social: { ...layout.list.social!, capitals: e.target.checked } })}
+                  />
+                  In capitals
+                </label>
+              </>
+            )}
+          </Group>
+        )}
+
+        <Group title="Top bar">
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={bar !== null}
+              onChange={(e) => set({ topBar: e.target.checked ? DEFAULT_TOP_BAR : null })}
+            />
+            The logo in a bar across the top
+          </label>
+          {bar && (
+            <>
+              {(["desktop", "phone"] as const).map((device) => (
+                <WholeNumber
+                  key={`h-${device}`}
+                  label={`Bar height, ${device}`}
+                  unit="pixels"
+                  value={bar.height[device]}
+                  limits={l.barHeight}
+                  onCommit={(v) => setBar({ height: { ...bar.height, [device]: v } })}
+                />
+              ))}
+              {(["desktop", "phone"] as const).map((device) => (
+                <WholeNumber
+                  key={`p-${device}`}
+                  label={`Space at the ends, ${device}`}
+                  unit="pixels"
+                  value={bar.padding[device]}
+                  limits={l.barPadding}
+                  onCommit={(v) => setBar({ padding: { ...bar.padding, [device]: v } })}
+                />
+              ))}
+              {(["desktop", "phone"] as const).map((device) => (
+                <WholeNumber
+                  key={`l-${device}`}
+                  label={`Logo height, ${device}`}
+                  unit="pixels"
+                  value={bar.logoHeight[device]}
+                  limits={LOGO_HEIGHT_LIMITS}
+                  onCommit={(v) => setBar({ logoHeight: { ...bar.logoHeight, [device]: v } })}
+                />
+              ))}
+              <TextStyleBox
+                label="Words under the logo"
+                value={bar.byline.style}
+                fonts={SITE_FONTS}
+                kinds={SITE_FONT_KINDS}
+                isFont={isSiteFontId}
+                noSize
+                onChange={(style) => setBar({ byline: { ...bar.byline, style } })}
+              />
+              {BYLINE_FIELDS.map((f) => (
+                <WholeNumber
+                  key={f.key}
+                  label={f.label}
+                  unit={f.unit}
+                  value={bar.byline[f.key]}
+                  limits={LOGO_BYLINE_LIMITS[f.key]}
+                  onCommit={(v) => setBar({ byline: { ...bar.byline, [f.key]: v } })}
+                />
+              ))}
+              <label className="flex items-center gap-2 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={bar.line !== null}
+                  onChange={(e) => setBar({ line: e.target.checked ? DEFAULT_LINE : null })}
+                />
+                <span className="flex-1">Line under the bar</span>
+                {bar.line && (
+                  <input
+                    type="color"
+                    value={bar.line.colour}
+                    onChange={(e) => setBar({ line: { ...bar.line!, colour: e.target.value } })}
+                    aria-label="Line colour"
+                    className="h-6 w-6 shrink-0 cursor-pointer rounded border border-neutral-300 p-0"
+                  />
+                )}
+              </label>
+              {bar.line && (
+                <NumberField
+                  label="Line thickness"
+                  unit="pixels"
+                  step={0.5}
+                  value={bar.line.thickness}
+                  limits={LINE_THICKNESS_LIMITS}
+                  onCommit={(thickness) => setBar({ line: { ...bar.line!, thickness } })}
+                  wide
+                />
+              )}
+              <p className="text-xs text-neutral-400">
+                The logo and its words are typed in Settings → Personal Profile.
+              </p>
+            </>
+          )}
+        </Group>
+
         <Group title="Design">
           <ColourField
             label="Background"
             value={layout.backgroundColor}
             onChange={(backgroundColor) => set({ backgroundColor })}
           />
-          <NumberField
+          <WholeNumber
             label="Background opacity"
             unit="%"
-            step={5}
             value={layout.backgroundOpacity}
             limits={l.backgroundOpacity}
             onCommit={(backgroundOpacity) => set({ backgroundOpacity })}
-            wide
           />
-          <ColourField
-            label="Text"
-            value={layout.textColor}
-            onChange={(textColor) => set({ textColor })}
+          <TextStyleBox
+            label="Pages"
+            value={layout.text}
+            fonts={SITE_FONTS}
+            kinds={SITE_FONT_KINDS}
+            isFont={isSiteFontId}
+            onChange={(text) => set({ text })}
           />
-          <NumberField
-            label="Text size"
-            unit="pixels"
-            step={1}
-            value={layout.textSize}
-            limits={l.textSize}
-            onCommit={(textSize) => set({ textSize })}
-            wide
-          />
-          <ColourField
-            label="Current page highlight"
-            value={layout.highlightColor}
-            onChange={(highlightColor) => set({ highlightColor })}
-          />
-          <NumberField
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={layout.highlightColor !== null}
+              onChange={(e) => set({ highlightColor: e.target.checked ? DEFAULT_HIGHLIGHT : null })}
+            />
+            <span className="flex-1">Highlight the current page</span>
+            {layout.highlightColor && (
+              <input
+                type="color"
+                value={layout.highlightColor}
+                onChange={(e) => set({ highlightColor: e.target.value })}
+                aria-label="Highlight colour"
+                className="h-6 w-6 shrink-0 cursor-pointer rounded border border-neutral-300 p-0"
+              />
+            )}
+          </label>
+          <WholeNumber
             label="Corner rounding"
             unit="pixels"
-            step={1}
             value={layout.rounding}
             limits={l.rounding}
             onCommit={(rounding) => set({ rounding })}
-            wide
           />
-          <Choice
-            label="Shadow"
-            value={layout.shadow}
-            choices={MENU_SHADOWS}
-            onChange={(shadow) => set({ shadow })}
-          />
-          <NumberField
+          <Choice label="Shadow" value={layout.shadow} choices={MENU_SHADOWS} onChange={(shadow) => set({ shadow })} />
+          <WholeNumber
             label="Background blur"
             unit="pixels"
-            step={1}
             value={layout.blur}
             limits={l.blur}
             onCommit={(blur) => set({ blur })}
-            wide
           />
         </Group>
 
         <p className="text-xs text-neutral-400">
-          The menu lists each site&apos;s Live Pages, in order. On phones it always opens full
-          screen.
+          The menu lists each site&apos;s Live Pages, in order. On phones it always opens full screen.
         </p>
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-neutral-200 p-3">
-        <p className={`min-w-0 text-xs ${status.isError ? "text-red-600" : "text-neutral-500"}`}>
-          {status.text}
-        </p>
+        <p className={`min-w-0 text-xs ${status.isError ? "text-red-600" : "text-neutral-500"}`}>{status.text}</p>
         <button
           type="button"
           onClick={onClose}
@@ -151,6 +320,41 @@ export default function MenuStyleEditor({
       </div>
     </div>
   );
+}
+
+const SIDES = [
+  { value: "left", label: "Left" },
+  { value: "right", label: "Right" },
+] as const;
+
+const ALIGNS = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Centred" },
+  { value: "right", label: "Right" },
+] as const;
+
+// The words under the logo: size and place, all a share of the logo.
+const BYLINE_FIELDS: { key: keyof typeof LOGO_BYLINE_LIMITS; label: string; unit: string }[] = [
+  { key: "size", label: "Words' size", unit: "% of logo height" },
+  { key: "up", label: "Words up", unit: "% of logo height" },
+  { key: "across", label: "Words across", unit: "% of logo width" },
+];
+
+// A whole-number setting.
+function WholeNumber({
+  label,
+  unit,
+  value,
+  limits,
+  onCommit,
+}: {
+  label: string;
+  unit: string;
+  value: number;
+  limits: { min: number; max: number };
+  onCommit: (value: number) => void;
+}) {
+  return <NumberField label={label} unit={unit} step={1} value={value} limits={limits} onCommit={onCommit} wide />;
 }
 
 function Group({ title, children }: { title: string; children: ReactNode }) {
@@ -191,15 +395,7 @@ function Choice<T extends string>({
   );
 }
 
-function ColourField({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-}) {
+function ColourField({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="flex items-center gap-2 text-sm text-neutral-700">
       <span className="flex-1">{label}</span>

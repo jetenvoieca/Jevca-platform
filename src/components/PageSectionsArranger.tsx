@@ -37,6 +37,7 @@ import {
 } from "@/lib/pageComponents";
 import {
   DEFAULT_LINE,
+  DEFAULT_LOGO_HEIGHT,
   blockTypeLabel,
   pageDesignWidth,
   type BlockBuildLayout,
@@ -53,6 +54,8 @@ import { bodyTextCss } from "@/components/textStyleCss";
 import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 import SignupFormSetup from "@/components/SignupFormSetup";
 import LineView from "@/components/LineView";
+import SiteLogo from "@/components/SiteLogo";
+import type { SiteArtist } from "@/lib/siteArtist";
 
 // Arrange for a Block Build page (2026-10-07; 2026-10-13 from Craig's
 // mockup: Page Styles set the layout, curations what's available, and
@@ -163,7 +166,7 @@ export default function PageSectionsArranger({
   // The Sign-up forms set up (by block id), and the one being set up.
   const [signupsSetUp, setSignupsSetUp] = useState<Set<string>>(new Set());
   const [settingUp, setSettingUp] = useState<string | null>(null);
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [artist, setArtist] = useState<SiteArtist | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = groupBlocksByRow(layout.blocks);
@@ -177,7 +180,7 @@ export default function PageSectionsArranger({
         siteData.getSignupForms(pageId),
         siteData.getArtist(),
       ]).then(([loadedCuration, loadedSections, components, signupForms, artist]) => {
-        setLogoUrl(artist?.logoUrl ?? null);
+        setArtist(artist);
         setCuration(loadedCuration);
         setSections(loadedSections);
         setContents(new Map(components.map((c) => [c.blockId, c])));
@@ -392,8 +395,14 @@ export default function PageSectionsArranger({
                             <Slot block={b} dragging={dragging}>
                               {b.type === "logo" ? (
                                 <Labelled label={blockTypeLabel(b.type)}>
-                                  {logoUrl ? (
-                                    <img src={logoUrl} alt="" className="block w-full" />
+                                  {artist?.logoUrl ? (
+                                    <SiteLogo
+                                      logoUrl={artist.logoUrl}
+                                      bylineText={artist.logoByline}
+                                      byline={b.byline}
+                                      height={b.logoHeight ?? DEFAULT_LOGO_HEIGHT}
+                                      device="desktop"
+                                    />
                                   ) : (
                                     <p className="py-4 text-center text-sm text-neutral-400">
                                       No logo yet — upload one in Settings → Invoicing.

@@ -12,6 +12,7 @@ import {
 import { SnapshotSiteData } from "@/lib/siteData";
 import PagePreview from "@/components/PagePreview";
 import PublishedSiteMenu from "@/components/PublishedSiteMenu";
+import { SITE_PAGE_ATTRIBUTE } from "@/components/MenuView";
 
 // How long the old page takes to fade out as the new one fades in —
 // matches the page-fade animations in tailwind.config.ts.
@@ -23,13 +24,14 @@ type Leaving = { page: SnapshotPage; scrollY: number };
 
 // A published site (2026-10-06; 2026-10-13 instant pages): drawn from its
 // snapshot with the same components as the admin preview (PagePreview),
-// with the site's menu (PublishedSiteMenu). It's loaded once, by the
-// site's layout, when a visitor arrives; after that, following a link to
-// another of the site's pages (the menu, a Logo…) changes the address
-// and draws that page in the browser — no trip to the server; hovering
-// over the link first fetches that page's pictures. The old
-// page fades out as the new one fades in (Craig's choice: a plain
-// cross-fade, 0.8 s), the menu staying where it is. Back and forward
+// with the site's menu (PublishedSiteMenu), which keeps its top bar and
+// Side list clear of the pages (2026-10-23, SITE_PAGE_ATTRIBUTE). It's
+// loaded once, by the site's layout, when a visitor arrives; after that,
+// following a link to another of the site's pages (the menu, a Logo…)
+// changes the address and draws that page in the browser — no trip to
+// the server; hovering over the link first fetches that page's
+// pictures. The old page fades out as the new one fades in (Craig's
+// choice: a plain cross-fade, 0.8 s), the menu staying where it is. Back and forward
 // work as usual, and every address still opens its page directly.
 // `siteKey` (2026-10-10): the robot check's public key for this address,
 // for the visitor's forms; `salesEnabled` (2026-10-19): whether works can
@@ -132,6 +134,7 @@ export default function PublishedSite({
           return (
             <main
               key={p.id}
+              {...{ [SITE_PAGE_ATTRIBUTE]: "" }}
               className={className}
               style={l ? { top: -l.scrollY } : undefined}
               aria-hidden={l ? true : undefined}
@@ -140,7 +143,13 @@ export default function PublishedSite({
             </main>
           );
         })}
-        <PublishedSiteMenu siteId={siteId} pages={snapshot.pages} menus={snapshot.menus} currentId={page?.id ?? null} />
+        <PublishedSiteMenu
+          siteId={siteId}
+          pages={snapshot.pages}
+          menus={snapshot.menus}
+          artist={snapshot.artist}
+          currentId={page?.id ?? null}
+        />
       </div>
     </SnapshotSiteData>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
+import { menuPageInset, type MenuStyleLayout } from "@/lib/menuStyleLayout";
 import MenuView, { type MenuViewItem } from "@/components/MenuView";
 
 // Example Live Pages for the preview — on a site the menu lists the
@@ -15,8 +15,9 @@ const EXAMPLE_ITEMS: MenuViewItem[] = [
 
 // The Menus page's Preview (2026-10-06): the menu in a desktop frame and
 // a phone frame, drawn by the same component as the site (MenuView), on
-// a grey example page so opacity and blur show. Both can be tried — the
-// desktop one starts open. `Works` is the current page. Re-keyed on
+// a grey example page so opacity and blur show (the logo in a top bar
+// and the links under a Side list are stand-ins). Both can be tried —
+// the desktop one starts open. `Works` is the current page. Re-keyed on
 // kind, position and behaviour so each change starts from the same
 // state.
 export default function MenuStylePreview({ layout }: { layout: MenuStyleLayout }) {
@@ -25,7 +26,7 @@ export default function MenuStylePreview({ layout }: { layout: MenuStyleLayout }
     <div className="flex flex-wrap items-start justify-center gap-6">
       <figure className="flex min-w-0 flex-1 flex-col items-center gap-2">
         <div className="relative aspect-[16/10] w-full max-w-[720px] overflow-hidden rounded-md border border-neutral-300">
-          <ExamplePage />
+          <ExamplePage inset={menuPageInset(layout, "desktop", true)} />
           <MenuView
             key={key}
             layout={layout}
@@ -40,7 +41,7 @@ export default function MenuStylePreview({ layout }: { layout: MenuStyleLayout }
       </figure>
       <figure className="flex flex-col items-center gap-2">
         <div className="relative h-[440px] w-[220px] overflow-hidden rounded-[24px] border-4 border-neutral-800">
-          <ExamplePage />
+          <ExamplePage inset={menuPageInset(layout, "phone", false)} />
           <MenuView
             key={key}
             layout={layout}
@@ -56,10 +57,11 @@ export default function MenuStylePreview({ layout }: { layout: MenuStyleLayout }
   );
 }
 
-// Grey blocks standing in for a page's images and text.
-function ExamplePage() {
+// Grey blocks standing in for a page's images and text, clear of the
+// menu's top bar and Side list as on a site (2026-10-23).
+function ExamplePage({ inset }: { inset: { top: number; left: number; right: number } }) {
   return (
-    <div className="absolute inset-0 grid grid-cols-3 gap-2 bg-neutral-100 p-3">
+    <div className="absolute grid grid-cols-3 gap-2 bg-neutral-100 p-3" style={{ ...inset, bottom: 0 }}>
       {Array.from({ length: 9 }, (_, i) => (
         <div key={i} className={`rounded ${i % 2 ? "bg-neutral-300" : "bg-neutral-400"}`} />
       ))}

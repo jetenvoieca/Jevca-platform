@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
+import type { SiteArtist } from "@/lib/siteArtist";
 import { publishedPagePath } from "@/lib/siteSnapshot";
 import { SITE_PHONE_QUERY } from "@/lib/siteBreakpoint";
 import MenuView from "@/components/MenuView";
@@ -25,11 +26,14 @@ export default function PublishedSiteMenu({
   siteId,
   pages,
   menus,
+  artist,
   currentId,
 }: {
   siteId: string;
   pages: PublishedMenuPage[];
   menus: Record<string, MenuStyleLayout>;
+  // The Logo for a top bar and the links under a Side list (2026-10-23).
+  artist: SiteArtist | null;
   // The page being shown — null on an address that isn't one.
   currentId: string | null;
 }) {
@@ -52,6 +56,13 @@ export default function PublishedSiteMenu({
       items={items}
       currentId={current.id}
       phone={phone}
+      artist={
+        artist && {
+          logoUrl: artist.logoUrl,
+          logoByline: artist.logoByline ?? null,
+          social: artist.social ?? null,
+        }
+      }
     />
   );
 }

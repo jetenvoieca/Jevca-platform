@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
@@ -17,7 +17,6 @@ import {
   type GalleryPerRow,
   type GalleryTiles,
   type LayoutBlock,
-  type LogoHeight,
   type PageGridSpacing,
   type PageTextStyle,
 } from "@/lib/pageStyleLayout";
@@ -53,6 +52,7 @@ import HeroBlock from "@/components/HeroBlock";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import LineView from "@/components/LineView";
+import SiteLogo from "@/components/SiteLogo";
 
 // A page, drawn in its Display Style (2026-10-04) — the Pages page's
 // Preview panel, and (2026-10-06) the site's own pages, full screen.
@@ -345,48 +345,15 @@ export function blockFiller({
   const fill = (block: LayoutBlock, horizontal: HorizontalAlign): ReactNode => {
     if (block.type === "logo") {
       if (!artist?.logoUrl) return null;
-      const byline = artist.logoByline ? block.byline : undefined;
-      const logo = (
-        <>
-          <FadeImage
-            src={artist.logoUrl}
-            alt=""
-            className="block h-[var(--logo-now)] w-auto max-w-full object-contain"
-          />
-          {byline && (
-            <span
-              className="absolute whitespace-nowrap leading-none"
-              style={{
-                ...bodyTextCss(byline.style),
-                fontSize: `calc(var(--logo-now) * ${byline.size / 100})`,
-                left: `${byline.across}%`,
-                top: `calc(100% - var(--logo-now) * ${byline.up / 100})`,
-              }}
-            >
-              {artist.logoByline}
-            </span>
-          )}
-        </>
-      );
-      // The byline's height below the logo, kept clear of what follows.
-      const below = byline ? Math.max(0, byline.size - byline.up) / 100 : 0;
-      const box = {
-        ...logoHeightStyle(block.logoHeight ?? DEFAULT_LOGO_HEIGHT),
-        marginBottom: `calc(var(--logo-now) * ${below})`,
-      };
-      const boxClass =
-        "relative block w-fit max-w-full [--logo-now:var(--logo-h-phone)] site:[--logo-now:var(--logo-h)]";
       return (
         <div className={alignedInsideClass(horizontal)}>
-          {homeHref ? (
-            <a href={homeHref} className={boxClass} style={box}>
-              {logo}
-            </a>
-          ) : (
-            <div className={boxClass} style={box}>
-              {logo}
-            </div>
-          )}
+          <SiteLogo
+            logoUrl={artist.logoUrl}
+            bylineText={artist.logoByline}
+            byline={block.byline}
+            height={block.logoHeight ?? DEFAULT_LOGO_HEIGHT}
+            href={homeHref}
+          />
         </div>
       );
     }
@@ -510,20 +477,14 @@ function BlockBuildPage({
   );
 }
 
-// A Logo's height on a desktop and on a phone (2026-10-22); `--logo-now`
-// is the one in use, which the words under it scale with.
-function logoHeightStyle(height: LogoHeight): CSSProperties {
-  return { "--logo-h": `${height.desktop}px`, "--logo-h-phone": `${height.phone}px` } as CSSProperties;
-}
-
 // The page's background and margin around its rows, then the site's
 // footer, no wider than the page's maximum width (2026-10-22), centred.
 // The contents are the container a text's shrinking size measures (see
 // bodyTextCss). Unfilled blocks are dropped, and so is any row left
-// empty. It grows to
-// fill the space it's in (the whole window on the published site), so
-// the background reaches the bottom — and both sides — however short or
-// narrow the page, as it does in the admin preview.
+// empty. It grows to fill the space it's in (the whole window on the
+// published site), so the background reaches the bottom — and both
+// sides — however short or narrow the page, as it does in the admin
+// preview.
 function StyledFrame({
   margins,
   maxWidth,
