@@ -53,6 +53,9 @@ export const LAYOUT_BLOCK_TYPES = [
   // The artist's Logo from Settings (2026-10-13), at its `logoHeight`,
   // linking to the site's home page.
   { value: "logo", label: "Logo" },
+  // A thin rule across the component (2026-10-23, from louisedear.com's
+  // gallery pages, under the title and byline).
+  { value: "line", label: "Line" },
 ] as const;
 
 export type LayoutBlockType = (typeof LAYOUT_BLOCK_TYPES)[number]["value"];
@@ -180,6 +183,20 @@ export function cleanLogoByline(raw: unknown): LogoByline {
     size: cleanNumber(value.size, l.size, d.size, 0),
     up: cleanNumber(value.up, l.up, d.up, 0),
     across: cleanNumber(value.across, l.across, d.across, 0),
+  };
+}
+
+// A Line's look (2026-10-23): its colour and thickness in pixels (half
+// a pixel draws a hairline on a sharp screen).
+export type LineLook = { colour: string; thickness: number };
+export const LINE_THICKNESS_LIMITS = { min: 0.5, max: 20 } as const;
+export const DEFAULT_LINE: LineLook = { colour: "#dfdcd7", thickness: 0.5 };
+
+export function cleanLine(raw: unknown): LineLook {
+  const value = (raw ?? {}) as Partial<Record<keyof LineLook, unknown>>;
+  return {
+    colour: cleanColour(value.colour) ?? DEFAULT_LINE.colour,
+    thickness: cleanNumber(value.thickness, LINE_THICKNESS_LIMITS, DEFAULT_LINE.thickness, 1),
   };
 }
 
@@ -359,7 +376,7 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 };
 
 // A Block Build component. `doors` is set on Sliding doors blocks only,
-// `signup` on Sign-up form blocks only, `logoHeight` on Logo blocks only,
+// `signup` on Sign-up form blocks only, `logoHeight` on Logo blocks only, `line` on Line blocks only,
 // `perRow`, `names` and `tiles` on Gallery blocks only, `hero` on Hero blocks only;
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
@@ -368,6 +385,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     doors?: SlidingDoorsSettings;
     signup?: SignupLook;
     logoHeight?: LogoHeight;
+    line?: LineLook;
     perRow?: GalleryPerRow;
     names?: PageTextStyle | null;
     tiles?: GalleryTiles;
@@ -506,6 +524,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "signup") {
             clean.signup = cleanSignupLook((b as Partial<LayoutBlock>).signup);
           }
+          if (clean.type === "line") {
+            clean.line = cleanLine((b as Partial<LayoutBlock>).line);
+          }
           if (clean.type === "logo") {
             clean.logoHeight = cleanLogoHeight((b as Partial<LayoutBlock>).logoHeight);
             clean.byline = cleanLogoByline((b as Partial<LayoutBlock>).byline);
@@ -547,6 +568,7 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   const id = crypto.randomUUID();
   if (type === "slidingdoors") return { id, type, doors: DEFAULT_SLIDING_DOORS };
   if (type === "signup") return { id, type, signup: DEFAULT_SIGNUP_LOOK };
+  if (type === "line") return { id, type, line: DEFAULT_LINE };
   if (type === "logo") return { id, type, logoHeight: DEFAULT_LOGO_HEIGHT, byline: DEFAULT_LOGO_BYLINE };
   if (type === "gallery")
     return { id, type, perRow: DEFAULT_GALLERY_PER_ROW, names: null, tiles: DEFAULT_GALLERY_TILES };

@@ -9,6 +9,9 @@ import {
   LOGO_HEIGHT_LIMITS,
   SLIDING_DOORS_LIMITS,
   DEFAULT_GALLERY_NAMES,
+  DEFAULT_LINE,
+  LINE_THICKNESS_LIMITS,
+  cleanLine,
   DEFAULT_GALLERY_TILES,
   GALLERY_ROUNDING_LIMITS,
   cleanGalleryTiles,
@@ -125,6 +128,31 @@ export default function PageStyleLayoutEditor({
                 <p className="text-xs text-neutral-400">
                   The words are typed once per artist, in Settings → Personal Profile.
                 </p>
+              </>
+            ),
+          };
+        }
+        if (b.type === "line") {
+          const line = b.line ?? DEFAULT_LINE;
+          return {
+            button: "Settings",
+            title: "Line",
+            content: (
+              <>
+                <ColourRow
+                  label="Colour"
+                  value={line.colour}
+                  onChange={(colour) => onBlock({ ...b, line: cleanLine({ ...line, colour }) })}
+                />
+                <NumberField
+                  label="Thickness"
+                  unit="pixels"
+                  step={0.5}
+                  value={line.thickness}
+                  limits={LINE_THICKNESS_LIMITS}
+                  onCommit={(thickness) => onBlock({ ...b, line: cleanLine({ ...line, thickness }) })}
+                  wide
+                />
               </>
             ),
           };

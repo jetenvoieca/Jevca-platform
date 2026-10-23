@@ -10,6 +10,7 @@ import type { SiteArtist } from "@/lib/siteArtist";
 import {
   DEFAULT_GALLERY_PER_ROW,
   DEFAULT_GALLERY_TILES,
+  DEFAULT_LINE,
   DEFAULT_LOGO_HEIGHT,
   pageContentWidth,
   type BlockBuildLayout,
@@ -51,6 +52,7 @@ import SlidingDoors from "@/components/SlidingDoors";
 import HeroBlock from "@/components/HeroBlock";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
+import LineView from "@/components/LineView";
 
 // A page, drawn in its Display Style (2026-10-04) — the Pages page's
 // Preview panel, and (2026-10-06) the site's own pages, full screen.
@@ -74,7 +76,8 @@ import FadeImage from "@/components/FadeImage";
 //   Logo from Settings, at its height on a desktop or a phone (never
 //   wider than the component), with the words typed under it tucked in
 //   as its Byline sets (2026-10-22), linking to the site's home page on
-//   the published site.
+//   the published site. A Line (2026-10-23) is a rule across its
+//   component.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Every page but a Canvas ends with the site's footer (2026-10-13) — see
 // SiteFooter.
@@ -387,6 +390,7 @@ export function blockFiller({
         </div>
       );
     }
+    if (block.type === "line") return <LineView look={block.line ?? DEFAULT_LINE} />;
     if (block.type === "signup") {
       const form = formByBlock.get(block.id);
       if (!form || !block.signup) return null;

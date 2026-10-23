@@ -36,6 +36,7 @@ import {
   type ContentKind,
 } from "@/lib/pageComponents";
 import {
+  DEFAULT_LINE,
   blockTypeLabel,
   pageDesignWidth,
   type BlockBuildLayout,
@@ -51,6 +52,7 @@ import { BlockShape, Labelled } from "@/components/blockShapes";
 import { bodyTextCss } from "@/components/textStyleCss";
 import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 import SignupFormSetup from "@/components/SignupFormSetup";
+import LineView from "@/components/LineView";
 
 // Arrange for a Block Build page (2026-10-07; 2026-10-13 from Craig's
 // mockup: Page Styles set the layout, curations what's available, and
@@ -397,6 +399,10 @@ export default function PageSectionsArranger({
                                       No logo yet — upload one in Settings → Invoicing.
                                     </p>
                                   )}
+                                </Labelled>
+                              ) : b.type === "line" ? (
+                                <Labelled label={blockTypeLabel(b.type)}>
+                                  <LineView look={b.line ?? DEFAULT_LINE} />
                                 </Labelled>
                               ) : b.type === "hero" && b.hero ? (
                                 <HeroSlot

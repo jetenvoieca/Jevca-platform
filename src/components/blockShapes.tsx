@@ -67,6 +67,8 @@ export function BlockShape({
     }
     case "header":
       return <Bar className="h-7 w-2/3" />;
+    case "line":
+      return <div className="border-t border-neutral-300" />;
     case "byline":
       return <Bar className="h-3.5 w-1/3" />;
     case "text":

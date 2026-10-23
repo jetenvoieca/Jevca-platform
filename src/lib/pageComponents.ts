@@ -35,7 +35,8 @@ export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 // Description; 2026-10-16: a Single Image also takes the works, showing
 // the first as arranged on the page). Feature takes nothing yet. A Sign-up form (2026-10-10)
 // takes no content: it's set up on its own in Arrange (see
-// lib/signupForms.ts). A Logo (2026-10-13) is always the artist's own.
+// lib/signupForms.ts). A Logo (2026-10-13) is always the artist's own,
+// and a Line (2026-10-23) is only a line.
 const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   header: ["TYPED"],
   byline: ["TYPED"],
@@ -49,6 +50,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   artwork: [],
   signup: [],
   logo: [],
+  line: [],
 };
 
 export function contentFits(block: LayoutBlockType, kind: ContentKind): boolean {
