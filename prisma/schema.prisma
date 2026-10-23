@@ -193,6 +193,9 @@ model Artist {
   // Words shown under the artist's Logo on their website (2026-10-22,
   // e.g. "Painter of Passion") — its look is set on the Logo component.
   logoByline      String?
+  // The artist's Facebook page, a full link (2026-10-23) — shown with
+  // their Instagram under a Side list menu on their website.
+  facebookUrl     String?
   // Whether the artist's address shows in the footer of their campaign
   // mails and website pages (2026-10-21, Craig's choice — per artist).
   // Mails sent to people in the USA legally need a postal address.

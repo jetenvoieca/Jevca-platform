@@ -15,6 +15,7 @@ import {
   setArtistProfileImage,
   updateArtistProfileText,
   updateArtistFooterAddress,
+  type ArtistProfileTextField,
 } from "@/lib/actions";
 import {
   toArtistFormFields,
@@ -76,6 +77,7 @@ type ArtistData = {
   story: string | null;
   writingVoice: string | null;
   instagramHandle: string | null;
+  facebookUrl: string | null;
   showFooterAddress: boolean;
   logoByline: string | null;
   // The Certificate of Authenticity's signature image (2026-09-03) —
@@ -337,7 +339,7 @@ export default function SiteSettingsPanel({
   };
 
   const handleProfileTextSave = (
-    field: "story" | "writingVoice" | "instagramHandle" | "logoByline",
+    field: ArtistProfileTextField,
     value: string,
   ) => {
     startTransition(async () => {
@@ -455,10 +457,25 @@ export default function SiteSettingsPanel({
             className={inputCls}
           />
           <p className="mt-1 text-xs text-neutral-400">
-            Shown as &ldquo;Or DM on Instagram&rdquo; on the website&apos;s enquiry form. Re-publish the site after
-            changing it.
+            Shown as &ldquo;Or DM on Instagram&rdquo; on the website&apos;s enquiry form, and under a Side list menu.
+            Re-publish the site after changing it.
           </p>
           {savedField === "instagramHandle" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+
+          <label className={`${labelCls} mt-4`}>Facebook page</label>
+          <input
+            key={`facebook-${artist.id}`}
+            type="text"
+            defaultValue={artist.facebookUrl || ""}
+            onBlur={(e) => handleProfileTextSave("facebookUrl", e.target.value)}
+            disabled={isPending}
+            placeholder="e.g. https://www.facebook.com/louisedear"
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-neutral-400">
+            Shown under a Side list menu on the website. Re-publish the site after changing it.
+          </p>
+          {savedField === "facebookUrl" && <p className="mt-1 text-xs text-green-600">Saved</p>}
 
           <label className="mt-4 flex items-center gap-2 text-sm text-neutral-700">
             <input

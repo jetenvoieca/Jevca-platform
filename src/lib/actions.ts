@@ -253,25 +253,32 @@ export async function updateArtistFooterAddress(artistId: string, show: boolean)
 
 export async function updateArtistProfileText(
   artistId: string,
-  field: "story" | "writingVoice" | "instagramHandle" | "logoByline",
+  field: ArtistProfileTextField,
   value: string,
 ): Promise<void> {
-  // An Instagram username is kept bare: "@louisedear" or a link to the
-  // profile both become "louisedear".
-  const clean =
-    field === "instagramHandle"
-      ? value
-          .trim()
-          .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
-          .replace(/^@/, "")
-          .replace(/[/?#].*$/, "")
-      : value.trim();
   await db.artist.update({
     where: { id: artistId },
-    data: { [field]: clean || null },
+    data: { [field]: cleanProfileText(field, value) || null },
   });
   revalidatePath("/");
 }
+
+// An Instagram username is kept bare: "@louisedear" or a link to the
+// profile both become "louisedear". A Facebook link (2026-10-23) gets
+// https:// if typed without it.
+function cleanProfileText(field: ArtistProfileTextField, value: string): string {
+  const text = value.trim();
+  if (field === "instagramHandle") {
+    return text
+      .replace(/^https?:\/\/(www\.)?instagram\.com\//i, "")
+      .replace(/^@/, "")
+      .replace(/[/?#].*$/, "");
+  }
+  if (field === "facebookUrl" && text && !/^https?:\/\//i.test(text)) return `https://${text}`;
+  return text;
+}
+
+export type ArtistProfileTextField = "story" | "writingVoice" | "instagramHandle" | "facebookUrl" | "logoByline";
 
 // Deliberately its own action, not folded into the autosave updateArtist
 // above — regenerating this immediately breaks any copy of the iPhone

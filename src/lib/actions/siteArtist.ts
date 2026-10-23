@@ -20,12 +20,20 @@ export async function getSiteArtist(artistId: string): Promise<SiteArtist | null
       country: true,
       showFooterAddress: true,
       logoByline: true,
+      instagramHandle: true,
+      facebookUrl: true,
     },
   });
   if (!artist) return null;
   return {
     logoUrl: artist.logoUrl ? storedFileUrl(artist.logoUrl) : null,
     logoByline: artist.logoByline,
+    social: {
+      instagramUrl: artist.instagramHandle
+        ? `https://www.instagram.com/${encodeURIComponent(artist.instagramHandle)}`
+        : null,
+      facebookUrl: artist.facebookUrl,
+    },
     footer: {
       name: artist.name,
       town: artist.showFooterAddress ? artistTownLine(artist) : null,

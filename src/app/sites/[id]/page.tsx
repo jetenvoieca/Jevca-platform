@@ -116,6 +116,7 @@ export default async function SiteSettingsPage({
             story: site.artist.story,
             writingVoice: site.artist.writingVoice,
             instagramHandle: site.artist.instagramHandle,
+            facebookUrl: site.artist.facebookUrl,
             showFooterAddress: site.artist.showFooterAddress,
             logoByline: site.artist.logoByline,
             signatureUrl: site.artist.signatureUrl,

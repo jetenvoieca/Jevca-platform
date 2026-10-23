@@ -18,6 +18,9 @@ export type SiteArtist = {
   logoUrl: string | null;
   // Words under the Logo (2026-10-22); absent from sites published before.
   logoByline?: string | null;
+  // Links to the artist's Instagram and Facebook (2026-10-23), shown
+  // under a Side list menu; absent from sites published before.
+  social?: { instagramUrl: string | null; facebookUrl: string | null };
   footer: SiteFooter;
 };
 
