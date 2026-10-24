@@ -29,7 +29,8 @@ import {
   contentFits,
   contentKindOf,
   hiddenItems,
-  isTypedBlock,
+  isTypedContent,
+  maxTypedLength,
   readHeroText,
   writeHeroText,
   type ComponentContent,
@@ -246,12 +247,12 @@ export default function PageSectionsArranger({
       () => clearPageComponent(siteId, pageId, blockId),
     );
 
-  // A Header's typed text (blank empties it), or this page's
-  // Description (null = the curation's own).
+  // A Header's, Byline's or Text's typed text (blank empties it), or
+  // this page's Description (null = the curation's own).
   const saveText = (block: LayoutBlock, text: string | null) =>
     change(
       (m) => {
-        const typed = isTypedBlock(block.type);
+        const typed = isTypedContent(block.type, m.get(block.id) ?? null);
         if (typed && !text?.trim()) {
           m.delete(block.id);
           return m;
@@ -430,11 +431,10 @@ export default function PageSectionsArranger({
                                   setUp={signupsSetUp.has(b.id)}
                                   onSetUp={() => setSettingUp(b.id)}
                                 />
-                              ) : isTypedBlock(b.type) ? (
+                              ) : isTypedContent(b.type, content) ? (
                                 <TypedSlot
                                   key={content?.text ?? ""}
-                                  label={blockTypeLabel(b.type)}
-                                  byline={b.type === "byline"}
+                                  type={b.type}
                                   text={content?.text ?? ""}
                                   style={textStyle ? bodyTextCss(textStyle) : undefined}
                                   onSave={(text) => saveText(b, text)}
@@ -597,35 +597,48 @@ function Slot({ block, dragging, children }: { block: LayoutBlock; dragging: Dra
   );
 }
 
-// A Header or Byline, typed straight in; saves when left.
+// A Header, Byline or (2026-10-24) Text, typed straight in; saves when
+// left. A Text is several lines and can instead take the Description,
+// dragged onto it.
 function TypedSlot({
-  label,
-  byline,
+  type,
   text,
   style,
   onSave,
 }: {
-  label: string;
-  byline: boolean;
+  type: LayoutBlock["type"];
   text: string;
   style: CSSProperties | undefined;
   onSave: (text: string) => void;
 }) {
   const [value, setValue] = useState(text);
+  const box =
+    "w-full rounded-md border border-neutral-200 bg-white px-3 py-2 focus:border-neutral-400 focus:outline-none";
+  const common = {
+    value,
+    onBlur: () => value.trim() !== text && onSave(value),
+    maxLength: maxTypedLength(type),
+    style,
+  };
   return (
-    <Labelled label={label}>
-      <input
-        type="text"
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onBlur={() => value.trim() !== text && onSave(value)}
-        maxLength={MAX_TYPED_TEXT}
-        placeholder={byline ? "Type the byline…" : "Type the header…"}
-        className={`w-full rounded-md border border-neutral-200 bg-white px-3 py-2 focus:border-neutral-400 focus:outline-none ${
-          byline ? "text-xl text-neutral-600" : "text-3xl text-neutral-900"
-        }`}
-        style={style}
-      />
+    <Labelled label={blockTypeLabel(type)}>
+      {type === "text" ? (
+        <textarea
+          {...common}
+          onChange={(e) => setValue(e.target.value)}
+          rows={4}
+          placeholder="Type the text… or drag the Description here"
+          className={`${box} resize-y text-xl text-neutral-800`}
+        />
+      ) : (
+        <input
+          {...common}
+          type="text"
+          onChange={(e) => setValue(e.target.value)}
+          placeholder={type === "byline" ? "Type the byline…" : "Type the header…"}
+          className={`${box} ${type === "byline" ? "text-xl text-neutral-600" : "text-3xl text-neutral-900"}`}
+        />
+      )}
     </Labelled>
   );
 }

@@ -372,6 +372,13 @@ export function blockFiller({
       if (!content.text) return null;
       const style = textStyleOf(block);
       const css = style ? bodyTextCss(style, contentWidth) : undefined;
+      if (block.type === "text") {
+        return (
+          <p className="whitespace-pre-line break-words text-sm text-neutral-800" style={css}>
+            {content.text}
+          </p>
+        );
+      }
       return block.type === "byline" ? (
         <p className="whitespace-pre-line break-words text-base text-neutral-600" style={css}>
           {content.text}

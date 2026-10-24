@@ -3,9 +3,9 @@
 import { db } from "@/lib/db";
 import { MAX_SECTION_TEXT } from "@/lib/curationSections";
 import {
-  MAX_TYPED_TEXT,
   contentFits,
-  isTypedBlock,
+  isTypedContent,
+  maxTypedLength,
   readHeroText,
   writeHeroText,
   type ComponentContent,
@@ -32,10 +32,7 @@ const CONTENT_SELECT = {
 
 // The page's components' content. Anything left from a curation the
 // page no longer shows is left out.
-export async function getPageComponents(
-  siteId: string,
-  pageId: string
-): Promise<ComponentContent[]> {
+export async function getPageComponents(siteId: string, pageId: string): Promise<ComponentContent[]> {
   const page = await db.page.findFirst({
     where: { id: pageId, siteId },
     select: {
@@ -64,7 +61,7 @@ export async function getPageComponents(
 async function pageBlock(
   siteId: string,
   pageId: string,
-  blockId: string
+  blockId: string,
 ): Promise<{ curationId: string; block: LayoutBlock } | { error: string }> {
   const page = await db.page.findFirst({
     where: { id: pageId, siteId },
@@ -88,7 +85,7 @@ export async function setPageComponent(
   siteId: string,
   pageId: string,
   blockId: string,
-  sectionId: string | null
+  sectionId: string | null,
 ): Promise<Result> {
   const found = await pageBlock(siteId, pageId, blockId);
   if ("error" in found) return found;
@@ -129,7 +126,7 @@ export async function movePageComponent(
   siteId: string,
   pageId: string,
   fromBlockId: string,
-  toBlockId: string
+  toBlockId: string,
 ): Promise<Result> {
   const found = await pageBlock(siteId, pageId, toBlockId);
   if ("error" in found) return found;
@@ -138,8 +135,7 @@ export async function movePageComponent(
     select: { id: true, source: true, section: { select: { type: true } } },
   });
   if (!row) return { error: "That component is empty." };
-  const kind: ContentKind | undefined =
-    row.source === "SECTION" ? row.section?.type : row.source;
+  const kind: ContentKind | undefined = row.source === "SECTION" ? row.section?.type : row.source;
   if (!kind || !contentFits(found.block.type, kind)) {
     return { error: `That can't go in a ${blockTypeLabel(found.block.type)} component.` };
   }
@@ -150,15 +146,14 @@ export async function movePageComponent(
   return { ok: true };
 }
 
-// Saves a component's text: a Header's or Byline's typed text (blank
-// empties it),
-// or a Description's text for this page only (null = back to the
-// curation's own).
+// Saves a component's text: a Header's, Byline's or (2026-10-24) Text's
+// typed text (blank empties it), or a Description's text for this page
+// only (null = back to the curation's own).
 export async function setPageComponentText(
   siteId: string,
   pageId: string,
   blockId: string,
-  textRaw: string | null
+  textRaw: string | null,
 ): Promise<Result> {
   const found = await pageBlock(siteId, pageId, blockId);
   if ("error" in found) return found;
@@ -176,14 +171,19 @@ export async function setPageComponentText(
     return { ok: true };
   }
 
-  if (isTypedBlock(found.block.type)) {
+  const current = await db.pageComponentContent.findUnique({
+    where: { pageId_blockId: { pageId, blockId } },
+    select: { source: true },
+  });
+  if (isTypedContent(found.block.type, current)) {
     if (!text) {
       await db.pageComponentContent.deleteMany({ where: { pageId, blockId } });
       return { ok: true };
     }
-    if (text.length > MAX_TYPED_TEXT) {
+    const max = maxTypedLength(found.block.type);
+    if (text.length > max) {
       return {
-        error: `A ${blockTypeLabel(found.block.type).toLowerCase()} can be at most ${MAX_TYPED_TEXT} characters.`,
+        error: `A ${blockTypeLabel(found.block.type).toLowerCase()} can be at most ${max.toLocaleString("en-GB")} characters.`,
       };
     }
     const data = {
@@ -220,7 +220,7 @@ export async function setPageComponentItems(
   siteId: string,
   pageId: string,
   blockId: string,
-  items: { hiddenIds: string[]; orderIds: string[] }
+  items: { hiddenIds: string[]; orderIds: string[] },
 ): Promise<Result> {
   const found = await pageBlock(siteId, pageId, blockId);
   if ("error" in found) return found;
@@ -240,11 +240,7 @@ export async function setPageComponentItems(
 }
 
 // Empties one component.
-export async function clearPageComponent(
-  siteId: string,
-  pageId: string,
-  blockId: string
-): Promise<Result> {
+export async function clearPageComponent(siteId: string, pageId: string, blockId: string): Promise<Result> {
   await db.pageComponentContent.deleteMany({ where: { pageId, blockId, page: { siteId } } });
   return { ok: true };
 }

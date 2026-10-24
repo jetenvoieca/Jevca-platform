@@ -1,4 +1,4 @@
-import type { CurationSectionType } from "@/lib/curationSections";
+import { MAX_SECTION_TEXT, type CurationSectionType } from "@/lib/curationSections";
 import type { LayoutBlockType } from "@/lib/pageStyleLayout";
 
 // What fills a Block Build page's components (2026-10-07; 2026-10-13,
@@ -33,14 +33,16 @@ export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 // Which content each component takes (Craig's choice: match by kind;
 // 2026-10-13: a Header or Byline is typed in, a Text or Text grid takes the
 // Description; 2026-10-16: a Single Image also takes the works, showing
-// the first as arranged on the page). Feature takes nothing yet. A Sign-up form (2026-10-10)
+// the first as arranged on the page; 2026-10-24: a Text can also be typed
+// on the page, for a text the curation's one Description isn't — e.g.
+// Louise Dear's Materials and Commissions). Feature takes nothing yet. A Sign-up form (2026-10-10)
 // takes no content: it's set up on its own in Arrange (see
 // lib/signupForms.ts). A Logo (2026-10-13) is always the artist's own,
 // and a Line (2026-10-23) is only a line.
 const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   header: ["TYPED"],
   byline: ["TYPED"],
-  text: ["DESCRIPTION"],
+  text: ["DESCRIPTION", "TYPED"],
   textgrid: ["DESCRIPTION"],
   video: ["VIDEO"],
   image: ["IMAGES", "WORKS"],
@@ -57,9 +59,22 @@ export function contentFits(block: LayoutBlockType, kind: ContentKind): boolean 
   return FITS[block].includes(kind);
 }
 
-// Whether a component is typed into rather than filled by dragging.
+// Whether a component can be typed into. A Header or Byline only is; a
+// Text is unless it holds the Description (see isTypedContent).
 export function isTypedBlock(block: LayoutBlockType): boolean {
   return contentFits(block, "TYPED");
+}
+
+// Whether a component shows typed words: it can be typed into and holds
+// nothing else (a Text holding the Description shows that instead).
+export function isTypedContent(block: LayoutBlockType, content: Pick<ComponentContent, "source"> | null): boolean {
+  return isTypedBlock(block) && (!content || content.source === "TYPED");
+}
+
+// The longest text that can be typed into a component: a Text as long as
+// a Description, a Header or Byline MAX_TYPED_TEXT.
+export function maxTypedLength(block: LayoutBlockType): number {
+  return block === "text" ? MAX_SECTION_TEXT : MAX_TYPED_TEXT;
 }
 
 // What a component's content is, given the curation's section types by
