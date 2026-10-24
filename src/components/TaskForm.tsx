@@ -50,9 +50,17 @@ import { formatDate } from "@/lib/formatDate";
 // (last, on tasks and insights) adds an action line under the
 // description and puts the cursor in it; see TaskActionsList. The buttons
 // sit in columns, three to a row.
+//
+// Projects (2026-10-24, direct request — see mock-up): a task's open
+// action lines can each be made a task of its own (`onMakeActionTask`,
+// null on an insight). A task made that way names the project it came
+// from under its name (`projectName`), which opens it (`onOpenProject`).
+// The gear that makes a task a project sits in the modal's top bar (see
+// AdminInboxPanel).
 export default function TaskForm({
   form,
   dateAdded,
+  projectName,
   categories,
   artistOptions,
   saving,
@@ -60,6 +68,8 @@ export default function TaskForm({
   files,
   activity,
   onChange,
+  onMakeActionTask,
+  onOpenProject,
   onOpenEmail,
   onEmail,
   onActivity,
@@ -69,6 +79,7 @@ export default function TaskForm({
 }: {
   form: TaskInput;
   dateAdded: string | null; // "YYYY-MM-DD" — set for an Insight
+  projectName: string | null; // the project it was made from
   categories: string[];
   artistOptions: { id: string; name: string }[];
   saving: boolean;
@@ -76,6 +87,8 @@ export default function TaskForm({
   files: ReactNode;
   activity: ReactNode;
   onChange: (patch: Partial<TaskInput>) => void;
+  onMakeActionTask: ((actionId: string) => void) | null;
+  onOpenProject: () => void;
   onOpenEmail: (() => void) | null;
   onEmail: () => void;
   onActivity: () => void;
@@ -88,11 +101,11 @@ export default function TaskForm({
   const [editingDescription, setEditingDescription] = useState(!form.description.trim());
   const [copied, setCopied] = useState(false);
   // The action line to put the cursor in once it's drawn (a new one).
-  const [focusActionKey, setFocusActionKey] = useState<string | null>(null);
+  const [focusActionId, setFocusActionId] = useState<string | null>(null);
   const addAction = () => {
     const line = newActionLine();
     onChange({ actions: insertActionLine(form.actions, line) });
-    setFocusActionKey(line.key);
+    setFocusActionId(line.id);
   };
   useEffect(() => {
     if (!copied) return;
@@ -187,6 +200,20 @@ export default function TaskForm({
         className={inputCls}
       />
 
+      {projectName && (
+        <p className="text-xs text-neutral-500">
+          From project{" "}
+          <button
+            type="button"
+            onClick={onOpenProject}
+            disabled={saving}
+            className="text-blue-700 underline hover:text-blue-900 disabled:opacity-50"
+          >
+            {projectName}
+          </button>
+        </p>
+      )}
+
       {/* The description, with Copy in its top right corner (pr-9 keeps the
           text clear of it). Copy doesn't take the focus, so pressing it
           while typing leaves the box open. */}
@@ -230,9 +257,11 @@ export default function TaskForm({
 
       <TaskActionsList
         actions={form.actions}
-        focusKey={focusActionKey}
+        focusId={focusActionId}
+        busy={saving}
         onChange={(actions) => onChange({ actions })}
-        onFocusKey={setFocusActionKey}
+        onFocusId={setFocusActionId}
+        onMakeTask={onMakeActionTask}
       />
 
       {onOpenEmail && (

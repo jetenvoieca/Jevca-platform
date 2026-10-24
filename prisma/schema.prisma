@@ -1044,6 +1044,15 @@ model Task {
   // Inbox's Insight pill instead of the Task list, with no owner, target
   // date, Today / This week or completion. "Make task" clears it again.
   keptOn      DateTime? @db.Date
+  // A project (2026-10-24, direct request — the gear on the task): a task
+  // whose action lines are the parts of it. Tinted lilac and listed after
+  // the other tasks in its panel; cleared when it's kept as an Insight.
+  isProject   Boolean   @default(false)
+  // The action line this task was made from (2026-10-24, the clipboard
+  // icon on the line): completing the task ticks the line, reinstating it
+  // unticks it. The line stays if the task is deleted (the link clears).
+  fromActionId String?     @unique
+  fromAction   TaskAction? @relation("ActionTask", fields: [fromActionId], references: [id], onDelete: SetNull)
 
   completedAt DateTime?
 
@@ -1055,7 +1064,7 @@ model Task {
   notes          TaskNote[]
   files          TaskFile[]
   // Its action lines (2026-10-20, see TaskAction).
-  actions        TaskAction[]
+  actions        TaskAction[] @relation("TaskActions")
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1069,15 +1078,19 @@ model Task {
 // box and a line of text, under the description. Kept in the order shown
 // (`position`): open lines first, in the order they were dragged into,
 // ticked lines after them — a line moves to the bottom when ticked. Saved
-// with the task, which replaces its lines as a whole (see saveTask).
+// with the task (see saveTask). The id is made by the form when the line
+// is added (2026-10-24), so a line keeps the same id from the start.
 model TaskAction {
   id     String @id @default(cuid())
   taskId String
-  task   Task   @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  task   Task   @relation("TaskActions", fields: [taskId], references: [id], onDelete: Cascade)
 
   text     String
   done     Boolean @default(false)
   position Int
+
+  // The task made from this line, if any (see Task.fromActionId).
+  madeTask Task? @relation("ActionTask")
 
   createdAt DateTime @default(now())
 

@@ -31,20 +31,34 @@ import { parisToday, parisWeekStart } from "@/lib/parisTime";
 // Actions (2026-10-20, direct request): a task (or insight) can hold a
 // list of action lines, each a tick box and text — see TaskAction. They
 // come with every TaskItem and are saved with the task by saveTask.
+//
+// Projects (2026-10-24, direct request — see mock-up): the gear on a task
+// flags it as a project (Task.isProject). Any open action line can be
+// made into a task of its own, set for today (makeTaskFromAction) — the
+// line stays, and is ticked when that task is completed and unticked if
+// it's reinstated (see setActionDone).
 
-// One action line. `key` identifies it in the form (its id once saved,
-// a new random key for a line just added); saving doesn't use it, since
-// saveTask replaces the task's lines as a whole, in the order given.
-export type TaskActionLine = { key: string; text: string; done: boolean };
+// One action line. `id` is made by the form when the line is added and
+// kept when it's saved, so a line is the same record from the start —
+// which the task made from it relies on. `madeTaskId`: the task made from
+// it, if any.
+export type TaskActionLine = { id: string; text: string; done: boolean; madeTaskId: string | null };
 
 const MAX_ACTIONS = 100;
 const MAX_ACTION_LENGTH = 500;
+// A line's id: a cuid (older lines) or the form's random UUID.
+const ACTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
-// What every task query loads with the task: its owner's name and its
-// action lines in order.
+// What every task query loads with the task: its owner's name, its action
+// lines in order (each with the task made from it), and the project it was
+// made from, if any.
 const TASK_INCLUDE = {
   artist: { select: { name: true } },
-  actions: { orderBy: { position: "asc" as const }, select: { id: true, text: true, done: true } },
+  actions: {
+    orderBy: { position: "asc" as const },
+    select: { id: true, text: true, done: true, madeTask: { select: { id: true } } },
+  },
+  fromAction: { select: { task: { select: { id: true, name: true } } } },
 };
 
 export type TaskItem = {
@@ -61,6 +75,8 @@ export type TaskItem = {
   weekOf: string | null; // "YYYY-MM-DD", a Monday — in the This week panel only during that week
   gmailThreadId: string | null; // the Personal (Gmail) conversation it was made from
   keptOn: string | null; // "YYYY-MM-DD", Paris — set = an Insight (its Date added)
+  isProject: boolean;
+  project: { id: string; name: string } | null; // the project it was made from
   actions: TaskActionLine[];
 };
 
@@ -76,6 +92,7 @@ export type TaskInput = {
   targetDate: string; // "YYYY-MM-DD" or ""
   category: string;
   artistId: string;
+  isProject: boolean;
   actions: TaskActionLine[];
 };
 
@@ -92,8 +109,10 @@ function toTaskItem(r: {
   weekOf: Date | null;
   gmailThreadId: string | null;
   keptOn: Date | null;
+  isProject: boolean;
   artist: { name: string } | null;
-  actions: { id: string; text: string; done: boolean }[];
+  actions: { id: string; text: string; done: boolean; madeTask: { id: string } | null }[];
+  fromAction: { task: { id: string; name: string } } | null;
 }): TaskItem {
   return {
     id: r.id,
@@ -109,16 +128,18 @@ function toTaskItem(r: {
     weekOf: r.weekOf ? r.weekOf.toISOString().slice(0, 10) : null,
     gmailThreadId: r.gmailThreadId,
     keptOn: r.keptOn ? r.keptOn.toISOString().slice(0, 10) : null,
-    actions: r.actions.map((a) => ({ key: a.id, text: a.text, done: a.done })),
+    isProject: r.isProject,
+    project: r.fromAction?.task ?? null,
+    actions: r.actions.map((a) => ({ id: a.id, text: a.text, done: a.done, madeTaskId: a.madeTask?.id ?? null })),
   };
 }
 
-// Open tasks, soonest target date first (tasks with no date last), then
-// oldest first.
+// Open tasks: projects after the other tasks, then soonest target date
+// first (tasks with no date last), then oldest first.
 export async function getOpenTasks(): Promise<TaskItem[]> {
   const rows = await db.task.findMany({
     where: { completedAt: null, keptOn: null },
-    orderBy: [{ targetDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+    orderBy: [{ isProject: "asc" }, { targetDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
     take: 200,
     include: TASK_INCLUDE,
   });
@@ -151,7 +172,12 @@ export async function getInsights(): Promise<TaskItem[]> {
 
 // Creates a new task, or updates an existing open one. With complete =
 // true, the task is also marked completed in the same write — so a task
-// can be created and completed in one go without a second round trip.
+// can be created and completed in one go without a second round trip —
+// and the action line it was made from, if any, is ticked.
+//
+// Its action lines are saved in the order given: lines kept are updated
+// in place (so a task made from one stays linked), new ones are added
+// with the form's id, and lines no longer there are removed.
 export async function saveTask(
   input: TaskInput,
   complete = false
@@ -166,14 +192,24 @@ export async function saveTask(
   }
 
   // Action lines, in the order shown; empty lines are dropped.
-  const actions = input.actions
-    .map((a) => ({ text: a.text.trim(), done: a.done }))
-    .filter((a) => a.text);
-  if (actions.length > MAX_ACTIONS) return { ok: false, error: `A task can have up to ${MAX_ACTIONS} actions.` };
-  if (actions.some((a) => a.text.length > MAX_ACTION_LENGTH)) {
+  const actionRows = input.actions
+    .map((a) => ({ id: a.id, text: a.text.trim(), done: a.done }))
+    .filter((a) => a.text)
+    .map((a, position) => ({ ...a, position }));
+  if (actionRows.length > MAX_ACTIONS) return { ok: false, error: `A task can have up to ${MAX_ACTIONS} actions.` };
+  if (actionRows.some((a) => a.text.length > MAX_ACTION_LENGTH)) {
     return { ok: false, error: `An action can be up to ${MAX_ACTION_LENGTH} characters.` };
   }
-  const actionRows = actions.map((a, position) => ({ ...a, position }));
+  const actionIds = actionRows.map((a) => a.id);
+  if (actionIds.some((id) => !ACTION_ID.test(id)) || new Set(actionIds).size !== actionIds.length) {
+    return { ok: false, error: "The action lines couldn't be saved — close the task and open it again." };
+  }
+  // A line's id must not already belong to another task.
+  const clash = await db.taskAction.findFirst({
+    where: { id: { in: actionIds }, ...(input.id ? { taskId: { not: input.id } } : {}) },
+    select: { id: true },
+  });
+  if (clash) return { ok: false, error: "The action lines couldn't be saved — close the task and open it again." };
 
   const data = {
     name,
@@ -181,16 +217,24 @@ export async function saveTask(
     targetDate,
     category: input.category.trim() || null,
     artistId: input.artistId || null,
+    isProject: input.isProject,
     ...(complete ? { completedAt: new Date() } : {}),
   };
 
   if (input.id) {
-    const existing = await db.task.findUnique({ where: { id: input.id }, select: { id: true } });
+    const existing = await db.task.findUnique({ where: { id: input.id }, select: { fromActionId: true } });
     if (!existing) return { ok: false, error: "Task not found — it may have been removed." };
     await db.task.update({
       where: { id: input.id },
-      data: { ...data, actions: { deleteMany: {}, create: actionRows } },
+      data: {
+        ...data,
+        actions: {
+          deleteMany: { id: { notIn: actionIds } },
+          upsert: actionRows.map(({ id, ...row }) => ({ where: { id }, create: { id, ...row }, update: row })),
+        },
+      },
     });
+    if (complete && existing.fromActionId) await setActionDone(existing.fromActionId, true);
     revalidatePath("/accounts/inbox");
     return { ok: true, id: input.id };
   }
@@ -238,7 +282,7 @@ export async function moveTaskToThisWeek(id: string): Promise<void> {
 
 // Keep this (2026-10-13): makes a task, open or completed, an Insight
 // dated today (Paris). An insight has no owner, target date, Today / This
-// week or completion, so those are cleared; its name, description,
+// week, completion or project flag, so those are cleared; its name, description,
 // category, email address, files and Activity stay.
 export async function keepTask(id: string): Promise<void> {
   await db.task.updateMany({
@@ -250,6 +294,7 @@ export async function keepTask(id: string): Promise<void> {
       todayOn: null,
       weekOf: null,
       completedAt: null,
+      isProject: false,
     },
   });
   revalidatePath("/accounts/inbox");
@@ -264,9 +309,79 @@ export async function makeTaskFromInsight(id: string): Promise<void> {
 // Reinstates a completed task (2026-09-28, direct request — for one
 // completed by mistake): it moves from the Done list back to the open
 // list, with its details, emails and notes untouched.
+// The action line it was made from, if any, is unticked.
 export async function reopenTask(id: string): Promise<void> {
-  await db.task.updateMany({ where: { id, completedAt: { not: null } }, data: { completedAt: null } });
+  const task = await db.task.findFirst({
+    where: { id, completedAt: { not: null } },
+    select: { fromActionId: true },
+  });
+  if (!task) return;
+  await db.task.update({ where: { id }, data: { completedAt: null } });
+  if (task.fromActionId) await setActionDone(task.fromActionId, false);
   revalidatePath("/accounts/inbox");
+}
+
+// Makes a task from an open action line (2026-10-24, direct request — the
+// clipboard icon on the line): named after the line, with its task's
+// Category and Owner, a target date of today and marked Today. The line
+// stays where it is, linked to the new task; a line can only be made into
+// one task.
+export async function makeTaskFromAction(
+  actionId: string
+): Promise<{ ok: true; taskId: string } | { ok: false; error: string }> {
+  const action = await db.taskAction.findUnique({
+    where: { id: actionId },
+    select: {
+      text: true,
+      done: true,
+      madeTask: { select: { id: true } },
+      task: { select: { category: true, artistId: true } },
+    },
+  });
+  if (!action) return { ok: false, error: "Action not found — it may have been removed." };
+  if (action.madeTask) return { ok: false, error: "This action is already a task." };
+  if (action.done) return { ok: false, error: "This action is already done." };
+
+  const today = new Date(`${parisToday()}T00:00:00.000Z`);
+  try {
+    const created = await db.task.create({
+      data: {
+        name: action.text,
+        category: action.task.category,
+        artistId: action.task.artistId,
+        targetDate: today,
+        todayOn: today,
+        fromActionId: actionId,
+      },
+      select: { id: true },
+    });
+    revalidatePath("/accounts/inbox");
+    return { ok: true, taskId: created.id };
+  } catch (e) {
+    // Made into a task a moment ago (Task.fromActionId is unique).
+    if ((e as { code?: string }).code === "P2002") return { ok: false, error: "This action is already a task." };
+    throw e;
+  }
+}
+
+// Ticks or unticks an action line, moving it the way the form does: a
+// ticked line to the bottom, an unticked one to the end of the open lines.
+async function setActionDone(actionId: string, done: boolean): Promise<void> {
+  const line = await db.taskAction.findUnique({ where: { id: actionId }, select: { taskId: true, done: true } });
+  if (!line || line.done === done) return;
+  const lines = await db.taskAction.findMany({
+    where: { taskId: line.taskId },
+    orderBy: { position: "asc" },
+    select: { id: true, done: true },
+  });
+  const rest = lines.filter((l) => l.id !== actionId);
+  const at = done ? rest.length : rest.filter((l) => !l.done).length;
+  const ordered = [...rest.slice(0, at).map((l) => l.id), actionId, ...rest.slice(at).map((l) => l.id)];
+  await db.$transaction(
+    ordered.map((id, position) =>
+      db.taskAction.update({ where: { id }, data: id === actionId ? { done, position } : { position } })
+    )
+  );
 }
 
 // Deletes a task, open or completed — from the open Task list (2026-09-27,

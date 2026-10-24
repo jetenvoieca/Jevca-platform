@@ -5,12 +5,12 @@ import type { ReactNode } from "react";
 // SwipeRow). Plain inline SVGs drawn in the current text colour, so they
 // follow whatever the button around them sets; no icon library needed.
 
-function Icon({ children }: { children: ReactNode }) {
+function Icon({ children, size = 18 }: { children: ReactNode; size?: number }) {
   return (
     <svg
       viewBox="0 0 24 24"
-      width="18"
-      height="18"
+      width={size}
+      height={size}
       fill="none"
       stroke="currentColor"
       strokeWidth="1.75"
@@ -126,6 +126,34 @@ export function SpamIcon() {
     <Icon>
       <circle cx="12" cy="12" r="8.5" />
       <path d="M6 6l12 12" />
+    </Icon>
+  );
+}
+
+// A clipboard with a tick, a circle and a pencil — Make an action line a
+// task of its own (2026-10-24, see TaskActionsList).
+export function ActionTaskIcon() {
+  return (
+    <Icon size={22}>
+      <rect x="4" y="4" width="12" height="17" rx="2" />
+      <path d="M8 4V3h4v1" />
+      <path d="m7 9.5 1.5 1.5L11 8.5" />
+      <circle cx="8.5" cy="15.5" r="1.5" />
+      <path d="m13.5 21 .7-2.7 5.3-5.3a1.4 1.4 0 0 1 2 2l-5.3 5.3z" />
+    </Icon>
+  );
+}
+
+// A gear — Project (2026-10-24, on a task's modal). `fill` colours it in
+// when the task is a project.
+export function GearIcon({ fill = "none" }: { fill?: string }) {
+  return (
+    <Icon size={24}>
+      <path
+        fill={fill}
+        d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"
+      />
+      <circle cx="12" cy="12" r="3" fill="white" />
     </Icon>
   );
 }

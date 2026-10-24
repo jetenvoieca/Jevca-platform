@@ -18,6 +18,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import type { TaskActionLine } from "@/lib/actions/tasks";
+import { ActionTaskIcon } from "@/components/ActionIcons";
+import { PROJECT_FILL, PROJECT_INK } from "@/lib/projectColours";
 
 // A task's action lines (2026-10-20, direct request — see mock-up): each a
 // tick box and a line of text, under the description. Open lines come
@@ -27,34 +29,43 @@ import type { TaskActionLine } from "@/lib/actions/tasks";
 // × removes a line. Empty lines are dropped when the task is saved.
 //
 // The parent owns the list (it's part of the task form, saved with the
-// task); `focusKey` is the line to put the cursor in once it's drawn —
+// task); `focusId` is the line to put the cursor in once it's drawn —
 // set by the form's Action button and by Enter here.
+//
+// Make task (2026-10-24, direct request — see mock-up): an open line has
+// a clipboard icon on its right that makes it a task of its own, set for
+// today (`onMakeTask`, null where lines can't be made into tasks). Once
+// made, the icon is coloured and can't be pressed again.
 
 export function newActionLine(): TaskActionLine {
-  return { key: crypto.randomUUID(), text: "", done: false };
+  return { id: crypto.randomUUID(), text: "", done: false, madeTaskId: null };
 }
 
-// Puts `line` after `afterKey`, or at the end of the open lines.
+// Puts `line` after `afterId`, or at the end of the open lines.
 export function insertActionLine(
   actions: TaskActionLine[],
   line: TaskActionLine,
-  afterKey: string | null = null
+  afterId: string | null = null
 ): TaskActionLine[] {
-  const after = afterKey ? actions.findIndex((a) => a.key === afterKey) : -1;
+  const after = afterId ? actions.findIndex((a) => a.id === afterId) : -1;
   const at = after >= 0 ? after + 1 : actions.filter((a) => !a.done).length;
   return [...actions.slice(0, at), line, ...actions.slice(at)];
 }
 
 export default function TaskActionsList({
   actions,
-  focusKey,
+  focusId,
+  busy,
   onChange,
-  onFocusKey,
+  onFocusId,
+  onMakeTask,
 }: {
   actions: TaskActionLine[];
-  focusKey: string | null;
+  focusId: string | null;
+  busy: boolean;
   onChange: (actions: TaskActionLine[]) => void;
-  onFocusKey: (key: string | null) => void;
+  onFocusId: (id: string | null) => void;
+  onMakeTask: ((id: string) => void) | null;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -65,54 +76,56 @@ export default function TaskActionsList({
 
   if (actions.length === 0) return null;
 
-  const setText = (key: string, text: string) =>
-    onChange(actions.map((a) => (a.key === key ? { ...a, text } : a)));
+  const setText = (id: string, text: string) =>
+    onChange(actions.map((a) => (a.id === id ? { ...a, text } : a)));
 
-  const toggle = (key: string) => {
-    const line = actions.find((a) => a.key === key);
+  const toggle = (id: string) => {
+    const line = actions.find((a) => a.id === id);
     if (!line) return;
-    const rest = actions.filter((a) => a.key !== key);
+    const rest = actions.filter((a) => a.id !== id);
     const changed = { ...line, done: !line.done };
     onChange(changed.done ? [...rest, changed] : insertActionLine(rest, changed));
   };
 
-  const remove = (key: string) => onChange(actions.filter((a) => a.key !== key));
+  const remove = (id: string) => onChange(actions.filter((a) => a.id !== id));
 
-  const addAfter = (key: string) => {
+  const addAfter = (id: string) => {
     const line = newActionLine();
-    onChange(insertActionLine(actions, line, key));
-    onFocusKey(line.key);
+    onChange(insertActionLine(actions, line, id));
+    onFocusId(line.id);
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
-    const from = open.findIndex((a) => a.key === active.id);
-    const to = open.findIndex((a) => a.key === over.id);
+    const from = open.findIndex((a) => a.id === active.id);
+    const to = open.findIndex((a) => a.id === over.id);
     if (from < 0 || to < 0) return;
     onChange([...arrayMove(open, from, to), ...done]);
   };
 
   const rowProps = (a: TaskActionLine) => ({
     line: a,
-    focus: focusKey === a.key,
-    onFocused: () => onFocusKey(null),
-    onText: (text: string) => setText(a.key, text),
-    onToggle: () => toggle(a.key),
-    onRemove: () => remove(a.key),
-    onEnter: () => addAfter(a.key),
+    focus: focusId === a.id,
+    busy,
+    onFocused: () => onFocusId(null),
+    onText: (text: string) => setText(a.id, text),
+    onToggle: () => toggle(a.id),
+    onRemove: () => remove(a.id),
+    onEnter: () => addAfter(a.id),
+    onMakeTask: onMakeTask && !a.done ? () => onMakeTask(a.id) : null,
   });
 
   return (
     <div className="space-y-2">
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={open.map((a) => a.key)} strategy={verticalListSortingStrategy}>
+        <SortableContext items={open.map((a) => a.id)} strategy={verticalListSortingStrategy}>
           {open.map((a) => (
-            <SortableActionRow key={a.key} {...rowProps(a)} />
+            <SortableActionRow key={a.id} {...rowProps(a)} />
           ))}
         </SortableContext>
       </DndContext>
       {done.map((a) => (
-        <ActionRow key={a.key} {...rowProps(a)} />
+        <ActionRow key={a.id} {...rowProps(a)} />
       ))}
     </div>
   );
@@ -121,17 +134,19 @@ export default function TaskActionsList({
 type RowProps = {
   line: TaskActionLine;
   focus: boolean;
+  busy: boolean;
   onFocused: () => void;
   onText: (text: string) => void;
   onToggle: () => void;
   onRemove: () => void;
   onEnter: () => void;
+  onMakeTask: (() => void) | null;
 };
 
 // An open line — draggable by its grip.
 function SortableActionRow(props: RowProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: props.line.key });
+    useSortable({ id: props.line.id });
   return (
     <ActionRow
       {...props}
@@ -163,11 +178,13 @@ function SortableActionRow(props: RowProps) {
 function ActionRow({
   line,
   focus,
+  busy,
   onFocused,
   onText,
   onToggle,
   onRemove,
   onEnter,
+  onMakeTask,
   rowRef,
   style,
   dragging = false,
@@ -229,6 +246,23 @@ function ActionRow({
       >
         ×
       </button>
+      {onMakeTask && (
+        <button
+          type="button"
+          onClick={onMakeTask}
+          disabled={busy || !!line.madeTaskId}
+          title={line.madeTaskId ? "Already a task" : "Make this a task for today"}
+          aria-label={line.madeTaskId ? "Already a task" : "Make this a task for today"}
+          style={line.madeTaskId ? { color: PROJECT_INK, backgroundColor: PROJECT_FILL } : undefined}
+          className={`shrink-0 rounded p-0.5 ${
+            line.madeTaskId
+              ? "cursor-default"
+              : "text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800 disabled:opacity-50"
+          }`}
+        >
+          <ActionTaskIcon />
+        </button>
+      )}
     </div>
   );
 }

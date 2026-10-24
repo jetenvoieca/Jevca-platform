@@ -31,6 +31,7 @@ import {
   createTaskFromEmail,
   createTaskFromGmail,
   getTask,
+  makeTaskFromAction,
   type TaskItem,
   type TaskInput,
 } from "@/lib/actions/tasks";
@@ -71,7 +72,9 @@ import {
   TrashIcon,
   ReinstateIcon,
   SpamIcon,
+  GearIcon,
 } from "@/components/ActionIcons";
+import { PROJECT_FILL, PROJECT_INK } from "@/lib/projectColours";
 
 // The unified admin inbox (2026-09-05, Email Integration) — "one box
 // with a filter" (direct decision): every message received in one list,
@@ -181,6 +184,14 @@ import {
 // the day after, so Sunday's carries into the new week — and clears with
 // that week like any other.
 //
+// Projects (2026-10-24, direct request — see mock-up): the gear in an
+// open task's top bar makes it a project, or back into a task. A project
+// row is tinted lilac (PANEL_STYLES.project) wherever it sits — Today,
+// This week or neither — and comes after the other tasks there (see
+// getOpenTasks). An open action line's clipboard icon makes it a task of
+// its own, set for today (see makeTaskFromAction); that task names the
+// project it came from, which opens it.
+//
 // Reinstate (2026-10-01, direct request) — a Done task can be put back
 // on the open list (see reopenTask), for one completed by mistake: the
 // same swipe/hover on its row, beside Delete. A full swipe reinstates,
@@ -269,6 +280,7 @@ const EMPTY_TASK_FORM: TaskInput = {
   targetDate: "",
   category: "",
   artistId: "",
+  isProject: false,
   actions: [],
 };
 
@@ -289,8 +301,17 @@ function isInformationalSaleAlert(alert: AlertItem): boolean {
 }
 
 // The open task rows' tints and text colours: the Today panel, the This
-// week panel (2026-10-10), or neither.
+// week panel (2026-10-10), or neither — and a project (2026-10-24), in a
+// paler lilac than its gear's (PROJECT_FILL), whichever panel it's in.
 const PANEL_STYLES = {
+  project: {
+    bg: "bg-[#F2EEFF]",
+    open: "bg-[#E5DEFF]",
+    hover: "hover:bg-[#EBE6FF]",
+    title: "text-[#2F2660]",
+    text: "text-[#5A4F8F]",
+    faint: "text-[#8A80B8]",
+  },
   today: {
     bg: "bg-[#FAF0DC]",
     open: "bg-[#F3E3C2]",
@@ -469,6 +490,8 @@ export default function AdminInboxPanel({
   const [taskGmailThreadId, setTaskGmailThreadId] = useState<string | null>(null);
   // The open form's Date added ("YYYY-MM-DD") when it's an Insight, else null.
   const [taskKeptOn, setTaskKeptOn] = useState<string | null>(null);
+  // The project the open task was made from, if any — for its link.
+  const [taskProject, setTaskProject] = useState<{ id: string; name: string } | null>(null);
   const [personalThreadId, setPersonalThreadId] = useState<string | null>(null);
   const [taskDirty, setTaskDirty] = useState(false);
   const [taskError, setTaskError] = useState<string | null>(null);
@@ -817,7 +840,7 @@ export default function AdminInboxPanel({
   });
 
   const renderOpenTask = (t: TaskItem, panel: "today" | "week" | "none") => {
-    const style = PANEL_STYLES[panel];
+    const style = PANEL_STYLES[t.isProject ? "project" : panel];
     const markToday = (on: boolean) => () => runRowAction(t.id, (id) => setTaskToday(id, on));
     const markWeek = (on: boolean) => () => runRowAction(t.id, (id) => setTaskThisWeek(id, on));
     const actions =
@@ -1084,11 +1107,13 @@ export default function AdminInboxPanel({
       targetDate: t.targetDate ?? "",
       category: t.category ?? "",
       artistId: t.artistId ?? "",
+      isProject: t.isProject,
       actions: t.actions,
     });
     setTaskEmail(t.email ?? "");
     setTaskGmailThreadId(t.gmailThreadId);
     setTaskKeptOn(t.keptOn);
+    setTaskProject(t.project);
     setTaskFormKey((k) => k + 1);
     setTaskDirty(false);
     setTaskError(null);
@@ -1100,6 +1125,7 @@ export default function AdminInboxPanel({
     setTaskEmail("");
     setTaskGmailThreadId(null);
     setTaskKeptOn(null);
+    setTaskProject(null);
     setTaskFormKey((k) => k + 1);
     setTaskDirty(false);
     setTaskError(null);
@@ -1193,6 +1219,45 @@ export default function AdminInboxPanel({
       closeModal();
       refreshRight();
       router.refresh();
+    });
+  };
+
+  // An action line's clipboard icon: saves the task (so the line exists),
+  // then makes the line a task for today and colours its icon.
+  const handleMakeActionTask = (actionId: string) => {
+    const line = taskForm?.actions.find((a) => a.id === actionId);
+    if (!line || line.madeTaskId) return;
+    if (!line.text.trim()) {
+      setTaskError("Write the action before making it a task.");
+      return;
+    }
+    startTransition(async () => {
+      if (!(await ensureTaskSaved())) return;
+      const res = await makeTaskFromAction(actionId);
+      if (!res.ok) {
+        setTaskError(res.error);
+        return;
+      }
+      setTaskForm((f) =>
+        f ? { ...f, actions: f.actions.map((a) => (a.id === actionId ? { ...a, madeTaskId: res.taskId } : a)) } : f
+      );
+      router.refresh();
+    });
+  };
+
+  // A task made from an action line: its project's link saves it if it
+  // changed, then opens the project.
+  const handleOpenProject = () => {
+    const projectId = taskProject?.id;
+    if (!projectId) return;
+    startTransition(async () => {
+      if (taskDirty && !(await persistTask(false))) return;
+      const project = await getTask(projectId);
+      if (!project) {
+        alert("Project not found — it may have been deleted.");
+        return;
+      }
+      showTask(project);
     });
   };
 
@@ -1725,7 +1790,25 @@ export default function AdminInboxPanel({
             }`}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex shrink-0 justify-end border-b border-neutral-100 px-4 py-2">
+            <div className="flex shrink-0 items-center justify-end gap-3 border-b border-neutral-100 px-4 py-2">
+              {/* Project (2026-10-24): on an open task, not an insight —
+                  coloured in when the task is one. Saved with the task. */}
+              {isTaskMode && taskForm && taskKeptOn === null && (
+                <button
+                  type="button"
+                  onClick={() => handleTaskChange({ isProject: !taskForm.isProject })}
+                  disabled={isPending}
+                  aria-pressed={taskForm.isProject}
+                  title={taskForm.isProject ? "Project — press to make it a task again" : "Make this task a project"}
+                  aria-label={taskForm.isProject ? "Make this a task again" : "Make this task a project"}
+                  style={taskForm.isProject ? { color: PROJECT_INK } : undefined}
+                  className={`rounded-md p-0.5 disabled:opacity-50 ${
+                    taskForm.isProject ? "" : "text-neutral-600 hover:text-neutral-900"
+                  }`}
+                >
+                  <GearIcon fill={taskForm.isProject ? PROJECT_FILL : "none"} />
+                </button>
+              )}
               <button
                 type="button"
                 onClick={isTaskMode ? closeTask : closeModal}
@@ -1761,6 +1844,7 @@ export default function AdminInboxPanel({
                     key={taskFormKey}
                     form={taskForm}
                     dateAdded={taskKeptOn}
+                    projectName={taskProject?.name ?? null}
                     categories={taskCategories}
                     artistOptions={artistOptions}
                     saving={isPending}
@@ -1781,6 +1865,8 @@ export default function AdminInboxPanel({
                       )
                     }
                     onChange={handleTaskChange}
+                    onMakeActionTask={taskKeptOn === null ? handleMakeActionTask : null}
+                    onOpenProject={handleOpenProject}
                     onOpenEmail={taskGmailThreadId ? handleOpenTaskEmail : null}
                     onEmail={() => openTaskPopup("email")}
                     onActivity={() => openTaskPopup("note")}
