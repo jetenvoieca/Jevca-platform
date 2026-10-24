@@ -35,7 +35,11 @@ export default function HeroBlock({
   const [index, setIndex] = useState(0);
   const paused = useRef(false);
 
-  useEffect(() => setIndex(0), [shown]);
+  // Back to the first only when the works themselves change — not when
+  // the page is drawn again with the same works (it is each time the
+  // picture changes, so a Gallery can outline the work showing).
+  const shownIds = shown.map((w) => w.artworkId).join(",");
+  useEffect(() => setIndex(0), [shownIds]);
   useEffect(() => {
     if (shown.length < 2) return;
     const timer = setInterval(() => {
