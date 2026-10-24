@@ -1621,9 +1621,11 @@ export default function AdminInboxPanel({
       </div>
 
       {/* ---- RIGHT: Processed (Sent, Done or processed alerts) — none for
-          Insight, whose list takes the full width ---- */}
+          Insight, whose list takes the full width, nor for Task on a phone
+          (2026-10-24, direct request — the open tasks get the full width;
+          Done shows from a tablet up) ---- */}
       {mode !== "insight" && (
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className={`${mode === "task" ? "hidden sm:flex" : "flex"} min-w-0 flex-1 flex-col`}>
         <div className={headRowCls}>
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
         </div>
