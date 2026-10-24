@@ -39,6 +39,9 @@ export const LAYOUT_BLOCK_TYPES = [
   // A home page's opening (2026-10-22, from Louise Dear's site): typed
   // words beside the curation's works, one at a time.
   { value: "hero", label: "Hero" },
+  // A picture beside a typed headline and the Description (2026-10-24,
+  // from Louise Dear's Story page).
+  { value: "picturewords", label: "Picture & words" },
   { value: "header", label: "Header" },
   // Typed on each page, usually under the Header (2026-10-13).
   { value: "byline", label: "Byline" },
@@ -272,6 +275,25 @@ export const DEFAULT_GALLERY_NAMES: PageTextStyle = {
   colour: "#1f1f1f",
 };
 
+// The shapes a picture's box can take (2026-10-22, a Hero's; shared
+// 2026-10-24 with Picture & words): the picture is shown in a box of
+// this shape.
+export const PICTURE_SHAPES = [
+  { value: "square", label: "Square", ratio: "1 / 1" },
+  { value: "landscape", label: "Landscape (4:3)", ratio: "4 / 3" },
+  { value: "portrait", label: "Portrait (3:4)", ratio: "3 / 4" },
+] as const;
+
+export type PictureShape = (typeof PICTURE_SHAPES)[number]["value"];
+
+export function pictureShapeRatio(shape: PictureShape): string {
+  return PICTURE_SHAPES.find((s) => s.value === shape)!.ratio;
+}
+
+function cleanPictureShape(raw: unknown, fallback: PictureShape): PictureShape {
+  return PICTURE_SHAPES.find((s) => s.value === raw)?.value ?? fallback;
+}
+
 // A Hero (2026-10-22, from Louise Dear's home page): beside each
 // other on a desktop, the words typed on each page — a small line in
 // capitals, the headline, a second headline line in its own look (e.g.
@@ -284,24 +306,12 @@ export const DEFAULT_GALLERY_NAMES: PageTextStyle = {
 // picture stack — the picture first with `pictureFirstOnPhone`. Each
 // line's look is set here, so every page using the style looks the
 // same.
-export const HERO_SHAPES = [
-  { value: "square", label: "Square", ratio: "1 / 1" },
-  { value: "landscape", label: "Landscape (4:3)", ratio: "4 / 3" },
-  { value: "portrait", label: "Portrait (3:4)", ratio: "3 / 4" },
-] as const;
-
-export type HeroShape = (typeof HERO_SHAPES)[number]["value"];
-
-export function heroShapeRatio(shape: HeroShape): string {
-  return HERO_SHAPES.find((s) => s.value === shape)!.ratio;
-}
-
 export type HeroSettings = {
   seconds: number;
   fade: number;
   pictureShare: number;
   gap: { desktop: number; phone: number };
-  shape: { desktop: HeroShape; phone: HeroShape };
+  shape: { desktop: PictureShape; phone: PictureShape };
   pictureFirstOnPhone: boolean;
   kicker: PageTextStyle;
   headline: PageTextStyle;
@@ -336,10 +346,6 @@ export const HERO_LIMITS = {
   gap: { min: 0, max: 200 },
 } as const;
 
-function cleanHeroShape(raw: unknown, fallback: HeroShape): HeroShape {
-  return HERO_SHAPES.find((s) => s.value === raw)?.value ?? fallback;
-}
-
 export function cleanHero(raw: unknown): HeroSettings {
   const value = (raw ?? {}) as Partial<Record<keyof HeroSettings, unknown>>;
   const gap = (value.gap ?? {}) as Partial<Record<"desktop" | "phone", unknown>>;
@@ -356,8 +362,8 @@ export function cleanHero(raw: unknown): HeroSettings {
       phone: cleanNumber(gap.phone, l.gap, d.gap.phone, 0),
     },
     shape: {
-      desktop: cleanHeroShape(shape.desktop, d.shape.desktop),
-      phone: cleanHeroShape(shape.phone, d.shape.phone),
+      desktop: cleanPictureShape(shape.desktop, d.shape.desktop),
+      phone: cleanPictureShape(shape.phone, d.shape.phone),
     },
     pictureFirstOnPhone:
       typeof value.pictureFirstOnPhone === "boolean" ? value.pictureFirstOnPhone : d.pictureFirstOnPhone,
@@ -368,6 +374,75 @@ export function cleanHero(raw: unknown): HeroSettings {
   };
 }
 
+// Picture & words (2026-10-24, from Louise Dear's Story page): a
+// picture beside a headline and the curation's Description. The picture
+// is the first of the page's Supporting Images or works (as arranged on
+// the page), filling a box of the chosen shape, on the `side` chosen, its
+// share of the width `pictureShare` beside the `gap`. The headline and a
+// second line in its own look are typed on each page; `headlineSpace`
+// is the space under them; the words sit at the top or the middle of
+// the picture. On a phone they stack, the picture first with
+// `pictureFirstOnPhone`.
+export type PictureWordsSettings = {
+  side: "left" | "right";
+  pictureShare: number;
+  gap: { desktop: number; phone: number };
+  shape: { desktop: PictureShape; phone: PictureShape };
+  pictureFirstOnPhone: boolean;
+  wordsAt: "top" | "middle";
+  headlineSpace: number;
+  headline: PageTextStyle;
+  accent: PageTextStyle;
+  body: PageTextStyle;
+};
+
+export const DEFAULT_PICTURE_WORDS: PictureWordsSettings = {
+  side: "left",
+  pictureShare: 50,
+  gap: { desktop: 80, phone: 32 },
+  shape: { desktop: "portrait", phone: "portrait" },
+  pictureFirstOnPhone: true,
+  wordsAt: "top",
+  headlineSpace: 32,
+  headline: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 42, look: "light", colour: "#1a1714" },
+  accent: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 42, look: "lightitalic", colour: "#e8698a" },
+  body: { ...NO_TEXT_STYLE, font: "jost", size: 15, look: "light", colour: "#7a7066" },
+};
+
+export const PICTURE_WORDS_LIMITS = {
+  pictureShare: { min: 25, max: 75 },
+  gap: { min: 0, max: 200 },
+  headlineSpace: { min: 0, max: 200 },
+} as const;
+
+export function cleanPictureWords(raw: unknown): PictureWordsSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof PictureWordsSettings, unknown>>;
+  const gap = (value.gap ?? {}) as Partial<Record<"desktop" | "phone", unknown>>;
+  const shape = (value.shape ?? {}) as Partial<Record<"desktop" | "phone", unknown>>;
+  const d = DEFAULT_PICTURE_WORDS;
+  const l = PICTURE_WORDS_LIMITS;
+  const style = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
+  return {
+    side: value.side === "right" ? "right" : "left",
+    pictureShare: cleanNumber(value.pictureShare, l.pictureShare, d.pictureShare, 0),
+    gap: {
+      desktop: cleanNumber(gap.desktop, l.gap, d.gap.desktop, 0),
+      phone: cleanNumber(gap.phone, l.gap, d.gap.phone, 0),
+    },
+    shape: {
+      desktop: cleanPictureShape(shape.desktop, d.shape.desktop),
+      phone: cleanPictureShape(shape.phone, d.shape.phone),
+    },
+    pictureFirstOnPhone:
+      typeof value.pictureFirstOnPhone === "boolean" ? value.pictureFirstOnPhone : d.pictureFirstOnPhone,
+    wordsAt: value.wordsAt === "middle" ? "middle" : "top",
+    headlineSpace: cleanNumber(value.headlineSpace, l.headlineSpace, d.headlineSpace, 0),
+    headline: style(value.headline, d.headline),
+    accent: style(value.accent, d.accent),
+    body: style(value.body, d.body),
+  };
+}
+
 const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
   header: NO_TEXT_STYLE,
   byline: NO_TEXT_STYLE,
@@ -375,9 +450,10 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
   textgrid: NO_TEXT_STYLE,
 };
 
-// A Block Build component. `doors` is set on Sliding doors blocks only,
-// `signup` on Sign-up form blocks only, `logoHeight` on Logo blocks only, `line` on Line blocks only,
-// `perRow`, `names` and `tiles` on Gallery blocks only, `hero` on Hero blocks only;
+// A Block Build component. Each kind's own settings are set on it only:
+// `doors` (Sliding doors), `signup` (Sign-up form), `logoHeight` and
+// `byline` (Logo), `line` (Line), `perRow`, `names` and `tiles`
+// (Gallery), `hero` (Hero), `pictureWords` (Picture & words).
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -390,6 +466,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     names?: PageTextStyle | null;
     tiles?: GalleryTiles;
     hero?: HeroSettings;
+    pictureWords?: PictureWordsSettings;
     byline?: LogoByline;
   };
 
@@ -536,6 +613,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
             clean.names = cleanGalleryNames((b as Partial<LayoutBlock>).names);
             clean.tiles = cleanGalleryTiles((b as Partial<LayoutBlock>).tiles);
           }
+          if (clean.type === "picturewords") {
+            clean.pictureWords = cleanPictureWords((b as Partial<LayoutBlock>).pictureWords);
+          }
           if (clean.type === "hero") {
             clean.hero = cleanHero((b as Partial<LayoutBlock>).hero);
           }
@@ -573,5 +653,6 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "gallery")
     return { id, type, perRow: DEFAULT_GALLERY_PER_ROW, names: null, tiles: DEFAULT_GALLERY_TILES };
   if (type === "hero") return { id, type, hero: DEFAULT_HERO };
+  if (type === "picturewords") return { id, type, pictureWords: DEFAULT_PICTURE_WORDS };
   return { id, type };
 }

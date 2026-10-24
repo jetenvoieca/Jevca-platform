@@ -20,7 +20,10 @@ import {
   cleanLogoByline,
   LOGO_BYLINE_LIMITS,
   HERO_LIMITS,
-  HERO_SHAPES,
+  PICTURE_WORDS_LIMITS,
+  cleanPictureWords,
+  type PictureWordsSettings,
+  PICTURE_SHAPES,
   cleanGalleryNames,
   cleanHero,
   type HeroSettings,
@@ -84,6 +87,7 @@ export default function PageStyleLayoutEditor({
             perRow={b.perRow}
             names={!!b.names}
             hero={b.hero}
+            pictureWords={b.pictureWords}
             device={device}
             spacing={layout.gridSpacing}
           />
@@ -95,6 +99,18 @@ export default function PageStyleLayoutEditor({
             button: "Settings",
             title: "Hero",
             content: <HeroSettingsPanel hero={b.hero} onChange={(hero) => onBlock({ ...b, hero: cleanHero(hero) })} />,
+          };
+        }
+        if (b.pictureWords) {
+          return {
+            button: "Settings",
+            title: "Picture & words",
+            content: (
+              <PictureWordsPanel
+                settings={b.pictureWords}
+                onChange={(pictureWords) => onBlock({ ...b, pictureWords: cleanPictureWords(pictureWords) })}
+              />
+            ),
           };
         }
         if (b.type === "logo") {
@@ -425,7 +441,7 @@ function HeroSettingsPanel({ hero, onChange }: { hero: HeroSettings; onChange: (
         onChange={(e) => onChange(cleanHero({ ...hero, shape: { ...hero.shape, [device]: e.target.value } }))}
         className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
       >
-        {HERO_SHAPES.map((s) => (
+        {PICTURE_SHAPES.map((s) => (
           <option key={s.value} value={s.value}>
             {s.label}
           </option>
@@ -464,6 +480,106 @@ function HeroSettingsPanel({ hero, onChange }: { hero: HeroSettings; onChange: (
       <p className="text-xs text-neutral-400">
         The words are typed on each page (Pages → Arrange); the pictures are the page&apos;s curation&apos;s works, each
         shown whole in its box.
+      </p>
+    </>
+  );
+}
+
+// A Picture & words's settings (2026-10-24): the picture's side, share of
+// the width and shape, the gap beside it, whether it comes first on a
+// phone, where the words sit and the space under the headline, and the
+// look of the headline, its second line and the Description.
+function PictureWordsPanel({
+  settings,
+  onChange,
+}: {
+  settings: PictureWordsSettings;
+  onChange: (settings: PictureWordsSettings) => void;
+}) {
+  const l = PICTURE_WORDS_LIMITS;
+  const select = (
+    label: string,
+    value: string,
+    options: readonly { value: string; label: string }[],
+    set: (v: string) => void,
+  ) => (
+    <label className="flex items-center gap-2 text-sm text-neutral-700">
+      <span className="flex-1">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => set(e.target.value)}
+        className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+  const number = (
+    label: string,
+    unit: string,
+    value: number,
+    limits: { min: number; max: number },
+    set: (v: number) => void,
+  ) => <NumberField label={label} unit={unit} step={1} value={value} limits={limits} onCommit={set} wide />;
+  const look = (key: "headline" | "accent" | "body", label: string) => (
+    <TextStyleBox
+      label={label}
+      value={settings[key]}
+      fonts={SITE_FONTS}
+      kinds={SITE_FONT_KINDS}
+      isFont={isSiteFontId}
+      scales
+      onChange={(style) => onChange({ ...settings, [key]: style })}
+    />
+  );
+  const sides = [
+    { value: "left", label: "Left" },
+    { value: "right", label: "Right" },
+  ] as const;
+  const wordsAt = [
+    { value: "top", label: "Top" },
+    { value: "middle", label: "Middle" },
+  ] as const;
+  return (
+    <>
+      {select("Picture on the", settings.side, sides, (side) => onChange(cleanPictureWords({ ...settings, side })))}
+      {number("Picture width", "%", settings.pictureShare, l.pictureShare, (pictureShare) =>
+        onChange({ ...settings, pictureShare }),
+      )}
+      {(["desktop", "phone"] as const).map((device) => (
+        <div key={device} className="flex flex-col gap-2">
+          {number(`Gap, ${device}`, "pixels", settings.gap[device], l.gap, (v) =>
+            onChange({ ...settings, gap: { ...settings.gap, [device]: v } }),
+          )}
+          {select(`Picture shape, ${device}`, settings.shape[device], PICTURE_SHAPES, (v) =>
+            onChange(cleanPictureWords({ ...settings, shape: { ...settings.shape, [device]: v } })),
+          )}
+        </div>
+      ))}
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={settings.pictureFirstOnPhone}
+          onChange={(e) => onChange({ ...settings, pictureFirstOnPhone: e.target.checked })}
+        />
+        Picture first on a phone
+      </label>
+      {select("Words sit at the", settings.wordsAt, wordsAt, (v) =>
+        onChange(cleanPictureWords({ ...settings, wordsAt: v })),
+      )}
+      {number("Space under the headline", "pixels", settings.headlineSpace, l.headlineSpace, (headlineSpace) =>
+        onChange({ ...settings, headlineSpace }),
+      )}
+      {look("headline", "Headline")}
+      {look("accent", "Headline, second line")}
+      {look("body", "Description")}
+      <p className="text-xs text-neutral-400">
+        The headline is typed on each page (Pages → Arrange); the picture is the first of the Supporting Images or works
+        dragged onto it; the words under it are the curation&apos;s Description.
       </p>
     </>
   );

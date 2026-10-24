@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { MAX_SECTION_TEXT } from "@/lib/curationSections";
 import {
   contentFits,
+  hasTypedWords,
   isTypedContent,
   maxTypedLength,
   readHeroText,
@@ -109,8 +110,9 @@ export async function setPageComponent(
     hiddenIds: [],
     orderIds: [],
   };
-  // A Hero keeps the words typed on it (2026-10-22).
-  const keepText = found.block.type === "hero";
+  // A Hero (2026-10-22) or Picture & words (2026-10-24) keeps the words
+  // typed on it.
+  const keepText = hasTypedWords(found.block.type);
   await db.pageComponentContent.upsert({
     where: { pageId_blockId: { pageId, blockId } },
     create: { pageId, blockId, ...data, text: null },
@@ -159,9 +161,10 @@ export async function setPageComponentText(
   if ("error" in found) return found;
   const text = textRaw === null ? null : textRaw.trim();
 
-  // A Hero's words (JSON — see readHeroText); the Hero shows the
-  // curation's works, so typing into an empty one fills it with them.
-  if (found.block.type === "hero") {
+  // A Hero's or Picture & words's words (JSON — see readHeroText);
+  // typing into an empty one fills it with the curation's works, which a
+  // Picture & words's Supporting Images can then replace.
+  if (hasTypedWords(found.block.type)) {
     const heroText = writeHeroText(readHeroText(text));
     await db.pageComponentContent.upsert({
       where: { pageId_blockId: { pageId, blockId } },

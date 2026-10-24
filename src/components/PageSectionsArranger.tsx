@@ -29,6 +29,7 @@ import {
   contentFits,
   contentKindOf,
   hiddenItems,
+  hasTypedWords,
   isTypedContent,
   maxTypedLength,
   readHeroText,
@@ -44,6 +45,7 @@ import {
   type BlockBuildLayout,
   type HeroSettings,
   type LayoutBlock,
+  type PictureWordsSettings,
   type PageTextStyle,
 } from "@/lib/pageStyleLayout";
 import { blockWidthOf, groupBlocksByRow, rowKey, rowSettingsOf } from "@/lib/rowLayout";
@@ -212,6 +214,11 @@ export default function PageSectionsArranger({
     }
   };
 
+  const blockTyped = (blockId: string) => {
+    const block = layout.blocks.find((b) => b.id === blockId);
+    return !!block && hasTypedWords(block.type);
+  };
+
   const fill = (blockId: string, sectionId: string | null) =>
     change(
       (m) =>
@@ -219,8 +226,9 @@ export default function PageSectionsArranger({
           blockId,
           source: sectionId === null ? "WORKS" : "SECTION",
           sectionId,
-          // A Hero keeps its words when the works are dropped on it again.
-          text: sectionId === null ? (m.get(blockId)?.text ?? null) : null,
+          // A Hero or Picture & words keeps its words when pictures are
+          // dropped on it again.
+          text: blockTyped(blockId) ? (m.get(blockId)?.text ?? null) : null,
           hiddenIds: [],
           orderIds: [],
         }),
@@ -273,8 +281,8 @@ export default function PageSectionsArranger({
       () => setPageComponentText(siteId, pageId, block.id, text),
     );
 
-  // A Hero's words (JSON — see readHeroText). A Hero shows the
-  // curation's works, so typing into an empty one fills it with them.
+  // A Hero's or Picture & words's words (JSON — see readHeroText).
+  // Typing into an empty one fills it with the curation's works.
   const saveHeroText = (block: LayoutBlock, text: string | null) =>
     change(
       (m) => {
@@ -424,6 +432,17 @@ export default function PageSectionsArranger({
                                   onSaveText={(text) => saveHeroText(b, text)}
                                   onSaveItems={(items) => saveItems(b.id, items)}
                                 />
+                              ) : b.type === "picturewords" && b.pictureWords ? (
+                                <PictureWordsSlot
+                                  block={b}
+                                  settings={b.pictureWords}
+                                  content={content}
+                                  description={sections?.find((s) => s.type === "DESCRIPTION")?.text ?? null}
+                                  items={content ? itemsOf(content) : []}
+                                  dragging={dragging}
+                                  onSaveText={(text) => saveHeroText(b, text)}
+                                  onSaveItems={(items) => saveItems(b.id, items)}
+                                />
                               ) : b.type === "signup" ? (
                                 <SignupSlot
                                   block={b}
@@ -448,6 +467,7 @@ export default function PageSectionsArranger({
                                     perRow={b.perRow}
                                     names={!!b.names}
                                     hero={b.hero}
+                                    pictureWords={b.pictureWords}
                                     spacing={layout.gridSpacing}
                                   />
                                 </Labelled>
@@ -665,6 +685,7 @@ function SignupSlot({
           perRow={block.perRow}
           names={!!block.names}
           hero={block.hero}
+          pictureWords={block.pictureWords}
           spacing={gridSpacing}
         />
       </Labelled>
@@ -1092,6 +1113,103 @@ function HeroSlot({
             </p>
           )}
         </div>
+      </div>
+    </Labelled>
+  );
+}
+
+// A Picture & words (2026-10-24): the headline and its second line typed
+// straight in, saved when left, in their looks, and the curation's
+// Description below (edited on the Curations page); beside them the
+// works or Supporting Images, dragged here — the first as arranged is
+// shown.
+function PictureWordsSlot({
+  block,
+  settings,
+  content,
+  description,
+  items,
+  dragging,
+  onSaveText,
+  onSaveItems,
+}: {
+  block: LayoutBlock;
+  settings: PictureWordsSettings;
+  content: ComponentContent | null;
+  description: string | null;
+  items: Item[];
+  dragging: DragData | null;
+  onSaveText: (text: string | null) => void;
+  onSaveItems: (items: { hiddenIds: string[]; orderIds: string[] }) => void;
+}) {
+  const saved = readHeroText(content?.text ?? null);
+  const [text, setText] = useState(saved);
+  const save = () => {
+    const next = writeHeroText(text);
+    if (next !== writeHeroText(saved)) onSaveText(next);
+  };
+  const box =
+    "w-full resize-none rounded-md border border-neutral-200 bg-white px-3 py-2 focus:border-neutral-400 focus:outline-none";
+  const big = (style: PageTextStyle): CSSProperties => ({ ...bodyTextCss(style), lineHeight: 1.1 });
+  const share = settings.pictureShare;
+  const picture = (
+    <div>
+      {content ? (
+        <ItemsGrid
+          blockId={block.id}
+          items={items}
+          content={content}
+          note="Only the first is shown."
+          dragging={dragging}
+          onSave={onSaveItems}
+        />
+      ) : (
+        <p className="py-6 text-center text-sm text-neutral-400">Drag Supporting Images or Works here.</p>
+      )}
+    </div>
+  );
+  const words = (
+    <div className="flex flex-col gap-3">
+      <textarea
+        rows={2}
+        value={text.headline}
+        onChange={(e) => setText({ ...text, headline: e.target.value })}
+        onBlur={save}
+        maxLength={MAX_TYPED_TEXT}
+        placeholder="Headline — e.g. The artist."
+        className={box}
+        style={big(settings.headline)}
+      />
+      <textarea
+        rows={2}
+        value={text.accent}
+        onChange={(e) => setText({ ...text, accent: e.target.value })}
+        onBlur={save}
+        maxLength={MAX_TYPED_TEXT}
+        placeholder="Second line — e.g. The journey."
+        className={box}
+        style={big(settings.accent)}
+      />
+      {description ? (
+        <p className="line-clamp-6 whitespace-pre-line" style={bodyTextCss(settings.body)}>
+          {description}
+        </p>
+      ) : (
+        <p className="text-sm text-neutral-400">
+          The curation&apos;s Description shows here — write it on the Curations page.
+        </p>
+      )}
+    </div>
+  );
+  const left = settings.side === "left";
+  return (
+    <Labelled label={blockTypeLabel(block.type)}>
+      <div
+        className="grid items-start gap-6"
+        style={{ gridTemplateColumns: left ? `${share}fr ${100 - share}fr` : `${100 - share}fr ${share}fr` }}
+      >
+        {left ? picture : words}
+        {left ? words : picture}
       </div>
     </Labelled>
   );

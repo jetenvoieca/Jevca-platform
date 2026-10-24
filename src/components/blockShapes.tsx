@@ -1,9 +1,10 @@
 import type { ReactNode } from "react";
 import {
-  heroShapeRatio,
+  pictureShapeRatio,
   type GalleryPerRow,
   type HeroSettings,
   type LayoutBlockType,
+  type PictureWordsSettings,
   type SignupLook,
   type SlidingDoorsSettings,
 } from "@/lib/pageStyleLayout";
@@ -27,6 +28,7 @@ export function BlockShape({
   perRow,
   names = false,
   hero,
+  pictureWords,
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
@@ -37,6 +39,7 @@ export function BlockShape({
   // A Gallery showing its works' names; a Hero's settings.
   names?: boolean;
   hero?: HeroSettings;
+  pictureWords?: PictureWordsSettings;
   device?: PreviewDevice;
 }) {
   switch (type) {
@@ -60,8 +63,38 @@ export function BlockShape({
           </div>
           <div
             className={`w-full rounded bg-neutral-200 ${phone && (hero?.pictureFirstOnPhone ?? true) ? "order-first" : ""}`}
-            style={{ aspectRatio: heroShapeRatio(hero ? (phone ? hero.shape.phone : hero.shape.desktop) : "square") }}
+            style={{
+              aspectRatio: pictureShapeRatio(hero ? (phone ? hero.shape.phone : hero.shape.desktop) : "square"),
+            }}
           />
+        </div>
+      );
+    }
+    case "picturewords": {
+      const left = (pictureWords?.side ?? "left") === "left";
+      const share = pictureWords?.pictureShare ?? 50;
+      const box = (
+        <div
+          className="w-full rounded bg-neutral-200"
+          style={{ aspectRatio: pictureShapeRatio(pictureWords?.shape.desktop ?? "portrait") }}
+        />
+      );
+      const words = (
+        <div className="flex flex-col gap-3">
+          <Bar className="h-7 w-3/4" />
+          <Bar className="h-7 w-1/2 bg-rose-100" />
+          <Bar className="mt-3 h-2.5 w-full" />
+          <Bar className="h-2.5 w-11/12" />
+          <Bar className="h-2.5 w-4/5" />
+        </div>
+      );
+      return (
+        <div
+          className="grid items-start gap-6"
+          style={{ gridTemplateColumns: left ? `${share}fr ${100 - share}fr` : `${100 - share}fr ${share}fr` }}
+        >
+          {left ? box : words}
+          {left ? words : box}
         </div>
       );
     }

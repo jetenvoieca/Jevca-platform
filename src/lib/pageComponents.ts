@@ -49,6 +49,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   gallery: ["IMAGES", "WORKS"],
   slidingdoors: ["WORKS"],
   hero: ["WORKS"],
+  picturewords: ["IMAGES", "WORKS"],
   artwork: [],
   signup: [],
   logo: [],
@@ -69,6 +70,12 @@ export function isTypedBlock(block: LayoutBlockType): boolean {
 // nothing else (a Text holding the Description shows that instead).
 export function isTypedContent(block: LayoutBlockType, content: Pick<ComponentContent, "source"> | null): boolean {
   return isTypedBlock(block) && (!content || content.source === "TYPED");
+}
+
+// Whether a component holds words typed on it as well as its pictures
+// (see readHeroText): a Hero or a Picture & words.
+export function hasTypedWords(block: LayoutBlockType): boolean {
+  return block === "hero" || block === "picturewords";
 }
 
 // The longest text that can be typed into a component: a Text as long as
@@ -118,7 +125,8 @@ export function hiddenItems<T>(
 export const MAX_TYPED_TEXT = 300;
 
 // A Hero's words (2026-10-22): the small line, the headline, its second
-// line and the line under them (`below`, 2026-10-22), typed on the page
+// line and the line under them (`below`, 2026-10-22) — a Picture &
+// words's (2026-10-24) use the headline and second line — typed on the page
 // and kept as JSON in its content's `text` — the content itself is the
 // curation's works. `headline` and `accent` may run over several lines.
 const HERO_LINES = ["kicker", "headline", "accent", "below"] as const;

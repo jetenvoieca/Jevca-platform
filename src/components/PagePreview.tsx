@@ -19,6 +19,7 @@ import {
   type LayoutBlock,
   type PageGridSpacing,
   type PageTextStyle,
+  type PictureWordsSettings,
 } from "@/lib/pageStyleLayout";
 import {
   blockWidthOf,
@@ -49,6 +50,7 @@ import { DEFAULT_PRESENTATION, formatMoney } from "@/lib/presentationTemplate";
 import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
 import HeroBlock from "@/components/HeroBlock";
+import PictureWordsBlock from "@/components/PictureWordsBlock";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import LineView from "@/components/LineView";
@@ -77,7 +79,9 @@ import SiteLogo from "@/components/SiteLogo";
 //   wider than the component), with the words typed under it tucked in
 //   as its Byline sets (2026-10-22), linking to the site's home page on
 //   the published site. A Line (2026-10-23) is a rule across its
-//   component.
+//   component. A Picture & words (2026-10-24) is a picture beside a
+//   typed headline and the curation's Description — see
+//   PictureWordsBlock.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Every page but a Canvas ends with the site's footer (2026-10-13) — see
 // SiteFooter.
@@ -276,6 +280,40 @@ export function blockFiller({
   const textStyleOf = (block: LayoutBlock) =>
     isTextComponent(block.type) ? mergeTextStyle(layout.textStyles[block.type], block.textStyle) : undefined;
 
+  // A Picture & words (2026-10-24): the first of its works or Supporting
+  // Images as arranged on the page, its typed headline, and the
+  // curation's Description.
+  const pictureWords = (settings: PictureWordsSettings, content: ComponentContent): ReactNode => {
+    let picture: { url: string; alt: string } | null = null;
+    let open: (() => void) | undefined;
+    if (content.source === "WORKS") {
+      const work = arrangeItems(curation.works, (w) => w.artworkId, content)[0];
+      const url = work ? (work.displayUrl ?? work.imageUrl) : null;
+      if (work && url) {
+        picture = { url, alt: work.catalogueName };
+        open = () => onOpen(work.artworkId);
+      }
+    } else {
+      const images = content.sectionId ? sectionById.get(content.sectionId) : undefined;
+      const first = images ? arrangeItems(images.media, (m) => m.imageId, content)[0] : undefined;
+      if (first) picture = { url: first.url, alt: "" };
+    }
+    const words = readHeroText(content.text);
+    const body = sections.find((s) => s.type === "DESCRIPTION")?.text ?? null;
+    if (!picture && !words.headline && !words.accent && !body) return null;
+    return (
+      <PictureWordsBlock
+        settings={settings}
+        picture={picture}
+        headline={words.headline}
+        accent={words.accent}
+        body={body}
+        contentWidth={contentWidth}
+        onOpen={open}
+      />
+    );
+  };
+
   const works = (block: LayoutBlock, content: ComponentContent): ReactNode => {
     const shown = arrangeItems(curation.works, (w) => w.artworkId, content);
     // A Single Image shows the first work as arranged on the page, and
@@ -367,6 +405,7 @@ export function blockFiller({
     if (!content) return null;
     const kind = contentKindOf(content, sectionTypes);
     if (!kind || !contentFits(block.type, kind)) return null;
+    if (block.type === "picturewords" && block.pictureWords) return pictureWords(block.pictureWords, content);
     if (content.source === "WORKS") return works(block, content);
     if (content.source === "TYPED") {
       if (!content.text) return null;

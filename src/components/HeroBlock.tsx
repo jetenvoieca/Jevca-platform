@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import type { CurationWork } from "@/lib/actions/curations";
 import type { HeroText } from "@/lib/pageComponents";
-import { heroShapeRatio, type HeroSettings } from "@/lib/pageStyleLayout";
+import { pictureShapeRatio, type HeroSettings } from "@/lib/pageStyleLayout";
 import { bodyTextCss } from "@/components/textStyleCss";
 
 // A Hero on a page (2026-10-22, from Louise Dear's home page — see
@@ -53,8 +53,8 @@ export default function HeroBlock({
     "--hero-columns": `${100 - hero.pictureShare}fr ${hero.pictureShare}fr`,
     "--hero-gap": `${hero.gap.desktop}px`,
     "--hero-gap-phone": `${hero.gap.phone}px`,
-    "--hero-shape": heroShapeRatio(hero.shape.desktop),
-    "--hero-shape-phone": heroShapeRatio(hero.shape.phone),
+    "--hero-shape": pictureShapeRatio(hero.shape.desktop),
+    "--hero-shape-phone": pictureShapeRatio(hero.shape.phone),
   } as CSSProperties;
   const big = (style: HeroSettings["headline"]): CSSProperties => ({
     ...bodyTextCss(style, contentWidth),

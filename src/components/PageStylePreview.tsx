@@ -57,6 +57,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
                     perRow={b.perRow}
                     names={!!b.names}
                     hero={b.hero}
+                    pictureWords={b.pictureWords}
                     spacing={layout.gridSpacing}
                   />
                 </Labelled>
