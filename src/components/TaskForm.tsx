@@ -51,9 +51,9 @@ import { formatDate } from "@/lib/formatDate";
 // description and puts the cursor in it; see TaskActionsList. The buttons
 // sit in columns, three to a row.
 //
-// Projects (2026-10-24, direct request — see mock-up): a task's open
-// action lines can each be made a task of its own (`onMakeActionTask`,
-// null on an insight). A task made that way names the project it came
+// Projects (2026-10-24, direct request — see mock-up): the open action
+// lines of a task or an insight can each be made a task of its own
+// (`onMakeActionTask`). A task made that way names the project it came
 // from under its name (`projectName`), which opens it (`onOpenProject`).
 // The gear that makes a task a project sits in the modal's top bar (see
 // AdminInboxPanel).
@@ -87,7 +87,7 @@ export default function TaskForm({
   files: ReactNode;
   activity: ReactNode;
   onChange: (patch: Partial<TaskInput>) => void;
-  onMakeActionTask: ((actionId: string) => void) | null;
+  onMakeActionTask: (actionId: string) => void;
   onOpenProject: () => void;
   onOpenEmail: (() => void) | null;
   onEmail: () => void;
@@ -196,7 +196,7 @@ export default function TaskForm({
 
       {projectName && (
         <p className="text-xs text-neutral-500">
-          From project{" "}
+          From{" "}
           <button
             type="button"
             onClick={onOpenProject}

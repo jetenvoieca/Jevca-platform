@@ -188,9 +188,9 @@ import { PROJECT_FILL, PROJECT_INK } from "@/lib/projectColours";
 // open task's top bar makes it a project, or back into a task. A project
 // row is tinted lilac (PANEL_STYLES.project) wherever it sits — Today,
 // This week or neither — and comes after the other tasks there (see
-// getOpenTasks). An open action line's clipboard icon makes it a task of
-// its own, set for today (see makeTaskFromAction); that task names the
-// project it came from, which opens it.
+// getOpenTasks). An open action line's clipboard icon — on a task or an
+// insight — makes it a task of its own, set for today (see
+// makeTaskFromAction); that task names the one it came from, which opens it.
 //
 // Reinstate (2026-10-01, direct request) — a Done task can be put back
 // on the open list (see reopenTask), for one completed by mistake: the
@@ -1621,11 +1621,11 @@ export default function AdminInboxPanel({
       </div>
 
       {/* ---- RIGHT: Processed (Sent, Done or processed alerts) — none for
-          Insight, whose list takes the full width, nor for Task on a phone
-          (2026-10-24, direct request — the open tasks get the full width;
-          Done shows from a tablet up) ---- */}
+          Insight, whose list takes the full width, nor for Task or Alert on
+          a phone (2026-10-24, direct request — the open tasks and alerts
+          get the full width; Processed shows from a tablet up) ---- */}
       {mode !== "insight" && (
-      <div className={`${mode === "task" ? "hidden sm:flex" : "flex"} min-w-0 flex-1 flex-col`}>
+      <div className={`${isMailMode ? "flex" : "hidden sm:flex"} min-w-0 flex-1 flex-col`}>
         <div className={headRowCls}>
           <h2 className="text-xl font-semibold text-neutral-900">Processed</h2>
         </div>
@@ -1867,7 +1867,7 @@ export default function AdminInboxPanel({
                       )
                     }
                     onChange={handleTaskChange}
-                    onMakeActionTask={taskKeptOn === null ? handleMakeActionTask : null}
+                    onMakeActionTask={handleMakeActionTask}
                     onOpenProject={handleOpenProject}
                     onOpenEmail={taskGmailThreadId ? handleOpenTaskEmail : null}
                     onEmail={() => openTaskPopup("email")}

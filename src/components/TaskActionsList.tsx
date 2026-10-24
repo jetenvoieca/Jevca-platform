@@ -40,8 +40,8 @@ import LinkifiedText from "@/components/LinkifiedText";
 //
 // Make task (2026-10-24, direct request — see mock-up): an open line has
 // a clipboard icon on its right that makes it a task of its own, set for
-// today (`onMakeTask`, null where lines can't be made into tasks). Once
-// made, the icon is coloured and can't be pressed again.
+// today (`onMakeTask`); a ticked line has none. Once made, the icon is
+// coloured and can't be pressed again.
 
 export function newActionLine(): TaskActionLine {
   return { id: crypto.randomUUID(), text: "", done: false, madeTaskId: null };
@@ -67,7 +67,7 @@ export default function TaskActionsList({
   actions: TaskActionLine[];
   busy: boolean;
   onChange: (actions: TaskActionLine[]) => void;
-  onMakeTask: ((id: string) => void) | null;
+  onMakeTask: (id: string) => void;
 }) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
@@ -108,7 +108,7 @@ export default function TaskActionsList({
     onToggle: () => toggle(a.id),
     onRemove: () => remove(a.id),
     onEnter: () => addAfter(a.id),
-    onMakeTask: onMakeTask && !a.done ? () => onMakeTask(a.id) : null,
+    onMakeTask: a.done ? null : () => onMakeTask(a.id),
   });
 
   return (
