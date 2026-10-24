@@ -10,7 +10,7 @@ import {
 import { MAIL_WIDTH, type MailBlock, type MailTemplateLayout, type MailTextStyle } from "@/lib/mailTemplateLayout";
 import { blockWidthOf, groupBlocksByRow, rowKey, rowSettingsOf, type RowSettings } from "@/lib/rowLayout";
 import { escapeHtml, isRichTextEmpty, richTextToHtml, type RichText } from "@/lib/richText";
-import { mergeTextStyle, textLookCss } from "@/lib/textStyle";
+import { mergeTextStyle, textLookCss, type TextAlign } from "@/lib/textStyle";
 
 // A campaign mail as the email itself (2026-10-08, Marketing step 3) —
 // the one HTML used both for the Preview and for sending, so what's
@@ -99,6 +99,7 @@ export type MailTextLook = {
   fontWeight: 300 | 400 | 700;
   fontStyle: "italic" | "normal";
   letterSpacing: string | undefined;
+  textAlign: TextAlign | undefined;
 };
 
 export function mailTextLook(style: MailTextStyle, kind: TextKind, extraSize = 0): MailTextLook {
@@ -112,6 +113,7 @@ export function mailTextLook(style: MailTextStyle, kind: TextKind, extraSize = 0
     fontWeight: look.weight,
     fontStyle: look.italic ? "italic" : "normal",
     letterSpacing: style.spacing !== null ? `${style.spacing / 100}em` : undefined,
+    textAlign: style.align ?? undefined,
   };
 }
 
@@ -125,6 +127,7 @@ function textCss(style: MailTextStyle, kind: TextKind, extraSize = 0): string {
     `font-weight:${look.fontWeight}`,
     `font-style:${look.fontStyle}`,
     ...(look.letterSpacing ? [`letter-spacing:${look.letterSpacing}`] : []),
+    ...(look.textAlign ? [`text-align:${look.textAlign}`] : []),
   ].join(";");
 }
 

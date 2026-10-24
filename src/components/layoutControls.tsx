@@ -11,6 +11,7 @@ import {
   type PageMargins,
 } from "@/lib/rowLayout";
 import {
+  TEXT_ALIGNS,
   TEXT_COMPONENT_TYPES,
   TEXT_LOOKS,
   TEXT_SIZE_LIMITS,
@@ -62,11 +63,7 @@ export function ColourControl({
       <span className="flex-1 text-sm text-neutral-700">
         {label} <span className="text-neutral-400">{value}</span>
       </span>
-      <button
-        type="button"
-        onClick={() => onChange(null)}
-        className="text-xs text-red-500 hover:underline"
-      >
+      <button type="button" onClick={() => onChange(null)} className="text-xs text-red-500 hover:underline">
         Remove
       </button>
     </div>
@@ -90,9 +87,7 @@ export function FineTuneSection({
 }) {
   return (
     <details className="rounded-md border border-neutral-300">
-      <summary className="cursor-pointer select-none px-3 py-2 text-sm text-neutral-700">
-        Fine-tune
-      </summary>
+      <summary className="cursor-pointer select-none px-3 py-2 text-sm text-neutral-700">Fine-tune</summary>
       <div className="flex flex-col gap-2.5 border-t border-neutral-200 p-2">
         <PageMarginControl value={margins} onChange={onMargins} />
         <GridSpacingControl value={gridSpacing} onChange={onGridSpacing} />
@@ -103,13 +98,7 @@ export function FineTuneSection({
 }
 
 // Vertical and horizontal grid spacing (2026-10-05, from Craig's mockup).
-function GridSpacingControl({
-  value,
-  onChange,
-}: {
-  value: GridSpacing;
-  onChange: (value: GridSpacing) => void;
-}) {
+function GridSpacingControl({ value, onChange }: { value: GridSpacing; onChange: (value: GridSpacing) => void }) {
   return (
     <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
       <NumberField
@@ -144,13 +133,7 @@ const MARGIN_FIELDS: { device: keyof PageMargins; side: keyof PageMargin; label:
 
 // The margin (2026-10-06): top & bottom and left & right, for desktop
 // and for phone.
-function PageMarginControl({
-  value,
-  onChange,
-}: {
-  value: PageMargins;
-  onChange: (value: PageMargins) => void;
-}) {
+function PageMarginControl({ value, onChange }: { value: PageMargins; onChange: (value: PageMargins) => void }) {
   return (
     <div className="flex flex-col gap-2 rounded-md border border-neutral-300 p-2">
       {MARGIN_FIELDS.map((f) => (
@@ -161,9 +144,7 @@ function PageMarginControl({
           step={1}
           value={value[f.device][f.side]}
           limits={PAGE_MARGIN_LIMITS}
-          onCommit={(v) =>
-            onChange(cleanPageMargins({ ...value, [f.device]: { ...value[f.device], [f.side]: v } }))
-          }
+          onCommit={(v) => onChange(cleanPageMargins({ ...value, [f.device]: { ...value[f.device], [f.side]: v } }))}
           wide
         />
       ))}
@@ -209,7 +190,7 @@ export function TextStylesControl<F extends string>({
 }
 
 // One component type's (or one component's) Font and Size, then Style
-// and Colour, then the smallest size (`scales`, a page's text — once it
+// and Colour, how its lines line up (2026-10-24), then the smallest size (`scales`, a page's text — once it
 // has a size) and the letter spacing. `noSize`: its size is set
 // elsewhere (the words under a Logo, a % of the logo's height). Anything
 // left blank keeps the text's own look.
@@ -232,8 +213,7 @@ export function TextStyleBox<F extends string>({
   noSize?: boolean;
   onChange: (value: TextStyle<F>) => void;
 }) {
-  const set = (patch: Partial<TextStyle<F>>) =>
-    onChange(cleanTextStyle({ ...value, ...patch }, isFont));
+  const set = (patch: Partial<TextStyle<F>>) => onChange(cleanTextStyle({ ...value, ...patch }, isFont));
   const selectClass = (empty: boolean) =>
     `min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm ${
       empty ? "text-neutral-400" : "text-neutral-800"
@@ -275,9 +255,7 @@ export function TextStyleBox<F extends string>({
       <div className="flex items-center gap-2">
         <select
           value={value.look ?? ""}
-          onChange={(e) =>
-            set({ look: TEXT_LOOKS.find((l) => l.value === e.target.value)?.value ?? null })
-          }
+          onChange={(e) => set({ look: TEXT_LOOKS.find((l) => l.value === e.target.value)?.value ?? null })}
           aria-label={`${label} style`}
           className={selectClass(!value.look)}
         >
@@ -290,6 +268,19 @@ export function TextStyleBox<F extends string>({
         </select>
         <ColourField label={label} value={value.colour} onChange={(colour) => set({ colour })} />
       </div>
+      <select
+        value={value.align ?? ""}
+        onChange={(e) => set({ align: TEXT_ALIGNS.find((a) => a.value === e.target.value)?.value ?? null })}
+        aria-label={`${label} lines up`}
+        className={selectClass(!value.align)}
+      >
+        <option value="">Lines up</option>
+        {TEXT_ALIGNS.map((a) => (
+          <option key={a.value} value={a.value}>
+            {a.label}
+          </option>
+        ))}
+      </select>
       <div className="flex items-center justify-end gap-2">
         {scales && !noSize && value.size !== null && (
           <span className="flex flex-1 items-center gap-1 text-xs text-neutral-500">

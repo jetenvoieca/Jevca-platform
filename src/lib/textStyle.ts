@@ -6,8 +6,9 @@ import { cleanColour, cleanNumber } from "@/lib/rowLayout";
 // layout: a font from the layout's own set list (lib/siteFonts.ts for
 // Page Styles, lib/mailFonts.ts for Mail Templates), a size in pixels, a
 // style (regular, bold, italic, light or light italic), a colour
-// (#rrggbb) and the space between letters, as a % of the size
-// (2026-10-22, from louisedear.com). On a page (not in a mail) a text
+// (#rrggbb), the space between letters, as a % of the size
+// (2026-10-22, from louisedear.com) and how its lines line up (left,
+// centred or right — 2026-10-24, her Story page's quote). On a page (not in a mail) a text
 // can also have a smallest size (2026-10-22): it's its size on the page
 // as designed and shrinks in proportion as the page narrows, down to
 // that — see bodyTextCss. Anything null keeps the text's own look.
@@ -44,6 +45,14 @@ export function textLookCss(look: TextLook): { weight: 300 | 400 | 700; italic: 
   };
 }
 
+export const TEXT_ALIGNS = [
+  { value: "left", label: "Left" },
+  { value: "center", label: "Centred" },
+  { value: "right", label: "Right" },
+] as const;
+
+export type TextAlign = (typeof TEXT_ALIGNS)[number]["value"];
+
 export type TextStyle<F extends string = string> = {
   font: F | null;
   size: number | null;
@@ -51,6 +60,7 @@ export type TextStyle<F extends string = string> = {
   look: TextLook | null;
   colour: string | null;
   spacing: number | null;
+  align: TextAlign | null;
 };
 
 export const NO_TEXT_STYLE: TextStyle<never> = {
@@ -60,6 +70,7 @@ export const NO_TEXT_STYLE: TextStyle<never> = {
   look: null,
   colour: null,
   spacing: null,
+  align: null,
 };
 
 export type TextStyles<F extends string = string> = Record<TextComponentType, TextStyle<F>>;
@@ -73,10 +84,7 @@ export type FontChoice<F extends string = string> = { id: F; label: string; kind
 // One text component's look; a font not in the list is dropped, a
 // number left blank (or not a number) stays blank, any other is kept
 // within its limits — a smallest size only with a size, and smaller.
-export function cleanTextStyle<F extends string>(
-  raw: unknown,
-  isFont: (value: unknown) => value is F
-): TextStyle<F> {
+export function cleanTextStyle<F extends string>(raw: unknown, isFont: (value: unknown) => value is F): TextStyle<F> {
   const value = (raw ?? {}) as Partial<Record<keyof TextStyle, unknown>>;
   const size = optionalNumber(value.size, TEXT_SIZE_LIMITS, 0);
   const smallest = size === null ? null : optionalNumber(value.smallest, { min: TEXT_SIZE_LIMITS.min, max: size }, 0);
@@ -87,6 +95,7 @@ export function cleanTextStyle<F extends string>(
     look: TEXT_LOOKS.find((l) => l.value === value.look)?.value ?? null,
     colour: cleanColour(value.colour),
     spacing: optionalNumber(value.spacing, LETTER_SPACING_LIMITS, 1),
+    align: TEXT_ALIGNS.find((a) => a.value === value.align)?.value ?? null,
   };
 }
 
@@ -96,10 +105,7 @@ function optionalNumber(raw: unknown, limits: { min: number; max: number }, deci
 }
 
 // A layout saved before text styles existed keeps every text's own look.
-export function cleanTextStyles<F extends string>(
-  raw: unknown,
-  isFont: (value: unknown) => value is F
-): TextStyles<F> {
+export function cleanTextStyles<F extends string>(raw: unknown, isFont: (value: unknown) => value is F): TextStyles<F> {
   const value = (raw ?? {}) as Partial<Record<TextComponentType, unknown>>;
   return {
     header: cleanTextStyle(value.header, isFont),
@@ -122,7 +128,8 @@ export function isTextStyleEmpty(style: TextStyle): boolean {
     style.smallest === null &&
     !style.look &&
     !style.colour &&
-    style.spacing === null
+    style.spacing === null &&
+    !style.align
   );
 }
 
@@ -138,6 +145,7 @@ export function mergeTextStyle<F extends string>(base: TextStyle<F>, own: TextSt
     look: own.look ?? base.look,
     colour: own.colour ?? base.colour,
     spacing: own.spacing ?? base.spacing,
+    align: own.align ?? base.align,
   };
 }
 
@@ -146,7 +154,7 @@ export function mergeTextStyle<F extends string>(base: TextStyle<F>, own: TextSt
 export function cleanBlockTextStyle<F extends string>(
   type: string,
   raw: unknown,
-  isFont: (value: unknown) => value is F
+  isFont: (value: unknown) => value is F,
 ): TextStyle<F> | undefined {
   if (!isTextComponent(type) || raw === undefined || raw === null) return undefined;
   const style = cleanTextStyle(raw, isFont);

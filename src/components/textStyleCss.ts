@@ -21,6 +21,7 @@ export function bodyTextCss(style: PageTextStyle, designedWidth?: number): CSSPr
     fontStyle: look ? (look.italic ? "italic" : "normal") : undefined,
     color: style.colour ?? undefined,
     letterSpacing: style.spacing !== null ? `${style.spacing / 100}em` : undefined,
+    textAlign: style.align ?? undefined,
   };
 }
 
