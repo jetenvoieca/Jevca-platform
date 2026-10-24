@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   DndContext,
   PointerSensor,
@@ -20,6 +20,7 @@ import {
 import type { TaskActionLine } from "@/lib/actions/tasks";
 import { ActionTaskIcon } from "@/components/ActionIcons";
 import { PROJECT_FILL, PROJECT_INK } from "@/lib/projectColours";
+import LinkifiedText from "@/components/LinkifiedText";
 
 // A task's action lines (2026-10-20, direct request — see mock-up): each a
 // tick box and a line of text, under the description. Open lines come
@@ -29,8 +30,13 @@ import { PROJECT_FILL, PROJECT_INK } from "@/lib/projectColours";
 // × removes a line. Empty lines are dropped when the task is saved.
 //
 // The parent owns the list (it's part of the task form, saved with the
-// task); `focusId` is the line to put the cursor in once it's drawn —
-// set by the form's Action button and by Enter here.
+// task).
+//
+// Links (2026-10-24, direct request): a line shows as text with its web
+// addresses clickable, like the description; tapping anywhere else on it
+// turns it into the box to type in, and it goes back to text once you
+// click away. A new (empty) line starts as the box, with the cursor in it
+// — so the form's Action button and Enter here both put you straight in.
 //
 // Make task (2026-10-24, direct request — see mock-up): an open line has
 // a clipboard icon on its right that makes it a task of its own, set for
@@ -54,17 +60,13 @@ export function insertActionLine(
 
 export default function TaskActionsList({
   actions,
-  focusId,
   busy,
   onChange,
-  onFocusId,
   onMakeTask,
 }: {
   actions: TaskActionLine[];
-  focusId: string | null;
   busy: boolean;
   onChange: (actions: TaskActionLine[]) => void;
-  onFocusId: (id: string | null) => void;
   onMakeTask: ((id: string) => void) | null;
 }) {
   const sensors = useSensors(
@@ -89,11 +91,7 @@ export default function TaskActionsList({
 
   const remove = (id: string) => onChange(actions.filter((a) => a.id !== id));
 
-  const addAfter = (id: string) => {
-    const line = newActionLine();
-    onChange(insertActionLine(actions, line, id));
-    onFocusId(line.id);
-  };
+  const addAfter = (id: string) => onChange(insertActionLine(actions, newActionLine(), id));
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     if (!over || active.id === over.id) return;
@@ -105,9 +103,7 @@ export default function TaskActionsList({
 
   const rowProps = (a: TaskActionLine) => ({
     line: a,
-    focus: focusId === a.id,
     busy,
-    onFocused: () => onFocusId(null),
     onText: (text: string) => setText(a.id, text),
     onToggle: () => toggle(a.id),
     onRemove: () => remove(a.id),
@@ -133,9 +129,7 @@ export default function TaskActionsList({
 
 type RowProps = {
   line: TaskActionLine;
-  focus: boolean;
   busy: boolean;
-  onFocused: () => void;
   onText: (text: string) => void;
   onToggle: () => void;
   onRemove: () => void;
@@ -177,9 +171,7 @@ function SortableActionRow(props: RowProps) {
 
 function ActionRow({
   line,
-  focus,
   busy,
-  onFocused,
   onText,
   onToggle,
   onRemove,
@@ -196,11 +188,11 @@ function ActionRow({
   grip?: React.ReactNode;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [editing, setEditing] = useState(!line.text.trim());
   useEffect(() => {
-    if (!focus) return;
-    inputRef.current?.focus();
-    onFocused();
-  }, [focus, onFocused]);
+    if (editing) inputRef.current?.focus();
+  }, [editing]);
+  const textCls = `min-w-0 flex-1 py-1 text-sm ${line.done ? "text-neutral-400 line-through" : "text-neutral-800"}`;
 
   return (
     <div
@@ -219,23 +211,36 @@ function ActionRow({
         aria-label={line.done ? "Mark not done" : "Mark done"}
         className="h-4 w-4 shrink-0 accent-neutral-600"
       />
-      <input
-        ref={inputRef}
-        type="text"
-        value={line.text}
-        onChange={(e) => onText(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" && !e.nativeEvent.isComposing) {
-            e.preventDefault();
-            onEnter();
-          }
-        }}
-        placeholder="Action"
-        maxLength={500}
-        className={`min-w-0 flex-1 bg-transparent py-1 text-sm outline-none placeholder:text-neutral-400 ${
-          line.done ? "text-neutral-400 line-through" : "text-neutral-800"
-        }`}
-      />
+      {editing ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={line.text}
+          onChange={(e) => onText(e.target.value)}
+          onBlur={() => setEditing(!line.text.trim())}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              onEnter();
+            }
+          }}
+          placeholder="Action"
+          maxLength={500}
+          className={`${textCls} bg-transparent outline-none placeholder:text-neutral-400`}
+        />
+      ) : (
+        <div
+          role="textbox"
+          tabIndex={0}
+          onClick={() => setEditing(true)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") setEditing(true);
+          }}
+          className={`${textCls} cursor-text whitespace-pre-wrap [overflow-wrap:anywhere]`}
+        >
+          <LinkifiedText text={line.text} />
+        </div>
+      )}
       {/* Always shown on a touch screen; on hover with a mouse. */}
       <button
         type="button"

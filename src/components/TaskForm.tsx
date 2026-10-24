@@ -100,13 +100,7 @@ export default function TaskForm({
   const inputCls = "w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm";
   const [editingDescription, setEditingDescription] = useState(!form.description.trim());
   const [copied, setCopied] = useState(false);
-  // The action line to put the cursor in once it's drawn (a new one).
-  const [focusActionId, setFocusActionId] = useState<string | null>(null);
-  const addAction = () => {
-    const line = newActionLine();
-    onChange({ actions: insertActionLine(form.actions, line) });
-    setFocusActionId(line.id);
-  };
+  const addAction = () => onChange({ actions: insertActionLine(form.actions, newActionLine()) });
   useEffect(() => {
     if (!copied) return;
     const timer = setTimeout(() => setCopied(false), 1500);
@@ -257,10 +251,8 @@ export default function TaskForm({
 
       <TaskActionsList
         actions={form.actions}
-        focusId={focusActionId}
         busy={saving}
         onChange={(actions) => onChange({ actions })}
-        onFocusId={setFocusActionId}
         onMakeTask={onMakeActionTask}
       />
 
