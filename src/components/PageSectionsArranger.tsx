@@ -57,6 +57,7 @@ import { bodyTextCss } from "@/components/textStyleCss";
 import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 import SignupFormSetup from "@/components/SignupFormSetup";
 import LineView from "@/components/LineView";
+import EntriesSlot from "@/components/EntriesSlot";
 import SiteLogo from "@/components/SiteLogo";
 import type { SiteArtist } from "@/lib/siteArtist";
 
@@ -442,6 +443,15 @@ export default function PageSectionsArranger({
                                   dragging={dragging}
                                   onSaveText={(text) => saveHeroText(b, text)}
                                   onSaveItems={(items) => saveItems(b.id, items)}
+                                />
+                              ) : b.type === "entries" ? (
+                                <EntriesSlot
+                                  label={blockTypeLabel(b.type)}
+                                  text={content?.text ?? null}
+                                  images={(sections ?? [])
+                                    .filter((s) => s.type === "IMAGES")
+                                    .flatMap((s) => s.media.map((m) => ({ id: m.imageId, url: m.url })))}
+                                  onSave={(text) => saveText(b, text)}
                                 />
                               ) : b.type === "signup" ? (
                                 <SignupSlot

@@ -21,6 +21,9 @@ import {
   LOGO_BYLINE_LIMITS,
   HERO_LIMITS,
   PICTURE_WORDS_LIMITS,
+  ENTRIES_LIMITS,
+  cleanEntriesSettings,
+  type EntriesSettings,
   cleanPictureWords,
   type PictureWordsSettings,
   PICTURE_SHAPES,
@@ -99,6 +102,18 @@ export default function PageStyleLayoutEditor({
             button: "Settings",
             title: "Hero",
             content: <HeroSettingsPanel hero={b.hero} onChange={(hero) => onBlock({ ...b, hero: cleanHero(hero) })} />,
+          };
+        }
+        if (b.entries) {
+          return {
+            button: "Settings",
+            title: "Entries",
+            content: (
+              <EntriesPanel
+                settings={b.entries}
+                onChange={(entries) => onBlock({ ...b, entries: cleanEntriesSettings(entries) })}
+              />
+            ),
           };
         }
         if (b.pictureWords) {
@@ -480,6 +495,92 @@ function HeroSettingsPanel({ hero, onChange }: { hero: HeroSettings; onChange: (
       <p className="text-xs text-neutral-400">
         The words are typed on each page (Pages → Arrange); the pictures are the page&apos;s curation&apos;s works, each
         shown whole in its box.
+      </p>
+    </>
+  );
+}
+
+// An Entries list's settings (2026-10-24): the pictures' width and
+// shape, the spaces, the line between entries, and the looks of the
+// date, title, caption and description.
+function EntriesPanel({
+  settings,
+  onChange,
+}: {
+  settings: EntriesSettings;
+  onChange: (settings: EntriesSettings) => void;
+}) {
+  const space = ENTRIES_LIMITS.space;
+  const numbers: { key: "pictureWidth" | "gap" | "pictureSpace" | "titleSpace" | "entrySpace"; label: string }[] = [
+    { key: "pictureWidth", label: "Picture width" },
+    { key: "gap", label: "Space beside the picture" },
+    { key: "pictureSpace", label: "Space between pictures" },
+    { key: "titleSpace", label: "Space under the title" },
+    { key: "entrySpace", label: "Space above and below the line" },
+  ];
+  const look = (key: "date" | "title" | "caption" | "text", label: string) => (
+    <TextStyleBox
+      label={label}
+      value={settings[key]}
+      fonts={SITE_FONTS}
+      kinds={SITE_FONT_KINDS}
+      isFont={isSiteFontId}
+      scales
+      onChange={(style) => onChange({ ...settings, [key]: style })}
+    />
+  );
+  return (
+    <>
+      {numbers.map((f) => (
+        <NumberField
+          key={f.key}
+          label={f.label}
+          unit="pixels"
+          step={1}
+          value={settings[f.key]}
+          limits={f.key === "pictureWidth" ? ENTRIES_LIMITS.pictureWidth : space}
+          onCommit={(value) => onChange({ ...settings, [f.key]: value })}
+          wide
+        />
+      ))}
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <span className="flex-1">Picture shape</span>
+        <select
+          value={settings.shape}
+          onChange={(e) => onChange(cleanEntriesSettings({ ...settings, shape: e.target.value }))}
+          className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+        >
+          {PICTURE_SHAPES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={settings.line !== null}
+          onChange={(e) => onChange({ ...settings, line: e.target.checked ? DEFAULT_LINE : null })}
+        />
+        <span className="flex-1">Line between entries</span>
+        {settings.line && (
+          <input
+            type="color"
+            value={settings.line.colour}
+            onChange={(e) => onChange({ ...settings, line: { ...settings.line!, colour: e.target.value } })}
+            aria-label="Line colour"
+            className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+          />
+        )}
+      </label>
+      {look("date", "Date (in capitals)")}
+      {look("title", "Title")}
+      {look("caption", "Caption")}
+      {look("text", "Description")}
+      <p className="text-xs text-neutral-400">
+        The entries are typed on each page (Pages → Arrange); their pictures are the curation&apos;s Supporting Images.
+        On a phone each picture sits above its description, the full width.
       </p>
     </>
   );

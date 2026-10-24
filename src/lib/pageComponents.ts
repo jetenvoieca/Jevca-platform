@@ -33,7 +33,8 @@ export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 // Which content each component takes (Craig's choice: match by kind;
 // 2026-10-13: a Header or Byline is typed in, a Text or Text grid takes the
 // Description; 2026-10-16: a Single Image also takes the works, showing
-// the first as arranged on the page; 2026-10-24: a Text can also be typed
+// the first as arranged on the page; 2026-10-24: Entries are typed on the
+// page — see lib/pageEntries.ts; 2026-10-24: a Text can also be typed
 // on the page, for a text the curation's one Description isn't — e.g.
 // Louise Dear's Materials and Commissions). Feature takes nothing yet. A Sign-up form (2026-10-10)
 // takes no content: it's set up on its own in Arrange (see
@@ -48,6 +49,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   image: ["IMAGES", "WORKS"],
   gallery: ["IMAGES", "WORKS"],
   slidingdoors: ["WORKS"],
+  entries: ["TYPED"],
   hero: ["WORKS"],
   picturewords: ["IMAGES", "WORKS"],
   artwork: [],
@@ -125,10 +127,11 @@ export function hiddenItems<T>(
 export const MAX_TYPED_TEXT = 300;
 
 // A Hero's words (2026-10-22): the small line, the headline, its second
-// line and the line under them (`below`, 2026-10-22) — a Picture &
-// words's (2026-10-24) use the headline and second line — typed on the page
-// and kept as JSON in its content's `text` — the content itself is the
-// curation's works. `headline` and `accent` may run over several lines.
+// line and the line under them (`below`, 2026-10-22) — a Picture & words
+// (2026-10-24) uses the headline and second line — typed on the page and
+// kept as JSON in its content's `text`; the content itself is the
+// curation's works (or a Picture & words's Supporting Images).
+// `headline` and `accent` may run over several lines.
 const HERO_LINES = ["kicker", "headline", "accent", "below"] as const;
 
 export type HeroText = Record<(typeof HERO_LINES)[number], string>;

@@ -42,6 +42,9 @@ export const LAYOUT_BLOCK_TYPES = [
   // A picture beside a typed headline and the Description (2026-10-24,
   // from Louise Dear's Story page).
   { value: "picturewords", label: "Picture & words" },
+  // A list typed on the page: date, title, pictures with captions and
+  // descriptions (2026-10-24, from Louise Dear's Events & Projects).
+  { value: "entries", label: "Entries" },
   { value: "header", label: "Header" },
   // Typed on each page, usually under the Header (2026-10-13).
   { value: "byline", label: "Byline" },
@@ -443,6 +446,66 @@ export function cleanPictureWords(raw: unknown): PictureWordsSettings {
   };
 }
 
+// Entries (2026-10-24, from Louise Dear's Events & Projects): a list
+// typed on each page (lib/pageEntries.ts). Each entry: its date, title
+// (`titleSpace` under them), then its pictures, each `pictureWidth`
+// pixels wide in a box of `shape` beside its description, with its
+// caption under it (the full width above the description on a phone),
+// `pictureSpace` apart. `entrySpace` above and below the `line` between
+// entries (null = no line).
+export type EntriesSettings = {
+  pictureWidth: number;
+  shape: PictureShape;
+  gap: number;
+  pictureSpace: number;
+  titleSpace: number;
+  entrySpace: number;
+  line: LineLook | null;
+  date: PageTextStyle;
+  title: PageTextStyle;
+  caption: PageTextStyle;
+  text: PageTextStyle;
+};
+
+export const DEFAULT_ENTRIES: EntriesSettings = {
+  pictureWidth: 200,
+  shape: "square",
+  gap: 32,
+  pictureSpace: 32,
+  titleSpace: 24,
+  entrySpace: 48,
+  line: { colour: "#dfdcd7", thickness: 0.5 },
+  date: { ...NO_TEXT_STYLE, font: "jost", size: 11, look: "regular", colour: "#c4965a", spacing: 14 },
+  title: { ...NO_TEXT_STYLE, font: "cormorant-garamond", size: 22, look: "regular", colour: "#1a1714" },
+  caption: { ...NO_TEXT_STYLE, font: "jost", size: 11, look: "italic", colour: "#7a7066", align: "center" },
+  text: { ...NO_TEXT_STYLE, font: "jost", size: 14, look: "light", colour: "#7a7066" },
+};
+
+export const ENTRIES_LIMITS = {
+  pictureWidth: { min: 60, max: 600 },
+  space: { min: 0, max: 200 },
+} as const;
+
+export function cleanEntriesSettings(raw: unknown): EntriesSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof EntriesSettings, unknown>>;
+  const d = DEFAULT_ENTRIES;
+  const space = ENTRIES_LIMITS.space;
+  const style = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
+  return {
+    pictureWidth: cleanNumber(value.pictureWidth, ENTRIES_LIMITS.pictureWidth, d.pictureWidth, 0),
+    shape: cleanPictureShape(value.shape, d.shape),
+    gap: cleanNumber(value.gap, space, d.gap, 0),
+    pictureSpace: cleanNumber(value.pictureSpace, space, d.pictureSpace, 0),
+    titleSpace: cleanNumber(value.titleSpace, space, d.titleSpace, 0),
+    entrySpace: cleanNumber(value.entrySpace, space, d.entrySpace, 0),
+    line: value.line === null ? null : value.line ? cleanLine(value.line) : d.line,
+    date: style(value.date, d.date),
+    title: style(value.title, d.title),
+    caption: style(value.caption, d.caption),
+    text: style(value.text, d.text),
+  };
+}
+
 const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
   header: NO_TEXT_STYLE,
   byline: NO_TEXT_STYLE,
@@ -453,7 +516,8 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 // A Block Build component. Each kind's own settings are set on it only:
 // `doors` (Sliding doors), `signup` (Sign-up form), `logoHeight` and
 // `byline` (Logo), `line` (Line), `perRow`, `names` and `tiles`
-// (Gallery), `hero` (Hero), `pictureWords` (Picture & words).
+// (Gallery), `hero` (Hero), `pictureWords` (Picture & words), `entries`
+// (Entries).
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -467,6 +531,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     tiles?: GalleryTiles;
     hero?: HeroSettings;
     pictureWords?: PictureWordsSettings;
+    entries?: EntriesSettings;
     byline?: LogoByline;
   };
 
@@ -613,6 +678,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
             clean.names = cleanGalleryNames((b as Partial<LayoutBlock>).names);
             clean.tiles = cleanGalleryTiles((b as Partial<LayoutBlock>).tiles);
           }
+          if (clean.type === "entries") {
+            clean.entries = cleanEntriesSettings((b as Partial<LayoutBlock>).entries);
+          }
           if (clean.type === "picturewords") {
             clean.pictureWords = cleanPictureWords((b as Partial<LayoutBlock>).pictureWords);
           }
@@ -654,5 +722,6 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
     return { id, type, perRow: DEFAULT_GALLERY_PER_ROW, names: null, tiles: DEFAULT_GALLERY_TILES };
   if (type === "hero") return { id, type, hero: DEFAULT_HERO };
   if (type === "picturewords") return { id, type, pictureWords: DEFAULT_PICTURE_WORDS };
+  if (type === "entries") return { id, type, entries: DEFAULT_ENTRIES };
   return { id, type };
 }

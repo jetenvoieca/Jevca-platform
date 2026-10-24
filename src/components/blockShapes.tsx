@@ -98,6 +98,24 @@ export function BlockShape({
         </div>
       );
     }
+    case "entries":
+      return (
+        <div className="flex flex-col gap-4">
+          {[0, 1].map((i) => (
+            <div key={i} className={`flex flex-col gap-2 ${i === 0 ? "border-b border-neutral-200 pb-4" : ""}`}>
+              <Bar className="h-2 w-16" />
+              <Bar className="h-4 w-1/2" />
+              <div className="mt-1 flex items-start gap-4">
+                <div className="h-20 w-20 shrink-0 rounded bg-neutral-200" />
+                <div className="flex flex-1 flex-col gap-2">
+                  <Bar className="h-2.5 w-full" />
+                  <Bar className="h-2.5 w-4/5" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
     case "header":
       return <Bar className="h-7 w-2/3" />;
     case "line":

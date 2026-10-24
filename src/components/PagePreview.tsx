@@ -51,6 +51,8 @@ import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
 import HeroBlock from "@/components/HeroBlock";
 import PictureWordsBlock from "@/components/PictureWordsBlock";
+import EntriesBlock from "@/components/EntriesBlock";
+import { readEntries } from "@/lib/pageEntries";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import LineView from "@/components/LineView";
@@ -81,7 +83,8 @@ import SiteLogo from "@/components/SiteLogo";
 //   the published site. A Line (2026-10-23) is a rule across its
 //   component. A Picture & words (2026-10-24) is a picture beside a
 //   typed headline and the curation's Description — see
-//   PictureWordsBlock.
+//   PictureWordsBlock. Entries (2026-10-24) is a list typed on the page
+//   — see EntriesBlock.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Every page but a Canvas ends with the site's footer (2026-10-13) — see
 // SiteFooter.
@@ -280,6 +283,16 @@ export function blockFiller({
   const textStyleOf = (block: LayoutBlock) =>
     isTextComponent(block.type) ? mergeTextStyle(layout.textStyles[block.type], block.textStyle) : undefined;
 
+  // A Supporting Image of the curation by its id (an Entries picture).
+  const imageUrl = (imageId: string): string | null => {
+    for (const s of sections) {
+      if (s.type !== "IMAGES") continue;
+      const found = s.media.find((m) => m.imageId === imageId);
+      if (found) return found.url;
+    }
+    return null;
+  };
+
   // A Picture & words (2026-10-24): the first of its works or Supporting
   // Images as arranged on the page, its typed headline, and the
   // curation's Description.
@@ -406,6 +419,13 @@ export function blockFiller({
     const kind = contentKindOf(content, sectionTypes);
     if (!kind || !contentFits(block.type, kind)) return null;
     if (block.type === "picturewords" && block.pictureWords) return pictureWords(block.pictureWords, content);
+    if (block.type === "entries" && block.entries) {
+      const entries = readEntries(content.text);
+      if (!entries.some((e) => !e.hidden)) return null;
+      return (
+        <EntriesBlock settings={block.entries} entries={entries} imageUrl={imageUrl} contentWidth={contentWidth} />
+      );
+    }
     if (content.source === "WORKS") return works(block, content);
     if (content.source === "TYPED") {
       if (!content.text) return null;
