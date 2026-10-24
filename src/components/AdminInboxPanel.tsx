@@ -301,13 +301,13 @@ function isInformationalSaleAlert(alert: AlertItem): boolean {
 }
 
 // The open task rows' tints and text colours: the Today panel, the This
-// week panel (2026-10-10), or neither — and a project (2026-10-24), in a
-// paler lilac than its gear's (PROJECT_FILL), whichever panel it's in.
+// week panel (2026-10-10), or neither — and a project (2026-10-24), in
+// its gear's lilac (PROJECT_FILL), whichever panel it's in.
 const PANEL_STYLES = {
   project: {
-    bg: "bg-[#F2EEFF]",
-    open: "bg-[#E5DEFF]",
-    hover: "hover:bg-[#EBE6FF]",
+    bg: "bg-[#E5DEFF]",
+    open: "bg-[#D6CCFA]",
+    hover: "hover:bg-[#DDD5FD]",
     title: "text-[#2F2660]",
     text: "text-[#5A4F8F]",
     faint: "text-[#8A80B8]",
