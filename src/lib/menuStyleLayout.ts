@@ -42,6 +42,11 @@ import { NO_TEXT_STYLE, cleanTextStyle } from "@/lib/textStyle";
 //   the top bar and side list), the words' look (`text`, 2026-10-23 —
 //   was a colour and size), the current page's highlight colour (null =
 //   none), corner rounding, shadow and background blur.
+// - sub (2026-10-25, the ISYT sites): pages sitting under another
+//   (Page.parentId) are listed under it, indented, in their own look
+//   (blank = the pages' look, smaller) — while on that group's pages
+//   only ("open"), or always. A Side list can have a line beside it
+//   (`list.line`, on the page's side).
 
 export const MENU_KINDS = [
   { value: "button", label: "Menu button" },
@@ -94,6 +99,7 @@ export type MenuTopBar = {
 // under it (null = not shown; `capitals` writes them in capitals).
 export type MenuSideList = {
   side: "left" | "right";
+  line: LineLook | null;
   width: number;
   top: number;
   gap: number;
@@ -101,6 +107,20 @@ export type MenuSideList = {
   hamburgerBelow: number;
   social: { text: PageTextStyle; capitals: boolean } | null;
 };
+
+// Pages under another (2026-10-25): when they show, their look, how far
+// they're indented and the space between them, in pixels.
+export type MenuSubPages = {
+  show: "open" | "always";
+  text: PageTextStyle;
+  indent: number;
+  gap: number;
+};
+
+export const SUB_PAGES_SHOW = [
+  { value: "open", label: "On that group's pages" },
+  { value: "always", label: "Always" },
+] as const;
 
 export type MenuStyleLayout = {
   kind: MenuKind;
@@ -118,7 +138,14 @@ export type MenuStyleLayout = {
   blur: number;
   topBar: MenuTopBar | null;
   list: MenuSideList;
+  sub: MenuSubPages;
 };
+
+// A page under another is this much the size of the pages' words, unless
+// its own look sets a size.
+export const SUB_PAGE_SCALE = 0.8;
+
+export const DEFAULT_SUB_PAGES: MenuSubPages = { show: "open", text: NO_TEXT_STYLE, indent: 20, gap: 4 };
 
 export const DEFAULT_HIGHLIGHT = "#f0f0f0";
 
@@ -142,6 +169,7 @@ export const DEFAULT_SOCIAL_TEXT: PageTextStyle = {
 
 export const DEFAULT_SIDE_LIST: MenuSideList = {
   side: "right",
+  line: null,
   width: 260,
   top: 48,
   gap: 40,
@@ -163,6 +191,7 @@ export const DEFAULT_MENU_STYLE: MenuStyleLayout = {
   blur: 8,
   topBar: null,
   list: DEFAULT_SIDE_LIST,
+  sub: DEFAULT_SUB_PAGES,
 };
 
 export const MENU_STYLE_LIMITS = {
@@ -175,6 +204,8 @@ export const MENU_STYLE_LIMITS = {
   listTop: { min: 0, max: 400 },
   listGap: { min: 0, max: 200 },
   hamburgerBelow: { min: 700, max: 2400 },
+  subIndent: { min: 0, max: 100 },
+  subGap: { min: 0, max: 100 },
 } as const;
 
 // The space a menu takes from its pages (2026-10-23): the top bar's
@@ -260,6 +291,7 @@ function cleanSideList(raw: unknown): MenuSideList {
   const l = MENU_STYLE_LIMITS;
   return {
     side: value.side === "left" ? "left" : "right",
+    line: value.line ? cleanLine(value.line) : null,
     width: cleanNumber(value.width, l.listWidth, d.width),
     top: cleanNumber(value.top, l.listTop, d.top),
     gap: cleanNumber(value.gap, l.listGap, d.gap),
@@ -271,6 +303,18 @@ function cleanSideList(raw: unknown): MenuSideList {
           capitals: social.capitals !== false,
         }
       : null,
+  };
+}
+
+function cleanSubPages(raw: unknown): MenuSubPages {
+  const value = asObject<MenuSubPages>(raw);
+  const d = DEFAULT_SUB_PAGES;
+  const l = MENU_STYLE_LIMITS;
+  return {
+    show: value.show === "always" ? "always" : "open",
+    text: value.text ? cleanTextStyle(value.text, isSiteFontId) : d.text,
+    indent: cleanNumber(value.indent, l.subIndent, d.indent),
+    gap: cleanNumber(value.gap, l.subGap, d.gap),
   };
 }
 
@@ -301,5 +345,6 @@ export function normalizeMenuStyle(raw: unknown): MenuStyleLayout {
     blur: cleanNumber(value.blur, l.blur, d.blur),
     topBar: cleanTopBar(value.topBar),
     list: cleanSideList(value.list),
+    sub: cleanSubPages(value.sub),
   };
 }

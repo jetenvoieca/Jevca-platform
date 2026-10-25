@@ -7,7 +7,14 @@ import MenuView, { type MenuViewItem } from "@/components/MenuView";
 // site's own Live Pages, in order.
 const EXAMPLE_ITEMS: MenuViewItem[] = [
   { id: "home", title: "Home" },
-  { id: "works", title: "Works" },
+  {
+    id: "works",
+    title: "Works",
+    children: [
+      { id: "paintings", title: "Paintings" },
+      { id: "prints", title: "Prints" },
+    ],
+  },
   { id: "exhibitions", title: "Exhibitions" },
   { id: "about", title: "About" },
   { id: "contact", title: "Contact" },
@@ -17,7 +24,7 @@ const EXAMPLE_ITEMS: MenuViewItem[] = [
 // a phone frame, drawn by the same component as the site (MenuView), on
 // a grey example page so opacity and blur show (the logo in a top bar
 // and the links under a Side list are stand-ins). Both can be tried —
-// the desktop one starts open. `Works` is the current page. Re-keyed on
+// the desktop one starts open. `Works` is the current page, with two pages under it. Re-keyed on
 // kind, position and behaviour so each change starts from the same
 // state.
 export default function MenuStylePreview({ layout }: { layout: MenuStyleLayout }) {
@@ -42,14 +49,7 @@ export default function MenuStylePreview({ layout }: { layout: MenuStyleLayout }
       <figure className="flex flex-col items-center gap-2">
         <div className="relative h-[440px] w-[220px] overflow-hidden rounded-[24px] border-4 border-neutral-800">
           <ExamplePage inset={menuPageInset(layout, "phone", false)} />
-          <MenuView
-            key={key}
-            layout={layout}
-            items={EXAMPLE_ITEMS}
-            currentId="works"
-            phone
-            contained
-          />
+          <MenuView key={key} layout={layout} items={EXAMPLE_ITEMS} currentId="works" phone contained />
         </div>
         <figcaption className="text-xs text-neutral-400">Phone — tap the menu</figcaption>
       </figure>

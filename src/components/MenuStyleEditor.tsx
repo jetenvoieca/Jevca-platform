@@ -10,6 +10,7 @@ import {
   MENU_POSITIONS,
   MENU_SHADOWS,
   MENU_STYLE_LIMITS,
+  SUB_PAGES_SHOW,
   normalizeMenuStyle,
   type MenuSideList,
   type MenuStyleLayout,
@@ -93,6 +94,23 @@ export default function MenuStyleEditor({
               limits={l.listWidth}
               onCommit={(width) => setList({ width })}
             />
+            <label className="flex items-center gap-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                checked={layout.list.line !== null}
+                onChange={(e) => setList({ line: e.target.checked ? DEFAULT_LINE : null })}
+              />
+              <span className="flex-1">Line beside the list</span>
+              {layout.list.line && (
+                <input
+                  type="color"
+                  value={layout.list.line.colour}
+                  onChange={(e) => setList({ line: { ...layout.list.line!, colour: e.target.value } })}
+                  aria-label="Line colour"
+                  className="h-6 w-6 shrink-0 cursor-pointer rounded border border-neutral-300 p-0"
+                />
+              )}
+            </label>
             <WholeNumber
               label="Space above"
               unit="pixels"
@@ -152,6 +170,41 @@ export default function MenuStyleEditor({
             )}
           </Group>
         )}
+
+        <Group title="Pages under another">
+          <Choice
+            label="Show them"
+            value={layout.sub.show}
+            choices={SUB_PAGES_SHOW}
+            onChange={(show) => set({ sub: { ...layout.sub, show } })}
+          />
+          <WholeNumber
+            label="Indent"
+            unit="pixels"
+            value={layout.sub.indent}
+            limits={l.subIndent}
+            onCommit={(indent) => set({ sub: { ...layout.sub, indent } })}
+          />
+          <WholeNumber
+            label="Space between them"
+            unit="pixels"
+            value={layout.sub.gap}
+            limits={l.subGap}
+            onCommit={(gap) => set({ sub: { ...layout.sub, gap } })}
+          />
+          <TextStyleBox
+            label="Their look"
+            value={layout.sub.text}
+            fonts={SITE_FONTS}
+            kinds={SITE_FONT_KINDS}
+            isFont={isSiteFontId}
+            onChange={(text) => set({ sub: { ...layout.sub, text } })}
+          />
+          <p className="text-xs text-neutral-400">
+            A page is put under another in Pages → Edit. Anything left blank follows the pages&apos; look (a little
+            smaller).
+          </p>
+        </Group>
 
         <Group title="Top bar">
           <label className="flex items-center gap-2 text-sm text-neutral-700">

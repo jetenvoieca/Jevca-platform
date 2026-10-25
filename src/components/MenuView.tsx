@@ -1,7 +1,8 @@
 "use client";
 
 import { useId, useState, type CSSProperties, type ReactNode } from "react";
-import { menuBackground, menuHeight, menuSide, type MenuStyleLayout } from "@/lib/menuStyleLayout";
+import { SUB_PAGE_SCALE, menuBackground, menuHeight, menuSide, type MenuStyleLayout } from "@/lib/menuStyleLayout";
+import { mergeTextStyle } from "@/lib/textStyle";
 import { SITE_DESKTOP_MIN } from "@/lib/siteBreakpoint";
 import { bodyTextCss } from "@/components/textStyleCss";
 import SiteLogo from "@/components/SiteLogo";
@@ -9,7 +10,8 @@ import SiteLogo from "@/components/SiteLogo";
 // One menu entry — a Live Page. With `href` it's a link (the published
 // site shows the page without leaving — see PublishedSite); without (the
 // Menus page preview) choosing it only shows what would happen.
-export type MenuViewItem = { id: string; title: string; href?: string };
+// `children` (2026-10-25): the pages sitting under it.
+export type MenuViewItem = { id: string; title: string; href?: string; children?: MenuViewItem[] };
 
 // What a menu shows of the artist (2026-10-23): the Logo and the words
 // under it, for a top bar, and their Instagram and Facebook links, for
@@ -98,10 +100,17 @@ export default function MenuView({
   };
 
   // A Side list's pages keep their size full screen; the other kinds'
-  // grow, as they always have.
+  // grow, as they always have. Pages under another (2026-10-25) show
+  // under it, indented, in their own look — while one of that group's
+  // pages is showing, or always.
   const list = (fullScreen: boolean) => {
     const size = (layout.text.size ?? 15) * (fullScreen && !sideList ? 1.4 : 1);
     const align = fullScreen ? "center" : sideList ? layout.list.align : "left";
+    const sub = layout.sub;
+    const subText = mergeTextStyle(layout.text, sub.text);
+    const subSize = sub.text.size !== null ? sub.text.size : size * SUB_PAGE_SCALE;
+    const open = (item: MenuViewItem) =>
+      sub.show === "always" || item.id === currentId || !!item.children?.some((c) => c.id === currentId);
     return (
       <ul className={`flex flex-col ${ALIGN_ITEMS[align]}`} style={{ gap: sideList ? layout.list.gap : 4 }}>
         {items.map((item) => (
@@ -110,10 +119,31 @@ export default function MenuView({
               item={item}
               current={item.id === currentId}
               layout={layout}
+              text={layout.text}
               size={size}
               align={align}
               onChoose={choose}
             />
+            {!!item.children?.length && open(item) && (
+              <ul
+                className={`flex flex-col ${ALIGN_ITEMS[align]}`}
+                style={{ gap: sub.gap, marginTop: sub.gap, paddingLeft: align === "left" ? sub.indent : 0 }}
+              >
+                {item.children.map((child) => (
+                  <li key={child.id} className="max-w-full">
+                    <MenuEntry
+                      item={child}
+                      current={child.id === currentId}
+                      layout={layout}
+                      text={subText}
+                      size={subSize}
+                      align={align}
+                      onChoose={choose}
+                    />
+                  </li>
+                ))}
+              </ul>
+            )}
           </li>
         ))}
       </ul>
@@ -227,6 +257,9 @@ export default function MenuView({
             top: barHeight,
             [side]: 0,
             width: layout.list.width,
+            [side === "right" ? "borderLeft" : "borderRight"]: layout.list.line
+              ? `${layout.list.line.thickness}px solid ${layout.list.line.colour}`
+              : undefined,
             paddingTop: layout.list.top,
             paddingBottom: layout.list.top,
             gap: layout.list.gap,
@@ -413,6 +446,7 @@ function MenuEntry({
   item,
   current,
   layout,
+  text,
   size,
   align,
   onChoose,
@@ -420,13 +454,14 @@ function MenuEntry({
   item: MenuViewItem;
   current: boolean;
   layout: MenuStyleLayout;
+  text: MenuStyleLayout["text"];
   size: number;
   align: "left" | "center" | "right";
   onChoose: () => void;
 }) {
   const className = `block truncate px-3 py-1.5 hover:opacity-70 ${TEXT_ALIGN[align]}`;
   const style: CSSProperties = {
-    ...bodyTextCss(layout.text),
+    ...bodyTextCss(text),
     fontSize: size,
     borderRadius: Math.min(layout.rounding, 12),
     backgroundColor: current && layout.highlightColor ? layout.highlightColor : undefined,
