@@ -19,6 +19,8 @@ import type { SignupFormContent } from "@/lib/signupForms";
 import { publishedHomePath, type SiteSnapshot } from "@/lib/siteSnapshot";
 import { getSiteArtist } from "@/lib/actions/siteArtist";
 import type { SiteArtist } from "@/lib/siteArtist";
+import { getPageHeadingNames } from "@/lib/actions/pages";
+import type { HeadingNames } from "@/lib/pageHeading";
 
 // Where the page components (PagePreview, CanvasPlayer, CurationPanel,
 // CurationWorkView, PageSectionsArranger) get their content from
@@ -35,6 +37,8 @@ export type PageContent = {
   signupForms: SignupFormContent[];
   // The artist's Logo and footer.
   artist: SiteArtist | null;
+  // What a Page heading fills itself in from (2026-10-25).
+  heading: HeadingNames | null;
 };
 
 export type SiteData = {
@@ -49,6 +53,9 @@ export type SiteData = {
   listCovers(): Promise<CurationCover[]>;
   // The artist's Logo and footer (2026-10-13) — see lib/siteArtist.ts.
   getArtist(): Promise<SiteArtist | null>;
+  // A page's site name, own name and group's name, for a Page heading
+  // (2026-10-25).
+  getHeadingNames(pageId: string): Promise<HeadingNames | null>;
   // Everything a page shows, at once (2026-10-13): from the published
   // snapshot, which is already in the browser, so a page is drawn
   // straight away — no "Loading…". Null in the admin preview, whose
@@ -101,6 +108,7 @@ export function LiveSiteData({
       getSignupForms: (pageId) => getPageSignupForms(siteId, pageId),
       listCovers: () => listCurationCovers(artistId),
       getArtist: () => getSiteArtist(artistId),
+      getHeadingNames: (pageId) => getPageHeadingNames(siteId, pageId),
       pageContentNow: () => null,
       canvasNow: () => null,
       homeHref: null,
@@ -138,6 +146,7 @@ export function SnapshotSiteData({
       getSignupForms: async (pageId) => snapshot.pages.find((p) => p.id === pageId)?.signupForms ?? [],
       listCovers: async () => snapshot.covers,
       getArtist: async () => snapshot.artist,
+      getHeadingNames: async (pageId) => snapshotHeadingNames(snapshot, pageId),
       pageContentNow: (pageId, curationId) => {
         const page = snapshot.pages.find((p) => p.id === pageId);
         const curation = snapshot.curations[curationId];
@@ -147,6 +156,7 @@ export function SnapshotSiteData({
           components: page?.components ?? [],
           signupForms: page?.signupForms ?? [],
           artist: snapshot.artist,
+          heading: snapshotHeadingNames(snapshot, pageId),
         };
       },
       canvasNow: (pageId) => ({
@@ -159,4 +169,13 @@ export function SnapshotSiteData({
     [snapshot, siteId, siteKey, salesEnabled],
   );
   return <SiteDataContext.Provider value={data}>{children}</SiteDataContext.Provider>;
+}
+
+// A published page's Page heading names: the site's name, the page's
+// name and the name of the page it sits under, if that's live too.
+function snapshotHeadingNames(snapshot: SiteSnapshot, pageId: string): HeadingNames | null {
+  const page = snapshot.pages.find((p) => p.id === pageId);
+  if (!page) return null;
+  const group = page.parentId ? snapshot.pages.find((p) => p.id === page.parentId) : undefined;
+  return { siteName: snapshot.siteName, pageTitle: page.title, groupTitle: group?.title ?? null };
 }

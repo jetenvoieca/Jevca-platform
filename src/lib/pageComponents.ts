@@ -34,7 +34,9 @@ export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 // 2026-10-13: a Header or Byline is typed in, a Text or Text grid takes the
 // Description; 2026-10-16: a Single Image also takes the works, showing
 // the first as arranged on the page; 2026-10-24: Entries are typed on the
-// page — see lib/pageEntries.ts; 2026-10-24: a Text can also be typed
+// page — see lib/pageEntries.ts; 2026-10-25: a Page heading fills itself
+// in and either line can be typed over — see lib/pageHeading.ts;
+// 2026-10-24: a Text can also be typed
 // on the page, for a text the curation's one Description isn't — e.g.
 // Louise Dear's Materials and Commissions). Feature takes nothing yet. A Sign-up form (2026-10-10)
 // takes no content: it's set up on its own in Arrange (see
@@ -50,6 +52,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   gallery: ["IMAGES", "WORKS"],
   slidingdoors: ["WORKS"],
   entries: ["TYPED"],
+  pageheading: ["TYPED"],
   hero: ["WORKS"],
   picturewords: ["IMAGES", "WORKS"],
   artwork: [],

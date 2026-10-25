@@ -56,6 +56,8 @@ import { readEntries } from "@/lib/pageEntries";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import LineView from "@/components/LineView";
+import PageHeadingView from "@/components/PageHeadingView";
+import { readHeadingText, shownHeading, type HeadingNames } from "@/lib/pageHeading";
 import SiteLogo from "@/components/SiteLogo";
 
 // A page, drawn in its Display Style (2026-10-04) — the Pages page's
@@ -146,6 +148,7 @@ export default function PagePreview({
         components={content.components}
         signupForms={content.signupForms}
         artist={content.artist}
+        heading={content.heading}
         homeHref={siteData.homeHref}
         onOpen={setViewingId}
       />
@@ -217,9 +220,10 @@ export function usePageContent(
       blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
       blockBuild ? siteData.getSignupForms(pageId) : Promise.resolve<SignupFormContent[]>([]),
       siteData.getArtist(),
-    ]).then(([curation, sections, components, signupForms, artist]) => {
+      blockBuild ? siteData.getHeadingNames(pageId) : Promise.resolve(null),
+    ]).then(([curation, sections, components, signupForms, artist, heading]) => {
       if (!current) return;
-      setLoaded({ curation, sections, components, signupForms, artist });
+      setLoaded({ curation, sections, components, signupForms, artist, heading });
       setLoading(false);
     });
     return () => {
@@ -256,6 +260,8 @@ export type BlockFillerInput = {
   signupForms: SignupFormContent[];
   artist: SiteArtist | null;
   homeHref: string | null;
+  // What a Page heading fills itself in from (2026-10-25).
+  heading: HeadingNames | null;
   onOpen: (artworkId: string) => void;
   heroShowing?: string | null;
   onHeroShowing?: (artworkId: string | null) => void;
@@ -270,6 +276,7 @@ export function blockFiller({
   signupForms,
   artist,
   homeHref,
+  heading,
   onOpen,
   heroShowing = null,
   onHeroShowing,
@@ -408,6 +415,11 @@ export function blockFiller({
         </div>
       );
     }
+    if (block.type === "pageheading" && block.pageHeading) {
+      const shown = shownHeading(readHeadingText(contentByBlock.get(block.id)?.text ?? null), heading);
+      if (!shown.name && !shown.page) return null;
+      return <PageHeadingView settings={block.pageHeading} lines={shown} contentWidth={contentWidth} />;
+    }
     if (block.type === "line") return <LineView look={block.line ?? DEFAULT_LINE} />;
     if (block.type === "signup") {
       const form = formByBlock.get(block.id);
@@ -486,6 +498,7 @@ function BlockBuildPage({
   components,
   signupForms,
   artist,
+  heading,
   homeHref,
   onOpen,
 }: {
@@ -496,6 +509,7 @@ function BlockBuildPage({
   components: ComponentContent[];
   signupForms: SignupFormContent[];
   artist: SiteArtist | null;
+  heading: HeadingNames | null;
   homeHref: string | null;
   onOpen: (artworkId: string) => void;
 }) {
@@ -510,6 +524,7 @@ function BlockBuildPage({
     signupForms,
     artist,
     homeHref,
+    heading,
     onOpen,
     heroShowing,
     onHeroShowing: setHeroShowing,

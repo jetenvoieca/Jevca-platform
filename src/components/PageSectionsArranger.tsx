@@ -45,6 +45,7 @@ import {
   type BlockBuildLayout,
   type HeroSettings,
   type LayoutBlock,
+  type PageHeadingSettings,
   type PictureWordsSettings,
   type PageTextStyle,
 } from "@/lib/pageStyleLayout";
@@ -58,6 +59,14 @@ import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 import SignupFormSetup from "@/components/SignupFormSetup";
 import LineView from "@/components/LineView";
 import EntriesSlot from "@/components/EntriesSlot";
+import PageHeadingView from "@/components/PageHeadingView";
+import {
+  automaticHeading,
+  readHeadingText,
+  writeHeadingText,
+  type HeadingNames,
+  type HeadingText,
+} from "@/lib/pageHeading";
 import SiteLogo from "@/components/SiteLogo";
 import type { SiteArtist } from "@/lib/siteArtist";
 
@@ -171,6 +180,7 @@ export default function PageSectionsArranger({
   const [signupsSetUp, setSignupsSetUp] = useState<Set<string>>(new Set());
   const [settingUp, setSettingUp] = useState<string | null>(null);
   const [artist, setArtist] = useState<SiteArtist | null>(null);
+  const [headingNames, setHeadingNames] = useState<HeadingNames | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = groupBlocksByRow(layout.blocks);
@@ -183,8 +193,10 @@ export default function PageSectionsArranger({
         siteData.getComponents(pageId),
         siteData.getSignupForms(pageId),
         siteData.getArtist(),
-      ]).then(([loadedCuration, loadedSections, components, signupForms, artist]) => {
+        siteData.getHeadingNames(pageId),
+      ]).then(([loadedCuration, loadedSections, components, signupForms, artist, names]) => {
         setArtist(artist);
+        setHeadingNames(names);
         setCuration(loadedCuration);
         setSections(loadedSections);
         setContents(new Map(components.map((c) => [c.blockId, c])));
@@ -443,6 +455,14 @@ export default function PageSectionsArranger({
                                   dragging={dragging}
                                   onSaveText={(text) => saveHeroText(b, text)}
                                   onSaveItems={(items) => saveItems(b.id, items)}
+                                />
+                              ) : b.type === "pageheading" && b.pageHeading ? (
+                                <PageHeadingSlot
+                                  label={blockTypeLabel(b.type)}
+                                  settings={b.pageHeading}
+                                  text={content?.text ?? null}
+                                  names={headingNames}
+                                  onSave={(text) => saveText(b, text)}
                                 />
                               ) : b.type === "entries" ? (
                                 <EntriesSlot
@@ -1220,6 +1240,61 @@ function PictureWordsSlot({
       >
         {left ? picture : words}
         {left ? words : picture}
+      </div>
+    </Labelled>
+  );
+}
+
+// A Page heading (2026-10-25): the two lines as they'll show, each
+// typed over in its box — blank = filled in (shown faintly), saved when
+// left. `text` and `onSave`: the typed lines as JSON (lib/pageHeading.ts).
+function PageHeadingSlot({
+  label,
+  settings,
+  text,
+  names,
+  onSave,
+}: {
+  label: string;
+  settings: PageHeadingSettings;
+  text: string | null;
+  names: HeadingNames | null;
+  onSave: (text: string) => void;
+}) {
+  const saved = readHeadingText(text);
+  const [lines, setLines] = useState<HeadingText>(saved);
+  const auto = names ? automaticHeading(names) : { name: "", page: "" };
+  const save = () => {
+    const next = writeHeadingText(lines);
+    if (next !== writeHeadingText(saved)) onSave(next ?? "");
+  };
+  const box =
+    "w-full rounded-md border border-neutral-200 bg-white/70 px-2 py-1 placeholder:opacity-50 focus:border-neutral-400 focus:outline-none";
+  return (
+    <Labelled label={label}>
+      <div className="flex flex-col gap-2">
+        <input
+          value={lines.name}
+          onChange={(e) => setLines({ ...lines, name: e.target.value })}
+          onBlur={save}
+          maxLength={MAX_TYPED_TEXT}
+          placeholder={auto.name || "Site name"}
+          className={box}
+          style={bodyTextCss(settings.name)}
+        />
+        <input
+          value={lines.page}
+          onChange={(e) => setLines({ ...lines, page: e.target.value })}
+          onBlur={save}
+          maxLength={MAX_TYPED_TEXT}
+          placeholder={auto.page || "Page name"}
+          className={box}
+          style={bodyTextCss(settings.page)}
+        />
+        {settings.line && <PageHeadingView settings={{ ...settings, lineSpace: 0 }} lines={{ name: "", page: "" }} />}
+        <p className="text-xs text-neutral-400">
+          Leave a line blank to fill it in from the site&apos;s and page&apos;s names.
+        </p>
       </div>
     </Labelled>
   );

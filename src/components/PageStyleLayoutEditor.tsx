@@ -22,6 +22,9 @@ import {
   HERO_LIMITS,
   PICTURE_WORDS_LIMITS,
   ENTRIES_LIMITS,
+  PAGE_HEADING_LIMITS,
+  cleanPageHeading,
+  type PageHeadingSettings,
   cleanEntriesSettings,
   type EntriesSettings,
   cleanPictureWords,
@@ -102,6 +105,78 @@ export default function PageStyleLayoutEditor({
             button: "Settings",
             title: "Hero",
             content: <HeroSettingsPanel hero={b.hero} onChange={(hero) => onBlock({ ...b, hero: cleanHero(hero) })} />,
+          };
+        }
+        if (b.pageHeading) {
+          const heading = b.pageHeading;
+          const set = (patch: Partial<PageHeadingSettings>) =>
+            onBlock({ ...b, pageHeading: cleanPageHeading({ ...heading, ...patch }) });
+          return {
+            button: "Settings",
+            title: "Page heading",
+            content: (
+              <>
+                <TextStyleBox
+                  label="Site name"
+                  value={heading.name}
+                  fonts={SITE_FONTS}
+                  kinds={SITE_FONT_KINDS}
+                  isFont={isSiteFontId}
+                  scales
+                  onChange={(name) => set({ name })}
+                />
+                <TextStyleBox
+                  label="Page name"
+                  value={heading.page}
+                  fonts={SITE_FONTS}
+                  kinds={SITE_FONT_KINDS}
+                  isFont={isSiteFontId}
+                  scales
+                  onChange={(page) => set({ page })}
+                />
+                <NumberField
+                  label="Space between"
+                  unit="pixels"
+                  step={1}
+                  value={heading.gap}
+                  limits={PAGE_HEADING_LIMITS.space}
+                  onCommit={(gap) => set({ gap })}
+                  wide
+                />
+                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={heading.line !== null}
+                    onChange={(e) => set({ line: e.target.checked ? DEFAULT_LINE : null })}
+                  />
+                  <span className="flex-1">Line under</span>
+                  {heading.line && (
+                    <input
+                      type="color"
+                      value={heading.line.colour}
+                      onChange={(e) => set({ line: { ...heading.line!, colour: e.target.value } })}
+                      aria-label="Line colour"
+                      className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+                    />
+                  )}
+                </label>
+                {heading.line && (
+                  <NumberField
+                    label="Space above the line"
+                    unit="pixels"
+                    step={1}
+                    value={heading.lineSpace}
+                    limits={PAGE_HEADING_LIMITS.space}
+                    onCommit={(lineSpace) => set({ lineSpace })}
+                    wide
+                  />
+                )}
+                <p className="text-xs text-neutral-400">
+                  Fills itself in: the site&apos;s name, then the page&apos;s name with the page it sits under in front
+                  (&ldquo;Portfolio: Head Sculptures&rdquo;). Either line can be typed over on a page in Arrange.
+                </p>
+              </>
+            ),
           };
         }
         if (b.entries) {

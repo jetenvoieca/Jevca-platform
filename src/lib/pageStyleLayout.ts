@@ -45,6 +45,9 @@ export const LAYOUT_BLOCK_TYPES = [
   // A list typed on the page: date, title, pictures with captions and
   // descriptions (2026-10-24, from Louise Dear's Events & Projects).
   { value: "entries", label: "Entries" },
+  // The site's name over the page's name, filled in (2026-10-25, the ISYT
+  // sites).
+  { value: "pageheading", label: "Page heading" },
   { value: "header", label: "Header" },
   // Typed on each page, usually under the Header (2026-10-13).
   { value: "byline", label: "Byline" },
@@ -506,6 +509,41 @@ export function cleanEntriesSettings(raw: unknown): EntriesSettings {
   };
 }
 
+// A Page heading (2026-10-25, the ISYT sites): the site's name over the
+// page's name (lib/pageHeading.ts), each in its own look, `gap` apart,
+// with an optional line under them `lineSpace` below.
+export type PageHeadingSettings = {
+  name: PageTextStyle;
+  page: PageTextStyle;
+  gap: number;
+  line: LineLook | null;
+  lineSpace: number;
+};
+
+export const DEFAULT_PAGE_HEADING: PageHeadingSettings = {
+  name: { ...NO_TEXT_STYLE, size: 40, look: "bold", colour: "#777777" },
+  page: { ...NO_TEXT_STYLE, size: 52, look: "regular", colour: "#bbbbbb" },
+  gap: 0,
+  line: { colour: "#cccccc", thickness: 1 },
+  lineSpace: 40,
+};
+
+export const PAGE_HEADING_LIMITS = { space: { min: 0, max: 200 } } as const;
+
+export function cleanPageHeading(raw: unknown): PageHeadingSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof PageHeadingSettings, unknown>>;
+  const d = DEFAULT_PAGE_HEADING;
+  const space = PAGE_HEADING_LIMITS.space;
+  const style = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
+  return {
+    name: style(value.name, d.name),
+    page: style(value.page, d.page),
+    gap: cleanNumber(value.gap, space, d.gap, 0),
+    line: value.line === null ? null : value.line ? cleanLine(value.line) : d.line,
+    lineSpace: cleanNumber(value.lineSpace, space, d.lineSpace, 0),
+  };
+}
+
 const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
   header: NO_TEXT_STYLE,
   byline: NO_TEXT_STYLE,
@@ -517,7 +555,7 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 // `doors` (Sliding doors), `signup` (Sign-up form), `logoHeight` and
 // `byline` (Logo), `line` (Line), `perRow`, `names` and `tiles`
 // (Gallery), `hero` (Hero), `pictureWords` (Picture & words), `entries`
-// (Entries).
+// (Entries), `pageHeading` (Page heading).
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -532,6 +570,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     hero?: HeroSettings;
     pictureWords?: PictureWordsSettings;
     entries?: EntriesSettings;
+    pageHeading?: PageHeadingSettings;
     byline?: LogoByline;
   };
 
@@ -678,6 +717,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
             clean.names = cleanGalleryNames((b as Partial<LayoutBlock>).names);
             clean.tiles = cleanGalleryTiles((b as Partial<LayoutBlock>).tiles);
           }
+          if (clean.type === "pageheading") {
+            clean.pageHeading = cleanPageHeading((b as Partial<LayoutBlock>).pageHeading);
+          }
           if (clean.type === "entries") {
             clean.entries = cleanEntriesSettings((b as Partial<LayoutBlock>).entries);
           }
@@ -723,5 +765,6 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "hero") return { id, type, hero: DEFAULT_HERO };
   if (type === "picturewords") return { id, type, pictureWords: DEFAULT_PICTURE_WORDS };
   if (type === "entries") return { id, type, entries: DEFAULT_ENTRIES };
+  if (type === "pageheading") return { id, type, pageHeading: DEFAULT_PAGE_HEADING };
   return { id, type };
 }

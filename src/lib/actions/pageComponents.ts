@@ -14,6 +14,7 @@ import {
 } from "@/lib/pageComponents";
 import { blockTypeLabel, normalizeLayout, type LayoutBlock } from "@/lib/pageStyleLayout";
 import { readEntries, writeEntries } from "@/lib/pageEntries";
+import { readHeadingText, writeHeadingText } from "@/lib/pageHeading";
 
 // What fills a Block Build page's components (2026-10-07; 2026-10-13) —
 // see lib/pageComponents.ts and PageComponentContent in schema.prisma.
@@ -176,15 +177,17 @@ export async function setPageComponentText(
     return { ok: true };
   }
 
-  // Entries (2026-10-24): the whole list, as JSON (see
-  // lib/pageEntries.ts) — an empty list empties the component.
-  if (found.block.type === "entries") {
-    const entries = writeEntries(readEntries(text));
-    if (!entries) {
+  // Entries (2026-10-24) and a Page heading's typed lines (2026-10-25),
+  // as JSON (see lib/pageEntries.ts, lib/pageHeading.ts) — nothing in
+  // them empties the component.
+  if (found.block.type === "entries" || found.block.type === "pageheading") {
+    const json =
+      found.block.type === "entries" ? writeEntries(readEntries(text)) : writeHeadingText(readHeadingText(text));
+    if (!json) {
       await db.pageComponentContent.deleteMany({ where: { pageId, blockId } });
       return { ok: true };
     }
-    const data = { source: "TYPED" as const, sectionId: null, text: entries, hiddenIds: [], orderIds: [] };
+    const data = { source: "TYPED" as const, sectionId: null, text: json, hiddenIds: [], orderIds: [] };
     await db.pageComponentContent.upsert({
       where: { pageId_blockId: { pageId, blockId } },
       create: { pageId, blockId, ...data },

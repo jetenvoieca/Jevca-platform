@@ -116,6 +116,13 @@ export function BlockShape({
           ))}
         </div>
       );
+    case "pageheading":
+      return (
+        <div className="flex flex-col gap-2 border-b border-neutral-300 pb-3">
+          <Bar className="h-5 w-1/3" />
+          <Bar className="h-7 w-1/2 bg-neutral-100" />
+        </div>
+      );
     case "header":
       return <Bar className="h-7 w-2/3" />;
     case "line":

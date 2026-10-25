@@ -76,6 +76,7 @@ export default function PageLayoutEditor({
     components: content.components,
     signupForms: content.signupForms,
     artist: content.artist,
+    heading: content.heading,
     homeHref: null,
     onOpen: () => {},
     heroShowing,

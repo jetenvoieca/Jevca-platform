@@ -3,6 +3,7 @@
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { slugify } from "@/lib/pageSlug";
+import type { HeadingNames } from "@/lib/pageHeading";
 
 // Deliberately NOT calling revalidatePath(`/sites/${siteId}`) from the
 // actions below (2026-08-31 removal) — the same fix already made in
@@ -216,4 +217,16 @@ export async function reorderPages(siteId: string, liveIds: string[], hiddenIds:
 export async function deletePage(siteId: string, pageId: string) {
   await db.page.deleteMany({ where: { id: pageId, siteId } });
   redirect(`/sites/${siteId}/pages`);
+}
+
+// What a Page heading is filled in from (2026-10-25 — see
+// lib/pageHeading.ts): the site's name, the page's name and the name of
+// the page it sits under. Scoped by siteId.
+export async function getPageHeadingNames(siteId: string, pageId: string): Promise<HeadingNames | null> {
+  const page = await db.page.findFirst({
+    where: { id: pageId, siteId },
+    select: { title: true, site: { select: { name: true } }, parent: { select: { title: true } } },
+  });
+  if (!page) return null;
+  return { siteName: page.site.name, pageTitle: page.title, groupTitle: page.parent?.title ?? null };
 }

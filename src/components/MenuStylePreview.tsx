@@ -24,9 +24,9 @@ const EXAMPLE_ITEMS: MenuViewItem[] = [
 // a phone frame, drawn by the same component as the site (MenuView), on
 // a grey example page so opacity and blur show (the logo in a top bar
 // and the links under a Side list are stand-ins). Both can be tried —
-// the desktop one starts open. `Works` is the current page, with two pages under it. Re-keyed on
-// kind, position and behaviour so each change starts from the same
-// state.
+// the desktop one starts open. `Works` is the current page, with two
+// pages under it. Re-keyed on kind, position and behaviour so each
+// change starts from the same state.
 export default function MenuStylePreview({ layout }: { layout: MenuStyleLayout }) {
   const key = `${layout.kind}-${layout.position}-${layout.behaviour}`;
   return (
