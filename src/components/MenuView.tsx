@@ -184,14 +184,17 @@ export default function MenuView({
     </div>
   );
 
+  // A Side list's button sits in its top bar if it has one, plain;
+  // otherwise it has the menu's background, so it shows on any page.
+  const inBar = sideList && !!bar;
   const menuButton = (
     <button
       type="button"
       onClick={() => setOpen(true)}
       aria-expanded={open}
       aria-label="Menu"
-      className={`p-2.5 ${sideList ? "" : shadow}`}
-      style={sideList ? { color: textColour } : { ...surface, borderRadius: layout.rounding }}
+      className={`p-2.5 ${inBar ? "" : shadow}`}
+      style={inBar ? { color: textColour } : { ...surface, borderRadius: layout.rounding }}
     >
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
         <path d="M3 6h18M3 12h18M3 18h18" strokeLinecap="round" />
@@ -459,10 +462,14 @@ function MenuEntry({
   align: "left" | "center" | "right";
   onChoose: () => void;
 }) {
-  const className = `block truncate px-3 py-1.5 hover:opacity-70 ${TEXT_ALIGN[align]}`;
+  // A Side list's pages are spaced only by its own spacing (2026-10-25),
+  // tightly lined; the other kinds' have some padding.
+  const sideList = layout.kind === "sidelist";
+  const className = `block truncate px-3 hover:opacity-70 ${sideList ? "" : "py-1.5"} ${TEXT_ALIGN[align]}`;
   const style: CSSProperties = {
     ...bodyTextCss(text),
     fontSize: size,
+    lineHeight: sideList ? 1.25 : undefined,
     borderRadius: Math.min(layout.rounding, 12),
     backgroundColor: current && layout.highlightColor ? layout.highlightColor : undefined,
   };
