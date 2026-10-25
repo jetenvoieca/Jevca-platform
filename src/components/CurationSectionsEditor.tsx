@@ -2,13 +2,14 @@
 
 import { useEffect, useState } from "react";
 import MediaPicker from "@/components/MediaPicker";
+import { PlayMark, stillOf } from "@/components/SectionMediaView";
 import {
   listCurationSections,
   setCurationSectionMedia,
   updateCurationSectionText,
 } from "@/lib/actions/curationSections";
 import {
-  MAX_SECTION_IMAGES,
+  MAX_SUPPORTING_MEDIA,
   MAX_SECTION_TEXT,
   curationSectionLabel,
   type CurationSectionData,
@@ -17,7 +18,7 @@ import {
 // The Curations page's presentation sections (2026-10-06; fixed
 // 2026-10-13, Craig's mockup) — what the curation panel on a page shows
 // under the artwork. Always the same three boxes, in this order:
-// Description, Video and Supporting Images. They can't be added,
+// Description, Video and Supporting Media. They can't be added,
 // removed or reordered; further layout is done in Pages. Text saves when
 // the box is left, a video or images save as soon as they're picked —
 // from the Media Catalogue's views (2026-10-25, Craig's request, so
@@ -54,16 +55,8 @@ export default function CurationSectionsEditor({
 
       {sections.map((s) => (
         <div key={s.id} className="rounded-xl border border-neutral-300 p-3">
-          <h3 className="mb-2 text-center text-base text-neutral-900">
-            {curationSectionLabel(s.type)}
-          </h3>
-          <SectionBody
-            section={s}
-            artistId={artistId}
-            siteId={siteId}
-            onSaved={replace}
-            onError={setError}
-          />
+          <h3 className="mb-2 text-center text-base text-neutral-900">{curationSectionLabel(s.type)}</h3>
+          <SectionBody section={s} artistId={artistId} siteId={siteId} onSaved={replace} onError={setError} />
         </div>
       ))}
     </div>
@@ -138,11 +131,7 @@ function SectionBody({
           onSelect={(picked) => picked[0] && saveMedia([picked[0].id])}
         />
         {video && (
-          <button
-            type="button"
-            onClick={() => saveMedia([])}
-            className="self-end text-xs text-red-500 hover:underline"
-          >
+          <button type="button" onClick={() => saveMedia([])} className="self-end text-xs text-red-500 hover:underline">
             Remove video
           </button>
         )}
@@ -154,30 +143,32 @@ function SectionBody({
     <div className="grid grid-cols-3 gap-2">
       {section.media.map((m) => (
         <div key={m.imageId} className="group relative">
-          <img src={m.url} alt="" className="aspect-square w-full rounded-md object-cover" />
+          {stillOf(m) ? (
+            <img src={stillOf(m)!} alt="" className="aspect-square w-full rounded-md object-cover" />
+          ) : (
+            <div className="aspect-square w-full rounded-md bg-neutral-800" />
+          )}
+          {m.kind === "VIDEO" && <PlayMark />}
           <button
             type="button"
-            onClick={() =>
-              saveMedia(section.media.filter((x) => x.imageId !== m.imageId).map((x) => x.imageId))
-            }
-            aria-label="Remove image"
+            onClick={() => saveMedia(section.media.filter((x) => x.imageId !== m.imageId).map((x) => x.imageId))}
+            aria-label="Remove"
             className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
           >
             ✕
           </button>
         </div>
       ))}
-      {section.media.length < MAX_SECTION_IMAGES && (
+      {section.media.length < MAX_SUPPORTING_MEDIA && (
         <MediaPicker
           artistId={artistId}
           siteId={siteId}
           mode="multi"
           catalogueViews
-          label="Add images"
+          mediaKinds={["PHOTO", "VIDEO"]}
+          label="Add pictures or videos"
           previewClassName="aspect-square"
-          onSelect={(picked) =>
-            saveMedia([...section.media.map((m) => m.imageId), ...picked.map((p) => p.id)])
-          }
+          onSelect={(picked) => saveMedia([...section.media.map((m) => m.imageId), ...picked.map((p) => p.id)])}
         />
       )}
     </div>

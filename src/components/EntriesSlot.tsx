@@ -11,10 +11,11 @@ import {
   type PageEntry,
 } from "@/lib/pageEntries";
 import { Labelled } from "@/components/blockShapes";
+import { PlayMark } from "@/components/SectionMediaView";
 
 // An Entries component in a page's Arrange (2026-10-24): the list typed
 // straight in — each entry's date and title, and its pictures, each
-// chosen from the curation's Supporting Images with a caption and a
+// chosen from the curation's Supporting Media with a caption and a
 // description. Entries can be added, moved up or down, hidden from the
 // page or removed; pictures added or removed. Typing saves when a box is
 // left; every other change saves at once (`onSave`, the list as JSON —
@@ -27,7 +28,9 @@ export default function EntriesSlot({
 }: {
   label: string;
   text: string | null;
-  images: { id: string; url: string }[];
+  // The curation's Supporting Media: a picture, or a video's still
+  // picture (null when it has none) with ▶ (2026-10-25).
+  images: { id: string; url: string | null; video: boolean }[];
   onSave: (text: string) => void;
 }) {
   const [entries, setEntries] = useState<PageEntry[]>(() => readEntries(text));
@@ -116,8 +119,9 @@ export default function EntriesSlot({
               return (
                 <div key={j} className="flex gap-3 rounded-md bg-neutral-50 p-2">
                   <div className="flex w-40 shrink-0 flex-col gap-1.5">
-                    <div className="aspect-square w-full overflow-hidden rounded bg-neutral-200">
-                      {chosen && <img src={chosen.url} alt="" className="h-full w-full object-cover" />}
+                    <div className="relative aspect-square w-full overflow-hidden rounded bg-neutral-200">
+                      {chosen?.url && <img src={chosen.url} alt="" className="h-full w-full object-cover" />}
+                      {chosen?.video && <PlayMark />}
                     </div>
                     <input
                       value={picture.caption}
@@ -150,17 +154,22 @@ export default function EntriesSlot({
                               )
                             }
                             title={picture.imageId === im.id ? "Take this picture out" : "Use this picture"}
-                            className={`h-10 w-10 overflow-hidden rounded ${
+                            className={`relative h-10 w-10 overflow-hidden rounded ${
                               picture.imageId === im.id ? "ring-2 ring-blue-500" : "opacity-70 hover:opacity-100"
                             }`}
                           >
-                            <img src={im.url} alt="" className="h-full w-full object-cover" />
+                            {im.url ? (
+                              <img src={im.url} alt="" className="h-full w-full object-cover" />
+                            ) : (
+                              <span className="block h-full w-full bg-neutral-800" />
+                            )}
+                            {im.video && <PlayMark />}
                           </button>
                         ))}
                       </div>
                     ) : (
                       <p className="text-xs text-neutral-400">
-                        Add Supporting Images to the curation to choose pictures here.
+                        Add Supporting Media to the curation to choose pictures here.
                       </p>
                     )}
                     <textarea

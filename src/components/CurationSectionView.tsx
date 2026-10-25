@@ -1,7 +1,7 @@
 import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
 import type { PageTextStyle } from "@/lib/pageStyleLayout";
 import { bodyTextCss } from "@/components/textStyleCss";
-import FadeImage from "@/components/FadeImage";
+import SectionMediaView from "@/components/SectionMediaView";
 
 // One curation section as visitors see it (2026-10-06; shared
 // 2026-10-07) — in the curation panel on a Canvas page (CurationPanel),
@@ -34,12 +34,7 @@ export default function CurationSectionView({
     case "VIDEO": {
       const video = section.media[0];
       return (
-        <video
-          src={video.url}
-          poster={video.posterUrl ?? undefined}
-          controls
-          className="w-full rounded-md bg-black"
-        />
+        <video src={video.url} poster={video.posterUrl ?? undefined} controls className="w-full rounded-md bg-black" />
       );
     }
 
@@ -47,7 +42,7 @@ export default function CurationSectionView({
       return (
         <div className="flex flex-col gap-2">
           {section.media.map((m) => (
-            <FadeImage key={m.imageId} src={m.url} alt="" className="w-full rounded-md" />
+            <SectionMediaView key={m.imageId} media={m} className="overflow-hidden rounded-md" />
           ))}
         </div>
       );

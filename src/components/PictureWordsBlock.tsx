@@ -1,7 +1,12 @@
 import type { CSSProperties } from "react";
 import { pictureShapeRatio, type PageTextStyle, type PictureWordsSettings } from "@/lib/pageStyleLayout";
+import type { SectionMedia } from "@/lib/curationSections";
 import { bodyTextCss } from "@/components/textStyleCss";
-import FadeImage from "@/components/FadeImage";
+import SectionMediaView from "@/components/SectionMediaView";
+
+// The picture: a work's, or one of the Supporting Media — a picture or
+// (2026-10-25) a video, shown with ▶ and played in its box.
+export type PictureWordsPicture = { media: Pick<SectionMedia, "kind" | "url" | "posterUrl">; alt: string };
 
 // A Picture & words on a page (2026-10-24, from Louise Dear's Story page
 // — see PictureWordsSettings in lib/pageStyleLayout.ts): the picture
@@ -20,7 +25,7 @@ export default function PictureWordsBlock({
   onOpen,
 }: {
   settings: PictureWordsSettings;
-  picture: { url: string; alt: string } | null;
+  picture: PictureWordsPicture | null;
   headline: string;
   accent: string;
   body: string | null;
@@ -45,9 +50,7 @@ export default function PictureWordsBlock({
   const pictureOrder = `${s.pictureFirstOnPhone ? "order-1" : "order-2"} ${pictureFirst ? "site:order-1" : "site:order-2"}`;
   const wordsOrder = `${s.pictureFirstOnPhone ? "order-2" : "order-1"} ${pictureFirst ? "site:order-2" : "site:order-1"}`;
 
-  const image = picture && (
-    <FadeImage src={picture.url} alt={picture.alt} className="absolute inset-0 h-full w-full object-cover" />
-  );
+  const image = picture && <SectionMediaView media={picture.media} alt={picture.alt} fill />;
 
   return (
     <div

@@ -382,7 +382,7 @@ export function cleanHero(raw: unknown): HeroSettings {
 
 // Picture & words (2026-10-24, from Louise Dear's Story page): a
 // picture beside a headline and the curation's Description. The picture
-// is the first of the page's Supporting Images or works (as arranged on
+// is the first of the page's Supporting Media or works (as arranged on
 // the page), filling a box of the chosen shape, on the `side` chosen, its
 // share of the width `pictureShare` beside the `gap`. The headline and a
 // second line in its own look are typed on each page; `headlineSpace`

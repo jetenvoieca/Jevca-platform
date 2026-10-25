@@ -59,6 +59,7 @@ import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 import SignupFormSetup from "@/components/SignupFormSetup";
 import LineView from "@/components/LineView";
 import EntriesSlot from "@/components/EntriesSlot";
+import { PlayMark, stillOf } from "@/components/SectionMediaView";
 import PageHeadingView from "@/components/PageHeadingView";
 import {
   automaticHeading,
@@ -74,14 +75,14 @@ import type { SiteArtist } from "@/lib/siteArtist";
 // mockup: Page Styles set the layout, curations what's available, and
 // the page brings them together) — shown in the Pages page's Preview
 // panel. On the left, the page's curation's works and its Description,
-// Video and Supporting Images; on the right, the page's Display Style
+// Video and Supporting Media; on the right, the page's Display Style
 // (desktop width) with what each component holds drawn in it:
 // - A Header or Byline is typed straight in.
 // - Drag the works or a section onto a component to put it there. A
 //   component holds one, and takes only what fits it (see
 //   lib/pageComponents.ts) — while dragging, the components it fits are
 //   outlined in blue and the rest fade.
-// - Works and Supporting Images show as pictures: drag one onto another
+// - Works and Supporting Media show as pictures: drag one onto another
 //   to change the order, ✕ to remove it from this page, and click a
 //   removed one (listed below) to put it back.
 // - The Description can be edited for this page only; "Use the
@@ -111,7 +112,9 @@ type DropData =
   { kind: "tray" } | { kind: "block"; block: LayoutBlock } | { kind: "item"; blockId: string; itemId: string };
 
 // One picture in a component: a work or a Supporting Image.
-type Item = { id: string; url: string | null; title: string };
+// `video`: one of the Supporting Media that's a video (2026-10-25),
+// shown by its still picture with ▶.
+type Item = { id: string; url: string | null; title: string; video?: boolean };
 
 const WORKS: Content = {
   sectionId: null,
@@ -136,7 +139,7 @@ function sectionContent(section: CurationSectionData): Content {
 function sectionDetail(section: CurationSectionData): string {
   if (section.type === "VIDEO") return section.media.length > 0 ? "Video chosen" : "No video yet";
   if (section.type === "IMAGES") {
-    return section.media.length === 1 ? "1 image" : `${section.media.length} images`;
+    return section.media.length === 1 ? "1 picture or video" : `${section.media.length} pictures and videos`;
   }
   const text = (section.text || "").trim();
   if (!text) return "Empty";
@@ -321,7 +324,7 @@ export default function PageSectionsArranger({
       () => setPageComponentItems(siteId, pageId, blockId, items),
     );
 
-  // A component's pictures — the curation's works or Supporting Images —
+  // A component's pictures — the curation's works or Supporting Media —
   // all of them, in the curation's order.
   const itemsOf = (content: ComponentContent): Item[] => {
     if (content.source === "WORKS") {
@@ -333,7 +336,7 @@ export default function PageSectionsArranger({
     }
     const section = content.sectionId ? sectionById.get(content.sectionId) : undefined;
     if (section?.type !== "IMAGES") return [];
-    return section.media.map((m) => ({ id: m.imageId, url: m.url, title: "" }));
+    return section.media.map((m) => ({ id: m.imageId, url: stillOf(m), title: "", video: m.kind === "VIDEO" }));
   };
 
   const handleDragStart = (e: DragStartEvent) => {
@@ -470,7 +473,13 @@ export default function PageSectionsArranger({
                                   text={content?.text ?? null}
                                   images={(sections ?? [])
                                     .filter((s) => s.type === "IMAGES")
-                                    .flatMap((s) => s.media.map((m) => ({ id: m.imageId, url: m.url })))}
+                                    .flatMap((s) =>
+                                      s.media.map((m) => ({
+                                        id: m.imageId,
+                                        url: stillOf(m),
+                                        video: m.kind === "VIDEO",
+                                      })),
+                                    )}
                                   onSave={(text) => saveText(b, text)}
                                 />
                               ) : b.type === "signup" ? (
@@ -909,7 +918,7 @@ function DescriptionText({
   );
 }
 
-// Works or Supporting Images as this page shows them: drag one onto
+// Works or Supporting Media as this page shows them: drag one onto
 // another to change the order, ✕ to remove it from this page. Removed
 // ones are listed below; click one to put it back.
 function ItemsGrid({
@@ -1025,8 +1034,9 @@ function ItemTile({
       {item.url ? (
         <img src={item.url} alt="" draggable={false} className="aspect-square w-full object-cover" />
       ) : (
-        <div className="aspect-square w-full bg-neutral-100" />
+        <div className={`aspect-square w-full ${item.video ? "bg-neutral-800" : "bg-neutral-100"}`} />
       )}
+      {item.video && <PlayMark />}
       <button
         type="button"
         onPointerDown={(e) => e.stopPropagation()}
@@ -1151,7 +1161,7 @@ function HeroSlot({
 // A Picture & words (2026-10-24): the headline and its second line typed
 // straight in, saved when left, in their looks, and the curation's
 // Description below (edited on the Curations page); beside them the
-// works or Supporting Images, dragged here — the first as arranged is
+// works or Supporting Media, dragged here — the first as arranged is
 // shown.
 function PictureWordsSlot({
   block,
@@ -1194,7 +1204,7 @@ function PictureWordsSlot({
           onSave={onSaveItems}
         />
       ) : (
-        <p className="py-6 text-center text-sm text-neutral-400">Drag Supporting Images or Works here.</p>
+        <p className="py-6 text-center text-sm text-neutral-400">Drag Supporting Media or Works here.</p>
       )}
     </div>
   );

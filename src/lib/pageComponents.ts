@@ -15,7 +15,7 @@ import type { LayoutBlockType } from "@/lib/pageStyleLayout";
 // - SECTION: the curation's section `sectionId`; for a Description,
 //   `text` is this page's own copy (null = the curation's).
 // - TYPED: `text`, typed on the page (a Header or Byline).
-// `hiddenIds` / `orderIds`: works or Supporting Images removed on this
+// `hiddenIds` / `orderIds`: works or Supporting Media removed on this
 // page, and the order chosen — see arrangeItems.
 export type ComponentContent = {
   blockId: string;
@@ -100,7 +100,7 @@ export function contentKindOf(
   return (content.sectionId && sectionTypes.get(content.sectionId)) || null;
 }
 
-// Works or Supporting Images as one page shows them: those removed on the
+// Works or Supporting Media as one page shows them: those removed on the
 // page left out; those in the chosen order first, in that order; then any
 // others (e.g. added to the curation since) in the curation's order.
 export function arrangeItems<T>(
@@ -133,7 +133,7 @@ export const MAX_TYPED_TEXT = 300;
 // line and the line under them (`below`, 2026-10-22) — a Picture & words
 // (2026-10-24) uses the headline and second line — typed on the page and
 // kept as JSON in its content's `text`; the content itself is the
-// curation's works (or a Picture & words's Supporting Images).
+// curation's works (or a Picture & words's Supporting Media).
 // `headline` and `accent` may run over several lines.
 const HERO_LINES = ["kicker", "headline", "accent", "below"] as const;
 

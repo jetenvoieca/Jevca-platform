@@ -43,7 +43,7 @@ function formatPrice(amount: string | null, currency: string): string | null {
 //
 // About (2026-10-16, Craig's mockup): the curation's optional content —
 // its Title (the curation's name) and the presentation sections
-// (Description, Video, Supporting Images; see CurationSectionsEditor) —
+// (Description, Video, Supporting Media; see CurationSectionsEditor) —
 // opens in a centred modal from the About button.
 //
 // Presentation (2026-10-03) — a work's images, Name, Description and

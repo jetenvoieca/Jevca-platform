@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
-import { sectionIsEmpty, type CurationSectionData } from "@/lib/curationSections";
+import { sectionIsEmpty, type CurationSectionData, type SectionMedia } from "@/lib/curationSections";
 import { arrangeItems, contentFits, contentKindOf, readHeroText, type ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
@@ -55,7 +55,8 @@ import { DEFAULT_PRESENTATION, formatMoney } from "@/lib/presentationTemplate";
 import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
 import HeroBlock from "@/components/HeroBlock";
-import PictureWordsBlock from "@/components/PictureWordsBlock";
+import PictureWordsBlock, { type PictureWordsPicture } from "@/components/PictureWordsBlock";
+import SectionMediaView from "@/components/SectionMediaView";
 import EntriesBlock from "@/components/EntriesBlock";
 import { readEntries } from "@/lib/pageEntries";
 import CanvasPlayer from "@/components/CanvasPlayer";
@@ -78,7 +79,7 @@ import SiteLogo from "@/components/SiteLogo";
 //   lib/pageComponents.ts) — a Header or Byline typed on the page, the
 //   Description in a Text or Text grid (this page's own copy if edited
 //   here), both in the style's font, size, style and colour for that
-//   component; the Video; Supporting Images (the first in a Single
+//   component; the Video; Supporting Media (the first in a Single
 //   Image, a grid in a Gallery); or the curation's works (a grid in a
 //   Gallery, square panels in Sliding doors — see SlidingDoors). Works
 //   and images removed on this page are left out, in the order chosen
@@ -295,12 +296,12 @@ export function blockFiller({
   const textStyleOf = (block: LayoutBlock) =>
     isTextComponent(block.type) ? mergeTextStyle(layout.textStyles[block.type], block.textStyle) : undefined;
 
-  // A Supporting Image of the curation by its id (an Entries picture).
-  const imageUrl = (imageId: string): string | null => {
+  // One of the curation's Supporting Media by its id (an Entries picture).
+  const mediaById = (imageId: string): SectionMedia | null => {
     for (const s of sections) {
       if (s.type !== "IMAGES") continue;
       const found = s.media.find((m) => m.imageId === imageId);
-      if (found) return found.url;
+      if (found) return found;
     }
     return null;
   };
@@ -309,19 +310,19 @@ export function blockFiller({
   // Images as arranged on the page, its typed headline, and the
   // curation's Description.
   const pictureWords = (settings: PictureWordsSettings, content: ComponentContent): ReactNode => {
-    let picture: { url: string; alt: string } | null = null;
+    let picture: PictureWordsPicture | null = null;
     let open: (() => void) | undefined;
     if (content.source === "WORKS") {
       const work = arrangeItems(curation.works, (w) => w.artworkId, content)[0];
       const url = work ? (work.displayUrl ?? work.imageUrl) : null;
       if (work && url) {
-        picture = { url, alt: work.catalogueName };
+        picture = { media: { kind: "PHOTO", url, posterUrl: null }, alt: work.catalogueName };
         open = () => onOpen(work.artworkId);
       }
     } else {
       const images = content.sectionId ? sectionById.get(content.sectionId) : undefined;
       const first = images ? arrangeItems(images.media, (m) => m.imageId, content)[0] : undefined;
-      if (first) picture = { url: first.url, alt: "" };
+      if (first) picture = { media: first, alt: "" };
     }
     const words = readHeroText(content.text);
     const body = sections.find((s) => s.type === "DESCRIPTION")?.text ?? null;
@@ -440,9 +441,7 @@ export function blockFiller({
     if (block.type === "entries" && block.entries) {
       const entries = readEntries(content.text);
       if (!entries.some((e) => !e.hidden)) return null;
-      return (
-        <EntriesBlock settings={block.entries} entries={entries} imageUrl={imageUrl} contentWidth={contentWidth} />
-      );
+      return <EntriesBlock settings={block.entries} entries={entries} media={mediaById} contentWidth={contentWidth} />;
     }
     if (content.source === "WORKS") return works(block, content);
     if (content.source === "TYPED") {
@@ -468,7 +467,7 @@ export function blockFiller({
     }
     const curated = content.sectionId ? sectionById.get(content.sectionId) : undefined;
     if (!curated) return null;
-    // This page's own Description, or its Supporting Images as arranged
+    // This page's own Description, or its Supporting Media as arranged
     // here.
     const section: CurationSectionData =
       curated.type === "DESCRIPTION"
@@ -478,12 +477,16 @@ export function blockFiller({
           : curated;
     if (sectionIsEmpty(section)) return null;
     if (section.type === "IMAGES" && block.type === "image") {
-      return <FadeImage src={section.media[0].url} alt="" className="w-full rounded" />;
+      return <SectionMediaView media={section.media[0]} className="overflow-hidden rounded" />;
     }
     if (section.type === "IMAGES" && block.type === "gallery") {
       return (
         <ImageGrid
-          images={section.media.map((m) => ({ id: m.imageId, url: m.url }))}
+          images={section.media.map((m) => ({
+            id: m.imageId,
+            url: m.url,
+            video: m.kind === "VIDEO" ? m : undefined,
+          }))}
           spacing={layout.gridSpacing}
           perRow={block.perRow ?? DEFAULT_GALLERY_PER_ROW}
         />
@@ -667,7 +670,15 @@ function PlainPage({ curation, onOpen }: { curation: CurationDetail; onOpen: (ar
 
 // One image in a grid: a work (clickable, opens its presentation, with
 // its price) or a Supporting Image (image only).
-type GridImage = { id: string; url: string | null; title?: string; price?: string | null };
+// A video among the Supporting Media (2026-10-25) shows its still picture
+// with ▶ and plays in its tile.
+type GridImage = {
+  id: string;
+  url: string | null;
+  title?: string;
+  price?: string | null;
+  video?: SectionMedia;
+};
 
 // Images in order, the Gallery's number across on a desktop and on a
 // phone, spaced as the style's grid spacing. With `onOpen`, clicking one
@@ -703,7 +714,11 @@ function ImageGrid({
           <>
             <div className="relative overflow-hidden" style={{ borderRadius: tiles.rounding }}>
               <div className={tiles.zoom ? "transition-transform duration-[400ms] group-hover:scale-[1.04]" : ""}>
-                {img.url ? (
+                {img.video ? (
+                  <div className="relative aspect-square w-full">
+                    <SectionMediaView media={img.video} fill />
+                  </div>
+                ) : img.url ? (
                   <FadeImage src={img.url} alt={img.title ?? ""} className="aspect-square w-full object-cover" />
                 ) : (
                   <div className="aspect-square w-full bg-neutral-100" />

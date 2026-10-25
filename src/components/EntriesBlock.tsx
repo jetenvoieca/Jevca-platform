@@ -2,25 +2,27 @@ import type { CSSProperties } from "react";
 import { pictureShapeRatio, type EntriesSettings } from "@/lib/pageStyleLayout";
 import type { PageEntry } from "@/lib/pageEntries";
 import { bodyTextCss } from "@/components/textStyleCss";
-import FadeImage from "@/components/FadeImage";
+import type { SectionMedia } from "@/lib/curationSections";
+import SectionMediaView from "@/components/SectionMediaView";
 
 // An Entries list on a page (2026-10-24, from Louise Dear's Events &
 // Projects — see EntriesSettings in lib/pageStyleLayout.ts and
 // lib/pageEntries.ts): each shown entry's date and title, then its
 // pictures, each beside its description with its caption under it — the
 // picture the full width above its description on a phone (narrower than
-// 700px, lib/siteBreakpoint.ts). A line between entries. `imageUrl`
-// gives a Supporting Image's address by its id (null = no longer in the
+// 700px, lib/siteBreakpoint.ts). A line between entries. `media` gives
+// one of the curation's Supporting Media by its id — a picture or
+// (2026-10-25) a video, played in its box (null = no longer in the
 // curation, so not shown). Sizes shrink with the page (bodyTextCss).
 export default function EntriesBlock({
   settings,
   entries,
-  imageUrl,
+  media,
   contentWidth,
 }: {
   settings: EntriesSettings;
   entries: PageEntry[];
-  imageUrl: (imageId: string) => string | null;
+  media: (imageId: string) => SectionMedia | null;
   contentWidth: number;
 }) {
   const s = settings;
@@ -64,26 +66,22 @@ export default function EntriesBlock({
             )}
             <div className="flex flex-col" style={{ gap: s.pictureSpace }}>
               {entry.pictures.map((picture, j) => {
-                const url = picture.imageId ? imageUrl(picture.imageId) : null;
-                if (!url && !picture.caption && !picture.text) return null;
+                const shown = picture.imageId ? media(picture.imageId) : null;
+                if (!shown && !picture.caption && !picture.text) return null;
                 return (
                   <div
                     key={j}
                     className={`flex flex-col gap-[var(--entry-gap)] ${
-                      url ? "site:grid site:grid-cols-[var(--entry-picture)_1fr] site:items-start" : ""
+                      shown ? "site:grid site:grid-cols-[var(--entry-picture)_1fr] site:items-start" : ""
                     }`}
                   >
-                    {url && (
+                    {shown && (
                       <div className="min-w-0">
                         <div
                           className="relative w-full overflow-hidden rounded-sm"
                           style={{ aspectRatio: pictureShapeRatio(s.shape) }}
                         >
-                          <FadeImage
-                            src={url}
-                            alt={entry.title}
-                            className="absolute inset-0 h-full w-full object-cover"
-                          />
+                          <SectionMediaView media={shown} alt={entry.title} fill />
                         </div>
                         {picture.caption && (
                           <p className="mt-1.5" style={css(s.caption)}>

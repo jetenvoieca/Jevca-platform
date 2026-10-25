@@ -663,7 +663,7 @@ function EntriesPanel({
       {look("caption", "Caption")}
       {look("text", "Description")}
       <p className="text-xs text-neutral-400">
-        The entries are typed on each page (Pages → Arrange); their pictures are the curation&apos;s Supporting Images.
+        The entries are typed on each page (Pages → Arrange); their pictures are the curation&apos;s Supporting Media.
         On a phone each picture sits above its description, the full width.
       </p>
     </>
@@ -763,7 +763,7 @@ function PictureWordsPanel({
       {look("accent", "Headline, second line")}
       {look("body", "Description")}
       <p className="text-xs text-neutral-400">
-        The headline is typed on each page (Pages → Arrange); the picture is the first of the Supporting Images or works
+        The headline is typed on each page (Pages → Arrange); the picture is the first of the Supporting Media or works
         dragged onto it; the words under it are the curation&apos;s Description.
       </p>
     </>

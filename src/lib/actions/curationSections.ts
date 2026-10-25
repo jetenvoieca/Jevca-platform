@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
 import {
-  MAX_SECTION_IMAGES,
+  MAX_SUPPORTING_MEDIA,
   MAX_SECTION_TEXT,
   type CurationSectionData,
   type SectionMedia,
@@ -64,10 +64,7 @@ function toData(row: SectionRow): CurationSectionData {
 }
 
 // The curation's three sections, in their fixed order (the type's order).
-export async function listCurationSections(
-  curationId: string,
-  artistId: string
-): Promise<CurationSectionData[]> {
+export async function listCurationSections(curationId: string, artistId: string): Promise<CurationSectionData[]> {
   const rows = await db.curationSection.findMany({
     where: { curationId, curation: { artistId } },
     orderBy: { type: "asc" },
@@ -80,7 +77,7 @@ export async function listCurationSections(
 export async function updateCurationSectionText(
   sectionId: string,
   artistId: string,
-  textRaw: string
+  textRaw: string,
 ): Promise<Result<{ text: string | null }>> {
   const text = textRaw.trim() || null;
   if (text && text.length > MAX_SECTION_TEXT) {
@@ -101,11 +98,12 @@ export async function updateCurationSectionText(
 }
 
 // Sets the Video section's video (one, or none) or the Supporting
-// Images section's photos (in order), replacing what was there.
+// Media section's pictures and videos (in order; videos since
+// 2026-10-25), replacing what was there.
 export async function setCurationSectionMedia(
   sectionId: string,
   artistId: string,
-  imageIds: string[]
+  imageIds: string[],
 ): Promise<Result<{ media: SectionMedia[] }>> {
   const section = await db.curationSection.findFirst({
     where: { id: sectionId, curation: { artistId } },
@@ -119,16 +117,16 @@ export async function setCurationSectionMedia(
   const ids = [...new Set(imageIds)];
   const isVideo = section.type === "VIDEO";
   if (isVideo && ids.length > 1) return { error: "A Video section holds one video." };
-  if (!isVideo && ids.length > MAX_SECTION_IMAGES) {
-    return { error: `Supporting Images can hold at most ${MAX_SECTION_IMAGES} images.` };
+  if (!isVideo && ids.length > MAX_SUPPORTING_MEDIA) {
+    return { error: `Supporting Media can hold at most ${MAX_SUPPORTING_MEDIA} pictures and videos.` };
   }
 
   const images = await db.image.findMany({
-    where: { id: { in: ids }, artistId, kind: isVideo ? "VIDEO" : "PHOTO" },
+    where: { id: { in: ids }, artistId, ...(isVideo ? { kind: "VIDEO" as const } : {}) },
     select: { id: true, kind: true, url: true, displayKey: true, posterUrl: true },
   });
   if (images.length !== ids.length) {
-    return { error: isVideo ? "That video couldn't be found." : "An image couldn't be found." };
+    return { error: isVideo ? "That video couldn't be found." : "A picture or video couldn't be found." };
   }
 
   await db.$transaction([

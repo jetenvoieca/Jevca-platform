@@ -11,7 +11,9 @@
 export const CURATION_SECTION_TYPES = [
   { value: "DESCRIPTION", label: "Description" },
   { value: "VIDEO", label: "Video" },
-  { value: "IMAGES", label: "Supporting Images" },
+  // Pictures and videos (2026-10-25, was Supporting Media — pictures
+  // only), for story pages.
+  { value: "IMAGES", label: "Supporting Media" },
 ] as const;
 
 export type CurationSectionType = (typeof CURATION_SECTION_TYPES)[number]["value"];
@@ -47,4 +49,4 @@ export function sectionIsEmpty(section: CurationSectionData): boolean {
 }
 
 export const MAX_SECTION_TEXT = 20000;
-export const MAX_SECTION_IMAGES = 20;
+export const MAX_SUPPORTING_MEDIA = 20;

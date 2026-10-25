@@ -166,7 +166,7 @@ export async function setPageComponentText(
 
   // A Hero's or Picture & words's words (JSON — see readHeroText);
   // typing into an empty one fills it with the curation's works, which a
-  // Picture & words's Supporting Images can then replace.
+  // Picture & words's Supporting Media can then replace.
   if (hasTypedWords(found.block.type)) {
     const heroText = writeHeroText(readHeroText(text));
     await db.pageComponentContent.upsert({
@@ -239,7 +239,7 @@ export async function setPageComponentText(
   return { ok: true };
 }
 
-// Saves which works or Supporting Images a component shows on this page:
+// Saves which works or Supporting Media a component shows on this page:
 // those removed, and the order chosen.
 export async function setPageComponentItems(
   siteId: string,
