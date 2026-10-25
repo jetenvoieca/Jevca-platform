@@ -1,6 +1,11 @@
 import { blockTypeLabel, type CanvasLayout, type LayoutBlock, type PageStyleLayout } from "@/lib/pageStyleLayout";
 import { blockWidthOf, groupBlocksByRow, rowKey, rowSettingsOf } from "@/lib/rowLayout";
-import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
+import {
+  PAGE_BACKGROUND_CLASS,
+  PAGE_MARGIN_CLASS,
+  pageBackgroundStyle,
+  pageMarginStyle,
+} from "@/components/pageMargins";
 import { rowBlockClass, rowBlockStyle, rowClass } from "@/components/pageRows";
 import { BlockShape, Labelled } from "@/components/blockShapes";
 
@@ -20,13 +25,13 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
 
   return (
     <div
-      className={`relative mx-auto flex min-h-full w-full flex-col rounded-md ${PAGE_MARGIN_CLASS} ${
+      className={`relative mx-auto flex min-h-full w-full flex-col rounded-md ${PAGE_MARGIN_CLASS} ${PAGE_BACKGROUND_CLASS} ${
         layout.backgroundImage ? "border-2 border-dashed border-neutral-300" : ""
       }`}
       style={{
         ...pageMarginStyle(layout.margins),
         maxWidth: layout.maxWidth ?? undefined,
-        backgroundColor: layout.backgroundColor ?? undefined,
+        ...pageBackgroundStyle(layout.backgroundColor, layout.phoneBackgroundColor),
       }}
     >
       {layout.backgroundImage && (

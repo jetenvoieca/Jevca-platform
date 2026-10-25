@@ -19,3 +19,15 @@ export function pageMarginStyle(margins: PageMargins): CSSProperties {
     "--margin-dh": `${margins.desktop.horizontal}px`,
   } as CSSProperties;
 }
+
+// A page's background colour (2026-10-25): its phone colour below 700px
+// (lib/siteBreakpoint.ts) when it has one, otherwise the same colour.
+// None at all = the page's own (white).
+export const PAGE_BACKGROUND_CLASS = "bg-[var(--page-bg-phone)] site:bg-[var(--page-bg)]";
+
+export function pageBackgroundStyle(desktop: string | null, phone: string | null): CSSProperties {
+  return {
+    "--page-bg": desktop ?? "transparent",
+    "--page-bg-phone": phone ?? desktop ?? "transparent",
+  } as CSSProperties;
+}

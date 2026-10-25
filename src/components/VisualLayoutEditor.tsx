@@ -138,6 +138,7 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
   textStyleFonts,
   desktopWidth,
   backgroundColor,
+  phoneBackgroundColor = null,
   backgroundImage = false,
   surroundColor = null,
   fluid = false,
@@ -161,6 +162,8 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
   textStyleFonts?: TextStyleFonts;
   desktopWidth: number;
   backgroundColor: string | null;
+  // A page's own background on a phone (2026-10-25); null = the same.
+  phoneBackgroundColor?: string | null;
   backgroundImage?: boolean;
   surroundColor?: string | null;
   fluid?: boolean;
@@ -277,7 +280,7 @@ export default function VisualLayoutEditor<B extends RowBlock & StyledBlock, L e
           <PageFrame
             margins={layout.margins}
             device={device}
-            backgroundColor={backgroundColor}
+            backgroundColor={device === "phone" && phoneBackgroundColor ? phoneBackgroundColor : backgroundColor}
             backgroundImage={backgroundImage}
             onMargins={(margins) => onChange({ ...layout, margins })}
             onDeselect={deselect}

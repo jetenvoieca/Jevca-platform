@@ -32,7 +32,12 @@ import {
 } from "@/lib/rowLayout";
 import { isTextComponent, mergeTextStyle } from "@/lib/textStyle";
 import { useSiteData, type PageContent } from "@/lib/siteData";
-import { PAGE_MARGIN_CLASS, pageMarginStyle } from "@/components/pageMargins";
+import {
+  PAGE_BACKGROUND_CLASS,
+  PAGE_MARGIN_CLASS,
+  pageBackgroundStyle,
+  pageMarginStyle,
+} from "@/components/pageMargins";
 import {
   alignedInsideClass,
   perRowClass,
@@ -549,6 +554,7 @@ function BlockBuildPage({
       margins={layout.margins}
       maxWidth={layout.maxWidth}
       backgroundColor={layout.backgroundColor}
+      phoneBackgroundColor={layout.phoneBackgroundColor}
       rows={rows}
       empty="Nothing on this page yet — use Arrange to type its header and drag the curation's works and sections onto it."
       footer={
@@ -570,6 +576,7 @@ function StyledFrame({
   margins,
   maxWidth,
   backgroundColor,
+  phoneBackgroundColor,
   rows: allRows,
   empty,
   footer,
@@ -577,6 +584,7 @@ function StyledFrame({
   margins: PageMargins;
   maxWidth: number | null;
   backgroundColor: string | null;
+  phoneBackgroundColor: string | null;
   rows: Row[];
   empty: string;
   footer: ReactNode;
@@ -586,7 +594,10 @@ function StyledFrame({
     .filter((r) => r.cells.length > 0);
 
   return (
-    <div className="flex min-h-full grow flex-col" style={{ backgroundColor: backgroundColor ?? undefined }}>
+    <div
+      className={`flex min-h-full grow flex-col ${PAGE_BACKGROUND_CLASS}`}
+      style={pageBackgroundStyle(backgroundColor, phoneBackgroundColor)}
+    >
       <div
         className={`mx-auto flex w-full grow flex-col ${PAGE_MARGIN_CLASS}`}
         style={{ ...pageMarginStyle(margins), maxWidth: maxWidth ?? undefined, containerType: "inline-size" }}

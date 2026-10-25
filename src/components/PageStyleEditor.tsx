@@ -28,16 +28,14 @@ export type PageStyleDraft = {
   presentationTemplateId: string | null;
 };
 
-export const EMPTY_BLOCK_BUILD = (
-  emptyLayout("BLOCK_BUILD") as Extract<PageStyleLayout, { type: "BLOCK_BUILD" }>
-).layout;
-
-export const EMPTY_CANVAS = (emptyLayout("CANVAS") as Extract<PageStyleLayout, { type: "CANVAS" }>)
+export const EMPTY_BLOCK_BUILD = (emptyLayout("BLOCK_BUILD") as Extract<PageStyleLayout, { type: "BLOCK_BUILD" }>)
   .layout;
+
+export const EMPTY_CANVAS = (emptyLayout("CANVAS") as Extract<PageStyleLayout, { type: "CANVAS" }>).layout;
 
 export function draftFrom(
   name: string,
-  style: (PageStyleLayout & { presentationTemplateId: string | null }) | null
+  style: (PageStyleLayout & { presentationTemplateId: string | null }) | null,
 ): PageStyleDraft {
   return {
     name,
@@ -204,8 +202,8 @@ export default function PageStyleEditor({
               onChange={(backgroundColor) => setCanvas({ ...canvas, backgroundColor })}
             />
             <p className="text-xs text-neutral-400">
-              The curations are chosen and dragged into place on each page; the canvas grows to
-              fit them. The curation nearest the centre of the screen opens.
+              The curations are chosen and dragged into place on each page; the canvas grows to fit them. The curation
+              nearest the centre of the screen opens.
             </p>
           </div>
         )}
@@ -218,12 +216,16 @@ export default function PageStyleEditor({
               value={blockBuild.backgroundColor}
               onChange={(backgroundColor) => setBlockBuild({ ...blockBuild, backgroundColor })}
             />
+            <ColourControl
+              label="Background colour, phone"
+              initial="#ffffff"
+              value={blockBuild.phoneBackgroundColor}
+              onChange={(phoneBackgroundColor) => setBlockBuild({ ...blockBuild, phoneBackgroundColor })}
+            />
 
             {blockBuild.backgroundImage ? (
               <div className="flex items-center gap-2 rounded-md border border-neutral-300 px-3 py-2">
-                <span className="flex-1 text-sm text-neutral-700">
-                  Background image — chosen on the page
-                </span>
+                <span className="flex-1 text-sm text-neutral-700">Background image — chosen on the page</span>
                 <button
                   type="button"
                   onClick={() => setBlockBuild({ ...blockBuild, backgroundImage: false })}
@@ -265,9 +267,7 @@ export default function PageStyleEditor({
       </div>
 
       <div className="flex items-center justify-between gap-2 border-t border-neutral-200 p-3">
-        <p className={`min-w-0 text-xs ${status.isError ? "text-red-600" : "text-neutral-500"}`}>
-          {status.text}
-        </p>
+        <p className={`min-w-0 text-xs ${status.isError ? "text-red-600" : "text-neutral-500"}`}>{status.text}</p>
         <button
           type="button"
           onClick={onClose}

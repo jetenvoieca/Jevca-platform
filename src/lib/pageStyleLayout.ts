@@ -609,6 +609,9 @@ export function pageContentWidth(layout: Pick<BlockBuildLayout, "maxWidth" | "ma
 export type BlockBuildLayout = RowLayout<LayoutBlock> & {
   // A colour is styling, so the style keeps it; null = none.
   backgroundColor: string | null;
+  // Its own background on a phone (2026-10-25, the ISYT home page: dark
+  // on a desktop, white on a phone); null = the same as on a desktop.
+  phoneBackgroundColor: string | null;
   // Whether the page has a background image — the image itself is
   // content, chosen on the page later.
   backgroundImage: boolean;
@@ -660,6 +663,7 @@ export function emptyLayout(type: PageStyleType): PageStyleLayout {
     type,
     layout: {
       backgroundColor: null,
+      phoneBackgroundColor: null,
       backgroundImage: false,
       maxWidth: null,
       gridSpacing: cleanPageGridSpacing(DEFAULT_GRID_SPACING),
@@ -740,6 +744,7 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
     type,
     layout: {
       backgroundColor: cleanColour(value.backgroundColor),
+      phoneBackgroundColor: cleanColour(value.phoneBackgroundColor),
       backgroundImage: value.backgroundImage === true,
       maxWidth:
         value.maxWidth === null || value.maxWidth === undefined

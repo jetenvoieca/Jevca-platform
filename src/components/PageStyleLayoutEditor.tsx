@@ -335,6 +335,7 @@ export default function PageStyleLayoutEditor({
       textStyleFonts={SITE_TEXT_STYLE_FONTS}
       desktopWidth={pageDesignWidth(layout)}
       backgroundColor={layout.backgroundColor}
+      phoneBackgroundColor={layout.phoneBackgroundColor}
       backgroundImage={layout.backgroundImage}
     />
   );
