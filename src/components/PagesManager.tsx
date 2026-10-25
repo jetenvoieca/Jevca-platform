@@ -29,6 +29,7 @@ export type PageListItem = {
   curationId: string | null;
   pageStyleId: string | null;
   menuStyleId: string | null;
+  parentId: string | null;
 };
 
 type ListKey = "live" | "hidden";
@@ -59,7 +60,8 @@ type ListKey = "live" | "hidden";
 //
 // Site menu (2026-10-06): under Live Pages, the Menu Style the site's
 // menu uses (Templates → Menus) — saved as soon as it's changed. A page
-// can have its own instead, chosen in its Edit.
+// can have its own instead, chosen in its Edit. A page sitting under
+// another in the menu (2026-10-25, chosen in its Edit) shows ↳ and which.
 export default function PagesManager({
   siteId,
   artistId,
@@ -271,7 +273,17 @@ export default function PagesManager({
                       : "border-neutral-200 text-neutral-700 hover:bg-neutral-50"
                   } ${dragged?.id === p.id ? "opacity-40" : ""}`}
                 >
-                  {p.title}
+                  {p.parentId ? (
+                    <span className="text-neutral-500">
+                      <span aria-hidden>↳ </span>
+                      {p.title}
+                      <span className="ml-2 text-xs text-neutral-400">
+                        under {pages.find((q) => q.id === p.parentId)?.title}
+                      </span>
+                    </span>
+                  ) : (
+                    p.title
+                  )}
                 </button>
                 {/* Straight to the page's Display Style (2026-10-22, Craig's
                   request), and back to this page from there. */}
@@ -427,9 +439,12 @@ export default function PagesManager({
                   curationId: selected.curationId,
                   pageStyleId: selected.pageStyleId,
                   menuStyleId: selected.menuStyleId,
+                  parentId: selected.parentId,
                 }
-              : { title: "", curationId: null, pageStyleId: null, menuStyleId: null }
+              : { title: "", curationId: null, pageStyleId: null, menuStyleId: null, parentId: null }
           }
+          topPages={pages.filter((p) => !p.parentId && p.id !== (modal === "edit" ? selected?.id : undefined))}
+          hasChildren={modal === "edit" && !!selected && pages.some((p) => p.parentId === selected.id)}
           curations={curations}
           pageStyles={pageStyles}
           menuStyles={menuStyles}

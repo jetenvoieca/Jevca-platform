@@ -13,13 +13,18 @@ import type { MenuStyleSummary } from "@/lib/actions/menuStyles";
 // Canvas style there's no Curation to choose — a Canvas page has its own
 // placed curations (Arrange on the Pages page) — so it's hidden and
 // saved as none. Menu (2026-10-06) is "Site menu" (the one chosen under
-// Live Pages) or one of the Menu Styles, for this page only.
+// Live Pages) or one of the Menu Styles, for this page only. Under
+// (2026-10-25): the page this one sits under in the menu — one of the
+// site's pages at the top (`topPages`); not offered for a page that has
+// pages under it.
 export default function PageDetailsModal({
   heading,
   initial,
   curations,
   pageStyles,
   menuStyles,
+  topPages,
+  hasChildren,
   saving,
   error,
   onSave,
@@ -30,6 +35,8 @@ export default function PageDetailsModal({
   curations: CurationSummary[];
   pageStyles: PageStyleSummary[];
   menuStyles: MenuStyleSummary[];
+  topPages: { id: string; title: string }[];
+  hasChildren: boolean;
   saving: boolean;
   error: string | null;
   onSave: (input: PageDetailsInput) => void;
@@ -39,14 +46,12 @@ export default function PageDetailsModal({
   const [curationId, setCurationId] = useState(initial.curationId ?? "");
   const [pageStyleId, setPageStyleId] = useState(initial.pageStyleId ?? "");
   const [menuStyleId, setMenuStyleId] = useState(initial.menuStyleId ?? "");
+  const [parentId, setParentId] = useState(initial.parentId ?? "");
 
   const isCanvas = pageStyles.find((s) => s.id === pageStyleId)?.type === "CANVAS";
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
-      onClick={onCancel}
-    >
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
       <form
         className="w-full max-w-sm rounded-lg bg-white p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
@@ -57,6 +62,7 @@ export default function PageDetailsModal({
             curationId: isCanvas ? null : curationId || null,
             pageStyleId: pageStyleId || null,
             menuStyleId: menuStyleId || null,
+            parentId: parentId || null,
           });
         }}
       >
@@ -127,12 +133,31 @@ export default function PageDetailsModal({
               </option>
             ))}
           </select>
+
+          {!hasChildren && (
+            <>
+              <label htmlFor="page-under" className="text-sm text-neutral-700">
+                In the menu
+              </label>
+              <select
+                id="page-under"
+                value={parentId}
+                onChange={(e) => setParentId(e.target.value)}
+                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">At the top</option>
+                {topPages.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    Under {p.title}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
         </div>
 
         {isCanvas && (
-          <p className="mb-4 text-xs text-neutral-500">
-            A Canvas page&apos;s curations are placed with Arrange.
-          </p>
+          <p className="mb-4 text-xs text-neutral-500">A Canvas page&apos;s curations are placed with Arrange.</p>
         )}
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}

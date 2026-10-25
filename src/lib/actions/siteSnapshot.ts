@@ -50,6 +50,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
           curationId: true,
           pageStyleId: true,
           menuStyleId: true,
+          parentId: true,
         },
       },
     },
@@ -71,6 +72,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
         components: style?.type === "BLOCK_BUILD" ? await getPageComponents(siteId, p.id) : [],
         signupForms: style?.type === "BLOCK_BUILD" ? await getPageSignupForms(siteId, p.id) : [],
         menuStyleId: p.menuStyleId ?? site.menuStyleId,
+        parentId: p.parentId,
       };
     })
   );
@@ -194,6 +196,7 @@ export async function getPublishedSite(
     components: p.components ?? [],
     signupForms: p.signupForms ?? [],
     menuStyleId: p.menuStyleId ?? null,
+    parentId: p.parentId ?? null,
   }));
   const menus: Record<string, MenuStyleLayout> = {};
   for (const [id, layout] of Object.entries(snapshot.menus ?? {})) {

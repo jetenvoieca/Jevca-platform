@@ -67,7 +67,9 @@ export function pageForPath<P extends { slug: string }>(
 // components; a site published before it existed reads it as empty.
 // `signupForms` (2026-10-10) is the wording of its Sign-up form
 // components (never their list — see lib/actions/websiteSignup.ts); read
-// as empty for a site published before it existed.
+// as empty for a site published before it existed. `parentId`
+// (2026-10-25) is the page it sits under in the menu — null at the top,
+// and for a site published before it existed.
 export type SnapshotPage = {
   id: string;
   title: string;
@@ -78,6 +80,7 @@ export type SnapshotPage = {
   components: ComponentContent[];
   signupForms: SignupFormContent[];
   menuStyleId: string | null;
+  parentId: string | null;
 };
 
 // One curation shown somewhere on the site: its works, its sections, and

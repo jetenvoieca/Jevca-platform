@@ -1307,6 +1307,14 @@ model Page {
   menuStyleId String?
   menuStyle   MenuStyle? @relation(fields: [menuStyleId], references: [id], onDelete: SetNull)
 
+  // The page this one sits under in the menu (2026-10-25, the ISYT
+  // sites' portfolio sections and profile pages) — one level only: a
+  // page with pages under it can't sit under another. Null = at the top.
+  // Cleared, not the page deleted, if that page is deleted.
+  parentId String?
+  parent   Page?   @relation("PageParent", fields: [parentId], references: [id], onDelete: SetNull)
+  children Page[]  @relation("PageParent")
+
   // The curations placed on this page's canvas (2026-10-05) — used when
   // its Display Style is a Canvas. See PageCanvasItem.
   canvasItems PageCanvasItem[]
@@ -1327,6 +1335,7 @@ model Page {
   @@index([curationId])
   @@index([pageStyleId])
   @@index([menuStyleId])
+  @@index([parentId])
 }
 
 // One curation placed on a Canvas page (2026-10-05) — its tile's

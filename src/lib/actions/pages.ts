@@ -33,14 +33,35 @@ async function uniqueSlug(siteId: string, base: string) {
 }
 
 // What the Pages page's Add / Edit modal saves (2026-10-04): name,
-// curation, Display Style (a Page Style, 2026-10-05) and Menu (a Menu
-// Style, 2026-10-06 — null = the site's menu).
+// curation, Display Style (a Page Style, 2026-10-05), Menu (a Menu
+// Style, 2026-10-06 — null = the site's menu) and the page it sits under
+// in the menu (2026-10-25 — null = at the top).
 export type PageDetailsInput = {
   title: string;
   curationId: string | null;
   pageStyleId: string | null;
   menuStyleId: string | null;
+  parentId: string | null;
 };
+
+// The page another sits under (2026-10-25): one of the same site's pages
+// at the top of the menu, not the page itself. One level only, so a page
+// with pages under it stays at the top.
+async function checkedParentId(
+  siteId: string,
+  pageId: string | null,
+  parentId: string | null,
+): Promise<{ parentId: string | null } | { error: string }> {
+  if (!parentId) return { parentId: null };
+  if (parentId === pageId) return { error: "A page can't sit under itself." };
+  const parent = await db.page.findFirst({ where: { id: parentId, siteId }, select: { parentId: true } });
+  if (!parent) return { parentId: null };
+  if (parent.parentId) return { error: "That page sits under another page itself — choose a page at the top." };
+  if (pageId && (await db.page.count({ where: { parentId: pageId } })) > 0) {
+    return { error: "This page has pages under it, so it stays at the top." };
+  }
+  return { parentId };
+}
 
 // A page can only show one of its own site's artist's curations —
 // anything else is treated as no curation.
@@ -86,20 +107,19 @@ export async function updateSiteMenuStyle(siteId: string, menuStyleId: string | 
 
 // Add (2026-10-04). A new page starts in Hidden Pages, at the bottom, so
 // nothing appears on the site until it's dragged into Live Pages.
-export async function createPage(
-  siteId: string,
-  input: PageDetailsInput
-): Promise<{ id: string } | { error: string }> {
+export async function createPage(siteId: string, input: PageDetailsInput): Promise<{ id: string } | { error: string }> {
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
-  const [slug, curationId, pageStyleId, menuStyleId, last] = await Promise.all([
+  const [slug, curationId, pageStyleId, menuStyleId, parent, last] = await Promise.all([
     uniqueSlug(siteId, slugify(title)),
     ownCurationId(siteId, input.curationId),
     existingPageStyleId(input.pageStyleId),
     existingMenuStyleId(input.menuStyleId),
+    checkedParentId(siteId, null, input.parentId),
     db.page.aggregate({ where: { siteId }, _max: { position: true } }),
   ]);
+  if ("error" in parent) return parent;
 
   const page = await db.page.create({
     data: {
@@ -109,6 +129,7 @@ export async function createPage(
       curationId,
       pageStyleId,
       menuStyleId,
+      parentId: parent.parentId,
       visible: false,
       position: (last._max.position ?? -1) + 1,
     },
@@ -127,7 +148,7 @@ export async function createPage(
 export async function updatePageDetails(
   siteId: string,
   pageId: string,
-  input: PageDetailsInput
+  input: PageDetailsInput,
 ): Promise<{ ok: true } | { error: string }> {
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
@@ -138,11 +159,13 @@ export async function updatePageDetails(
   });
   if (!current) return { error: "Page not found." };
 
-  const [curationId, pageStyleId, menuStyleId] = await Promise.all([
+  const [curationId, pageStyleId, menuStyleId, parent] = await Promise.all([
     ownCurationId(siteId, input.curationId),
     existingPageStyleId(input.pageStyleId),
     existingMenuStyleId(input.menuStyleId),
+    checkedParentId(siteId, pageId, input.parentId),
   ]);
+  if ("error" in parent) return parent;
 
   // A new Display Style clears every component's content. A new
   // curation (2026-10-13) clears its sections and resets its works'
@@ -165,7 +188,7 @@ export async function updatePageDetails(
   await db.$transaction([
     db.page.update({
       where: { id: pageId },
-      data: { title, curationId, pageStyleId, menuStyleId },
+      data: { title, curationId, pageStyleId, menuStyleId, parentId: parent.parentId },
     }),
     ...clearComponents,
     ...(styleChanged ? [db.pageSignupForm.deleteMany({ where: { pageId } })] : []),
@@ -177,22 +200,15 @@ export async function updatePageDetails(
 // Live pages first, then Hidden, each in the order shown. Position is
 // numbered straight through both lists, and `visible` follows which list
 // a page is in. Scoped by siteId so an id from another site is ignored.
-export async function reorderPages(
-  siteId: string,
-  liveIds: string[],
-  hiddenIds: string[]
-): Promise<void> {
-  const ordered = [
-    ...liveIds.map((id) => ({ id, visible: true })),
-    ...hiddenIds.map((id) => ({ id, visible: false })),
-  ];
+export async function reorderPages(siteId: string, liveIds: string[], hiddenIds: string[]): Promise<void> {
+  const ordered = [...liveIds.map((id) => ({ id, visible: true })), ...hiddenIds.map((id) => ({ id, visible: false }))];
   await db.$transaction(
     ordered.map((p, position) =>
       db.page.updateMany({
         where: { id: p.id, siteId },
         data: { visible: p.visible, position },
-      })
-    )
+      }),
+    ),
   );
 }
 
