@@ -19,7 +19,10 @@ import {
 // under the artwork. Always the same three boxes, in this order:
 // Description, Video and Supporting Images. They can't be added,
 // removed or reordered; further layout is done in Pages. Text saves when
-// the box is left, a video or images save as soon as they're picked.
+// the box is left, a video or images save as soon as they're picked —
+// from the Media Catalogue's views (2026-10-25, Craig's request, so
+// marketing media can go into story pages): Marketing, Videos and
+// Related, searchable, not only the newest pictures.
 // Loaded for one curation; the Curations page remounts it (key) when
 // another is opened.
 export default function CurationSectionsEditor({
@@ -127,6 +130,7 @@ function SectionBody({
           artistId={artistId}
           siteId={siteId}
           videoOnly
+          catalogueViews
           label="Choose video"
           previewUrl={video ? (video.posterUrl ?? video.url) : undefined}
           previewKind={video && !video.posterUrl ? "video" : "image"}
@@ -168,6 +172,7 @@ function SectionBody({
           artistId={artistId}
           siteId={siteId}
           mode="multi"
+          catalogueViews
           label="Add images"
           previewClassName="aspect-square"
           onSelect={(picked) =>
