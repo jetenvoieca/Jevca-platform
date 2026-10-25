@@ -511,8 +511,10 @@ export function cleanEntriesSettings(raw: unknown): EntriesSettings {
 
 // A Page heading (2026-10-25, the ISYT sites): the site's name over the
 // page's name (lib/pageHeading.ts), each in its own look, `gap` apart,
-// with an optional line under them `lineSpace` below.
+// with an optional line under them `lineSpace` below. `showPage` false:
+// the site's name only (an ISYT home page).
 export type PageHeadingSettings = {
+  showPage: boolean;
   name: PageTextStyle;
   page: PageTextStyle;
   gap: number;
@@ -521,6 +523,7 @@ export type PageHeadingSettings = {
 };
 
 export const DEFAULT_PAGE_HEADING: PageHeadingSettings = {
+  showPage: true,
   name: { ...NO_TEXT_STYLE, size: 40, look: "bold", colour: "#777777" },
   page: { ...NO_TEXT_STYLE, size: 52, look: "regular", colour: "#bbbbbb" },
   gap: 0,
@@ -536,6 +539,7 @@ export function cleanPageHeading(raw: unknown): PageHeadingSettings {
   const space = PAGE_HEADING_LIMITS.space;
   const style = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
   return {
+    showPage: value.showPage !== false,
     name: style(value.name, d.name),
     page: style(value.page, d.page),
     gap: cleanNumber(value.gap, space, d.gap, 0),

@@ -1282,15 +1282,17 @@ function PageHeadingSlot({
           className={box}
           style={bodyTextCss(settings.name)}
         />
-        <input
-          value={lines.page}
-          onChange={(e) => setLines({ ...lines, page: e.target.value })}
-          onBlur={save}
-          maxLength={MAX_TYPED_TEXT}
-          placeholder={auto.page || "Page name"}
-          className={box}
-          style={bodyTextCss(settings.page)}
-        />
+        {settings.showPage && (
+          <input
+            value={lines.page}
+            onChange={(e) => setLines({ ...lines, page: e.target.value })}
+            onBlur={save}
+            maxLength={MAX_TYPED_TEXT}
+            placeholder={auto.page || "Page name"}
+            className={box}
+            style={bodyTextCss(settings.page)}
+          />
+        )}
         {settings.line && <PageHeadingView settings={{ ...settings, lineSpace: 0 }} lines={{ name: "", page: "" }} />}
         <p className="text-xs text-neutral-400">
           Leave a line blank to fill it in from the site&apos;s and page&apos;s names.

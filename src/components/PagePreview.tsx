@@ -421,7 +421,8 @@ export function blockFiller({
       );
     }
     if (block.type === "pageheading" && block.pageHeading) {
-      const shown = shownHeading(readHeadingText(contentByBlock.get(block.id)?.text ?? null), heading);
+      const lines = shownHeading(readHeadingText(contentByBlock.get(block.id)?.text ?? null), heading);
+      const shown = block.pageHeading.showPage ? lines : { ...lines, page: "" };
       if (!shown.name && !shown.page) return null;
       return <PageHeadingView settings={block.pageHeading} lines={shown} contentWidth={contentWidth} />;
     }

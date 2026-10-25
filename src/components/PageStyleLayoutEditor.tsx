@@ -116,6 +116,14 @@ export default function PageStyleLayoutEditor({
             title: "Page heading",
             content: (
               <>
+                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                  <input
+                    type="checkbox"
+                    checked={heading.showPage}
+                    onChange={(e) => set({ showPage: e.target.checked })}
+                  />
+                  Show the page&apos;s name under the site&apos;s
+                </label>
                 <TextStyleBox
                   label="Site name"
                   value={heading.name}
