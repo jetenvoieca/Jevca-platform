@@ -16,6 +16,9 @@ export const SITE_FONTS = [
   { id: "work-sans", label: "Work Sans", kind: "Sans serif" },
   { id: "cormorant-garamond", label: "Cormorant Garamond", kind: "Serif" },
   { id: "eb-garamond", label: "EB Garamond", kind: "Serif" },
+  // A free near-copy of Georgia (2026-10-25), for the ISYT sites, which
+  // use Georgia.
+  { id: "gelasio", label: "Gelasio (like Georgia)", kind: "Serif" },
   { id: "libre-baskerville", label: "Libre Baskerville", kind: "Serif" },
   { id: "lora", label: "Lora", kind: "Serif" },
   { id: "playfair-display", label: "Playfair Display", kind: "Serif" },

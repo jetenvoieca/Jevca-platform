@@ -150,6 +150,19 @@ const ebGaramond = localFont({
   fallback: ["serif"],
 });
 
+// Gelasio (2026-10-25): a near-copy of Georgia, for the ISYT sites.
+// Georgia-like fallbacks keep the shape while it loads.
+const gelasio = localFont({
+  src: [
+    { path: "../../node_modules/@fontsource/gelasio/files/gelasio-latin-400-normal.woff2", weight: "400", style: "normal" },
+    { path: "../../node_modules/@fontsource/gelasio/files/gelasio-latin-700-normal.woff2", weight: "700", style: "normal" },
+    { path: "../../node_modules/@fontsource/gelasio/files/gelasio-latin-400-italic.woff2", weight: "400", style: "italic" },
+  ],
+  display: "swap",
+  preload: false,
+  fallback: ["Georgia", "serif"],
+});
+
 const libreBaskerville = localFont({
   src: [
     { path: "../../node_modules/@fontsource/libre-baskerville/files/libre-baskerville-latin-400-normal.woff2", weight: "400", style: "normal" },
@@ -183,6 +196,7 @@ export const SITE_FONT_FAMILY: Record<SiteFontId, string> = {
   "work-sans": workSans.style.fontFamily,
   "cormorant-garamond": cormorantGaramond.style.fontFamily,
   "eb-garamond": ebGaramond.style.fontFamily,
+  gelasio: gelasio.style.fontFamily,
   "libre-baskerville": libreBaskerville.style.fontFamily,
   lora: lora.style.fontFamily,
   "playfair-display": playfairDisplay.style.fontFamily,
