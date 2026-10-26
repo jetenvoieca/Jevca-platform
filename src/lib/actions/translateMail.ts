@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSiteAccess } from "@/lib/currentUser";
 import Anthropic from "@anthropic-ai/sdk";
 import { db } from "@/lib/db";
 import { normalizeMailTemplate } from "@/lib/mailTemplateLayout";
@@ -48,6 +49,7 @@ export async function translateMailToFrench(
   siteId: string,
   input: CampaignMailInput
 ): Promise<{ fill: FrenchFill } | { error: string }> {
+  await requireSiteAccess(siteId);
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { error: "Translation isn't set up yet (ANTHROPIC_API_KEY is missing in Netlify)." };
 

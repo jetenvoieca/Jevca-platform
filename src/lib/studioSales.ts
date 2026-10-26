@@ -4,7 +4,7 @@ import {
   recordPastSale,
   startArtworkSaleAndEnterCard,
   startArtworkSaleAndGetLink,
-} from "@/lib/actions/payments";
+} from "@/lib/purchases";
 import {
   raiseSaleAlert,
   SALE_LINK_ALERT_TYPE,

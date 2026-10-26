@@ -7,10 +7,10 @@ import {
   linkSubscriptionToSchedule,
   handleInstalmentInvoicePaid,
   handleInstalmentInvoiceFailed,
-} from "@/lib/actions/payments";
-import { recordInvoicePaymentIntent } from "@/lib/actions/invoices";
-import { recordStatementPaymentIntent } from "@/lib/actions/statements";
-import { recordMailDeposit } from "@/lib/actions/mailPayments";
+} from "@/lib/purchases";
+import { recordInvoicePaymentIntent } from "@/lib/invoiceRecords";
+import { recordStatementPaymentIntent } from "@/lib/statementRecords";
+import { recordMailDeposit } from "@/lib/mailPaymentRecords";
 
 // Extracts the subscription ID from an Invoice, handling both API shapes:
 // old (`invoice.subscription`, versions before 2025-03-31) and new

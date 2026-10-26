@@ -1,5 +1,6 @@
 "use server";
 
+import { requirePurchaseAccess } from "@/lib/recordOwners";
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { APP_URL } from "@/lib/appUrl";
@@ -100,6 +101,7 @@ async function embedImageFromUrl(doc: PDFDocument, url: string | null) {
 export async function generateCertificatePdf(
   purchaseId: string
 ): Promise<{ bytes: Uint8Array; filename: string }> {
+  await requirePurchaseAccess(purchaseId);
   const purchase = await db.purchase.findUnique({
     where: { id: purchaseId },
     relationLoadStrategy: "query",

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { abandonPurchase, recordPaymentIntent } from "@/lib/actions/payments";
+import { abandonPurchase, recordPaymentIntent } from "@/lib/purchases";
 import { getStripeClientForSale } from "@/lib/stripe";
 
 // Holds on works while a website visitor pays (2026-10-19, Craig's

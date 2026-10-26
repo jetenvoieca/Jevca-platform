@@ -1,5 +1,6 @@
 "use server";
 
+import { requirePurchaseAccess } from "@/lib/recordOwners";
 import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { generateCertificatePdf } from "./certificate";
@@ -57,6 +58,7 @@ function firstNameFor(purchase: {
 export async function getCertificateEmailDraft(
   purchaseId: string
 ): Promise<CertificateEmailDraft | { error: string }> {
+  await requirePurchaseAccess(purchaseId);
   const purchase = await loadPurchaseForEmail(purchaseId);
   if (!purchase) return { error: "Sale not found." };
   if (purchase.status === "ABANDONED") {
@@ -91,6 +93,7 @@ export async function sendCertificateEmail(
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requirePurchaseAccess(purchaseId);
   const purchase = await loadPurchaseForEmail(purchaseId);
   if (!purchase) return { ok: false, error: "Sale not found." };
   if (purchase.status === "ABANDONED") {

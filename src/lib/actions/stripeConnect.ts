@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess } from "@/lib/currentUser";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/stripe";
@@ -16,6 +17,7 @@ import { getConnectClientId } from "@/lib/stripeConnect";
 export async function disconnectStripeAccount(
   artistId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireArtistAccess(artistId);
   const artist = await db.artist.findUnique({ where: { id: artistId }, select: { stripeMode: true } });
   if (!artist) return { ok: false, error: "Artist not found." };
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser, requireArtistAccess } from "@/lib/currentUser";
 import Papa from "papaparse";
 import { db } from "@/lib/db";
 import { campaignMailLabel } from "@/lib/campaignMails";
@@ -138,6 +139,7 @@ async function ownedListIds(artistId: string, listIds: string[]): Promise<string
 
 // Oldest first, so a new list is added to the bottom.
 export async function listMailLists(artistId: string): Promise<MailListSummary[]> {
+  await requireArtistAccess(artistId);
   return db.mailList.findMany({
     where: { artistId },
     orderBy: { createdAt: "asc" },
@@ -149,6 +151,7 @@ export async function createMailList(
   artistId: string,
   nameRaw: string
 ): Promise<Result<MailListSummary>> {
+  await requireArtistAccess(artistId);
   const name = nameRaw.trim();
   if (!name) return { error: "A name is required." };
   try {
@@ -167,6 +170,7 @@ export async function renameMailList(
   artistId: string,
   nameRaw: string
 ): Promise<Result<{ ok: true }>> {
+  await requireArtistAccess(artistId);
   const name = nameRaw.trim();
   if (!name) return { error: "A name is required." };
   try {
@@ -185,6 +189,7 @@ export async function duplicateMailList(
   listId: string,
   artistId: string
 ): Promise<Result<MailListSummary>> {
+  await requireArtistAccess(artistId);
   const source = await db.mailList.findFirst({
     where: { id: listId, artistId },
     select: { name: true },
@@ -213,6 +218,7 @@ export async function duplicateMailList(
 
 // Removes the list only — its subscribers stay on file.
 export async function deleteMailList(listId: string, artistId: string): Promise<void> {
+  await requireArtistAccess(artistId);
   await db.mailList.deleteMany({ where: { id: listId, artistId } });
 }
 
@@ -222,6 +228,7 @@ export async function deleteMailList(listId: string, artistId: string): Promise<
 
 // Every subscriber of the artist, newest first, with the lists each is in.
 export async function listSubscribers(artistId: string): Promise<SubscriberRow[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.subscriber.findMany({
     where: { artistId },
     orderBy: { createdAt: "desc" },
@@ -235,6 +242,7 @@ export async function addSubscriber(
   artistId: string,
   input: SubscriberInput & { listIds: string[]; consent: boolean }
 ): Promise<Result<SubscriberRow>> {
+  await requireArtistAccess(artistId);
   if (!input.consent) return { error: "Please confirm they agreed to receive emails." };
   const email = normalizeEmail(input.email);
   if (!isValidEmail(email)) return { error: "Please enter a valid email address." };
@@ -267,6 +275,7 @@ export async function updateSubscriber(
   artistId: string,
   patch: Partial<SubscriberInput>
 ): Promise<Result<SubscriberRow>> {
+  await requireArtistAccess(artistId);
   const data: { email?: string; firstName?: string | null; lastName?: string | null; language?: string | null } = {};
   if (patch.email !== undefined) {
     const email = normalizeEmail(patch.email);
@@ -295,6 +304,7 @@ export async function setSubscriberStatus(
   artistId: string,
   status: "SUBSCRIBED" | "UNSUBSCRIBED"
 ): Promise<Result<SubscriberRow>> {
+  await requireArtistAccess(artistId);
   if (status !== "SUBSCRIBED" && status !== "UNSUBSCRIBED") return { error: "Unknown status." };
   const { count } = await db.subscriber.updateMany({
     where: { id: subscriberId, artistId },
@@ -313,6 +323,7 @@ export async function setSubscriberLists(
   artistId: string,
   listIdsRaw: string[]
 ): Promise<Result<SubscriberRow>> {
+  await requireArtistAccess(artistId);
   const exists = await db.subscriber.findFirst({
     where: { id: subscriberId, artistId },
     select: { id: true },
@@ -334,6 +345,7 @@ export async function setSubscriberLists(
 // details). Unlike Unsubscribe, nothing is kept, so a later import could
 // add them again.
 export async function deleteSubscriber(subscriberId: string, artistId: string): Promise<void> {
+  await requireArtistAccess(artistId);
   await db.subscriber.deleteMany({ where: { id: subscriberId, artistId } });
 }
 
@@ -426,6 +438,7 @@ function csvLanguage(raw: string | undefined): SubscriberLanguage | null {
 }
 
 export async function parseSubscriberCsv(csvText: string): Promise<Result<ParsedSubscriberCsv>> {
+  await requireUser();
   const result = Papa.parse<Record<string, string>>(csvText, { header: true, skipEmptyLines: true });
 
   const columns = new Map<string, string>();
@@ -478,6 +491,7 @@ export async function importSubscribers(
   listId: string | null,
   consent: boolean
 ): Promise<Result<BulkAddResult>> {
+  await requireArtistAccess(artistId);
   if (!consent) return { error: "Please confirm these people agreed to receive emails." };
   if (rows.length > IMPORT_CHUNK_LIMIT) return { error: "Too many rows in one go." };
   return bulkAdd(artistId, rows, "IMPORT", listId);
@@ -493,6 +507,7 @@ export type SubscribableCustomer = {
 // The artist's individual customers who have an email address, for
 // "Add from Customers" — each marked if already on file as a subscriber.
 export async function listSubscribableCustomers(artistId: string): Promise<SubscribableCustomer[]> {
+  await requireArtistAccess(artistId);
   const [customers, subscribers] = await Promise.all([
     db.customer.findMany({
       where: { artistId, kind: "INDIVIDUAL", email: { not: null } },
@@ -514,6 +529,7 @@ export async function subscribeCustomers(
   listId: string | null,
   consent: boolean
 ): Promise<Result<BulkAddResult>> {
+  await requireArtistAccess(artistId);
   if (!consent) return { error: "Please confirm these people agreed to receive emails." };
   const customers = await db.customer.findMany({
     where: { artistId, kind: "INDIVIDUAL", id: { in: customerIds }, email: { not: null } },
@@ -559,6 +575,7 @@ export async function getSubscriberCampaigns(
   subscriberId: string,
   artistId: string
 ): Promise<SubscriberCampaignRow[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.campaignRecipient.findMany({
     where: { subscriberId, subscriber: { artistId } },
     orderBy: { createdAt: "desc" },

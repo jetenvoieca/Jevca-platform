@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
@@ -18,6 +19,7 @@ export type CertificateTemplateRow = {
 };
 
 export async function getCertificateTemplates(artistId: string): Promise<CertificateTemplateRow[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.certificateTemplate.findMany({
     where: { artistId },
     orderBy: { createdAt: "asc" },
@@ -30,6 +32,7 @@ export async function addCertificateTemplate(
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireArtistAccess(artistId);
   const label = (formData.get("label") as string)?.trim();
   const text = (formData.get("text") as string)?.trim();
   if (!label) return { ok: false, error: "A label is required." };
@@ -45,6 +48,7 @@ export async function updateCertificateTemplate(
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireRecordAccess(db.certificateTemplate.findUnique({ where: { id }, select: { artistId: true } }));
   const label = (formData.get("label") as string)?.trim();
   const text = (formData.get("text") as string)?.trim();
   if (!label) return { ok: false, error: "A label is required." };
@@ -56,6 +60,7 @@ export async function updateCertificateTemplate(
 }
 
 export async function removeCertificateTemplate(id: string, siteId: string): Promise<void> {
+  await requireRecordAccess(db.certificateTemplate.findUnique({ where: { id }, select: { artistId: true } }));
   await db.certificateTemplate.delete({ where: { id } });
   revalidatePath(`/sites/${siteId}`);
 }

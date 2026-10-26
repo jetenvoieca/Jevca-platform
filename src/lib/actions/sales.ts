@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { saleTitle, netOfCommission } from "@/lib/saleMath";
 import { isSaleOverdue, overdueInvoiceSelect } from "@/lib/overdue";
@@ -28,6 +29,7 @@ export type SaleRow = {
 // their sites, not siloed per-site) so this doesn't need to look "across
 // each artwork" to get the picture.
 export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
+  await requireArtistAccess(artistId);
   const purchases = await db.purchase.findMany({
     where: { artwork: { artistId } },
     include: {
@@ -77,6 +79,7 @@ export type SalesResetPreview = {
 };
 
 export async function getSalesResetPreview(artistId: string): Promise<SalesResetPreview> {
+  await requireAdmin();
   const artist = await db.artist.findUniqueOrThrow({
     where: { id: artistId },
     select: { name: true },
@@ -97,6 +100,7 @@ export async function getSalesResetPreview(artistId: string): Promise<SalesReset
 export async function resetArtistSalesData(
   artistId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   try {
     await db.$transaction([
       // Payments cascade automatically when their Purchase is deleted, but

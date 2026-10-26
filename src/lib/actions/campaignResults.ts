@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import {
   DEFAULT_FOLLOW_UP,
@@ -25,6 +26,7 @@ export type CampaignResults = {
 };
 
 export async function getCampaignResults(campaignId: string, siteId: string): Promise<CampaignResults | null> {
+  await requireSiteAccess(siteId);
   const campaign = await db.campaign.findFirst({
     where: { id: campaignId, siteId },
     select: {
@@ -81,6 +83,7 @@ export async function getCampaignPeople(
   siteId: string,
   list: PeopleList
 ): Promise<ResultPerson[]> {
+  await requireSiteAccess(siteId);
   const owned = await db.campaign.findFirst({ where: { id: campaignId, siteId }, select: { id: true } });
   if (!owned) return [];
 

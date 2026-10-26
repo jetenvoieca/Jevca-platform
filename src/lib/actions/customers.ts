@@ -1,6 +1,9 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { requireArtistAccess } from "@/lib/currentUser";
+import { findOrCreateCustomerRecord } from "@/lib/customerRecords";
+import { requireCustomerAccess } from "@/lib/recordOwners";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
 import { saleTitle, netOfCommission } from "@/lib/saleMath";
@@ -85,6 +88,7 @@ export async function searchCustomers(
   artistId: string,
   query: string
 ): Promise<CustomerSummary[]> {
+  await requireArtistAccess(artistId);
   const q = query.trim();
   if (!q) return [];
   const rows = await db.customer.findMany({
@@ -112,6 +116,7 @@ export async function searchCustomers(
 export async function listCustomers(artistId: string): Promise<
   (CustomerSummary & { saleCount: number })[]
 > {
+  await requireArtistAccess(artistId);
   const rows = await db.customer.findMany({
     // Customers page is Individual-only now (2026-08-14) — Galleries
     // moved to their own page/section since the two are diverging in
@@ -141,6 +146,7 @@ export async function listCustomers(artistId: string): Promise<
 }
 
 export async function listGalleries(artistId: string): Promise<CustomerSummary[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.customer.findMany({
     where: { artistId, kind: "GALLERY" },
     select: {
@@ -157,6 +163,7 @@ export async function listGalleries(artistId: string): Promise<CustomerSummary[]
 }
 
 export async function getCustomerDetail(customerId: string): Promise<CustomerDetail | null> {
+  await requireCustomerAccess(customerId);
   const customer = await db.customer.findUnique({
     where: { id: customerId },
     include: {
@@ -280,6 +287,7 @@ export type GalleryDetail = CustomerDetail & { consignedWorks: GalleryConsignedW
 // diff on every existing caller (GalleriesView, PurchasePanel) — it's
 // exactly the same shape/behaviour for either Location type now.
 export async function getGalleryDetail(customerId: string): Promise<GalleryDetail | null> {
+  await requireCustomerAccess(customerId);
   const detail = await getCustomerDetail(customerId);
   if (!detail || detail.kind === "INDIVIDUAL") return null;
 
@@ -327,60 +335,20 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
   };
 }
 
-// Used when starting a sale — reuses an existing customer if the typed
-// email already matches one for this artist (avoiding accidental
-// duplicates for the same real person), otherwise creates a new one.
-// Name-only entries (no email) always create new, since name alone
-// isn't a safe enough match.
-//
-// 2026-08-16 fix: an explicit `customerId` (set when the person actually
-// picks a result from CustomerPicker, rather than just typing a name)
-// is now authoritative and skips the name/email matching entirely. Before
-// this, picking an existing customer only copied their name/email/address
-// into the form's free-text fields — if that customer had no email on
-// file (common for a past/offline sale that predates this feature, or
-// any gallery-only contact), the email-match below would find nothing
-// and silently create a second, blank-ish duplicate of someone already
-// selected by name. Verified against `artistId` so a stale or foreign id
-// can never attach a sale to the wrong artist's customer.
+// A sale's buyer, found or created — see findOrCreateCustomerRecord.
 export async function findOrCreateCustomer(
   artistId: string,
   data: { name: string; email?: string | null; address?: string | null; customerId?: string | null }
 ): Promise<{ id: string }> {
-  if (data.customerId) {
-    const picked = await db.customer.findFirst({
-      where: { id: data.customerId, artistId },
-      select: { id: true },
-    });
-    if (picked) return { id: picked.id };
-    // Falls through to the usual matching/create path if the id somehow
-    // doesn't resolve (e.g. deleted between selecting and submitting) —
-    // better to create a sane record than to fail the whole sale.
-  }
-
-  const email = data.email?.trim() || null;
-  if (email) {
-    const existing = await db.customer.findFirst({
-      where: { artistId, email: { equals: email, mode: "insensitive" } },
-    });
-    if (existing) return { id: existing.id };
-  }
-
-  const created = await db.customer.create({
-    data: {
-      artistId,
-      name: data.name.trim(),
-      email,
-      address: data.address?.trim() || null,
-    },
-  });
-  return { id: created.id };
+  await requireArtistAccess(artistId);
+  return findOrCreateCustomerRecord(artistId, data);
 }
 
 export async function createCustomer(
   artistId: string,
   formData: FormData
 ): Promise<{ id: string } | { error: string }> {
+  await requireArtistAccess(artistId);
   const kindRaw = (formData.get("kind") as string)?.trim();
   // "INDIVIDUAL" | "GALLERY" | "OWN" (2026-09-22 — see the note on
   // Customer.kind in schema.prisma for what "OWN" is). Anything else
@@ -436,6 +404,7 @@ export async function createCustomer(
 }
 
 export async function updateCustomer(customerId: string, formData: FormData): Promise<void> {
+  await requireCustomerAccess(customerId);
   const kindRaw = (formData.get("kind") as string)?.trim();
   const kind = kindRaw === "GALLERY" || kindRaw === "OWN" ? kindRaw : "INDIVIDUAL";
   const firstName = (formData.get("firstName") as string)?.trim() || null;
@@ -506,6 +475,7 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
 // cascade, so calling this directly on one would fail with a foreign
 // key error rather than leaving an orphaned Location behind.
 export async function deleteCustomer(customerId: string): Promise<void> {
+  await requireCustomerAccess(customerId);
   // Any statements go with it (cascade) — their links switched off first.
   await retireStatementPaymentLinks({ customerId });
   await db.customer.delete({ where: { id: customerId } });

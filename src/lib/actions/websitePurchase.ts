@@ -1,7 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { recordPaymentIntent, startArtworkSaleAndEnterCard, type CardEntry } from "@/lib/actions/payments";
+import { recordPaymentIntent, startArtworkSaleAndEnterCard, type CardEntry } from "@/lib/purchases";
 import { isValidEmail, normalizeEmail } from "@/lib/emailAddress";
 import { holdEndsAt, releaseExpiredHolds } from "@/lib/paymentHolds";
 import { checkWebsiteVisitor } from "@/lib/turnstile";

@@ -7,7 +7,7 @@ import {
   retireStatementPaymentLinks,
 } from "@/lib/paymentLinks";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
-import type { SaleInvoice } from "@/lib/actions/payments";
+import type { SaleInvoice } from "@/lib/purchases";
 
 // Shared server-side helpers for invoices (2026-10-14) — see Invoice in
 // schema.prisma. Kept out of the "use server" actions files so payments,

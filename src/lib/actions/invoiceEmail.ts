@@ -1,5 +1,6 @@
 "use server";
 
+import { requireInvoiceAccess } from "@/lib/recordOwners";
 import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { generateInvoicePdf } from "./invoice";
@@ -49,6 +50,7 @@ function recipientFor(invoice: LoadedInvoice): { ok: true; to: string } | { ok: 
 // the receipt, with no payment request at all. A gallery is
 // congratulated on its sale(s); anyone else thanked for their purchase.
 export async function getInvoiceEmailDraft(invoiceId: string): Promise<InvoiceEmailDraft | { error: string }> {
+  await requireInvoiceAccess(invoiceId);
   // An unpaid invoice's payment link is made when it's produced; if that
   // didn't work then (or it was retired since — a work paid by itself, an
   // artwork renamed), it's made now so the email can include it. A
@@ -122,6 +124,7 @@ export async function sendInvoiceEmail(
   invoiceId: string,
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireInvoiceAccess(invoiceId);
   const invoice = await loadInvoice(invoiceId);
   if (!invoice) return { ok: false, error: "Invoice not found." };
   const recipient = recipientFor(invoice);

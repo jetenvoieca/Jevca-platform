@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { normalizeMailTemplate, withTemplateLook, type MailTemplateLayout } from "@/lib/mailTemplateLayout";
 import {
@@ -253,6 +254,7 @@ async function summaryOf(id: string, siteId: string): Promise<CampaignSummary | 
 
 // Newest first, as campaigns are made one after another.
 export async function listCampaigns(siteId: string): Promise<CampaignSummary[]> {
+  await requireSiteAccess(siteId);
   const rows = await db.campaign.findMany({
     where: { siteId },
     orderBy: { createdAt: "desc" },
@@ -265,6 +267,7 @@ export async function listCampaigns(siteId: string): Promise<CampaignSummary[]> 
 // One campaign as it stands now — the page asks again every few seconds
 // while it's sending.
 export async function getCampaign(id: string, siteId: string): Promise<CampaignSummary | null> {
+  await requireSiteAccess(siteId);
   return summaryOf(id, siteId);
 }
 
@@ -292,6 +295,7 @@ export async function saveCampaign(
   id: string | null,
   setup: CampaignSetup
 ): Promise<{ campaign: CampaignSummary } | { error: string }> {
+  await requireSiteAccess(siteId);
   const name = setup.name.trim();
   if (!name) return { error: "Give the campaign a name." };
   const problem = checkSetup(setup.mails);
@@ -408,6 +412,7 @@ export async function duplicateCampaign(
   id: string,
   siteId: string
 ): Promise<{ campaign: CampaignSummary } | { error: string }> {
+  await requireSiteAccess(siteId);
   const source = await db.campaign.findFirst({
     where: { id, siteId },
     select: { name: true, lists: { select: { listId: true } }, mails: { select: MAIL_SELECT } },
@@ -458,6 +463,7 @@ export async function duplicateCampaign(
 // Not while it's sending — once it has finished, it (and its record of
 // who got it) can go.
 export async function deleteCampaign(id: string, siteId: string): Promise<Result> {
+  await requireSiteAccess(siteId);
   const { count } = await db.campaign.deleteMany({ where: { id, siteId, status: { not: "SENDING" } } });
   return count === 1 ? { ok: true } : { error: "A campaign can't be deleted while it's sending." };
 }
@@ -469,6 +475,7 @@ export async function setAlternativeShare(
   siteId: string,
   percent: number
 ): Promise<Result> {
+  await requireSiteAccess(siteId);
   const share = Math.round(percent);
   if (!Number.isFinite(share) || share < SHARE_LIMITS.min || share > SHARE_LIMITS.max) {
     return { error: `A share is between ${SHARE_LIMITS.min}% and ${SHARE_LIMITS.max}%.` };
@@ -500,6 +507,7 @@ export async function setFollowUp(
   siteId: string,
   input: { condition: string; days: number }
 ): Promise<Result> {
+  await requireSiteAccess(siteId);
   if (!isFollowUpCondition(input.condition)) return { error: "Choose who the follow-up goes to." };
   const { count } = await db.campaignMail.updateMany({
     where: { id: mailId, kind: "FOLLOW_UP", campaign: { siteId }, followUpStartedAt: null },
@@ -518,6 +526,7 @@ export async function updateCampaignMail(
   siteId: string,
   input: CampaignMailInput
 ): Promise<Result> {
+  await requireSiteAccess(siteId);
   const editable = {
     id: mailId,
     campaign: { siteId },
@@ -548,6 +557,7 @@ export async function updateCampaignMail(
 
 // The mail lists the campaign goes to (only the artist's own).
 export async function setCampaignLists(id: string, siteId: string, listIds: string[]): Promise<Result> {
+  await requireSiteAccess(siteId);
   const campaign = await db.campaign.findFirst({
     where: { id, siteId },
     select: { status: true, site: { select: { artistId: true } } },
@@ -572,6 +582,7 @@ export async function getCampaignSendCounts(
   id: string,
   siteId: string
 ): Promise<{ counts: SendCounts } | { error: string }> {
+  await requireSiteAccess(siteId);
   const campaign = await db.campaign.findFirst({ where: { id, siteId }, select: { id: true } });
   if (!campaign) return { error: "Campaign not found." };
   const plan = await planCampaign(id);
@@ -587,6 +598,7 @@ export async function scheduleCampaignSend(
   siteId: string,
   at: { date: string; time: string } | null
 ): Promise<{ campaign: CampaignSummary } | { error: string }> {
+  await requireSiteAccess(siteId);
   const when = at ? parisToDate(at.date, at.time) : new Date();
   if (!when) return { error: "Choose a date and time." };
   if (at && when.getTime() < Date.now() - 60_000) return { error: "That time has already passed." };
@@ -611,6 +623,7 @@ export async function cancelCampaignSend(
   id: string,
   siteId: string
 ): Promise<{ campaign: CampaignSummary } | { error: string }> {
+  await requireSiteAccess(siteId);
   const { count } = await db.campaign.updateMany({
     where: { id, siteId, status: "SCHEDULED" },
     data: { status: "DRAFT", scheduledAt: null },
@@ -627,6 +640,7 @@ export async function renderCampaignMailPreview(
   input: CampaignMailInput,
   language: MailLanguage
 ): Promise<{ html: string } | { error: string }> {
+  await requireSiteAccess(siteId);
   const result = await renderCampaignMail(siteId, input, language, null);
   return "error" in result ? result : { html: result.html };
 }
@@ -644,6 +658,7 @@ export async function sendCampaignTestMail(
   input: CampaignMailInput,
   to: string
 ): Promise<{ sent: string[]; skipped: string[] } | { error: string }> {
+  await requireSiteAccess(siteId);
   const address = to.trim();
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(address)) return { error: "Type the address to send the test to." };
 
@@ -694,6 +709,7 @@ export async function describeMailPictures(
   siteId: string,
   content: MailContent
 ): Promise<Record<string, MailPictureThumb>> {
+  await requireSiteAccess(siteId);
   const assets = await loadMailAssets(siteId, content, "");
   if (!assets) return {};
   const thumbs: Record<string, MailPictureThumb> = {};

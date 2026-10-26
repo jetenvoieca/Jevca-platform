@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
@@ -15,6 +16,7 @@ export type ExpenseRow = {
 
 // Newest first, same convention as Sales/Galleries lists elsewhere.
 export async function listExpenses(artistId: string): Promise<ExpenseRow[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.expense.findMany({
     where: { artistId },
     orderBy: { date: "desc" },
@@ -38,6 +40,7 @@ export async function createExpense(
   artistId: string,
   formData: FormData
 ): Promise<{ id: string } | { error: string }> {
+  await requireArtistAccess(artistId);
   const dateRaw = (formData.get("date") as string)?.trim();
   const payeeName = (formData.get("payeeName") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
@@ -63,6 +66,7 @@ export async function updateExpense(
   expenseId: string,
   formData: FormData
 ): Promise<{ error: string } | void> {
+  await requireRecordAccess(db.expense.findUnique({ where: { id: expenseId }, select: { artistId: true } }));
   const dateRaw = (formData.get("date") as string)?.trim();
   const payeeName = (formData.get("payeeName") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
@@ -88,6 +92,7 @@ export async function updateExpense(
 // Customer/Gallery delete elsewhere (this is a manual ledger entry, not
 // a record anything else links to).
 export async function deleteExpense(expenseId: string): Promise<void> {
+  await requireRecordAccess(db.expense.findUnique({ where: { id: expenseId }, select: { artistId: true } }));
   await db.expense.delete({ where: { id: expenseId } });
   revalidatePath(`/sites`);
 }

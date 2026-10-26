@@ -1,5 +1,5 @@
 import { invoiceForSale } from "@/lib/actions/invoices";
-import type { PurchaseDetail } from "@/lib/actions/payments";
+import type { PurchaseDetail } from "@/lib/purchases";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 
 // Which invoice to open for a sale (2026-10-14) — its current invoice,

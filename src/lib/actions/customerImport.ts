@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser, requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import Papa from "papaparse";
@@ -21,6 +22,7 @@ export type NormalizedCustomerRow = {
 export async function parseCustomerImportCsv(
   csvText: string
 ): Promise<{ rows: NormalizedCustomerRow[]; parseErrors: string[] }> {
+  await requireUser();
   const result = Papa.parse<Record<string, string>>(csvText, {
     header: true,
     skipEmptyLines: true,
@@ -64,6 +66,7 @@ export async function importCustomerRow(
   artistId: string,
   row: NormalizedCustomerRow
 ): Promise<ImportCustomerRowResult> {
+  await requireArtistAccess(artistId);
   const name = [row.firstName, row.lastName].filter(Boolean).join(" ");
   if (!name) return { outcome: "skipped", reason: "No name." };
 
