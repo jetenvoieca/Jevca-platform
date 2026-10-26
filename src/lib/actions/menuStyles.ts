@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser, requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { normalizeMenuStyle, type MenuStyleLayout } from "@/lib/menuStyleLayout";
 
@@ -31,6 +32,7 @@ function validate(
 
 // Alphabetical, so a menu is easy to find as the list grows.
 export async function listMenuStyles(): Promise<MenuStyleSummary[]> {
+  await requireUser();
   const rows = await db.menuStyle.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true, layout: true },
@@ -41,6 +43,7 @@ export async function listMenuStyles(): Promise<MenuStyleSummary[]> {
 export async function createMenuStyle(
   input: MenuStyleInput
 ): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const valid = validate(input);
   if ("error" in valid) return valid;
   try {
@@ -53,6 +56,7 @@ export async function createMenuStyle(
 }
 
 export async function updateMenuStyle(id: string, input: MenuStyleInput): Promise<Result> {
+  await requireAdmin();
   const valid = validate(input);
   if ("error" in valid) return valid;
   try {
@@ -69,6 +73,7 @@ export async function updateMenuStyle(id: string, input: MenuStyleInput): Promis
 export async function duplicateMenuStyle(
   id: string
 ): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const source = await db.menuStyle.findUnique({
     where: { id },
     select: { name: true, layout: true },
@@ -93,5 +98,6 @@ export async function duplicateMenuStyle(
 }
 
 export async function deleteMenuStyle(id: string): Promise<void> {
+  await requireAdmin();
   await db.menuStyle.deleteMany({ where: { id } });
 }

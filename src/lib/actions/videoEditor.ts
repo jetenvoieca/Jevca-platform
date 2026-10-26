@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
@@ -53,6 +54,7 @@ async function saveTimeline(renderId: string, timeline: Timeline): Promise<void>
 // explicitly choosing images in the Hopper, are the ONLY two ways
 // anything is ever supposed to land in a draft.
 export async function getDraftTimeline(artistId: string) {
+  await requireArtistAccess(artistId);
   const draft = await getOrCreateDraft(artistId);
   const timeline = readTimeline(draft.timeline);
 
@@ -91,6 +93,7 @@ export async function setTimelineCaptions(
   renderId: string,
   captions: TimelineCaptions | null
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
   const timeline = readTimeline(draft.timeline);
@@ -129,6 +132,7 @@ export async function requestVoiceUpload(
   artistId: string,
   contentType: string
 ): Promise<{ uploadUrl: string; key: string } | { error: string }> {
+  await requireArtistAccess(artistId);
   if (!VOICE_TYPES.includes(contentType)) return { error: "A voiceover must be a WAV, MP3 or M4A file." };
   const extension = contentType === "audio/mpeg" ? "mp3" : contentType.includes("wav") ? "wav" : "m4a";
   const key = `${artistId}/voice/${randomUUID()}.${extension}`;
@@ -138,6 +142,7 @@ export async function requestVoiceUpload(
 // Sets (or, with null, removes) the voiceover; a replaced recording's
 // file is deleted.
 export async function setTimelineVoice(siteId: string, renderId: string, voice: TimelineVoice | null): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
   const timeline = readTimeline(draft.timeline);
@@ -160,6 +165,7 @@ export async function setTimelineVoice(siteId: string, renderId: string, voice: 
 
 // How a clip changes into the next one (2026-10-17).
 export async function setClipFade(siteId: string, renderId: string, clipId: string, fade: FadeSpeed): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   if (!isFadeSpeed(fade)) return;
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
@@ -173,6 +179,7 @@ export async function setClipFade(siteId: string, renderId: string, clipId: stri
 
 // The same change between every clip ("All clips").
 export async function setAllClipFades(siteId: string, renderId: string, fade: FadeSpeed): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   if (!isFadeSpeed(fade)) return;
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
@@ -192,6 +199,7 @@ export async function setClipStickers(
   clipId: string,
   stickers: ClipSticker[]
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
   const timeline = readTimeline(draft.timeline);
@@ -223,6 +231,7 @@ export async function setTimelineMusic(
   music: TimelineMusic | null,
   muteClips: boolean
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
   const timeline = readTimeline(draft.timeline);
@@ -243,6 +252,7 @@ export async function setTimelineMusic(
 
 // The video's shape (2026-10-16).
 export async function setTimelineShape(siteId: string, renderId: string, shape: VideoShape): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   if (!isVideoShape(shape)) return;
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
@@ -257,6 +267,7 @@ export async function appendImageToTimeline(
   siteId: string,
   imageId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireArtistAccess(artistId);
   // One video at a time (2026-08-08): nothing gets added to the next
   // draft while a previous render is still in progress or waiting to be
   // saved/discarded — that's exactly the "stacking" that isn't wanted.
@@ -267,7 +278,7 @@ export async function appendImageToTimeline(
     };
   }
 
-  const image = await db.image.findUnique({ where: { id: imageId }, select: { kind: true } });
+  const image = await db.image.findFirst({ where: { id: imageId, artistId }, select: { kind: true } });
   if (!image) return { ok: false, error: "That item couldn't be found." };
 
   await db.image.update({ where: { id: imageId }, data: { status: "BUCKET" } });
@@ -298,6 +309,7 @@ export async function addPicksToTimeline(
   siteId: string,
   picks: { imageIds: string[]; artworkIds: string[] }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireArtistAccess(artistId);
   if (await hasUnresolvedRender(artistId)) {
     return {
       ok: false,
@@ -343,6 +355,7 @@ export async function addMediaToBucket(
   imageId: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireRecordAccess(db.image.findUnique({ where: { id: imageId }, select: { artistId: true } }));
   const image = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true } });
   if (!image) return { ok: false, error: "That item couldn't be found." };
   const result = await appendImageToTimeline(image.artistId, siteId, imageId);
@@ -355,6 +368,7 @@ export async function removeClipFromTimeline(
   renderId: string,
   clipId: string
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft) return;
   const timeline = readTimeline(draft.timeline);
@@ -388,6 +402,7 @@ export async function removeClipFromTimeline(
 // media, and the voiceover (its recording deleted), captions, music and
 // shape gone.
 export async function clearDraftTimeline(siteId: string, renderId: string): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
   const timeline = readTimeline(draft.timeline);
@@ -417,6 +432,7 @@ export async function reorderTimeline(
   renderId: string,
   orderedClipIds: string[]
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft) return;
   const timeline = readTimeline(draft.timeline);
@@ -434,6 +450,7 @@ export async function reorderTimeline(
 // Every photo on screen for the same time (2026-10-16 — the "All photos"
 // button by a photo's seconds).
 export async function setAllPhotoDurations(siteId: string, renderId: string, duration: number): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") return;
   const timeline = readTimeline(draft.timeline);
@@ -449,6 +466,7 @@ export async function setClipDuration(
   clipId: string,
   duration: number
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft) return;
   const timeline = readTimeline(draft.timeline);
@@ -465,6 +483,7 @@ export async function initializeClipDuration(
   clipId: string,
   sourceDuration: number
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft) return;
   const timeline = readTimeline(draft.timeline);
@@ -486,6 +505,7 @@ export async function setClipTrim(
   trimIn: number,
   trimOut: number
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft) return;
   const timeline = readTimeline(draft.timeline);
@@ -505,6 +525,7 @@ export async function splitClip(
   cutStart: number,
   cutEnd: number
 ): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft) return;
   const timeline = readTimeline(draft.timeline);
@@ -549,6 +570,7 @@ export async function grabVideoStill(
   imageId: string,
   atSecond: number
 ): Promise<{ ok: true } | { error: string }> {
+  await requireRecordAccess(db.image.findUnique({ where: { id: imageId }, select: { artistId: true } }));
   const video = await db.image.findUnique({
     where: { id: imageId },
     select: { artistId: true, key: true, kind: true, caption: true },

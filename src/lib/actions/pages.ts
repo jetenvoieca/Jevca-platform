@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { slugify } from "@/lib/pageSlug";
@@ -100,6 +101,7 @@ async function existingMenuStyleId(menuStyleId: string | null): Promise<string |
 // The site's menu (2026-10-06), chosen under Live Pages on the Pages
 // page — null = no menu chosen yet.
 export async function updateSiteMenuStyle(siteId: string, menuStyleId: string | null) {
+  await requireSiteAccess(siteId);
   await db.site.update({
     where: { id: siteId },
     data: { menuStyleId: await existingMenuStyleId(menuStyleId) },
@@ -109,6 +111,7 @@ export async function updateSiteMenuStyle(siteId: string, menuStyleId: string | 
 // Add (2026-10-04). A new page starts in Hidden Pages, at the bottom, so
 // nothing appears on the site until it's dragged into Live Pages.
 export async function createPage(siteId: string, input: PageDetailsInput): Promise<{ id: string } | { error: string }> {
+  await requireSiteAccess(siteId);
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
@@ -151,6 +154,7 @@ export async function updatePageDetails(
   pageId: string,
   input: PageDetailsInput,
 ): Promise<{ ok: true } | { error: string }> {
+  await requireSiteAccess(siteId);
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
@@ -202,6 +206,7 @@ export async function updatePageDetails(
 // numbered straight through both lists, and `visible` follows which list
 // a page is in. Scoped by siteId so an id from another site is ignored.
 export async function reorderPages(siteId: string, liveIds: string[], hiddenIds: string[]): Promise<void> {
+  await requireSiteAccess(siteId);
   const ordered = [...liveIds.map((id) => ({ id, visible: true })), ...hiddenIds.map((id) => ({ id, visible: false }))];
   await db.$transaction(
     ordered.map((p, position) =>
@@ -215,6 +220,7 @@ export async function reorderPages(siteId: string, liveIds: string[], hiddenIds:
 
 // Scoped by siteId, so a page can only be deleted from its own site.
 export async function deletePage(siteId: string, pageId: string) {
+  await requireSiteAccess(siteId);
   await db.page.deleteMany({ where: { id: pageId, siteId } });
   redirect(`/sites/${siteId}/pages`);
 }
@@ -223,6 +229,7 @@ export async function deletePage(siteId: string, pageId: string) {
 // lib/pageHeading.ts): the site's name, the page's name and the name of
 // the page it sits under. Scoped by siteId.
 export async function getPageHeadingNames(siteId: string, pageId: string): Promise<HeadingNames | null> {
+  await requireSiteAccess(siteId);
   const page = await db.page.findFirst({
     where: { id: pageId, siteId },
     select: { title: true, site: { select: { name: true } }, parent: { select: { title: true } } },

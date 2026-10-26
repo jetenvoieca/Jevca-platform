@@ -4,6 +4,7 @@ import { listCurations } from "@/lib/actions/curations";
 import { listPageStyles } from "@/lib/actions/pageStyles";
 import { listMenuStyles } from "@/lib/actions/menuStyles";
 import PagesManager from "@/components/PagesManager";
+import { getCurrentUser } from "@/lib/currentUser";
 
 export const dynamic = "force-dynamic";
 
@@ -24,7 +25,7 @@ export default async function PagesPage({
   });
   if (!site) notFound();
 
-  const [pages, curations, pageStyles, menuStyles] = await Promise.all([
+  const [pages, curations, pageStyles, menuStyles, user] = await Promise.all([
     db.page.findMany({
       where: { siteId: id },
       orderBy: { position: "asc" },
@@ -41,6 +42,7 @@ export default async function PagesPage({
     listCurations(site.artistId),
     listPageStyles(),
     listMenuStyles(),
+    getCurrentUser(),
   ]);
 
   return (
@@ -53,6 +55,7 @@ export default async function PagesPage({
       menuStyles={menuStyles}
       siteMenuStyleId={site.menuStyleId}
       initialPageId={initialPageId ?? null}
+      canEditStyles={user?.role === "ADMIN"}
     />
   );
 }

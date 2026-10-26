@@ -1,6 +1,6 @@
 "use server";
 
-import { normalizePresentation } from "@/lib/presentationTemplate";
+import { requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { listProfileStories } from "@/lib/actions/profileStories";
 import { readPageStories } from "@/lib/pageStories";
@@ -16,8 +16,6 @@ import { getPageCanvas } from "@/lib/actions/pageCanvas";
 import { getPageComponents } from "@/lib/actions/pageComponents";
 import { getPageSignupForms } from "@/lib/actions/signupForms";
 import { listPageStyles } from "@/lib/actions/pageStyles";
-import { normalizeLayout } from "@/lib/pageStyleLayout";
-import { isPageStyleType } from "@/lib/pageStyleTypes";
 import { normalizeMenuStyle, type MenuStyleLayout } from "@/lib/menuStyleLayout";
 import { syncTurnstileDomains } from "@/lib/turnstile";
 import {
@@ -144,6 +142,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
 // preview (lib/turnstile.ts); if that fails the site is still published,
 // with a warning.
 export async function publishSite(siteId: string): Promise<PublishResult> {
+  await requireSiteAccess(siteId);
   try {
     const snapshot = await buildSiteSnapshot(siteId);
     if (!snapshot) return { error: "Site not found." };
@@ -169,57 +168,10 @@ export async function publishSite(siteId: string): Promise<PublishResult> {
 // was published in an older shape — see SNAPSHOT_VERSION). Reads only
 // the date, not the whole snapshot, for the admin's Publish button.
 export async function getLastPublishedAt(siteId: string): Promise<Date | null> {
+  await requireSiteAccess(siteId);
   const row = await db.sitePublication.findUnique({
     where: { siteId },
     select: { publishedAt: true },
   });
   return row?.publishedAt ?? null;
-}
-
-// The site as last published, or null if it never has been (or was
-// published in an older shape — see SNAPSHOT_VERSION). Each page's
-// Display Style is cleaned with the same rules as a saved style
-// (2026-10-06), so a style setting added after publishing takes its
-// default rather than breaking the page, and one of a type that no
-// longer exists (Section, removed 2026-10-07) is dropped; menus
-// (2026-10-06) the same. A site published before menus existed shows
-// none until it's published again, and one published before
-// components' content existed (2026-10-07) shows its Block Build pages
-// empty until then; the same for sign-up forms (2026-10-10).
-// Changes to a style's own settings still need a publish to show.
-export async function getPublishedSite(
-  siteId: string
-): Promise<{ snapshot: SiteSnapshot; publishedAt: Date } | null> {
-  const row = await db.sitePublication.findUnique({
-    where: { siteId },
-    select: { data: true, publishedAt: true },
-  });
-  const snapshot = row?.data as SiteSnapshot | undefined;
-  if (!row || !snapshot || snapshot.version !== SNAPSHOT_VERSION) return null;
-  const pages = snapshot.pages.map((p) => ({
-    ...p,
-    style:
-      p.style && isPageStyleType(p.style.type)
-        ? {
-            id: p.style.id,
-            name: p.style.name,
-            presentationTemplateId: p.style.presentationTemplateId ?? null,
-            // Published before Presentation Templates (2026-10-19): the built-in look.
-            presentation: normalizePresentation(p.style.presentation),
-            ...normalizeLayout(p.style.type, p.style.layout),
-          }
-        : null,
-    components: p.components ?? [],
-    signupForms: p.signupForms ?? [],
-    menuStyleId: p.menuStyleId ?? null,
-    parentId: p.parentId ?? null,
-  }));
-  const menus: Record<string, MenuStyleLayout> = {};
-  for (const [id, layout] of Object.entries(snapshot.menus ?? {})) {
-    menus[id] = normalizeMenuStyle(layout);
-  }
-  return {
-    snapshot: { ...snapshot, pages, menus, profileStories: snapshot.profileStories ?? [] },
-    publishedAt: row.publishedAt,
-  };
 }

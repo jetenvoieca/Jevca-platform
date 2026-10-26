@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess } from "@/lib/currentUser";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { removeZernioAccount } from "@/lib/instagram";
@@ -10,6 +11,7 @@ export async function disconnectInstagram(
   artistId: string,
   siteId: string
 ): Promise<{ ok: true } | { error: string }> {
+  await requireArtistAccess(artistId);
   const connection = await db.instagramConnection.findUnique({ where: { artistId } });
   if (connection) {
     try {

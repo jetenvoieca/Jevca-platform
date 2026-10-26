@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser, requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import type { CampaignMailKind, CampaignStatus } from "@/generated/prisma/client";
 import { campaignMailLabel } from "@/lib/campaignMails";
@@ -34,6 +35,7 @@ function validate(
 
 // Alphabetical, so a template is easy to find as the list grows.
 export async function listMailTemplates(): Promise<MailTemplateSummary[]> {
+  await requireUser();
   const rows = await db.mailTemplate.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true, layout: true },
@@ -44,6 +46,7 @@ export async function listMailTemplates(): Promise<MailTemplateSummary[]> {
 export async function createMailTemplate(
   input: MailTemplateInput
 ): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const valid = validate(input);
   if ("error" in valid) return valid;
   try {
@@ -56,6 +59,7 @@ export async function createMailTemplate(
 }
 
 export async function updateMailTemplate(id: string, input: MailTemplateInput): Promise<Result> {
+  await requireAdmin();
   const valid = validate(input);
   if ("error" in valid) return valid;
   try {
@@ -129,6 +133,7 @@ async function applyTemplateToUnsentMails(
 // any made before 2026-10-13, when only the look followed) and returns
 // those held back, for the warning.
 export async function syncTemplateMails(templateId: string): Promise<HeldMail[]> {
+  await requireAdmin();
   const row = await db.mailTemplate.findUnique({ where: { id: templateId }, select: { layout: true } });
   if (!row) return [];
   return applyTemplateToUnsentMails(templateId, normalizeMailTemplate(row.layout), false);
@@ -137,6 +142,7 @@ export async function syncTemplateMails(templateId: string): Promise<HeldMail[]>
 // "Update them anyway": the held mails follow the template, losing the
 // content that has no place in it.
 export async function applyTemplateToHeldMails(templateId: string): Promise<void> {
+  await requireAdmin();
   const row = await db.mailTemplate.findUnique({ where: { id: templateId }, select: { layout: true } });
   if (!row) return;
   await applyTemplateToUnsentMails(templateId, normalizeMailTemplate(row.layout), true);
@@ -147,6 +153,7 @@ export async function applyTemplateToHeldMails(templateId: string): Promise<void
 export async function duplicateMailTemplate(
   id: string
 ): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const source = await db.mailTemplate.findUnique({
     where: { id },
     select: { name: true, layout: true },
@@ -171,5 +178,6 @@ export async function duplicateMailTemplate(
 }
 
 export async function deleteMailTemplate(id: string): Promise<void> {
+  await requireAdmin();
   await db.mailTemplate.deleteMany({ where: { id } });
 }

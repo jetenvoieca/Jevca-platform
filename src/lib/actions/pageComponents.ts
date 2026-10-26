@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { MAX_SECTION_TEXT } from "@/lib/curationSections";
 import {
@@ -37,6 +38,7 @@ const CONTENT_SELECT = {
 // The page's components' content. Anything left from a curation the
 // page no longer shows is left out.
 export async function getPageComponents(siteId: string, pageId: string): Promise<ComponentContent[]> {
+  await requireSiteAccess(siteId);
   const page = await db.page.findFirst({
     where: { id: pageId, siteId },
     select: {
@@ -90,6 +92,7 @@ export async function setPageComponent(
   blockId: string,
   sectionId: string | null,
 ): Promise<Result> {
+  await requireSiteAccess(siteId);
   const found = await pageBlock(siteId, pageId, blockId);
   if ("error" in found) return found;
   // A page needs no curation (2026-10-26) — only to show one's works or
@@ -135,6 +138,7 @@ export async function movePageComponent(
   fromBlockId: string,
   toBlockId: string,
 ): Promise<Result> {
+  await requireSiteAccess(siteId);
   const found = await pageBlock(siteId, pageId, toBlockId);
   if ("error" in found) return found;
   const row = await db.pageComponentContent.findFirst({
@@ -163,6 +167,7 @@ export async function setPageComponentText(
   blockId: string,
   textRaw: string | null,
 ): Promise<Result> {
+  await requireSiteAccess(siteId);
   const found = await pageBlock(siteId, pageId, blockId);
   if ("error" in found) return found;
   const text = textRaw === null ? null : textRaw.trim();
@@ -256,6 +261,7 @@ export async function setPageComponentItems(
   blockId: string,
   items: { hiddenIds: string[]; orderIds: string[] },
 ): Promise<Result> {
+  await requireSiteAccess(siteId);
   const found = await pageBlock(siteId, pageId, blockId);
   if ("error" in found) return found;
   const updated = await db.pageComponentContent.updateMany({
@@ -275,6 +281,7 @@ export async function setPageComponentItems(
 
 // Empties one component.
 export async function clearPageComponent(siteId: string, pageId: string, blockId: string): Promise<Result> {
+  await requireSiteAccess(siteId);
   await db.pageComponentContent.deleteMany({ where: { pageId, blockId, page: { siteId } } });
   return { ok: true };
 }

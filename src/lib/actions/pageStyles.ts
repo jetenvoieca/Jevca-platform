@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser, requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { isPageStyleType } from "@/lib/pageStyleTypes";
 import { normalizeLayout, type PageStyleLayout } from "@/lib/pageStyleLayout";
@@ -53,6 +54,7 @@ async function validate(
 
 // Alphabetical, so a style is easy to find as the list grows.
 export async function listPageStyles(): Promise<PageStyleSummary[]> {
+  await requireUser();
   const rows = await db.pageStyle.findMany({
     orderBy: { name: "asc" },
     select: {
@@ -82,6 +84,7 @@ export async function listPageStyles(): Promise<PageStyleSummary[]> {
 export async function createPageStyle(
   input: PageStyleInput
 ): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const valid = await validate(input);
   if ("error" in valid) return valid;
   try {
@@ -94,6 +97,7 @@ export async function createPageStyle(
 }
 
 export async function updatePageStyle(id: string, input: PageStyleInput): Promise<Result> {
+  await requireAdmin();
   const valid = await validate(input);
   if ("error" in valid) return valid;
   try {
@@ -111,6 +115,7 @@ export async function updatePageStyle(id: string, input: PageStyleInput): Promis
 export async function duplicatePageStyle(
   id: string
 ): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const source = await db.pageStyle.findUnique({
     where: { id },
     select: { name: true, type: true, layout: true, presentationTemplateId: true },
@@ -139,5 +144,6 @@ export async function duplicatePageStyle(
 }
 
 export async function deletePageStyle(id: string): Promise<void> {
+  await requireAdmin();
   await db.pageStyle.deleteMany({ where: { id } });
 }

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser, requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { normalizePresentation, type PresentationSettings } from "@/lib/presentationTemplate";
 
@@ -29,6 +30,7 @@ function validate(
 
 // Alphabetical, so a template is easy to find as the list grows.
 export async function listPresentationTemplates(): Promise<PresentationTemplateSummary[]> {
+  await requireUser();
   const rows = await db.presentationTemplate.findMany({
     orderBy: { name: "asc" },
     select: { id: true, name: true, settings: true },
@@ -39,6 +41,7 @@ export async function listPresentationTemplates(): Promise<PresentationTemplateS
 export async function createPresentationTemplate(
   input: PresentationTemplateInput
 ): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const valid = validate(input);
   if ("error" in valid) return valid;
   try {
@@ -51,6 +54,7 @@ export async function createPresentationTemplate(
 }
 
 export async function updatePresentationTemplate(id: string, input: PresentationTemplateInput): Promise<Result> {
+  await requireAdmin();
   const valid = validate(input);
   if ("error" in valid) return valid;
   try {
@@ -65,6 +69,7 @@ export async function updatePresentationTemplate(id: string, input: Presentation
 // A copy of the template's settings, named "<name> (copy)" — or
 // "(copy 2)"… if that's taken. For trying a variation.
 export async function duplicatePresentationTemplate(id: string): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const source = await db.presentationTemplate.findUnique({ where: { id }, select: { name: true, settings: true } });
   if (!source) return { error: "Template not found." };
 
@@ -86,5 +91,6 @@ export async function duplicatePresentationTemplate(id: string): Promise<{ id: s
 
 // Page Styles using it go back to the built-in look.
 export async function deletePresentationTemplate(id: string): Promise<void> {
+  await requireAdmin();
   await db.presentationTemplate.deleteMany({ where: { id } });
 }

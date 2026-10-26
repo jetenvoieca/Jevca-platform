@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { normalizeLayout } from "@/lib/pageStyleLayout";
 import {
@@ -20,6 +21,7 @@ type Result = { ok: true } | { error: string };
 // The page's forms, as the page draws them — for the admin preview and
 // for publishing.
 export async function getPageSignupForms(siteId: string, pageId: string): Promise<SignupFormContent[]> {
+  await requireSiteAccess(siteId);
   const rows = await db.pageSignupForm.findMany({
     where: { pageId, page: { siteId } },
     select: { blockId: true, placeholder: true, buttonLabel: true, consentText: true, thanksText: true },
@@ -34,6 +36,7 @@ export async function getSignupFormSetup(
   pageId: string,
   blockId: string
 ): Promise<{ setup: SignupFormSetup | null; defaults: SignupWording; lists: MailListSummary[] } | null> {
+  await requireSiteAccess(siteId);
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: { artistId: true, artist: { select: { name: true } } },
@@ -61,6 +64,7 @@ export async function saveSignupForm(
   blockId: string,
   input: SignupFormSetup
 ): Promise<Result> {
+  await requireSiteAccess(siteId);
   const page = await db.page.findFirst({
     where: { id: pageId, siteId },
     select: { site: { select: { artistId: true } }, pageStyle: { select: { type: true, layout: true } } },
@@ -94,6 +98,7 @@ export async function saveSignupForm(
 
 // Removes a form's set-up, so the page shows nothing there.
 export async function clearSignupForm(siteId: string, pageId: string, blockId: string): Promise<Result> {
+  await requireSiteAccess(siteId);
   await db.pageSignupForm.deleteMany({ where: { pageId, blockId, page: { siteId } } });
   return { ok: true };
 }

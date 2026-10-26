@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import {
@@ -31,6 +32,7 @@ type OutputSize = { width: number; height: number };
 // an in-flight render — starting a new one, or adding more clips to the
 // next draft while this one hasn't been dealt with yet.
 export async function hasUnresolvedRender(artistId: string): Promise<boolean> {
+  await requireArtistAccess(artistId);
   const unresolved = await db.videoRender.findFirst({
     where: {
       artistId,
@@ -371,6 +373,7 @@ export async function renderVideo(
   siteId: string,
   renderId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const draft = await db.videoRender.findUnique({ where: { id: renderId } });
   if (!draft || draft.status !== "DRAFT") {
     return { ok: false, error: "This video isn't in a state that can be rendered." };
@@ -545,6 +548,7 @@ export async function renderVideo(
 }
 
 export async function getRenderStatus(artistId: string) {
+  await requireArtistAccess(artistId);
   const render = await db.videoRender.findFirst({
     where: { artistId, status: { in: ["PENDING", "RENDERING", "DONE", "FAILED"] } },
     orderBy: { updatedAt: "desc" },
@@ -629,6 +633,7 @@ export async function nameRenderedVideo(
   imageId: string,
   name: string
 ): Promise<void> {
+  await requireRecordAccess(db.image.findUnique({ where: { id: imageId }, select: { artistId: true } }));
   const trimmed = name.trim();
   await db.image.update({
     where: { id: imageId },
@@ -639,6 +644,7 @@ export async function nameRenderedVideo(
 }
 
 export async function discardRenderResult(siteId: string, renderId: string): Promise<void> {
+  await requireRecordAccess(db.videoRender.findUnique({ where: { id: renderId }, select: { artistId: true } }));
   const render = await db.videoRender.findUnique({
     where: { id: renderId },
     include: { resultImage: true },

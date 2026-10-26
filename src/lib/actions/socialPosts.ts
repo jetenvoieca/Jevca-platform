@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
 import { checkSocialPosting, startSocialPosting } from "@/lib/socialPublishing";
@@ -91,6 +92,7 @@ function toRow(p: {
 // Posts being posted are checked with Zernio first, so the list is
 // up to date.
 export async function listSocialPosts(artistId: string): Promise<SocialPostRow[]> {
+  await requireArtistAccess(artistId);
   const posting = await db.socialPost.findMany({ where: { artistId, status: "POSTING" }, select: { id: true } });
   await Promise.all(posting.map((p) => checkSocialPosting(p.id)));
   const posts = await db.socialPost.findMany({
@@ -102,6 +104,7 @@ export async function listSocialPosts(artistId: string): Promise<SocialPostRow[]
 }
 
 export async function createSocialPost(artistId: string): Promise<SocialPostRow> {
+  await requireArtistAccess(artistId);
   const post = await db.socialPost.create({ data: { artistId }, include: POST_INCLUDE });
   return toRow(post);
 }
@@ -111,6 +114,7 @@ export async function publishSocialPost(
   artistId: string,
   id: string
 ): Promise<{ post: SocialPostRow } | { error: string; post: SocialPostRow | null }> {
+  await requireArtistAccess(artistId);
   const failed = await startSocialPosting(artistId, id);
   const post = await postRow(id);
   if (failed) return { ...failed, post };
@@ -119,6 +123,7 @@ export async function publishSocialPost(
 
 // How a post being posted is getting on.
 export async function refreshSocialPost(artistId: string, id: string): Promise<SocialPostRow | null> {
+  await requireArtistAccess(artistId);
   const owned = await db.socialPost.findFirst({ where: { id, artistId }, select: { id: true } });
   if (!owned) return null;
   await checkSocialPosting(id);
@@ -128,6 +133,7 @@ export async function refreshSocialPost(artistId: string, id: string): Promise<S
 // A new Reel draft holding one video (2026-10-16 — Video Edit's "Save &
 // post to Social"). Its id, for opening it on the Social page.
 export async function createReelFromVideo(imageId: string): Promise<string | null> {
+  await requireRecordAccess(db.image.findUnique({ where: { id: imageId }, select: { artistId: true } }));
   const video = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true, kind: true } });
   if (!video || video.kind !== "VIDEO") return null;
   const post = await db.socialPost.create({
@@ -142,6 +148,7 @@ export async function socialMediaForPicks(
   artistId: string,
   picks: { imageIds: string[]; artworkIds: string[] }
 ): Promise<SocialMediaItem[]> {
+  await requireArtistAccess(artistId);
   const artworks = await db.artwork.findMany({
     where: { id: { in: picks.artworkIds }, artistId },
     select: { id: true, mainImageId: true, images: { take: 1, select: { id: true } } },
@@ -162,6 +169,7 @@ export async function updateSocialPost(
   id: string,
   draft: { format: SocialPostFormat; caption: string; reelInFeed: boolean; imageIds: string[] }
 ): Promise<{ ok: true } | { error: string }> {
+  await requireArtistAccess(artistId);
   const post = await db.socialPost.findFirst({ where: { id, artistId }, select: { status: true } });
   if (!post) return { error: "That post couldn't be found." };
   if (!isEditable(post.status)) return { error: "This post has been sent, so it can't be changed." };
@@ -193,6 +201,7 @@ export async function deleteSocialPost(
   artistId: string,
   id: string
 ): Promise<{ ok: true } | { error: string }> {
+  await requireArtistAccess(artistId);
   const post = await db.socialPost.findFirst({ where: { id, artistId }, select: { status: true } });
   if (!post) return { ok: true };
   if (post.status === "POSTING") return { error: "This post is being sent — try again shortly." };

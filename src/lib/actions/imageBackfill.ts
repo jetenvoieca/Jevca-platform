@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { getFromR2, uploadToR2 } from "@/lib/r2";
 import { generateImageSizes } from "@/lib/imageSizes";
@@ -14,6 +15,7 @@ import { revalidatePath } from "next/cache";
 // progress instead of one opaque "please wait".
 
 export async function getBackfillCount(artistId: string): Promise<number> {
+  await requireArtistAccess(artistId);
   return db.image.count({
     where: { artistId, kind: "PHOTO", thumbnailKey: null },
   });
@@ -23,6 +25,7 @@ export async function backfillOneImage(
   artistId: string,
   excludeIds: string[] = []
 ): Promise<{ done: true } | { done: false; imageId: string; ok: boolean; error?: string }> {
+  await requireArtistAccess(artistId);
   const next = await db.image.findFirst({
     where: { artistId, kind: "PHOTO", thumbnailKey: null, id: { notIn: excludeIds } },
     select: { id: true, key: true },
@@ -63,6 +66,7 @@ export async function backfillOneImage(
 }
 
 export async function refreshMediaAfterBackfill(siteId: string) {
+  await requireSiteAccess(siteId);
   revalidatePath(`/sites/${siteId}/media`);
   revalidatePath(`/sites/${siteId}/artworks`);
 }

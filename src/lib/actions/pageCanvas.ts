@@ -1,5 +1,6 @@
 "use server";
 
+import { requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 
 // A Canvas page's placed curations (2026-10-05) — see PageCanvasItem in
@@ -18,6 +19,7 @@ function cleanCoordinate(value: number): number {
 }
 
 export async function getPageCanvas(siteId: string, pageId: string): Promise<CanvasPlacement[]> {
+  await requireSiteAccess(siteId);
   return db.pageCanvasItem.findMany({
     where: { pageId, page: { siteId } },
     select: { curationId: true, x: true, y: true },
@@ -31,6 +33,7 @@ export async function savePageCanvas(
   pageId: string,
   placements: CanvasPlacement[]
 ): Promise<{ ok: true } | { error: string }> {
+  await requireSiteAccess(siteId);
   const page = await db.page.findFirst({
     where: { id: pageId, siteId },
     select: { site: { select: { artistId: true } } },

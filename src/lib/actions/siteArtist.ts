@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { EMAIL_DOMAIN } from "@/lib/email";
 import { storedFileUrl } from "@/lib/r2";
@@ -9,6 +10,7 @@ import { artistTownLine, type SiteArtist } from "@/lib/siteArtist";
 // lib/siteArtist.ts. Used live by the admin preview and saved in the
 // published snapshot.
 export async function getSiteArtist(artistId: string): Promise<SiteArtist | null> {
+  await requireArtistAccess(artistId);
   const artist = await db.artist.findUnique({
     where: { id: artistId },
     select: {

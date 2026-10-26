@@ -1,5 +1,6 @@
 "use server";
 
+import { requireRecordAccess } from "@/lib/currentUser";
 import sharp from "sharp";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
@@ -55,6 +56,7 @@ export async function cropImage(
   crop: CropPercent,
   rotation: number
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireRecordAccess(db.image.findUnique({ where: { id: imageId }, select: { artistId: true } }));
   const values = [crop.x, crop.y, crop.width, crop.height, rotation];
   if (values.some((v) => typeof v !== "number" || !Number.isFinite(v))) {
     return { ok: false, error: "Invalid crop." };

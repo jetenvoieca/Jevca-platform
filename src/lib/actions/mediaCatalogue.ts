@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
@@ -46,6 +47,7 @@ const DEFAULT_PAGE_SIZE = 60;
 // main image) rather than comparing IDs by hand, so it stays correct
 // automatically if Set as Main ever moves to a different image.
 export async function listMedia(artistId: string, filters: ListFilters) {
+  await requireArtistAccess(artistId);
   const { purpose, kind, q, tag, artworkId, offset = 0, limit = DEFAULT_PAGE_SIZE, newestFirst = false } = filters;
 
   const where = {
@@ -100,6 +102,7 @@ export async function listMedia(artistId: string, filters: ListFilters) {
 // See the note on listMedia above — Related deliberately excludes each
 // artwork's own Main image, same reasoning and same exclusion.
 export async function countMediaByPurpose(artistId: string) {
+  await requireArtistAccess(artistId);
   const [marketing, videos, related] = await Promise.all([
     db.image.count({
       where: { artistId, status: { not: "ARCHIVED" }, artworkId: null, kind: "PHOTO" },
@@ -120,6 +123,7 @@ export async function countMediaByPurpose(artistId: string) {
 }
 
 export async function getMediaDetail(id: string) {
+  await requireRecordAccess(db.image.findUnique({ where: { id }, select: { artistId: true } }));
   const image = await db.image.findUnique({
     where: { id },
     // catalogueName — see the matching note in listMedia above.
@@ -136,6 +140,7 @@ export async function getMediaDetail(id: string) {
 // Lightweight list for the "link to artwork" dropdown — every artwork this
 // artist has, regardless of which site it's tied to, by Name.
 export async function getArtistArtworksForLinking(artistId: string) {
+  await requireArtistAccess(artistId);
   return db.artwork.findMany({
     where: { artistId },
     select: { id: true, catalogueName: true },
@@ -144,6 +149,7 @@ export async function getArtistArtworksForLinking(artistId: string) {
 }
 
 export async function updateMedia(id: string, siteId: string, formData: FormData): Promise<void> {
+  await requireRecordAccess(db.image.findUnique({ where: { id }, select: { artistId: true } }));
   const caption = (formData.get("caption") as string)?.trim() || null;
   const tagsRaw = (formData.get("tags") as string)?.trim() || "";
 
@@ -195,6 +201,7 @@ export async function deleteMedia(
   id: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireRecordAccess(db.image.findUnique({ where: { id }, select: { artistId: true } }));
   const result = await deleteImagePermanently(id);
   if (result.ok) {
     revalidatePath(`/sites/${siteId}/media`);
@@ -209,12 +216,14 @@ export async function deleteMediaItems(
   siteId: string,
   ids: string[]
 ): Promise<{ deletedCount: number; failed: { id: string; error: string }[] }> {
+  await requireArtistAccess(artistId);
   const result = await deleteImagesPermanently(artistId, ids);
   if (result.deletedCount > 0) revalidatePath(`/sites/${siteId}/media`);
   return result;
 }
 
 export async function getMediaTagPresets(artistId: string) {
+  await requireArtistAccess(artistId);
   const artist = await db.artist.findUnique({
     where: { id: artistId },
     select: { mediaTags: true },
@@ -227,6 +236,7 @@ export async function addMediaTagPreset(
   siteId: string,
   formData: FormData
 ) {
+  await requireArtistAccess(artistId);
   const value = (formData.get("value") as string)?.trim();
   if (!value) return;
   const current = await getMediaTagPresets(artistId);
@@ -236,6 +246,7 @@ export async function addMediaTagPreset(
 }
 
 export async function removeMediaTagPreset(artistId: string, siteId: string, value: string) {
+  await requireArtistAccess(artistId);
   const current = await getMediaTagPresets(artistId);
   const next = current.filter((v) => v !== value);
   await db.artist.update({ where: { id: artistId }, data: { mediaTags: next } });
@@ -245,6 +256,7 @@ export async function removeMediaTagPreset(artistId: string, siteId: string, val
 // One artwork's images, for the Media Catalogue's read-only Artworks
 // view (2026-10-15) — Main first. Only this artist's own.
 export async function getArtworkImagesForMedia(artistId: string, artworkId: string) {
+  await requireArtistAccess(artistId);
   const artwork = await db.artwork.findFirst({
     where: { id: artworkId, artistId },
     select: {

@@ -71,6 +71,7 @@ export default function PagesManager({
   menuStyles,
   siteMenuStyleId,
   initialPageId = null,
+  canEditStyles,
 }: {
   siteId: string;
   artistId: string;
@@ -81,6 +82,9 @@ export default function PagesManager({
   siteMenuStyleId: string | null;
   // The page to start on (coming back from its Display Style).
   initialPageId?: string | null;
+  // Whether Layout (editing the page's Display Style, shared by every
+  // site) is offered — admin only (2026-10-26).
+  canEditStyles: boolean;
 }) {
   const router = useRouter();
   const [live, setLive] = useState(() => pages.filter((p) => p.visible));
@@ -315,7 +319,7 @@ export default function PagesManager({
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white">
-        {selected && layingOut && blockBuildStyle ? (
+        {selected && layingOut && blockBuildStyle && canEditStyles ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
             <PageLayoutEditor
               key={selected.id}
@@ -352,7 +356,7 @@ export default function PagesManager({
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">
-        <div className="grid grid-cols-5 gap-2">
+        <div className={`grid gap-2 ${canEditStyles ? "grid-cols-5" : "grid-cols-4"}`}>
           <button type="button" onClick={() => openModal("add")} disabled={isPending} className={buttonClass}>
             Add
           </button>
@@ -364,18 +368,20 @@ export default function PagesManager({
           >
             Edit
           </button>
-          <button
-            type="button"
-            onClick={() => {
-              setArranging(false);
-              setLayingOut(true);
-            }}
-            disabled={!blockBuildStyle || isPending}
-            title="Change this page's layout (its Display Style), seeing its real content"
-            className={buttonClass}
-          >
-            Layout
-          </button>
+          {canEditStyles && (
+            <button
+              type="button"
+              onClick={() => {
+                setArranging(false);
+                setLayingOut(true);
+              }}
+              disabled={!blockBuildStyle || isPending}
+              title="Change this page's layout (its Display Style), seeing its real content"
+              className={buttonClass}
+            >
+              Layout
+            </button>
+          )}
           <button
             type="button"
             onClick={() => {
