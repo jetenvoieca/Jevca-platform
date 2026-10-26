@@ -1420,6 +1420,10 @@ model PageComponentContent {
   text      String?
   hiddenIds String[]          @default([])
   orderIds  String[]          @default([])
+  // Filled with "Unsold works" (2026-10-26): the curation's works with
+  // sold ones (paid or not) left out — only with source WORKS. See
+  // pageWorks in lib/pageComponents.ts.
+  unsoldOnly Boolean          @default(false)
 
   @@unique([pageId, blockId])
   @@index([sectionId])

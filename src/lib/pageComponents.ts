@@ -1,5 +1,6 @@
 import { MAX_SECTION_TEXT, type CurationSectionType } from "@/lib/curationSections";
 import type { LayoutBlockType } from "@/lib/pageStyleLayout";
+import { isSold } from "@/lib/artworkFilters";
 
 // What fills a Block Build page's components (2026-10-07; 2026-10-13,
 // Craig's mockup: Page Styles set the layout, curations the content, and
@@ -11,7 +12,8 @@ import type { LayoutBlockType } from "@/lib/pageStyleLayout";
 
 // One component's content. `blockId` is the component in the page's
 // Display Style. `source`:
-// - WORKS: the curation's works.
+// - WORKS: the curation's works — with `unsoldOnly` (2026-10-26, the
+//   Sections column's "Unsold works"), sold ones left out.
 // - SECTION: the curation's section `sectionId`; for a Description,
 //   `text` is this page's own copy (null = the curation's).
 // - TYPED: `text`, typed on the page (a Header or Byline).
@@ -24,6 +26,7 @@ export type ComponentContent = {
   text: string | null;
   hiddenIds: string[];
   orderIds: string[];
+  unsoldOnly: boolean;
 };
 
 // What can go in a component: a section, by its type, the works, or
@@ -116,6 +119,17 @@ export function arrangeItems<T>(
   const ranked = shown.filter((item) => rank.has(idOf(item)));
   ranked.sort((a, b) => rank.get(idOf(a))! - rank.get(idOf(b))!);
   return [...ranked, ...shown.filter((item) => !rank.has(idOf(item)))];
+}
+
+// The curation's works a component can show, before arrangeItems: all
+// of them, or with `unsoldOnly` the unsold ones. A sold work is then left
+// out without being listed as removed, and comes back if its sale is
+// undone.
+export function pageWorks<T extends { availability: string }>(
+  works: T[],
+  content: Pick<ComponentContent, "unsoldOnly">,
+): T[] {
+  return content.unsoldOnly ? works.filter((w) => !isSold(w.availability)) : works;
 }
 
 // The items removed on the page, in the curation's order.

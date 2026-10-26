@@ -33,6 +33,7 @@ const CONTENT_SELECT = {
   text: true,
   hiddenIds: true,
   orderIds: true,
+  unsoldOnly: true,
 } as const;
 
 // The page's components' content. Anything left from a curation the
@@ -58,6 +59,7 @@ export async function getPageComponents(siteId: string, pageId: string): Promise
       text: c.text,
       hiddenIds: c.hiddenIds,
       orderIds: c.orderIds,
+      unsoldOnly: c.unsoldOnly,
     }));
 }
 
@@ -85,12 +87,14 @@ async function pageBlock(
 }
 
 // Fills one component with a section of the page's curation (or, with
-// `sectionId` null, its works), replacing what it held.
+// `sectionId` null, its works — `unsoldOnly`: only the unsold ones),
+// replacing what it held.
 export async function setPageComponent(
   siteId: string,
   pageId: string,
   blockId: string,
   sectionId: string | null,
+  unsoldOnly: boolean,
 ): Promise<Result> {
   await requireSiteAccess(siteId);
   const found = await pageBlock(siteId, pageId, blockId);
@@ -117,6 +121,7 @@ export async function setPageComponent(
     sectionId,
     hiddenIds: [],
     orderIds: [],
+    unsoldOnly: sectionId === null && unsoldOnly,
   };
   // A Hero (2026-10-22) or Picture & words (2026-10-24) keeps the words
   // typed on it.

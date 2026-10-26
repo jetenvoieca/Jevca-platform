@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData, type SectionMedia } from "@/lib/curationSections";
-import { arrangeItems, contentFits, contentKindOf, readHeroText, type ComponentContent } from "@/lib/pageComponents";
+import { arrangeItems, pageWorks, contentFits, contentKindOf, readHeroText, type ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
 import {
@@ -329,7 +329,7 @@ export function blockFiller({
     let picture: PictureWordsPicture | null = null;
     let open: (() => void) | undefined;
     if (content.source === "WORKS") {
-      const work = arrangeItems(curation?.works ?? [], (w) => w.artworkId, content)[0];
+      const work = arrangeItems(pageWorks(curation?.works ?? [], content), (w) => w.artworkId, content)[0];
       const url = work ? (work.displayUrl ?? work.imageUrl) : null;
       if (work && url) {
         picture = {
@@ -361,7 +361,7 @@ export function blockFiller({
   };
 
   const works = (block: LayoutBlock, content: ComponentContent): ReactNode => {
-    const shown = arrangeItems(curation?.works ?? [], (w) => w.artworkId, content);
+    const shown = arrangeItems(pageWorks(curation?.works ?? [], content), (w) => w.artworkId, content);
     // A Single Image shows the first work as arranged on the page, and
     // opens it like a Gallery does (2026-10-16).
     const first = shown[0];

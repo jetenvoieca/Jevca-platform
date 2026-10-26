@@ -29,6 +29,7 @@ import {
   contentFits,
   contentKindOf,
   hiddenItems,
+  pageWorks,
   hasTypedWords,
   isTypedContent,
   maxTypedLength,
@@ -101,8 +102,9 @@ import type { SiteArtist } from "@/lib/siteArtist";
 const TRAY_ID = "tray";
 
 // Something in the list that can go in a component: a section, or
-// (`sectionId` null) the curation's works.
-type Content = { sectionId: string | null; kind: ContentKind; label: string; detail: string };
+// (`sectionId` null) the curation's works — all of them, or with
+// `unsoldOnly` (2026-10-26) the unsold ones.
+type Content = { sectionId: string | null; unsoldOnly?: boolean; kind: ContentKind; label: string; detail: string };
 
 // What's being dragged: something from the list or a component (to
 // fill, move or empty a component), or one picture within a component
@@ -128,6 +130,14 @@ const WORKS: Content = {
   kind: "WORKS",
   label: "Works",
   detail: "The curation's works — for a Single Image, Gallery or Sliding doors",
+};
+
+const UNSOLD_WORKS: Content = {
+  sectionId: null,
+  unsoldOnly: true,
+  kind: "WORKS",
+  label: "Unsold works",
+  detail: "The curation's works, leaving out any sold",
 };
 
 const DETAIL_LENGTH = 60;
@@ -248,21 +258,24 @@ export default function PageSectionsArranger({
     return !!block && hasTypedWords(block.type);
   };
 
-  const fill = (blockId: string, sectionId: string | null) =>
-    change(
+  const fill = (blockId: string, content: Content) => {
+    const unsoldOnly = content.sectionId === null && !!content.unsoldOnly;
+    return change(
       (m) =>
         m.set(blockId, {
           blockId,
-          source: sectionId === null ? "WORKS" : "SECTION",
-          sectionId,
+          source: content.sectionId === null ? "WORKS" : "SECTION",
+          sectionId: content.sectionId,
           // A Hero or Picture & words keeps its words when pictures are
           // dropped on it again.
           text: blockTyped(blockId) ? (m.get(blockId)?.text ?? null) : null,
           hiddenIds: [],
           orderIds: [],
+          unsoldOnly,
         }),
-      () => setPageComponent(siteId, pageId, blockId, sectionId),
+      () => setPageComponent(siteId, pageId, blockId, content.sectionId, unsoldOnly),
     );
+  };
 
   const move = (fromBlockId: string, toBlockId: string) =>
     change(
@@ -303,6 +316,7 @@ export default function PageSectionsArranger({
               text: text?.trim() ?? null,
               hiddenIds: [],
               orderIds: [],
+              unsoldOnly: false,
             }
           : { ...current!, text };
         return m.set(block.id, next);
@@ -322,6 +336,7 @@ export default function PageSectionsArranger({
           sectionId: null,
           hiddenIds: current?.hiddenIds ?? [],
           orderIds: current?.orderIds ?? [],
+          unsoldOnly: current?.unsoldOnly ?? false,
           text,
         });
       },
@@ -337,11 +352,11 @@ export default function PageSectionsArranger({
       () => setPageComponentItems(siteId, pageId, blockId, items),
     );
 
-  // A component's pictures — the curation's works or Supporting Media —
-  // all of them, in the curation's order.
+  // A component's pictures — the curation's works (only the unsold ones
+  // for Unsold works) or Supporting Media — in the curation's order.
   const itemsOf = (content: ComponentContent): Item[] => {
     if (content.source === "WORKS") {
-      return (curation?.works ?? []).map((w) => ({
+      return pageWorks(curation?.works ?? [], content).map((w) => ({
         id: w.artworkId,
         url: w.imageUrl,
         title: w.catalogueName,
@@ -392,7 +407,7 @@ export default function PageSectionsArranger({
     const block = target.block;
     if (block.id === from || !contentFits(block.type, data.content.kind)) return;
     if (from) move(from, block.id);
-    else fill(block.id, data.content.sectionId);
+    else fill(block.id, data.content);
   };
 
   return (
@@ -671,6 +686,7 @@ function Tray({
         ) : (
           <>
             <TrayItem content={WORKS} />
+            <TrayItem content={UNSOLD_WORKS} />
             {sections.map((s) => (
               <TrayItem key={s.id} content={sectionContent(s)} />
             ))}
@@ -722,7 +738,7 @@ function TrayStory({ story, onPage }: { story: ProfileStoryRow; onPage: boolean 
 function TrayItem({ content }: { content: Content }) {
   const data: DragData = { type: "content", content, fromBlockId: null };
   const { setNodeRef, attributes, listeners } = useDraggable({
-    id: `tray:${content.sectionId ?? "works"}`,
+    id: `tray:${content.sectionId ?? (content.unsoldOnly ? "unsold" : "works")}`,
     data,
   });
   return (
@@ -883,7 +899,8 @@ function FilledSlot({
   onSaveText: (text: string | null) => void;
   onSaveItems: (items: { hiddenIds: string[]; orderIds: string[] }) => void;
 }) {
-  const barContent: Content = kind === "WORKS" || !section ? WORKS : sectionContent(section);
+  const barContent: Content =
+    kind === "WORKS" || !section ? (content.unsoldOnly ? UNSOLD_WORKS : WORKS) : sectionContent(section);
   const edited = kind === "DESCRIPTION" && content.text !== null;
 
   let body: ReactNode = null;
@@ -1054,7 +1071,11 @@ function ItemsGrid({
       {note && <p className="mb-2 text-xs text-neutral-500">{note}</p>}
       {shown.length === 0 ? (
         <p className="py-6 text-center text-sm text-neutral-400">
-          {items.length === 0 ? "Nothing in the curation yet." : "Everything has been removed."}
+          {items.length > 0
+            ? "Everything has been removed."
+            : content.unsoldOnly
+              ? "No unsold works in the curation."
+              : "Nothing in the curation yet."}
         </p>
       ) : (
         <div className="grid grid-cols-4 gap-3">
@@ -1252,13 +1273,13 @@ function HeroSlot({
               blockId={block.id}
               items={items}
               content={content}
-              note="Shown one at a time, in this order."
+              note={`${content.unsoldOnly ? "Unsold works, shown" : "Shown"} one at a time, in this order.`}
               dragging={dragging}
               onSave={onSaveItems}
             />
           ) : (
             <p className="py-6 text-center text-sm text-neutral-400">
-              Shows the curation&apos;s works one at a time — type the words, or drag Works here.
+              Shows the curation&apos;s works one at a time — type the words, or drag Works or Unsold works here.
             </p>
           )}
         </div>
@@ -1308,12 +1329,12 @@ function PictureWordsSlot({
           blockId={block.id}
           items={items}
           content={content}
-          note="Only the first is shown."
+          note={content.unsoldOnly ? "Unsold works — only the first is shown." : "Only the first is shown."}
           dragging={dragging}
           onSave={onSaveItems}
         />
       ) : (
-        <p className="py-6 text-center text-sm text-neutral-400">Drag Supporting Media or Works here.</p>
+        <p className="py-6 text-center text-sm text-neutral-400">Drag Supporting Media, Works or Unsold works here.</p>
       )}
     </div>
   );
