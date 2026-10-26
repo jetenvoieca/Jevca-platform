@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
 import {
@@ -65,6 +66,7 @@ function toData(row: SectionRow): CurationSectionData {
 
 // The curation's three sections, in their fixed order (the type's order).
 export async function listCurationSections(curationId: string, artistId: string): Promise<CurationSectionData[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.curationSection.findMany({
     where: { curationId, curation: { artistId } },
     orderBy: { type: "asc" },
@@ -79,6 +81,7 @@ export async function updateCurationSectionText(
   artistId: string,
   textRaw: string,
 ): Promise<Result<{ text: string | null }>> {
+  await requireArtistAccess(artistId);
   const text = textRaw.trim() || null;
   if (text && text.length > MAX_SECTION_TEXT) {
     return {
@@ -105,6 +108,7 @@ export async function setCurationSectionMedia(
   artistId: string,
   imageIds: string[],
 ): Promise<Result<{ media: SectionMedia[] }>> {
+  await requireArtistAccess(artistId);
   const section = await db.curationSection.findFirst({
     where: { id: sectionId, curation: { artistId } },
     select: { id: true, type: true },

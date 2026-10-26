@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser, requireArtistAccess, requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
@@ -82,6 +83,7 @@ function normalizeLocation(raw: string): string {
 export async function parseArtworkImportCsv(
   csvText: string
 ): Promise<{ rows: NormalizedArtworkRow[]; parseErrors: string[] }> {
+  await requireUser();
   const result = Papa.parse<Record<string, string>>(csvText, {
     header: true,
     skipEmptyLines: true,
@@ -125,6 +127,7 @@ export async function fetchAndUploadImage(
   | { video: string }
   | { error: string }
 > {
+  await requireArtistAccess(artistId);
   // Confirmed cause of the 2026-08-11 run's ~60% failure rate: a bare
   // server-to-server fetch with no User-Agent/Referer looks like a bot to
   // most hosting setups (WordPress security plugins, generic hotlink
@@ -199,6 +202,7 @@ export async function importArtworkRow(
   siteId: string,
   row: NormalizedArtworkRow
 ): Promise<{ ok: true; catalogueNumber: string } | { ok: false; error: string }> {
+  await requireArtistAccess(artistId);
   try {
     const imageResult = await fetchAndUploadImage(artistId, row.imageUrl);
     if ("error" in imageResult) return { ok: false, error: imageResult.error };
@@ -276,6 +280,7 @@ export async function importArtworkRow(
 // source: "CSV import" — can never touch anything added any other way.
 
 export async function getCsvImportedArtworkIds(artistId: string): Promise<string[]> {
+  await requireArtistAccess(artistId);
   const artworks = await db.artwork.findMany({
     where: { artistId, mainImage: { source: "CSV import" } },
     select: { id: true },
@@ -287,13 +292,14 @@ export async function deleteArtworksByIds(
   siteId: string,
   artworkIds: string[]
 ): Promise<{ deleted: number; failed: { id: string; error: string }[] }> {
+  const { artistId } = await requireSiteAccess(siteId);
   let deleted = 0;
   const failed: { id: string; error: string }[] = [];
 
   for (const id of artworkIds) {
     try {
-      const artwork = await db.artwork.findUnique({
-        where: { id },
+      const artwork = await db.artwork.findFirst({
+        where: { id, artistId },
         select: { images: { select: { id: true, key: true } } },
       });
       if (!artwork) continue;

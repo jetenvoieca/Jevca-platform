@@ -1,5 +1,13 @@
 "use server";
 
+import {
+  NotAllowedError,
+  requireAdmin,
+  requireArtistAccess,
+  requireRecordAccess,
+  requireSiteAccess,
+  requireUser,
+} from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
@@ -12,6 +20,7 @@ import { OPEN_ALERTS_TAG } from "@/lib/alerts";
 // ---- Reading data for the "Add New Site" picker ----
 
 export async function getArtistsForPicker() {
+  await requireAdmin();
   return db.artist.findMany({
     where: { status: { not: "ARCHIVED" } },
     orderBy: { name: "asc" },
@@ -24,6 +33,7 @@ export async function getArtistsForPicker() {
 export type CreateSiteState = { error?: string };
 
 export async function createSite(_prevState: CreateSiteState, formData: FormData): Promise<CreateSiteState> {
+  await requireAdmin();
   const siteName = (formData.get("siteName") as string)?.trim();
   const existingArtistId = (formData.get("artistId") as string) || "";
   const newArtistName = (formData.get("newArtistName") as string)?.trim() || "";
@@ -70,6 +80,10 @@ export async function createSite(_prevState: CreateSiteState, formData: FormData
 // ---- Edit Site details (name, domain) ----
 
 export async function updateSite(id: string, formData: FormData): Promise<void> {
+  await requireSiteAccess(id);
+  // The domain and its renewal are the admin's (2026-10-26) — left as
+  // they are when an artist login saves.
+  const isAdmin = (await requireUser()).role === "ADMIN";
   const name = (formData.get("name") as string)?.trim();
   const domainRaw = (formData.get("domain") as string)?.trim() || null;
   const defaultCurrency = (formData.get("defaultCurrency") as string)?.trim() || "GBP";
@@ -91,16 +105,14 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
     where: { id },
     data: {
       name,
-      domain,
       defaultCurrency,
-      domainStatus,
-      domainRenewalDate,
+      ...(isAdmin ? { domain, domainStatus, domainRenewalDate } : {}),
     },
   });
   // A new or changed domain is listed on Cloudflare's robot check for
   // sign-up forms (2026-10-10, lib/turnstile.ts); a failure is logged
   // and put right by the next publish.
-  if (before?.domain !== domain) {
+  if (isAdmin && before?.domain !== domain) {
     const sync = await syncTurnstileDomains();
     if ("error" in sync) console.error("updateSite: Turnstile", sync.error);
   }
@@ -119,6 +131,9 @@ export async function updateSite(id: string, formData: FormData): Promise<void> 
 // ---- Edit Owner (Artist) details ----
 
 export async function updateArtist(id: string, formData: FormData): Promise<void> {
+  // The subscription, notes and @jevca.art address are the admin's
+  // (2026-10-26) — left as they are when an artist login saves.
+  const isAdmin = (await requireArtistAccess(id)).role === "ADMIN";
   const name = (formData.get("name") as string)?.trim();
   const firstName = (formData.get("firstName") as string)?.trim() || null;
   const email = (formData.get("email") as string)?.trim() || null;
@@ -158,9 +173,7 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
       firstName,
       email,
       phone,
-      notes,
-      subscriptionAmount,
-      paymentMethod,
+      ...(isAdmin ? { notes, subscriptionAmount, paymentMethod } : {}),
       addressLine1,
       city,
       postcode,
@@ -174,7 +187,7 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
       // getOrAssignInvoiceNumber, not here, so leave it alone unless the
       // field was actually submitted with a value.
       ...(nextInvoiceNumberRaw ? { nextInvoiceNumber: parseInt(nextInvoiceNumberRaw, 10) } : {}),
-      ...(emailSlugRaw ? { emailSlug: await generateUniqueEmailSlug(emailSlugRaw, id) } : {}),
+      ...(isAdmin && emailSlugRaw ? { emailSlug: await generateUniqueEmailSlug(emailSlugRaw, id) } : {}),
     },
   });
   revalidatePath("/");
@@ -186,6 +199,7 @@ export async function updateArtist(id: string, formData: FormData): Promise<void
 // standalone, explicit action rather than something that could fire
 // silently as a side effect of saving an unrelated field.
 export async function updateArtistStripeMode(id: string, mode: "TEST" | "LIVE"): Promise<void> {
+  await requireArtistAccess(id);
   await db.artist.update({ where: { id }, data: { stripeMode: mode } });
   revalidatePath("/");
 }
@@ -196,6 +210,10 @@ export async function updateArtistStripeMode(id: string, mode: "TEST" | "LIVE"):
 // field, and this artist-identity logo deliberately doesn't create an
 // Image/Media Catalogue row — it's a business asset, not artwork media.
 export async function saveArtistLogo(artistId: string, key: string): Promise<void> {
+  await requireArtistAccess(artistId);
+  // Only a file uploaded for this client (every upload key starts with
+  // its client's id — see requestUploadUrl).
+  if (!key.startsWith(`${artistId}/`)) throw new NotAllowedError();
   await db.artist.update({
     where: { id: artistId },
     data: { logoUrl: `/api/media/${key}` },
@@ -210,6 +228,10 @@ export async function saveArtistLogo(artistId: string, key: string): Promise<voi
 // direct confirmation), so this can't just be a second reference to the
 // Logo.
 export async function saveArtistSignature(artistId: string, key: string): Promise<void> {
+  await requireArtistAccess(artistId);
+  // Only a file uploaded for this client (every upload key starts with
+  // its client's id — see requestUploadUrl).
+  if (!key.startsWith(`${artistId}/`)) throw new NotAllowedError();
   await db.artist.update({
     where: { id: artistId },
     data: { signatureUrl: `/api/media/${key}` },
@@ -221,6 +243,7 @@ export async function saveArtistSignature(artistId: string, key: string): Promis
 // in Alerts if unpaid (2026-10-20, direct request — per client; see
 // lib/alerts.ts). A whole number from 1 to 365; anything else is ignored.
 export async function saveInvoiceOverdueDays(artistId: string, days: number): Promise<void> {
+  await requireArtistAccess(artistId);
   if (!Number.isInteger(days) || days < 1 || days > 365) return;
   await db.artist.update({ where: { id: artistId }, data: { invoiceOverdueDays: days } });
   updateTag(OPEN_ALERTS_TAG);
@@ -233,6 +256,8 @@ export async function saveInvoiceOverdueDays(artistId: string, days: number): Pr
 // separate upload like the Invoicing logo above. Just sets which
 // existing Image row this artist's profile points at.
 export async function setArtistProfileImage(artistId: string, imageId: string): Promise<void> {
+  await requireArtistAccess(artistId);
+  await requireRecordAccess(db.image.findFirst({ where: { id: imageId, artistId }, select: { artistId: true } }));
   await db.artist.update({
     where: { id: artistId },
     data: { profileImageId: imageId },
@@ -247,6 +272,7 @@ export async function setArtistProfileImage(artistId: string, imageId: string): 
 // through unchanged.
 // The Personal Profile's "Show address in footers" tick (2026-10-21).
 export async function updateArtistFooterAddress(artistId: string, show: boolean): Promise<void> {
+  await requireArtistAccess(artistId);
   await db.artist.update({ where: { id: artistId }, data: { showFooterAddress: show === true } });
   revalidatePath("/");
 }
@@ -256,6 +282,7 @@ export async function updateArtistProfileText(
   field: ArtistProfileTextField,
   value: string,
 ): Promise<void> {
+  await requireArtistAccess(artistId);
   await db.artist.update({
     where: { id: artistId },
     data: { [field]: cleanProfileText(field, value) || null },
@@ -286,6 +313,7 @@ export type ArtistProfileTextField = "story" | "writingVoice" | "instagramHandle
 // conscious button click with its own confirmation, not something that
 // could fire from a stray text-field edit.
 export async function regenerateHopperToken(artistId: string): Promise<{ token: string }> {
+  await requireAdmin();
   const token = randomUUID();
   await db.artist.update({
     where: { id: artistId },
@@ -303,6 +331,7 @@ export async function regenerateHopperToken(artistId: string): Promise<{ token: 
 // status. Folded in here so there's one action and one control for the
 // whole thing, not two mechanisms doing the same kind of update.
 export async function updateSiteStatus(id: string, status: "DRAFT" | "LIVE" | "PAUSED" | "ARCHIVED" | "ISYT") {
+  await requireAdmin();
   await db.site.update({
     where: { id },
     data: { status },
@@ -317,6 +346,7 @@ export async function updateSiteStatus(id: string, status: "DRAFT" | "LIVE" | "P
 // site's Settings page — a site that doesn't take payments has no use
 // for invoice numbering/VAT/etc.
 export async function updateSalesEnabled(id: string, enabled: boolean) {
+  await requireSiteAccess(id);
   await db.site.update({
     where: { id },
     data: { salesEnabled: enabled },
@@ -328,6 +358,7 @@ export async function updateSalesEnabled(id: string, enabled: boolean) {
 // ---- Sample data, for trying the screen out before real data exists ----
 
 export async function seedSampleData() {
+  await requireAdmin();
   const jane = await db.artist.create({
     data: { name: "Jane Doe", email: "jane@example.com", status: "ACTIVE" },
   });

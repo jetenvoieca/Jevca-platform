@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { EMAIL_DOMAIN } from "@/lib/email";
 import { publicMediaUrl } from "@/lib/r2";
@@ -176,6 +177,7 @@ async function ownsCuration(curationId: string, artistId: string): Promise<boole
 // Artwork Catalogue's Curations filter. Oldest first, so a new curation
 // is added to the bottom of the list.
 export async function listCurations(artistId: string): Promise<CurationSummary[]> {
+  await requireArtistAccess(artistId);
   return db.curation.findMany({
     where: { artistId },
     select: { id: true, name: true },
@@ -186,6 +188,7 @@ export async function listCurations(artistId: string): Promise<CurationSummary[]
 // Every curation with its cover (2026-10-05) — for placing curations on
 // a canvas. Same order as listCurations.
 export async function listCurationCovers(artistId: string): Promise<CurationCover[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.curation.findMany({
     where: { artistId },
     orderBy: { createdAt: "asc" },
@@ -210,6 +213,7 @@ export async function listCurationCovers(artistId: string): Promise<CurationCove
 // main image in this curation (see tileUrls), and its description (see
 // CurationDetail).
 export async function getCuration(curationId: string, artistId: string): Promise<CurationDetail | null> {
+  await requireArtistAccess(artistId);
   const row = await db.curation.findFirst({
     where: { id: curationId, artistId },
     select: {
@@ -253,6 +257,7 @@ export async function getCuration(curationId: string, artistId: string): Promise
 }
 
 export async function createCuration(artistId: string, nameRaw: string): Promise<Result<CurationSummary>> {
+  await requireArtistAccess(artistId);
   const name = nameRaw.trim();
   if (!name) return { error: "A name is required." };
   try {
@@ -279,6 +284,7 @@ export async function renameCuration(
   artistId: string,
   nameRaw: string,
 ): Promise<Result<CurationSummary>> {
+  await requireArtistAccess(artistId);
   const name = nameRaw.trim();
   if (!name) return { error: "A name is required." };
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
@@ -297,6 +303,7 @@ export async function renameCuration(
 // Removes the curation, its list of works and its sections. The
 // artworks themselves are never touched.
 export async function deleteCuration(curationId: string, artistId: string): Promise<void> {
+  await requireArtistAccess(artistId);
   await db.curation.deleteMany({ where: { id: curationId, artistId } });
 }
 
@@ -308,6 +315,7 @@ export async function addWorksToCuration(
   artistId: string,
   artworkIds: string[],
 ): Promise<Result<CurationDetail>> {
+  await requireArtistAccess(artistId);
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
 
   if (artworkIds.length > 0) {
@@ -350,6 +358,7 @@ export async function removeWorkFromCuration(
   artistId: string,
   artworkId: string,
 ): Promise<Result<{ ok: true }>> {
+  await requireArtistAccess(artistId);
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
   await db.curationItem.deleteMany({ where: { curationId, artworkId } });
   return { ok: true };
@@ -363,6 +372,7 @@ export async function reorderCuration(
   artistId: string,
   artworkIds: string[],
 ): Promise<Result<{ ok: true }>> {
+  await requireArtistAccess(artistId);
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
   if (artworkIds.length === 0) return { ok: true };
 
@@ -383,6 +393,7 @@ export async function getCurationWorkPresentation(
   artistId: string,
   artworkId: string,
 ): Promise<CurationWorkPresentation | null> {
+  await requireArtistAccess(artistId);
   const item = await db.curationItem.findFirst({
     where: { curationId, artworkId, curation: { artistId } },
     select: {
@@ -463,6 +474,7 @@ export async function setCurationWorkImages(
   artworkId: string,
   imageIds: string[],
 ): Promise<Result<{ images: ArtworkImage[] }>> {
+  await requireArtistAccess(artistId);
   const ids = [...new Set(imageIds)];
   if (ids.length > MAX_CURATION_IMAGES) {
     return { error: `A work can have at most ${MAX_CURATION_IMAGES} images.` };
@@ -519,6 +531,7 @@ export async function updateCurationWorkDescription(
   artworkId: string,
   descriptionRaw: string,
 ): Promise<Result<{ description: string }>> {
+  await requireArtistAccess(artistId);
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
   const description = descriptionRaw.trim();
   const { count } = await db.curationItem.updateMany({

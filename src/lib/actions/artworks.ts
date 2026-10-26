@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { retireArtworkPaymentLinks, saleInvoicesInclude, toSaleInvoices } from "@/lib/invoices";
 import { revalidatePath } from "next/cache";
@@ -58,6 +59,14 @@ async function nextCatalogueNumber(artistId: string) {
   return `AW-${String(highest + 1).padStart(4, "0")}`;
 }
 
+// The client an artwork belongs to, once the person logged in is checked
+// to have access to it (2026-10-26).
+async function artworkOwner(artworkId: string): Promise<{ artistId: string }> {
+  const artwork = await db.artwork.findUnique({ where: { id: artworkId }, select: { artistId: true } });
+  await requireRecordAccess(Promise.resolve(artwork));
+  return artwork!;
+}
+
 // Wraps a create attempt with a short retry in case two artworks are
 // created at the exact same instant and both compute the same next
 // number — rare, but cheap to guard against. Exported (2026-08-11) so the
@@ -109,6 +118,7 @@ export async function createArtworkWithRetry(
     priceCurrency: string;
   }> & { catalogueName: string }
 ) {
+  await requireArtistAccess(artistId);
   const priceCurrency = data.priceCurrency ?? (await getArtistDefaultCurrency(artistId));
   for (let attempt = 0; attempt < 3; attempt++) {
     const catalogueNumber = await nextCatalogueNumber(artistId);
@@ -134,6 +144,7 @@ export async function createArtworkWithRetry(
 // new artwork's editor opens back on that site's URL — it doesn't scope
 // ownership, `artistId` does.
 export async function createArtwork(artistId: string, siteId: string, formData: FormData) {
+  await requireArtistAccess(artistId);
   const title = (formData.get("title") as string)?.trim() || "Untitled";
 
   const artwork = await createArtworkWithRetry(artistId, {
@@ -194,6 +205,7 @@ export async function duplicateArtwork(
   siteId: string,
   newEdition?: string | null
 ) {
+  await artworkOwner(artworkId);
   const original = await db.artwork.findUniqueOrThrow({
     where: { id: artworkId },
     include: { images: true, saleTerms: true },
@@ -328,6 +340,7 @@ export type ArtworkListRow = {
 // sorts (natural-language collation, see buildArtworkOrderBy) — the
 // Artwork Catalogue's Name dropdown (2026-10-13).
 export async function listArtworkNames(artistId: string): Promise<string[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.artwork.findMany({
     where: { artistId },
     distinct: ["catalogueName"],
@@ -343,6 +356,7 @@ export async function listArtworks(
   artistId: string,
   filters: ListFilters
 ): Promise<{ rows: ArtworkListRow[]; total: number; soldCount: number }> {
+  await requireArtistAccess(artistId);
   const { offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
 
   const orderBy = buildArtworkOrderBy();
@@ -401,6 +415,7 @@ export async function listArtworks(
 
 // Full record for the slide-in detail panel — both facets, all images.
 export async function getArtworkDetail(id: string) {
+  await artworkOwner(id);
   const result = await db.artwork.findUnique({
     where: { id },
     relationLoadStrategy: "join",
@@ -433,6 +448,7 @@ export async function getArtworkDetail(id: string) {
 // from a client component (e.g. clicking an artwork tile to edit it
 // in-place, as the Section editor does).
 export async function getArtworkDetailForClient(id: string) {
+  await artworkOwner(id);
   const artwork = await getArtworkDetail(id);
   if (!artwork) return null;
 
@@ -542,6 +558,7 @@ export async function updateCatalogue(
   siteId: string,
   formData: FormData
 ): Promise<void> {
+  await artworkOwner(id);
   const catalogueName = (formData.get("catalogueName") as string)?.trim();
   const dateRaw = (formData.get("date") as string)?.trim();
   const type = (formData.get("type") as string)?.trim() || null;
@@ -628,6 +645,7 @@ export async function updateArtworkPrice(
   priceRaw: string,
   currency: string
 ): Promise<{ ok: true; offeredPrice: string | null } | { error: string }> {
+  await requireArtistAccess(artistId);
   const trimmed = priceRaw.trim();
   const amount = trimmed ? Number(trimmed) : null;
   if (amount != null && (!Number.isFinite(amount) || amount < 0)) {
@@ -654,6 +672,7 @@ export async function updateArtworkName(
   artistId: string,
   nameRaw: string
 ): Promise<{ ok: true; catalogueName: string } | { error: string }> {
+  await requireArtistAccess(artistId);
   const catalogueName = nameRaw.trim();
   if (!catalogueName) return { error: "A name is required." };
 
@@ -679,6 +698,7 @@ export async function updateArtworkName(
 // close without ever touching it, rather than asking for a title upfront
 // and breaking that pattern.
 export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
+  await artworkOwner(artworkId);
   const artwork = await db.artwork.findUnique({
     where: { id: artworkId },
     include: { images: true, saleTerms: true, purchases: true },
@@ -711,6 +731,7 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
 }
 
 export async function deleteArtwork(siteId: string, id: string) {
+  await artworkOwner(id);
   await db.artwork.delete({ where: { id } });
 }
 
@@ -728,8 +749,10 @@ export async function deleteArtwork(siteId: string, id: string) {
 // next image linked here — the replacement the person just picked —
 // automatically becomes the new Main.
 export async function linkImagesToArtwork(artworkId: string, imageIds: string[], siteId: string) {
+  const { artistId } = await artworkOwner(artworkId);
+  // Only this client's own pictures (2026-10-26).
   await db.image.updateMany({
-    where: { id: { in: imageIds } },
+    where: { id: { in: imageIds }, artistId },
     data: { artworkId },
   });
 
@@ -745,8 +768,9 @@ export async function linkImagesToArtwork(artworkId: string, imageIds: string[],
 }
 
 export async function unlinkImageFromArtwork(artworkId: string, imageId: string, siteId: string) {
-  await db.image.update({
-    where: { id: imageId },
+  await artworkOwner(artworkId);
+  await db.image.updateMany({
+    where: { id: imageId, artworkId },
     data: { artworkId: null },
   });
 }
@@ -760,37 +784,6 @@ export async function unlinkImageFromArtwork(artworkId: string, imageId: string,
 // the new Main automatically once linked (see linkImagesToArtwork's
 // auto-assign above).
 export async function deleteArtworkMainImage(artworkId: string, imageId: string, siteId: string) {
+  await artworkOwner(artworkId);
   return deleteArtworkMainImageInternal(artworkId, imageId);
 }
-
-// Used to hydrate a Section's saved artwork grid — Prisma's `in` filter
-// doesn't preserve order, so the results are re-sorted to match the saved
-// artworkIds order before returning.
-export async function getArtworksByIds(ids: string[]) {
-  if (ids.length === 0) return [];
-  const rows = await db.artwork.findMany({
-    where: { id: { in: ids } },
-    include: { images: { take: 1 }, mainImage: true },
-    relationLoadStrategy: "query",
-  });
-  const byId = new Map(rows.map((a) => [a.id, a]));
-  return ids
-    .map((id) => byId.get(id))
-    .filter((a): a is NonNullable<typeof a> => Boolean(a))
-    .map(({ mainImage, images, ...a }) => {
-      // Folds mainImage into the same images[0] slot every consumer
-      // already reads (2026-08-16, same pattern as listArtworks) — used
-      // by both the Section editor's saved artwork grid and the page
-      // preview's Section-type rendering.
-      const effectiveImages = mainImage ? [mainImage, ...images.filter((i) => i.id !== mainImage.id)] : images;
-      return {
-        ...a,
-        presentationPrice: a.presentationPrice != null ? a.presentationPrice.toString() : null,
-        images: effectiveImages.map((img) => ({
-          ...img,
-          url: publicMediaUrl(img.thumbnailKey) || img.url,
-        })),
-      };
-    });
-}
-

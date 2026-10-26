@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { requestUploadUrl } from "@/lib/actions/media";
+import { createUploadUrl } from "@/lib/mediaUpload";
 
 // Called by the iPhone Shortcut — step 1 of 2. Authenticated by the
 // artist's own hopperToken (see hopper-design.md), not the app's shared
@@ -30,7 +30,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid token." }, { status: 401 });
   }
 
-  const result = await requestUploadUrl(artist.id, filename, contentType);
+  const result = await createUploadUrl(artist.id, filename, contentType);
   if ("error" in result) {
     return NextResponse.json({ error: result.error }, { status: 400 });
   }

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFPage, type PDFFont } from "pdf-lib";
 import { publicMediaUrl } from "@/lib/r2";
@@ -93,6 +94,7 @@ export async function generateArtworkCataloguePdf(
   artist: { name: string; kind: ClientKind },
   filters: CatalogueExportFilters
 ): Promise<{ bytes: Uint8Array; filename: string }> {
+  await requireArtistAccess(artistId);
   const where = buildArtworkWhere(artistId, filters);
   const orderBy = buildArtworkOrderBy();
 

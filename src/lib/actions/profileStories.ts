@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
 
@@ -59,6 +60,7 @@ function toRow(s: StoryRecord): ProfileStoryRow {
 }
 
 export async function listProfileStories(artistId: string): Promise<ProfileStoryRow[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.profileStory.findMany({
     where: { artistId },
     orderBy: { position: "asc" },
@@ -70,6 +72,7 @@ export async function listProfileStories(artistId: string): Promise<ProfileStory
 // A new story at the end of the catalogue, for this picture or video. Its
 // caption starts as the picture's own caption (editable).
 export async function createProfileStory(artistId: string, imageId: string): Promise<Result<ProfileStoryRow>> {
+  await requireArtistAccess(artistId);
   const image = await db.image.findFirst({
     where: { id: imageId, artistId },
     select: { caption: true },
@@ -92,6 +95,7 @@ export async function updateProfileStory(
   artistId: string,
   fields: { caption?: string; story?: string }
 ): Promise<Result<ProfileStoryRow>> {
+  await requireArtistAccess(artistId);
   const { count } = await db.profileStory.updateMany({
     where: { id, artistId },
     data: {
@@ -107,11 +111,13 @@ export async function updateProfileStory(
 // Deletes the story only — its picture or video stays in the Media
 // Catalogue.
 export async function deleteProfileStory(id: string, artistId: string): Promise<void> {
+  await requireArtistAccess(artistId);
   await db.profileStory.deleteMany({ where: { id, artistId } });
 }
 
 // The catalogue in this order (every story's id, first first).
 export async function reorderProfileStories(artistId: string, ids: string[]): Promise<Result<{ ok: true }>> {
+  await requireArtistAccess(artistId);
   const owned = await db.profileStory.findMany({ where: { artistId }, select: { id: true } });
   const ownedIds = new Set(owned.map((s) => s.id));
   if (ids.length !== ownedIds.size || ids.some((id) => !ownedIds.has(id))) {

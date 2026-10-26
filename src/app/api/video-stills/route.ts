@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { finalizeUpload } from "@/lib/actions/media";
+import { saveUpload } from "@/lib/mediaUpload";
 import { MEDIA_JOB_SECRET_HEADER, type VideoStillReport } from "@/lib/mediaJobs";
 
 // For the background function taking Video Edit's stills (2026-10-17) —
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   if (!artist || !key.startsWith(`${artist.id}/`))
     return NextResponse.json({ error: "Unknown artist." }, { status: 400 });
 
-  await finalizeUpload(artist.id, key, "image/jpeg", "PHOTO", {
+  await saveUpload(artist.id, key, "image/jpeg", "PHOTO", {
     status: "HOPPER",
     source: "Video still",
     caption: String(report.caption || "").slice(0, 200),

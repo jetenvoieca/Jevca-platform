@@ -1,4 +1,4 @@
-import { getArtworkSettings } from "@/lib/actions/artworkSettings";
+import { readArtworkSettings } from "@/lib/artworkSettingsData";
 
 // Everything from the artist's own Settings that the Studio app offers as
 // choices, gathered in one place.
@@ -14,7 +14,7 @@ export type StudioSettings = {
 };
 
 export async function getStudioSettings(artistId: string): Promise<StudioSettings> {
-  const settings = await getArtworkSettings(artistId);
+  const settings = await readArtworkSettings(artistId);
   return {
     artworkTypes: settings.artworkTypes,
     locations: settings.locations.map((l) => l.name),

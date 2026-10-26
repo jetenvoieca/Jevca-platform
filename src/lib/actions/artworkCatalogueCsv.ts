@@ -1,5 +1,6 @@
 "use server";
 
+import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import Papa from "papaparse";
 import { publicMediaUrl } from "@/lib/r2";
@@ -20,6 +21,7 @@ export async function generateArtworkCatalogueCsv(
   artistId: string,
   filters: ArtworkFilterInput
 ): Promise<{ csv: string; filename: string }> {
+  await requireArtistAccess(artistId);
   const where = buildArtworkWhere(artistId, filters);
   const orderBy = buildArtworkOrderBy();
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireUser, requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import Papa from "papaparse";
@@ -38,6 +39,7 @@ export type NormalizedHopperImportRow = {
 export async function parseHopperImportCsv(
   csvText: string
 ): Promise<{ rows: NormalizedHopperImportRow[]; parseErrors: string[] }> {
+  await requireUser();
   const result = Papa.parse<Record<string, string>>(csvText, {
     header: true,
     skipEmptyLines: true,
@@ -64,6 +66,7 @@ export async function importHopperCsvRow(
   siteId: string,
   row: NormalizedHopperImportRow
 ): Promise<{ ok: true; videoImportId?: string } | { ok: false; error: string }> {
+  await requireArtistAccess(artistId);
   const fetched = await fetchAndUploadImage(artistId, row.url);
   if ("error" in fetched) return { ok: false, error: fetched.error };
 
@@ -97,6 +100,7 @@ export async function getHopperVideoImports(
   artistId: string,
   ids: string[]
 ): Promise<HopperVideoImportState[]> {
+  await requireArtistAccess(artistId);
   if (ids.length === 0) return [];
   return hopperVideoImportStates(artistId, ids);
 }

@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { NotAllowedError, requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { publicMediaUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
@@ -34,6 +35,14 @@ import { MAX_ARTWORK_IMAGES } from "@/lib/artworkImages";
 // building that route's data is a genuine, different case worth
 // checking if this recurs there too.
 
+// The client a picture belongs to, once the person logged in is checked
+// to have access to it (2026-10-26).
+async function imageOwner(imageId: string): Promise<{ artistId: string }> {
+  const image = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true } });
+  await requireRecordAccess(Promise.resolve(image));
+  return image!;
+}
+
 // Returns rows already in the exact shape HopperView's HopperItem
 // expects (2026-09-24) — this mapping used to be copied by hand into
 // both Hopper pages (/sites/[id]/hopper and /preview/[slug]/hopper),
@@ -41,6 +50,7 @@ import { MAX_ARTWORK_IMAGES } from "@/lib/artworkImages";
 // already broken the build once when they drifted. Now it lives here,
 // once.
 export async function listHopperQueue(artistId: string) {
+  await requireArtistAccess(artistId);
   const rows = await db.image.findMany({
     where: { artistId, status: "HOPPER" },
     orderBy: { createdAt: "asc" },
@@ -98,6 +108,7 @@ export async function binHopperItem(
   id: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await imageOwner(id);
   return deleteImagePermanently(id);
 }
 
@@ -108,10 +119,12 @@ export async function binHopperItems(
   artistId: string,
   ids: string[]
 ): Promise<{ deletedCount: number; failed: { id: string; error: string }[] }> {
+  await requireArtistAccess(artistId);
   return deleteImagesPermanently(artistId, ids);
 }
 
 export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {
+  await imageOwner(id);
   await db.image.update({ where: { id }, data: { status: "SORTED", needsReview: true } });
 }
 
@@ -119,6 +132,7 @@ export async function addHopperItemToBucket(
   id: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await imageOwner(id);
   const image = await db.image.findUnique({ where: { id }, select: { artistId: true } });
   if (!image) return { ok: false, error: "That item couldn't be found." };
   const result = await appendImageToTimeline(image.artistId, siteId, id);
@@ -143,6 +157,11 @@ export async function addHopperItemToArtwork(
   setAsMain: boolean,
   relatedName?: string | null
 ): Promise<void> {
+  const { artistId } = await imageOwner(id);
+  // The artwork must be the same client's.
+  if (!(await db.artwork.findFirst({ where: { id: artworkId, artistId }, select: { id: true } }))) {
+    throw new NotAllowedError();
+  }
   await db.$transaction(async (tx) => {
     await tx.image.update({
       where: { id },
@@ -161,6 +180,7 @@ export async function addHopperItemToArtwork(
 // The artwork an "Add images" page is for (?artwork= on Add Artworks),
 // limited to this artist's own — null if it isn't one.
 export async function getHopperTargetArtwork(artistId: string, artworkId: string) {
+  await requireArtistAccess(artistId);
   const artwork = await db.artwork.findFirst({
     where: { id: artworkId, artistId },
     select: { id: true, catalogueName: true, mainImageId: true, _count: { select: { images: true } } },
@@ -184,6 +204,7 @@ export async function addHopperItemToThisArtwork(
   artworkId: string,
   name: string
 ): Promise<{ ok: true; becameMain: boolean } | { ok: false; error: string }> {
+  await requireArtistAccess(artistId);
   const artwork = await db.artwork.findFirst({
     where: { id: artworkId, artistId },
     select: { mainImageId: true, _count: { select: { images: true } } },
@@ -244,6 +265,11 @@ export async function createArtworkFromHopperQuick(
   artistId: string,
   formData: FormData
 ): Promise<{ ok: true; artwork: { id: string } } | { ok: false; error: string }> {
+  await requireArtistAccess(artistId);
+  // The picture must be this client's.
+  if (!(await db.image.findFirst({ where: { id: hopperImageId, artistId }, select: { id: true } }))) {
+    return { ok: false, error: "That item couldn't be found." };
+  }
   const title = ((formData.get("catalogueName") as string) || "").trim() || "Untitled";
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
   const dateRaw = (formData.get("date") as string)?.trim();

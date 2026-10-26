@@ -1,30 +1,18 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
+import { readLocations, type LocationSummary, type LocationType } from "@/lib/artworkSettingsData";
 import { revalidatePath } from "next/cache";
 import { retireStatementPaymentLinks } from "@/lib/paymentLinks";
 import { createCustomer, type CustomerKind, type CustomerSummary } from "./customers";
 
-export type LocationType = "GALLERY" | "OWN";
+export type { LocationType, LocationSummary } from "@/lib/artworkSettingsData";
 
-export type LocationSummary = {
-  id: string;
-  name: string;
-  type: LocationType;
-  customerId: string;
-};
-
-// The single canonical list a Location picker offers (2026-09-22) —
-// replaces the old free-text Artist.artworkLocations. See the note on
-// Location in schema.prisma. Used by the Artwork Catalogue's Location
-// dropdown and the Settings screen's Locations card.
+// The single canonical list a Location picker offers — see readLocations.
 export async function listLocations(artistId: string): Promise<LocationSummary[]> {
-  const rows = await db.location.findMany({
-    where: { artistId },
-    select: { id: true, name: true, type: true, customerId: true },
-    orderBy: { name: "asc" },
-  });
-  return rows.map((r) => ({ ...r, type: r.type as LocationType }));
+  await requireArtistAccess(artistId);
+  return readLocations(artistId);
 }
 
 // Same list, but shaped for the Locations page's own left-hand list
@@ -36,6 +24,7 @@ export async function listLocations(artistId: string): Promise<LocationSummary[]
 export type LocationCustomerSummary = CustomerSummary & { locationType: LocationType };
 
 export async function listLocationCustomers(artistId: string): Promise<LocationCustomerSummary[]> {
+  await requireArtistAccess(artistId);
   const rows = await db.location.findMany({
     where: { artistId },
     select: {
@@ -67,6 +56,7 @@ export async function createLocation(
   name: string,
   type: LocationType
 ): Promise<LocationSummary | { error: string }> {
+  await requireArtistAccess(artistId);
   const trimmed = name.trim();
   if (!trimmed) return { error: "A name is required." };
 
@@ -109,6 +99,7 @@ export async function renameLocationByCustomer(
   siteId: string,
   newNameRaw: string
 ): Promise<{ ok: true } | { error: string }> {
+  await requireRecordAccess(db.location.findUnique({ where: { customerId }, select: { artistId: true } }));
   const newName = newNameRaw.trim();
   if (!newName) return { error: "A name is required." };
   const loc = await db.location.findUnique({ where: { customerId } });
@@ -143,6 +134,7 @@ export async function renameLocationByCustomer(
 // tolerance as everywhere else this match is used) — it just won't
 // resolve to anywhere until repointed at a real Location.
 export async function deleteLocationByCustomer(customerId: string, siteId: string): Promise<void> {
+  await requireRecordAccess(db.customer.findUnique({ where: { id: customerId }, select: { artistId: true } }));
   const loc = await db.location.findUnique({ where: { customerId } });
   // Its statements go with it (cascade) — their links switched off first.
   await retireStatementPaymentLinks({ customerId });
@@ -157,6 +149,7 @@ export async function deleteLocationByCustomer(customerId: string, siteId: strin
 // listLocations above returns) — same underlying action as
 // deleteLocationByCustomer, just reached the other way round.
 export async function deleteLocation(locationId: string, siteId: string): Promise<void> {
+  await requireRecordAccess(db.location.findUnique({ where: { id: locationId }, select: { artistId: true } }));
   const loc = await db.location.findUnique({ where: { id: locationId } });
   if (!loc) return;
   await deleteLocationByCustomer(loc.customerId, siteId);
@@ -178,6 +171,7 @@ export async function updateLocationType(
   siteId: string,
   type: LocationType
 ): Promise<{ ok: true } | { error: string }> {
+  await requireRecordAccess(db.location.findUnique({ where: { id: locationId }, select: { artistId: true } }));
   const loc = await db.location.findUnique({ where: { id: locationId } });
   if (!loc) return { error: "Location not found." };
   if (loc.type === type) return { ok: true };
@@ -204,6 +198,7 @@ export async function moveArtworksToLocation(
   locationName: string,
   artworkIds: string[]
 ): Promise<{ moved: number; skipped: number } | { error: string }> {
+  await requireArtistAccess(artistId);
   const location = await db.location.findUnique({
     where: { artistId_name: { artistId, name: locationName } },
     select: { name: true },
