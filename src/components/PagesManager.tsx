@@ -82,8 +82,9 @@ export default function PagesManager({
   siteMenuStyleId: string | null;
   // The page to start on (coming back from its Display Style).
   initialPageId?: string | null;
-  // Whether Layout (editing the page's Display Style, shared by every
-  // site) is offered — admin only (2026-10-26).
+  // Whether Layout and each page's Template button (editing the page's
+  // Display Style, shared by every site) are offered — admin only
+  // (2026-10-26).
   canEditStyles: boolean;
 }) {
   const router = useRouter();
@@ -290,8 +291,9 @@ export default function PagesManager({
                   )}
                 </button>
                 {/* Straight to the page's Display Style (2026-10-22, Craig's
-                  request), and back to this page from there. */}
-                {p.pageStyleId && (
+                  request), and back to this page from there — admin only,
+                  like Layout (2026-10-26). */}
+                {canEditStyles && p.pageStyleId && (
                   <Link
                     href={`/templates/page-styles?edit=${p.pageStyleId}&back=${encodeURIComponent(
                       `/sites/${siteId}/pages?page=${p.id}`,
