@@ -8,6 +8,8 @@ import { useSiteData } from "@/lib/siteData";
 import CurationSectionView from "@/components/CurationSectionView";
 import CurationWorkView from "@/components/CurationWorkView";
 import FadeImage from "@/components/FadeImage";
+import SoldFlag from "@/components/SoldFlag";
+import { isSold } from "@/lib/artworkFilters";
 
 // How the grid's images fly in (2026-10-06): from this far below,
 // slightly smaller, over this long, each one in a row a little after the
@@ -108,17 +110,20 @@ export default function CurationPanel({
                 type="button"
                 onClick={() => setDetailsOpen(true)}
                 title="See this work's details"
-                className="block"
+                className={`relative mx-auto block ${work.displayUrl ? "w-fit max-w-full" : "w-full"}`}
               >
+                {/* Sized to the picture (not the panel's width), so the
+                    SOLD flag sits on the picture's corner. */}
                 {work.displayUrl ? (
                   <FadeImage
                     src={work.displayUrl}
                     alt={work.catalogueName}
-                    className="max-h-[65vh] w-full rounded-md object-contain"
+                    className="max-h-[65vh] max-w-full rounded-md"
                   />
                 ) : (
                   <div className="aspect-square w-full rounded-md bg-neutral-100" />
                 )}
+                {isSold(work.availability) && <SoldFlag />}
               </button>
               <button
                 type="button"
@@ -143,7 +148,7 @@ export default function CurationPanel({
                         type="button"
                         onClick={() => showWork(w.artworkId)}
                         title={w.catalogueName}
-                        className="block w-full overflow-hidden rounded hover:opacity-90"
+                        className="relative block w-full overflow-hidden rounded hover:opacity-90"
                       >
                         {w.imageUrl ? (
                           <FadeImage
@@ -156,6 +161,7 @@ export default function CurationPanel({
                         ) : (
                           <div className="aspect-square w-full bg-neutral-100" />
                         )}
+                        {isSold(w.availability) && <SoldFlag />}
                       </button>
                     </FlyIn>
                   ))}

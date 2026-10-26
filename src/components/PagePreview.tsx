@@ -64,6 +64,8 @@ import { readPageStories } from "@/lib/pageStories";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
+import SoldFlag from "@/components/SoldFlag";
+import { isSold } from "@/lib/artworkFilters";
 import LineView from "@/components/LineView";
 import PageHeadingView from "@/components/PageHeadingView";
 import { readHeadingText, shownHeading, type HeadingNames } from "@/lib/pageHeading";
@@ -330,7 +332,11 @@ export function blockFiller({
       const work = arrangeItems(curation?.works ?? [], (w) => w.artworkId, content)[0];
       const url = work ? (work.displayUrl ?? work.imageUrl) : null;
       if (work && url) {
-        picture = { media: { kind: "PHOTO", url, posterUrl: null }, alt: work.catalogueName };
+        picture = {
+          media: { kind: "PHOTO", url, posterUrl: null },
+          alt: work.catalogueName,
+          sold: isSold(work.availability),
+        };
         open = () => onOpen(work.artworkId);
       }
     } else {
@@ -366,9 +372,10 @@ export function blockFiller({
           type="button"
           onClick={() => onOpen(first.artworkId)}
           title={first.catalogueName}
-          className="block w-full overflow-hidden rounded hover:opacity-90"
+          className="relative block w-full overflow-hidden rounded hover:opacity-90"
         >
           <FadeImage src={firstUrl} alt={first.catalogueName} className="w-full" />
+          {isSold(first.availability) && <SoldFlag />}
         </button>
       );
     }
@@ -380,6 +387,7 @@ export function blockFiller({
             url: w.imageUrl,
             title: w.catalogueName,
             price: w.offeredPrice != null ? formatMoney(Number(w.offeredPrice), w.priceCurrency) : null,
+            sold: isSold(w.availability),
           }))}
           spacing={layout.gridSpacing}
           perRow={block.perRow ?? DEFAULT_GALLERY_PER_ROW}
@@ -667,7 +675,7 @@ function PlainPage({ curation, onOpen }: { curation: CurationDetail; onOpen: (ar
           <div className="grid grid-cols-[repeat(auto-fill,minmax(160px,1fr))] items-start gap-4">
             {curation.works.map((w) => (
               <button key={w.artworkId} type="button" onClick={() => onOpen(w.artworkId)} className="text-left">
-                <div className="aspect-square overflow-hidden rounded-md bg-neutral-100 hover:opacity-90">
+                <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100 hover:opacity-90">
                   {w.imageUrl ? (
                     <FadeImage src={w.imageUrl} alt={w.catalogueName} className="h-full w-full object-cover" />
                   ) : (
@@ -675,6 +683,7 @@ function PlainPage({ curation, onOpen }: { curation: CurationDetail; onOpen: (ar
                       No image
                     </div>
                   )}
+                  {isSold(w.availability) && <SoldFlag />}
                 </div>
                 <span className="mt-1.5 block truncate text-sm text-neutral-800">{w.catalogueName}</span>
               </button>
@@ -696,7 +705,8 @@ function PlainPage({ curation, onOpen }: { curation: CurationDetail; onOpen: (ar
 }
 
 // One image in a grid: a work (clickable, opens its presentation, with
-// its price) or a Supporting Image (image only).
+// its price and, when sold, the SOLD flag) or a Supporting Image (image
+// only).
 // A video among the Supporting Media (2026-10-25) shows its still picture
 // with ▶ and plays in its tile.
 type GridImage = {
@@ -704,6 +714,7 @@ type GridImage = {
   url: string | null;
   title?: string;
   price?: string | null;
+  sold?: boolean;
   video?: SectionMedia;
 };
 
@@ -766,6 +777,7 @@ function ImageGrid({
                   style={{ boxShadow: `inset 0 0 0 2px ${outline}` }}
                 />
               )}
+              {img.sold && <SoldFlag />}
             </div>
             {names && img.title && (
               <p

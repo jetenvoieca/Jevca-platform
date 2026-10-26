@@ -3,6 +3,8 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import CurationWorkPresentation from "@/components/CurationWorkPresentation";
+import SoldFlag from "@/components/SoldFlag";
+import { isSold } from "@/lib/artworkFilters";
 import CurationSectionsEditor from "@/components/CurationSectionsEditor";
 import {
   addWorksToCuration,
@@ -375,6 +377,7 @@ export default function CurationsView({
                         >
                           Presentation
                         </button>
+                        {isSold(w.availability) && <SoldFlag />}
                       </div>
                       <p className="mt-2 flex gap-1.5 text-sm font-medium text-neutral-900">
                         <span className="truncate">{w.catalogueName}</span>
@@ -388,7 +391,7 @@ export default function CurationsView({
                           handleRemoveWork(w.artworkId);
                         }}
                         title="Remove from this curation"
-                        className="absolute right-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                        className="absolute left-1 top-1 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
                       >
                         ✕
                       </button>

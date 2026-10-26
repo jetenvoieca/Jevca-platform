@@ -15,6 +15,8 @@ import type { CanvasLayout } from "@/lib/pageStyleLayout";
 import { useSiteData } from "@/lib/siteData";
 import CurationPanel from "@/components/CurationPanel";
 import FadeImage from "@/components/FadeImage";
+import SoldFlag from "@/components/SoldFlag";
+import { isSold } from "@/lib/artworkFilters";
 
 // A Canvas page played (2026-10-05, from Craig's mockups): the page's
 // placed curations on a large canvas that scrolls in any direction —
@@ -357,6 +359,7 @@ export default function CanvasPlayer({
                       decoding="async"
                       className="h-full w-full object-cover"
                     />
+                    {isSold(w.availability) && <SoldFlag />}
                   </button>
                 ))}
                 <button

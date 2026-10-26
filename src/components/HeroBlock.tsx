@@ -5,6 +5,8 @@ import type { CurationWork } from "@/lib/actions/curations";
 import type { HeroText } from "@/lib/pageComponents";
 import { pictureShapeRatio, type HeroSettings } from "@/lib/pageStyleLayout";
 import { bodyTextCss } from "@/components/textStyleCss";
+import SoldFlag from "@/components/SoldFlag";
+import { isSold } from "@/lib/artworkFilters";
 
 // A Hero on a page (2026-10-22, from Louise Dear's home page — see
 // HeroSettings in lib/pageStyleLayout.ts): the words — small line in
@@ -118,6 +120,7 @@ export default function HeroBlock({
               style={{ opacity: i === index ? 1 : 0, transition: `opacity ${hero.fade}s ease` }}
             />
           ))}
+          {isSold(current.availability) && <SoldFlag />}
         </button>
       )}
     </div>

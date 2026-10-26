@@ -9,6 +9,8 @@ import type { ArtworkImage } from "@/lib/artworkImages";
 import ArtworkFilterBar, { type ArtworkFilterValues } from "@/components/ArtworkFilterBar";
 import MediaCatalogueTabs from "@/components/MediaCatalogueTabs";
 import ImageFill from "@/components/ImageFill";
+import SoldFlag from "@/components/SoldFlag";
+import { isSold } from "@/lib/artworkFilters";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 
 // The Media Catalogue's Artworks view (2026-10-15, direct request): the
@@ -134,11 +136,7 @@ export default function MediaArtworksView({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={a.imageUrl} alt="" className="h-full w-full object-cover" />
               )}
-              {a.availability !== "AVAILABLE" && (
-                <span className="absolute right-1.5 top-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                  Sold
-                </span>
-              )}
+              {isSold(a.availability) && <SoldFlag />}
             </div>
             <p className="mt-1 truncate text-sm font-medium text-neutral-900">{a.catalogueName}</p>
           </button>

@@ -38,6 +38,9 @@ export type CurationWork = {
   // Shown beside the name on the Curations page (2026-10-26), since
   // several works can share a name.
   catalogueNumber: string;
+  // For the SOLD flag (2026-10-26) on the Curations page, the website
+  // and presentations — see isSold in lib/artworkFilters.ts.
+  availability: string;
   offeredPrice: string | null;
   priceCurrency: string;
   // The work's main image in this curation: a small thumbnail for
@@ -235,6 +238,7 @@ export async function getCuration(curationId: string, artistId: string): Promise
               id: true,
               catalogueName: true,
               catalogueNumber: true,
+              availability: true,
               offeredPrice: true,
               priceCurrency: true,
               ...TILE_ARTWORK_IMAGES,
@@ -254,6 +258,7 @@ export async function getCuration(curationId: string, artistId: string): Promise
       artworkId: item.artwork.id,
       catalogueName: item.artwork.catalogueName,
       catalogueNumber: item.artwork.catalogueNumber,
+      availability: item.artwork.availability,
       offeredPrice: item.artwork.offeredPrice != null ? item.artwork.offeredPrice.toString() : null,
       priceCurrency: item.artwork.priceCurrency,
       ...tileUrls(item),

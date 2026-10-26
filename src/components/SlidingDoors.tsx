@@ -5,6 +5,8 @@ import type { CurationWork } from "@/lib/actions/curations";
 import type { DoorsHeight } from "@/lib/pageStyleLayout";
 import type { PageMargins } from "@/lib/rowLayout";
 import { SITE_PHONE_QUERY } from "@/lib/siteBreakpoint";
+import SoldFlag from "@/components/SoldFlag";
+import { isSold } from "@/lib/artworkFilters";
 
 // Sliding doors (2026-10-05, from Craig's mockup) — a curation's main
 // images, a slide at a time, on a continuous loop. After `duration`
@@ -158,7 +160,7 @@ export default function SlidingDoors({
                 type="button"
                 onClick={() => onOpen(w.artworkId)}
                 title={w.catalogueName}
-                className="min-h-0 min-w-0 flex-1 overflow-hidden"
+                className="relative min-h-0 min-w-0 flex-1 overflow-hidden"
                 style={{
                   transform: `${axis}(${distance})`,
                   transition: opening ? `transform ${speed}s ease-in-out` : "none",
@@ -169,6 +171,7 @@ export default function SlidingDoors({
                   alt={w.catalogueName}
                   className="h-full w-full object-cover"
                 />
+                {isSold(w.availability) && <SoldFlag />}
               </button>
             );
           })}

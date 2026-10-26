@@ -31,6 +31,7 @@ import StatementModal from "@/components/StatementModal";
 import SaleHeader from "@/components/SaleHeader";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import SoldFlag from "@/components/SoldFlag";
 
 type DetailTab = "details" | "sales";
 
@@ -720,11 +721,7 @@ export default function GalleriesView({
                       {/* SOLD ribbon — any recorded (not abandoned)
                           gallery-channel sale, paid or not (2026-09-22
                           — see the note on soldWorkIds above). */}
-                      {soldWorkIds.has(w.id) && (
-                        <span className="absolute right-1 top-1 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-white">
-                          Sold
-                        </span>
-                      )}
+                      {soldWorkIds.has(w.id) && <SoldFlag />}
                     </div>
                     <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
                       {w.catalogueName}

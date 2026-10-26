@@ -15,7 +15,8 @@ import ArtworkDetailPanel, {
   type ArtworkDetail,
   type ArtworkSettings,
 } from "@/components/ArtworkDetailPanel";
-import { artworkMatchesFilters } from "@/lib/artworkFilters";
+import { artworkMatchesFilters, isSold } from "@/lib/artworkFilters";
+import SoldFlag from "@/components/SoldFlag";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import ArtworkFilterBar from "@/components/ArtworkFilterBar";
 import { useBackdropClose } from "@/lib/useBackdropClose";
@@ -695,15 +696,7 @@ export default function ArtworksCatalogueView({
                         No image
                       </div>
                     )}
-                    {/* Includes RESERVED now (2026-09-20 rebuild) — a
-                        "Sold - Not Paid" piece is just as unavailable to
-                        browse as a fully SOLD one, so it gets a ribbon
-                        too, just with different wording. */}
-                    {(a.availability === "SOLD" || a.availability === "RESERVED") && (
-                      <span className="absolute right-1.5 top-1.5 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-medium uppercase text-white">
-                        {a.availability === "SOLD" ? "Sold" : "Not Paid"}
-                      </span>
-                    )}
+                    {isSold(a.availability) && <SoldFlag />}
                   </div>
                   <p className="mt-1 truncate text-sm font-medium text-neutral-900">
                     {a.catalogueName}

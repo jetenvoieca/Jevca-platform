@@ -13,6 +13,13 @@ export type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 // sold too, so every committed sale shows under Sold, paid or not.
 export const SOLD_AVAILABILITIES: Availability[] = ["RESERVED", "SOLD"];
 
+// Whether a work shows the SOLD flag (components/SoldFlag.tsx) — the
+// same meaning as the Sold filter. Undefined (a site published before
+// curation works carried their availability) is not sold.
+export function isSold(availability: string | undefined): boolean {
+  return SOLD_AVAILABILITIES.includes(availability as Availability);
+}
+
 function availabilitiesFor(filter: string): Availability[] {
   return filter === "SOLD" ? SOLD_AVAILABILITIES : [filter as Availability];
 }
