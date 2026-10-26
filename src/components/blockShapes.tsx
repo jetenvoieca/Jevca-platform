@@ -7,6 +7,7 @@ import {
   type PictureWordsSettings,
   type SignupLook,
   type SlidingDoorsSettings,
+  type StoriesSettings,
 } from "@/lib/pageStyleLayout";
 import type { MailBlockType } from "@/lib/mailTemplateLayout";
 import type { GridSpacing } from "@/lib/rowLayout";
@@ -29,6 +30,7 @@ export function BlockShape({
   names = false,
   hero,
   pictureWords,
+  stories,
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
@@ -40,6 +42,7 @@ export function BlockShape({
   names?: boolean;
   hero?: HeroSettings;
   pictureWords?: PictureWordsSettings;
+  stories?: StoriesSettings;
   device?: PreviewDevice;
 }) {
   switch (type) {
@@ -95,6 +98,37 @@ export function BlockShape({
         >
           {left ? box : words}
           {left ? words : box}
+        </div>
+      );
+    }
+    case "stories": {
+      // Two stories, the second with its picture swapped to the other side.
+      const share = stories?.pictureShare ?? 50;
+      const ratio = pictureShapeRatio(stories?.shape.desktop ?? "landscape");
+      return (
+        <div className="flex flex-col gap-6">
+          {[0, 1].map((i) => {
+            const left = ((stories?.side ?? "left") === "left") === (i === 0);
+            const box = <div className="w-full rounded bg-neutral-200" style={{ aspectRatio: ratio }} />;
+            const words = (
+              <div className="flex flex-col gap-3 self-center">
+                <Bar className="h-5 w-2/3" />
+                <Bar className="mt-2 h-2.5 w-full" />
+                <Bar className="h-2.5 w-11/12" />
+                <Bar className="h-2.5 w-4/5" />
+              </div>
+            );
+            return (
+              <div
+                key={i}
+                className="grid gap-6"
+                style={{ gridTemplateColumns: left ? `${share}fr ${100 - share}fr` : `${100 - share}fr ${share}fr` }}
+              >
+                {left ? box : words}
+                {left ? words : box}
+              </div>
+            );
+          })}
         </div>
       );
     }

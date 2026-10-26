@@ -14,6 +14,7 @@ import {
 } from "@/lib/pageComponents";
 import { blockTypeLabel, normalizeLayout, type LayoutBlock } from "@/lib/pageStyleLayout";
 import { readEntries, writeEntries } from "@/lib/pageEntries";
+import { readPageStories, writePageStories } from "@/lib/pageStories";
 import { readHeadingText, writeHeadingText } from "@/lib/pageHeading";
 
 // What fills a Block Build page's components (2026-10-07; 2026-10-13) —
@@ -177,12 +178,18 @@ export async function setPageComponentText(
     return { ok: true };
   }
 
-  // Entries (2026-10-24) and a Page heading's typed lines (2026-10-25),
-  // as JSON (see lib/pageEntries.ts, lib/pageHeading.ts) — nothing in
-  // them empties the component.
-  if (found.block.type === "entries" || found.block.type === "pageheading") {
+  // Entries (2026-10-24), a Page heading's typed lines (2026-10-25) and
+  // Profile stories (2026-10-26), as JSON (see lib/pageEntries.ts,
+  // lib/pageHeading.ts, lib/pageStories.ts) — nothing in them empties
+  // the component.
+  const type = found.block.type;
+  if (type === "entries" || type === "pageheading" || type === "stories") {
     const json =
-      found.block.type === "entries" ? writeEntries(readEntries(text)) : writeHeadingText(readHeadingText(text));
+      type === "entries"
+        ? writeEntries(readEntries(text))
+        : type === "stories"
+          ? writePageStories(readPageStories(text))
+          : writeHeadingText(readHeadingText(text));
     if (!json) {
       await db.pageComponentContent.deleteMany({ where: { pageId, blockId } });
       return { ok: true };

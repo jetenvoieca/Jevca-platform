@@ -2,6 +2,8 @@
 
 import { normalizePresentation } from "@/lib/presentationTemplate";
 import { db } from "@/lib/db";
+import { listProfileStories } from "@/lib/actions/profileStories";
+import { readPageStories } from "@/lib/pageStories";
 import { getSiteArtist } from "@/lib/actions/siteArtist";
 import {
   getCuration,
@@ -110,6 +112,19 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
 
   const covers = (await listCurationCovers(site.artistId)).filter((c) => curationIds.has(c.id));
 
+  // The stories the pages' Profile stories show (2026-10-26).
+  const storyIds = new Set<string>();
+  for (const p of pages) {
+    if (p.style?.type !== "BLOCK_BUILD") continue;
+    const storyBlocks = new Set(p.style.layout.blocks.filter((b) => b.type === "stories").map((b) => b.id));
+    for (const c of p.components) {
+      if (storyBlocks.has(c.blockId)) for (const s of readPageStories(c.text)) storyIds.add(s.id);
+    }
+  }
+  const profileStories = storyIds.size
+    ? (await listProfileStories(site.artistId)).filter((s) => storyIds.has(s.id))
+    : [];
+
   return {
     version: SNAPSHOT_VERSION,
     siteName: site.name,
@@ -118,6 +133,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
     curations,
     covers,
     menus,
+    profileStories,
   };
 }
 
@@ -202,5 +218,8 @@ export async function getPublishedSite(
   for (const [id, layout] of Object.entries(snapshot.menus ?? {})) {
     menus[id] = normalizeMenuStyle(layout);
   }
-  return { snapshot: { ...snapshot, pages, menus }, publishedAt: row.publishedAt };
+  return {
+    snapshot: { ...snapshot, pages, menus, profileStories: snapshot.profileStories ?? [] },
+    publishedAt: row.publishedAt,
+  };
 }

@@ -45,6 +45,9 @@ export const LAYOUT_BLOCK_TYPES = [
   // A list typed on the page: date, title, pictures with captions and
   // descriptions (2026-10-24, from Louise Dear's Events & Projects).
   { value: "entries", label: "Entries" },
+  // Profile Catalogue stories chosen on each page, stacked, each its
+  // picture beside its caption and story (2026-10-26).
+  { value: "stories", label: "Profile stories" },
   // The site's name over the page's name, filled in (2026-10-25, the ISYT
   // sites).
   { value: "pageheading", label: "Page heading" },
@@ -389,7 +392,10 @@ export function cleanHero(raw: unknown): HeroSettings {
 // is the space under them; the words sit at the top or the middle of
 // the picture. On a phone they stack, the picture first with
 // `pictureFirstOnPhone`.
-export type PictureWordsSettings = {
+//
+// The picture-beside-words look without the second line
+// (PictureWordsLook) is shared with Profile stories (2026-10-26).
+export type PictureWordsLook = {
   side: "left" | "right";
   pictureShare: number;
   gap: { desktop: number; phone: number };
@@ -398,9 +404,10 @@ export type PictureWordsSettings = {
   wordsAt: "top" | "middle";
   headlineSpace: number;
   headline: PageTextStyle;
-  accent: PageTextStyle;
   body: PageTextStyle;
 };
+
+export type PictureWordsSettings = PictureWordsLook & { accent: PageTextStyle };
 
 export const DEFAULT_PICTURE_WORDS: PictureWordsSettings = {
   side: "left",
@@ -421,13 +428,13 @@ export const PICTURE_WORDS_LIMITS = {
   headlineSpace: { min: 0, max: 200 },
 } as const;
 
-export function cleanPictureWords(raw: unknown): PictureWordsSettings {
-  const value = (raw ?? {}) as Partial<Record<keyof PictureWordsSettings, unknown>>;
+const cleanStyleOr = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
+
+function cleanPictureWordsLook(raw: unknown, d: PictureWordsLook): PictureWordsLook {
+  const value = (raw ?? {}) as Partial<Record<keyof PictureWordsLook, unknown>>;
   const gap = (value.gap ?? {}) as Partial<Record<"desktop" | "phone", unknown>>;
   const shape = (value.shape ?? {}) as Partial<Record<"desktop" | "phone", unknown>>;
-  const d = DEFAULT_PICTURE_WORDS;
   const l = PICTURE_WORDS_LIMITS;
-  const style = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
   return {
     side: value.side === "right" ? "right" : "left",
     pictureShare: cleanNumber(value.pictureShare, l.pictureShare, d.pictureShare, 0),
@@ -443,9 +450,46 @@ export function cleanPictureWords(raw: unknown): PictureWordsSettings {
       typeof value.pictureFirstOnPhone === "boolean" ? value.pictureFirstOnPhone : d.pictureFirstOnPhone,
     wordsAt: value.wordsAt === "middle" ? "middle" : "top",
     headlineSpace: cleanNumber(value.headlineSpace, l.headlineSpace, d.headlineSpace, 0),
-    headline: style(value.headline, d.headline),
-    accent: style(value.accent, d.accent),
-    body: style(value.body, d.body),
+    headline: cleanStyleOr(value.headline, d.headline),
+    body: cleanStyleOr(value.body, d.body),
+  };
+}
+
+export function cleanPictureWords(raw: unknown): PictureWordsSettings {
+  const accent = (raw as { accent?: unknown } | null)?.accent;
+  return {
+    ...cleanPictureWordsLook(raw, DEFAULT_PICTURE_WORDS),
+    accent: cleanStyleOr(accent, DEFAULT_PICTURE_WORDS.accent),
+  };
+}
+
+// Profile stories (2026-10-26, Craig's request): the Profile Catalogue
+// stories chosen on each page (lib/pageStories.ts), stacked
+// `storySpace` apart, each its picture beside its caption (the headline)
+// and its story, in the Picture & words look. `side` is the side the
+// picture is on unless a story is swapped on the page.
+export type StoriesSettings = PictureWordsLook & { storySpace: number };
+
+export const DEFAULT_STORIES: StoriesSettings = {
+  side: "left",
+  pictureShare: 50,
+  gap: { desktop: 64, phone: 24 },
+  shape: { desktop: "landscape", phone: "landscape" },
+  pictureFirstOnPhone: true,
+  wordsAt: "middle",
+  headlineSpace: 20,
+  headline: { ...NO_TEXT_STYLE, font: "gelasio", size: 28, look: "regular", colour: "#333333" },
+  body: { ...NO_TEXT_STYLE, font: "gelasio", size: 15, look: "regular", colour: "#555555" },
+  storySpace: 80,
+};
+
+export const STORIES_LIMITS = { storySpace: { min: 0, max: 300 } } as const;
+
+export function cleanStoriesSettings(raw: unknown): StoriesSettings {
+  const space = (raw as { storySpace?: unknown } | null)?.storySpace;
+  return {
+    ...cleanPictureWordsLook(raw, DEFAULT_STORIES),
+    storySpace: cleanNumber(space, STORIES_LIMITS.storySpace, DEFAULT_STORIES.storySpace, 0),
   };
 }
 
@@ -559,7 +603,7 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 // `doors` (Sliding doors), `signup` (Sign-up form), `logoHeight` and
 // `byline` (Logo), `line` (Line), `perRow`, `names` and `tiles`
 // (Gallery), `hero` (Hero), `pictureWords` (Picture & words), `entries`
-// (Entries), `pageHeading` (Page heading).
+// (Entries), `pageHeading` (Page heading), `stories` (Profile stories).
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -574,6 +618,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     hero?: HeroSettings;
     pictureWords?: PictureWordsSettings;
     entries?: EntriesSettings;
+    stories?: StoriesSettings;
     pageHeading?: PageHeadingSettings;
     byline?: LogoByline;
   };
@@ -731,6 +776,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "entries") {
             clean.entries = cleanEntriesSettings((b as Partial<LayoutBlock>).entries);
           }
+          if (clean.type === "stories") {
+            clean.stories = cleanStoriesSettings((b as Partial<LayoutBlock>).stories);
+          }
           if (clean.type === "picturewords") {
             clean.pictureWords = cleanPictureWords((b as Partial<LayoutBlock>).pictureWords);
           }
@@ -774,6 +822,7 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "hero") return { id, type, hero: DEFAULT_HERO };
   if (type === "picturewords") return { id, type, pictureWords: DEFAULT_PICTURE_WORDS };
   if (type === "entries") return { id, type, entries: DEFAULT_ENTRIES };
+  if (type === "stories") return { id, type, stories: DEFAULT_STORIES };
   if (type === "pageheading") return { id, type, pageHeading: DEFAULT_PAGE_HEADING };
   return { id, type };
 }

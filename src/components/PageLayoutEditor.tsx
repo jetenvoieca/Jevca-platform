@@ -24,7 +24,8 @@ export default function PageLayoutEditor({
   onClose,
 }: {
   pageId: string;
-  curationId: string;
+  // Null for a page without a curation (2026-10-26).
+  curationId: string | null;
   style: Extract<PageStyleSummary, { type: "BLOCK_BUILD" }>;
   onClose: () => void;
 }) {
@@ -64,8 +65,8 @@ export default function PageLayoutEditor({
     onClose();
   };
 
-  if (loading || !content?.curation) {
-    return <p className="py-10 text-center text-sm text-neutral-400">{loading ? "Loading…" : "No curation."}</p>;
+  if (loading || !content) {
+    return <p className="py-10 text-center text-sm text-neutral-400">Loading…</p>;
   }
 
   const fill = blockFiller({
@@ -77,6 +78,7 @@ export default function PageLayoutEditor({
     signupForms: content.signupForms,
     artist: content.artist,
     heading: content.heading,
+    stories: content.stories,
     homeHref: null,
     onOpen: () => {},
     heroShowing,

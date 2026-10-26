@@ -59,6 +59,8 @@ import { PageFrame, ScaledFrame } from "@/components/visualEditorParts";
 import SignupFormSetup from "@/components/SignupFormSetup";
 import LineView from "@/components/LineView";
 import EntriesSlot from "@/components/EntriesSlot";
+import StoriesSlot from "@/components/StoriesSlot";
+import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import { PlayMark, stillOf } from "@/components/SectionMediaView";
 import PageHeadingView from "@/components/PageHeadingView";
 import {
@@ -169,7 +171,10 @@ export default function PageSectionsArranger({
 }: {
   siteId: string;
   pageId: string;
-  curationId: string;
+  // Null for a page without a curation (2026-10-26): no works or
+  // sections to drag, but Profile stories, Entries, typed components
+  // and the rest still arrange.
+  curationId: string | null;
   layout: BlockBuildLayout;
 }) {
   const siteData = useSiteData();
@@ -184,6 +189,7 @@ export default function PageSectionsArranger({
   const [settingUp, setSettingUp] = useState<string | null>(null);
   const [artist, setArtist] = useState<SiteArtist | null>(null);
   const [headingNames, setHeadingNames] = useState<HeadingNames | null>(null);
+  const [stories, setStories] = useState<ProfileStoryRow[]>([]);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
   const rows = groupBlocksByRow(layout.blocks);
@@ -191,15 +197,17 @@ export default function PageSectionsArranger({
   const load = useCallback(
     () =>
       Promise.all([
-        siteData.getCuration(curationId),
-        siteData.listSections(curationId),
+        curationId ? siteData.getCuration(curationId) : Promise.resolve(null),
+        curationId ? siteData.listSections(curationId) : Promise.resolve<CurationSectionData[]>([]),
         siteData.getComponents(pageId),
         siteData.getSignupForms(pageId),
         siteData.getArtist(),
         siteData.getHeadingNames(pageId),
-      ]).then(([loadedCuration, loadedSections, components, signupForms, artist, names]) => {
+        siteData.listProfileStories(),
+      ]).then(([loadedCuration, loadedSections, components, signupForms, artist, names, loadedStories]) => {
         setArtist(artist);
         setHeadingNames(names);
+        setStories(loadedStories);
         setCuration(loadedCuration);
         setSections(loadedSections);
         setContents(new Map(components.map((c) => [c.blockId, c])));
@@ -383,7 +391,11 @@ export default function PageSectionsArranger({
       onDragCancel={() => setDragging(null)}
     >
       <div className="flex min-h-0 flex-1 gap-4 p-4">
-        <Tray sections={sections} removing={dragging?.type === "content" && !!dragging.fromBlockId} />
+        <Tray
+          sections={sections}
+          hasCuration={!!curationId}
+          removing={dragging?.type === "content" && !!dragging.fromBlockId}
+        />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
           {error && <p className="mb-2 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
@@ -480,6 +492,14 @@ export default function PageSectionsArranger({
                                         video: m.kind === "VIDEO",
                                       })),
                                     )}
+                                  onSave={(text) => saveText(b, text)}
+                                />
+                              ) : b.type === "stories" && b.stories ? (
+                                <StoriesSlot
+                                  label={blockTypeLabel(b.type)}
+                                  settings={b.stories}
+                                  text={content?.text ?? null}
+                                  stories={stories}
                                   onSave={(text) => saveText(b, text)}
                                 />
                               ) : b.type === "signup" ? (
@@ -580,8 +600,17 @@ export default function PageSectionsArranger({
 
 // The list on the left: the works and the curation's sections, to drag
 // onto the page — and, while a component's content is being dragged,
-// the place to drop it to empty that component.
-function Tray({ sections, removing }: { sections: CurationSectionData[] | null; removing: boolean }) {
+// the place to drop it to empty that component. A page without a
+// curation (2026-10-26) has none to drag.
+function Tray({
+  sections,
+  hasCuration,
+  removing,
+}: {
+  sections: CurationSectionData[] | null;
+  hasCuration: boolean;
+  removing: boolean;
+}) {
   const { setNodeRef, isOver } = useDroppable({ id: TRAY_ID, data: { kind: "tray" } });
   const outline = !removing
     ? "border-neutral-300"
@@ -597,6 +626,10 @@ function Tray({ sections, removing }: { sections: CurationSectionData[] | null; 
       >
         {sections === null ? (
           <p className="text-xs text-neutral-400">Loading…</p>
+        ) : !hasCuration ? (
+          <p className="text-xs text-neutral-400">
+            This page has no curation, so no works or sections — choose one with Edit to use them.
+          </p>
         ) : (
           <>
             <TrayItem content={WORKS} />

@@ -21,6 +21,7 @@ import { getSiteArtist } from "@/lib/actions/siteArtist";
 import type { SiteArtist } from "@/lib/siteArtist";
 import { getPageHeadingNames } from "@/lib/actions/pages";
 import type { HeadingNames } from "@/lib/pageHeading";
+import { listProfileStories, type ProfileStoryRow } from "@/lib/actions/profileStories";
 
 // Where the page components (PagePreview, CanvasPlayer, CurationPanel,
 // CurationWorkView, PageSectionsArranger) get their content from
@@ -39,6 +40,8 @@ export type PageContent = {
   artist: SiteArtist | null;
   // What a Page heading fills itself in from (2026-10-25).
   heading: HeadingNames | null;
+  // The Profile Catalogue stories, for Profile stories (2026-10-26).
+  stories: ProfileStoryRow[];
 };
 
 export type SiteData = {
@@ -56,11 +59,15 @@ export type SiteData = {
   // A page's site name, own name and group's name, for a Page heading
   // (2026-10-25).
   getHeadingNames(pageId: string): Promise<HeadingNames | null>;
+  // The artist's Profile Catalogue stories (2026-10-26): all of them in
+  // the admin; on the published site, those its pages show.
+  listProfileStories(): Promise<ProfileStoryRow[]>;
   // Everything a page shows, at once (2026-10-13): from the published
   // snapshot, which is already in the browser, so a page is drawn
   // straight away — no "Loading…". Null in the admin preview, whose
   // pages load with the getters above.
-  pageContentNow(pageId: string, curationId: string): PageContent | null;
+  // A Block Build page may have no curation (null, 2026-10-26).
+  pageContentNow(pageId: string, curationId: string | null): PageContent | null;
   // A Canvas page's placements and the curations' covers, at once, in
   // the same way.
   canvasNow(pageId: string): { placements: CanvasPlacement[]; covers: CurationCover[] } | null;
@@ -109,6 +116,7 @@ export function LiveSiteData({
       listCovers: () => listCurationCovers(artistId),
       getArtist: () => getSiteArtist(artistId),
       getHeadingNames: (pageId) => getPageHeadingNames(siteId, pageId),
+      listProfileStories: () => listProfileStories(artistId),
       pageContentNow: () => null,
       canvasNow: () => null,
       homeHref: null,
@@ -147,9 +155,10 @@ export function SnapshotSiteData({
       listCovers: async () => snapshot.covers,
       getArtist: async () => snapshot.artist,
       getHeadingNames: async (pageId) => snapshotHeadingNames(snapshot, pageId),
+      listProfileStories: async () => snapshot.profileStories,
       pageContentNow: (pageId, curationId) => {
         const page = snapshot.pages.find((p) => p.id === pageId);
-        const curation = snapshot.curations[curationId];
+        const curation = curationId ? snapshot.curations[curationId] : undefined;
         return {
           curation: curation?.detail ?? null,
           sections: curation?.sections ?? [],
@@ -157,6 +166,7 @@ export function SnapshotSiteData({
           signupForms: page?.signupForms ?? [],
           artist: snapshot.artist,
           heading: snapshotHeadingNames(snapshot, pageId),
+          stories: snapshot.profileStories,
         };
       },
       canvasNow: (pageId) => ({

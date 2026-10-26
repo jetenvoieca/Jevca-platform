@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { pictureShapeRatio, type PageTextStyle, type PictureWordsSettings } from "@/lib/pageStyleLayout";
+import { pictureShapeRatio, type PageTextStyle, type PictureWordsLook } from "@/lib/pageStyleLayout";
 import type { SectionMedia } from "@/lib/curationSections";
 import { bodyTextCss } from "@/components/textStyleCss";
 import SectionMediaView from "@/components/SectionMediaView";
@@ -15,6 +15,8 @@ export type PictureWordsPicture = { media: Pick<SectionMedia, "kind" | "url" | "
 // than 700px — lib/siteBreakpoint.ts), the picture first if set. A
 // work's picture opens it when clicked (`onOpen`). Sizes shrink with the
 // page (bodyTextCss, `contentWidth` = the page's contents as designed).
+// Also draws each of Profile stories' stories (2026-10-26), which have no
+// second line (`accent` look not given).
 export default function PictureWordsBlock({
   settings,
   picture,
@@ -24,7 +26,7 @@ export default function PictureWordsBlock({
   contentWidth,
   onOpen,
 }: {
-  settings: PictureWordsSettings;
+  settings: PictureWordsLook & { accent?: PageTextStyle };
   picture: PictureWordsPicture | null;
   headline: string;
   accent: string;
@@ -77,14 +79,14 @@ export default function PictureWordsBlock({
           </div>
         ))}
       <div className={`min-w-0 ${wordsOrder}`}>
-        {(headline || accent) && (
+        {(headline || (accent && s.accent)) && (
           <h2 className="font-normal" style={{ marginBottom: s.headlineSpace }}>
             {headline && (
               <span className="block whitespace-pre-line" style={big(s.headline)}>
                 {headline}
               </span>
             )}
-            {accent && (
+            {accent && s.accent && (
               <span className="block whitespace-pre-line" style={big(s.accent)}>
                 {accent}
               </span>

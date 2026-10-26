@@ -59,6 +59,9 @@ import PictureWordsBlock, { type PictureWordsPicture } from "@/components/Pictur
 import SectionMediaView from "@/components/SectionMediaView";
 import EntriesBlock from "@/components/EntriesBlock";
 import { readEntries } from "@/lib/pageEntries";
+import StoriesBlock from "@/components/StoriesBlock";
+import { readPageStories } from "@/lib/pageStories";
+import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import LineView from "@/components/LineView";
@@ -135,14 +138,17 @@ export default function PagePreview({
   const closeView = useCallback(() => setViewingId(null), []);
   const curation = content?.curation ?? null;
 
+  // A Block Build page needs no curation (2026-10-26 — e.g. one showing
+  // only profile stories); its components that show the curation's works
+  // or sections then show nothing.
   let body: ReactNode;
   if (style?.type === "CANVAS") {
     body = <CanvasPlayer key={pageId} pageId={pageId} layout={style.layout} fullScreen={fullScreen} />;
-  } else if (!curationId) {
+  } else if (!curationId && !blockBuild) {
     body = <Message text="This page has no curation. Choose one with Edit." />;
   } else if (loading || !content) {
     body = <Message text="Loading…" />;
-  } else if (!curation) {
+  } else if (curationId && !curation) {
     body = <Message text="This page's curation could not be found." />;
   } else if (style?.type === "BLOCK_BUILD") {
     body = (
@@ -155,11 +161,12 @@ export default function PagePreview({
         signupForms={content.signupForms}
         artist={content.artist}
         heading={content.heading}
+        stories={content.stories}
         homeHref={siteData.homeHref}
         onOpen={setViewingId}
       />
     );
-  } else {
+  } else if (curation) {
     body = (
       <>
         <PlainPage curation={curation} onOpen={setViewingId} />
@@ -198,7 +205,8 @@ export default function PagePreview({
 // Everything a page shows (2026-10-13; a hook since 2026-10-22, shared
 // with PageLayoutEditor): from the published snapshot on the site, drawn
 // at once; loaded in the admin preview. A Block Build page also has its
-// sections, components and sign-up forms.
+// sections, components and sign-up forms — and may have no curation
+// (2026-10-26).
 export function usePageContent(
   pageId: string,
   curationId: string | null,
@@ -207,13 +215,14 @@ export function usePageContent(
   const siteData = useSiteData();
   const [loaded, setLoaded] = useState<PageContent | null>(null);
   const [loading, setLoading] = useState(false);
+  const needed = blockBuild || !!curationId;
   const now = useMemo(
-    () => (curationId ? siteData.pageContentNow(pageId, curationId) : null),
-    [siteData, pageId, curationId],
+    () => (needed ? siteData.pageContentNow(pageId, curationId) : null),
+    [siteData, pageId, curationId, needed],
   );
 
   useEffect(() => {
-    if (!curationId || now) {
+    if (!needed || now) {
       setLoaded(null);
       return;
     }
@@ -221,21 +230,22 @@ export function usePageContent(
     let current = true;
     setLoading(true);
     Promise.all([
-      siteData.getCuration(curationId),
-      blockBuild ? siteData.listSections(curationId) : Promise.resolve<CurationSectionData[]>([]),
+      curationId ? siteData.getCuration(curationId) : Promise.resolve(null),
+      blockBuild && curationId ? siteData.listSections(curationId) : Promise.resolve<CurationSectionData[]>([]),
       blockBuild ? siteData.getComponents(pageId) : Promise.resolve<ComponentContent[]>([]),
       blockBuild ? siteData.getSignupForms(pageId) : Promise.resolve<SignupFormContent[]>([]),
       siteData.getArtist(),
       blockBuild ? siteData.getHeadingNames(pageId) : Promise.resolve(null),
-    ]).then(([curation, sections, components, signupForms, artist, heading]) => {
+      blockBuild ? siteData.listProfileStories() : Promise.resolve<ProfileStoryRow[]>([]),
+    ]).then(([curation, sections, components, signupForms, artist, heading, stories]) => {
       if (!current) return;
-      setLoaded({ curation, sections, components, signupForms, artist, heading });
+      setLoaded({ curation, sections, components, signupForms, artist, heading, stories });
       setLoading(false);
     });
     return () => {
       current = false;
     };
-  }, [siteData, curationId, pageId, blockBuild, now]);
+  }, [siteData, curationId, pageId, blockBuild, needed, now]);
 
   return { content: now ?? loaded, loading };
 }
@@ -260,7 +270,8 @@ type Row = {
 export type BlockFillerInput = {
   pageId: string;
   layout: BlockBuildLayout;
-  curation: CurationDetail;
+  // Null for a page without a curation (2026-10-26).
+  curation: CurationDetail | null;
   sections: CurationSectionData[];
   components: ComponentContent[];
   signupForms: SignupFormContent[];
@@ -268,6 +279,8 @@ export type BlockFillerInput = {
   homeHref: string | null;
   // What a Page heading fills itself in from (2026-10-25).
   heading: HeadingNames | null;
+  // The Profile Catalogue stories, for Profile stories (2026-10-26).
+  stories: ProfileStoryRow[];
   onOpen: (artworkId: string) => void;
   heroShowing?: string | null;
   onHeroShowing?: (artworkId: string | null) => void;
@@ -283,6 +296,7 @@ export function blockFiller({
   artist,
   homeHref,
   heading,
+  stories,
   onOpen,
   heroShowing = null,
   onHeroShowing,
@@ -313,7 +327,7 @@ export function blockFiller({
     let picture: PictureWordsPicture | null = null;
     let open: (() => void) | undefined;
     if (content.source === "WORKS") {
-      const work = arrangeItems(curation.works, (w) => w.artworkId, content)[0];
+      const work = arrangeItems(curation?.works ?? [], (w) => w.artworkId, content)[0];
       const url = work ? (work.displayUrl ?? work.imageUrl) : null;
       if (work && url) {
         picture = { media: { kind: "PHOTO", url, posterUrl: null }, alt: work.catalogueName };
@@ -341,7 +355,7 @@ export function blockFiller({
   };
 
   const works = (block: LayoutBlock, content: ComponentContent): ReactNode => {
-    const shown = arrangeItems(curation.works, (w) => w.artworkId, content);
+    const shown = arrangeItems(curation?.works ?? [], (w) => w.artworkId, content);
     // A Single Image shows the first work as arranged on the page, and
     // opens it like a Gallery does (2026-10-16).
     const first = shown[0];
@@ -443,6 +457,16 @@ export function blockFiller({
       if (!entries.some((e) => !e.hidden)) return null;
       return <EntriesBlock settings={block.entries} entries={entries} media={mediaById} contentWidth={contentWidth} />;
     }
+    if (block.type === "stories" && block.stories) {
+      return (
+        <StoriesBlock
+          settings={block.stories}
+          chosen={readPageStories(content.text)}
+          stories={stories}
+          contentWidth={contentWidth}
+        />
+      );
+    }
     if (content.source === "WORKS") return works(block, content);
     if (content.source === "TYPED") {
       if (!content.text) return null;
@@ -508,17 +532,19 @@ function BlockBuildPage({
   signupForms,
   artist,
   heading,
+  stories,
   homeHref,
   onOpen,
 }: {
   pageId: string;
   style: Extract<PageStyleSummary, { type: "BLOCK_BUILD" }>;
-  curation: CurationDetail;
+  curation: CurationDetail | null;
   sections: CurationSectionData[];
   components: ComponentContent[];
   signupForms: SignupFormContent[];
   artist: SiteArtist | null;
   heading: HeadingNames | null;
+  stories: ProfileStoryRow[];
   homeHref: string | null;
   onOpen: (artworkId: string) => void;
 }) {
@@ -534,6 +560,7 @@ function BlockBuildPage({
     artist,
     homeHref,
     heading,
+    stories,
     onOpen,
     heroShowing,
     onHeroShowing: setHeroShowing,

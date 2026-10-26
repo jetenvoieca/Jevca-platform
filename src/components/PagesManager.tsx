@@ -118,9 +118,9 @@ export default function PagesManager({
   const selected = [...live, ...hidden].find((p) => p.id === selectedId) ?? null;
   const selectedStyle = selected ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null) : null;
   const canvasStyle = selectedStyle?.type === "CANVAS" ? selectedStyle : null;
-  // A Block Build page is arranged from its curation's sections, so
-  // it needs one.
-  const blockBuildStyle = selectedStyle?.type === "BLOCK_BUILD" && selected?.curationId ? selectedStyle : null;
+  // A Block Build page can be arranged with or without a curation
+  // (2026-10-26 — e.g. a page of profile stories).
+  const blockBuildStyle = selectedStyle?.type === "BLOCK_BUILD" ? selectedStyle : null;
   const canArrange = !!canvasStyle || !!blockBuildStyle;
   const arrangingSections = arranging && !!blockBuildStyle;
 
@@ -315,7 +315,7 @@ export default function PagesManager({
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
       <section className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-neutral-300 bg-white">
-        {selected && layingOut && blockBuildStyle && selected.curationId ? (
+        {selected && layingOut && blockBuildStyle ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
             <PageLayoutEditor
               key={selected.id}
@@ -325,7 +325,7 @@ export default function PagesManager({
               onClose={closeLayout}
             />
           </LiveSiteData>
-        ) : selected && arrangingSections && blockBuildStyle && selected.curationId ? (
+        ) : selected && arrangingSections && blockBuildStyle ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
             <PageSectionsArranger
               key={selected.id}

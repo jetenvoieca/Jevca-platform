@@ -10,6 +10,8 @@ import type { CurationSectionData } from "@/lib/curationSections";
 import type { ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
+import type { ProfileStoryRow } from "@/lib/actions/profileStories";
+import { readPageStories } from "@/lib/pageStories";
 
 // A published site (2026-10-06) — everything its pages show, saved when
 // "Publish to live site" is pressed (see SitePublication in
@@ -103,6 +105,10 @@ export type SiteSnapshot = {
   covers: CurationCover[];
   // The menus the pages show (2026-10-06), by Menu Style id.
   menus: Record<string, MenuStyleLayout>;
+  // The Profile Catalogue stories the pages' Profile stories show
+  // (2026-10-26) — only those, so unpublished ones stay private. Read as
+  // none for a site published before they existed.
+  profileStories: ProfileStoryRow[];
 };
 
 // What "Publish to live site" reports back (2026-10-06): when the site
@@ -129,6 +135,12 @@ export function pageImageUrls(snapshot: SiteSnapshot, page: SnapshotPage): strin
   }
   const blocks = style?.type === "BLOCK_BUILD" ? style.layout.blocks : [];
   if (blocks.some((b) => b.type === "logo")) add(snapshot.artist?.logoUrl);
+  // Profile stories' pictures (2026-10-26).
+  const storyBlocks = new Set(blocks.filter((b) => b.type === "stories").map((b) => b.id));
+  for (const c of page.components) {
+    if (!storyBlocks.has(c.blockId)) continue;
+    for (const { id } of readPageStories(c.text)) add(snapshot.profileStories.find((s) => s.id === id)?.media?.displayUrl);
+  }
   const curation = page.curationId ? snapshot.curations[page.curationId] : undefined;
   if (!curation) return [...urls];
   const doors = blocks.some((b) => b.type === "slidingdoors");

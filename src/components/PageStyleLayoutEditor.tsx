@@ -28,7 +28,9 @@ import {
   cleanEntriesSettings,
   type EntriesSettings,
   cleanPictureWords,
-  type PictureWordsSettings,
+  cleanStoriesSettings,
+  STORIES_LIMITS,
+  type PictureWordsLook,
   PICTURE_SHAPES,
   cleanGalleryNames,
   cleanHero,
@@ -94,6 +96,7 @@ export default function PageStyleLayoutEditor({
             names={!!b.names}
             hero={b.hero}
             pictureWords={b.pictureWords}
+            stories={b.stories}
             device={device}
             spacing={layout.gridSpacing}
           />
@@ -206,7 +209,49 @@ export default function PageStyleLayoutEditor({
             content: (
               <PictureWordsPanel
                 settings={b.pictureWords}
+                clean={cleanPictureWords}
                 onChange={(pictureWords) => onBlock({ ...b, pictureWords: cleanPictureWords(pictureWords) })}
+                note={
+                  <>
+                    The headline is typed on each page (Pages → Arrange); the picture is the first of the Supporting
+                    Media or works dragged onto it; the words under it are the curation&apos;s Description.
+                  </>
+                }
+              />
+            ),
+          };
+        }
+        if (b.stories) {
+          const stories = b.stories;
+          return {
+            button: "Settings",
+            title: "Profile stories",
+            content: (
+              <PictureWordsPanel
+                settings={stories}
+                clean={cleanStoriesSettings}
+                onChange={(next) => onBlock({ ...b, stories: cleanStoriesSettings(next) })}
+                headlineLabel="Caption"
+                bodyLabel="Story"
+                extra={
+                  <NumberField
+                    label="Space between stories"
+                    unit="pixels"
+                    step={1}
+                    value={stories.storySpace}
+                    limits={STORIES_LIMITS.storySpace}
+                    onCommit={(storySpace) =>
+                      onBlock({ ...b, stories: cleanStoriesSettings({ ...stories, storySpace }) })
+                    }
+                    wide
+                  />
+                }
+                note={
+                  <>
+                    The stories are chosen on each page (Pages → Arrange) from Artworks → Profile Catalogue — each its
+                    picture or video beside its caption and story, on the side set here or, swapped there, the other.
+                  </>
+                }
               />
             ),
           };
@@ -673,13 +718,26 @@ function EntriesPanel({
 // A Picture & words's settings (2026-10-24): the picture's side, share of
 // the width and shape, the gap beside it, whether it comes first on a
 // phone, where the words sit and the space under the headline, and the
-// look of the headline, its second line and the Description.
-function PictureWordsPanel({
+// look of the headline, its second line and the Description. Shared
+// (2026-10-26) with Profile stories, which have no second line and add
+// the space between stories (`extra`); `clean` is the settings' own
+// clean-up.
+function PictureWordsPanel<T extends PictureWordsLook & { accent?: PageTextStyle }>({
   settings,
+  clean,
   onChange,
+  headlineLabel = "Headline",
+  bodyLabel = "Description",
+  extra,
+  note,
 }: {
-  settings: PictureWordsSettings;
-  onChange: (settings: PictureWordsSettings) => void;
+  settings: T;
+  clean: (settings: T) => T;
+  onChange: (settings: T) => void;
+  headlineLabel?: string;
+  bodyLabel?: string;
+  extra?: ReactNode;
+  note: ReactNode;
 }) {
   const l = PICTURE_WORDS_LIMITS;
   const select = (
@@ -710,15 +768,15 @@ function PictureWordsPanel({
     limits: { min: number; max: number },
     set: (v: number) => void,
   ) => <NumberField label={label} unit={unit} step={1} value={value} limits={limits} onCommit={set} wide />;
-  const look = (key: "headline" | "accent" | "body", label: string) => (
+  const look = (value: PageTextStyle, label: string, set: (style: PageTextStyle) => void) => (
     <TextStyleBox
       label={label}
-      value={settings[key]}
+      value={value}
       fonts={SITE_FONTS}
       kinds={SITE_FONT_KINDS}
       isFont={isSiteFontId}
       scales
-      onChange={(style) => onChange({ ...settings, [key]: style })}
+      onChange={set}
     />
   );
   const sides = [
@@ -731,7 +789,7 @@ function PictureWordsPanel({
   ] as const;
   return (
     <>
-      {select("Picture on the", settings.side, sides, (side) => onChange(cleanPictureWords({ ...settings, side })))}
+      {select("Picture on the", settings.side, sides, (side) => onChange(clean({ ...settings, side })))}
       {number("Picture width", "%", settings.pictureShare, l.pictureShare, (pictureShare) =>
         onChange({ ...settings, pictureShare }),
       )}
@@ -741,7 +799,7 @@ function PictureWordsPanel({
             onChange({ ...settings, gap: { ...settings.gap, [device]: v } }),
           )}
           {select(`Picture shape, ${device}`, settings.shape[device], PICTURE_SHAPES, (v) =>
-            onChange(cleanPictureWords({ ...settings, shape: { ...settings.shape, [device]: v } })),
+            onChange(clean({ ...settings, shape: { ...settings.shape, [device]: v } })),
           )}
         </div>
       ))}
@@ -753,19 +811,20 @@ function PictureWordsPanel({
         />
         Picture first on a phone
       </label>
-      {select("Words sit at the", settings.wordsAt, wordsAt, (v) =>
-        onChange(cleanPictureWords({ ...settings, wordsAt: v })),
+      {select("Words sit at the", settings.wordsAt, wordsAt, (v) => onChange(clean({ ...settings, wordsAt: v })))}
+      {number(
+        `Space under the ${headlineLabel.toLowerCase()}`,
+        "pixels",
+        settings.headlineSpace,
+        l.headlineSpace,
+        (headlineSpace) => onChange({ ...settings, headlineSpace }),
       )}
-      {number("Space under the headline", "pixels", settings.headlineSpace, l.headlineSpace, (headlineSpace) =>
-        onChange({ ...settings, headlineSpace }),
-      )}
-      {look("headline", "Headline")}
-      {look("accent", "Headline, second line")}
-      {look("body", "Description")}
-      <p className="text-xs text-neutral-400">
-        The headline is typed on each page (Pages → Arrange); the picture is the first of the Supporting Media or works
-        dragged onto it; the words under it are the curation&apos;s Description.
-      </p>
+      {extra}
+      {look(settings.headline, headlineLabel, (headline) => onChange({ ...settings, headline }))}
+      {settings.accent &&
+        look(settings.accent, `${headlineLabel}, second line`, (accent) => onChange({ ...settings, accent }))}
+      {look(settings.body, bodyLabel, (body) => onChange({ ...settings, body }))}
+      <p className="text-xs text-neutral-400">{note}</p>
     </>
   );
 }

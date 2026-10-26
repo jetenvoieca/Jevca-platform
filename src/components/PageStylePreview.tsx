@@ -63,6 +63,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
                     names={!!b.names}
                     hero={b.hero}
                     pictureWords={b.pictureWords}
+                    stories={b.stories}
                     spacing={layout.gridSpacing}
                   />
                 </Labelled>
