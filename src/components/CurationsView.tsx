@@ -376,8 +376,9 @@ export default function CurationsView({
                           Presentation
                         </button>
                       </div>
-                      <p className="mt-2 truncate text-sm font-medium text-neutral-900">
-                        {w.catalogueName}
+                      <p className="mt-2 flex gap-1.5 text-sm font-medium text-neutral-900">
+                        <span className="truncate">{w.catalogueName}</span>
+                        <span className="shrink-0 font-normal text-neutral-400">#{w.catalogueNumber}</span>
                       </p>
                       {price && <p className="text-sm text-neutral-400">{price}</p>}
                       <button

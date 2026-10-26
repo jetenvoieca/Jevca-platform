@@ -35,6 +35,9 @@ export type CurationCover = {
 export type CurationWork = {
   artworkId: string;
   catalogueName: string;
+  // Shown beside the name on the Curations page (2026-10-26), since
+  // several works can share a name.
+  catalogueNumber: string;
   offeredPrice: string | null;
   priceCurrency: string;
   // The work's main image in this curation: a small thumbnail for
@@ -231,6 +234,7 @@ export async function getCuration(curationId: string, artistId: string): Promise
             select: {
               id: true,
               catalogueName: true,
+              catalogueNumber: true,
               offeredPrice: true,
               priceCurrency: true,
               ...TILE_ARTWORK_IMAGES,
@@ -249,6 +253,7 @@ export async function getCuration(curationId: string, artistId: string): Promise
     works: row.items.map((item) => ({
       artworkId: item.artwork.id,
       catalogueName: item.artwork.catalogueName,
+      catalogueNumber: item.artwork.catalogueNumber,
       offeredPrice: item.artwork.offeredPrice != null ? item.artwork.offeredPrice.toString() : null,
       priceCurrency: item.artwork.priceCurrency,
       ...tileUrls(item),

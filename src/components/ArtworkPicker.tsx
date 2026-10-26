@@ -190,6 +190,7 @@ export default function ArtworkPicker({
         const a: PickedArtwork = {
           id: result.artwork.id,
           catalogueName: result.artwork.catalogueName,
+          catalogueNumber: result.artwork.catalogueNumber,
           type: null,
           imageUrl: null,
           presentationPrice: null,
@@ -345,7 +346,10 @@ export default function ArtworkPicker({
                     </div>
                   )}
                   <div className="px-1 py-1">
-                    <p className="truncate text-xs text-neutral-700">{a.catalogueName}</p>
+                    <p className="flex gap-1 text-xs text-neutral-700">
+                      <span className="truncate">{a.catalogueName}</span>
+                      <span className="shrink-0 text-neutral-400">#{a.catalogueNumber}</span>
+                    </p>
                     <p className="truncate text-xs text-neutral-500">{a.type || "—"}</p>
                   </div>
                 </button>
