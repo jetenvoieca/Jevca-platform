@@ -126,7 +126,10 @@ export default function MediaPicker({
   // "inline" (2026-10-17, Video Edit's Add Media panel): no trigger and no
   // pop-up — the picker itself, open, where it's placed. `onClose` is
   // called by its Close button and after adding.
-  variant?: "tile" | "button" | "inline";
+  //
+  // "icon" (2026-10-26, the Profile Catalogue's ⊞ beside its heading): a
+  // small borderless ⊞ button, `label` as its tooltip.
+  variant?: "tile" | "button" | "inline" | "icon";
   onClose?: () => void;
   // Picked media, and (withArtworks) picked artworks — one call with
   // everything picked.
@@ -342,7 +345,22 @@ export default function MediaPicker({
   // so it works wherever the picker sits — even inside a moved or scaled
   // box, like a campaign mail's components. The trigger stays in place.
   let trigger: ReactNode;
-  if (variant === "button") {
+  if (variant === "icon") {
+    trigger = (
+      <button
+        type="button"
+        onClick={handleOpen}
+        title={label}
+        aria-label={label}
+        className="rounded p-1 text-neutral-700 hover:bg-neutral-100"
+      >
+        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
+          <rect x="1.5" y="1.5" width="15" height="15" rx="1" />
+          <path d="M9 5v8M5 9h8" />
+        </svg>
+      </button>
+    );
+  } else if (variant === "button") {
     trigger = (
       <button
         type="button"

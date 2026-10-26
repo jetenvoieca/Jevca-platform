@@ -233,6 +233,8 @@ model Artist {
   // Named, ordered selections of this artist's artworks (2026-09-24) —
   // see Curation below.
   curations Curation[]
+  // The Profile Catalogue (2026-10-26) — see ProfileStory below.
+  profileStories ProfileStory[]
 
   // Deprecated (2026-08-28) — superseded by the real ArtworkType table
   // below, which adds a per-type Ref value (used to compute Reference
@@ -709,6 +711,28 @@ model CurationSectionMedia {
 
   @@unique([sectionId, imageId])
   @@index([sectionId, position])
+  @@index([imageId])
+}
+
+// One entry in an artist's Profile Catalogue (2026-10-26, Craig's
+// mockup): the content for profile and story pages that isn't about one
+// artwork — a picture or video, its caption, and its story (plain text,
+// for now). `position` sets the order in the catalogue (0 first). If its
+// picture or video is deleted, the story stays, without a picture.
+model ProfileStory {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  imageId  String?
+  image    Image? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  caption  String @default("")
+  story    String @default("")
+  position Int
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId, position])
   @@index([imageId])
 }
 
@@ -2182,6 +2206,8 @@ model Image {
   sourceVideoRender VideoRender?
   // Social posts showing this image or video (2026-10-15).
   socialPostMedia SocialPostMedia[]
+  // Profile Catalogue stories showing this picture or video (2026-10-26).
+  profileStories ProfileStory[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

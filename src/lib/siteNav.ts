@@ -19,6 +19,7 @@ export const SITE_SECTION_COLOR = "#635572";
 export type SiteNavKey =
   | "artworks"
   | "curations"
+  | "profileCatalogue"
   | "galleries"
   | "artworkSettings"
   | "hopper"
@@ -38,7 +39,7 @@ export type SiteNavKey =
   | "socialMedia"
   | "pr";
 
-const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "curations", "galleries", "artworkSettings"];
+const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "profileCatalogue", "curations", "galleries", "artworkSettings"];
 
 const FINANCIAL_KEYS: SiteNavKey[] = [
   "account",
@@ -84,6 +85,13 @@ export function buildSiteNavEntries({
 
   const artworkChildren: AppShellNavItem[] = [
     { label: "Catalogue", href: `${base}/artworks`, active: active === "artworks" },
+    // The Profile Catalogue (2026-10-26) — stories for profile pages;
+    // between Catalogue and Curations (Craig's screenshot).
+    {
+      label: "Profile Catalogue",
+      href: `${base}/profile-catalogue`,
+      active: active === "profileCatalogue",
+    },
     { label: "Curations", href: `${base}/curations`, active: active === "curations" },
     // "Locations" — the /galleries route, relabelled.
     { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },
