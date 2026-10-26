@@ -1,16 +1,15 @@
-// Signs and verifies session cookies for the app's single shared-password
-// gate (see decisions log, 2026-08-05 — one password, no per-user
-// accounts, no session store). Uses the Web Crypto API rather than Node's
-// `crypto` module so the exact same code works in middleware (Edge
-// runtime) and in server actions (Node runtime) without two
-// implementations — confirmed available in both on this project's stack
-// (Netlify runs Node 24).
+// Signs and verifies login cookies (2026-10-26: one per person — see
+// User in schema.prisma — replacing the single shared password of
+// 2026-08-05). Uses the Web Crypto API rather than Node's `crypto`
+// module so the same code works in middleware (Edge runtime) and in
+// server actions (Node runtime). Password hashing, which needs Node, is
+// in lib/passwords.ts.
 
 export const SESSION_COOKIE_NAME = "jevca_session";
 
-// 30 days — long enough that you and Louise aren't re-entering a
-// password constantly, short enough that a stale cookie doesn't linger
-// forever if a device is ever lost.
+// 30 days — long enough not to be re-entering a password constantly,
+// short enough that a stale cookie doesn't linger forever if a device is
+// ever lost.
 const SESSION_LIFETIME_MS = 1000 * 60 * 60 * 24 * 30;
 export const SESSION_MAX_AGE_SECONDS = SESSION_LIFETIME_MS / 1000;
 
@@ -40,31 +39,35 @@ function safeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
-// The cookie value is just "<expiryTimestamp>.<signature>" — nothing to
-// look up in a database, no session store, since there's only ever one
-// valid password to check against.
-export async function createSessionToken(): Promise<string> {
+// Who a login cookie is for: the person's id and their sessionVersion
+// when they logged in.
+export type SessionClaims = { userId: string; version: number };
+
+// The cookie value is "<userId>.<sessionVersion>.<expiryTimestamp>.<signature>",
+// signed over the first three. Nothing is stored for it; whether the
+// person may still log in (switched off, a new password since) is
+// checked against the database by lib/currentUser.ts.
+export async function createSessionToken(claims: SessionClaims): Promise<string> {
   const secret = process.env.AUTH_SECRET;
   if (!secret) throw new Error("AUTH_SECRET is not configured.");
-  const expiresAt = Date.now() + SESSION_LIFETIME_MS;
-  const signature = await hmac(secret, String(expiresAt));
-  return `${expiresAt}.${signature}`;
+  const payload = `${claims.userId}.${claims.version}.${Date.now() + SESSION_LIFETIME_MS}`;
+  return `${payload}.${await hmac(secret, `session:${payload}`)}`;
 }
 
-export async function isValidSessionToken(
-  token: string | undefined | null
-): Promise<boolean> {
-  if (!token) return false;
+// The cookie's claims if it's genuine and not expired, otherwise null.
+// The old shared-password cookies (two parts) never pass, so everyone
+// logs in again once.
+export async function readSessionToken(token: string | undefined | null): Promise<SessionClaims | null> {
   const secret = process.env.AUTH_SECRET;
-  if (!secret) return false;
-
-  const [expiresAtRaw, signature] = token.split(".");
+  if (!token || !secret) return null;
+  const parts = token.split(".");
+  if (parts.length !== 4) return null;
+  const [userId, versionRaw, expiresAtRaw, signature] = parts;
+  const version = Number(versionRaw);
   const expiresAt = Number(expiresAtRaw);
-  if (!expiresAtRaw || !signature || Number.isNaN(expiresAt)) return false;
-  if (Date.now() > expiresAt) return false;
-
-  const expected = await hmac(secret, expiresAtRaw);
-  return safeEqual(expected, signature);
+  if (!userId || !Number.isInteger(version) || !Number.isFinite(expiresAt) || Date.now() > expiresAt) return null;
+  const expected = await hmac(secret, `session:${userId}.${versionRaw}.${expiresAtRaw}`);
+  return safeEqual(expected, signature) ? { userId, version } : null;
 }
 
 // A short-lived signed value for one purpose (2026-10-09, first used as

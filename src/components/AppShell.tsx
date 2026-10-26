@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { logout } from "@/lib/actions/auth";
 import type { PublishResult } from "@/lib/siteSnapshot";
 import SidebarNav from "@/components/SidebarNav";
@@ -178,6 +179,12 @@ export default function AppShell({
               header above — sits outside the scrolling <nav>, not inside
               it, so it stays visible regardless of list length. */}
           <form action={logout} className="border-t border-neutral-200 p-4">
+            <Link
+              href="/my-login"
+              className="block w-full rounded-md px-3 py-2 text-left text-sm text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"
+            >
+              Your login
+            </Link>
             <button
               type="submit"
               className="w-full rounded-md px-3 py-2 text-left text-sm text-neutral-500 hover:bg-neutral-100 hover:text-neutral-700"

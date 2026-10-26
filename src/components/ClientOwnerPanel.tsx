@@ -2,6 +2,8 @@ import OwnerCard from "@/components/OwnerCard";
 import DomainCard from "@/components/DomainCard";
 import SubscriptionCard from "@/components/SubscriptionCard";
 import HopperTokenCard from "@/components/HopperTokenCard";
+import ArtistLoginCard from "@/components/ArtistLoginCard";
+import type { ArtistLogin } from "@/lib/actions/users";
 import type { ArtistRecord, SiteRecord } from "@/lib/clientPanelTypes";
 
 type SubscriptionPaymentRow = {
@@ -25,10 +27,13 @@ export default function ClientOwnerPanel({
   site,
   artist,
   subscriptionPayments,
+  login,
 }: {
   site: SiteRecord;
   artist: ArtistRecord;
   subscriptionPayments: SubscriptionPaymentRow[];
+  // The client's own login (2026-10-26), null if none yet.
+  login: ArtistLogin | null;
 }) {
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -44,6 +49,7 @@ export default function ClientOwnerPanel({
             subscriptionPayments={subscriptionPayments}
           />
           <HopperTokenCard artistId={artist.id} kind={artist.kind} hopperToken={artist.hopperToken} />
+          <ArtistLoginCard key={artist.id} artistId={artist.id} login={login} />
         </div>
       </div>
     </div>

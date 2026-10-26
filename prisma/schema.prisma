@@ -235,6 +235,8 @@ model Artist {
   curations Curation[]
   // The Profile Catalogue (2026-10-26) — see ProfileStory below.
   profileStories ProfileStory[]
+  // Logins for this client (2026-10-26) — see User below.
+  users User[]
 
   // Deprecated (2026-08-28) — superseded by the real ArtworkType table
   // below, which adds a per-type Ref value (used to compute Reference
@@ -2646,4 +2648,36 @@ model TurnstileWidget {
   domains         String[]
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+}
+
+// Who can log in (2026-10-26, replacing the one shared password): an
+// ADMIN (Craig — everything) or an ARTIST, who reaches only their own
+// client's sites (`artistId`). Email is stored lower-case. The password
+// is kept only as a scrypt hash (lib/passwords.ts). `sessionVersion` is
+// part of every login cookie: raising it (a new password, the login
+// switched off) logs that person out everywhere. After
+// LOGIN_LOCK_AFTER failed tries in a row the login is locked until
+// `lockedUntil` (lib/actions/auth.ts).
+enum UserRole {
+  ADMIN
+  ARTIST
+}
+
+model User {
+  id             String    @id @default(cuid())
+  email          String    @unique
+  name           String
+  passwordHash   String
+  role           UserRole
+  artistId       String?
+  artist         Artist?   @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  active         Boolean   @default(true)
+  sessionVersion Int       @default(0)
+  failedLogins   Int       @default(0)
+  lockedUntil    DateTime?
+  lastLoginAt    DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([artistId])
 }

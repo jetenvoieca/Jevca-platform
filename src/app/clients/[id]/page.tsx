@@ -8,6 +8,7 @@ import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
 import { getOpenAlerts } from "@/lib/alerts";
 import { getClientPanelData } from "@/lib/clientPanelData";
+import { getArtistLogin } from "@/lib/actions/users";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 
 export const dynamic = "force-dynamic";
@@ -49,6 +50,7 @@ export default async function ClientAdminPage({
     getRecentSites(),
   ]);
   if (!data) notFound();
+  const login = await getArtistLogin(data.artist.id);
 
   return (
     <AppShell
@@ -78,6 +80,7 @@ export default async function ClientAdminPage({
           site={data.site}
           artist={data.artist}
           subscriptionPayments={data.subscriptionPayments}
+          login={login}
         />
       }
     />

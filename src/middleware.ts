@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { isValidSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { readSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
 import { BUSINESS_WEBSITE_DOMAIN, BUSINESS_WEBSITE_HOST } from "@/lib/businessWebsite";
 
 // The business website, jetenvoieca.com (2026-09-29). Requests to these
@@ -124,8 +124,12 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // A genuine, unexpired login cookie (2026-10-26: per person). Whether
+  // that person may still log in, and what they may reach, is checked by
+  // the pages and actions themselves (lib/currentUser.ts) — the database
+  // isn't reachable from here.
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const authenticated = await isValidSessionToken(token);
+  const authenticated = (await readSessionToken(token)) !== null;
 
   if (!authenticated) {
     const loginUrl = new URL("/login", request.url);
