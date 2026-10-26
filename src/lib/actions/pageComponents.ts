@@ -60,19 +60,18 @@ export async function getPageComponents(siteId: string, pageId: string): Promise
 }
 
 // The page and one component of its Display Style, checked: the page is
-// this site's, has a curation and a Block Build style holding the
-// component.
+// this site's and has a Block Build style holding the component. Its
+// curation, if it has one (2026-10-26: a page needs none).
 async function pageBlock(
   siteId: string,
   pageId: string,
   blockId: string,
-): Promise<{ curationId: string; block: LayoutBlock } | { error: string }> {
+): Promise<{ curationId: string | null; block: LayoutBlock } | { error: string }> {
   const page = await db.page.findFirst({
     where: { id: pageId, siteId },
     select: { curationId: true, pageStyle: { select: { type: true, layout: true } } },
   });
   if (!page) return { error: "Page not found." };
-  if (!page.curationId) return { error: "This page has no curation. Choose one with Edit." };
   if (page.pageStyle?.type !== "BLOCK_BUILD") {
     return { error: "Only pages with a Block Build Display Style are arranged this way." };
   }
@@ -93,6 +92,9 @@ export async function setPageComponent(
 ): Promise<Result> {
   const found = await pageBlock(siteId, pageId, blockId);
   if ("error" in found) return found;
+  // A page needs no curation (2026-10-26) — only to show one's works or
+  // sections.
+  if (!found.curationId) return { error: "This page has no curation. Choose one with Edit." };
 
   let kind: ContentKind = "WORKS";
   if (sectionId !== null) {
