@@ -60,6 +60,8 @@ import SignupFormSetup from "@/components/SignupFormSetup";
 import LineView from "@/components/LineView";
 import EntriesSlot from "@/components/EntriesSlot";
 import StoriesSlot from "@/components/StoriesSlot";
+import { StoryThumb } from "@/components/StoryThumb";
+import { readPageStories, writePageStories } from "@/lib/pageStories";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import { PlayMark, stillOf } from "@/components/SectionMediaView";
 import PageHeadingView from "@/components/PageHeadingView";
@@ -105,9 +107,12 @@ type Content = { sectionId: string | null; kind: ContentKind; label: string; det
 // What's being dragged: something from the list or a component (to
 // fill, move or empty a component), or one picture within a component
 // (to change the order).
+// A Profile Catalogue story dragged from the Sections column onto a
+// Profile stories component (2026-10-26).
 type DragData =
   | { type: "content"; content: Content; fromBlockId: string | null }
-  | { type: "item"; blockId: string; itemId: string; url: string | null };
+  | { type: "item"; blockId: string; itemId: string; url: string | null }
+  | { type: "story"; story: ProfileStoryRow };
 
 // What a droppable is, so a drag only meets the targets it can use.
 type DropData =
@@ -370,6 +375,14 @@ export default function PageSectionsArranger({
       return;
     }
 
+    if (data.type === "story") {
+      if (target.kind !== "block" || target.block.type !== "stories") return;
+      const onPage = readPageStories(contents.get(target.block.id)?.text ?? null);
+      if (onPage.some((s) => s.id === data.story.id)) return;
+      saveText(target.block, writePageStories([...onPage, { id: data.story.id, swap: false }]));
+      return;
+    }
+
     const from = data.fromBlockId;
     if (target.kind === "tray") {
       if (from) empty(from);
@@ -394,6 +407,14 @@ export default function PageSectionsArranger({
         <Tray
           sections={sections}
           hasCuration={!!curationId}
+          stories={layout.blocks.some((b) => b.type === "stories") ? stories : null}
+          storiesOnPage={
+            new Set(
+              layout.blocks
+                .filter((b) => b.type === "stories")
+                .flatMap((b) => readPageStories(contents.get(b.id)?.text ?? null).map((s) => s.id)),
+            )
+          }
           removing={dragging?.type === "content" && !!dragging.fromBlockId}
         />
 
@@ -589,6 +610,12 @@ export default function PageSectionsArranger({
             <ContentText content={dragging.content} />
           </div>
         )}
+        {dragging?.type === "story" && (
+          <div className="flex w-56 items-center gap-2 rounded-md border border-blue-500 bg-white p-1.5 shadow-md">
+            <StoryThumb story={dragging.story} className="h-10 w-10" />
+            <p className="min-w-0 truncate text-sm text-neutral-900">{dragging.story.caption || "Untitled"}</p>
+          </div>
+        )}
         {dragging?.type === "item" && (
           <div className="h-20 w-20 overflow-hidden rounded-md shadow-md">
             {dragging.url ? (
@@ -606,14 +633,20 @@ export default function PageSectionsArranger({
 // The list on the left: the works and the curation's sections, to drag
 // onto the page — and, while a component's content is being dragged,
 // the place to drop it to empty that component. A page without a
-// curation (2026-10-26) has none to drag.
+// curation (2026-10-26) has none to drag. With a Profile stories
+// component (2026-10-26), the Profile Catalogue's stories too, to drag
+// onto it — those already on the page marked so.
 function Tray({
   sections,
   hasCuration,
+  stories,
+  storiesOnPage,
   removing,
 }: {
   sections: CurationSectionData[] | null;
   hasCuration: boolean;
+  stories: ProfileStoryRow[] | null;
+  storiesOnPage: Set<string>;
   removing: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: TRAY_ID, data: { kind: "tray" } });
@@ -643,6 +676,16 @@ function Tray({
             ))}
           </>
         )}
+        {stories && sections !== null && (
+          <>
+            <h4 className="mt-3 px-1 text-sm text-neutral-800">Profile stories</h4>
+            {stories.length === 0 ? (
+              <p className="px-1 text-xs text-neutral-400">None yet — add them in Artworks → Profile Catalogue.</p>
+            ) : (
+              stories.map((s) => <TrayStory key={s.id} story={s} onPage={storiesOnPage.has(s.id)} />)
+            )}
+          </>
+        )}
         <p className={`mt-1 text-xs ${removing ? "text-red-600" : "text-neutral-400"}`}>
           {removing
             ? "Drop here to empty the component."
@@ -650,6 +693,29 @@ function Tray({
         </p>
       </div>
     </aside>
+  );
+}
+
+// A Profile Catalogue story in the Sections column (2026-10-26), to drag
+// onto a Profile stories component — faded, and not draggable, once it's
+// on the page.
+function TrayStory({ story, onPage }: { story: ProfileStoryRow; onPage: boolean }) {
+  const data: DragData = { type: "story", story };
+  const { setNodeRef, attributes, listeners } = useDraggable({ id: `story:${story.id}`, data, disabled: onPage });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      title={onPage ? "Already on this page" : "Drag onto the Profile stories component"}
+      className={`flex items-center gap-2 rounded-md border border-neutral-300 bg-white p-1.5 ${
+        onPage ? "opacity-40" : "cursor-grab hover:border-neutral-400 active:cursor-grabbing"
+      }`}
+    >
+      <StoryThumb story={story} className="h-9 w-9" />
+      <p className="min-w-0 flex-1 truncate text-sm text-neutral-800">{story.caption || "Untitled"}</p>
+      {onPage && <span className="shrink-0 text-xs text-neutral-500">On page</span>}
+    </div>
   );
 }
 
@@ -678,8 +744,13 @@ function Slot({ block, dragging, children }: { block: LayoutBlock; dragging: Dra
     id: `block:${block.id}`,
     data: { kind: "block", block },
   });
-  const contentDrag = dragging?.type === "content" ? dragging : null;
-  const fits = contentDrag ? contentFits(block.type, contentDrag.content.kind) : false;
+  const contentDrag = dragging?.type === "content" || dragging?.type === "story" ? dragging : null;
+  const fits =
+    dragging?.type === "story"
+      ? block.type === "stories"
+      : contentDrag?.type === "content"
+        ? contentFits(block.type, contentDrag.content.kind)
+        : false;
   const highlight = !contentDrag
     ? ""
     : fits
