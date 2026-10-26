@@ -28,9 +28,7 @@ import { useAutoSave } from "@/components/useAutoSave";
 const SAMPLE: CurationWorkPresentation = {
   artworkId: "sample",
   catalogueName: "Rude",
-  description: null,
-  defaultDescription: null,
-  artworkDescription:
+  description:
     "RUDE was originally created when I first relocated to Brighton, as part of the ‘Day Tripper’ series. Inspired by the fairground elements of Brighton Pier this fun work suggests a cheeky joke shared, a giggle and snigger over a naughty thought or comment.\nRecently, wanting to work again with this much loved piece, I had her printed in a large format and have thoroughly enjoyed playing with all the gorgeousness, gold, glitter, gloss and an abundance of stickers, sequins and sparkles to create a completely new unique work of art.",
   offeredPrice: "1995",
   priceCurrency: "GBP",

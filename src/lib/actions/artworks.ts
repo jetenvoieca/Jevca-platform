@@ -574,23 +574,19 @@ export async function updateCatalogue(
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
   const priceCurrencyRaw = (formData.get("priceCurrency") as string)?.trim() ?? "";
 
-  // The public website's Medium and "Can be viewed at" are seeded once
-  // from Catalogue's Medium and Location — only while each is still at
-  // its untouched default. The Presentation tab that used to edit them
-  // was removed (2026-09-23, direct request); these stay as-is until a
-  // new way of presenting artworks is designed.
+  // The public website's "Can be viewed at" is seeded once from
+  // Catalogue's Location — only while it's still at its untouched default.
+  // (Presentation medium needs no seeding: until changed in a curation's
+  // Presentation panel it is the Catalogue's Medium — see
+  // updateArtworkPresentationMedium.)
   const current = await db.artwork.findUnique({
     where: { id },
-    select: { catalogueName: true, presentationMedium: true, viewingLocation: true },
+    select: { catalogueName: true, viewingLocation: true },
   });
 
   const presentationUpdate: {
-    presentationMedium?: string;
     viewingLocation?: string;
   } = {};
-  if (!current?.presentationMedium && medium) {
-    presentationUpdate.presentationMedium = medium;
-  }
   if (!current?.viewingLocation && location) {
     presentationUpdate.viewingLocation = location;
   }
@@ -686,6 +682,25 @@ export async function updateArtworkName(
   await db.artwork.update({ where: { id: artworkId }, data: { catalogueName } });
   await retireArtworkPaymentLinks(artworkId);
   return { ok: true, catalogueName };
+}
+
+// The artwork's Presentation medium (2026-10-26) — the italic line in its
+// presentation on the website, edited in a curation's Presentation panel
+// and the same in every curation. Null (never changed) = the Catalogue's
+// Medium, kept current; saved blank it stays "" and shows nothing.
+export async function updateArtworkPresentationMedium(
+  artworkId: string,
+  artistId: string,
+  mediumRaw: string
+): Promise<{ ok: true; presentationMedium: string } | { error: string }> {
+  await requireArtistAccess(artistId);
+  const presentationMedium = mediumRaw.trim();
+  const { count } = await db.artwork.updateMany({
+    where: { id: artworkId, artistId },
+    data: { presentationMedium },
+  });
+  if (count === 0) return { error: "Not found — it may have been deleted." };
+  return { ok: true, presentationMedium };
 }
 
 // Called when leaving the editor (Close) rather than on every keystroke —

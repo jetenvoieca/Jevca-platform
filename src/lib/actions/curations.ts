@@ -63,30 +63,33 @@ export type CurationDetail = {
 
 // One work's presentation within a curation (2026-10-03) — shown beside
 // the works on the Curations page when that work is selected.
-// Description and images are this curation's own: Description is null
-// until written (defaultDescription is shown instead), and images are the
-// Catalogue's until changed here (see CurationItem.ownImages). Name and
-// price are the artwork's own, so editing them here changes them
-// everywhere. The number of instalments is the artist's Settings
+// Description and images are this curation's own: images are the
+// Catalogue's until changed here (see CurationItem.ownImages). Name,
+// Presentation medium and price are the artwork's own, so editing them
+// here changes them everywhere. The number of instalments is the artist's Settings
 // default — artworks don't have their own.
 export type CurationWorkPresentation = {
   artworkId: string;
   catalogueName: string;
-  description: string | null;
-  defaultDescription: string | null;
+  // Exactly what the Presentation panel shows and the website shows —
+  // never anything else (2026-10-26, direct request: fallbacks confuse).
+  // This curation's own wording once written; until then the artwork's
+  // Type, Size and Medium (kept current with the Catalogue); "" once
+  // deleted, which shows nothing.
+  description: string;
   offeredPrice: string | null;
   priceCurrency: string;
   defaultInstalmentCount: number;
   // Main first — this curation's main image is images[0].
   images: ArtworkImage[];
   // For the Presentation window's details (2026-10-19 — see
-  // lib/presentationTemplate.ts): the artwork's own description, its
-  // Presentation medium (else Medium), edition, type, size, where it can
+  // lib/presentationTemplate.ts): the artwork's Presentation medium —
+  // the Catalogue's Medium until changed in the Presentation panel, ""
+  // once deleted, which shows nothing — edition, type, size, where it can
   // be seen, whether it's still for sale, the artist's release message
   // (shown with the instalment terms) and where enquiries go; for the
   // enquiry form, the artist's first name and Instagram username (absent
   // from sites published before them).
-  artworkDescription: string | null;
   medium: string | null;
   edition: string | null;
   type: string | null;
@@ -158,7 +161,7 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
 }
 
-// What a work's Description shows until one is written for it: the
+// What a work's Description is until one is written for it: the
 // artwork's Type, Size and Medium, one per line, skipping any that are
 // blank. Worked out each time it's shown, so it always matches the
 // Catalogue.
@@ -413,7 +416,6 @@ export async function getCurationWorkPresentation(
       artwork: {
         select: {
           catalogueName: true,
-          description: true,
           type: true,
           size: true,
           medium: true,
@@ -446,8 +448,7 @@ export async function getCurationWorkPresentation(
   return {
     artworkId,
     catalogueName: artwork.catalogueName,
-    description: item.description,
-    defaultDescription: defaultDescription(artwork),
+    description: item.description ?? defaultDescription(artwork) ?? "",
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     priceCurrency: artwork.priceCurrency,
     defaultInstalmentCount: artwork.artist.defaultInstalmentCount,
@@ -457,8 +458,7 @@ export async function getCurationWorkPresentation(
           null,
         )
       : toArtworkImages(artwork.images, artwork.mainImageId),
-    artworkDescription: artwork.description,
-    medium: artwork.presentationMedium || artwork.medium,
+    medium: artwork.presentationMedium ?? artwork.medium,
     edition: artwork.edition,
     type: artwork.type,
     size: artwork.size,
@@ -533,8 +533,8 @@ export async function setCurationWorkImages(
 }
 
 // Saves a work's Description within this curation only. From then on
-// it's kept as written — saving it blank keeps it blank rather than
-// going back to the default.
+// it's kept as written — saving it blank keeps it blank (nothing shown)
+// rather than going back to the default.
 export async function updateCurationWorkDescription(
   curationId: string,
   artistId: string,

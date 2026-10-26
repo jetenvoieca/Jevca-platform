@@ -7,7 +7,11 @@ import {
   updateCurationWorkDescription,
   type CurationWorkPresentation as Presentation,
 } from "@/lib/actions/curations";
-import { updateArtworkName, updateArtworkPrice } from "@/lib/actions/artworks";
+import {
+  updateArtworkName,
+  updateArtworkPresentationMedium,
+  updateArtworkPrice,
+} from "@/lib/actions/artworks";
 import { CURRENCIES } from "@/lib/currencies";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 
@@ -17,21 +21,21 @@ import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 //   Catalogue's until changed here, and changing them never touches the
 //   Catalogue (see CurationImageEditor).
 // - Name: the artwork's own name (renames it everywhere).
+// - Presentation medium (2026-10-26): the artwork's own, the italic line
+//   on the website (changes it in every curation). The Catalogue's Medium
+//   until changed; deleted, nothing shows.
 // - Description: this curation's own wording for the work. Until one is
-//   written it shows the artwork's Type, Size and Medium, kept current
-//   with the Catalogue — see CurationItem.description in schema.prisma.
+//   written it's the artwork's Type, Size and Medium, kept current with
+//   the Catalogue; deleted, nothing shows — see CurationItem.description
+//   in schema.prisma.
+// What these boxes show is exactly what the website shows (2026-10-26,
+// direct request — no other text is ever put in its place).
 // - Purchase Options: the artwork's own full price (changes it
 //   everywhere), and what it comes to in instalments. The number of
 //   instalments is the artist's Settings default, edited there only.
 //
 // Rendered with a key of curation + work by its parent, so it starts
 // fresh whenever a different work is shown.
-
-// The Description as shown: this curation's own once written, otherwise
-// the artwork's Type, Size and Medium.
-function shownDescription(p: Presentation): string {
-  return p.description ?? p.defaultDescription ?? "";
-}
 
 // Amounts in Purchase Options: thousands separated, pence only when
 // there are any ("25,000", "4,999.50"). The currency is the dropdown
@@ -67,6 +71,7 @@ export default function CurationWorkPresentation({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [nameDraft, setNameDraft] = useState("");
+  const [mediumDraft, setMediumDraft] = useState("");
   const [descriptionDraft, setDescriptionDraft] = useState("");
   const [priceDraft, setPriceDraft] = useState("");
   const [currencyDraft, setCurrencyDraft] = useState("GBP");
@@ -81,7 +86,8 @@ export default function CurationWorkPresentation({
       setData(result);
       if (result) {
         setNameDraft(result.catalogueName);
-        setDescriptionDraft(shownDescription(result));
+        setMediumDraft(result.medium ?? "");
+        setDescriptionDraft(result.description);
         setPriceDraft(result.offeredPrice ?? "");
         setCurrencyDraft(result.priceCurrency);
       }
@@ -123,10 +129,27 @@ export default function CurationWorkPresentation({
     onArtworkChanged();
   };
 
+  // Saving it unchanged writes nothing, so an untouched one keeps
+  // following the Catalogue's Medium.
+  const saveMedium = async () => {
+    if (mediumDraft.trim() === (data.medium ?? "").trim()) return;
+    setError(null);
+    setSaving(true);
+    const result = await updateArtworkPresentationMedium(artworkId, artistId, mediumDraft);
+    setSaving(false);
+    if ("error" in result) {
+      setError(result.error);
+      setMediumDraft(data.medium ?? "");
+      return;
+    }
+    setData({ ...data, medium: result.presentationMedium });
+    setMediumDraft(result.presentationMedium);
+  };
+
   // Saving the default unchanged writes nothing, so a work nobody has
   // written a description for keeps following the Catalogue.
   const saveDescription = async () => {
-    if (descriptionDraft.trim() === shownDescription(data).trim()) return;
+    if (descriptionDraft.trim() === data.description.trim()) return;
     setError(null);
     setSaving(true);
     const result = await updateCurationWorkDescription(
@@ -138,7 +161,7 @@ export default function CurationWorkPresentation({
     setSaving(false);
     if ("error" in result) {
       setError(result.error);
-      setDescriptionDraft(shownDescription(data));
+      setDescriptionDraft(data.description);
       return;
     }
     setData({ ...data, description: result.description });
@@ -211,6 +234,18 @@ export default function CurationWorkPresentation({
             if (e.key === "Enter") e.currentTarget.blur();
           }}
           className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
+        />
+      </div>
+
+      <div className="rounded-xl border border-neutral-300 p-4">
+        <h3 className="mb-2 text-center text-lg text-neutral-900">Presentation medium</h3>
+        <textarea
+          value={mediumDraft}
+          onChange={(e) => setMediumDraft(e.target.value)}
+          onBlur={saveMedium}
+          rows={2}
+          placeholder="e.g. Original work on aluminium. Mixed media…"
+          className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
         />
       </div>
 

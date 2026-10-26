@@ -55,7 +55,7 @@ export default function WorkPresentation({
   // Which is showing: the words and buttons, or one of the forms over them.
   const [panel, setPanel] = useState<"words" | "enquiry" | "full" | "instalments">("words");
   const viewed = data.images[viewIndex] ?? data.images[0] ?? null;
-  const description = data.description ?? data.artworkDescription ?? "";
+  const description = data.description;
   const price = data.offeredPrice != null ? Number(data.offeredPrice) : null;
   const priced = price != null && price > 0;
   const count = data.defaultInstalmentCount;
