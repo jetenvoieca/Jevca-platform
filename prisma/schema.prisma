@@ -2139,6 +2139,20 @@ model Image {
   artworkPrice    Decimal? @db.Decimal(10, 2)
   artworkType     String?
   artworkLocation String?
+  // More details read from an artist's old website by the browser
+  // importer (2026-10-26, "Import this ISYT site" — extension/): they
+  // fill the Hopper's "Create new artwork" form (Medium, Edition, Sold)
+  // or go straight into the new artwork (viewing location → "Can be
+  // viewed at"). artworkPortfolio is the old site's portfolio section,
+  // so curations can be made in the site's order. sourceUrl is the
+  // work's own page on the old site — it stops the same work being
+  // imported twice (/api/hopper/known-sources).
+  artworkMedium          String?
+  artworkEdition         String?
+  artworkSold            Boolean @default(false)
+  artworkViewingLocation String?
+  artworkPortfolio       String?
+  sourceUrl              String?
   altText   String?
   tags      String[]    @default([])
   status    ImageStatus @default(SORTED)
@@ -2174,6 +2188,7 @@ model Image {
 
   @@index([artistId])
   @@index([artworkId])
+  @@index([artistId, sourceUrl])
 }
 
 enum VideoRenderStatus {

@@ -49,6 +49,14 @@ export type HopperItem = {
   artworkPrice: string | null;
   artworkType: string | null;
   artworkLocation: string | null;
+  // What the browser importer read from an artist's old website
+  // (2026-10-26; sourceUrl = the work's page there, null otherwise) —
+  // they fill in the same form.
+  artworkMedium: string | null;
+  artworkEdition: string | null;
+  artworkSold: boolean;
+  artworkViewingLocation: string | null;
+  sourceUrl: string | null;
   altText: string | null;
   tags: string[];
   createdAt: string;
@@ -1447,6 +1455,13 @@ function parseHopperItemForQuickCatalogue(
 // 2026-09-26 — Type, Size, Offered price and Location sent from the
 // Studio app (HopperItem.artwork*) fill their fields first; the parse
 // above only fills Size and Offered price when Studio didn't send them.
+//
+// 2026-10-26 — a work imported from an artist's old website (sourceUrl
+// set, "Import this ISYT site" in the browser importer) arrives with its
+// details already sorted into their own fields, so there's no parse: its
+// Medium and Edition fill those fields, and the form also shows its
+// Description, "Can be viewed at" (when the site gave one) and Sold
+// (when the site marked it sold), all carried into the new artwork.
 function QuickCatalogueFields({
   item,
   settings,
@@ -1461,7 +1476,10 @@ function QuickCatalogueFields({
   onDone: (fields: FormData) => void;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
-  const parsed = parseHopperItemForQuickCatalogue(item.caption, item.description);
+  const imported = item.sourceUrl !== null;
+  const parsed = imported
+    ? { name: (item.caption || "").trim(), size: "", offeredPrice: "", studioNotes: "" }
+    : parseHopperItemForQuickCatalogue(item.caption, item.description);
   const initialType = item.artworkType ?? "";
   const initialSize = item.artworkSize ?? parsed.size;
   const initialPrice = item.artworkPrice ?? parsed.offeredPrice;
@@ -1494,9 +1512,9 @@ function QuickCatalogueFields({
             settings={settings}
             values={{
               type: initialType,
-              medium: "",
+              medium: item.artworkMedium ?? "",
               size: initialSize,
-              edition: "",
+              edition: item.artworkEdition ?? "",
               availableQty: "",
               location: item.artworkLocation ?? "",
               date: "",
@@ -1533,6 +1551,37 @@ function QuickCatalogueFields({
               </div>
             </div>
           </ArtworkCatalogueFields>
+
+          {imported && (
+            <>
+              <div className="col-span-2">
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Description</label>
+                <textarea
+                  name="description"
+                  defaultValue={item.description ?? ""}
+                  rows={4}
+                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                />
+              </div>
+              {item.artworkViewingLocation && (
+                <div className="col-span-2">
+                  <label className="mb-1 block text-sm font-medium text-neutral-700">Can be viewed at</label>
+                  <input
+                    type="text"
+                    name="viewingLocation"
+                    defaultValue={item.artworkViewingLocation}
+                    className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                  />
+                </div>
+              )}
+              {item.artworkSold && (
+                <label className="col-span-2 flex items-center gap-2 text-sm text-neutral-700">
+                  <input type="checkbox" name="sold" defaultChecked />
+                  Sold (marked sold on the old website)
+                </label>
+              )}
+            </>
+          )}
         </div>
       </form>
       <div className="mt-4 flex items-center gap-3">

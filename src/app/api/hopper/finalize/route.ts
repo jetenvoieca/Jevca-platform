@@ -37,6 +37,11 @@ function optionalText(value: unknown): string | undefined {
 // "Studio"). Blank or omitted is the same as before this existed.
 // artworkPrice must be a plain number (or a numeric string) and is
 // rejected otherwise, rather than silently stored as something else.
+//
+// artworkMedium/artworkEdition/artworkSold/artworkViewingLocation/
+// artworkPortfolio/sourceUrl (2026-10-26) — optional, sent by the browser
+// importer's "Import this ISYT site" (see the note on Image.artworkMedium
+// in schema.prisma). artworkSold is true only when sent as true.
 export async function POST(request: NextRequest) {
   const body = await request.json().catch(() => null);
   if (!body) {
@@ -55,6 +60,12 @@ export async function POST(request: NextRequest) {
     artworkPrice,
     artworkType,
     artworkLocation,
+    artworkMedium,
+    artworkEdition,
+    artworkSold,
+    artworkViewingLocation,
+    artworkPortfolio,
+    sourceUrl,
   } = body as {
     token?: string;
     key?: string;
@@ -67,6 +78,12 @@ export async function POST(request: NextRequest) {
     artworkPrice?: unknown;
     artworkType?: unknown;
     artworkLocation?: unknown;
+    artworkMedium?: unknown;
+    artworkEdition?: unknown;
+    artworkSold?: unknown;
+    artworkViewingLocation?: unknown;
+    artworkPortfolio?: unknown;
+    sourceUrl?: unknown;
   };
 
   if (!token || !key || !contentType || !kind) {
@@ -109,6 +126,12 @@ export async function POST(request: NextRequest) {
     artworkPrice: price,
     artworkType: optionalText(artworkType),
     artworkLocation: optionalText(artworkLocation),
+    artworkMedium: optionalText(artworkMedium),
+    artworkEdition: optionalText(artworkEdition),
+    artworkSold: artworkSold === true,
+    artworkViewingLocation: optionalText(artworkViewingLocation),
+    artworkPortfolio: optionalText(artworkPortfolio),
+    sourceUrl: optionalText(sourceUrl),
   });
 
   return NextResponse.json(result);

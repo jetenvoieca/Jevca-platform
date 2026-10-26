@@ -106,6 +106,23 @@ async function fetchBestImage(url) {
   return { blob: await res.blob(), url };
 }
 
+// The first of these addresses that is a real image (2026-10-26) — used
+// by "Import this ISYT site", which knows the sizes its sites make and
+// lists them largest first, ending with the picture as found on the page.
+async function fetchFirstImage(urls) {
+  for (const url of urls) {
+    try {
+      const res = await fetch(url);
+      if (res.ok && (res.headers.get("content-type") || "").startsWith("image/")) {
+        return { blob: await res.blob(), url };
+      }
+    } catch (e) {
+      // not there — try the next
+    }
+  }
+  throw new Error("Could not download the picture");
+}
+
 // ---------- sending images to a real artist's Hopper ----------
 
 function guessContentType(url) {
@@ -116,12 +133,14 @@ function guessContentType(url) {
   return "image/jpeg";
 }
 
-async function sendOneImage({ url, filename, caption, description }, token) {
+// `source` names the sender in the Hopper; `details` (ISYT import,
+// 2026-10-26) are the work's details in /api/hopper/finalize's own fields.
+async function sendOneImage({ url, candidates, filename, caption, description, source, details }, token) {
   // 1. Get the best real version of the image bytes we can find. This
   //    works even though the source page itself blocks dragging, since
   //    the extension's host permissions exempt it from that page's own
   //    CORS restrictions.
-  const { blob, url: resolvedUrl } = await fetchBestImage(url);
+  const { blob, url: resolvedUrl } = candidates ? await fetchFirstImage(candidates) : await fetchBestImage(url);
   const contentType = blob.type || guessContentType(resolvedUrl);
 
   // 2. Ask the Jevca app for a presigned upload slot for this artist.
@@ -154,6 +173,8 @@ async function sendOneImage({ url, filename, caption, description }, token) {
       kind,
       caption: caption || undefined,
       description: description || undefined,
+      source: source || "Browser importer",
+      ...(details || {}),
     }),
   });
   const finalizeData = await finalizeRes.json().catch(() => ({}));
@@ -166,6 +187,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "REFRESH_ARTISTS") {
     refreshArtists().then(sendResponse);
     return true; // keep the message channel open for the async response
+  }
+
+  // Which of these old-site addresses the artist already has (ISYT import).
+  if (message.type === "KNOWN_SOURCES") {
+    fetch(`${JEVCA_ORIGIN}/api/hopper/known-sources`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token: message.token, sourceUrls: message.sourceUrls }),
+    })
+      .then(async (res) => {
+        const data = await res.json().catch(() => ({}));
+        sendResponse(res.ok ? { known: data.known || [] } : { error: data.error || `(${res.status})` });
+      })
+      .catch((err) => sendResponse({ error: err.message }));
+    return true;
   }
 
   if (message.type === "SEND_TO_HOPPER") {

@@ -2,7 +2,9 @@
   const MIN_SIZE = 120; // ignore icons, logos, tracking pixels, etc.
   const HOST_ID = "hopper-picker-host";
 
-  // Re-activating while the picker is open just closes it.
+  // Re-activating while the picker is open just closes it (and closes
+  // "Import this ISYT site", isyt.js, if that's open).
+  document.getElementById("hopper-isyt-host")?.remove();
   const existingHost = document.getElementById(HOST_ID);
   if (existingHost) {
     existingHost.remove();

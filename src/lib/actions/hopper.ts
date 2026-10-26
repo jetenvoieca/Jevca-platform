@@ -67,6 +67,13 @@ export async function listHopperQueue(artistId: string) {
       artworkPrice: true,
       artworkType: true,
       artworkLocation: true,
+      // What the browser importer read from an old website (2026-10-26)
+      // — see the note on Image.artworkMedium in schema.prisma.
+      artworkMedium: true,
+      artworkEdition: true,
+      artworkSold: true,
+      artworkViewingLocation: true,
+      sourceUrl: true,
       altText: true,
       tags: true,
       createdAt: true,
@@ -247,6 +254,12 @@ export async function createArtworkFromHopperQuick(
   const location = (formData.get("location") as string)?.trim() || null;
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
   const medium = (formData.get("medium") as string)?.trim() || null;
+  // Only on the form for a work imported from an old website (2026-10-26
+  // — see QuickCatalogueFields): its description, where it can be seen,
+  // and whether it was marked sold there.
+  const description = (formData.get("description") as string)?.trim() || null;
+  const viewingLocation = (formData.get("viewingLocation") as string)?.trim() || null;
+  const sold = formData.get("sold") === "on";
 
   let artwork: { id: string };
   try {
@@ -268,9 +281,12 @@ export async function createArtworkFromHopperQuick(
       location,
       studioNotes,
       medium,
+      description,
+      viewingLocation,
       // No Available/SOLD toggle on this form (2026-09-13, direct
-      // request) — every artwork created this way starts AVAILABLE.
-      availability: "AVAILABLE",
+      // request) — an artwork created here starts AVAILABLE, unless it
+      // was imported from an old website that marked it sold (2026-10-26).
+      availability: sold ? "SOLD" : "AVAILABLE",
       date: dateRaw || null,
       needsReview: true,
     });

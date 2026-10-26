@@ -70,6 +70,9 @@ export async function createArtworkWithRetry(
     presentationPrice: number | null;
     description: string | null;
     medium: string | null;
+    // "Can be viewed at" — set at creation by the Hopper for a work
+    // imported from an old website (2026-10-26).
+    viewingLocation: string | null;
     availability: Availability;
     type: string | null;
     size: string | null;

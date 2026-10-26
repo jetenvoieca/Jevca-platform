@@ -28,14 +28,16 @@
         border: 1px solid #ccc;
         background: #fff;
       }
-      #activate {
+      #activate,
+      #import-isyt {
         background: #4f46e5;
         border: none;
         color: #fff;
         font-weight: 600;
         padding: 10px;
       }
-      #activate:disabled {
+      #activate:disabled,
+      #import-isyt:disabled {
         opacity: 0.5;
         cursor: not-allowed;
       }
@@ -48,6 +50,7 @@
       }
       #status,
       #activate-status,
+      #isyt-status,
       #refresh-status {
         margin-top: 6px;
         font-size: 12px;
@@ -75,6 +78,13 @@
     <p>Click below to add checkboxes to the images on the page you're currently on, then pick the ones you want and send them to the Hopper.</p>
     <button id="activate">Activate on this page</button>
     <div id="activate-status"></div>
+
+    <hr />
+
+    <h3>Import an ISYT website</h3>
+    <p>On an isendyouthis client's site: reads every work in its portfolio sections, with its details, so you can send them all to the Hopper.</p>
+    <button id="import-isyt">Import this ISYT site</button>
+    <div id="isyt-status"></div>
 
     <script src="popup.js"></script>
   </body>

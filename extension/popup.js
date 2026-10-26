@@ -9,6 +9,8 @@ const refreshStatus = document.getElementById("refresh-status");
 const lastUpdatedEl = document.getElementById("last-updated");
 const activateBtn = document.getElementById("activate");
 const activateStatus = document.getElementById("activate-status");
+const importIsytBtn = document.getElementById("import-isyt");
+const isytStatus = document.getElementById("isyt-status");
 
 function formatUpdatedAt(iso) {
   if (!iso) return "Never refreshed.";
@@ -21,6 +23,7 @@ function populateArtistSelect(artists, selectedId) {
   if (!artists || artists.length === 0) {
     artistSelect.innerHTML = `<option value="">No artists loaded \u2014 click Refresh</option>`;
     activateBtn.disabled = true;
+    importIsytBtn.disabled = true;
     return;
   }
   artists.forEach((a) => {
@@ -31,6 +34,7 @@ function populateArtistSelect(artists, selectedId) {
     artistSelect.appendChild(opt);
   });
   activateBtn.disabled = false;
+  importIsytBtn.disabled = false;
 }
 
 async function loadInitialState() {
@@ -63,19 +67,21 @@ refreshBtn.addEventListener("click", async () => {
   populateArtistSelect(response.artists, data[LAST_ARTIST_ID_KEY]);
 });
 
-activateBtn.addEventListener("click", async () => {
+// Puts the chosen artist in place, then runs `file` on the current tab:
+// content.js (pick images on any page) or isyt.js (import an ISYT site).
+async function activate(file, statusEl) {
   const selectedId = artistSelect.value;
   if (!selectedId) {
-    activateStatus.textContent = "Choose an artist first.";
-    activateStatus.className = "err";
+    statusEl.textContent = "Choose an artist first.";
+    statusEl.className = "err";
     return;
   }
 
   const { artists } = await chrome.storage.local.get(ARTISTS_KEY);
   const artist = (artists || []).find((a) => a.id === selectedId);
   if (!artist) {
-    activateStatus.textContent = "That artist is no longer in the list \u2014 refresh and try again.";
-    activateStatus.className = "err";
+    statusEl.textContent = "That artist is no longer in the list \u2014 refresh and try again.";
+    statusEl.className = "err";
     return;
   }
 
@@ -87,14 +93,17 @@ activateBtn.addEventListener("click", async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   if (!tab || !tab.id) return;
   try {
-    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] });
-    activateStatus.textContent = `Activated for ${artist.name} \u2014 check the page.`;
-    activateStatus.className = "ok";
+    await chrome.scripting.executeScript({ target: { tabId: tab.id }, files: [file] });
+    statusEl.textContent = `Activated for ${artist.name} \u2014 check the page.`;
+    statusEl.className = "ok";
     setTimeout(() => window.close(), 700);
   } catch (err) {
-    activateStatus.textContent = `Couldn't activate here: ${err.message}`;
-    activateStatus.className = "err";
+    statusEl.textContent = `Couldn't activate here: ${err.message}`;
+    statusEl.className = "err";
   }
-});
+}
+
+activateBtn.addEventListener("click", () => activate("content.js", activateStatus));
+importIsytBtn.addEventListener("click", () => activate("isyt.js", isytStatus));
 
 loadInitialState();

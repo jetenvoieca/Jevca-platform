@@ -64,7 +64,29 @@ couldn't find a Jevca tab to read from — open one and try again.
 7. Click the **✕** in the panel, or click "Activate on this page" again, to
    close it.
 
-## If it stops finding images, or the send fails
+## Import a whole ISYT website (since v1.2.0)
+
+For the isendyouthis client sites (e.g. jillysuttonsculpture.com):
+
+1. Open the site's home page, click the extension's icon, choose the
+   **artist**, then **Import this ISYT site**.
+2. It reads every portfolio section in the site's menu, then every work's
+   own page (about 10 seconds for 100 works), and shows them grouped by
+   section — ticked, except works already imported before ("Already in
+   Jevca"). Hover a work to see all its details. Untick any you don't want
+   (a section's own tick box does the whole section).
+3. **Send to Hopper** sends them in the site's order, each with its largest
+   picture and its details in their own fields: title, description, type
+   ("Original" / "Limited Edition"), medium, size, edition, sold, price,
+   "can be seen at", and its portfolio section.
+4. In the Hopper, **Create new artwork** opens with those already filled in
+   (plus Description, and Sold / Can be viewed at when the site had them).
+   Lines it couldn't place are left in the Description for checking.
+
+The same work is never imported twice: each keeps its address on the old
+site, and the importer asks Jevca which it already has before showing them.
+
+
 
 - **The picker grid is empty, or missing images**: some sites load their
   real image behind a smaller placeholder, or use background-images instead

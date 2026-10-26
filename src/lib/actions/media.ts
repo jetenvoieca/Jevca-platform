@@ -47,6 +47,9 @@ export async function requestUploadUrl(
 //   collects — see the matching note on Image in schema.prisma.
 //   artworkPrice is a plain numeric string, validated by the caller
 //   before it gets here.
+// - artworkMedium/Edition/Sold/ViewingLocation/Portfolio and sourceUrl
+//   (2026-10-26): what the browser importer reads from an artist's old
+//   website — see the note on Image.artworkMedium in schema.prisma.
 type FinalizeUploadOptions = {
   posterUrl?: string;
   status?: "SORTED" | "HOPPER";
@@ -57,6 +60,12 @@ type FinalizeUploadOptions = {
   artworkPrice?: string;
   artworkType?: string;
   artworkLocation?: string;
+  artworkMedium?: string;
+  artworkEdition?: string;
+  artworkSold?: boolean;
+  artworkViewingLocation?: string;
+  artworkPortfolio?: string;
+  sourceUrl?: string;
 };
 
 // Step 2 of 2: once the browser (or the iPhone Shortcut / Studio app, for
@@ -80,6 +89,12 @@ export async function finalizeUpload(
     artworkPrice,
     artworkType,
     artworkLocation,
+    artworkMedium,
+    artworkEdition,
+    artworkSold,
+    artworkViewingLocation,
+    artworkPortfolio,
+    sourceUrl,
   } = options;
 
   // Generate the smaller display/thumbnail versions now, once, rather than
@@ -132,6 +147,12 @@ export async function finalizeUpload(
       artworkPrice: artworkPrice || null,
       artworkType: artworkType || null,
       artworkLocation: artworkLocation || null,
+      artworkMedium: artworkMedium || null,
+      artworkEdition: artworkEdition || null,
+      artworkSold: artworkSold ?? false,
+      artworkViewingLocation: artworkViewingLocation || null,
+      artworkPortfolio: artworkPortfolio || null,
+      sourceUrl: sourceUrl || null,
     },
   });
   // A video that came without a still picture gets one made (2026-10-16).
