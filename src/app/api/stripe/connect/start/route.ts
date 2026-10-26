@@ -1,3 +1,4 @@
+import { passes, requireSiteAccess } from "@/lib/currentUser";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/stripe";
@@ -20,6 +21,7 @@ export async function GET(request: NextRequest) {
   if (!artistId || !siteId) {
     return NextResponse.json({ error: "Missing artist or site." }, { status: 400 });
   }
+  if (!(await passes(requireSiteAccess(siteId)))) return new Response("Not allowed.", { status: 403 });
 
   const site = await db.site.findFirst({
     where: { id: siteId, artistId },

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath, updateTag } from "next/cache";
 import { OPEN_ALERTS_TAG } from "@/lib/alerts";
@@ -15,6 +16,7 @@ export async function updateArtistPaymentMethod(
   siteId: string,
   paymentMethod: SubscriptionMethod | ""
 ) {
+  await requireAdmin();
   if (paymentMethod && !isSubscriptionMethod(paymentMethod)) return;
   await db.artist.update({
     where: { id: artistId },
@@ -34,6 +36,7 @@ export async function updateStripeSubscriptionCustomerId(
   siteId: string,
   stripeSubscriptionCustomerId: string
 ) {
+  await requireAdmin();
   await db.artist.update({
     where: { id: artistId },
     data: {
@@ -60,6 +63,7 @@ export async function addManualSubscriptionPayment(
   siteId: string,
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   const amountRaw = (formData.get("amount") as string)?.trim();
   const paidAtRaw = (formData.get("paidAt") as string)?.trim();
   const currency = (formData.get("currency") as string)?.trim() || "GBP";
@@ -102,6 +106,7 @@ export async function addManualSubscriptionPayment(
 }
 
 export async function deleteManualSubscriptionPayment(id: string, siteId: string) {
+  await requireAdmin();
   // Guard against ever deleting a Stripe-synced row from this UI — that
   // history should only ever change via the webhook that created it.
   const row = await db.subscriptionPayment.findUnique({ where: { id } });
@@ -116,6 +121,7 @@ export async function deleteManualSubscriptionPayment(id: string, siteId: string
 // Dismisses a stored alert (2026-09-19: the standalone Alerts page this
 // used to revalidate is gone — alerts now live in the Inbox's Alert view).
 export async function dismissAlert(id: string) {
+  await requireAdmin();
   await db.alertEvent.update({
     where: { id },
     data: { resolvedAt: new Date() },

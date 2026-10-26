@@ -1,3 +1,4 @@
+import { passes, requireArtistAccess } from "@/lib/currentUser";
 import { NextRequest } from "next/server";
 import { generateArtworkCatalogueCsv } from "@/lib/actions/artworkCatalogueCsv";
 
@@ -5,6 +6,7 @@ export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   const artistId = params.get("artistId");
   if (!artistId) return new Response("Missing artistId", { status: 400 });
+  if (!(await passes(requireArtistAccess(artistId)))) return new Response("Not allowed.", { status: 403 });
 
   try {
     const { csv, filename } = await generateArtworkCatalogueCsv(artistId, {

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { randomUUID } from "crypto";
 import { getPresignedUploadUrl } from "@/lib/r2";
@@ -33,6 +34,7 @@ export type GuideWithSteps = {
 // the whole list is small (this is hand-authored documentation, not a
 // large dataset).
 export async function listGuides(): Promise<GuideWithSteps[]> {
+  await requireAdmin();
   const rows = await db.guide.findMany({
     orderBy: [{ category: "asc" }, { position: "asc" }],
   });
@@ -49,6 +51,7 @@ export async function createGuide(
   category: GuideCategory,
   title: string
 ): Promise<{ guide: GuideWithSteps } | { error: string }> {
+  await requireAdmin();
   const trimmed = title.trim();
   if (!trimmed) return { error: "Title is required." };
 
@@ -81,6 +84,7 @@ export async function updateGuide(
   title: string,
   steps: GuideStep[]
 ): Promise<{ ok: true } | { error: string }> {
+  await requireAdmin();
   const trimmed = title.trim();
   if (!trimmed) return { error: "Title is required." };
 
@@ -94,6 +98,7 @@ export async function updateGuide(
 }
 
 export async function deleteGuide(id: string): Promise<void> {
+  await requireAdmin();
   await db.guide.delete({ where: { id } });
   revalidatePath("/accounts/guides");
 }
@@ -113,6 +118,7 @@ export async function requestGuideImageUploadUrl(
   filename: string,
   contentType: string
 ): Promise<{ uploadUrl: string; url: string } | { error: string }> {
+  await requireAdmin();
   if (!contentType.startsWith("image/")) {
     return { error: "Only images can be uploaded." };
   }

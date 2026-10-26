@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
@@ -12,6 +13,7 @@ import { revalidatePath } from "next/cache";
 const SINGLETON_ID = "singleton";
 
 export async function getPlatformTaskCategories(): Promise<string[]> {
+  await requireAdmin();
   const settings = await db.platformSettings.upsert({
     where: { id: SINGLETON_ID },
     update: {},
@@ -21,6 +23,7 @@ export async function getPlatformTaskCategories(): Promise<string[]> {
 }
 
 export async function addPlatformTaskCategory(formData: FormData): Promise<void> {
+  await requireAdmin();
   const value = (formData.get("value") as string)?.trim();
   if (!value) return;
   const current = await getPlatformTaskCategories();
@@ -31,6 +34,7 @@ export async function addPlatformTaskCategory(formData: FormData): Promise<void>
 }
 
 export async function removePlatformTaskCategory(value: string): Promise<void> {
+  await requireAdmin();
   const current = await getPlatformTaskCategories();
   const next = current.filter((v) => v !== value);
   await db.platformSettings.update({ where: { id: SINGLETON_ID }, data: { taskCategories: next } });

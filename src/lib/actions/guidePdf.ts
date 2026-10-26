@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { PDFDocument, StandardFonts, rgb, type PDFFont, type PDFPage } from "pdf-lib";
 import { APP_URL } from "@/lib/appUrl";
@@ -48,6 +49,7 @@ async function embedImageFromUrl(doc: PDFDocument, url: string | null) {
 }
 
 export async function generateGuidePdf(guideId: string): Promise<{ bytes: Uint8Array; filename: string }> {
+  await requireAdmin();
   const guide = await db.guide.findUnique({ where: { id: guideId } });
   if (!guide) throw new Error("Guide not found.");
 

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import Papa from "papaparse";
@@ -16,6 +17,7 @@ export type PlatformExpenseRow = {
 
 // Newest first, same convention as the artist-level equivalent.
 export async function listPlatformExpenses(): Promise<PlatformExpenseRow[]> {
+  await requireAdmin();
   const rows = await db.platformExpense.findMany({ orderBy: { date: "desc" } });
   return rows.map((e) => ({
     id: e.id,
@@ -35,6 +37,7 @@ function parseCategory(raw: string | null): string {
 export async function createPlatformExpense(
   formData: FormData
 ): Promise<{ id: string } | { error: string }> {
+  await requireAdmin();
   const dateRaw = (formData.get("date") as string)?.trim();
   const payeeName = (formData.get("payeeName") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
@@ -60,6 +63,7 @@ export async function updatePlatformExpense(
   expenseId: string,
   formData: FormData
 ): Promise<{ error: string } | void> {
+  await requireAdmin();
   const dateRaw = (formData.get("date") as string)?.trim();
   const payeeName = (formData.get("payeeName") as string)?.trim();
   const description = (formData.get("description") as string)?.trim() || null;
@@ -82,6 +86,7 @@ export async function updatePlatformExpense(
 }
 
 export async function deletePlatformExpense(expenseId: string): Promise<void> {
+  await requireAdmin();
   await db.platformExpense.delete({ where: { id: expenseId } });
   revalidatePath(`/accounts`);
 }
@@ -93,6 +98,7 @@ export async function deletePlatformExpense(expenseId: string): Promise<void> {
 // separate concern the person manages on the Settings page if any need
 // removing too.
 export async function deleteAllPlatformExpenses(): Promise<{ deleted: number }> {
+  await requireAdmin();
   const result = await db.platformExpense.deleteMany({});
   revalidatePath(`/accounts`);
   return { deleted: result.count };
@@ -114,6 +120,7 @@ export type CsvImportResult = {
 // Date must be YYYY-MM-DD, checked strictly — accepting ambiguous
 // formats like "03/04/2026" would risk silently swapping day and month.
 export async function importPlatformExpensesCsv(formData: FormData): Promise<CsvImportResult> {
+  await requireAdmin();
   const file = formData.get("file");
   if (!(file instanceof File) || file.size === 0) {
     return { imported: 0, skipped: [{ row: 0, reason: "No file selected." }] };

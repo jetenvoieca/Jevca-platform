@@ -1,3 +1,5 @@
+import { passes } from "@/lib/currentUser";
+import { requireInvoiceAccess } from "@/lib/recordOwners";
 import { NextRequest } from "next/server";
 import { generateInvoicePdf } from "@/lib/actions/invoice";
 
@@ -11,6 +13,7 @@ export async function GET(
   { params }: { params: Promise<{ invoiceId: string }> }
 ) {
   const { invoiceId } = await params;
+  if (!(await passes(requireInvoiceAccess(invoiceId)))) return new Response("Not allowed.", { status: 403 });
   const disposition = req.nextUrl.searchParams.get("disposition") === "inline" ? "inline" : "attachment";
 
   try {

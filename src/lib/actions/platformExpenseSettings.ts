@@ -1,11 +1,13 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
 const SINGLETON_ID = "singleton";
 
 export async function getPlatformExpenseCategories(): Promise<string[]> {
+  await requireAdmin();
   const settings = await db.platformSettings.upsert({
     where: { id: SINGLETON_ID },
     update: {},
@@ -15,6 +17,7 @@ export async function getPlatformExpenseCategories(): Promise<string[]> {
 }
 
 export async function addPlatformExpenseCategory(formData: FormData) {
+  await requireAdmin();
   const value = (formData.get("value") as string)?.trim();
   if (!value) return;
   const current = await getPlatformExpenseCategories();
@@ -24,6 +27,7 @@ export async function addPlatformExpenseCategory(formData: FormData) {
 }
 
 export async function removePlatformExpenseCategory(value: string) {
+  await requireAdmin();
   const current = await getPlatformExpenseCategories();
   const next = current.filter((v) => v !== value);
   await db.platformSettings.update({ where: { id: SINGLETON_ID }, data: { expenseCategories: next } });

@@ -109,6 +109,7 @@ export default function SiteSettingsPanel({
   certificateTemplates,
   stripeConnection,
   stripeConnectNotice,
+  canResetSales,
 }: {
   site: SiteData;
   artist: ArtistData;
@@ -123,6 +124,8 @@ export default function SiteSettingsPanel({
   // The result of a Connect attempt, passed back by
   // /api/stripe/connect/callback.
   stripeConnectNotice: StripeConnectNotice | null;
+  // Reset all sales data — admin only (2026-10-26).
+  canResetSales: boolean;
 }) {
   const words = useClientWords();
   const client = words.client.toLowerCase();
@@ -602,14 +605,16 @@ export default function SiteSettingsPanel({
                     </div>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={handleResetSalesData}
-                    disabled={resettingSales}
-                    className="mt-4 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
-                  >
-                    {resettingSales ? "Checking…" : "Reset all sales data…"}
-                  </button>
+                  {canResetSales && (
+                    <button
+                      type="button"
+                      onClick={handleResetSalesData}
+                      disabled={resettingSales}
+                      className="mt-4 rounded-md border border-red-300 px-3 py-1.5 text-xs font-medium text-red-600 hover:bg-red-50 disabled:opacity-50"
+                    >
+                      {resettingSales ? "Checking…" : "Reset all sales data…"}
+                    </button>
+                  )}
                   {resetError && <p className="mt-2 text-xs text-red-600">{resetError}</p>}
                 </>
               )}

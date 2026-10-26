@@ -1,3 +1,4 @@
+import { passes, requireAdmin } from "@/lib/currentUser";
 import { NextRequest, NextResponse } from "next/server";
 import { isValidSignedState } from "@/lib/auth";
 import { completeGmailConnection, GMAIL_STATE_PURPOSE } from "@/lib/gmail";
@@ -8,6 +9,7 @@ import { completeGmailConnection, GMAIL_STATE_PURPOSE } from "@/lib/gmail";
 // is behind the admin login too), saves the connection, and goes back to
 // the Inbox's Personal tab either way, with a message if it didn't work.
 export async function GET(request: NextRequest) {
+  if (!(await passes(requireAdmin()))) return new Response("Not allowed.", { status: 403 });
   const params = request.nextUrl.searchParams;
 
   const back = (error: string | null) => {

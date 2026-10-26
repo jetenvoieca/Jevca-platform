@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { readableEmailText } from "@/lib/emailText";
@@ -137,6 +138,7 @@ function toTaskItem(r: {
 // Open tasks: projects after the other tasks, then soonest target date
 // first (tasks with no date last), then oldest first.
 export async function getOpenTasks(): Promise<TaskItem[]> {
+  await requireAdmin();
   const rows = await db.task.findMany({
     where: { completedAt: null, keptOn: null },
     orderBy: [{ isProject: "asc" }, { targetDate: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
@@ -150,6 +152,7 @@ export async function getOpenTasks(): Promise<TaskItem[]> {
 // right-hand column. Fetched on demand from the client, same as the Sent
 // list.
 export async function getCompletedTasks(): Promise<TaskItem[]> {
+  await requireAdmin();
   const rows = await db.task.findMany({
     where: { completedAt: { not: null }, keptOn: null },
     orderBy: { completedAt: "desc" },
@@ -161,6 +164,7 @@ export async function getCompletedTasks(): Promise<TaskItem[]> {
 
 // Insights, newest added first — the Insight pill's list.
 export async function getInsights(): Promise<TaskItem[]> {
+  await requireAdmin();
   const rows = await db.task.findMany({
     where: { keptOn: { not: null } },
     orderBy: [{ keptOn: "desc" }, { updatedAt: "desc" }],
@@ -182,6 +186,7 @@ export async function saveTask(
   input: TaskInput,
   complete = false
 ): Promise<{ ok: true; id: string } | { ok: false; error: string }> {
+  await requireAdmin();
   const name = input.name.trim();
   if (!name) return { ok: false, error: "Task name can't be empty." };
 
@@ -250,6 +255,7 @@ export async function saveTask(
 // Marks an open task Today (for today's date in Paris), or takes it off
 // with today = false.
 export async function setTaskToday(id: string, today: boolean): Promise<void> {
+  await requireAdmin();
   await db.task.updateMany({
     where: { id, completedAt: null, keptOn: null },
     data: { todayOn: today ? new Date(`${parisToday()}T00:00:00.000Z`) : null },
@@ -261,6 +267,7 @@ export async function setTaskToday(id: string, today: boolean): Promise<void> {
 // with thisWeek = false — which also clears a past Today, since an
 // unfinished Today task shows in This week (see AdminInboxPanel).
 export async function setTaskThisWeek(id: string, thisWeek: boolean): Promise<void> {
+  await requireAdmin();
   await db.task.updateMany({
     where: { id, completedAt: null, keptOn: null },
     data: thisWeek
@@ -273,6 +280,7 @@ export async function setTaskThisWeek(id: string, thisWeek: boolean): Promise<vo
 // Moves a task from Today to This week (2026-10-10, direct request) —
 // off Today's panel and into This week's, in one step.
 export async function moveTaskToThisWeek(id: string): Promise<void> {
+  await requireAdmin();
   await db.task.updateMany({
     where: { id, completedAt: null, keptOn: null },
     data: { todayOn: null, weekOf: new Date(`${parisWeekStart(parisToday())}T00:00:00.000Z`) },
@@ -285,6 +293,7 @@ export async function moveTaskToThisWeek(id: string): Promise<void> {
 // week, completion or project flag, so those are cleared; its name, description,
 // category, email address, files and Activity stay.
 export async function keepTask(id: string): Promise<void> {
+  await requireAdmin();
   await db.task.updateMany({
     where: { id, keptOn: null },
     data: {
@@ -302,6 +311,7 @@ export async function keepTask(id: string): Promise<void> {
 
 // Make task (2026-10-13): puts an Insight back on the open Task list.
 export async function makeTaskFromInsight(id: string): Promise<void> {
+  await requireAdmin();
   await db.task.updateMany({ where: { id, keptOn: { not: null } }, data: { keptOn: null } });
   revalidatePath("/accounts/inbox");
 }
@@ -311,6 +321,7 @@ export async function makeTaskFromInsight(id: string): Promise<void> {
 // list, with its details, emails and notes untouched.
 // The action line it was made from, if any, is unticked.
 export async function reopenTask(id: string): Promise<void> {
+  await requireAdmin();
   const task = await db.task.findFirst({
     where: { id, completedAt: { not: null } },
     select: { fromActionId: true },
@@ -329,6 +340,7 @@ export async function reopenTask(id: string): Promise<void> {
 export async function makeTaskFromAction(
   actionId: string
 ): Promise<{ ok: true; taskId: string } | { ok: false; error: string }> {
+  await requireAdmin();
   const action = await db.taskAction.findUnique({
     where: { id: actionId },
     select: {
@@ -390,6 +402,7 @@ async function setActionDone(actionId: string, done: boolean): Promise<void> {
 // Its files (2026-10-11) are removed from storage first; their rows go
 // with the task.
 export async function deleteTask(id: string): Promise<void> {
+  await requireAdmin();
   const files = await db.taskFile.findMany({ where: { taskId: id }, select: { r2Key: true } });
   await Promise.all(files.map((f) => deleteFromR2(f.r2Key)));
   await db.task.deleteMany({ where: { id } });
@@ -416,6 +429,7 @@ export type TaskActivityItem =
 // dated the day it was written sorts by when it was written; a note dated
 // some other day sits at midday on that day.
 export async function getTaskActivity(taskId: string): Promise<TaskActivityItem[]> {
+  await requireAdmin();
   const [sent, received, notes] = await Promise.all([
     db.outboundEmail.findMany({
       where: { taskId },
@@ -482,6 +496,7 @@ export type TaskNoteInput = {
 export async function saveTaskNote(
   input: TaskNoteInput
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   const text = input.text.trim();
   if (!text) return { ok: false, error: "Write what was done first." };
   if (!input.date) return { ok: false, error: "Choose a date." };
@@ -504,6 +519,7 @@ export async function saveTaskNote(
 }
 
 export async function deleteTaskNote(id: string): Promise<void> {
+  await requireAdmin();
   await db.taskNote.deleteMany({ where: { id } });
 }
 
@@ -516,6 +532,7 @@ export async function deleteTaskNote(id: string): Promise<void> {
 export async function createTaskFromEmail(
   inboundEmailId: string
 ): Promise<{ ok: true; task: TaskItem } | { ok: false; error: string }> {
+  await requireAdmin();
   const inbound = await db.inboundEmail.findUnique({
     where: { id: inboundEmailId },
     select: { subject: true, fromAddress: true, fromName: true, artistId: true, taskId: true },
@@ -557,6 +574,7 @@ export async function createTaskFromGmail(input: {
   name: string | null;
   address: string;
 }): Promise<{ ok: true; task: TaskItem } | { ok: false; error: string }> {
+  await requireAdmin();
   if (!input.threadId) return { ok: false, error: "Email not found." };
   const existing = await db.task.findUnique({ where: { gmailThreadId: input.threadId }, include: TASK_INCLUDE });
   if (existing) return { ok: true, task: toTaskItem(existing) };
@@ -577,6 +595,7 @@ export async function createTaskFromGmail(input: {
 // One task, open, completed or an Insight — for an email's Open task
 // (2026-10-11).
 export async function getTask(id: string): Promise<TaskItem | null> {
+  await requireAdmin();
   const row = await db.task.findUnique({ where: { id }, include: TASK_INCLUDE });
   return row ? toTaskItem(row) : null;
 }
@@ -585,6 +604,7 @@ export async function getTask(id: string): Promise<TaskItem | null> {
 // conversation id → task id (2026-10-11) — so the Personal tab offers
 // Open task / Remove task on them instead of Make task.
 export async function getGmailTaskLinks(): Promise<Record<string, string>> {
+  await requireAdmin();
   const rows = await db.task.findMany({
     where: { gmailThreadId: { not: null } },
     select: { id: true, gmailThreadId: true },

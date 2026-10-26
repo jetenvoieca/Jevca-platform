@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 
 // The full platform artist list, for the Curator edit form's "tick which
@@ -11,6 +12,7 @@ import { db } from "@/lib/db";
 // half-remembers by their site's name, are both easy to tell apart in a
 // long list — an artist with no site at all just shows their name alone.
 export async function getAllArtistsForPicker() {
+  await requireAdmin();
   const artists = await db.artist.findMany({
     where: { status: { not: "ARCHIVED" } },
     select: {

@@ -1,3 +1,4 @@
+import { passes, requireAdmin } from "@/lib/currentUser";
 import { NextRequest, NextResponse } from "next/server";
 import { getPersonalAttachment, GmailNotConnectedError } from "@/lib/gmailMessages";
 
@@ -15,6 +16,7 @@ export async function GET(request: NextRequest) {
   const messageId = params.get("message");
   const attachmentId = params.get("id");
   if (!messageId || !attachmentId) return new NextResponse("Missing attachment.", { status: 400 });
+  if (!(await passes(requireAdmin()))) return new Response("Not allowed.", { status: 403 });
 
   try {
     const data = await getPersonalAttachment(messageId, attachmentId);

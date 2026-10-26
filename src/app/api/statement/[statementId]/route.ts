@@ -1,3 +1,5 @@
+import { passes } from "@/lib/currentUser";
+import { requireStatementAccess } from "@/lib/recordOwners";
 import { NextRequest } from "next/server";
 import { generateStatementPdf } from "@/lib/statementPdf";
 
@@ -6,6 +8,7 @@ import { generateStatementPdf } from "@/lib/statementPdf";
 // statement window's preview, so what's previewed is what's emailed.
 export async function GET(req: NextRequest, { params }: { params: Promise<{ statementId: string }> }) {
   const { statementId } = await params;
+  if (!(await passes(requireStatementAccess(statementId)))) return new Response("Not allowed.", { status: 403 });
   const disposition = req.nextUrl.searchParams.get("disposition") === "inline" ? "inline" : "attachment";
   try {
     const { bytes, filename } = await generateStatementPdf(statementId);

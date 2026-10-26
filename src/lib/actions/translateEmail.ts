@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import Anthropic from "@anthropic-ai/sdk";
 import { readJson } from "@/lib/claudeJson";
 
@@ -22,6 +23,7 @@ export type EmailTranslation =
   | { ok: false; error: string };
 
 export async function translateEmailToEnglish(subject: string, text: string): Promise<EmailTranslation> {
+  await requireAdmin();
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) return { ok: false, error: "Translation isn't set up (ANTHROPIC_API_KEY is missing in Netlify)." };
   if (!text.trim() && !subject.trim()) return { ok: false, error: "This email has no text to translate." };

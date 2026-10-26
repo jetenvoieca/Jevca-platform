@@ -1,3 +1,5 @@
+import { passes } from "@/lib/currentUser";
+import { requirePurchaseAccess } from "@/lib/recordOwners";
 import { NextRequest } from "next/server";
 import { generateCertificatePdf } from "@/lib/actions/certificate";
 
@@ -6,6 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ purchaseId: string }> }
 ) {
   const { purchaseId } = await params;
+  if (!(await passes(requirePurchaseAccess(purchaseId)))) return new Response("Not allowed.", { status: 403 });
 
   // Same ?disposition=inline convention as /api/invoice — defaults to a
   // real download; CertificateEmailModal's preview iframe is the one

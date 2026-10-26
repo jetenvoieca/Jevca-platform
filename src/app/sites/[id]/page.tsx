@@ -3,8 +3,12 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import SiteSettingsPanel from "@/components/SiteSettingsPanel";
 import SitesListColumn from "@/components/SitesListColumn";
-import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
+import {
+  SITES_STATUS_FILTER_COOKIE,
+  normalizeSitesStatusFilter,
+} from "@/lib/sitesStatusFilter";
 import { getCertificateTemplates } from "@/lib/actions/certificateSettings";
+import { getCurrentUser } from "@/lib/currentUser";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +19,10 @@ export default async function SiteSettingsPage({
   params: Promise<{ id: string }>;
   // Set by /api/stripe/connect/callback on its way back here
   // (2026-09-25) — see stripeConnectNotice below.
-  searchParams: Promise<{ stripeConnect?: string; stripeConnectError?: string }>;
+  searchParams: Promise<{
+    stripeConnect?: string;
+    stripeConnectError?: string;
+  }>;
 }) {
   const { id } = await params;
   const { stripeConnect, stripeConnectError } = await searchParams;
@@ -37,7 +44,13 @@ export default async function SiteSettingsPage({
   // copy of the list had it hardcoded rather than reading whatever was
   // actually chosen.
   const cookieStore = await cookies();
-  const status = normalizeSitesStatusFilter(cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value);
+  const status = normalizeSitesStatusFilter(
+    cookieStore.get(SITES_STATUS_FILTER_COOKIE)?.value,
+  );
+
+  // An artist login (2026-10-26) sees only their own site here — not the
+  // list of every client's sites, nor Reset all sales data.
+  const isAdmin = (await getCurrentUser())?.role === "ADMIN";
 
   const [allSites, certificateTemplates, stripeConnection] = await Promise.all([
     // Kept deliberately simple (no search wiring) — this is the "jump to
@@ -47,25 +60,32 @@ export default async function SiteSettingsPage({
     // last chosen on the Directory page automatically now, with nothing
     // to pass through by hand — Sort via a client-side preference (see
     // SitesListColumn), Status via the cookie read above.
-    db.site.findMany({
-      where: status ? { status } : { status: { not: "ARCHIVED" } },
-      select: {
-        id: true,
-        name: true,
-        status: true,
-        createdAt: true,
-        artist: { select: { name: true, paymentMethod: true } },
-      },
-      relationLoadStrategy: "query",
-      orderBy: { artist: { name: "asc" } },
-    }),
+    isAdmin
+      ? db.site.findMany({
+          where: status ? { status } : { status: { not: "ARCHIVED" } },
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            createdAt: true,
+            artist: { select: { name: true, paymentMethod: true } },
+          },
+          relationLoadStrategy: "query",
+          orderBy: { artist: { name: "asc" } },
+        })
+      : Promise.resolve([]),
     // Certificate of Authenticity templates (2026-09-04) — see
     // CertificateTemplatesCard on the Financial tab below.
     getCertificateTemplates(site.artistId),
     // The artist's own linked Stripe account for their current mode
     // (2026-09-25), if any — see StripeConnection in schema.prisma.
     db.stripeConnection.findUnique({
-      where: { artistId_mode: { artistId: site.artistId, mode: site.artist.stripeMode } },
+      where: {
+        artistId_mode: {
+          artistId: site.artistId,
+          mode: site.artist.stripeMode,
+        },
+      },
       select: { accountId: true, accountName: true },
     }),
   ]);
@@ -83,7 +103,9 @@ export default async function SiteSettingsPage({
             defaultCurrency: site.defaultCurrency,
             salesEnabled: site.salesEnabled,
             domainStatus: site.domainStatus,
-            domainRenewalDate: site.domainRenewalDate ? site.domainRenewalDate.toISOString().slice(0, 10) : "",
+            domainRenewalDate: site.domainRenewalDate
+              ? site.domainRenewalDate.toISOString().slice(0, 10)
+              : "",
           }}
           artist={{
             id: site.artist.id,
@@ -92,7 +114,9 @@ export default async function SiteSettingsPage({
             email: site.artist.email,
             phone: site.artist.phone,
             notes: site.artist.notes,
-            subscriptionAmount: site.artist.subscriptionAmount ? site.artist.subscriptionAmount.toString() : "",
+            subscriptionAmount: site.artist.subscriptionAmount
+              ? site.artist.subscriptionAmount.toString()
+              : "",
             paymentMethod: site.artist.paymentMethod,
             logoUrl: site.artist.logoUrl,
             // Structured postal address (2026-09-06, reformed from a
@@ -110,7 +134,8 @@ export default async function SiteSettingsPage({
             invoiceOverdueDays: site.artist.invoiceOverdueDays,
             hopperToken: site.artist.hopperToken,
             stripeMode: site.artist.stripeMode,
-            stripeSubscriptionCustomerId: site.artist.stripeSubscriptionCustomerId,
+            stripeSubscriptionCustomerId:
+              site.artist.stripeSubscriptionCustomerId,
             stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
             profileImageUrl: site.artist.profileImage?.url ?? null,
             story: site.artist.story,
@@ -134,6 +159,7 @@ export default async function SiteSettingsPage({
           }}
           certificateTemplates={certificateTemplates}
           stripeConnection={stripeConnection}
+          canResetSales={isAdmin}
           stripeConnectNotice={
             stripeConnectError
               ? { tone: "error", text: stripeConnectError }
@@ -143,32 +169,34 @@ export default async function SiteSettingsPage({
           }
         />
       </div>
-      <div className="h-full w-[300px] shrink-0 overflow-y-auto border-l border-neutral-200">
-        <SitesListColumn
-          sites={allSites.map((s) => ({
-            id: s.id,
-            name: s.name,
-            status: s.status,
-            ownerName: s.artist.name,
-            paymentMethod: s.artist.paymentMethod,
-            createdAt: s.createdAt.toISOString(),
-          }))}
-          q=""
-          sort="owner"
-          status={status}
-          selectedId={id}
-          // The site that's open is the most recently opened one.
-          pinnedSiteId={id}
-          // This panel is a compact "jump to another site" list, not the
-          // full filterable Directory — see the comment on the query
-          // above. Live search would navigate away from the site you're
-          // currently editing on every keystroke, which is exactly the
-          // "everything jumps" problem reported 2026-08-31; explicit
-          // Enter-to-search (SitesListColumn's default when this is
-          // false) avoids that.
-          liveSearch={false}
-        />
-      </div>
+      {isAdmin && (
+        <div className="h-full w-[300px] shrink-0 overflow-y-auto border-l border-neutral-200">
+          <SitesListColumn
+            sites={allSites.map((s) => ({
+              id: s.id,
+              name: s.name,
+              status: s.status,
+              ownerName: s.artist.name,
+              paymentMethod: s.artist.paymentMethod,
+              createdAt: s.createdAt.toISOString(),
+            }))}
+            q=""
+            sort="owner"
+            status={status}
+            selectedId={id}
+            // The site that's open is the most recently opened one.
+            pinnedSiteId={id}
+            // This panel is a compact "jump to another site" list, not the
+            // full filterable Directory — see the comment on the query
+            // above. Live search would navigate away from the site you're
+            // currently editing on every keystroke, which is exactly the
+            // "everything jumps" problem reported 2026-08-31; explicit
+            // Enter-to-search (SitesListColumn's default when this is
+            // false) avoids that.
+            liveSearch={false}
+          />
+        </div>
+      )}
     </div>
   );
 }

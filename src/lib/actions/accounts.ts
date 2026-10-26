@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { revalidatePath } from "next/cache";
 import { backfillMissingSubscriptionPayments } from "@/lib/platformSubscriptionSync";
 
@@ -19,6 +20,7 @@ import { backfillMissingSubscriptionPayments } from "@/lib/platformSubscriptionS
 export async function runSubscriptionPaymentsBackfill(): Promise<
   { ok: true; checked: number; created: number } | { ok: false; error: string }
 > {
+  await requireAdmin();
   try {
     const result = await backfillMissingSubscriptionPayments();
     if (result.created > 0) {

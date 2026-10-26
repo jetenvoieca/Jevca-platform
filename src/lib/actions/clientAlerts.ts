@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath, updateTag } from "next/cache";
 import { OPEN_ALERTS_TAG, isArtistSubscriptionOverdue } from "@/lib/alerts";
@@ -24,6 +25,7 @@ export async function markSubscriptionUpToDate(
   artistId: string,
   alertType: ClientAlertType
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   const artist = await db.artist.findUnique({
     where: { id: artistId },
     select: { name: true, paymentMethod: true },
@@ -66,6 +68,7 @@ export async function markSubscriptionUpToDate(
 export async function cancelSubscription(
   artistId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   const artist = await db.artist.findUnique({
     where: { id: artistId },
     select: { name: true, subscriptionCancelledAt: true },
@@ -95,6 +98,7 @@ export async function cancelSubscription(
 
 // Reinstate on the Subscription card of a cancelled client.
 export async function reinstateSubscription(artistId: string, siteId: string): Promise<void> {
+  await requireAdmin();
   await db.artist.updateMany({
     where: { id: artistId, subscriptionCancelledAt: { not: null } },
     data: { subscriptionCancelledAt: null },
@@ -109,6 +113,7 @@ export async function reinstateSubscription(artistId: string, siteId: string): P
 // themselves don't do, so the Alert list and nav badge catch up straight
 // away.
 export async function refreshOpenAlerts(): Promise<void> {
+  await requireAdmin();
   updateTag(OPEN_ALERTS_TAG);
 }
 
@@ -130,6 +135,7 @@ export type ProcessedAlertItem = {
 // stored, so they simply stop appearing once dealt with and have nothing
 // to list here.
 export async function getProcessedAlerts(): Promise<ProcessedAlertItem[]> {
+  await requireAdmin();
   const rows = await db.alertEvent.findMany({
     where: { resolvedAt: { not: null } },
     orderBy: { resolvedAt: "desc" },
@@ -149,5 +155,6 @@ export async function getProcessedAlerts(): Promise<ProcessedAlertItem[]> {
 // Deletes a processed alert's record for good. Only ever an alert that's
 // already been dealt with — an open one can't be removed this way.
 export async function deleteProcessedAlert(id: string): Promise<void> {
+  await requireAdmin();
   await db.alertEvent.deleteMany({ where: { id, resolvedAt: { not: null } } });
 }

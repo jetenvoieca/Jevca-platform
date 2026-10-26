@@ -1,3 +1,4 @@
+import { passes, requireAdmin } from "@/lib/currentUser";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
@@ -15,6 +16,7 @@ import { db } from "@/lib/db";
 // dropdown instead of Craig pasting tokens in by hand — see the note on
 // hopperToken in schema.prisma and /api/hopper/request-upload.
 export async function GET() {
+  if (!(await passes(requireAdmin()))) return new Response("Not allowed.", { status: 403 });
   const artists = await db.artist.findMany({
     where: { status: { not: "ARCHIVED" } },
     orderBy: { name: "asc" },

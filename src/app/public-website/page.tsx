@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import WebsiteHomeView from "@/components/WebsiteHomeView";
-import { getWebsiteHome, listWebsiteMenuItems, listWebsitePages } from "@/lib/actions/website";
+import { getWebsiteHome, listWebsiteMenuItems, listWebsitePages } from "@/lib/websiteContent";
 import { turnstileSiteKeyForHost } from "@/lib/turnstile";
 
 export const dynamic = "force-dynamic";

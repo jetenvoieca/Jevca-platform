@@ -1,3 +1,4 @@
+import { passes, requireSiteAccess } from "@/lib/currentUser";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { instagramConnectUrl } from "@/lib/instagram";
@@ -7,6 +8,7 @@ import { instagramConnectUrl } from "@/lib/instagram";
 // Behind the admin login.
 export async function GET(request: NextRequest) {
   const siteId = request.nextUrl.searchParams.get("siteId") ?? "";
+  if (!(await passes(requireSiteAccess(siteId)))) return new Response("Not allowed.", { status: 403 });
   const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true, artistId: true } });
   if (!site) return NextResponse.redirect(new URL("/", request.url));
 

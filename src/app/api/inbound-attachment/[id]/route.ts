@@ -1,3 +1,4 @@
+import { passes, requireAdmin } from "@/lib/currentUser";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getFromR2 } from "@/lib/r2";
@@ -14,6 +15,7 @@ import { getFromR2 } from "@/lib/r2";
 // app's own domain.
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!(await passes(requireAdmin()))) return new Response("Not allowed.", { status: 403 });
 
   const attachment = await db.inboundEmailAttachment.findUnique({
     where: { id },

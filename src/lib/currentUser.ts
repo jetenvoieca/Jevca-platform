@@ -81,3 +81,15 @@ export async function requireRecordAccess(
   if (!found) throw new NotAllowedError("Not found.");
   return requireArtistAccess(found.artistId);
 }
+
+// For routes (2026-10-26): whether a check passes, so the route can answer
+// 403 instead of failing.
+export async function passes(check: Promise<unknown>): Promise<boolean> {
+  try {
+    await check;
+    return true;
+  } catch (err) {
+    if (err instanceof NotAllowedError) return false;
+    throw err;
+  }
+}

@@ -1,3 +1,4 @@
+import { passes, requireSiteAccess } from "@/lib/currentUser";
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getStripeClient } from "@/lib/stripe";
@@ -22,6 +23,7 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   }
+  if (!(await passes(requireSiteAccess(state.siteId)))) return new Response("Not allowed.", { status: 403 });
 
   const backToSettings = (key: "stripeConnect" | "stripeConnectError", value: string) => {
     const url = new URL(`/sites/${state.siteId}`, request.url);

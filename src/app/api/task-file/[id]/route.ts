@@ -1,3 +1,4 @@
+import { passes, requireAdmin } from "@/lib/currentUser";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { getFromR2 } from "@/lib/r2";
@@ -11,6 +12,7 @@ const SHOWN_IN_PLACE = new Set(["image/png", "image/jpeg", "image/gif", "image/w
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  if (!(await passes(requireAdmin()))) return new Response("Not allowed.", { status: 403 });
   const file = await db.taskFile.findUnique({
     where: { id },
     select: { filename: true, contentType: true, r2Key: true },

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { randomUUID } from "crypto";
 import { db } from "@/lib/db";
 import { deleteFromR2, getPresignedUploadUrl } from "@/lib/r2";
@@ -21,6 +22,7 @@ export type TaskFileItem = {
 };
 
 export async function getTaskFiles(taskId: string): Promise<TaskFileItem[]> {
+  await requireAdmin();
   const rows = await db.taskFile.findMany({ where: { taskId }, orderBy: { createdAt: "asc" } });
   return rows.map((r) => ({
     id: r.id,
@@ -37,6 +39,7 @@ export async function requestTaskFileUpload(
   contentType: string,
   size: number
 ): Promise<{ ok: true; uploadUrl: string; key: string } | { ok: false; error: string }> {
+  await requireAdmin();
   if (size > MAX_SIZE) return { ok: false, error: `"${filename}" is over 25 MB.` };
   const task = await db.task.findUnique({ where: { id: taskId }, select: { id: true } });
   if (!task) return { ok: false, error: "Task not found — it may have been deleted." };
@@ -51,6 +54,7 @@ export async function addTaskFile(input: {
   contentType: string;
   size: number;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   // Only a key this task was given (see requestTaskFileUpload).
   if (!input.key.startsWith(`tasks/${input.taskId}/`)) return { ok: false, error: "That upload doesn't belong to this task." };
   await db.taskFile.create({
@@ -66,6 +70,7 @@ export async function addTaskFile(input: {
 }
 
 export async function deleteTaskFile(id: string): Promise<void> {
+  await requireAdmin();
   const file = await db.taskFile.findUnique({ where: { id }, select: { r2Key: true } });
   if (!file) return;
   await deleteFromR2(file.r2Key);

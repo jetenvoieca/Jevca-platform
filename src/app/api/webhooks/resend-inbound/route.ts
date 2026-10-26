@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { Resend } from "resend";
-import { processInboundEmail } from "@/lib/actions/inboundEmail";
+import { processInboundEmail } from "@/lib/inbox";
 
 // Resend "Inbound" webhook (2026-09-05, Email Integration) — every
 // email sent to any @jevca.art address arrives here as an

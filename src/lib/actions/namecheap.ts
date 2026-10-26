@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 
@@ -21,6 +22,7 @@ export type NamecheapImportResult = {
 export async function importNamecheapDomains(
   rows: NamecheapImportRow[]
 ): Promise<NamecheapImportResult> {
+  await requireAdmin();
   const sites = await db.site.findMany({ select: { id: true, domain: true } });
 
   // Same normalisation already applied when a domain is saved elsewhere in

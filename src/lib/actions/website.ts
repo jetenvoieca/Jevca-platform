@@ -1,273 +1,80 @@
 "use server";
 
-import { db } from "@/lib/db";
-import { randomUUID } from "crypto";
-import { getPresignedUploadUrl } from "@/lib/r2";
-import { revalidatePath } from "next/cache";
-import { sanitizeFilename } from "@/lib/sanitizeFilename";
-import { BUSINESS_EMAIL_DOMAIN } from "@/lib/email";
-import { isValidEmail, normalizeEmail } from "@/lib/emailAddress";
-import { syncTurnstileDomains } from "@/lib/turnstile";
+import * as website from "@/lib/websiteContent";
+import { requireAdmin } from "@/lib/currentUser";
 
-// The business's own website, jetenvoieca.com (2026-09-29) — platform-
-// level, not tied to any Artist or Site. Edits go live on save (no
-// draft/publish, direct decision). See WebsiteHome / WebsitePage /
-// WebsiteMenuItem in schema.prisma.
+// The business website's editor (jetenvoieca.com), from the browser
+// (2026-10-26): admin only; the work is in lib/websiteContent.ts, which
+// the public website's own pages read directly.
 
-export type WebsitePageSummary = {
-  id: string;
-  name: string;
-  slug: string;
-};
+export type { WebsitePageSummary, WebsitePageData, WebsiteHomeData, WebsiteMenuItemData } from "@/lib/websiteContent";
 
-export type WebsitePageData = {
-  id: string;
-  name: string;
-  slug: string;
-  title: string;
-  caption: string;
-  text: string;
-};
-
-export type WebsiteHomeData = {
-  imageUrl: string | null;
-  wordmark: string;
-  email: string | null;
-};
-
-export type WebsiteMenuItemData = {
-  id: string;
-  label: string;
-  text: string;
-  hoverText: string;
-  pageId: string | null;
-};
-
-const HOME_ID = "singleton";
-const DEFAULT_WORDMARK = "JETENVOIECA";
-
-const pageSelect = {
-  id: true,
-  name: true,
-  slug: true,
-  title: true,
-  caption: true,
-  text: true,
-} as const;
-
-function revalidateWebsite() {
-  revalidatePath("/accounts/website", "layout");
+export async function listWebsitePages(...args: Parameters<typeof website.listWebsitePages>) {
+  await requireAdmin();
+  return website.listWebsitePages(...args);
 }
 
-// Turns a page name into a web address segment, e.g. "Artists" ->
-// "artists". Falls back to "page" if nothing usable is left.
-function slugify(name: string): string {
-  const slug = name
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-  return slug || "page";
+export async function getWebsitePage(...args: Parameters<typeof website.getWebsitePage>) {
+  await requireAdmin();
+  return website.getWebsitePage(...args);
 }
 
-// For new pages only: adds -2, -3, ... until the slug isn't in use.
-async function uniqueSlug(name: string): Promise<string> {
-  const base = slugify(name);
-  let candidate = base;
-  let n = 2;
-  while (await db.websitePage.findUnique({ where: { slug: candidate }, select: { id: true } })) {
-    candidate = `${base}-${n}`;
-    n += 1;
-  }
-  return candidate;
+export async function getWebsitePageBySlug(...args: Parameters<typeof website.getWebsitePageBySlug>) {
+  await requireAdmin();
+  return website.getWebsitePageBySlug(...args);
 }
 
-// ---- Content pages ------------------------------------------------
-
-export async function listWebsitePages(): Promise<WebsitePageSummary[]> {
-  return db.websitePage.findMany({
-    orderBy: { position: "asc" },
-    select: { id: true, name: true, slug: true },
-  });
+export async function createWebsitePage(...args: Parameters<typeof website.createWebsitePage>) {
+  await requireAdmin();
+  return website.createWebsitePage(...args);
 }
 
-export async function getWebsitePage(id: string): Promise<WebsitePageData | null> {
-  return db.websitePage.findUnique({ where: { id }, select: pageSelect });
+export async function updateWebsitePage(...args: Parameters<typeof website.updateWebsitePage>) {
+  await requireAdmin();
+  return website.updateWebsitePage(...args);
 }
 
-// For the public site — finds a page by its web address.
-export async function getWebsitePageBySlug(slug: string): Promise<WebsitePageData | null> {
-  return db.websitePage.findUnique({ where: { slug }, select: pageSelect });
+export async function deleteWebsitePage(...args: Parameters<typeof website.deleteWebsitePage>) {
+  await requireAdmin();
+  return website.deleteWebsitePage(...args);
 }
 
-// "+ Add content page" — creates an empty page at the end of the list.
-export async function createWebsitePage(): Promise<{ id: string }> {
-  const name = "New page";
-  const highest = await db.websitePage.findFirst({
-    orderBy: { position: "desc" },
-    select: { position: true },
-  });
-
-  const page = await db.websitePage.create({
-    data: {
-      name,
-      slug: await uniqueSlug(name),
-      position: (highest?.position ?? -1) + 1,
-    },
-    select: { id: true },
-  });
-
-  revalidateWebsite();
-  return page;
+export async function getWebsiteHome(...args: Parameters<typeof website.getWebsiteHome>) {
+  await requireAdmin();
+  return website.getWebsiteHome(...args);
 }
 
-// Saves every field of a page. The web address is cleaned up
-// (e.g. "Our Artists!" -> "our-artists"), taken from the name if left
-// blank, and refused if another page already uses it. Returns the
-// address actually saved.
-export async function updateWebsitePage(
-  id: string,
-  data: Omit<WebsitePageData, "id">
-): Promise<{ slug: string } | { error: string }> {
-  const name = data.name.trim();
-  if (!name) return { error: "Page name is required." };
-
-  const slug = slugify(data.slug.trim() || name);
-  const clash = await db.websitePage.findFirst({
-    where: { slug, id: { not: id } },
-    select: { id: true },
-  });
-  if (clash) return { error: `jetenvoieca.com/${slug} is already used by another page.` };
-
-  await db.websitePage.update({
-    where: { id },
-    data: { name, slug, title: data.title, caption: data.caption, text: data.text },
-  });
-
-  revalidateWebsite();
-  return { slug };
+export async function updateWebsiteHome(...args: Parameters<typeof website.updateWebsiteHome>) {
+  await requireAdmin();
+  return website.updateWebsiteHome(...args);
 }
 
-// Any Home menu item pointing at a deleted page keeps its text but loses
-// its link (onDelete: SetNull in schema.prisma).
-export async function deleteWebsitePage(id: string): Promise<void> {
-  await db.websitePage.deleteMany({ where: { id } });
-  revalidateWebsite();
+export async function requestWebsiteImageUploadUrl(...args: Parameters<typeof website.requestWebsiteImageUploadUrl>) {
+  await requireAdmin();
+  return website.requestWebsiteImageUploadUrl(...args);
 }
 
-// ---- Home page ----------------------------------------------------
-
-// The row is only created on first save, so a fresh install reads the
-// defaults here.
-export async function getWebsiteHome(): Promise<WebsiteHomeData> {
-  const row = await db.websiteHome.findUnique({ where: { id: HOME_ID } });
-  return {
-    imageUrl: row?.imageUrl ?? null,
-    wordmark: row?.wordmark ?? DEFAULT_WORDMARK,
-    email: row?.email ?? null,
-  };
+export async function listWebsiteMenuItems(...args: Parameters<typeof website.listWebsiteMenuItems>) {
+  await requireAdmin();
+  return website.listWebsiteMenuItems(...args);
 }
 
-// Saves the Home page. Its email is where the contact form sends to
-// (see lib/actions/businessContact.ts), so it must be a business address
-// (@jetenvoieca.com) — the message lands in the Business mailbox and is
-// answered from it. Saving also makes sure Cloudflare's robot check
-// covers the website (see lib/turnstile.ts); a problem there is reported
-// without stopping the save.
-export async function updateWebsiteHome(data: WebsiteHomeData): Promise<{ error: string | null }> {
-  const email = data.email ? normalizeEmail(data.email) : "";
-  if (email && (!isValidEmail(email) || !email.endsWith(`@${BUSINESS_EMAIL_DOMAIN}`))) {
-    return { error: `The contact form's address must be an @${BUSINESS_EMAIL_DOMAIN} address.` };
-  }
-  const values = {
-    imageUrl: data.imageUrl,
-    wordmark: data.wordmark.trim(),
-    email: email || null,
-  };
-  await db.websiteHome.upsert({
-    where: { id: HOME_ID },
-    create: { id: HOME_ID, ...values },
-    update: values,
-  });
-  revalidateWebsite();
-  const sync = await syncTurnstileDomains();
-  return { error: "error" in sync ? sync.error : null };
+export async function createWebsiteMenuItem(...args: Parameters<typeof website.createWebsiteMenuItem>) {
+  await requireAdmin();
+  return website.createWebsiteMenuItem(...args);
 }
 
-// Direct-to-R2 upload for the Home image — same presigned-URL mechanism
-// as Guides (requestGuideImageUploadUrl), keyed under "website/". Not an
-// Image row: Image belongs to an Artist's Media Catalogue.
-export async function requestWebsiteImageUploadUrl(
-  filename: string,
-  contentType: string
-): Promise<{ uploadUrl: string; url: string } | { error: string }> {
-  if (!contentType.startsWith("image/")) {
-    return { error: "Only images can be uploaded." };
-  }
-  const key = `website/${randomUUID()}-${sanitizeFilename(filename)}`;
-  const uploadUrl = await getPresignedUploadUrl(key, contentType);
-  return { uploadUrl, url: `/api/media/${key}` };
+export async function updateWebsiteMenuItem(...args: Parameters<typeof website.updateWebsiteMenuItem>) {
+  await requireAdmin();
+  return website.updateWebsiteMenuItem(...args);
 }
 
-// ---- Home menu items ----------------------------------------------
-
-const menuItemSelect = {
-  id: true,
-  label: true,
-  text: true,
-  hoverText: true,
-  pageId: true,
-} as const;
-
-export async function listWebsiteMenuItems(): Promise<WebsiteMenuItemData[]> {
-  return db.websiteMenuItem.findMany({
-    orderBy: { position: "asc" },
-    select: menuItemSelect,
-  });
+export async function deleteWebsiteMenuItem(...args: Parameters<typeof website.deleteWebsiteMenuItem>) {
+  await requireAdmin();
+  return website.deleteWebsiteMenuItem(...args);
 }
 
-// "Add" — an empty item at the end of the menu.
-export async function createWebsiteMenuItem(): Promise<WebsiteMenuItemData> {
-  const highest = await db.websiteMenuItem.findFirst({
-    orderBy: { position: "desc" },
-    select: { position: true },
-  });
-  const item = await db.websiteMenuItem.create({
-    data: { position: (highest?.position ?? -1) + 1 },
-    select: menuItemSelect,
-  });
-  revalidateWebsite();
-  return item;
-}
-
-export async function updateWebsiteMenuItem(
-  id: string,
-  data: Omit<WebsiteMenuItemData, "id">
-): Promise<void> {
-  await db.websiteMenuItem.update({
-    where: { id },
-    data: {
-      label: data.label,
-      text: data.text,
-      hoverText: data.hoverText,
-      pageId: data.pageId,
-    },
-  });
-  revalidateWebsite();
-}
-
-export async function deleteWebsiteMenuItem(id: string): Promise<void> {
-  await db.websiteMenuItem.delete({ where: { id } });
-  revalidateWebsite();
-}
-
-// Saves the whole menu order at once, after a drag.
-export async function reorderWebsiteMenuItems(orderedIds: string[]): Promise<void> {
-  await db.$transaction(
-    orderedIds.map((id, position) =>
-      db.websiteMenuItem.update({ where: { id }, data: { position } })
-    )
-  );
-  revalidateWebsite();
+export async function reorderWebsiteMenuItems(...args: Parameters<typeof website.reorderWebsiteMenuItems>) {
+  await requireAdmin();
+  return website.reorderWebsiteMenuItems(...args);
 }

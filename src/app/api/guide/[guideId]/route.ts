@@ -1,3 +1,4 @@
+import { passes, requireAdmin } from "@/lib/currentUser";
 import { NextRequest } from "next/server";
 import { generateGuidePdf } from "@/lib/actions/guidePdf";
 
@@ -6,6 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ guideId: string }> }
 ) {
   const { guideId } = await params;
+  if (!(await passes(requireAdmin()))) return new Response("Not allowed.", { status: 403 });
 
   try {
     const { bytes, filename } = await generateGuidePdf(guideId);

@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { revalidatePath } from "next/cache";
 import { removeGmailConnection } from "@/lib/gmail";
 import {
@@ -34,6 +35,7 @@ function failure(err: unknown): { ok: false; error: string; reconnect: boolean }
 }
 
 export async function getPersonalMail(box: PersonalBox): Promise<Result<PersonalMailItem[]>> {
+  await requireAdmin();
   try {
     return { ok: true, data: await listPersonalMail(box) };
   } catch (err) {
@@ -43,6 +45,7 @@ export async function getPersonalMail(box: PersonalBox): Promise<Result<Personal
 
 // Opens a conversation (marking it read in Gmail).
 export async function getPersonalThread(threadId: string): Promise<Result<PersonalMailMessage[]>> {
+  await requireAdmin();
   try {
     return { ok: true, data: await openPersonalThread(threadId) };
   } catch (err) {
@@ -52,6 +55,7 @@ export async function getPersonalThread(threadId: string): Promise<Result<Person
 
 // Reply / forward, from the Gmail's own default sending address (step 3).
 export async function replyPersonal(messageId: string, body: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   try {
     return await replyToPersonalMessage(messageId, body);
   } catch (err) {
@@ -64,6 +68,7 @@ export async function composePersonal(
   subject: string,
   body: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   try {
     return await sendNewPersonalEmail(to, subject, body);
   } catch (err) {
@@ -76,6 +81,7 @@ export async function forwardPersonal(
   to: string,
   note: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   try {
     return await forwardPersonalMessage(messageId, to, note);
   } catch (err) {
@@ -85,6 +91,7 @@ export async function forwardPersonal(
 
 // Archive — the whole conversation out of the inbox, as in Gmail.
 export async function archivePersonal(threadId: string): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   try {
     await archivePersonalThread(threadId);
     return { ok: true };
@@ -98,6 +105,7 @@ export async function archivePersonal(threadId: string): Promise<{ ok: true } | 
 export async function deletePersonal(
   target: { threadId: string } | { messageId: string }
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   try {
     if ("threadId" in target) await trashPersonalThread(target.threadId);
     else await trashPersonalMessage(target.messageId);
@@ -110,6 +118,7 @@ export async function deletePersonal(
 // The Personal pill's unread count; null if Gmail isn't connected or
 // can't be reached (the pill then shows no number).
 export async function getPersonalUnreadCount(): Promise<number | null> {
+  await requireAdmin();
   try {
     return await personalUnreadCount();
   } catch {
@@ -119,6 +128,7 @@ export async function getPersonalUnreadCount(): Promise<number | null> {
 
 // The address replies and forwards go out from, shown in the tab.
 export async function getPersonalSendingAddress(): Promise<string | null> {
+  await requireAdmin();
   try {
     return await personalSendingAddress();
   } catch {
@@ -127,6 +137,7 @@ export async function getPersonalSendingAddress(): Promise<string | null> {
 }
 
 export async function disconnectGmail(): Promise<void> {
+  await requireAdmin();
   await removeGmailConnection();
   revalidatePath("/accounts/inbox");
 }

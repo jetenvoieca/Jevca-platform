@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { clientWords } from "@/lib/clientKind";
 import { Resend } from "resend";
@@ -44,6 +45,7 @@ export type ComposeRecipient = {
 // labelled so the same email address showing up for two artists (a
 // shared gallery contact) is never ambiguous about which one this is.
 export async function getComposeRecipients(): Promise<ComposeRecipient[]> {
+  await requireAdmin();
   const [artists, customers] = await Promise.all([
     db.artist.findMany({
       where: { email: { not: null }, status: { not: "ARCHIVED" } },
@@ -86,6 +88,7 @@ export async function getComposeRecipients(): Promise<ComposeRecipient[]> {
 
 // The address each mailbox's new messages are sent from.
 export async function getMailboxAddresses(): Promise<Record<Mailbox, string>> {
+  await requireAdmin();
   const settings = await db.platformSettings.upsert({
     where: { id: SINGLETON_ID },
     update: {},
@@ -95,6 +98,7 @@ export async function getMailboxAddresses(): Promise<Record<Mailbox, string>> {
 }
 
 export async function updateAdminEmailAddress(value: string): Promise<void> {
+  await requireAdmin();
   const address = value.trim();
   if (!address) return;
   await db.platformSettings.upsert({
@@ -113,6 +117,7 @@ export async function updateAdminEmailAddress(value: string): Promise<void> {
 export async function sendAdminEmail(
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   const to = ((formData.get("to") as string) || "").trim();
   const subject = ((formData.get("subject") as string) || "").trim();
   const body = ((formData.get("body") as string) || "").trim();
@@ -242,6 +247,7 @@ export async function forwardEmail(
   source: ForwardSource,
   formData: FormData
 ): Promise<{ ok: true } | { ok: false; error: string }> {
+  await requireAdmin();
   const to = ((formData.get("to") as string) || "").trim();
   const note = ((formData.get("note") as string) || "").trim();
   if (!to) return { ok: false, error: "Enter who to forward it to." };

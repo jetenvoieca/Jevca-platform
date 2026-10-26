@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import WebsiteContentView from "@/components/WebsiteContentView";
-import { getWebsitePageBySlug, listWebsitePages } from "@/lib/actions/website";
+import { getWebsitePageBySlug, listWebsitePages } from "@/lib/websiteContent";
 
 export const dynamic = "force-dynamic";
 

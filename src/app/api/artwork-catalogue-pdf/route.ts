@@ -1,3 +1,4 @@
+import { passes, requireArtistAccess } from "@/lib/currentUser";
 import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { generateArtworkCataloguePdf } from "@/lib/actions/artworkCataloguePdf";
@@ -6,6 +7,7 @@ export async function GET(req: NextRequest) {
   const params = req.nextUrl.searchParams;
   const artistId = params.get("artistId");
   if (!artistId) return new Response("Missing artistId", { status: 400 });
+  if (!(await passes(requireArtistAccess(artistId)))) return new Response("Not allowed.", { status: 403 });
 
   const artist = await db.artist.findUnique({ where: { id: artistId }, select: { name: true, kind: true } });
   if (!artist) return new Response("Artist not found", { status: 404 });
