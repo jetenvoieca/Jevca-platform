@@ -406,7 +406,12 @@ export default function PageSectionsArranger({
               backgroundColor={layout.backgroundColor}
               backgroundImage={layout.backgroundImage}
             >
-              {rows.length === 0 ? (
+              {/* Drawn once what's saved has loaded (2026-10-26): Entries,
+                  Profile stories and a Page heading read it when they first
+                  appear, so drawn before it they'd start empty. */}
+              {sections === null ? (
+                <p className="py-10 text-center text-sm text-neutral-400">Loading…</p>
+              ) : rows.length === 0 ? (
                 <p className="py-10 text-center text-sm text-neutral-400">
                   This page&apos;s Display Style has no components yet — add them under Templates → Page Styles.
                 </p>
