@@ -1,9 +1,13 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
+import { headers } from "next/headers";
+import { getCurrentUser } from "@/lib/currentUser";
+import { PATHNAME_HEADER } from "@/lib/auth";
+import { cleanMenuAccess, siteNavKeyForPath } from "@/lib/siteMenuAccess";
 import { db } from "@/lib/db";
 import { getLastPublishedAt } from "@/lib/actions/siteSnapshot";
 import { publishedHomePath } from "@/lib/siteSnapshot";
 import { getOpenAlerts } from "@/lib/alerts";
-import { getRecentSites, recordSiteVisit } from "@/lib/recentSites";
+import { getClientSites, getRecentSites, recordSiteVisit } from "@/lib/recentSites";
 import SiteShell from "@/components/SiteShell";
 import SiteNameField from "@/components/SiteNameField";
 import ClientWordsProvider from "@/components/ClientWordsProvider";
@@ -31,16 +35,31 @@ export default async function SiteLayout({
   });
   if (!site) notFound();
 
+  // Who's asking (2026-10-26). An artist login only reaches their own
+  // client's sites, and in them only the menu items ticked for them on
+  // the Client page; anything else goes back to "/", which sends them to
+  // what they may use.
+  const user = await getCurrentUser();
+  if (!user) redirect("/login");
+  const artistLogin = user.role === "ARTIST";
+  const allowed = artistLogin ? cleanMenuAccess(site.artist.menuAccess) : null;
+  if (artistLogin) {
+    if (site.artistId !== user.artistId) redirect("/");
+    const key = siteNavKeyForPath((await headers()).get(PATHNAME_HEADER) ?? "", id);
+    if (!key || !allowed!.includes(key)) redirect("/");
+  }
+
   // Opening a site records the visit (Site.lastVisitedAt). The recent
   // sites under "Sites" in the menu are this site, then the one opened
-  // before it.
+  // before it — for an artist, their own sites instead, and no alerts
+  // (they're Administration's).
   const [openAlerts, lastPublishedAt, previousSites] = await Promise.all([
-    getOpenAlerts(),
+    artistLogin ? Promise.resolve([]) : getOpenAlerts(),
     getLastPublishedAt(id),
-    getRecentSites({ excludeSiteId: id, take: 1 }),
-    recordSiteVisit(id),
+    artistLogin ? getClientSites(site.artistId, id) : getRecentSites({ excludeSiteId: id, take: 1 }),
+    artistLogin ? Promise.resolve() : recordSiteVisit(id),
   ]);
-  const recentSites = [{ id, label: site.artist.name }, ...previousSites];
+  const recentSites = [{ id, label: artistLogin ? site.name : site.artist.name }, ...previousSites];
 
   // Everything inside the site words itself for the client's type
   // (Artwork / Product, Gallery / Store…) — see ClientWordsProvider.
@@ -52,6 +71,7 @@ export default async function SiteLayout({
         alertCount={openAlerts.length}
         lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
         recentSites={recentSites}
+        allowed={allowed}
         header={
           // Site name left, the page's own heading (if any) centred,
           // View published site right.

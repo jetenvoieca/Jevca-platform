@@ -8,7 +8,7 @@ import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
 import { getOpenAlerts } from "@/lib/alerts";
 import { getClientPanelData } from "@/lib/clientPanelData";
-import { getArtistLogin } from "@/lib/actions/users";
+import { getArtistLogin, getArtistMenuAccess } from "@/lib/actions/users";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 
 export const dynamic = "force-dynamic";
@@ -50,7 +50,10 @@ export default async function ClientAdminPage({
     getRecentSites(),
   ]);
   if (!data) notFound();
-  const login = await getArtistLogin(data.artist.id);
+  const [login, menuAccess] = await Promise.all([
+    getArtistLogin(data.artist.id),
+    getArtistMenuAccess(data.artist.id),
+  ]);
 
   return (
     <AppShell
@@ -81,6 +84,7 @@ export default async function ClientAdminPage({
           artist={data.artist}
           subscriptionPayments={data.subscriptionPayments}
           login={login}
+          menuAccess={menuAccess}
         />
       }
     />

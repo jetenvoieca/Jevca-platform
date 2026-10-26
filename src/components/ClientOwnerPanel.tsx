@@ -3,7 +3,9 @@ import DomainCard from "@/components/DomainCard";
 import SubscriptionCard from "@/components/SubscriptionCard";
 import HopperTokenCard from "@/components/HopperTokenCard";
 import ArtistLoginCard from "@/components/ArtistLoginCard";
+import MenuAccessCard from "@/components/MenuAccessCard";
 import type { ArtistLogin } from "@/lib/actions/users";
+import type { SiteNavKey } from "@/lib/siteNav";
 import type { ArtistRecord, SiteRecord } from "@/lib/clientPanelTypes";
 
 type SubscriptionPaymentRow = {
@@ -28,12 +30,15 @@ export default function ClientOwnerPanel({
   artist,
   subscriptionPayments,
   login,
+  menuAccess,
 }: {
   site: SiteRecord;
   artist: ArtistRecord;
   subscriptionPayments: SubscriptionPaymentRow[];
   // The client's own login (2026-10-26), null if none yet.
   login: ArtistLogin | null;
+  // The site menu items that login may reach (2026-10-26).
+  menuAccess: SiteNavKey[];
 }) {
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -50,6 +55,7 @@ export default function ClientOwnerPanel({
           />
           <HopperTokenCard artistId={artist.id} kind={artist.kind} hopperToken={artist.hopperToken} />
           <ArtistLoginCard key={artist.id} artistId={artist.id} login={login} />
+          <MenuAccessCard key={`access-${artist.id}`} artistId={artist.id} initial={menuAccess} />
         </div>
       </div>
     </div>

@@ -237,6 +237,9 @@ model Artist {
   profileStories ProfileStory[]
   // Logins for this client (2026-10-26) — see User below.
   users User[]
+  // The site menu items this client's login may reach (2026-10-26),
+  // ticked on the Client page — see lib/siteMenuAccess.ts. Empty = none.
+  menuAccess String[] @default([])
 
   // Deprecated (2026-08-28) — superseded by the real ArtworkType table
   // below, which adds a per-type Ref value (used to compute Reference

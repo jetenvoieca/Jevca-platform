@@ -26,10 +26,15 @@ const LOCK_MINUTES = 15;
 const safeNext = (next: string) =>
   next.startsWith("/") && !next.startsWith("//") ? next : "/";
 
-async function startSession(user: { id: string; sessionVersion: number }) {
+async function startSession(user: {
+  id: string;
+  sessionVersion: number;
+  role: "ADMIN" | "ARTIST";
+}) {
   const token = await createSessionToken({
     userId: user.id,
     version: user.sessionVersion,
+    role: user.role,
   });
   const cookieStore = await cookies();
   cookieStore.set(SESSION_COOKIE_NAME, token, {

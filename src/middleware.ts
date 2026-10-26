@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { readSessionToken, SESSION_COOKIE_NAME } from "@/lib/auth";
+import { readSessionToken, SESSION_COOKIE_NAME, PATHNAME_HEADER } from "@/lib/auth";
 import { BUSINESS_WEBSITE_DOMAIN, BUSINESS_WEBSITE_HOST } from "@/lib/businessWebsite";
 
 // The business website, jetenvoieca.com (2026-09-29). Requests to these
@@ -96,6 +96,13 @@ const PUBLIC_PATH_PREFIXES = [
   "/privacy",
 ];
 
+// What an artist login may open besides "/" (which sends them to their
+// own site) (2026-10-26): their sites' pages (the site's layout keeps
+// them to their own sites and ticked menu items; /sites/new is admin
+// only), published sites, their own login, and the app's routes (each
+// checks who's asking itself).
+const ARTIST_PATH_PREFIXES = ["/sites", "/site-preview", "/my-login", "/api"];
+
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
   const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
@@ -125,19 +132,34 @@ export async function middleware(request: NextRequest) {
   }
 
   // A genuine, unexpired login cookie (2026-10-26: per person). Whether
-  // that person may still log in, and what they may reach, is checked by
-  // the pages and actions themselves (lib/currentUser.ts) — the database
-  // isn't reachable from here.
+  // that person may still log in, and which sites and menu items an
+  // artist may reach, is checked by the pages and actions themselves
+  // (lib/currentUser.ts) — the database isn't reachable from here.
   const token = request.cookies.get(SESSION_COOKIE_NAME)?.value;
-  const authenticated = (await readSessionToken(token)) !== null;
+  const claims = await readSessionToken(token);
 
-  if (!authenticated) {
+  if (!claims) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  return NextResponse.next();
+  // An artist login (2026-10-26) only reaches their sites' pages — never
+  // Administration, Templates, the Sites list or the admin's own tools.
+  if (
+    claims.role === "ARTIST" &&
+    pathname !== "/" &&
+    !ARTIST_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))
+  ) {
+    return NextResponse.redirect(new URL("/", request.url));
+  }
+
+  // The page's address, for the site's layout, which checks it against
+  // the menu items an artist may reach (lib/siteMenuAccess.ts) — a layout
+  // isn't told the address otherwise.
+  const headers = new Headers(request.headers);
+  headers.set(PATHNAME_HEADER, pathname);
+  return NextResponse.next({ request: { headers } });
 }
 
 export const config = {

@@ -1,8 +1,12 @@
 import Link from "next/link";
 import { getArtistsForPicker } from "@/lib/actions";
 import NewSiteForm from "./NewSiteForm";
+import { redirect } from "next/navigation";
+import { getCurrentUser } from "@/lib/currentUser";
 
 export default async function NewSitePage() {
+  // Admin only (2026-10-26).
+  if ((await getCurrentUser())?.role !== "ADMIN") redirect("/");
   const artists = await getArtistsForPicker();
 
   return (

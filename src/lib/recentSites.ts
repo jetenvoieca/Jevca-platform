@@ -2,7 +2,8 @@ import { db } from "@/lib/db";
 
 // The sites shown under "Sites" in the main menu (2026-10-07). Saved in
 // the database (Site.lastVisitedAt), so the list is the same on every
-// device — shared by everyone, since the app has one login.
+// device. The admin's (an artist login sees their own sites instead —
+// getClientSites).
 export const RECENT_SITES_COUNT = 2;
 
 export type RecentSite = { id: string; label: string };
@@ -32,4 +33,15 @@ export async function getRecentSites({
 // move when the site itself is edited.
 export async function recordSiteVisit(siteId: string): Promise<void> {
   await db.$executeRaw`UPDATE "Site" SET "lastVisitedAt" = NOW() WHERE "id" = ${siteId}`;
+}
+
+// A client's own sites but one (2026-10-26 — the "Sites" an artist login
+// sees in the menu), labelled by site name, archived ones left out.
+export async function getClientSites(artistId: string, excludeSiteId: string): Promise<RecentSite[]> {
+  const sites = await db.site.findMany({
+    where: { artistId, id: { not: excludeSiteId }, status: { not: "ARCHIVED" } },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
+  return sites.map((s) => ({ id: s.id, label: s.name }));
 }

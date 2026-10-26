@@ -32,7 +32,12 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
       sessionVersion: true,
     },
   });
-  if (!user || !user.active || user.sessionVersion !== claims.version)
+  if (
+    !user ||
+    !user.active ||
+    user.sessionVersion !== claims.version ||
+    user.role !== claims.role
+  )
     return null;
   return {
     id: user.id,

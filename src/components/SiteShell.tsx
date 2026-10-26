@@ -5,40 +5,10 @@ import { usePathname } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import { publishSite } from "@/lib/actions/siteSnapshot";
 import { buildSiteNavEntries, type SiteNavKey } from "@/lib/siteNav";
+import { siteNavKeyForPath } from "@/lib/siteMenuAccess";
 import type { RecentSite } from "@/lib/recentSites";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { PageHeadingProvider } from "@/components/PageHeading";
-
-// Works out which nav item should be highlighted/open purely from the
-// current path — this shell is rendered once from the shared site
-// layout, wrapping every page under /sites/[id]/*, rather than each
-// page declaring its own key. The bare /sites/[id] route is the Profile
-// page (Financial). Anything unmatched highlights nothing.
-function resolveActiveKey(pathname: string, siteId: string): SiteNavKey | null {
-  const base = `/sites/${siteId}`;
-  if (pathname === base) return "profile";
-  if (pathname === `${base}/artworks/settings`) return "artworkSettings";
-  if (pathname.startsWith(`${base}/artworks`)) return "artworks";
-  if (pathname.startsWith(`${base}/curations`)) return "curations";
-  if (pathname.startsWith(`${base}/profile-catalogue`)) return "profileCatalogue";
-  if (pathname.startsWith(`${base}/galleries`)) return "galleries";
-  if (pathname.startsWith(`${base}/media`)) return "media";
-  if (pathname === `${base}/hopper`) return "hopper";
-  if (pathname === `${base}/bucket`) return "bucket";
-  if (pathname.startsWith(`${base}/pages`)) return "pages";
-  if (pathname.startsWith(`${base}/analytics`)) return "analytics";
-  if (pathname.startsWith(`${base}/account`)) return "account";
-  if (pathname.startsWith(`${base}/sales`)) return "sales";
-  if (pathname.startsWith(`${base}/purchases/settings`)) return "purchasesSettings";
-  if (pathname.startsWith(`${base}/purchases`)) return "purchases";
-  if (pathname.startsWith(`${base}/customers`)) return "customers";
-  if (pathname.startsWith(`${base}/marketing/subscribers`)) return "subscribers";
-  if (pathname.startsWith(`${base}/marketing/campaigns`)) return "mailCampaigns";
-  if (pathname.startsWith(`${base}/marketing/social`)) return "socialMedia";
-  if (pathname.startsWith(`${base}/marketing/pr`)) return "pr";
-  if (pathname.startsWith(`${base}/marketing/settings`)) return "marketingSettings";
-  return null;
-}
 
 // "Publish to live site" (2026-10-06) is always available: it saves a
 // fresh snapshot of the whole site each time (lib/actions/siteSnapshot.ts)
@@ -49,6 +19,7 @@ export default function SiteShell({
   alertCount,
   lastPublishedAt,
   recentSites,
+  allowed,
   header,
   children,
 }: {
@@ -59,6 +30,8 @@ export default function SiteShell({
   lastPublishedAt: string | null;
   // The recent sites under "Sites" in the menu — this site first.
   recentSites: RecentSite[];
+  // An artist login's ticked menu items (2026-10-26); null for an admin.
+  allowed: SiteNavKey[] | null;
   // The site name / domain header, pinned above the scrolling page
   // content — built by the (server) layout since it needs the site
   // record, passed in ready-made. It holds the PageHeadingSlot.
@@ -70,11 +43,14 @@ export default function SiteShell({
 
   const navItems = buildSiteNavEntries({
     siteId,
-    active: resolveActiveKey(pathname, siteId),
+    // Which item is highlighted, from the page's address (the shell
+    // wraps every page under /sites/[id]/*).
+    active: siteNavKeyForPath(pathname, siteId),
     alertCount,
     salesEnabled,
     recentSites,
     words,
+    allowed,
   });
 
   return (

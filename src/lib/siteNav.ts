@@ -2,6 +2,7 @@ import type { AppShellNavEntry, AppShellNavItem } from "@/components/SidebarNav"
 import { buildAccountsSection, buildSitesSection, buildTemplatesSection } from "@/lib/topNav";
 import type { RecentSite } from "@/lib/recentSites";
 import type { ClientWords } from "@/lib/clientKind";
+import { siteLandingHref, siteNavKeyForPath } from "@/lib/siteMenuAccess";
 
 // Colour for every section that's specific to the site you're currently
 // inside (Artworks, Website, Financial, Marketing) — distinct from the
@@ -71,15 +72,21 @@ export function buildSiteNavEntries({
   salesEnabled,
   recentSites,
   words,
+  allowed,
 }: {
   siteId: string;
   active: SiteNavKey | null;
   alertCount: number;
   salesEnabled: boolean;
-  // This site first, then the one opened before it — see the site layout.
+  // This site first, then the one opened before it — see the site
+  // layout. For an artist login: their own sites.
   recentSites: RecentSite[];
   // Artwork or product wording for this site's client — lib/clientKind.ts.
   words: ClientWords;
+  // An artist login's ticked menu items (2026-10-26 — see
+  // lib/siteMenuAccess.ts); null for an admin, who has everything. An
+  // artist sees only those, and never Administration or Templates.
+  allowed: SiteNavKey[] | null;
 }): AppShellNavEntry[] {
   const base = `/sites/${siteId}`;
 
@@ -153,13 +160,12 @@ export function buildSiteNavEntries({
   ];
 
   const sectionActive = (keys: SiteNavKey[]) => active !== null && keys.includes(active);
+  const may = (href: string) => {
+    const key = siteNavKeyForPath(href, siteId);
+    return !allowed || (key !== null && allowed.includes(key));
+  };
 
-  return [
-    // Same "Administration" and "Templates" groups as the top-level
-    // pages — none of their own keys apply while inside a site.
-    buildAccountsSection(null, alertCount),
-    buildTemplatesSection(null),
-    buildSitesSection(recentSites, { currentSiteId: siteId }),
+  const entries: AppShellNavEntry[] = [
     {
       label: words.items,
       section: true,
@@ -192,5 +198,35 @@ export function buildSiteNavEntries({
       active: sectionActive(MARKETING_KEYS),
       children: marketingChildren,
     },
+  ];
+  const siteEntries = entries.flatMap((entry): AppShellNavEntry[] => {
+    if (!("section" in entry)) return may(entry.href) ? [entry] : [];
+    const children = entry.children.filter((c) => may(c.href));
+    return children.length ? [{ ...entry, children }] : [];
+  });
+
+  if (allowed) {
+    // An artist: their own sites (when they have more than one), each
+    // opening on its first ticked item, then this site's ticked items.
+    const sites =
+      recentSites.length > 1
+        ? [
+            buildSitesSection(recentSites, {
+              currentSiteId: siteId,
+              hrefOf: (id) => siteLandingHref(id, allowed) ?? `/sites/${id}`,
+              seeAll: false,
+            }),
+          ]
+        : [];
+    return [...sites, ...siteEntries];
+  }
+
+  return [
+    // Same "Administration" and "Templates" groups as the top-level
+    // pages — none of their own keys apply while inside a site.
+    buildAccountsSection(null, alertCount),
+    buildTemplatesSection(null),
+    buildSitesSection(recentSites, { currentSiteId: siteId }),
+    ...siteEntries,
   ];
 }

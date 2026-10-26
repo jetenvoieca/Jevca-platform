@@ -7,6 +7,10 @@
 
 export const SESSION_COOKIE_NAME = "jevca_session";
 
+// The request header the middleware puts the page's address in, for
+// layouts that need it (the site's layout — see middleware.ts).
+export const PATHNAME_HEADER = "x-jevca-pathname";
+
 // 30 days — long enough not to be re-entering a password constantly,
 // short enough that a stale cookie doesn't linger forever if a device is
 // ever lost.
@@ -39,35 +43,38 @@ function safeEqual(a: string, b: string): boolean {
   return result === 0;
 }
 
-// Who a login cookie is for: the person's id and their sessionVersion
-// when they logged in.
-export type SessionClaims = { userId: string; version: number };
+// Who a login cookie is for: the person's id, their sessionVersion when
+// they logged in, and their role — so the middleware can keep an artist
+// to the parts of the app they may use without the database.
+export type SessionClaims = { userId: string; version: number; role: "ADMIN" | "ARTIST" };
 
-// The cookie value is "<userId>.<sessionVersion>.<expiryTimestamp>.<signature>",
-// signed over the first three. Nothing is stored for it; whether the
-// person may still log in (switched off, a new password since) is
-// checked against the database by lib/currentUser.ts.
+// The cookie value is
+// "<userId>.<sessionVersion>.<role>.<expiryTimestamp>.<signature>", signed
+// over the first four. Nothing is stored for it; whether the person may
+// still log in (switched off, a new password since) is checked against
+// the database by lib/currentUser.ts.
 export async function createSessionToken(claims: SessionClaims): Promise<string> {
   const secret = process.env.AUTH_SECRET;
   if (!secret) throw new Error("AUTH_SECRET is not configured.");
-  const payload = `${claims.userId}.${claims.version}.${Date.now() + SESSION_LIFETIME_MS}`;
+  const payload = `${claims.userId}.${claims.version}.${claims.role}.${Date.now() + SESSION_LIFETIME_MS}`;
   return `${payload}.${await hmac(secret, `session:${payload}`)}`;
 }
 
 // The cookie's claims if it's genuine and not expired, otherwise null.
-// The old shared-password cookies (two parts) never pass, so everyone
-// logs in again once.
+// Older cookies (the shared password's, or without the role) never
+// pass, so everyone logs in again once.
 export async function readSessionToken(token: string | undefined | null): Promise<SessionClaims | null> {
   const secret = process.env.AUTH_SECRET;
   if (!token || !secret) return null;
   const parts = token.split(".");
-  if (parts.length !== 4) return null;
-  const [userId, versionRaw, expiresAtRaw, signature] = parts;
+  if (parts.length !== 5) return null;
+  const [userId, versionRaw, role, expiresAtRaw, signature] = parts;
   const version = Number(versionRaw);
   const expiresAt = Number(expiresAtRaw);
   if (!userId || !Number.isInteger(version) || !Number.isFinite(expiresAt) || Date.now() > expiresAt) return null;
-  const expected = await hmac(secret, `session:${userId}.${versionRaw}.${expiresAtRaw}`);
-  return safeEqual(expected, signature) ? { userId, version } : null;
+  if (role !== "ADMIN" && role !== "ARTIST") return null;
+  const expected = await hmac(secret, `session:${userId}.${versionRaw}.${role}.${expiresAtRaw}`);
+  return safeEqual(expected, signature) ? { userId, version, role } : null;
 }
 
 // A short-lived signed value for one purpose (2026-10-09, first used as

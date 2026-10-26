@@ -112,12 +112,22 @@ export function buildTemplatesSection(active: TopNavKey | null): AppShellNavEntr
 // `onSitesList` opens the section and highlights "See all";
 // `currentSiteId` highlights that site without opening the section, so
 // the site's own section (Artworks, Media…) stays the open one.
+//
+// For an artist login (2026-10-26): `hrefOf` opens each of their sites
+// on its first ticked menu item, and there's no "See all" (`seeAll`).
 export function buildSitesSection(
   recentSites: RecentSite[],
   {
     onSitesList = false,
     currentSiteId = null,
-  }: { onSitesList?: boolean; currentSiteId?: string | null } = {}
+    hrefOf = (id) => `/sites/${id}/artworks`,
+    seeAll = true,
+  }: {
+    onSitesList?: boolean;
+    currentSiteId?: string | null;
+    hrefOf?: (siteId: string) => string;
+    seeAll?: boolean;
+  } = {}
 ): AppShellNavEntry {
   return {
     label: "Sites",
@@ -127,10 +137,10 @@ export function buildSitesSection(
     children: [
       ...recentSites.map((site) => ({
         label: site.label,
-        href: `/sites/${site.id}/artworks`,
+        href: hrefOf(site.id),
         active: site.id === currentSiteId,
       })),
-      { label: "See all", href: "/", active: onSitesList, subtle: true },
+      ...(seeAll ? [{ label: "See all", href: "/", active: onSitesList, subtle: true }] : []),
     ],
   };
 }

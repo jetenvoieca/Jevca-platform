@@ -4,9 +4,12 @@ import { db } from "@/lib/db";
 import { requireAdmin } from "@/lib/currentUser";
 import { hashPassword } from "@/lib/passwords";
 import { passwordProblem } from "@/lib/passwordRules";
+import { cleanMenuAccess } from "@/lib/siteMenuAccess";
+import type { SiteNavKey } from "@/lib/siteNav";
 
 // A client's login (2026-10-26), set up by the admin on the Client page:
-// one ARTIST login per client for now. Admin only.
+// one ARTIST login per client for now, and the site menu items it may
+// reach. Admin only.
 
 export type ArtistLogin = {
   id: string;
@@ -119,4 +122,29 @@ export async function setArtistLoginActive(
       : { active: false, sessionVersion: { increment: 1 } },
   });
   return count ? { ok: true } : { error: "This client has no login yet." };
+}
+
+// The site menu items the client's login may reach (2026-10-26 — see
+// lib/siteMenuAccess.ts).
+export async function getArtistMenuAccess(
+  artistId: string,
+): Promise<SiteNavKey[]> {
+  await requireAdmin();
+  const artist = await db.artist.findUnique({
+    where: { id: artistId },
+    select: { menuAccess: true },
+  });
+  return cleanMenuAccess(artist?.menuAccess ?? []);
+}
+
+export async function setArtistMenuAccess(
+  artistId: string,
+  keys: string[],
+): Promise<Result> {
+  await requireAdmin();
+  const { count } = await db.artist.updateMany({
+    where: { id: artistId },
+    data: { menuAccess: cleanMenuAccess(keys) },
+  });
+  return count ? { ok: true } : { error: "Client not found." };
 }
