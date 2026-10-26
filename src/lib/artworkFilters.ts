@@ -30,7 +30,15 @@ export type ArtworkFilterInput = {
   // rename never breaks a saved/bookmarked filter). Matches every
   // artwork in that curation. See Curation in schema.prisma.
   curation?: string;
+  // The order, not a filter (2026-10-26, direct request) — carried with
+  // the filters so the grid, the URL and the PDF/CSV exports all follow
+  // it. See ARTWORK_SORT_NUMBER and buildArtworkOrderBy.
+  sort?: string;
 };
+
+// The one alternative to the standard order: catalogue number, lowest
+// first, whatever the availability. Unset means the standard order.
+export const ARTWORK_SORT_NUMBER = "number";
 
 export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput) {
   const { q, name, availability, location, type, curation } = filters;
@@ -89,8 +97,8 @@ export function artworkMatchesFilters(
   return true;
 }
 
-// One fixed order, shared by the on-screen grid, the PDF and CSV
-// exports and the Studio app (2026-09-24, direct request — was newest
+// The order shared by the on-screen grid, the PDF and CSV exports and
+// the Studio app. Standard (2026-09-24, direct request — was newest
 // first): works still for sale A–Z first, then Reserved, then Sold at
 // the bottom, each A–Z. Relies on the ArtworkAvailability enum's
 // declared order (AVAILABLE, RESERVED, SOLD), which is how Postgres
@@ -99,7 +107,16 @@ export function artworkMatchesFilters(
 // natural-language collation — see migration
 // 20260924150000_artwork_name_natural_sort. createdAt is only a
 // tie-break, so two works with the same name keep a stable order.
-export function buildArtworkOrderBy() {
+//
+// Sorted by catalogue number instead (2026-10-26, direct request) when
+// the Artwork Catalogue or the Media Catalogue's Artworks view asks.
+// Numbers are always generated as AW- plus four digits
+// (nextCatalogueNumber in lib/actions/artworks.ts), so a plain text
+// sort puts them in number order.
+export function buildArtworkOrderBy(sort?: string) {
+  if (sort === ARTWORK_SORT_NUMBER) {
+    return [{ catalogueNumber: "asc" as const }, { createdAt: "asc" as const }];
+  }
   return [
     { availability: "asc" as const },
     { catalogueName: "asc" as const },

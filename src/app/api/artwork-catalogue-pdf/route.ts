@@ -19,6 +19,7 @@ export async function GET(req: NextRequest) {
       location: params.get("location") || undefined,
       type: params.get("type") || undefined,
       curation: params.get("curation") || undefined,
+      sort: params.get("sort") || undefined,
       // Editable per-export override (2026-08-17) — defaults to the
       // client's real name / catalogue name when absent.
       headerTitle: params.get("headerTitle") || undefined,

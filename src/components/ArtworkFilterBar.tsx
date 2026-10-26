@@ -2,16 +2,20 @@
 
 import type { ReactNode } from "react";
 import type { CurationSummary } from "@/lib/actions/curations";
+import { ARTWORK_SORT_NUMBER } from "@/lib/artworkFilters";
 
-// The artwork filters (Curation, Name, Location, Type) — shared by the
-// Artwork Catalogue and the Media Catalogue's Artworks view (2026-10-15)
-// so both filter the same way. Controlled: the parent holds the values
-// and is told which one changed.
+// The artwork filters (Curation, Name, Location, Type) and the Sort —
+// shared by the Artwork Catalogue and the Media Catalogue's Artworks view
+// (2026-10-15) so both filter and sort the same way. Controlled: the
+// parent holds the values and is told which one changed.
 export type ArtworkFilterValues = {
   curation: string;
   name: string;
   location: string;
   type: string;
+  // "" = the standard order (by name), or ARTWORK_SORT_NUMBER
+  // (2026-10-26) — see buildArtworkOrderBy in lib/artworkFilters.ts.
+  sort: string;
 };
 
 export default function ArtworkFilterBar({
@@ -97,6 +101,15 @@ export default function ArtworkFilterBar({
               {t}
             </option>
           ))}
+        </select>
+        <select
+          name="sort"
+          value={values.sort}
+          onChange={(e) => onChange({ sort: e.target.value })}
+          className={selectCls}
+        >
+          <option value="">Sort: Name</option>
+          <option value={ARTWORK_SORT_NUMBER}>Sort: Catalogue number</option>
         </select>
       </div>
     </div>

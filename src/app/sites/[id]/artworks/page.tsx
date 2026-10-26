@@ -12,6 +12,8 @@ type SearchParams = {
   availability?: string;
   location?: string;
   type?: string;
+  // The order (2026-10-26) — see ArtworkFilterInput in lib/artworkFilters.ts.
+  sort?: string;
   // Curation filter (2026-09-24) — a Curation's id. See
   // ArtworkFilterInput in lib/artworkFilters.ts.
   curation?: string;
@@ -48,6 +50,7 @@ export default async function ArtworksCataloguePage({
       location: sp.location,
       type: sp.type,
       curation: sp.curation,
+      sort: sp.sort,
       limit: PAGE_SIZE,
     }),
     getArtworkSettings(artistId),
@@ -72,6 +75,7 @@ export default async function ArtworksCataloguePage({
       availability={sp.availability || ""}
       location={sp.location || ""}
       type={sp.type || ""}
+      sort={sp.sort || ""}
       curation={sp.curation || ""}
       curations={curations}
       initialSelected={selected}

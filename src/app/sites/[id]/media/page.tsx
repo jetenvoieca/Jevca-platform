@@ -39,6 +39,7 @@ type SearchParams = {
   name?: string;
   location?: string;
   type?: string;
+  sort?: string;
 };
 
 export default async function MediaCataloguePage({
@@ -78,6 +79,7 @@ export default async function MediaCataloguePage({
       name: sp.name || "",
       location: sp.location || "",
       type: sp.type || "",
+      sort: sp.sort || "",
     };
     const [{ rows, total }, counts, settings, names, curations] = await Promise.all([
       listArtworks(artistId, {
@@ -85,6 +87,7 @@ export default async function MediaCataloguePage({
         name: filters.name || undefined,
         location: filters.location || undefined,
         type: filters.type || undefined,
+        sort: filters.sort || undefined,
         limit: PAGE_SIZE,
       }),
       countMediaByPurpose(artistId),

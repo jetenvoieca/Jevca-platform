@@ -96,7 +96,7 @@ export async function generateArtworkCataloguePdf(
 ): Promise<{ bytes: Uint8Array; filename: string }> {
   await requireArtistAccess(artistId);
   const where = buildArtworkWhere(artistId, filters);
-  const orderBy = buildArtworkOrderBy();
+  const orderBy = buildArtworkOrderBy(filters.sort);
 
   const [artworks, curation] = await Promise.all([
     db.artwork.findMany({

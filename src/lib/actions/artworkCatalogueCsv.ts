@@ -23,7 +23,7 @@ export async function generateArtworkCatalogueCsv(
 ): Promise<{ csv: string; filename: string }> {
   await requireArtistAccess(artistId);
   const where = buildArtworkWhere(artistId, filters);
-  const orderBy = buildArtworkOrderBy();
+  const orderBy = buildArtworkOrderBy(filters.sort);
 
   const artworks = await db.artwork.findMany({
     where,

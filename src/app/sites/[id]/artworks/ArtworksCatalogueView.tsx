@@ -21,14 +21,15 @@ import ArtworkFilterBar from "@/components/ArtworkFilterBar";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
-// Every filter the catalogue offers, in one shape — what the URL, the
-// grid fetches and the PDF/CSV exports all read from.
+// Every filter the catalogue offers, and the sort, in one shape — what
+// the URL, the grid fetches and the PDF/CSV exports all read from.
 type Filters = {
   name: string;
   availability: string;
   location: string;
   type: string;
   curation: string;
+  sort: string;
 };
 
 const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
@@ -64,6 +65,7 @@ function toListFilters(filters: Filters) {
     location: filters.location || undefined,
     type: filters.type || undefined,
     curation: filters.curation || undefined,
+    sort: filters.sort || undefined,
   };
 }
 
@@ -81,6 +83,7 @@ export default function ArtworksCatalogueView({
   availability: initialAvailability,
   location: initialLocation,
   type: initialType,
+  sort: initialSort,
   curation: initialCuration = "",
   curations = [],
   initialSelected,
@@ -107,6 +110,9 @@ export default function ArtworksCatalogueView({
   availability: string;
   location: string;
   type: string;
+  // "" (by name) or catalogue number (2026-10-26) — see
+  // buildArtworkOrderBy in lib/artworkFilters.ts.
+  sort: string;
   // Curation filter (2026-09-24) — a Curation's id, and the list the
   // dropdown offers. Optional so the evaluation-only preview pages
   // (which don't have Curations yet) need no change; with no curations
@@ -160,13 +166,14 @@ export default function ArtworksCatalogueView({
   const [location, setLocation] = useState(initialLocation);
   const [type, setType] = useState(initialType);
   const [curation, setCuration] = useState(initialCuration);
+  const [sort, setSort] = useState(initialSort);
 
   // The Name list changes when a work is renamed, duplicated or deleted.
   const refreshNames = () => {
     listArtworkNames(artistId).then(setNames);
   };
 
-  const currentFilters: Filters = { name, availability, location, type, curation };
+  const currentFilters: Filters = { name, availability, location, type, curation, sort };
 
   // Declared up here, ahead of applyFilters below, specifically because
   // applyFilters' own dependency array reads `selected` directly
@@ -180,11 +187,6 @@ export default function ArtworksCatalogueView({
   // fuller selection-related comment further down, by selectingId.
   const [selected, setSelected] = useState<ArtworkDetail | null>(initialSelected);
 
-  // Sort dropdown removed (2026-09-12, direct request — "never used it
-  // or even know why I would"), same as its counterpart on the Media
-  // Catalogue. listArtworks (and the CSV/PDF exports, which share the
-  // same filters) always use the one shared order (buildArtworkOrderBy,
-  // lib/artworkFilters.ts).
   const updateUrlFilters = (next: Filters) => {
     const params = new URLSearchParams(window.location.search);
     for (const [key, value] of Object.entries(next)) {
@@ -197,7 +199,7 @@ export default function ArtworksCatalogueView({
 
   const applyFilters = useCallback(
     async (overrides: Partial<Filters>) => {
-      const next: Filters = { name, availability, location, type, curation, ...overrides };
+      const next: Filters = { name, availability, location, type, curation, sort, ...overrides };
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
         ...toListFilters(next),
         limit: pageSize,
@@ -225,7 +227,7 @@ export default function ArtworksCatalogueView({
         updateUrlSelected(null);
       }
     },
-    [artistId, name, availability, location, type, curation, pageSize, selected]
+    [artistId, name, availability, location, type, curation, sort, pageSize, selected]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -233,7 +235,7 @@ export default function ArtworksCatalogueView({
     setLoadMoreError(false);
     try {
       const { rows } = await listArtworks(artistId, {
-        ...toListFilters({ name, availability, location, type, curation }),
+        ...toListFilters({ name, availability, location, type, curation, sort }),
         offset: artworks.length,
         limit: pageSize,
       });
@@ -248,7 +250,7 @@ export default function ArtworksCatalogueView({
     } finally {
       setLoadingMore(false);
     }
-  }, [artistId, artworks.length, name, availability, location, type, curation, pageSize]);
+  }, [artistId, artworks.length, name, availability, location, type, curation, sort, pageSize]);
 
   // Infinite scroll: an invisible sentinel sits just past the last row.
   // When it enters the viewport we auto-fetch the next page — no "Load
@@ -641,7 +643,7 @@ export default function ArtworksCatalogueView({
                   ))}
                 </div>
               }
-              values={{ curation, name, location, type }}
+              values={{ curation, name, location, type, sort }}
               curations={curations}
               names={names}
               locations={settings.locations.map((l) => l.name)}
@@ -651,6 +653,7 @@ export default function ArtworksCatalogueView({
                 if (change.name !== undefined) setName(change.name);
                 if (change.location !== undefined) setLocation(change.location);
                 if (change.type !== undefined) setType(change.type);
+                if (change.sort !== undefined) setSort(change.sort);
                 applyFilters(change);
               }}
             />

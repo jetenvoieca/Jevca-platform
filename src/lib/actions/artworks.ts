@@ -359,7 +359,7 @@ export async function listArtworks(
   await requireArtistAccess(artistId);
   const { offset = 0, limit = DEFAULT_PAGE_SIZE } = filters;
 
-  const orderBy = buildArtworkOrderBy();
+  const orderBy = buildArtworkOrderBy(filters.sort);
   const where = buildArtworkWhere(artistId, filters);
 
   const [rows, total, soldCount] = await Promise.all([

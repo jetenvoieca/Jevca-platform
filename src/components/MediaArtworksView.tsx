@@ -59,6 +59,7 @@ export default function MediaArtworksView({
     name: f.name || undefined,
     location: f.location || undefined,
     type: f.type || undefined,
+    sort: f.sort || undefined,
   });
 
   const applyFilters = async (change: Partial<ArtworkFilterValues>) => {

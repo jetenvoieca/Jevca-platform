@@ -13,6 +13,8 @@ type SearchParams = {
   availability?: string;
   location?: string;
   type?: string;
+  // The order (2026-10-26) — see ArtworkFilterInput in lib/artworkFilters.ts.
+  sort?: string;
   selected?: string;
 };
 
@@ -50,6 +52,7 @@ export default async function PreviewArtworksPage({
       availability: sp.availability,
       location: sp.location,
       type: sp.type,
+      sort: sp.sort,
       limit: PAGE_SIZE,
     }),
     getArtworkSettings(artistId),
@@ -74,6 +77,7 @@ export default async function PreviewArtworksPage({
       availability={sp.availability || ""}
       location={sp.location || ""}
       type={sp.type || ""}
+      sort={sp.sort || ""}
       initialSelected={selected}
       settings={settings}
     />
