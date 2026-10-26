@@ -7,7 +7,6 @@ import {
   type ArtistLogin,
 } from "@/lib/actions/users";
 import { MIN_PASSWORD_LENGTH } from "@/lib/passwordRules";
-import { ARTIST_LOGINS_ENABLED } from "@/lib/userAccess";
 
 // The client's own login (2026-10-26), on Administration → Clients: their
 // name, email and a password you choose for them (blank keeps the
@@ -66,11 +65,6 @@ export default function ArtistLoginCard({
       <p className="mb-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
         Their login
       </p>
-      {!ARTIST_LOGINS_ENABLED && (
-        <p className="mb-2 text-xs text-amber-700">
-          Set up now; they can log in once artist logins are switched on.
-        </p>
-      )}
       <div className="flex flex-col gap-2">
         <input
           value={name}

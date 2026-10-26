@@ -11,7 +11,6 @@ import {
 import { hashPassword, verifyPassword } from "@/lib/passwords";
 import { passwordProblem } from "@/lib/passwordRules";
 import { getCurrentUser } from "@/lib/currentUser";
-import { ARTIST_LOGINS_ENABLED } from "@/lib/userAccess";
 
 // Logging in and out (2026-10-26: by email and password, one login per
 // person — see User in schema.prisma).
@@ -75,10 +74,6 @@ export async function login(
     });
     return wrong;
   }
-  if (user.role === "ARTIST" && !ARTIST_LOGINS_ENABLED) {
-    return { error: "Artist logins aren't switched on yet." };
-  }
-
   await db.user.update({
     where: { id: user.id },
     data: { failedLogins: 0, lockedUntil: null, lastLoginAt: new Date() },
