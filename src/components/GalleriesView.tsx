@@ -159,6 +159,10 @@ export default function GalleriesView({
   const [selectedWorkId, setSelectedWorkId] = useState<string | null>(null);
   const [selectedWorkDetail, setSelectedWorkDetail] = useState<ArtworkDetail | null>(null);
   const [workLoading, setWorkLoading] = useState(false);
+  // Set when the work couldn't be loaded (2026-10-27) — most often a page
+  // opened before the app was last updated, which a reload fixes — so the
+  // window says so instead of showing Loading… for ever.
+  const [workLoadError, setWorkLoadError] = useState<string | null>(null);
   // Which of the work's sale and its framing/delivery charges has its
   // panel open (null = the summary) — see GallerySaleCard.
   const [focusedSaleId, setFocusedSaleId] = useState<string | null>(null);
@@ -306,6 +310,7 @@ export default function GalleriesView({
     setWorkView(purchaseId ? "line" : "image");
     setLineSaleId(purchaseId ?? null);
     setWorkLoading(true);
+    setWorkLoadError(null);
     setSaleError(null);
     setSaleTotalAmount("");
     setSaleCurrency("GBP");
@@ -326,6 +331,11 @@ export default function GalleriesView({
     setSaleBuyerEmail(selectedLocationType === "GALLERY" ? selectedDetail?.email || "" : "");
     setSaleDate(new Date().toISOString().slice(0, 10));
     getArtworkDetailForClient(workId).then((detail) => {
+      if (!detail) {
+        setWorkLoadError("This work couldn't be found — it may have been deleted.");
+        setWorkLoading(false);
+        return;
+      }
       setSelectedWorkDetail(detail);
       const openedCharge = [detail?.activePurchase, ...(detail?.purchaseHistory ?? [])].some((p) =>
         p?.charges.some((c) => c.id === purchaseId)
@@ -344,6 +354,9 @@ export default function GalleriesView({
         setSaleCurrency(detail.priceCurrency);
         setSaleBaseCurrency(detail.priceCurrency);
       }
+      setWorkLoading(false);
+    }, () => {
+      setWorkLoadError("This couldn't be loaded — the app may have been updated since this page was opened.");
       setWorkLoading(false);
     });
   };
@@ -401,7 +414,13 @@ export default function GalleriesView({
   // never fall out of sync with each other.
   const refreshAfterSaleChange = () => {
     if (!selectedWorkId || !selectedId) return;
-    getArtworkDetailForClient(selectedWorkId).then((detail) => setSelectedWorkDetail(detail));
+    getArtworkDetailForClient(selectedWorkId).then(
+      (detail) => {
+        if (detail) setSelectedWorkDetail(detail);
+        else closeWork();
+      },
+      () => setWorkLoadError("This couldn't be loaded — the app may have been updated since this page was opened."),
+    );
     refreshGalleryDetail(selectedId);
   };
 
@@ -1388,7 +1407,27 @@ export default function GalleriesView({
       {selectedWorkId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" {...workBackdrop}>
           <div className="flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
-            {workLoading || !selectedWorkDetail ? (
+            {workLoadError ? (
+              <div className="flex items-center justify-between gap-4 p-6">
+                <p className="text-sm text-red-600">{workLoadError}</p>
+                <div className="flex shrink-0 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.location.reload()}
+                    className="rounded-md bg-neutral-900 px-3 py-1 text-sm text-white hover:bg-neutral-700"
+                  >
+                    Reload
+                  </button>
+                  <button
+                    type="button"
+                    onClick={closeWork}
+                    className="rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : workLoading || !selectedWorkDetail ? (
               <p className="p-6 text-sm text-neutral-400">Loading…</p>
             ) : (
               <>
