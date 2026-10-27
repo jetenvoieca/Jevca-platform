@@ -108,6 +108,22 @@ export async function updateProfileStory(
   return toRow(row);
 }
 
+// Gives a story another picture or video from the Media Catalogue
+// (2026-10-27) — e.g. once its own was deleted there.
+export async function setProfileStoryImage(
+  id: string,
+  artistId: string,
+  imageId: string
+): Promise<Result<ProfileStoryRow>> {
+  await requireArtistAccess(artistId);
+  const image = await db.image.findFirst({ where: { id: imageId, artistId }, select: { id: true } });
+  if (!image) return { error: "That picture or video wasn't found." };
+  const { count } = await db.profileStory.updateMany({ where: { id, artistId }, data: { imageId } });
+  if (count === 0) return { error: "Story not found." };
+  const row = await db.profileStory.findUniqueOrThrow({ where: { id }, select: STORY_SELECT });
+  return toRow(row);
+}
+
 // Deletes the story only — its picture or video stays in the Media
 // Catalogue.
 export async function deleteProfileStory(id: string, artistId: string): Promise<void> {

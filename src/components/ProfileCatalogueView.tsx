@@ -8,6 +8,7 @@ import {
   createProfileStory,
   deleteProfileStory,
   reorderProfileStories,
+  setProfileStoryImage,
   updateProfileStory,
   type ProfileStoryRow,
 } from "@/lib/actions/profileStories";
@@ -148,6 +149,7 @@ export default function ProfileCatalogueView({
           key={open.id}
           story={open}
           artistId={artistId}
+          siteId={siteId}
           onClose={() => setOpenId(null)}
           onSaved={(row) => setStories((prev) => prev.map((s) => (s.id === row.id ? row : s)))}
           onDeleted={() => {
@@ -163,12 +165,14 @@ export default function ProfileCatalogueView({
 function StoryModal({
   story,
   artistId,
+  siteId,
   onClose,
   onSaved,
   onDeleted,
 }: {
   story: ProfileStoryRow;
   artistId: string;
+  siteId: string;
   onClose: () => void;
   onSaved: (row: ProfileStoryRow) => void;
   onDeleted: () => void;
@@ -216,6 +220,28 @@ function StoryModal({
 
   const media = story.media;
 
+  // Choose (or change) its picture or video (2026-10-27).
+  const pickMedia = async (imageId: string) => {
+    setError(null);
+    const result = await setProfileStoryImage(story.id, artistId, imageId);
+    if ("error" in result) setError(result.error);
+    else onSaved(result);
+  };
+  const picker = (label: string) => (
+    <MediaPicker
+      artistId={artistId}
+      siteId={siteId}
+      mode="single"
+      mediaKinds={["PHOTO", "VIDEO"]}
+      catalogueViews
+      variant="button"
+      label={label}
+      onSelect={(images) => {
+        if (images[0]) pickMedia(images[0].id);
+      }}
+    />
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...backdrop}>
       <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
@@ -243,8 +269,9 @@ function StoryModal({
         {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
         {!media ? (
-          <div className="mb-4 flex aspect-[4/3] w-full items-center justify-center rounded-md bg-neutral-100 text-sm text-neutral-400">
-            Its picture or video was deleted from the Media Catalogue.
+          <div className="mb-4 flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 rounded-md bg-neutral-100 text-sm text-neutral-400">
+            <span>Its picture or video was deleted from the Media Catalogue.</span>
+            {picker("Choose a picture or video")}
           </div>
         ) : media.kind === "VIDEO" ? (
           <>
@@ -264,6 +291,8 @@ function StoryModal({
             <p className="mb-4 mt-1 text-xs text-neutral-400">Click to view full size.</p>
           </>
         )}
+
+        {media && <div className="mb-4">{picker("Change picture or video")}</div>}
 
         <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
         <input
