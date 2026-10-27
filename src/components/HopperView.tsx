@@ -1161,6 +1161,8 @@ function SortingCard({
 
       {showQuickForm && (
         <QuickCatalogueFields
+          artistId={artistId}
+          siteId={siteId}
           item={item}
           settings={settings}
           creating={creatingArtwork}
@@ -1463,12 +1465,16 @@ function parseHopperItemForQuickCatalogue(
 // Description, "Can be viewed at" (when the site gave one) and Sold
 // (when the site marked it sold), all carried into the new artwork.
 function QuickCatalogueFields({
+  artistId,
+  siteId,
   item,
   settings,
   creating,
   onCancel,
   onDone,
 }: {
+  artistId: string;
+  siteId: string;
   item: HopperItem;
   settings: ArtworkSettings;
   creating: boolean;
@@ -1509,6 +1515,8 @@ function QuickCatalogueFields({
           </div>
 
           <ArtworkCatalogueFields
+            artistId={artistId}
+            siteId={siteId}
             settings={settings}
             values={{
               type: initialType,

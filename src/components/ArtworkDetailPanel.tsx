@@ -8,12 +8,10 @@ import {
   deleteArtworkIfBlank,
   duplicateArtwork,
 } from "@/lib/actions/artworks";
-import { addArtworkType, addSettingOption } from "@/lib/actions/artworkSettings";
-import { createLocation, type LocationSummary } from "@/lib/actions/locations";
+import type { LocationSummary } from "@/lib/actions/locations";
 import { computeReferencePrice } from "@/lib/pricing";
 import { CURRENCIES } from "@/lib/currencies";
 import ArtworkImageManager from "@/components/ArtworkImageManager";
-import { useClientWords } from "@/components/ClientWordsProvider";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 
@@ -136,7 +134,6 @@ export default function ArtworkDetailPanel({
   // thing showing and closing it is the only way back.
   showCloseButton?: boolean;
 }) {
-  const words = useClientWords();
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
   // Live state for Type/Size (2026-08-28) — needed for the Reference
@@ -278,29 +275,6 @@ export default function ArtworkDetailPanel({
   // artwork right after. No router.refresh() needed here specifically
   // for that to work — the next full load of Settings/this page simply
   // picks up the new preset from then on.
-  const handleAddType = async (name: string) => {
-    const fd = new FormData();
-    fd.set("name", name);
-    await addArtworkType(artistId, siteId, fd);
-  };
-  const handleAddMedium = async (name: string) => {
-    const fd = new FormData();
-    fd.set("value", name);
-    await addSettingOption(artistId, siteId, "mediumPresets", fd);
-  };
-  // Persists to the Location model (2026-09-22, see
-  // actions/locations.ts) — asks Gallery vs Own, since a Location needs
-  // a Type to be created at all.
-  const handleAddLocation = async (name: string) => {
-    const isGallery = window.confirm(
-      `Is "${name}" a ${words.location} you consign to?\n\nOK = ${words.location}\nCancel = Own (e.g. your studio)`
-    );
-    const type = isGallery ? "GALLERY" : "OWN";
-    const result = await createLocation(artistId, siteId, name, type);
-    if ("error" in result) alert(result.error);
-    else setLocationsByName((prev) => new Map(prev).set(result.name, result));
-  };
-
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
       {/* Sticky header (2026-09-10, direct request) — was scrolling away
@@ -395,10 +369,8 @@ export default function ArtworkDetailPanel({
               Hopper's quick-add form uses (ArtworkCatalogueFields,
               2026-09-07) — Name above, and Reference/Offered price and
               SOLD (passed as children, rendered after Date) stay
-              Catalogue-only. onAddType/onAddMedium/
-              onAddLocation give those selects their own inline "+ Add
-              new…" option — the Hopper doesn't pass these, so its
-              selects are unaffected. */}
+              Catalogue-only. Its "+ Add new…" options save to the
+              client's Settings lists themselves. */}
           <ArtworkCatalogueFields
             settings={settings}
             values={{
@@ -418,9 +390,9 @@ export default function ArtworkDetailPanel({
             }}
             onLocationChange={setLocationValue}
             onViewLocation={currentLocation ? () => viewInLocation(currentLocation) : undefined}
-            onAddType={handleAddType}
-            onAddMedium={handleAddMedium}
-            onAddLocation={handleAddLocation}
+            artistId={artistId}
+            siteId={siteId}
+            onLocationAdded={(location) => setLocationsByName((prev) => new Map(prev).set(location.name, location))}
           >
             {/* Reference and Offered price as one compact pair
                 (2026-09-11, direct request — "put reference price

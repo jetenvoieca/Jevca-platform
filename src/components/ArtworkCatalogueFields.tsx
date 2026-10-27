@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import type { ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import { addArtworkType, addSettingOption } from "@/lib/actions/artworkSettings";
+import { createLocation, type LocationSummary } from "@/lib/actions/locations";
+import { useClientWords } from "@/components/ClientWordsProvider";
 
 // Keeps a select from silently dropping an existing value that isn't (yet)
 // in the preset list — e.g. legacy data typed in before Settings existed,
@@ -82,9 +85,9 @@ export default function ArtworkCatalogueFields({
   onLocationChange,
   onViewLocation,
   children,
-  onAddType,
-  onAddMedium,
-  onAddLocation,
+  artistId,
+  siteId,
+  onLocationAdded,
 }: {
   settings: Pick<ArtworkSettings, "artworkTypes" | "mediumPresets" | "sizePresets" | "locations">;
   values: ArtworkFacetValues;
@@ -104,22 +107,16 @@ export default function ArtworkCatalogueFields({
   // its Location.
   onViewLocation?: () => void;
   children?: React.ReactNode;
-  // Inline "add new preset" support (2026-09-11, direct request — "all
-  // drop-downs add ability to add to lists"). Each is a small async
-  // action that actually persists the new value to the artist's own
-  // Settings list (Type has its own table with a Ref value, so it's a
-  // distinct action from the plain string-list fields — see
-  // artworkSettings.ts). Omit any of these to leave that particular
-  // select as a plain, fixed-list picker — Hopper's quick-add form
-  // doesn't pass any of them, so its selects are unaffected.
-  //
-  // onAddLocation (2026-09-22) — persists to the Location model (see
-  // actions/locations.ts); the caller (ArtworkDetailPanel) decides the
-  // new Location's Type (Gallery/Own) before persisting, so this
-  // component itself stays agnostic to that.
-  onAddType?: (name: string) => Promise<void>;
-  onAddMedium?: (name: string) => Promise<void>;
-  onAddLocation?: (name: string) => Promise<void>;
+  // Inline "+ Add new…" on Type, Medium, Size and Location (2026-09-11,
+  // direct request — "all drop-downs add ability to add to lists";
+  // 2026-10-27: Size too, and in every form using these fields, the
+  // Hopper's included). The new value is saved to the client's own
+  // Settings list here (Type has its own table with a Ref value; a
+  // Location asks Gallery or Own first — see actions/locations.ts).
+  artistId: string;
+  siteId: string;
+  // Told about a Location just added, for a caller keeping its own list.
+  onLocationAdded?: (location: LocationSummary) => void;
 }) {
   const [typeValue, setTypeValue] = useState(values.type);
   const [sizeValue, setSizeValue] = useState(values.size);
@@ -138,6 +135,28 @@ export default function ArtworkCatalogueFields({
   // "Giclée Edition", "Limited Edition").
   const isEditionType = typeValue.trim().toLowerCase().includes("edition");
 
+  const words = useClientWords();
+  const onAddType = async (name: string) => {
+    const fd = new FormData();
+    fd.set("name", name);
+    await addArtworkType(artistId, siteId, fd);
+  };
+  const addToList = (field: "mediumPresets" | "sizePresets") => async (name: string) => {
+    const fd = new FormData();
+    fd.set("value", name);
+    await addSettingOption(artistId, siteId, field, fd);
+  };
+  const onAddMedium = addToList("mediumPresets");
+  const onAddSize = addToList("sizePresets");
+  const onAddLocation = async (name: string) => {
+    const isGallery = window.confirm(
+      `Is "${name}" a ${words.location} you consign to?\n\nOK = ${words.location}\nCancel = Own (e.g. your studio)`
+    );
+    const result = await createLocation(artistId, siteId, name, isGallery ? "GALLERY" : "OWN");
+    if ("error" in result) alert(result.error);
+    else onLocationAdded?.(result);
+  };
+
   // Shared "+ Add new…" flow for a select (2026-09-11). Deliberately a
   // plain window.prompt() rather than a custom inline input/popover —
   // this is a quick, occasional escape hatch for a missing preset, not
@@ -153,14 +172,14 @@ export default function ArtworkCatalogueFields({
   // the same tick as setState risks reading the select's old value.
   const addNew = (
     label: string,
-    persist: ((name: string) => Promise<void>) | undefined,
+    persist: (name: string) => Promise<void>,
     setValue: (v: string) => void,
     form: HTMLFormElement,
     onAdded?: (value: string) => void
   ) => {
     const entered = window.prompt(`Add a new ${label}:`)?.trim();
     if (!entered) return;
-    persist?.(entered);
+    persist(entered);
     setValue(entered);
     onAdded?.(entered);
     setTimeout(() => onAutosave?.(form), 0);
@@ -194,7 +213,7 @@ export default function ArtworkCatalogueFields({
               {t}
             </option>
           ))}
-          {onAddType && <option value={ADD_NEW}>+ Add new…</option>}
+          <option value={ADD_NEW}>+ Add new…</option>
         </select>
       </div>
       <div className="col-span-2">
@@ -220,7 +239,7 @@ export default function ArtworkCatalogueFields({
               {m}
             </option>
           ))}
-          {onAddMedium && <option value={ADD_NEW}>+ Add new…</option>}
+          <option value={ADD_NEW}>+ Add new…</option>
         </select>
       </div>
       <div>
@@ -229,18 +248,25 @@ export default function ArtworkCatalogueFields({
           name="size"
           value={sizeValue}
           onChange={(e) => {
-            setSizeValue(e.target.value);
-            onTypeOrSizeChange?.(typeValue, e.target.value);
-            onAutosave?.(e.currentTarget.form!);
+            const v = e.target.value;
+            const form = e.currentTarget.form!;
+            if (v === ADD_NEW) {
+              addNew("Size", onAddSize, setSizeValue, form, (newSize) => onTypeOrSizeChange?.(typeValue, newSize));
+              return;
+            }
+            setSizeValue(v);
+            onTypeOrSizeChange?.(typeValue, v);
+            onAutosave?.(form);
           }}
           className={inputCls}
         >
           <option value="">Choose from list…</option>
-          {withCurrent(settings.sizePresets, values.size).map((s) => (
+          {withCurrent(settings.sizePresets, sizeValue).map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
           ))}
+          <option value={ADD_NEW}>+ Add new…</option>
         </select>
       </div>
       {/* Edition only applies to editioned work — Originals and Uniques
@@ -296,7 +322,7 @@ export default function ArtworkCatalogueFields({
                 {l}
               </option>
             ))}
-            {onAddLocation && <option value={ADD_NEW}>+ Add new…</option>}
+            <option value={ADD_NEW}>+ Add new…</option>
           </select>
           {onViewLocation && (
             <button
