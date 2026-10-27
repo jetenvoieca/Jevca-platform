@@ -73,6 +73,9 @@ function LocationTypeBadge({ type }: { type: LocationType }) {
 // Financial), or 20% if none is set — always shown on the button.
 const DEFAULT_VAT_RATE = 20;
 
+// The currencies a sale can be recorded and invoiced in.
+const SALE_CURRENCIES = ["GBP", "EUR"] as const;
+
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
@@ -1342,9 +1345,12 @@ export default function GalleriesView({
                     )
                   ) : (
                     <div className="space-y-3">
-                      {/* Row 1: Date · Sale price (the work's currency) ·
-                          Remove VAT (a Gallery's sale only). */}
-                      <div className="grid grid-cols-[1fr_1fr_9rem] items-end gap-3">
+                      {/* Row 1 (Craig's mockup, 2026-10-27): Date · Sale price
+                          in the work's currency, with Remove VAT inside it
+                          (a Gallery's sale only) · Net price — the price
+                          net of VAT, or the price itself if VAT isn't
+                          removed. */}
+                      <div className="grid grid-cols-[1fr_1.4fr_1fr] gap-3">
                         <div>
                           <label className={labelCls}>Date</label>
                           <input
@@ -1355,47 +1361,52 @@ export default function GalleriesView({
                           />
                         </div>
                         <div>
-                          <label className={labelCls}>Sale price ({saleBaseCurrency})</label>
+                          <label className={labelCls}>Sale price</label>
+                          <div className="flex gap-1.5">
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={saleTotalAmount}
+                              onChange={(e) => setSaleTotalAmount(e.target.value)}
+                              placeholder="e.g. 250.00"
+                              className={`min-w-0 ${inputCls}`}
+                            />
+                            {selectedLocationType === "GALLERY" && (
+                              <button
+                                type="button"
+                                onClick={() => setSaleVatRemoved((v) => !v)}
+                                title={
+                                  vatRate == null
+                                    ? `Takes off ${shownVatRate}% VAT (no VAT rate in Settings → Financial). Click again to put it back.`
+                                    : `Takes off ${shownVatRate}% VAT (Settings → Financial). Click again to put it back.`
+                                }
+                                className={`shrink-0 whitespace-nowrap rounded-md border px-2 py-1 text-xs ${
+                                  saleVatRemoved
+                                    ? "border-neutral-900 bg-neutral-900 text-white"
+                                    : "border-neutral-300 hover:bg-neutral-50"
+                                }`}
+                              >
+                                {saleVatRemoved ? "VAT removed" : "Remove VAT"}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <label className={labelCls}>Net price</label>
                           <input
                             type="text"
-                            inputMode="decimal"
-                            value={saleTotalAmount}
-                            onChange={(e) => setSaleTotalAmount(e.target.value)}
-                            placeholder="e.g. 250.00"
-                            className={inputCls}
+                            readOnly
+                            value={saleAmountNum ? formatMoney(salePriceExVat.toFixed(2), saleBaseCurrency) : "—"}
+                            className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
                           />
                         </div>
-                        {selectedLocationType === "GALLERY" ? (
-                          <button
-                            type="button"
-                            onClick={() => setSaleVatRemoved((v) => !v)}
-                            title={
-                              vatRate == null
-                                ? "No VAT rate in Settings → Financial, so 20% is used"
-                                : "The VAT rate from Settings → Financial"
-                            }
-                            className={`rounded-md border px-2 py-1 text-sm ${
-                              saleVatRemoved
-                                ? "border-neutral-900 bg-neutral-900 text-white"
-                                : "border-neutral-300 hover:bg-neutral-50"
-                            }`}
-                          >
-                            {saleVatRemoved ? `VAT removed (${shownVatRate}%)` : `Remove VAT (${shownVatRate}%)`}
-                          </button>
-                        ) : (
-                          <div />
-                        )}
                       </div>
-                      {saleVatOff && saleAmountNum > 0 && (
-                        <p className="-mt-1 text-xs text-neutral-500">
-                          Price net of VAT: {formatMoney(salePriceExVat.toFixed(2), saleBaseCurrency)}
-                        </p>
-                      )}
 
-                      {/* Row 2: Commission % (Gallery) or Deposit paid
-                          (Own) · Net Due, in the work's currency. Both
-                          feed netOwed(). */}
-                      <div className="grid grid-cols-2 gap-3">
+                      {/* Row 2: Commission % (Gallery — applied to the Net
+                          price) or Deposit paid (Own) · Net Due, in the
+                          work's currency · GBP|EUR · Invoice price, in the
+                          chosen currency. */}
+                      <div className="grid grid-cols-[1fr_1fr_auto_1fr] items-end gap-3">
                         {selectedLocationType === "OWN" ? (
                           <div>
                             <label className={labelCls}>Deposit paid</label>
@@ -1430,53 +1441,50 @@ export default function GalleriesView({
                             className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
                           />
                         </div>
-                      </div>
-
-                      {/* Row 3: Currency, and — once it isn't the work's
-                          own — the exchange rate and what's invoiced. */}
-                      <div className="grid grid-cols-[6rem_1fr_1fr] items-end gap-3">
-                        <div>
-                          <label className={labelCls}>Currency</label>
-                          <select
-                            value={saleCurrency}
-                            onChange={(e) => setSaleCurrency(e.target.value)}
-                            className={inputCls}
-                          >
-                            <option value="GBP">GBP</option>
-                            <option value="EUR">EUR</option>
-                          </select>
+                        <div className="flex overflow-hidden rounded-md border border-neutral-300">
+                          {SALE_CURRENCIES.map((c) => (
+                            <button
+                              key={c}
+                              type="button"
+                              onClick={() => setSaleCurrency(c)}
+                              className={`px-2.5 py-1 text-sm ${
+                                saleCurrency === c ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
+                              }`}
+                            >
+                              {c}
+                            </button>
+                          ))}
                         </div>
-                        {saleConverting && (
-                          <>
-                            <div>
-                              <label className={labelCls}>
-                                Exchange rate (1 {saleBaseCurrency} = ? {saleCurrency})
-                              </label>
-                              <input
-                                type="text"
-                                inputMode="decimal"
-                                value={saleExchangeRate}
-                                onChange={(e) => setSaleExchangeRate(e.target.value)}
-                                placeholder="e.g. 1.15"
-                                className={inputCls}
-                              />
-                            </div>
-                            <div>
-                              <label className={labelCls}>To invoice</label>
-                              <input
-                                type="text"
-                                readOnly
-                                value={
-                                  saleAmountNum && saleRate > 0
-                                    ? formatMoney(saleNetInvoiced.toFixed(2), saleCurrency)
-                                    : "—"
-                                }
-                                className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
-                              />
-                            </div>
-                          </>
-                        )}
+                        <div>
+                          <label className={labelCls}>Invoice price</label>
+                          <input
+                            type="text"
+                            readOnly
+                            value={
+                              saleAmountNum && (!saleConverting || saleRate > 0)
+                                ? formatMoney(saleNetInvoiced.toFixed(2), saleCurrency)
+                                : "—"
+                            }
+                            className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
+                          />
+                        </div>
                       </div>
+                      {/* Shown once the currency isn't the work's own. */}
+                      {saleConverting && (
+                        <div className="flex items-center justify-end gap-2 text-sm text-neutral-600">
+                          <label htmlFor="sale-rate">Exchange rate: 1 {saleBaseCurrency} =</label>
+                          <input
+                            id="sale-rate"
+                            type="text"
+                            inputMode="decimal"
+                            value={saleExchangeRate}
+                            onChange={(e) => setSaleExchangeRate(e.target.value)}
+                            placeholder="e.g. 1.15"
+                            className="w-24 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                          />
+                          <span>{saleCurrency}</span>
+                        </div>
+                      )}
 
                       {/* Row 3: Customer · Customer email (wider) */}
                       <div className="grid grid-cols-[2fr_3fr] gap-3">
