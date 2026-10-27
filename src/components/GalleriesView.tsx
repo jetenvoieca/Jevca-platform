@@ -179,7 +179,8 @@ export default function GalleriesView({
   //   (saleBaseCurrency); choosing another asks for the exchange rate
   //   (1 of the work's = this many of the other), and the sale is
   //   recorded — and invoiced — in that currency.
-  // Only the resulting figures are recorded, not the VAT or the rate.
+  // Only the resulting figures are recorded, not the VAT or the rate,
+  // and with either used the work's Catalogue price is left unchanged.
   const [saleVatRemoved, setSaleVatRemoved] = useState(false);
   const [saleBaseCurrency, setSaleBaseCurrency] = useState("GBP");
   const [saleExchangeRate, setSaleExchangeRate] = useState("");
@@ -578,6 +579,9 @@ export default function GalleriesView({
     const fd = new FormData();
     fd.set("totalAmount", saleRecordedPrice.toFixed(2));
     fd.set("currency", saleCurrency);
+    // The Catalogue price stays as it is when the recorded price is net
+    // of VAT or converted (2026-10-27, Craig).
+    if (saleVatOff || saleConverting) fd.set("keepCataloguePrice", "1");
     // Always 0 for an Own location (2026-09-22), regardless of whatever
     // is in saleCommission's own state — belt and braces alongside the
     // disabled input below.

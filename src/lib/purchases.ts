@@ -527,6 +527,10 @@ export async function startGallerySale(
   const buyerName = (formData.get("buyerName") as string)?.trim() || customer.name;
   const buyerEmail = (formData.get("buyerEmail") as string)?.trim() || customer.email;
   const saleDateRaw = (formData.get("saleDate") as string)?.trim();
+  // Set when the price recorded isn't the work's own (VAT removed, or
+  // converted to another currency — see GalleriesView's Record Sale):
+  // the Catalogue price is then left as it is (2026-10-27, Craig).
+  const keepCataloguePrice = formData.get("keepCataloguePrice") === "1";
 
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
   if (!Number.isFinite(parseFloat(totalAmount))) return { ok: false, error: "That price isn't valid." };
@@ -561,10 +565,14 @@ export async function startGallerySale(
   // file-level Availability note above) — straight to SOLD, not
   // RESERVED. Whether the Net Due balance has actually been paid is
   // tracked separately (Purchase.status, still ACTIVE here). The work's
-  // price becomes the price it sold for (see consignedPriceFromSale).
+  // price becomes the price it sold for (see consignedPriceFromSale) —
+  // unless that's net of VAT or in another currency (keepCataloguePrice).
   await db.artwork.update({
     where: { id: artworkId },
-    data: { availability: "SOLD", ...consignedPriceFromSale(totalAmount, currency) },
+    data: {
+      availability: "SOLD",
+      ...(keepCataloguePrice ? {} : consignedPriceFromSale(totalAmount, currency)),
+    },
   });
 
   return { ok: true, purchaseId: purchase.id };
