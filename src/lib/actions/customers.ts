@@ -130,7 +130,8 @@ export async function listCustomers(artistId: string): Promise<
       email: true,
       phone: true,
       address: true,
-      _count: { select: { purchases: true } },
+      // Cancelled sales aren't counted (2026-10-27).
+      _count: { select: { purchases: { where: { status: { not: "ABANDONED" } } } } },
     },
     orderBy: { name: "asc" },
   });

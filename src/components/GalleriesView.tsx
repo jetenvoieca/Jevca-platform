@@ -673,23 +673,22 @@ export default function GalleriesView({
     depositPaid: saleConverting ? round2((parseFloat(saleDepositPaid) || 0) * saleRate) : saleDepositPaid,
   });
 
-  // Sum of every sale linked to this gallery, regardless of status —
-  // "all invoices", not just completed ones (2026-08-31 decision). Kept
-  // separate per currency rather than added together, same reasoning as
-  // the main Sales page.
+  // Sum of every sale linked to this gallery, paid or not — "all
+  // invoices", not just completed ones (2026-08-31 decision) — leaving out
+  // cancelled sales (2026-10-27: a cancelled sale re-recorded was counted
+  // twice). Cancelled ones still show in the list below. Kept separate per
+  // currency rather than added together, same reasoning as the main
+  // Sales page.
+  const liveSales = (selectedDetail?.purchases ?? []).filter((p) => p.status !== "ABANDONED");
   const salesByCurrency: Record<string, number> = {};
-  if (selectedDetail) {
-    for (const p of selectedDetail.purchases) {
-      salesByCurrency[p.currency] = (salesByCurrency[p.currency] || 0) + parseFloat(p.totalAmount);
-    }
+  for (const p of liveSales) {
+    salesByCurrency[p.currency] = (salesByCurrency[p.currency] || 0) + parseFloat(p.totalAmount);
   }
   const salesSummary = !selectedDetail
     ? ""
-    : selectedDetail.purchases.length === 0
+    : liveSales.length === 0
       ? "No sales yet."
-      : `${selectedDetail.purchases.length} sale${selectedDetail.purchases.length === 1 ? "" : "s"} · ${Object.entries(
-          salesByCurrency
-        )
+      : `${liveSales.length} sale${liveSales.length === 1 ? "" : "s"} · ${Object.entries(salesByCurrency)
           .map(([cur, amt]) => formatMoney(amt.toFixed(2), cur))
           .join(" · ")}`;
 
