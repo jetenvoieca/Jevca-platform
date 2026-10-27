@@ -22,10 +22,6 @@ import { ensureInvoicePaymentLink } from "./invoices";
 
 export type InvoiceEmailDraft = { to: string; subject: string; body: string };
 
-function currencySymbol(currency: string) {
-  return currency === "EUR" ? "€" : currency === "USD" ? "$" : "£";
-}
-
 // Where an invoice's email goes, or why it can't be sent.
 function recipientFor(invoice: LoadedInvoice): { ok: true; to: string } | { ok: false; error: string } {
   if (invoice.cancelledAt) return { ok: false, error: "This invoice was cancelled." };
@@ -44,7 +40,9 @@ function recipientFor(invoice: LoadedInvoice): { ok: true; to: string } | { ok: 
 }
 
 // The default subject and message, filled from the invoice — still fully
-// editable before sending (InvoiceModal). An unpaid invoice asks
+// editable before sending (InvoiceModal). No amounts (2026-10-27, Craig:
+// a sale's figures can be complex — VAT, commission, exchange rate — so
+// they're left to the attached PDF). An unpaid invoice asks
 // for payment (mentioning its payment link if it has one, since it's as
 // often settled by bank transfer); a paid one thanks them and encloses
 // the receipt, with no payment request at all. A gallery is
@@ -64,27 +62,24 @@ export async function getInvoiceEmailDraft(invoiceId: string): Promise<InvoiceEm
   const sales = invoice.lines.map((l) => l.purchase);
   const first = sales[0];
   const party = invoiceParty(first);
-  const sym = currencySymbol(invoice.currency);
-  const price = (sale: (typeof sales)[number]) =>
-    `${sym}${parseFloat(sale.totalAmount.toString()).toFixed(2)}`;
   const isPaid = !!invoice.paidAt;
 
   let opening: string[];
   if (sales.length > 1) {
     opening = [
       party.isGallery ? "It's great that you have sold these works:" : "Thank you for your purchase of these works:",
-      ...sales.map((s) => `- ${saleTitle(s.artwork.catalogueName, s.chargeKind)}: ${price(s)}`),
+      ...sales.map((s) => `- ${saleTitle(s.artwork.catalogueName, s.chargeKind)}`),
     ];
   } else if (first.chargeKind) {
     // A framing/delivery charge sale (2026-09-23) is about the charge,
     // not a sale of the artwork itself.
     const charge = first.chargeKind === "FRAMING" ? "framing" : "delivery";
-    opening = [`This is for the ${charge} of ${first.artwork.catalogueName}: ${price(first)}.`];
+    opening = [`This is for the ${charge} of ${first.artwork.catalogueName}.`];
   } else {
     opening = [
       party.isGallery
-        ? `It's great that you have sold ${first.artwork.catalogueName} for ${price(first)}.`
-        : `Thank you for your purchase of ${first.artwork.catalogueName} for ${price(first)}.`,
+        ? `It's great that you have sold ${first.artwork.catalogueName}.`
+        : `Thank you for your purchase of ${first.artwork.catalogueName}.`,
     ];
   }
 
