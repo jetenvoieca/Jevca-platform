@@ -594,7 +594,14 @@ export default function GalleriesView({
     fd.set("currency", saleCurrency);
     // The Catalogue price stays as it is when the recorded price is net
     // of VAT or converted (2026-10-27, Craig).
-    if (saleVatOff || saleConverting) fd.set("keepCataloguePrice", "1");
+    if (saleVatOff || saleConverting) {
+      fd.set("keepCataloguePrice", "1");
+      // How it was worked out, shown on the sale card (2026-10-27).
+      fd.set("priceAsSold", saleAmountNum.toFixed(2));
+      fd.set("currencyAsSold", saleBaseCurrency);
+      if (saleVatOff) fd.set("vatPercentRemoved", String(shownVatRate));
+      if (saleConverting) fd.set("exchangeRate", String(saleRate));
+    }
     // Always 0 for an Own location (2026-09-22), regardless of whatever
     // is in saleCommission's own state — belt and braces alongside the
     // disabled input below.

@@ -185,6 +185,61 @@ function ChargeHeading({ charge }: { charge: PurchaseDetail }) {
   );
 }
 
+// How a gallery sale's price came to what's due (2026-10-27, Craig's
+// request), read only: the price as sold, less VAT if it was removed,
+// less the commission, and — if it was converted — the exchange rate and
+// the result in the sale's currency. See Purchase.priceAsSold.
+function SaleCalculation({ purchase }: { purchase: PurchaseDetail }) {
+  const amounts = saleBreakdown(purchase);
+  const base = purchase.currencyAsSold ?? purchase.currency;
+  const rate = purchase.exchangeRate != null ? parseFloat(purchase.exchangeRate) : null;
+  const vat = purchase.vatPercentRemoved != null ? parseFloat(purchase.vatPercentRemoved) : null;
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const inBase = (n: number) => formatMoney(n.toFixed(2), base);
+  const inSale = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
+
+  const asSold = purchase.priceAsSold != null ? parseFloat(purchase.priceAsSold) : amounts.salePrice;
+  const exVat = vat != null ? round2(asSold / (1 + vat / 100)) : asSold;
+  const commission = round2(exVat * (amounts.commissionPercent / 100));
+  const net = round2(exVat - commission);
+
+  const rows: [string, string][] = [["Sale price", inBase(asSold)]];
+  if (vat != null) {
+    rows.push([`Less VAT (${vat}%)`, `−${inBase(round2(asSold - exVat))}`]);
+    rows.push(["Price net of VAT", inBase(exVat)]);
+  }
+  if (amounts.commissionPercent > 0) {
+    rows.push([`Commission (${amounts.commissionPercent}%)`, `−${inBase(commission)}`]);
+    rows.push(["Net after commission", inBase(net)]);
+  }
+  if (rate != null) {
+    rows.push(["Exchange rate", `1 ${base} = ${rate} ${purchase.currency}`]);
+    rows.push([`Net in ${purchase.currency}`, inSale(round2(amounts.salePrice - amounts.commission))]);
+  }
+
+  return (
+    <div className="mb-3 space-y-0.5 rounded-md bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
+      {rows.map(([label, value]) => (
+        <div key={label} className="flex justify-between gap-4">
+          <span>{label}</span>
+          <span className="tabular-nums">{value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Whether a sale's card shows its calculation: a gallery's own sale (not
+// a framing/delivery charge) with a commission, VAT removed or a rate.
+function showsCalculation(purchase: PurchaseDetail): boolean {
+  if (purchase.channel !== "GALLERY" || purchase.chargeKind) return false;
+  return (
+    parseFloat(purchase.commissionPercent ?? "0") > 0 ||
+    purchase.vatPercentRemoved != null ||
+    purchase.exchangeRate != null
+  );
+}
+
 // A sale's figures and history: price, framing/delivery, paid and Net
 // Due, then each payment and what has been sent. The top of every sale
 // panel, and each line of the summary list. `aside` sits to the right of
@@ -195,11 +250,15 @@ function SaleFigures({ purchase, aside }: { purchase: PurchaseDetail; aside?: Re
   const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
   const nextDueInstalment = purchase.payments.find((p) => p.status === "DUE") ?? null;
 
+  const calculation = showsCalculation(purchase);
+
   return (
     <>
+      {calculation && <SaleCalculation purchase={purchase} />}
       <div className="flex items-end justify-between gap-4 text-sm font-medium text-neutral-900">
         <div className="space-y-0.5">
-          <p>Sale price {money(amounts.salePrice)}</p>
+          {/* The calculation above already starts from the price. */}
+          {!calculation && <p>Sale price {money(amounts.salePrice)}</p>}
           {amounts.framing > 0 && <p>Framing {money(amounts.framing)}</p>}
           {amounts.delivery > 0 && <p>Delivery {money(amounts.delivery)}</p>}
           {amounts.paid > 0 && <p>Paid {money(amounts.paid)}</p>}

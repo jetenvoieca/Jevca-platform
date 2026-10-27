@@ -463,6 +463,10 @@ export async function getArtworkDetailForClient(id: string) {
     framed: p.framed,
     source: p.source,
     commissionPercent: p.commissionPercent != null ? p.commissionPercent.toString() : null,
+    priceAsSold: p.priceAsSold != null ? p.priceAsSold.toString() : null,
+    currencyAsSold: p.currencyAsSold,
+    vatPercentRemoved: p.vatPercentRemoved != null ? p.vatPercentRemoved.toString() : null,
+    exchangeRate: p.exchangeRate != null ? p.exchangeRate.toString() : null,
     // Framing/delivery charge sales (2026-09-23) — filled in below.
     parentPurchaseId: p.parentPurchaseId,
     chargeKind: p.chargeKind,

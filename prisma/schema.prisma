@@ -1731,6 +1731,18 @@ model Purchase {
 
   commissionPercent Decimal? @db.Decimal(5, 2)
 
+  // How a gallery sale's recorded price was worked out (2026-10-27), kept
+  // to show the calculation on its sale card — only when Record Sale's
+  // Remove VAT or another currency was used, otherwise all null. The
+  // price as sold (`priceAsSold`, in `currencyAsSold`, VAT included);
+  // the VAT % taken off it, if any; and the exchange rate (1 of
+  // currencyAsSold = this many of `currency`), if converted. totalAmount
+  // is the result. Cleared if Edit Sale changes the price.
+  priceAsSold       Decimal? @db.Decimal(10, 2)
+  currencyAsSold    String?
+  vatPercentRemoved Decimal? @db.Decimal(5, 2)
+  exchangeRate      Decimal? @db.Decimal(12, 6)
+
   // A framing or delivery charge arranged AFTER the artwork's sale was
   // paid (2026-09-23) is its own separate sale — its own invoice,
   // payments and receipt — linked back to the sale it belongs to, and

@@ -104,6 +104,11 @@ export type PurchaseDetail = {
   framed: boolean;
   source: string | null;
   commissionPercent: string | null;
+  // How the price was worked out (2026-10-27) — see Purchase.priceAsSold.
+  priceAsSold: string | null;
+  currencyAsSold: string | null;
+  vatPercentRemoved: string | null;
+  exchangeRate: string | null;
   // A framing/delivery charge sale arranged after this artwork's sale
   // was paid (2026-09-23) — see Purchase.parentPurchaseId in
   // schema.prisma. Both null for an ordinary sale. `charges` lists an
@@ -531,6 +536,25 @@ export async function startGallerySale(
   // converted to another currency — see GalleriesView's Record Sale):
   // the Catalogue price is then left as it is (2026-10-27, Craig).
   const keepCataloguePrice = formData.get("keepCataloguePrice") === "1";
+  // How the price was worked out, when VAT was removed or it was
+  // converted (2026-10-27) — see Purchase.priceAsSold.
+  const decimalField = (name: string) => {
+    const raw = (formData.get(name) as string)?.trim();
+    const n = raw ? parseFloat(raw) : NaN;
+    return Number.isFinite(n) && n > 0 ? raw : null;
+  };
+  const vatPercentRemoved = decimalField("vatPercentRemoved");
+  const exchangeRate = decimalField("exchangeRate");
+  const currencyAsSoldRaw = (formData.get("currencyAsSold") as string)?.trim().toUpperCase() || null;
+  const calculation =
+    vatPercentRemoved || exchangeRate
+      ? {
+          priceAsSold: decimalField("priceAsSold"),
+          currencyAsSold: currencyAsSoldRaw && isCurrency(currencyAsSoldRaw) ? currencyAsSoldRaw : null,
+          vatPercentRemoved,
+          exchangeRate,
+        }
+      : {};
 
   if (!totalAmount) return { ok: false, error: "The sale price is required." };
   if (!Number.isFinite(parseFloat(totalAmount))) return { ok: false, error: "That price isn't valid." };
@@ -557,6 +581,7 @@ export async function startGallerySale(
       currency,
       commissionPercent,
       depositPaid,
+      ...calculation,
       ...(createdAt ? { createdAt } : {}),
     },
   });
@@ -714,7 +739,12 @@ export async function updateGallerySaleAmount(
   // An older framing/delivery charge sale has its own amount, not the
   // work's price, so only the work's own sale moves the work's price.
   await db.$transaction([
-    db.purchase.update({ where: { id: purchaseId }, data: { totalAmount, currency } }),
+    // The price no longer comes from the recorded calculation, so that's
+    // cleared (2026-10-27 — see Purchase.priceAsSold).
+    db.purchase.update({
+      where: { id: purchaseId },
+      data: { totalAmount, currency, priceAsSold: null, currencyAsSold: null, vatPercentRemoved: null, exchangeRate: null },
+    }),
     ...(purchase.chargeKind
       ? []
       : [
