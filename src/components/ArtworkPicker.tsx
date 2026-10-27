@@ -9,6 +9,7 @@ import {
 } from "@/lib/actions/media";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import { FILTER_NONE } from "@/lib/artworkFilters";
 
 export default function ArtworkPicker({
   artistId,
@@ -262,6 +263,8 @@ export default function ArtworkPicker({
             className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
           >
             <option value="">All locations</option>
+            {/* The catalogue filters' "none" choices (2026-10-27). */}
+            <option value={FILTER_NONE}>No location</option>
             {filterOptions?.locations.map((l) => (
               <option key={l} value={l}>
                 {l}
@@ -277,6 +280,7 @@ export default function ArtworkPicker({
             className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
           >
             <option value="">All types</option>
+            <option value={FILTER_NONE}>No type</option>
             {filterOptions?.types.map((t) => (
               <option key={t} value={t}>
                 {t}
