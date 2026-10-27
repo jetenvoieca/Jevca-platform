@@ -14,7 +14,7 @@ export default async function GalleriesPage({ params }: { params: Promise<{ id: 
 
   const site = await db.site.findUnique({
     where: { id },
-    select: { artistId: true, artist: { select: { name: true } } },
+    select: { artistId: true, artist: { select: { name: true, vatRate: true } } },
   });
   if (!site) notFound();
 
@@ -39,6 +39,7 @@ export default async function GalleriesPage({ params }: { params: Promise<{ id: 
       siteId={id}
       artistId={site.artistId}
       artistName={site.artist.name}
+      vatRate={site.artist.vatRate != null ? Number(site.artist.vatRate) : null}
       galleries={galleries}
       paymentMethods={paymentMethods}
     />

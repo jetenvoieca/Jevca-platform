@@ -68,10 +68,20 @@ function LocationTypeBadge({ type }: { type: LocationType }) {
   );
 }
 
+// The VAT a gallery's sale price is taken to include when Remove VAT is
+// pressed on the Record Sale form: the client's own VAT rate (Settings →
+// Financial), or 20% if none is set — always shown on the button.
+const DEFAULT_VAT_RATE = 20;
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export default function GalleriesView({
   siteId,
   artistId,
   artistName,
+  vatRate,
   galleries,
   paymentMethods,
 }: {
@@ -79,6 +89,8 @@ export default function GalleriesView({
   artistId: string;
   // Default header title of the location's PDF.
   artistName: string;
+  // The client's VAT rate (Settings → Financial), null if not set.
+  vatRate: number | null;
   // Every Location this artist has (2026-09-22 rework of the old
   // Galleries-only page) — Gallery (third-party, consignment,
   // commission) and Own (the artist's own stock: studio, storage,
@@ -155,6 +167,18 @@ export default function GalleriesView({
   const [saleError, setSaleError] = useState<string | null>(null);
   const [saleTotalAmount, setSaleTotalAmount] = useState("");
   const [saleCurrency, setSaleCurrency] = useState("GBP");
+  // Record Sale's two adjustments (2026-10-27, direct request), applied in
+  // this order before the sale is recorded:
+  // - Remove VAT (a Gallery's sale only): the price typed includes VAT;
+  //   it's taken off first, and the commission applies to what's left.
+  // - Currency: the price is typed in the work's own currency
+  //   (saleBaseCurrency); choosing another asks for the exchange rate
+  //   (1 of the work's = this many of the other), and the sale is
+  //   recorded — and invoiced — in that currency.
+  // Only the resulting figures are recorded, not the VAT or the rate.
+  const [saleVatRemoved, setSaleVatRemoved] = useState(false);
+  const [saleBaseCurrency, setSaleBaseCurrency] = useState("GBP");
+  const [saleExchangeRate, setSaleExchangeRate] = useState("");
   const [saleCommission, setSaleCommission] = useState("");
   // Deposit already paid (2026-09-22, Phase 1 sale-recording rework) —
   // the Own-location counterpart to Commission % above: only ever shown
@@ -269,6 +293,9 @@ export default function GalleriesView({
     setSaleError(null);
     setSaleTotalAmount("");
     setSaleCurrency("GBP");
+    setSaleBaseCurrency("GBP");
+    setSaleVatRemoved(false);
+    setSaleExchangeRate("");
     // Defaults to this gallery's own default commission — still
     // editable per sale, same "starting point, not binding" idea as
     // everywhere else this default is used. Always 0 for an Own
@@ -297,7 +324,10 @@ export default function GalleriesView({
       // read once a sale already exists.
       setSaleTotalAmount(detail?.presentationPrice || "");
       // …and to the work's own currency (2026-10-15).
-      if (detail?.priceCurrency) setSaleCurrency(detail.priceCurrency);
+      if (detail?.priceCurrency) {
+        setSaleCurrency(detail.priceCurrency);
+        setSaleBaseCurrency(detail.priceCurrency);
+      }
       setWorkLoading(false);
     });
   };
@@ -525,9 +555,13 @@ export default function GalleriesView({
       setSaleError("The sale price is required.");
       return;
     }
+    if (saleConverting && !(saleRate > 0)) {
+      setSaleError(`Enter the exchange rate from ${saleBaseCurrency} to ${saleCurrency}.`);
+      return;
+    }
     setSaleError(null);
     const fd = new FormData();
-    fd.set("totalAmount", saleTotalAmount.trim());
+    fd.set("totalAmount", saleRecordedPrice.toFixed(2));
     fd.set("currency", saleCurrency);
     // Always 0 for an Own location (2026-09-22), regardless of whatever
     // is in saleCommission's own state — belt and braces alongside the
@@ -585,11 +619,26 @@ export default function GalleriesView({
   // one applies to this Location's type — see the third-field switch
   // below), so passing both here unconditionally is safe: the one not
   // shown just stays at its default "0"/"" and contributes nothing.
+  //
+  // Price typed → less VAT if removed → in the chosen currency if it
+  // isn't the work's → what's recorded (saleRecordedPrice), and Net Due
+  // from that, so what's shown is exactly what's recorded and invoiced.
+  const shownVatRate = vatRate ?? DEFAULT_VAT_RATE;
   const saleAmountNum = parseFloat(saleTotalAmount) || 0;
+  const saleVatOff = selectedLocationType === "GALLERY" && saleVatRemoved;
+  const salePriceExVat = saleVatOff ? round2(saleAmountNum / (1 + shownVatRate / 100)) : saleAmountNum;
+  const saleConverting = saleCurrency !== saleBaseCurrency;
+  const saleRate = parseFloat(saleExchangeRate) || 0;
+  const saleRecordedPrice = saleConverting ? round2(salePriceExVat * saleRate) : salePriceExVat;
   const saleNetOwed = netOwed({
-    totalAmount: saleTotalAmount,
+    totalAmount: salePriceExVat,
     commissionPercent: saleCommission,
     depositPaid: saleDepositPaid,
+  });
+  const saleNetInvoiced = netOwed({
+    totalAmount: saleRecordedPrice,
+    commissionPercent: saleCommission,
+    depositPaid: saleConverting ? round2((parseFloat(saleDepositPaid) || 0) * saleRate) : saleDepositPaid,
   });
 
   // Sum of every sale linked to this gallery, regardless of status —
@@ -1293,8 +1342,9 @@ export default function GalleriesView({
                     )
                   ) : (
                     <div className="space-y-3">
-                      {/* Row 1: Date · Sale price · Currency */}
-                      <div className="grid grid-cols-[1fr_1fr_6rem] gap-3">
+                      {/* Row 1: Date · Sale price (the work's currency) ·
+                          Remove VAT (a Gallery's sale only). */}
+                      <div className="grid grid-cols-[1fr_1fr_9rem] items-end gap-3">
                         <div>
                           <label className={labelCls}>Date</label>
                           <input
@@ -1305,7 +1355,7 @@ export default function GalleriesView({
                           />
                         </div>
                         <div>
-                          <label className={labelCls}>Sale price</label>
+                          <label className={labelCls}>Sale price ({saleBaseCurrency})</label>
                           <input
                             type="text"
                             inputMode="decimal"
@@ -1315,21 +1365,36 @@ export default function GalleriesView({
                             className={inputCls}
                           />
                         </div>
-                        <div>
-                          <label className={labelCls}>Currency</label>
-                          <select
-                            value={saleCurrency}
-                            onChange={(e) => setSaleCurrency(e.target.value)}
-                            className={inputCls}
+                        {selectedLocationType === "GALLERY" ? (
+                          <button
+                            type="button"
+                            onClick={() => setSaleVatRemoved((v) => !v)}
+                            title={
+                              vatRate == null
+                                ? "No VAT rate in Settings → Financial, so 20% is used"
+                                : "The VAT rate from Settings → Financial"
+                            }
+                            className={`rounded-md border px-2 py-1 text-sm ${
+                              saleVatRemoved
+                                ? "border-neutral-900 bg-neutral-900 text-white"
+                                : "border-neutral-300 hover:bg-neutral-50"
+                            }`}
                           >
-                            <option value="GBP">GBP</option>
-                            <option value="EUR">EUR</option>
-                          </select>
-                        </div>
+                            {saleVatRemoved ? `VAT removed (${shownVatRate}%)` : `Remove VAT (${shownVatRate}%)`}
+                          </button>
+                        ) : (
+                          <div />
+                        )}
                       </div>
+                      {saleVatOff && saleAmountNum > 0 && (
+                        <p className="-mt-1 text-xs text-neutral-500">
+                          Price net of VAT: {formatMoney(salePriceExVat.toFixed(2), saleBaseCurrency)}
+                        </p>
+                      )}
 
                       {/* Row 2: Commission % (Gallery) or Deposit paid
-                          (Own) · Net Due. Both feed netOwed(). */}
+                          (Own) · Net Due, in the work's currency. Both
+                          feed netOwed(). */}
                       <div className="grid grid-cols-2 gap-3">
                         {selectedLocationType === "OWN" ? (
                           <div>
@@ -1361,10 +1426,56 @@ export default function GalleriesView({
                           <input
                             type="text"
                             readOnly
-                            value={saleAmountNum ? formatMoney(saleNetOwed.toFixed(2), saleCurrency) : "—"}
+                            value={saleAmountNum ? formatMoney(saleNetOwed.toFixed(2), saleBaseCurrency) : "—"}
                             className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
                           />
                         </div>
+                      </div>
+
+                      {/* Row 3: Currency, and — once it isn't the work's
+                          own — the exchange rate and what's invoiced. */}
+                      <div className="grid grid-cols-[6rem_1fr_1fr] items-end gap-3">
+                        <div>
+                          <label className={labelCls}>Currency</label>
+                          <select
+                            value={saleCurrency}
+                            onChange={(e) => setSaleCurrency(e.target.value)}
+                            className={inputCls}
+                          >
+                            <option value="GBP">GBP</option>
+                            <option value="EUR">EUR</option>
+                          </select>
+                        </div>
+                        {saleConverting && (
+                          <>
+                            <div>
+                              <label className={labelCls}>
+                                Exchange rate (1 {saleBaseCurrency} = ? {saleCurrency})
+                              </label>
+                              <input
+                                type="text"
+                                inputMode="decimal"
+                                value={saleExchangeRate}
+                                onChange={(e) => setSaleExchangeRate(e.target.value)}
+                                placeholder="e.g. 1.15"
+                                className={inputCls}
+                              />
+                            </div>
+                            <div>
+                              <label className={labelCls}>To invoice</label>
+                              <input
+                                type="text"
+                                readOnly
+                                value={
+                                  saleAmountNum && saleRate > 0
+                                    ? formatMoney(saleNetInvoiced.toFixed(2), saleCurrency)
+                                    : "—"
+                                }
+                                className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-sm text-neutral-500"
+                              />
+                            </div>
+                          </>
+                        )}
                       </div>
 
                       {/* Row 3: Customer · Customer email (wider) */}

@@ -18,7 +18,7 @@ export default async function PreviewGalleriesPage({
 
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { artistId: true, artist: { select: { name: true } } },
+    select: { artistId: true, artist: { select: { name: true, vatRate: true } } },
   });
   if (!site) notFound();
 
@@ -33,6 +33,7 @@ export default async function PreviewGalleriesPage({
       siteId={siteId}
       artistId={site.artistId}
       artistName={site.artist.name}
+      vatRate={site.artist.vatRate != null ? Number(site.artist.vatRate) : null}
       galleries={galleries}
       paymentMethods={paymentMethods}
     />
