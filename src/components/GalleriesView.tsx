@@ -668,7 +668,19 @@ export default function GalleriesView({
   const salePriceExVat = saleVatOff ? round2(saleAmountNum / (1 + shownVatRate / 100)) : saleAmountNum;
   const saleConverting = saleCurrency !== saleBaseCurrency;
   const saleRate = parseFloat(saleExchangeRate) || 0;
-  const saleRecordedPrice = saleConverting ? round2(salePriceExVat * saleRate) : salePriceExVat;
+  // Converted, the net after commission is what's converted (2026-10-27,
+  // Craig: the order on the form), so Invoice price is exactly Net Due ×
+  // the rate. The price recorded in the new currency is worked back from
+  // it — the one that leaves exactly that once the commission is taken
+  // (rounding to the penny can't move it, as the commission's share is
+  // under 1). With no commission (or 100%) it's simply the price × rate.
+  const saleCommissionShare = selectedLocationType === "OWN" ? 0 : (parseFloat(saleCommission) || 0) / 100;
+  const saleNetBase = round2(salePriceExVat - round2(salePriceExVat * saleCommissionShare));
+  const saleRecordedPrice = !saleConverting
+    ? salePriceExVat
+    : saleCommissionShare > 0 && saleCommissionShare < 1
+      ? round2(round2(saleNetBase * saleRate) / (1 - saleCommissionShare))
+      : round2(salePriceExVat * saleRate);
   const saleNetOwed = netOwed({
     totalAmount: salePriceExVat,
     commissionPercent: saleCommission,
