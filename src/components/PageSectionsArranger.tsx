@@ -61,6 +61,7 @@ import SignupFormSetup from "@/components/SignupFormSetup";
 import LineView from "@/components/LineView";
 import EntriesSlot from "@/components/EntriesSlot";
 import StoriesSlot from "@/components/StoriesSlot";
+import { moveItem, useArrangeItem, type ItemDragData, type ItemDropData } from "@/components/arrangeItemDrag";
 import { StoryThumb } from "@/components/StoryThumb";
 import { readPageStories, writePageStories } from "@/lib/pageStories";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
@@ -113,12 +114,12 @@ type Content = { sectionId: string | null; unsoldOnly?: boolean; kind: ContentKi
 // Profile stories component (2026-10-26).
 type DragData =
   | { type: "content"; content: Content; fromBlockId: string | null }
-  | { type: "item"; blockId: string; itemId: string; url: string | null }
+  | ItemDragData
   | { type: "story"; story: ProfileStoryRow };
 
 // What a droppable is, so a drag only meets the targets it can use.
 type DropData =
-  { kind: "tray" } | { kind: "block"; block: LayoutBlock } | { kind: "item"; blockId: string; itemId: string };
+  { kind: "tray" } | { kind: "block"; block: LayoutBlock } | ItemDropData;
 
 // One picture in a component: a work or a Supporting Image.
 // `video`: one of the Supporting Media that's a video (2026-10-25),
@@ -378,15 +379,20 @@ export default function PageSectionsArranger({
     if (!data || !target) return;
 
     if (data.type === "item") {
-      if (target.kind !== "item" || target.itemId === data.itemId) return;
+      if (target.kind !== "item" || target.blockId !== data.blockId) return;
       const content = contents.get(data.blockId);
       if (!content) return;
+      // A Profile stories component's stories (2026-10-27), kept as its
+      // text; otherwise its pictures' order.
+      const block = layout.blocks.find((b) => b.id === data.blockId);
+      if (block?.type === "stories") {
+        const next = moveItem(readPageStories(content.text), (s) => s.id, data.itemId, target.itemId);
+        if (next) saveText(block, writePageStories(next));
+        return;
+      }
       const ids = arrangeItems(itemsOf(content), (i) => i.id, content).map((i) => i.id);
-      const from = ids.indexOf(data.itemId);
-      const to = ids.indexOf(target.itemId);
-      if (from < 0 || to < 0) return;
-      ids.splice(to, 0, ...ids.splice(from, 1));
-      saveItems(data.blockId, { hiddenIds: content.hiddenIds, orderIds: ids });
+      const next = moveItem(ids, (id) => id, data.itemId, target.itemId);
+      if (next) saveItems(data.blockId, { hiddenIds: content.hiddenIds, orderIds: next });
       return;
     }
 
@@ -537,10 +543,12 @@ export default function PageSectionsArranger({
                                 />
                               ) : b.type === "stories" && b.stories ? (
                                 <StoriesSlot
+                                  blockId={b.id}
                                   label={blockTypeLabel(b.type)}
                                   settings={b.stories}
                                   text={content?.text ?? null}
                                   stories={stories}
+                                  dragging={dragging}
                                   onSave={(text) => saveText(b, text)}
                                 />
                               ) : b.type === "signup" ? (
@@ -1138,28 +1146,16 @@ function ItemTile({
   dragging: DragData | null;
   onRemove: () => void;
 }) {
-  const drag = useDraggable({
-    id: `item:${blockId}:${item.id}`,
-    data: { type: "item", blockId, itemId: item.id, url: item.url } satisfies DragData,
-  });
-  const drop = useDroppable({
-    id: `itemdrop:${blockId}:${item.id}`,
-    data: { kind: "item", blockId, itemId: item.id } satisfies DropData,
-  });
-  const target =
-    dragging?.type === "item" && dragging.blockId === blockId && dragging.itemId !== item.id && drop.isOver;
+  const drag = useArrangeItem(blockId, item.id, item.url, dragging);
   return (
     <div
-      ref={(node) => {
-        drag.setNodeRef(node);
-        drop.setNodeRef(node);
-      }}
+      ref={drag.setNodeRef}
       {...drag.attributes}
       {...drag.listeners}
       title={item.title || undefined}
       className={`group relative cursor-grab overflow-hidden rounded active:cursor-grabbing ${
         drag.isDragging ? "opacity-30" : ""
-      } ${target ? "ring-4 ring-blue-500" : ""}`}
+      } ${drag.target ? "ring-4 ring-blue-500" : ""}`}
     >
       {item.url ? (
         <img src={item.url} alt="" draggable={false} className="aspect-square w-full object-cover" />
