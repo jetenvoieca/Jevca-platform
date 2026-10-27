@@ -7,6 +7,7 @@ import { publicMediaUrl } from "@/lib/r2";
 import {
   buildArtworkWhere,
   buildArtworkOrderBy,
+  FILTER_NONE,
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
 import { catalogueFileName, clientWords, type ClientKind } from "@/lib/clientKind";
@@ -117,7 +118,7 @@ export async function generateArtworkCataloguePdf(
     }),
     // The Curation filter holds an id — its name is what's printed in
     // the header's filter summary (2026-09-24).
-    filters.curation
+    filters.curation && filters.curation !== FILTER_NONE
       ? db.curation.findFirst({
           where: { id: filters.curation, artistId },
           select: { name: true },
@@ -330,10 +331,11 @@ function buildTextLines(a: {
 
 function describeFilters(filters: CatalogueExportFilters, curationName: string | null): string {
   const parts: string[] = [];
-  if (curationName) parts.push(`Curation: ${curationName}`);
+  if (filters.curation === FILTER_NONE) parts.push("Not in any curation");
+  else if (curationName) parts.push(`Curation: ${curationName}`);
   if (filters.name) parts.push(`Name: ${filters.name}`);
   if (filters.availability) parts.push(filters.availability === "SOLD" ? "Sold" : "Available");
-  if (filters.type) parts.push(`Type: ${filters.type}`);
-  if (filters.location) parts.push(`Location: ${filters.location}`);
+  if (filters.type) parts.push(filters.type === FILTER_NONE ? "No type" : `Type: ${filters.type}`);
+  if (filters.location) parts.push(filters.location === FILTER_NONE ? "No location" : `Location: ${filters.location}`);
   return parts.join(" · ");
 }

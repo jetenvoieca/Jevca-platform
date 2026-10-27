@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { CurationSummary } from "@/lib/actions/curations";
-import { ARTWORK_SORT_NUMBER } from "@/lib/artworkFilters";
+import { ARTWORK_SORT_NUMBER, FILTER_NONE } from "@/lib/artworkFilters";
 
 // The artwork filters (Curation, Name, Location, Type) and the Sort —
 // shared by the Artwork Catalogue and the Media Catalogue's Artworks view
@@ -48,6 +48,7 @@ export default function ArtworkFilterBar({
           className={selectCls}
         >
           <option value="">All curations</option>
+          <option value={FILTER_NONE}>Not in any curation</option>
           {curations.map((c) => (
             <option key={c.id} value={c.id}>
               {c.name}
@@ -83,6 +84,7 @@ export default function ArtworkFilterBar({
           className={selectCls}
         >
           <option value="">All locations</option>
+          <option value={FILTER_NONE}>No location</option>
           {locations.map((l) => (
             <option key={l} value={l}>
               {l}
@@ -96,6 +98,7 @@ export default function ArtworkFilterBar({
           className={selectCls}
         >
           <option value="">All types</option>
+          <option value={FILTER_NONE}>No type</option>
           {types.map((t) => (
             <option key={t} value={t}>
               {t}

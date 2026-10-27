@@ -47,10 +47,24 @@ export type ArtworkFilterInput = {
 // first, whatever the availability. Unset means the standard order.
 export const ARTWORK_SORT_NUMBER = "number";
 
+// The Location, Type and Curation filters' "none" choice (2026-10-27,
+// Craig's request — to spot works not yet put under one): No location,
+// No type, Not in any curation. A blank Location or Type counts as none.
+export const FILTER_NONE = "__none";
+
+function blankField(field: "location" | "type") {
+  return { OR: [{ [field]: null }, { [field]: "" }] };
+}
+
 export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput) {
   const { q, name, availability, location, type, curation } = filters;
+  const none = [
+    ...(location === FILTER_NONE ? [blankField("location")] : []),
+    ...(type === FILTER_NONE ? [blankField("type")] : []),
+  ];
   return {
     artistId,
+    ...(none.length > 0 ? { AND: none } : {}),
     ...(name ? { catalogueName: name } : {}),
     ...(q
       ? {
@@ -62,9 +76,13 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
         }
       : {}),
     ...(availability ? { availability: { in: availabilitiesFor(availability) } } : {}),
-    ...(location ? { location } : {}),
-    ...(type ? { type } : {}),
-    ...(curation ? { curationItems: { some: { curationId: curation } } } : {}),
+    ...(location && location !== FILTER_NONE ? { location } : {}),
+    ...(type && type !== FILTER_NONE ? { type } : {}),
+    ...(curation === FILTER_NONE
+      ? { curationItems: { none: {} } }
+      : curation
+        ? { curationItems: { some: { curationId: curation } } }
+        : {}),
   };
 }
 
@@ -81,7 +99,8 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
 // object check — but any change to what a filter *means* should be made
 // in both places together.
 //
-// The Curation filter is the one exception, and needs no check here:
+// The Curation filter is the one exception, and needs no check here
+// (Not in any curation included):
 // editing an artwork never changes which curations it's in (that's only
 // done from the Curations page), so an edit can't take it out of the
 // curation being filtered on.
@@ -99,8 +118,8 @@ export function artworkMatchesFilters(
   if (availability && !availabilitiesFor(availability).includes(artwork.availability as Availability)) {
     return false;
   }
-  if (location && artwork.location !== location) return false;
-  if (type && artwork.type !== type) return false;
+  if (location === FILTER_NONE ? !!artwork.location : location && artwork.location !== location) return false;
+  if (type === FILTER_NONE ? !!artwork.type : type && artwork.type !== type) return false;
   return true;
 }
 
