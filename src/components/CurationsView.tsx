@@ -18,6 +18,10 @@ import {
   type CurationSummary,
 } from "@/lib/actions/curations";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import ArtworkDetailPanel, { type ArtworkDetail, type ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import { getArtworkDetailForClient } from "@/lib/actions/artworks";
+import { moveArtworksToLocation } from "@/lib/actions/locations";
+import { useBackdropClose } from "@/lib/useBackdropClose";
 
 // Whole amounts show without pence ("£400"), as in the mockup.
 function formatPrice(amount: string | null, currency: string): string | null {
@@ -55,6 +59,12 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // appears when hovering over a work, rather than sitting beside the
 // works.
 //
+// Catalogue and Consign (2026-10-27, Craig's mockup) — two more hover
+// buttons above Presentation: Catalogue opens the work's Artwork
+// Catalogue details (ArtworkDetailPanel) in a modal; Consign (unsold
+// works only) lists the locations, and choosing one puts the work there
+// (moveArtworksToLocation, as Locations' Add works does).
+//
 // Frozen headers (2026-10-04, general requirement): the page fills the
 // space under the site header and never scrolls as a whole. The open
 // curation's title row and the list's "Curation Name" heading stay put;
@@ -64,11 +74,13 @@ export default function CurationsView({
   siteId,
   curations: initialCurations,
   initialSelected,
+  settings,
 }: {
   artistId: string;
   siteId: string;
   curations: CurationSummary[];
   initialSelected: CurationDetail | null;
+  settings: ArtworkSettings;
 }) {
   const words = useClientWords();
   const [curations, setCurations] = useState<CurationSummary[]>(initialCurations);
@@ -82,6 +94,10 @@ export default function CurationsView({
   // The work whose presentation modal is open, if any.
   const [presentingId, setPresentingId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  // The work open in the Catalogue modal, or in the Consign modal.
+  const [catalogueWork, setCatalogueWork] = useState<ArtworkDetail | null>(null);
+  const [consignWork, setConsignWork] = useState<ArtworkDetail | null>(null);
+  const [consignError, setConsignError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Which curation is meant to be open right now, readable inside
@@ -260,6 +276,46 @@ export default function CurationsView({
     setAboutOpen(false);
   };
 
+  // Catalogue: the work's Artwork Catalogue details. Any change there
+  // (name, price, sold…) refreshes the curation's tiles.
+  const openCatalogue = async (artworkId: string) => {
+    const detail = await getArtworkDetailForClient(artworkId);
+    if (detail) setCatalogueWork(detail);
+  };
+  const closeCatalogue = () => setCatalogueWork(null);
+  const catalogueBackdrop = useBackdropClose(closeCatalogue);
+  const refreshCatalogueWork = async () => {
+    if (!catalogueWork) return;
+    const detail = await getArtworkDetailForClient(catalogueWork.id);
+    if (detail) setCatalogueWork(detail);
+    if (selected) reload(selected.id);
+  };
+
+  // Consign: choose the location to put the work at.
+  const openConsign = async (artworkId: string) => {
+    setConsignError(null);
+    const detail = await getArtworkDetailForClient(artworkId);
+    if (detail) setConsignWork(detail);
+  };
+  const closeConsign = () => setConsignWork(null);
+  const consignBackdrop = useBackdropClose(closeConsign);
+  const consignTo = (locationName: string) => {
+    if (!consignWork) return;
+    setConsignError(null);
+    startTransition(async () => {
+      const result = await moveArtworksToLocation(artistId, locationName, [consignWork.id]);
+      if ("error" in result) {
+        setConsignError(result.error);
+        return;
+      }
+      if (result.moved === 0) {
+        setConsignError("It couldn't be consigned — it's sold or in a sale.");
+        return;
+      }
+      closeConsign();
+    });
+  };
+
   const modalOpen = !!presentingWork || (aboutOpen && !!selected);
   useEffect(() => {
     if (!modalOpen) return;
@@ -370,13 +426,31 @@ export default function CurationsView({
                             No image
                           </div>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => setPresentingId(w.artworkId)}
-                          className="absolute bottom-2 left-1/2 hidden -translate-x-1/2 rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-neutral-900 shadow hover:bg-white group-hover:block"
-                        >
-                          Presentation
-                        </button>
+                        <div className="absolute bottom-2 left-1/2 hidden -translate-x-1/2 flex-col items-stretch gap-1 group-hover:flex">
+                          <button
+                            type="button"
+                            onClick={() => openCatalogue(w.artworkId)}
+                            className="rounded-md bg-white/90 px-2 py-1 text-xs text-neutral-900 shadow hover:bg-white"
+                          >
+                            Catalogue
+                          </button>
+                          {!isSold(w.availability) && (
+                            <button
+                              type="button"
+                              onClick={() => openConsign(w.artworkId)}
+                              className="rounded-md bg-white/90 px-2 py-1 text-xs text-neutral-900 shadow hover:bg-white"
+                            >
+                              Consign
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setPresentingId(w.artworkId)}
+                            className="rounded-md bg-white/90 px-2 py-1 text-xs font-medium text-neutral-900 shadow hover:bg-white"
+                          >
+                            Presentation
+                          </button>
+                        </div>
                         {isSold(w.availability) && <SoldFlag />}
                       </div>
                       <p className="mt-2 flex gap-1.5 text-sm font-medium text-neutral-900">
@@ -565,6 +639,69 @@ export default function CurationsView({
           </div>
         </div>
       </aside>
+
+      {catalogueWork && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...catalogueBackdrop}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
+            <ArtworkDetailPanel
+              key={catalogueWork.id}
+              siteId={siteId}
+              artistId={artistId}
+              artwork={catalogueWork}
+              settings={settings}
+              onClose={closeCatalogue}
+              onDeleted={() => {
+                closeCatalogue();
+                if (selected) reload(selected.id);
+              }}
+              onDuplicated={closeCatalogue}
+              onDataChanged={refreshCatalogueWork}
+              showCloseButton={true}
+            />
+          </div>
+        </div>
+      )}
+
+      {consignWork && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...consignBackdrop}>
+          <div className="flex max-h-full w-full max-w-sm flex-col rounded-lg bg-white shadow-xl">
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3">
+              <h2 className="min-w-0 flex-1 truncate text-lg text-neutral-900">
+                Consign — {consignWork.catalogueName}
+              </h2>
+              <button
+                type="button"
+                onClick={closeConsign}
+                className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+              {settings.locations.length === 0 ? (
+                <p className="p-3 text-sm text-neutral-400">No locations yet — add them on the Locations page.</p>
+              ) : (
+                settings.locations.map((l) => {
+                  const here = consignWork.location === l.name;
+                  return (
+                    <button
+                      key={l.id}
+                      type="button"
+                      onClick={() => consignTo(l.name)}
+                      disabled={here || isPending}
+                      className="flex w-full items-center justify-between border-b border-neutral-100 px-3 py-2.5 text-left text-sm text-neutral-800 last:border-b-0 hover:bg-neutral-50 disabled:hover:bg-transparent"
+                    >
+                      <span>{l.name}</span>
+                      {here && <span className="text-xs text-neutral-500">Here now</span>}
+                    </button>
+                  );
+                })
+              )}
+              {consignError && <p className="p-3 text-sm text-red-600">{consignError}</p>}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

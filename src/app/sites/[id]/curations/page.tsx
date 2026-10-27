@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { listCurations, getCuration } from "@/lib/actions/curations";
 import CurationsView from "@/components/CurationsView";
+import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 
 // Curations (2026-09-24) — see the note on Curation in schema.prisma.
 // Force-dynamic for the same reason as the Artwork Catalogue: the view
@@ -30,7 +31,11 @@ export default async function CurationsPage({
   // Opens the curation named in the URL, otherwise the first one.
   const selectedId =
     selected && curations.some((c) => c.id === selected) ? selected : curations[0]?.id;
-  const initialSelected = selectedId ? await getCuration(selectedId, site.artistId) : null;
+  const [initialSelected, settings] = await Promise.all([
+    selectedId ? getCuration(selectedId, site.artistId) : Promise.resolve(null),
+    // For a work's Catalogue and Consign windows (2026-10-27).
+    getArtworkSettings(site.artistId),
+  ]);
 
   return (
     <CurationsView
@@ -38,6 +43,7 @@ export default async function CurationsPage({
       siteId={id}
       curations={curations}
       initialSelected={initialSelected}
+      settings={settings}
     />
   );
 }
