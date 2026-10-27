@@ -220,3 +220,30 @@ export async function moveArtworksToLocation(
   ]);
   return { moved: works.length, skipped: ids.length - works.length };
 }
+
+// Locations' ✕ on a work (2026-10-27, Craig's request): takes a work
+// still for sale off this Location, leaving it with none. "Can be viewed
+// at" is cleared too if it names this location (as Add works sets it);
+// anything else typed there is left. A sold work stays, so its sale stays
+// with the location.
+export async function removeArtworkFromLocation(
+  artistId: string,
+  locationName: string,
+  artworkId: string
+): Promise<{ ok: true } | { error: string }> {
+  await requireArtistAccess(artistId);
+  const work = await db.artwork.findFirst({
+    where: { id: artworkId, artistId, location: locationName },
+    select: { availability: true, viewingLocation: true },
+  });
+  if (!work) return { error: "That work is no longer at this location." };
+  if (work.availability !== "AVAILABLE") return { error: "A sold work stays at the location of its sale." };
+  await db.artwork.update({
+    where: { id: artworkId },
+    data: {
+      location: null,
+      ...(work.viewingLocation === locationName ? { viewingLocation: null } : {}),
+    },
+  });
+  return { ok: true };
+}

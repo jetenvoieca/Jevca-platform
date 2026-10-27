@@ -12,6 +12,7 @@ import {
   renameLocationByCustomer,
   deleteLocationByCustomer,
   moveArtworksToLocation,
+  removeArtworkFromLocation,
   type LocationCustomerSummary,
   type LocationType,
 } from "@/lib/actions/locations";
@@ -279,6 +280,17 @@ export default function GalleriesView({
       if (result.skipped > 0) {
         setAddWorksError(`${result.skipped} of them couldn't be moved — already sold or in a sale.`);
       }
+      refreshGalleryDetail(location.id);
+    });
+  };
+
+  // ✕ on a work (2026-10-27): takes a work still for sale off this
+  // location — see removeArtworkFromLocation.
+  const removeWorkHere = (location: GalleryDetail, artworkId: string) => {
+    setAddWorksError(null);
+    startTransition(async () => {
+      const result = await removeArtworkFromLocation(artistId, location.name, artworkId);
+      if ("error" in result) setAddWorksError(result.error);
       refreshGalleryDetail(location.id);
     });
   };
@@ -755,33 +767,46 @@ export default function GalleriesView({
             ) : (
               <div className="flex flex-wrap gap-3">
                 {orderedWorks.map((w) => (
-                  <button
-                    key={w.id}
-                    type="button"
-                    onClick={() => openWork(w.id)}
-                    className={`w-28 shrink-0 rounded-lg border-2 p-1 text-left ${
-                      selectedWorkId === w.id
-                        ? "border-neutral-900"
-                        : "border-transparent hover:border-neutral-200"
-                    }`}
-                  >
-                    <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
-                      {w.imageUrl ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={w.imageUrl} alt="" className="h-full w-full object-cover" />
-                      ) : null}
-                      {/* SOLD ribbon — any recorded (not abandoned)
-                          gallery-channel sale, paid or not (2026-09-22
-                          — see the note on soldWorkIds above). */}
-                      {soldWorkIds.has(w.id) && <SoldFlag />}
-                    </div>
-                    <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
-                      {w.catalogueName}
-                    </p>
-                    <p className="text-xs text-neutral-400">
-                      {w.presentationPrice ? formatMoney(w.presentationPrice, w.priceCurrency) : "—"}
-                    </p>
-                  </button>
+                  <div key={w.id} className="group relative w-28 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openWork(w.id)}
+                      className={`w-full rounded-lg border-2 p-1 text-left ${
+                        selectedWorkId === w.id
+                          ? "border-neutral-900"
+                          : "border-transparent hover:border-neutral-200"
+                      }`}
+                    >
+                      <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
+                        {w.imageUrl ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={w.imageUrl} alt="" className="h-full w-full object-cover" />
+                        ) : null}
+                        {/* SOLD ribbon — any recorded (not abandoned)
+                            gallery-channel sale, paid or not (2026-09-22
+                            — see the note on soldWorkIds above). */}
+                        {soldWorkIds.has(w.id) && <SoldFlag />}
+                      </div>
+                      <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
+                        {w.catalogueName}
+                      </p>
+                      <p className="text-xs text-neutral-400">
+                        {w.presentationPrice ? formatMoney(w.presentationPrice, w.priceCurrency) : "—"}
+                      </p>
+                    </button>
+                    {/* Unsold works only — a sold one stays with its sale. */}
+                    {w.availability === "AVAILABLE" && !soldWorkIds.has(w.id) && (
+                      <button
+                        type="button"
+                        onClick={() => removeWorkHere(selectedDetail, w.id)}
+                        disabled={isPending}
+                        title="Remove from this location"
+                        className="absolute left-2 top-2 hidden rounded bg-black/60 px-1.5 py-0.5 text-xs text-white group-hover:block"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
                 ))}
               </div>
             )}

@@ -264,6 +264,9 @@ export type GalleryConsignedWork = {
   description: string | null;
   medium: string | null;
   size: string | null;
+  // Only a work still for sale can be removed from the location
+  // (2026-10-27 — see removeArtworkFromLocation).
+  availability: string;
   imageUrl: string | null;
 };
 
@@ -307,6 +310,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
       description: true,
       medium: true,
       size: true,
+      availability: true,
       mainImage: { select: { url: true, thumbnailKey: true } },
       images: { take: 1, select: { url: true, thumbnailKey: true } },
     },
@@ -327,6 +331,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
         description: w.description,
         medium: w.medium,
         size: w.size,
+        availability: w.availability,
         imageUrl: effectiveImage
           ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
           : null,
