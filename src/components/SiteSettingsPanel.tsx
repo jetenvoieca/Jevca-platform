@@ -29,6 +29,8 @@ import { getSalesResetPreview, resetArtistSalesData } from "@/lib/actions/sales"
 import { disconnectStripeAccount } from "@/lib/actions/stripeConnect";
 import CertificateTemplatesCard from "@/components/CertificateTemplatesCard";
 import PaymentDefaultsCard from "@/components/PaymentDefaultsCard";
+import EmailTextsCard from "@/components/EmailTextsCard";
+import type { EmailText, EmailTextKey } from "@/lib/emailTexts";
 import type { CertificateTemplateRow } from "@/lib/actions/certificateSettings";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
@@ -107,6 +109,7 @@ export default function SiteSettingsPanel({
   site,
   artist,
   certificateTemplates,
+  emailTexts,
   stripeConnection,
   stripeConnectNotice,
   canResetSales,
@@ -117,6 +120,8 @@ export default function SiteSettingsPanel({
   // CertificateTemplatesCard, rendered full-width below the
   // Financial/Invoicing row.
   certificateTemplates: CertificateTemplateRow[];
+  // The client's email texts as used (2026-10-27) — see EmailTextsCard.
+  emailTexts: Record<EmailTextKey, EmailText>;
   // The artist's own linked Stripe account for their current Stripe mode
   // (2026-09-25), or null when their sales go to Jetenvoieca's account.
   // See StripeConnection in schema.prisma.
@@ -853,6 +858,10 @@ export default function SiteSettingsPanel({
               />
             </div>
           )}
+
+          {/* Email texts (2026-10-27) — the invoice, receipt, statement
+              and certificate emails' wording. Same gating as above. */}
+          {site.salesEnabled && <EmailTextsCard artistId={artist.id} texts={emailTexts} />}
         </div>
       )}
     </div>

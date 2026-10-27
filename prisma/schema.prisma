@@ -304,6 +304,10 @@ model Artist {
   // Days after an invoice is produced before it shows as overdue in
   // Alerts if still unpaid (2026-10-20, direct request — per client).
   invoiceOverdueDays Int @default(21)
+  // The client's own email texts (2026-10-27) — subject and message of
+  // each invoice, receipt, statement and certificate email, by key; one
+  // not here is its default. See lib/emailTexts.ts.
+  emailTexts Json @default("{}")
 
   // The artist's signature image for the Certificate of Authenticity
   // (2026-09-03) — deliberately its own upload, separate from `logoUrl`

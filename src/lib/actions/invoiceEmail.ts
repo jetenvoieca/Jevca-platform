@@ -9,6 +9,7 @@ import { saleTitle } from "@/lib/saleMath";
 import { invoiceParty, loadInvoice, type LoadedInvoice } from "@/lib/invoices";
 import { formatInvoiceNumber } from "@/lib/invoiceNumber";
 import { ensureInvoicePaymentLink } from "./invoices";
+import { fillEmailText, joinNames, readEmailTexts, type EmailTextKey } from "@/lib/emailTexts";
 
 // Emailing an invoice, or its receipt once paid (Part Three, 2026-09-01;
 // by invoice since 2026-10-14, so one email covers every sale on it).
@@ -39,14 +40,14 @@ function recipientFor(invoice: LoadedInvoice): { ok: true; to: string } | { ok: 
   return { ok: true, to: party.email };
 }
 
-// The default subject and message, filled from the invoice — still fully
-// editable before sending (InvoiceModal). No amounts (2026-10-27, Craig:
-// a sale's figures can be complex — VAT, commission, exchange rate — so
-// they're left to the attached PDF). An unpaid invoice asks
-// for payment (mentioning its payment link if it has one, since it's as
-// often settled by bank transfer); a paid one thanks them and encloses
-// the receipt, with no payment request at all. A gallery is
-// congratulated on its sale(s); anyone else thanked for their purchase.
+// The subject and message, from the client's email texts (Settings →
+// Financial → Email texts; lib/emailTexts.ts) filled in from the invoice
+// — still fully editable before sending (InvoiceModal). An unpaid
+// invoice uses an Invoice text, a paid one a Receipt text; a gallery has
+// its own, anyone else the buyer's; an invoice for a framing or delivery
+// charge on its own has its own pair. No amounts (2026-10-27, Craig: a
+// sale's figures can be complex — VAT, commission, exchange rate — so
+// they're left to the attached PDF).
 export async function getInvoiceEmailDraft(invoiceId: string): Promise<InvoiceEmailDraft | { error: string }> {
   await requireInvoiceAccess(invoiceId);
   // An unpaid invoice's payment link is made when it's produced; if that
@@ -63,53 +64,34 @@ export async function getInvoiceEmailDraft(invoiceId: string): Promise<InvoiceEm
   const first = sales[0];
   const party = invoiceParty(first);
   const isPaid = !!invoice.paidAt;
+  const chargeOnly = sales.length === 1 && !!first.chargeKind;
 
-  let opening: string[];
-  if (sales.length > 1) {
-    opening = [
-      party.isGallery ? "It's great that you have sold these works:" : "Thank you for your purchase of these works:",
-      ...sales.map((s) => `- ${saleTitle(s.artwork.catalogueName, s.chargeKind)}`),
-    ];
-  } else if (first.chargeKind) {
-    // A framing/delivery charge sale (2026-09-23) is about the charge,
-    // not a sale of the artwork itself.
-    const charge = first.chargeKind === "FRAMING" ? "framing" : "delivery";
-    opening = [`This is for the ${charge} of ${first.artwork.catalogueName}.`];
-  } else {
-    opening = [
-      party.isGallery
-        ? `It's great that you have sold ${first.artwork.catalogueName}.`
-        : `Thank you for your purchase of ${first.artwork.catalogueName}.`,
-    ];
-  }
+  const key: EmailTextKey = chargeOnly
+    ? isPaid
+      ? "chargeReceipt"
+      : "chargeInvoice"
+    : isPaid
+      ? party.isGallery
+        ? "receiptGallery"
+        : "receiptBuyer"
+      : party.isGallery
+        ? "invoiceGallery"
+        : "invoiceBuyer";
 
-  const middle = isPaid
-    ? ["Thank you for the payment — I enclose our receipt for your records."]
-    : [
-        "I enclose our invoice for your attention.",
-        "",
-        invoice.stripePaymentLinkUrl
-          ? `Payment by transfer to our account on the invoice, or by this secure payment link: ${invoice.stripePaymentLinkUrl}`
-          : "Payment by transfer to our account on the invoice.",
-      ];
+  const filled = fillEmailText(readEmailTexts(invoice.artist.emailTexts)[key], {
+    "first name": party.firstName || "there",
+    // A charge's text names the work it's for; otherwise every sale on
+    // the invoice.
+    works: chargeOnly
+      ? first.artwork.catalogueName
+      : joinNames(sales.map((s) => saleTitle(s.artwork.catalogueName, s.chargeKind))),
+    charge: first.chargeKind === "DELIVERY" ? "delivery" : "framing",
+    "invoice number": formatInvoiceNumber(invoice.number),
+    "payment link": isPaid ? "" : (invoice.stripePaymentLinkUrl ?? ""),
+    "artist name": invoice.artist.name,
+  });
 
-  const body = [
-    `Dear ${party.firstName || "there"},`,
-    "",
-    ...opening,
-    "",
-    ...middle,
-    "",
-    "Many thanks,",
-    invoice.artist.name,
-  ].join("\n");
-
-  const subject =
-    sales.length > 1
-      ? `${isPaid ? "Receipt" : "Invoice"} ${formatInvoiceNumber(invoice.number)}`
-      : `Sale "${saleTitle(first.artwork.catalogueName, first.chargeKind)}"`;
-
-  return { to: recipient.to, subject, body };
+  return { to: recipient.to, ...filled };
 }
 
 // Sends it, with the invoice (or receipt) PDF attached. The recipient is

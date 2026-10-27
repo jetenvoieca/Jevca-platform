@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Resend } from "resend";
 import { generateCertificatePdf } from "./certificate";
 import { artistFromAddress } from "@/lib/email";
+import { fillEmailText, readEmailTexts } from "@/lib/emailTexts";
 
 // 2026-09-05, Email Integration: same change as invoiceEmail.ts — sends
 // from the artist's own @jevca.art address instead of one shared
@@ -70,22 +71,15 @@ export async function getCertificateEmailDraft(
     return { error: "No email address is on file for this sale — add one first." };
   }
 
-  const contactFirstName = firstNameFor(purchase);
+  // From the client's Certificate email text (Settings → Financial →
+  // Email texts; lib/emailTexts.ts) — still editable before sending.
+  const filled = fillEmailText(readEmailTexts(purchase.artwork.artist.emailTexts).certificate, {
+    "first name": firstNameFor(purchase),
+    works: purchase.artwork.catalogueName,
+    "artist name": purchase.artwork.artist.name,
+  });
 
-  const body = [
-    `Dear ${contactFirstName},`,
-    "",
-    `Please find attached the Certificate of Authenticity for ${purchase.artwork.catalogueName}.`,
-    "",
-    "Many thanks,",
-    purchase.artwork.artist.name,
-  ].join("\n");
-
-  return {
-    to: recipient,
-    subject: `Certificate of Authenticity — "${purchase.artwork.catalogueName}"`,
-    body,
-  };
+  return { to: recipient, ...filled };
 }
 
 export async function sendCertificateEmail(

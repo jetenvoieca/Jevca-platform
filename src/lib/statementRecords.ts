@@ -1,3 +1,4 @@
+import { fillEmailText, readEmailTexts } from "@/lib/emailTexts";
 import { Resend } from "resend";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
@@ -273,9 +274,11 @@ function recipientFor(statement: LoadedStatement): { ok: true; to: string } | { 
   return { ok: true, to: email };
 }
 
-// The default subject and message — still editable before sending
-// (StatementModal): each work still owed with its invoice and amount,
-// then the one link to pay the whole statement.
+// The subject and message, from the client's Statement email text
+// (Settings → Financial → Email texts; lib/emailTexts.ts) filled in —
+// still editable before sending (StatementModal): each work still owed
+// with its invoice and amount, then the one link to pay the whole
+// statement.
 export async function getStatementEmailDraft(statementId: string): Promise<StatementEmailDraft | { error: string }> {
   await ensureStatementLink(statementId);
   const statement = await loadStatement(statementId);
@@ -285,7 +288,6 @@ export async function getStatementEmailDraft(statementId: string): Promise<State
   if (!recipient.ok) return { error: recipient.error };
 
   const owed = statement.lines.map((l) => l.purchase).filter((s) => s.status === "ACTIVE");
-  const payLink = statement.stripePaymentLinkUrl;
   const money = (s: StatementSale) => `${currencySymbol(s.currency)}${saleBreakdown(s).balance.toFixed(2)}`;
   const totals = owedTotals(statement)
     .map((t) => `${currencySymbol(t.currency)}${t.amount.toFixed(2)}`)
@@ -297,26 +299,18 @@ export async function getStatementEmailDraft(statementId: string): Promise<State
     return `- ${saleTitle(s.artwork.catalogueName, s.chargeKind)} (${where}): ${money(s)}`;
   });
 
-  const body = [
-    `Dear ${statementParty(statement.customer).firstName || "there"},`,
-    "",
-    `Please find attached our statement of works sold at ${statement.customer.name} and still to be paid for — ${owed.length} work${owed.length === 1 ? "" : "s"}, ${totals} in all.`,
-    "",
-    ...workLines,
-    "",
-    payLink
-      ? `Payment by transfer to our account on the statement, or by this secure payment link for the whole statement: ${payLink}`
-      : "Payment by transfer to our account on the statement.",
-    "",
-    "Many thanks,",
-    statement.artist.name,
-  ].join("\n");
+  const filled = fillEmailText(readEmailTexts(statement.artist.emailTexts).statement, {
+    "first name": statementParty(statement.customer).firstName || "there",
+    location: statement.customer.name,
+    date: statementLabelDate(statement),
+    count: `${owed.length} work${owed.length === 1 ? "" : "s"}`,
+    "total owed": totals,
+    "works owed": workLines.join("\n"),
+    "payment link": statement.stripePaymentLinkUrl ?? "",
+    "artist name": statement.artist.name,
+  });
 
-  return {
-    to: recipient.to,
-    subject: `Statement — ${statement.customer.name} — ${statementLabelDate(statement)}`,
-    body,
-  };
+  return { to: recipient.to, ...filled };
 }
 
 // Sends it, with the statement PDF attached. The recipient is always

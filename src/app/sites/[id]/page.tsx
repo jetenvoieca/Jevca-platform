@@ -9,6 +9,7 @@ import {
 } from "@/lib/sitesStatusFilter";
 import { getCertificateTemplates } from "@/lib/actions/certificateSettings";
 import { getCurrentUser } from "@/lib/currentUser";
+import { readEmailTexts } from "@/lib/emailTexts";
 
 export const dynamic = "force-dynamic";
 
@@ -157,6 +158,7 @@ export default async function SiteSettingsPage({
             defaultReleaseMessage: site.artist.defaultReleaseMessage,
             defaultReleaseTriggerCount: site.artist.defaultReleaseTriggerCount,
           }}
+          emailTexts={readEmailTexts(site.artist.emailTexts)}
           certificateTemplates={certificateTemplates}
           stripeConnection={stripeConnection}
           canResetSales={isAdmin}
