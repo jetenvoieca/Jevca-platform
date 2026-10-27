@@ -9,7 +9,7 @@ import {
 } from "@/lib/pageStories";
 import { Labelled } from "@/components/blockShapes";
 import { StoryThumb } from "@/components/StoryThumb";
-import { useArrangeItem } from "@/components/arrangeItemDrag";
+import { moveItem, useArrangeItem, useArrangeReorder } from "@/components/arrangeItemDrag";
 
 // A Profile stories component in a page's Arrange (2026-10-26): the
 // stories on this page, in order — drag one onto another to change the
@@ -18,7 +18,7 @@ import { useArrangeItem } from "@/components/arrangeItemDrag";
 // off the page (✕). Stories are added by dragging them here from the
 // Sections column (Craig's choice), so this shows only what's on the
 // page. Every change saves at once (`onSave`, the list as JSON — see
-// lib/pageStories.ts); a reorder is saved by PageSectionsArranger.
+// lib/pageStories.ts).
 export default function StoriesSlot({
   blockId,
   label,
@@ -43,6 +43,10 @@ export default function StoriesSlot({
   const shown = readPageStories(text).filter((c) => byId.has(c.id));
 
   const commit = (next: PageStory[]) => onSave(writePageStories(next) ?? "");
+  useArrangeReorder(blockId, (fromId, toId) => {
+    const next = moveItem(shown, (s) => s.id, fromId, toId);
+    if (next) commit(next);
+  });
   const sideOf = (c: PageStory) =>
     c.swap ? (settings.side === "left" ? "right" : "left") : settings.side;
 

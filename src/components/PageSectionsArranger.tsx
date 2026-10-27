@@ -61,7 +61,13 @@ import SignupFormSetup from "@/components/SignupFormSetup";
 import LineView from "@/components/LineView";
 import EntriesSlot from "@/components/EntriesSlot";
 import StoriesSlot from "@/components/StoriesSlot";
-import { moveItem, useArrangeItem, type ItemDragData, type ItemDropData } from "@/components/arrangeItemDrag";
+import {
+  moveItem,
+  useArrangeItem,
+  useArrangeReorder,
+  type ItemDragData,
+  type ItemDropData,
+} from "@/components/arrangeItemDrag";
 import { StoryThumb } from "@/components/StoryThumb";
 import { readPageStories, writePageStories } from "@/lib/pageStories";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
@@ -378,23 +384,9 @@ export default function PageSectionsArranger({
     const target = e.over?.data.current as DropData | undefined;
     if (!data || !target) return;
 
-    if (data.type === "item") {
-      if (target.kind !== "item" || target.blockId !== data.blockId) return;
-      const content = contents.get(data.blockId);
-      if (!content) return;
-      // A Profile stories component's stories (2026-10-27), kept as its
-      // text; otherwise its pictures' order.
-      const block = layout.blocks.find((b) => b.id === data.blockId);
-      if (block?.type === "stories") {
-        const next = moveItem(readPageStories(content.text), (s) => s.id, data.itemId, target.itemId);
-        if (next) saveText(block, writePageStories(next));
-        return;
-      }
-      const ids = arrangeItems(itemsOf(content), (i) => i.id, content).map((i) => i.id);
-      const next = moveItem(ids, (id) => id, data.itemId, target.itemId);
-      if (next) saveItems(data.blockId, { hiddenIds: content.hiddenIds, orderIds: next });
-      return;
-    }
+    // An item dropped on another in its component reorders it — heard by
+    // that component itself (useArrangeReorder, arrangeItemDrag.ts).
+    if (data.type === "item") return;
 
     if (data.type === "story") {
       if (target.kind !== "block" || target.block.type !== "stories") return;
@@ -528,6 +520,8 @@ export default function PageSectionsArranger({
                                 />
                               ) : b.type === "entries" ? (
                                 <EntriesSlot
+                                  blockId={b.id}
+                                  dragging={dragging}
                                   label={blockTypeLabel(b.type)}
                                   text={content?.text ?? null}
                                   images={(sections ?? [])
@@ -1073,6 +1067,10 @@ function ItemsGrid({
   const shown = arrangeItems(items, (i) => i.id, content);
   const removed = hiddenItems(items, (i) => i.id, content);
   const orderIds = shown.map((i) => i.id);
+  useArrangeReorder(blockId, (fromId, toId) => {
+    const next = moveItem(orderIds, (id) => id, fromId, toId);
+    if (next) onSave({ hiddenIds: content.hiddenIds, orderIds: next });
+  });
 
   return (
     <div>
