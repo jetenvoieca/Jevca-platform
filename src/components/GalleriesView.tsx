@@ -33,6 +33,7 @@ import SaleHeader from "@/components/SaleHeader";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import SoldFlag from "@/components/SoldFlag";
+import { isSold } from "@/lib/artworkFilters";
 
 type DetailTab = "details" | "sales";
 
@@ -730,21 +731,14 @@ export default function GalleriesView({
           .map(([cur, amt]) => formatMoney(amt.toFixed(2), cur))
           .join(" · ")}`;
 
-  // Which consigned works have a sale on record (2026-09-03; widened
-  // 2026-09-22) — drawn straight from selectedDetail.purchases (which
-  // already has artworkId per row) rather than a separate query, so the
-  // "SOLD" ribbon below stays in sync with the Sales tab table for
-  // free. Now includes ACTIVE (not just COMPLETED) gallery-channel
-  // purchases: recording a Consigned Works sale marks the artwork SOLD
-  // immediately (see the file-level Availability note in payments.ts),
-  // so "has a recorded sale" — not "has been paid" — is what this
-  // ribbon should reflect from here on. status !== "ABANDONED" rather
-  // than an explicit ACTIVE/COMPLETED list, so a future third non-final
-  // status doesn't quietly fall through this filter unnoticed.
+  // Which of the works here are sold — by the work's own availability
+  // (2026-10-27), the same as the SOLD flag everywhere else, so a work
+  // sold some other way (a past sale, a Studio sale) is flagged here too,
+  // not only one sold through this location's Record Sale (which marks
+  // the work SOLD itself). Paid or not; a cancelled sale makes it
+  // available again.
   const soldWorkIds = new Set(
-    (selectedDetail?.purchases ?? [])
-      .filter((p) => p.channel === "GALLERY" && p.status !== "ABANDONED")
-      .map((p) => p.artworkId)
+    (selectedDetail?.consignedWorks ?? []).filter((w) => isSold(w.availability)).map((w) => w.id)
   );
 
   // Unsold works first, sold ones after (each group keeps its A–Z order).
@@ -836,9 +830,7 @@ export default function GalleriesView({
                           // eslint-disable-next-line @next/next/no-img-element
                           <img src={w.imageUrl} alt="" className="h-full w-full object-cover" />
                         ) : null}
-                        {/* SOLD ribbon — any recorded (not abandoned)
-                            gallery-channel sale, paid or not (2026-09-22
-                            — see the note on soldWorkIds above). */}
+                        {/* SOLD — see the note on soldWorkIds above. */}
                         {soldWorkIds.has(w.id) && <SoldFlag />}
                       </div>
                       <p className="mt-1.5 truncate text-xs font-medium text-neutral-900">
@@ -849,7 +841,7 @@ export default function GalleriesView({
                       </p>
                     </button>
                     {/* Unsold works only — a sold one stays with its sale. */}
-                    {w.availability === "AVAILABLE" && !soldWorkIds.has(w.id) && (
+                    {!soldWorkIds.has(w.id) && (
                       <button
                         type="button"
                         onClick={() => removeWorkHere(selectedDetail, w.id)}
