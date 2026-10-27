@@ -26,7 +26,7 @@ export default async function PreviewGalleriesPage({
   // the new Location model (actions/locations.ts), same change as the
   // real (non-preview) galleries/page.tsx.
   const galleries = await listLocationCustomers(site.artistId);
-  const { paymentMethods } = await getArtworkSettings(site.artistId);
+  const settings = await getArtworkSettings(site.artistId);
 
   return (
     <GalleriesView
@@ -35,7 +35,7 @@ export default async function PreviewGalleriesPage({
       artistName={site.artist.name}
       vatRate={site.artist.vatRate != null ? Number(site.artist.vatRate) : null}
       galleries={galleries}
-      paymentMethods={paymentMethods}
+      settings={settings}
     />
   );
 }

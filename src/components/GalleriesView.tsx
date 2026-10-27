@@ -21,7 +21,7 @@ import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
 import { produceInvoice } from "@/lib/actions/invoices";
 import { netOwed } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
-import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
+import ArtworkDetailPanel, { type ArtworkDetail, type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
@@ -87,7 +87,7 @@ export default function GalleriesView({
   artistName,
   vatRate,
   galleries,
-  paymentMethods,
+  settings,
 }: {
   siteId: string;
   artistId: string;
@@ -101,10 +101,10 @@ export default function GalleriesView({
   // framer) alike, keyed by their linked Customer id throughout, same
   // as before this rework. See actions/locations.ts.
   galleries: LocationCustomerSummary[];
-  // Offered in GallerySaleCard's "Mark as paid" Method dropdown
-  // (2026-09-03) — Settings-editable, same list the Payment Methods
-  // card on the Artwork Catalogue's Settings screen manages.
-  paymentMethods: string[];
+  // The artist's catalogue settings (getArtworkSettings): the "Mark as
+  // paid" Method dropdown's payment methods (GallerySaleCard), and
+  // (2026-10-27) what a work's Catalogue window needs.
+  settings: ArtworkSettings;
 }) {
   const words = useClientWords();
   const [q, setQ] = useState("");
@@ -351,8 +351,21 @@ export default function GalleriesView({
   const closeWork = () => {
     setSelectedWorkId(null);
     setSelectedWorkDetail(null);
+    setCatalogueOpen(false);
   };
   const workBackdrop = useBackdropClose(closeWork);
+
+  // The open work's Catalogue button (2026-10-27, Craig's request): its
+  // Artwork Catalogue details in a modal over the sale, instead of going
+  // to the Artwork Catalogue. Changes refresh the work and the location.
+  const [catalogueOpen, setCatalogueOpen] = useState(false);
+  const closeCatalogue = () => setCatalogueOpen(false);
+  const catalogueBackdrop = useBackdropClose(closeCatalogue);
+  const refreshCatalogueWork = () => {
+    if (!selectedWorkId) return;
+    getArtworkDetailForClient(selectedWorkId).then(setSelectedWorkDetail);
+    if (selectedId) refreshGalleryDetail(selectedId);
+  };
 
   // Auto-opens a Location (and, if given, one of its works) from the
   // URL's own ?location=&work=&sale= query params (2026-09-22) — this is what
@@ -1328,6 +1341,29 @@ export default function GalleriesView({
       </div>
 
       {/* ---- Artwork sale modal ---- */}
+      {/* The open work's Catalogue window, over its sale. */}
+      {catalogueOpen && selectedWorkDetail && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-6" {...catalogueBackdrop}>
+          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
+            <ArtworkDetailPanel
+              key={selectedWorkDetail.id}
+              siteId={siteId}
+              artistId={artistId}
+              artwork={selectedWorkDetail}
+              settings={settings}
+              onClose={closeCatalogue}
+              onDeleted={() => {
+                closeWork();
+                if (selectedId) refreshGalleryDetail(selectedId);
+              }}
+              onDuplicated={closeCatalogue}
+              onDataChanged={refreshCatalogueWork}
+              showCloseButton={true}
+            />
+          </div>
+        </div>
+      )}
+
       {/* Fixed overlay on top of everything, at every width. Shared
           SaleHeader on top; below it either the sale card (sale already
           recorded) or the blank Record Sale form. */}
@@ -1348,9 +1384,7 @@ export default function GalleriesView({
                     onChanged={workView === "image" && shownSale ? undefined : refreshAfterSaleChange}
                     onClose={closeWork}
                     onTitleClick={() => setFocusedSaleId(null)}
-                    onOpenCatalogue={() =>
-                      router.push(`/sites/${siteId}/artworks?selected=${selectedWorkDetail.id}`)
-                    }
+                    onOpenCatalogue={() => setCatalogueOpen(true)}
                   />
                 </div>
 
@@ -1360,7 +1394,7 @@ export default function GalleriesView({
                       <GallerySaleCard
                         purchase={shownSale}
                         siteId={siteId}
-                        paymentMethods={paymentMethods}
+                        paymentMethods={settings.paymentMethods}
                         onChanged={refreshAfterSaleChange}
                         focusedId={focusedSaleId}
                         onFocusChange={setFocusedSaleId}

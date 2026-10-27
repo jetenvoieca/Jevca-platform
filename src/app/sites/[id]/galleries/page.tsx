@@ -28,11 +28,9 @@ export default async function GalleriesPage({ params }: { params: Promise<{ id: 
   // see the matching note on GalleriesView's own "galleries" prop.
   const galleries = await listLocationCustomers(site.artistId);
 
-  // Just the paymentMethods list is actually needed here (the "Mark as
-  // paid" Method dropdown, 2026-09-03) — reusing getArtworkSettings
-  // rather than a separate one-off query, since it already fetches this
-  // in the same single Artist row lookup the Settings screen uses.
-  const { paymentMethods } = await getArtworkSettings(site.artistId);
+  // The "Mark as paid" Method dropdown's payment methods, and (2026-10-27)
+  // what a work's Catalogue window needs (ArtworkDetailPanel).
+  const settings = await getArtworkSettings(site.artistId);
 
   return (
     <GalleriesView
@@ -41,7 +39,7 @@ export default async function GalleriesPage({ params }: { params: Promise<{ id: 
       artistName={site.artist.name}
       vatRate={site.artist.vatRate != null ? Number(site.artist.vatRate) : null}
       galleries={galleries}
-      paymentMethods={paymentMethods}
+      settings={settings}
     />
   );
 }
