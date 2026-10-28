@@ -85,6 +85,8 @@ export default function ArtworkCatalogueFields({
   onLocationChange,
   onViewLocation,
   children,
+  name,
+  picture,
   artistId,
   siteId,
   onLocationAdded,
@@ -106,7 +108,13 @@ export default function ArtworkCatalogueFields({
   // A View button beside Location, shown when given: opens the work in
   // its Location.
   onViewLocation?: () => void;
+  // The price (Catalogue / Hopper's own), shown after Size / Edition.
   children?: React.ReactNode;
+  // The Name field, first in the column (2026-10-28).
+  name: React.ReactNode;
+  // The work's picture, to the left of the fields (the Catalogue's) —
+  // omitted, the fields take the full width (the Hopper's).
+  picture?: React.ReactNode;
   // Inline "+ Add new…" on Type, Medium, Size and Location (2026-09-11,
   // direct request — "all drop-downs add ability to add to lists";
   // 2026-10-27: Size too, and in every form using these fields, the
@@ -187,36 +195,140 @@ export default function ArtworkCatalogueFields({
 
   return (
     <>
-      <div>
-        <label className={labelCls}>Type</label>
-        <select
-          name="type"
-          value={typeValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            const form = e.currentTarget.form!;
-            if (v === ADD_NEW) {
-              addNew("Type", onAddType, setTypeValue, form, (newType) =>
-                onTypeOrSizeChange?.(newType, sizeValue)
-              );
-              return;
-            }
-            setTypeValue(v);
-            onTypeOrSizeChange?.(v, sizeValue);
-            onAutosave?.(form);
-          }}
-          className={inputCls}
-        >
-          <option value="">Choose from list…</option>
-          {withCurrent(settings.artworkTypes, typeValue).map((t) => (
-            <option key={t} value={t}>
-              {t}
-            </option>
-          ))}
-          <option value={ADD_NEW}>+ Add new…</option>
-        </select>
+      {/* Craig's mockup (2026-10-28): the picture (when given) on the
+          left; Name, Type, Size, Edition, the price (children) and
+          Location beside it; Medium below; then Date and the notes in
+          the private Studio notes box. */}
+      <div className={picture ? "grid grid-cols-2 gap-4" : ""}>
+        {picture && <div>{picture}</div>}
+        <div className="space-y-3">
+          {name}
+          <div>
+            <label className={labelCls}>Type</label>
+            <select
+              name="type"
+              value={typeValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                const form = e.currentTarget.form!;
+                if (v === ADD_NEW) {
+                  addNew("Type", onAddType, setTypeValue, form, (newType) =>
+                    onTypeOrSizeChange?.(newType, sizeValue)
+                  );
+                  return;
+                }
+                setTypeValue(v);
+                onTypeOrSizeChange?.(v, sizeValue);
+                onAutosave?.(form);
+              }}
+              className={inputCls}
+            >
+              <option value="">Choose from list…</option>
+              {withCurrent(settings.artworkTypes, typeValue).map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+              <option value={ADD_NEW}>+ Add new…</option>
+            </select>
+          </div>
+          <div>
+            <label className={labelCls}>Size</label>
+            <select
+              name="size"
+              value={sizeValue}
+              onChange={(e) => {
+                const v = e.target.value;
+                const form = e.currentTarget.form!;
+                if (v === ADD_NEW) {
+                  addNew("Size", onAddSize, setSizeValue, form, (newSize) => onTypeOrSizeChange?.(typeValue, newSize));
+                  return;
+                }
+                setSizeValue(v);
+                onTypeOrSizeChange?.(typeValue, v);
+                onAutosave?.(form);
+              }}
+              className={inputCls}
+            >
+              <option value="">Choose from list…</option>
+              {withCurrent(settings.sizePresets, sizeValue).map((s) => (
+                <option key={s} value={s}>
+                  {s}
+                </option>
+              ))}
+              <option value={ADD_NEW}>+ Add new…</option>
+            </select>
+          </div>
+          {/* Edition only applies to editioned work — Originals and Uniques
+              (and materials like Aluminium that aren't editioned) are
+              one-offs (2026-08-15 decision). */}
+          {isEditionType ? (
+            <div>
+              <label className={labelCls}>Edition</label>
+              <input
+                type="text"
+                name="edition"
+                defaultValue={values.edition}
+                onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
+                className={inputCls}
+              />
+            </div>
+          ) : (
+            // Preserve any Edition value already on record rather than
+            // wiping it out just because Type changed — it'll reappear if
+            // switched back.
+            <input type="hidden" name="edition" value={values.edition} />
+          )}
+          {/* Available (qty) removed from the visible form (2026-09-11,
+              direct request) — always a hidden input now, regardless of
+              Type, so any existing value on record is preserved rather than
+              silently cleared the next time this form autosaves. */}
+          <input type="hidden" name="availableQty" value={values.availableQty} />
+          {children}
+          <div>
+            <label className={labelCls}>Location</label>
+            <div className="flex gap-1">
+              <select
+                name="location"
+                value={locationValue}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  const form = e.currentTarget.form!;
+                  if (v === ADD_NEW) {
+                    addNew("Location", onAddLocation, setLocationValue, form, onLocationChange);
+                    return;
+                  }
+                  setLocationValue(v);
+                  onLocationChange?.(v);
+                  onAutosave?.(form);
+                }}
+                className={`${inputCls} min-w-0`}
+              >
+                <option value="">Choose from list…</option>
+                {withCurrent(
+                  settings.locations.map((l) => l.name),
+                  locationValue
+                ).map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+                <option value={ADD_NEW}>+ Add new…</option>
+              </select>
+              {onViewLocation && (
+                <button
+                  type="button"
+                  onClick={onViewLocation}
+                  className="shrink-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-600 hover:bg-neutral-50"
+                >
+                  View
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
       </div>
-      <div className="col-span-2">
+      <div>
         <label className={labelCls}>Medium</label>
         <select
           name="medium"
@@ -242,124 +354,27 @@ export default function ArtworkCatalogueFields({
           <option value={ADD_NEW}>+ Add new…</option>
         </select>
       </div>
-      <div>
-        <label className={labelCls}>Size</label>
-        <select
-          name="size"
-          value={sizeValue}
-          onChange={(e) => {
-            const v = e.target.value;
-            const form = e.currentTarget.form!;
-            if (v === ADD_NEW) {
-              addNew("Size", onAddSize, setSizeValue, form, (newSize) => onTypeOrSizeChange?.(typeValue, newSize));
-              return;
-            }
-            setSizeValue(v);
-            onTypeOrSizeChange?.(typeValue, v);
-            onAutosave?.(form);
-          }}
-          className={inputCls}
-        >
-          <option value="">Choose from list…</option>
-          {withCurrent(settings.sizePresets, sizeValue).map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-          <option value={ADD_NEW}>+ Add new…</option>
-        </select>
-      </div>
-      {/* Edition only applies to editioned work — Originals and Uniques
-          (and materials like Aluminium that aren't editioned) are
-          one-offs (2026-08-15 decision). */}
-      {isEditionType ? (
-        <div>
-          <label className={labelCls}>Edition</label>
+      <div className="rounded-md border border-neutral-200 p-3">
+        <p className={labelCls}>
+          Studio notes <span className="font-normal text-neutral-400">(private)</span>
+        </p>
+        <div className="mb-3 w-1/2">
+          <label className={labelCls}>Date</label>
           <input
             type="text"
-            name="edition"
-            defaultValue={values.edition}
+            name="date"
+            defaultValue={values.date}
+            placeholder="e.g. June 2025"
             onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
             className={inputCls}
           />
         </div>
-      ) : (
-        // Preserve any Edition value already on record rather than
-        // wiping it out just because Type changed — it'll reappear if
-        // switched back.
-        <input type="hidden" name="edition" value={values.edition} />
-      )}
-      {/* Available (qty) removed from the visible form (2026-09-11,
-          direct request) — always a hidden input now, regardless of
-          Type, so any existing value on record is preserved rather than
-          silently cleared the next time this form autosaves. */}
-      <input type="hidden" name="availableQty" value={values.availableQty} />
-      <div>
-        <label className={labelCls}>Location</label>
-        <div className="flex gap-1">
-          <select
-            name="location"
-            value={locationValue}
-            onChange={(e) => {
-              const v = e.target.value;
-              const form = e.currentTarget.form!;
-              if (v === ADD_NEW) {
-                addNew("Location", onAddLocation, setLocationValue, form, onLocationChange);
-                return;
-              }
-              setLocationValue(v);
-              onLocationChange?.(v);
-              onAutosave?.(form);
-            }}
-            className={`${inputCls} min-w-0`}
-          >
-            <option value="">Choose from list…</option>
-            {withCurrent(
-              settings.locations.map((l) => l.name),
-              locationValue
-            ).map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-            <option value={ADD_NEW}>+ Add new…</option>
-          </select>
-          {onViewLocation && (
-            <button
-              type="button"
-              onClick={onViewLocation}
-              className="shrink-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-600 hover:bg-neutral-50"
-            >
-              View
-            </button>
-          )}
-        </div>
-      </div>
-      {/* A plain single-column cell (2026-09-12, direct request — "date
-          field too long, shorten and reposition") — sits right next to
-          Location in the same row, at the same width as every other
-          field. */}
-      <div>
-        <label className={labelCls}>Date</label>
-        <input
-          type="text"
-          name="date"
-          defaultValue={values.date}
-          placeholder="e.g. June 2025"
-          onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-          className={inputCls}
-        />
-      </div>
-      {children}
-      <div className="col-span-2">
-        <label className={labelCls}>
-          Studio notes <span className="font-normal text-neutral-400">(private)</span>
-        </label>
+        <label className={labelCls}>Notes</label>
         <textarea
           name="studioNotes"
           defaultValue={values.studioNotes}
           onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-          rows={3}
+          rows={5}
           className={inputCls}
         />
       </div>

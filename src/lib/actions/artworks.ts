@@ -754,6 +754,37 @@ export async function deleteArtwork(siteId: string, id: string) {
   await db.artwork.delete({ where: { id } });
 }
 
+// The artwork's one picture (2026-10-28, Craig: the Catalogue is a plain
+// record of the works — other pictures belong to curations'
+// presentations): this Media Catalogue picture becomes its Main, and the
+// one it replaces is taken off the artwork (it stays in the Media
+// Catalogue).
+export async function setArtworkMainImage(
+  artworkId: string,
+  imageId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const { artistId } = await artworkOwner(artworkId);
+  const image = await db.image.findFirst({
+    where: { id: imageId, artistId },
+    select: { kind: true, mainImageOfArtwork: { select: { id: true } } },
+  });
+  if (!image) return { error: "That picture wasn't found." };
+  if (image.kind !== "PHOTO") return { error: "Choose a picture, not a video." };
+  if (image.mainImageOfArtwork && image.mainImageOfArtwork.id !== artworkId) {
+    return { error: "That picture is already another work's main picture." };
+  }
+  const artwork = await db.artwork.findUnique({ where: { id: artworkId }, select: { mainImageId: true } });
+  if (artwork?.mainImageId === imageId) return { ok: true };
+  await db.$transaction([
+    ...(artwork?.mainImageId
+      ? [db.image.update({ where: { id: artwork.mainImageId }, data: { artworkId: null } })]
+      : []),
+    db.artwork.update({ where: { id: artworkId }, data: { mainImageId: imageId } }),
+    db.image.update({ where: { id: imageId }, data: { artworkId, status: "SORTED" } }),
+  ]);
+  return { ok: true };
+}
+
 // Links one or more already-uploaded Images to this artwork as
 // (Main and/or Related — see the note below) — this is what the
 // Catalogue tab's "+ Add" tiles call after a picker selection.

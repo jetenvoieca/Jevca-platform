@@ -1502,19 +1502,19 @@ function QuickCatalogueFields({
   return (
     <div className="mt-4 rounded-md border border-neutral-300 p-4">
       <form ref={formRef} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
-            <input
-              type="text"
-              name="catalogueName"
-              defaultValue={parsed.name}
-              placeholder="Untitled"
-              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-            />
-          </div>
-
           <ArtworkCatalogueFields
+            name={
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
+                <input
+                  type="text"
+                  name="catalogueName"
+                  defaultValue={parsed.name}
+                  placeholder="Untitled"
+                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                />
+              </div>
+            }
             artistId={artistId}
             siteId={siteId}
             settings={settings}
@@ -1562,7 +1562,7 @@ function QuickCatalogueFields({
 
           {imported && (
             <>
-              <div className="col-span-2">
+              <div>
                 <label className="mb-1 block text-sm font-medium text-neutral-700">Description</label>
                 <textarea
                   name="description"
@@ -1572,7 +1572,7 @@ function QuickCatalogueFields({
                 />
               </div>
               {item.artworkViewingLocation && (
-                <div className="col-span-2">
+                <div>
                   <label className="mb-1 block text-sm font-medium text-neutral-700">Can be viewed at</label>
                   <input
                     type="text"
@@ -1583,14 +1583,13 @@ function QuickCatalogueFields({
                 </div>
               )}
               {item.artworkSold && (
-                <label className="col-span-2 flex items-center gap-2 text-sm text-neutral-700">
+                <label className="flex items-center gap-2 text-sm text-neutral-700">
                   <input type="checkbox" name="sold" defaultChecked />
                   Sold (marked sold on the old website)
                 </label>
               )}
             </>
           )}
-        </div>
       </form>
       <div className="mt-4 flex items-center gap-3">
         <button

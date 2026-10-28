@@ -7,11 +7,12 @@ import {
   deleteArtwork,
   deleteArtworkIfBlank,
   duplicateArtwork,
+  setArtworkMainImage,
 } from "@/lib/actions/artworks";
 import type { LocationSummary } from "@/lib/actions/locations";
 import { computeReferencePrice } from "@/lib/pricing";
 import { CURRENCIES } from "@/lib/currencies";
-import ArtworkImageManager from "@/components/ArtworkImageManager";
+import MediaPicker from "@/components/MediaPicker";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 
@@ -46,8 +47,7 @@ export type ArtworkDetail = {
   derivedFromCatalogueNumber: string | null;
   // Which image (if any) is actually Main (2026-09-13) — see the
   // matching note in getArtworkDetailForClient (actions/artworks.ts).
-  // Passed straight through to ArtworkImageManager, which needs it to
-  // tell Main and Related apart with certainty.
+  // The work's one picture (2026-10-28) — `images` holds just it.
   mainImageId: string | null;
   images: {
     id: string;
@@ -230,6 +230,18 @@ export default function ArtworkDetailPanel({
   // never asks (everything's blank on the new derivative anyway); an
   // edition-type source does, since a new print copy needs its own
   // edition number, not the original's.
+  // The work's one picture (2026-10-28); changing it refreshes the work.
+  const mainImage = artwork.images.find((i) => i.id === artwork.mainImageId) ?? artwork.images[0] ?? null;
+  const [pictureError, setPictureError] = useState<string | null>(null);
+  const changeMainImage = (imageId: string) => {
+    setPictureError(null);
+    startTransition(async () => {
+      const result = await setArtworkMainImage(artwork.id, imageId);
+      if ("error" in result) setPictureError(result.error);
+      else onDataChanged?.();
+    });
+  };
+
   const handleDuplicate = () => {
     const typeLower = (artwork.type || "").trim().toLowerCase();
     const isOriginalOrUnique = typeLower.includes("original") || typeLower.includes("unique");
@@ -341,37 +353,44 @@ export default function ArtworkDetailPanel({
         </div>
       </div>
 
-      <ArtworkImageManager
-        artworkId={artwork.id}
-        siteId={siteId}
-        basePath={basePath ?? `/sites/${siteId}`}
-        artistId={artistId}
-        images={artwork.images}
-        mainImageId={artwork.mainImageId}
-        onDataChanged={onDataChanged}
-      />
-
       <form onBlur={(e) => autosaveCatalogue(e.currentTarget)} className="space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          <div>
-            <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
-            <input
-              type="text"
-              name="catalogueName"
-              defaultValue={artwork.catalogueName}
-              required
-              className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-            />
-          </div>
-
-          {/* The Type/Medium/Size/Edition/Location/Date/Studio notes
-              block below is the exact same shared component the
-              Hopper's quick-add form uses (ArtworkCatalogueFields,
-              2026-09-07) — Name above, and Reference/Offered price and
-              SOLD (passed as children, rendered after Date) stay
-              Catalogue-only. Its "+ Add new…" options save to the
-              client's Settings lists themselves. */}
           <ArtworkCatalogueFields
+            name={
+              <div>
+                <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
+                <input
+                  type="text"
+                  name="catalogueName"
+                  defaultValue={artwork.catalogueName}
+                  required
+                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                />
+              </div>
+            }
+            picture={
+              // The work's one picture (2026-10-28): click it to choose
+              // another from the Media Catalogue.
+              <div className="relative">
+                <MediaPicker
+                  artistId={artistId}
+                  siteId={siteId}
+                  mode="single"
+                  mediaKinds={["PHOTO"]}
+                  label="Add a picture"
+                  previewUrl={mainImage?.displayUrl}
+                  previewClassName="aspect-square"
+                  onSelect={(images) => {
+                    if (images[0]) changeMainImage(images[0].id);
+                  }}
+                />
+                {mainImage && (
+                  <span className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">
+                    Main
+                  </span>
+                )}
+                {pictureError && <p className="mt-1 text-xs text-red-600">{pictureError}</p>}
+              </div>
+            }
             settings={settings}
             values={{
               type: artwork.type || "",
@@ -464,7 +483,6 @@ export default function ArtworkDetailPanel({
               )}
             </div>
           </ArtworkCatalogueFields>
-        </div>
         <div className="flex items-center gap-3">
           {saved && <span className="text-sm text-green-600">Saved</span>}
         </div>
