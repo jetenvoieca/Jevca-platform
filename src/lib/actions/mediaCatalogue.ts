@@ -8,12 +8,13 @@ import { toArtworkImages } from "@/lib/artworkImages";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 
 type ListFilters = {
-  purpose?: "marketing" | "related";
+  // "marketing": pictures and videos not tied to an artwork (an
+  // artwork's one picture is its own).
+  purpose?: "marketing";
   // Pictures or videos only (2026-10-15 — the Marketing and Videos views).
   kind?: "PHOTO" | "VIDEO";
   q?: string;
   tag?: string;
-  artworkId?: string;
   // Pagination — added 2026-08-08. Previously this fetched every matching
   // row unconditionally, every time, including just to open one item's
   // detail panel — a real, measured contributor to Media Catalogue
@@ -28,35 +29,15 @@ type ListFilters = {
 
 const DEFAULT_PAGE_SIZE = 60;
 
-// "Marketing" vs "Related" isn't a stored field — it's simply whether the
-// item has a linked artwork or not. Avoids keeping a redundant flag in
-// sync with the artworkId it would just be describing.
-//
-// An artwork's own Main image is deliberately excluded from "Related"
-// (2026-09-13 fix, direct report — "the artwork is showing as a related
-// image of itself"). Main and Related images share the same underlying
-// Image row shape (both just have artworkId set), so without this
-// exclusion the Main image — captioned with the artwork's own name —
-// showed up in its own Related list tagged "→ [same artwork name]",
-// reading as an artwork related to itself. Conceptually the two are not
-// the same kind of thing: Main is the artwork's image of record (fixed,
-// managed only from the Artwork Catalogue itself), while Related is
-// ancillary media that can be freely linked/unlinked — so Main has no
-// place in the Related bucket at all. Filtered via the
-// `mainImageOfArtwork` back-relation (null = this image isn't anyone's
-// main image) rather than comparing IDs by hand, so it stays correct
-// automatically if Set as Main ever moves to a different image.
 export async function listMedia(artistId: string, filters: ListFilters) {
   await requireArtistAccess(artistId);
-  const { purpose, kind, q, tag, artworkId, offset = 0, limit = DEFAULT_PAGE_SIZE, newestFirst = false } = filters;
+  const { purpose, kind, q, tag, offset = 0, limit = DEFAULT_PAGE_SIZE, newestFirst = false } = filters;
 
   const where = {
     artistId,
     status: { not: "ARCHIVED" as const },
     ...(purpose === "marketing" ? { artworkId: null } : {}),
-    ...(purpose === "related" ? { artworkId: { not: null }, mainImageOfArtwork: null } : {}),
     ...(kind ? { kind } : {}),
-    ...(artworkId ? { artworkId } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
     ...(q
       ? {
@@ -99,29 +80,6 @@ export async function listMedia(artistId: string, filters: ListFilters) {
   return { rows: rowsWithThumbnails, total };
 }
 
-// See the note on listMedia above — Related deliberately excludes each
-// artwork's own Main image, same reasoning and same exclusion.
-export async function countMediaByPurpose(artistId: string) {
-  await requireArtistAccess(artistId);
-  const [marketing, videos, related] = await Promise.all([
-    db.image.count({
-      where: { artistId, status: { not: "ARCHIVED" }, artworkId: null, kind: "PHOTO" },
-    }),
-    db.image.count({
-      where: { artistId, status: { not: "ARCHIVED" }, artworkId: null, kind: "VIDEO" },
-    }),
-    db.image.count({
-      where: {
-        artistId,
-        status: { not: "ARCHIVED" },
-        artworkId: { not: null },
-        mainImageOfArtwork: null,
-      },
-    }),
-  ]);
-  return { marketing, videos, related };
-}
-
 export async function getMediaDetail(id: string) {
   await requireRecordAccess(db.image.findUnique({ where: { id }, select: { artistId: true } }));
   const image = await db.image.findUnique({
@@ -135,17 +93,6 @@ export async function getMediaDetail(id: string) {
   // original throughout, since the lightbox's "view full size" click
   // deliberately shows the real, unresized file.
   return { ...image, displayUrl: publicMediaUrl(image.displayKey) || image.url };
-}
-
-// Lightweight list for the "link to artwork" dropdown — every artwork this
-// artist has, regardless of which site it's tied to, by Name.
-export async function getArtistArtworksForLinking(artistId: string) {
-  await requireArtistAccess(artistId);
-  return db.artwork.findMany({
-    where: { artistId },
-    select: { id: true, catalogueName: true },
-    orderBy: { catalogueName: "asc" },
-  });
 }
 
 export async function updateMedia(id: string, siteId: string, formData: FormData): Promise<void> {

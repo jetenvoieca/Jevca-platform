@@ -27,12 +27,10 @@ export default function StickerLibraryView({
   siteId,
   artistId,
   initialStickers,
-  relatedCount,
 }: {
   siteId: string;
   artistId: string;
   initialStickers: StickerRow[];
-  relatedCount: number;
 }) {
   const [stickers, setStickers] = useState(initialStickers);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -78,7 +76,7 @@ export default function StickerLibraryView({
       <div className="sticky top-0 z-10 -mt-4 space-y-3 border-b border-neutral-200 bg-white pb-3 pt-4">
         <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
         <div className="flex flex-wrap items-center gap-3">
-          <MediaCatalogueTabs siteId={siteId} current="stickers" relatedCount={relatedCount} />
+          <MediaCatalogueTabs siteId={siteId} current="stickers" />
           <button
             type="button"
             onClick={() => inputRef.current?.click()}

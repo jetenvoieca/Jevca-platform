@@ -66,7 +66,6 @@ export default function CurationImageEditor({
         siteId={siteId}
         mode="single"
         label={label}
-        linkedArtworkId={artworkId}
         mediaKinds={["PHOTO", "VIDEO"]}
         catalogueViews
         previewClassName="aspect-square h-full w-full"

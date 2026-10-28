@@ -36,12 +36,10 @@ export default function MusicLibraryView({
   siteId,
   artistId,
   initialTracks,
-  relatedCount,
 }: {
   siteId: string;
   artistId: string;
   initialTracks: MusicTrackRow[];
-  relatedCount: number;
 }) {
   const [tracks, setTracks] = useState(initialTracks);
   const [uploading, setUploading] = useState<string | null>(null);
@@ -90,7 +88,7 @@ export default function MusicLibraryView({
       <div className="sticky top-0 z-10 -mt-4 space-y-3 border-b border-neutral-200 bg-white pb-3 pt-4">
         <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
         <div className="flex flex-wrap items-center gap-3">
-          <MediaCatalogueTabs siteId={siteId} current="music" relatedCount={relatedCount} />
+          <MediaCatalogueTabs siteId={siteId} current="music" />
           <button
             type="button"
             onClick={() => inputRef.current?.click()}

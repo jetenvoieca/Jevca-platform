@@ -488,7 +488,7 @@ export default function ArtworksCatalogueView({
 
   // ⊞ beside the title goes to "Add Artworks" (2026-10-15; the standard
   // add icon since 2026-10-28) — the Hopper narrowed to adding artworks
-  // and their ancillary images (see HopperView's artworkIntake), rather
+  // (see HopperView's artworkIntake), rather
   // than creating a blank row directly. resolvedBasePath keeps it inside
   // the evaluation reduced-menu shell when rendered there.
   const addHref = `${resolvedBasePath}/artworks/add`;

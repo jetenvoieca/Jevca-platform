@@ -32,17 +32,15 @@ type MediaRow = {
 
 // videoOnly stays exactly as it was (used by a curation's Video section) —
 // mediaKinds is the new, more general option, for pickers that want both
-// kinds together (e.g. an artwork's Related Images, since ancillary media
-// was always meant to include video — see the original Hopper spec).
+// kinds together (e.g. a curation work's presentation pictures, which can
+// include video).
 // When mediaKinds is given it takes over entirely; otherwise videoOnly's
 // old true/false logic applies unchanged.
-// "work": the media related to `linkedArtworkId` (catalogueViews).
-type PickerSource = MediaTab | "media" | "work";
+type PickerSource = MediaTab | "media";
 
-const SOURCE_LABEL: Record<Exclude<PickerSource, "artworks" | "work">, string> = {
+const SOURCE_LABEL: Record<Exclude<PickerSource, "artworks">, string> = {
   marketing: "Marketing",
   videos: "Videos",
-  related: "Related",
   media: "Media",
 };
 
@@ -71,7 +69,6 @@ export default function MediaPicker({
   videoOnly = false,
   mediaKinds,
   label = "Add Image",
-  linkedArtworkId,
   previewUrl,
   previewKind = "image",
   previewClassName,
@@ -90,15 +87,6 @@ export default function MediaPicker({
   // together, e.g. ["PHOTO", "VIDEO"] for an artwork's Related Images.
   mediaKinds?: ("PHOTO" | "VIDEO")[];
   label?: string;
-  // When set, this picker is being used to add images to one specific
-  // artwork (the Artwork editor's own Images section) — shows the same
-  // Marketing/Related toggle as the Media Catalogue, with "Related"
-  // scoped strictly to this one artwork's own images, never any other
-  // artwork's, so you can never accidentally pick something already
-  // belonging to a different piece. Terminology settled on "Related",
-  // replacing "ancillary"/"secondary"/"connected" — see decisions-log,
-  // 2026-08-05.
-  linkedArtworkId?: string;
   // When set (2026-08-30), the closed-state trigger renders this actual
   // image, large and uncropped-to-a-tiny-box (object-cover on a real
   // aspect ratio, not letterboxed), rather than the small dashed
@@ -141,32 +129,27 @@ export default function MediaPicker({
   // as its second list. In multi mode both can be ticked together.
   withArtworks?: boolean;
   // (2026-10-20 — a curation's work Presentation): the Media Catalogue's
-  // views without the artworks — Marketing, Videos and Related (every
-  // artwork's) — led by the media related to `linkedArtworkId`, so any
-  // picture or video in the catalogue can be picked.
+  // views without the artworks — Marketing and Videos — so any picture or
+  // video in the catalogue can be picked.
   catalogueViews?: boolean;
 }) {
   const words = useClientWords();
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [purpose, setPurpose] = useState<"marketing" | "related">("marketing");
   const [images, setImages] = useState<PickedImage[]>([]);
-  const [relatedCount, setRelatedCount] = useState(0);
   const [selected, setSelected] = useState<PickedImage[]>([]);
   // What the grid shows. With artworks (2026-10-16): the Media
-  // Catalogue's own views — Artworks, Marketing, Videos, Related — those
+  // Catalogue's own views — Artworks, Marketing, Videos — those
   // holding a kind this picker takes. Otherwise one list, "media".
   const takesPhotos = matchesKind("PHOTO", videoOnly, mediaKinds);
   const takesVideos = matchesKind("VIDEO", videoOnly, mediaKinds);
   const tabbed = withArtworks || catalogueViews;
   const sources: PickerSource[] = tabbed
     ? [
-        ...(catalogueViews && linkedArtworkId ? (["work"] as const) : []),
         ...(withArtworks && takesPhotos ? (["artworks"] as const) : []),
         ...(takesPhotos ? (["marketing"] as const) : []),
         ...(takesVideos ? (["videos"] as const) : []),
-        "related",
       ]
     : ["media"];
   const [source, setSource] = useState<PickerSource>(sources[0]);
@@ -182,21 +165,10 @@ export default function MediaPicker({
   // hiding results below whatever a user searches for.
   const PICKER_FETCH_LIMIT = 1000;
 
-  const load = (q: string, p: "marketing" | "related") => {
+  const load = (q: string) => {
     startTransition(async () => {
-      if (linkedArtworkId) {
-        const { rows } = await listMedia(artistId, {
-          purpose: p,
-          q: q || undefined,
-          artworkId: p === "related" ? linkedArtworkId : undefined,
-          limit: PICKER_FETCH_LIMIT,
-        });
-        setImages(toPicked(rows, videoOnly, mediaKinds));
-        if (p === "related") setRelatedCount(rows.length);
-      } else {
-        const results = await listImages(artistId, q || undefined);
-        setImages(toPicked(results, videoOnly, mediaKinds));
-      }
+      const results = await listImages(artistId, q || undefined);
+      setImages(toPicked(results, videoOnly, mediaKinds));
     });
   };
 
@@ -220,24 +192,9 @@ export default function MediaPicker({
     });
   };
 
-  // The media related to the linked artwork (catalogueViews).
-  const loadWorkMedia = (q: string) => {
-    startTransition(async () => {
-      const { rows } = await listMedia(artistId, {
-        purpose: "related",
-        artworkId: linkedArtworkId,
-        q: q || undefined,
-        limit: PICKER_FETCH_LIMIT,
-        newestFirst: true,
-      });
-      setImages(toPicked(rows, videoOnly, mediaKinds));
-    });
-  };
-
   const loadSource = (next: PickerSource, q: string) => {
     if (next === "artworks") loadArtworks(q);
-    else if (next === "media") load(q, purpose);
-    else if (next === "work") loadWorkMedia(q);
+    else if (next === "media") load(q);
     else loadMediaTab(q, next);
   };
 
@@ -258,25 +215,12 @@ export default function MediaPicker({
     const start = sources.includes(source) ? source : sources[0];
     setSource(start);
     loadSource(start, query);
-    // Fetch the Related count up front too, so the tab badge is correct
-    // even before switching to it — otherwise it'd read "Related (0)"
-    // until clicked once.
-    if (linkedArtworkId && !tabbed && purpose !== "related") {
-      startTransition(async () => {
-        const { rows } = await listMedia(artistId, {
-          purpose: "related",
-          artworkId: linkedArtworkId,
-          limit: PICKER_FETCH_LIMIT,
-        });
-        setRelatedCount(rows.length);
-      });
-    }
   };
 
   // Debounced search-as-you-type (2026-08-31) — previously fired a full
   // server request (fetching up to PICKER_FETCH_LIMIT rows) on every
   // keystroke, with no visible loading state. Same fix as ArtworkPicker.tsx
-  // / CustomerPicker.tsx. Only reacts to `query` changing — handlePurposeChange
+  // / CustomerPicker.tsx. Only reacts to `query` changing — handleSourceChange
   // below still reloads immediately on an explicit tab click, and
   // handleOpen's own immediate load() above still runs right away when the
   // picker is first opened.
@@ -289,11 +233,6 @@ export default function MediaPicker({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
-
-  const handlePurposeChange = (p: "marketing" | "related") => {
-    setPurpose(p);
-    load(query, p);
-  };
 
   const handlePick = (img: PickedImage) => {
     if (mode === "single") {
@@ -491,15 +430,12 @@ export default function MediaPicker({
         )}
         {source !== "artworks" && images.length === 0 && !isPending && (
           <p className="py-12 text-center text-sm text-neutral-400">
-            {source === "work" || (linkedArtworkId && purpose === "related" && !tabbed)
-              ? `No images related to this ${words.item.toLowerCase()} yet.`
-              : "No matches. Try Upload new."}
+            No matches. Try Upload new.
           </p>
         )}
       </div>
 
       {/* Right-hand control panel — everything lives here now: search,
-            the Marketing/Related toggle (when scoped to one artwork),
             the upload button, the selection count, "Add"/"Add
             selected", and Close. Its own independent scroll (separate
             from the grid) means a long list of future controls never
@@ -521,36 +457,11 @@ export default function MediaPicker({
                       : "border-neutral-300 hover:bg-neutral-50"
                   }`}
                 >
-                  {s === "artworks" ? words.items : s === "work" ? `This ${words.item.toLowerCase()}` : SOURCE_LABEL[s]}
+                  {s === "artworks" ? words.items : SOURCE_LABEL[s]}
                 </button>
               ))}
             </div>
           )}
-          {linkedArtworkId && !tabbed && (
-            // Same pill style as the Media Catalogue's own Marketing/
-            // Related toggle, for visual consistency.
-            <div className="flex w-fit overflow-hidden rounded-full border border-neutral-300 text-sm">
-              <button
-                type="button"
-                onClick={() => handlePurposeChange("marketing")}
-                className={`px-4 py-1.5 ${
-                  purpose === "marketing" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                }`}
-              >
-                Marketing
-              </button>
-              <button
-                type="button"
-                onClick={() => handlePurposeChange("related")}
-                className={`px-4 py-1.5 font-medium ${
-                  purpose === "related" ? "bg-neutral-900 text-white" : "bg-rose-100 text-rose-700 hover:bg-rose-200"
-                }`}
-              >
-                Related ({relatedCount})
-              </button>
-            </div>
-          )}
-
           <input
             type="text"
             value={query}

@@ -7,16 +7,14 @@ import {
   binHopperItem,
   binHopperItems,
   addHopperItemToMedia,
-  addHopperItemToArtwork,
   addHopperItemToBucket,
   createArtworkFromHopperQuick,
-  addHopperItemToThisArtwork,
 } from "@/lib/actions/hopper";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import ArtworkPicker from "@/components/ArtworkPicker";
+import { setArtworkMainImage } from "@/lib/actions/artworks";
 import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
-import { MAX_ARTWORK_IMAGES } from "@/lib/artworkImages";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
@@ -90,7 +88,6 @@ export default function HopperView({
   queue,
   artworkSettings,
   artworkIntake = false,
-  forArtwork,
   returnTo,
 }: {
   siteId: string;
@@ -110,16 +107,11 @@ export default function HopperView({
   // artwork" — see the note by that button in SortingCard.
   artworkSettings: ArtworkSettings;
   // "Add Artworks" (2026-10-15, Craig's mockup): the same queue, reached
-  // only from the Artwork Catalogue's "+ Add New", for adding artworks
-  // and their ancillary images. The sorting card only offers Bin, New
-  // Artwork, Ancillary image (added to an existing artwork as a related
-  // image) and Crop. The full Hopper, with every option, is the
-  // admin's own; artists only get this.
+  // only from the Artwork Catalogue's ⊞, for adding artworks. The sorting
+  // card only offers Bin, New Artwork and Crop (2026-10-28: an artwork
+  // has one picture, so no more ancillary images). The full Hopper, with
+  // every option, is the admin's own; artists only get this.
   artworkIntake?: boolean;
-  // An artwork's own "+ Add" (2026-10-15): images for that one artwork
-  // only — Bin and Ancillary image (its first image becomes Main). See
-  // addHopperItemToThisArtwork.
-  forArtwork?: { id: string; catalogueName: string; imageCount: number; hasMain: boolean };
   // Came from a media picker's "Upload new" (2026-10-15): after Add to
   // Media, go back there, where the new item can be picked.
   returnTo?: string;
@@ -340,51 +332,18 @@ export default function HopperView({
     });
   };
 
-  // Existing artwork, either as Main or Related (2026-09-13, reworked
-  // per direct spec — was always ancillary/never touched Main). Main
-  // reuses addHopperItemToArtwork's existing setAsMain flag; Related
-  // now also carries an optional name straight onto the image's own
-  // caption (see the matching note on addHopperItemToArtwork in
-  // hopper.ts), rather than there being no way to name it at all.
-  // The page reloads forArtwork after each add (advanceAfterAction), and
-  // the server refuses a fifth image either way.
-  const artworkFull = !!forArtwork && forArtwork.imageCount >= MAX_ARTWORK_IMAGES;
-
-  const handleAddToThisArtwork = async (item: HopperItem, name: string): Promise<string | null> => {
-    if (!forArtwork) return null;
-    const result = await addHopperItemToThisArtwork(item.id, artistId, forArtwork.id, name);
-    if (!result.ok) return result.error;
-    logProcessed(
-      item,
-      result.becameMain
-        ? `Main image for ${forArtwork.catalogueName}`
-        : `Added to ${forArtwork.catalogueName}`,
-      `${resolvedBasePath}/artworks?selected=${forArtwork.id}`
-    );
-    advanceAfterAction();
-    return null;
-  };
-
-  const handleManageArtwork = (
-    item: HopperItem,
-    artworkId: string,
-    artworkName: string,
-    mode: "main" | "related",
-    relatedName: string
-  ) => {
+  // An existing artwork's one picture (2026-09-13; Main only since
+  // 2026-10-28 — an artwork has one picture): this item becomes it, and
+  // the picture it replaces is taken off the artwork.
+  const handleSetMainPicture = (item: HopperItem, artworkId: string, artworkName: string) => {
     startTransition(async () => {
-      await addHopperItemToArtwork(
-        item.id,
-        siteId,
-        artworkId,
-        mode === "main",
-        mode === "related" ? relatedName.trim() || null : null
-      );
-      logProcessed(
-        item,
-        mode === "main" ? `Set as main image for ${artworkName}` : `Linked to ${artworkName}`,
-        `${resolvedBasePath}/artworks?selected=${artworkId}`
-      );
+      const result = await setArtworkMainImage(artworkId, item.id);
+      if ("error" in result) {
+        setAddError(result.error);
+        return;
+      }
+      setAddError(null);
+      logProcessed(item, `Main picture for ${artworkName}`, `${resolvedBasePath}/artworks?selected=${artworkId}`);
       advanceAfterAction();
     });
   };
@@ -616,35 +575,16 @@ export default function HopperView({
       )}
 
       {/* Shown in the page's top band (2026-10-16, Craig's mockup). */}
-      {forArtwork ? (
+      {artworkIntake && (
         <PageHeading>
           <Link
-            href={`${resolvedBasePath}/artworks?selected=${forArtwork.id}`}
+            href={`${resolvedBasePath}/artworks`}
             className="rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50"
           >
-            ← {forArtwork.catalogueName}
+            ← Catalogue
           </Link>
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            Add images to {forArtwork.catalogueName}
-          </h1>
-          {artworkFull && (
-            <span className="text-sm text-neutral-500">
-              — it has its {MAX_ARTWORK_IMAGES} images
-            </span>
-          )}
+          <h1 className="text-2xl font-semibold text-neutral-900">Add {words.items}</h1>
         </PageHeading>
-      ) : (
-        artworkIntake && (
-          <PageHeading>
-            <Link
-              href={`${resolvedBasePath}/artworks`}
-              className="rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50"
-            >
-              ← Catalogue
-            </Link>
-            <h1 className="text-2xl font-semibold text-neutral-900">Add {words.items}</h1>
-          </PageHeading>
-        )
       )}
 
       {isDraggingOver && (
@@ -800,19 +740,10 @@ export default function HopperView({
                 settings={artworkSettings}
                 artworkIntake={artworkIntake}
                 mediaIntake={!!returnTo}
-                forArtwork={
-                  forArtwork && {
-                    hasMain: forArtwork.hasMain,
-                    full: artworkFull,
-                    onAdd: (name) => handleAddToThisArtwork(current, name),
-                  }
-                }
                 onBin={() => handleBin(current)}
                 onAddToMedia={() => handleAddToMedia(current)}
                 onAddToBucket={() => handleAddToBucket(current)}
-                onManageArtwork={(artworkId, artworkName, mode, relatedName) =>
-                  handleManageArtwork(current, artworkId, artworkName, mode, relatedName)
-                }
+                onSetMainPicture={(artworkId, artworkName) => handleSetMainPicture(current, artworkId, artworkName)}
                 onAddNewArtwork={(fields) => handleAddNewArtwork(current, fields)}
                 onImageChanged={() => router.refresh()}
               />
@@ -930,11 +861,10 @@ function SortingCard({
   settings,
   artworkIntake,
   mediaIntake,
-  forArtwork,
   onBin,
   onAddToMedia,
   onAddToBucket,
-  onManageArtwork,
+  onSetMainPicture,
   onAddNewArtwork,
   onImageChanged,
 }: {
@@ -947,22 +877,11 @@ function SortingCard({
   // Reached from a media picker's Upload new: Bin, Add to Media and Crop
   // only.
   mediaIntake: boolean;
-  // Set when adding images to one artwork: Bin and Ancillary image only.
-  // onAdd returns an error message, or null once added.
-  forArtwork?: {
-    hasMain: boolean;
-    full: boolean;
-    onAdd: (name: string) => Promise<string | null>;
-  };
   onBin: () => void;
   onAddToMedia: () => void;
   onAddToBucket: () => void;
-  onManageArtwork: (
-    artworkId: string,
-    artworkName: string,
-    mode: "main" | "related",
-    relatedName: string
-  ) => void;
+  // Makes this item an existing artwork's one picture.
+  onSetMainPicture: (artworkId: string, artworkName: string) => void;
   onAddNewArtwork: (fields: FormData) => Promise<boolean>;
   // Called after the photo itself changes in place (a saved crop), so
   // the page re-fetches the item's new image URLs.
@@ -973,7 +892,6 @@ function SortingCard({
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
   const [showManageForm, setShowManageForm] = useState(false);
-  const [showAncillaryForm, setShowAncillaryForm] = useState(false);
 
   // The routing buttons share the row evenly (2026-10-17 tidy).
   const actionCls =
@@ -986,7 +904,6 @@ function SortingCard({
     setShowQuickForm(true);
     setShowManageForm(false);
   };
-  const [managingArtwork, setManagingArtwork] = useState(false);
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
@@ -1007,8 +924,7 @@ function SortingCard({
         <HopperItemPreview
           item={item}
           corner={
-            item.kind === "PHOTO" &&
-            !forArtwork && (
+            item.kind === "PHOTO" && (
               <button
                 type="button"
                 onClick={() => {
@@ -1072,22 +988,12 @@ function SortingCard({
           >
             Bin
           </button>
-          {forArtwork && (
-            <button
-              type="button"
-              onClick={() => setShowAncillaryForm(true)}
-              disabled={isPending || showAncillaryForm || forArtwork.full}
-              className={actionCls}
-            >
-              Ancillary
-            </button>
-          )}
           {mediaIntake && (
             <button type="button" onClick={onAddToMedia} disabled={isPending} className={actionCls}>
               Media
             </button>
           )}
-          {!forArtwork && !artworkIntake && !mediaIntake && (
+          {!artworkIntake && !mediaIntake && (
             <>
               <button type="button" onClick={onAddToMedia} disabled={isPending} className={actionCls}>
                 Media
@@ -1109,51 +1015,30 @@ function SortingCard({
                 disabled={isPending || showManageForm}
                 className={actionCls}
               >
-                Ancillary
+                Main picture
               </button>
             </>
           )}
-          {!forArtwork && artworkIntake && (
-            <>
-              <button
-                type="button"
-                onClick={openQuick}
-                disabled={isPending || showQuickForm}
-                className={actionCls}
-              >
-                {words.item}
-              </button>
-              <button
-                type="button"
-                onClick={openManage}
-                disabled={isPending || showManageForm}
-                className={actionCls}
-              >
-                Ancillary
-              </button>
-            </>
+          {artworkIntake && (
+            <button
+              type="button"
+              onClick={openQuick}
+              disabled={isPending || showQuickForm}
+              className={actionCls}
+            >
+              {words.item}
+            </button>
           )}
         </div>
       )}
 
-      {showAncillaryForm && forArtwork && (
-        <AncillaryForm
-          hasMain={forArtwork.hasMain}
-          onCancel={() => setShowAncillaryForm(false)}
-          onDone={forArtwork.onAdd}
-        />
-      )}
-
       {showManageForm && (
-        <ManageArtworkPanel
+        <MainPicturePanel
           artistId={artistId}
-          relatedOnly={artworkIntake}
-          managing={managingArtwork}
+          busy={isPending}
           onCancel={() => setShowManageForm(false)}
-          onDone={async (artworkId, artworkName, mode, relatedName) => {
-            setManagingArtwork(true);
-            onManageArtwork(artworkId, artworkName, mode, relatedName);
-            setManagingArtwork(false);
+          onDone={(artworkId, artworkName) => {
+            onSetMainPicture(artworkId, artworkName);
             setShowManageForm(false);
           }}
         />
@@ -1179,108 +1064,35 @@ function SortingCard({
   );
 }
 
-// Adding the item to one artwork (forArtwork): just its name — or
-// nothing, when it will be the artwork's first (Main) image.
-function AncillaryForm({
-  hasMain,
-  onCancel,
-  onDone,
-}: {
-  hasMain: boolean;
-  onCancel: () => void;
-  onDone: (name: string) => Promise<string | null>;
-}) {
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const save = async () => {
-    setSaving(true);
-    setError(await onDone(name));
-    setSaving(false);
-  };
-
-  return (
-    <div className="mt-4 space-y-4 rounded-md border border-neutral-300 p-4">
-      {hasMain ? (
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">
-            Name of ancillary image
-          </label>
-          <input
-            type="text"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-          />
-        </div>
-      ) : (
-        <p className="text-sm text-neutral-600">
-          This is the artwork&apos;s first image, so it becomes its Main image.
-        </p>
-      )}
-      {error && <p className="text-sm text-red-600">{error}</p>}
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={save}
-          disabled={saving}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-        >
-          {saving ? "Saving…" : "Done, next item"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={saving}
-          className="text-sm text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
-        >
-          Cancel
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// relatedOnly (the artists' version's "Ancillary image"): the image is
-// always added as a related image — no Main / Related choice.
-function ManageArtworkPanel({
+// "Main picture" (full Hopper): choose the artwork this item becomes the
+// one picture of (2026-10-28 — was Main or Related).
+function MainPicturePanel({
   artistId,
-  relatedOnly,
-  managing,
+  busy,
   onCancel,
   onDone,
 }: {
   artistId: string;
-  relatedOnly: boolean;
-  managing: boolean;
+  busy: boolean;
   onCancel: () => void;
-  onDone: (
-    artworkId: string,
-    artworkName: string,
-    mode: "main" | "related",
-    relatedName: string
-  ) => void;
+  onDone: (artworkId: string, artworkName: string) => void;
 }) {
   const words = useClientWords();
-  const [selected, setSelected] = useState<{ id: string; catalogueName: string } | null>(
-    null
-  );
-  const [mode, setMode] = useState<"main" | "related">(relatedOnly ? "related" : "main");
-  const [relatedName, setRelatedName] = useState("");
+  const [selected, setSelected] = useState<{ id: string; catalogueName: string } | null>(null);
 
   return (
     <div className="mt-4 space-y-4 rounded-md border border-neutral-300 p-4">
       <div>
-        <label className="mb-1 block text-sm font-medium text-neutral-700">Name of {words.item.toLowerCase()}</label>
+        <label className="mb-1 block text-sm font-medium text-neutral-700">
+          The {words.item.toLowerCase()} this becomes the picture of
+        </label>
         {selected ? (
           <button
             type="button"
             onClick={() => setSelected(null)}
             className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
           >
-            {selected.catalogueName}{" "}
-            <span className="text-neutral-400">(change)</span>
+            {selected.catalogueName} <span className="text-neutral-400">(change)</span>
           </button>
         ) : (
           <ArtworkPicker
@@ -1289,68 +1101,25 @@ function ManageArtworkPanel({
             variant="button"
             label={`Choose ${words.item.toLowerCase()}…`}
             onSelect={(artworks) => {
-              if (artworks[0]) {
-                setSelected({ id: artworks[0].id, catalogueName: artworks[0].catalogueName });
-              }
+              if (artworks[0]) setSelected({ id: artworks[0].id, catalogueName: artworks[0].catalogueName });
             }}
           />
         )}
       </div>
-
-      {!relatedOnly && (
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => setMode("main")}
-            className={`flex-1 rounded-md border px-3 py-[6.4px] text-sm font-medium ${
-              mode === "main"
-                ? "border-neutral-900 bg-neutral-900 text-white"
-                : "border-neutral-300 hover:bg-neutral-50"
-            }`}
-          >
-            Make Main image
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("related")}
-            className={`flex-1 rounded-md border px-3 py-[6.4px] text-sm font-medium ${
-              mode === "related"
-                ? "border-neutral-900 bg-neutral-900 text-white"
-                : "border-neutral-300 hover:bg-neutral-50"
-            }`}
-          >
-            Make related image
-          </button>
-        </div>
-      )}
-
-      {mode === "related" && (
-        <div>
-          <label className="mb-1 block text-sm font-medium text-neutral-700">
-            {relatedOnly ? "Name of ancillary image" : "Name of Related image"}
-          </label>
-          <input
-            type="text"
-            value={relatedName}
-            onChange={(e) => setRelatedName(e.target.value)}
-            className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-          />
-        </div>
-      )}
-
+      <p className="text-xs text-neutral-500">Any picture it has now is taken off it (it stays in the Media Catalogue).</p>
       <div className="flex items-center gap-3">
         <button
           type="button"
-          onClick={() => selected && onDone(selected.id, selected.catalogueName, mode, relatedName)}
-          disabled={!selected || managing}
+          onClick={() => selected && onDone(selected.id, selected.catalogueName)}
+          disabled={!selected || busy}
           className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
         >
-          {managing ? "Saving…" : "Done, next item"}
+          {busy ? "Saving…" : "Done, next item"}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          disabled={managing}
+          disabled={busy}
           className="text-sm text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
         >
           Cancel

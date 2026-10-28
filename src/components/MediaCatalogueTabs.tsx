@@ -5,11 +5,9 @@ import type { CatalogueView } from "@/lib/mediaTabs";
 export default function MediaCatalogueTabs({
   siteId,
   current,
-  relatedCount,
 }: {
   siteId: string;
   current: CatalogueView;
-  relatedCount: number;
 }) {
   const href = (tab: CatalogueView) => `/sites/${siteId}/media?purpose=${tab}`;
   const plain = (tab: CatalogueView) =>
@@ -24,16 +22,6 @@ export default function MediaCatalogueTabs({
       </Link>
       <Link href={href("videos")} className={plain("videos")}>
         Videos
-      </Link>
-      <Link
-        href={href("related")}
-        className={`px-4 py-1.5 font-medium ${
-          current === "related"
-            ? "bg-neutral-900 text-white"
-            : "bg-rose-100 text-rose-700 hover:bg-rose-200"
-        }`}
-      >
-        Related ({relatedCount})
       </Link>
       <Link href={href("music")} className={plain("music")}>
         Music

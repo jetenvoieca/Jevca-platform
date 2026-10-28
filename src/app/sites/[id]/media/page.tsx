@@ -1,9 +1,7 @@
 import { db } from "@/lib/db";
 import {
   listMedia,
-  countMediaByPurpose,
   getMediaTagPresets,
-  getArtistArtworksForLinking,
   getMediaDetail,
 } from "@/lib/actions/mediaCatalogue";
 import { getBackfillCount } from "@/lib/actions/imageBackfill";
@@ -27,7 +25,6 @@ type SearchParams = {
   purpose?: string;
   q?: string;
   tag?: string;
-  artworkId?: string;
   // Deep-link to a specific item's detail panel (e.g. from the Hopper's
   // "Added to Media Catalogue" link) — read once on first load only.
   // Selecting a *different* item afterwards happens client-side, without
@@ -58,18 +55,14 @@ export default async function MediaCataloguePage({
 
   // Music view (2026-10-16): the artist's Music library.
   if (tab === "music") {
-    const [tracks, counts] = await Promise.all([listMusic(artistId), countMediaByPurpose(artistId)]);
-    return (
-      <MusicLibraryView siteId={id} artistId={artistId} initialTracks={tracks} relatedCount={counts.related} />
-    );
+    const tracks = await listMusic(artistId);
+    return <MusicLibraryView siteId={id} artistId={artistId} initialTracks={tracks} />;
   }
 
   // Stickers view (2026-10-16): the artist's Stickers library.
   if (tab === "stickers") {
-    const [stickers, counts] = await Promise.all([listStickers(artistId), countMediaByPurpose(artistId)]);
-    return (
-      <StickerLibraryView siteId={id} artistId={artistId} initialStickers={stickers} relatedCount={counts.related} />
-    );
+    const stickers = await listStickers(artistId);
+    return <StickerLibraryView siteId={id} artistId={artistId} initialStickers={stickers} />;
   }
 
   // Artworks view (2026-10-15): the catalogue's works, read only.
@@ -81,7 +74,7 @@ export default async function MediaCataloguePage({
       type: sp.type || "",
       sort: sp.sort || "",
     };
-    const [{ rows, total }, counts, settings, names, curations] = await Promise.all([
+    const [{ rows, total }, settings, names, curations] = await Promise.all([
       listArtworks(artistId, {
         curation: filters.curation || undefined,
         name: filters.name || undefined,
@@ -90,7 +83,6 @@ export default async function MediaCataloguePage({
         sort: filters.sort || undefined,
         limit: PAGE_SIZE,
       }),
-      countMediaByPurpose(artistId),
       getArtworkSettings(artistId),
       listArtworkNames(artistId),
       listCurations(artistId),
@@ -107,25 +99,21 @@ export default async function MediaCataloguePage({
         names={names}
         locations={settings.locations.map((l) => l.name)}
         types={settings.artworkTypes}
-        relatedCount={counts.related}
       />
     );
   }
 
   const purpose = tab;
 
-  const [{ rows: mediaRows, total }, counts, tagPresets, artistArtworks, selectedItem, backfillCount] =
+  const [{ rows: mediaRows, total }, tagPresets, selectedItem, backfillCount] =
     await Promise.all([
       listMedia(artistId, {
         ...mediaListFilters(purpose),
         q: sp.q,
         tag: sp.tag,
-        artworkId: sp.artworkId,
         limit: PAGE_SIZE,
       }),
-      countMediaByPurpose(artistId),
       getMediaTagPresets(artistId),
-      getArtistArtworksForLinking(artistId),
       sp.selected ? getMediaDetail(sp.selected) : Promise.resolve(null),
       getBackfillCount(artistId),
     ]);
@@ -169,10 +157,7 @@ export default async function MediaCataloguePage({
         purpose={purpose}
         q={sp.q || ""}
         tag={sp.tag || ""}
-        artworkId={sp.artworkId || ""}
-        counts={counts}
         tagPresets={tagPresets}
-        artistArtworks={artistArtworks}
         initialSelected={selected}
       />
     </>

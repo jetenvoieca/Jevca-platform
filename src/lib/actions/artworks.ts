@@ -12,7 +12,6 @@ import {
   SOLD_AVAILABILITIES,
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
-import { deleteArtworkMainImage as deleteArtworkMainImageInternal } from "./imageDelete";
 import { isCurrency } from "@/lib/currencies";
 import { toArtworkImages } from "@/lib/artworkImages";
 import { getArtistDefaultCurrency } from "@/lib/primarySite";
@@ -785,55 +784,3 @@ export async function setArtworkMainImage(
   return { ok: true };
 }
 
-// Links one or more already-uploaded Images to this artwork as
-// (Main and/or Related — see the note below) — this is what the
-// Catalogue tab's "+ Add" tiles call after a picker selection.
-//
-// Auto-assigns Main (2026-09-13, direct request — "Set as Main" no
-// longer exists as a way to reassign an already-linked image, so the
-// artwork's very first image needs some way to become Main without a
-// button). Whenever this artwork doesn't have a Main image yet, the
-// first id in this batch becomes it. This is also exactly what makes
-// "Delete & Replace" work (see deleteArtworkMainImage in imageDelete.ts):
-// that clears mainImageId to null before deleting the old Main, so the
-// next image linked here — the replacement the person just picked —
-// automatically becomes the new Main.
-export async function linkImagesToArtwork(artworkId: string, imageIds: string[], siteId: string) {
-  const { artistId } = await artworkOwner(artworkId);
-  // Only this client's own pictures (2026-10-26).
-  await db.image.updateMany({
-    where: { id: { in: imageIds }, artistId },
-    data: { artworkId },
-  });
-
-  if (imageIds.length === 0) return;
-
-  const artwork = await db.artwork.findUnique({
-    where: { id: artworkId },
-    select: { mainImageId: true },
-  });
-  if (!artwork?.mainImageId) {
-    await db.artwork.update({ where: { id: artworkId }, data: { mainImageId: imageIds[0] } });
-  }
-}
-
-export async function unlinkImageFromArtwork(artworkId: string, imageId: string, siteId: string) {
-  await artworkOwner(artworkId);
-  await db.image.updateMany({
-    where: { id: imageId, artworkId },
-    data: { artworkId: null },
-  });
-}
-
-// "Delete & Replace" (2026-09-13, direct request) — the only way left to
-// change a wrong Main image. Main is the artwork's image of record, so
-// there's no swap-to-an-existing-image action any more — the old
-// setMainImage action and ArtworkImageManager's "Set as Main" button are
-// both removed; a wrong Main is deleted outright via
-// deleteArtworkMainImage (imageDelete.ts), and its replacement becomes
-// the new Main automatically once linked (see linkImagesToArtwork's
-// auto-assign above).
-export async function deleteArtworkMainImage(artworkId: string, imageId: string, siteId: string) {
-  await artworkOwner(artworkId);
-  return deleteArtworkMainImageInternal(artworkId, imageId);
-}

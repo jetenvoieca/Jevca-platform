@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { listHopperQueue, getHopperTargetArtwork } from "@/lib/actions/hopper";
+import { listHopperQueue } from "@/lib/actions/hopper";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { resolvePreviewSiteId } from "@/lib/previewSites";
 import HopperView from "@/components/HopperView";
@@ -9,15 +9,8 @@ export const dynamic = "force-dynamic";
 
 // The preview's "Add Artworks" — see /sites/[id]/artworks/add. Artists
 // don't get the full Hopper.
-export default async function PreviewAddArtworksPage({
-  params,
-  searchParams,
-}: {
-  params: Promise<{ slug: string }>;
-  searchParams: Promise<{ artwork?: string }>;
-}) {
+export default async function PreviewAddArtworksPage({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params;
-  const { artwork: artworkId } = await searchParams;
   const siteId = resolvePreviewSiteId(slug);
   if (!siteId) notFound();
 
@@ -25,11 +18,7 @@ export default async function PreviewAddArtworksPage({
   if (!site) notFound();
   const artistId = site.artistId;
 
-  const [queue, settings, forArtwork] = await Promise.all([
-    listHopperQueue(artistId),
-    getArtworkSettings(artistId),
-    artworkId ? getHopperTargetArtwork(artistId, artworkId) : null,
-  ]);
+  const [queue, settings] = await Promise.all([listHopperQueue(artistId), getArtworkSettings(artistId)]);
 
   return (
     <HopperView
@@ -39,7 +28,6 @@ export default async function PreviewAddArtworksPage({
       queue={queue}
       artworkSettings={settings}
       artworkIntake
-      forArtwork={forArtwork ?? undefined}
     />
   );
 }

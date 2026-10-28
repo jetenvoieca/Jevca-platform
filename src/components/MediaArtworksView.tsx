@@ -30,7 +30,6 @@ export default function MediaArtworksView({
   names,
   locations,
   types,
-  relatedCount,
 }: {
   siteId: string;
   artistId: string;
@@ -42,7 +41,6 @@ export default function MediaArtworksView({
   names: string[];
   locations: string[];
   types: string[];
-  relatedCount: number;
 }) {
   const [filters, setFilters] = useState(initialFilters);
   const [artworks, setArtworks] = useState(initialArtworks);
@@ -107,7 +105,7 @@ export default function MediaArtworksView({
       <div className="sticky top-0 z-10 -mt-4 space-y-3 border-b border-neutral-200 bg-white pb-3 pt-4">
         <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
         <div className="flex flex-wrap items-center gap-3">
-          <MediaCatalogueTabs siteId={siteId} current="artworks" relatedCount={relatedCount} />
+          <MediaCatalogueTabs siteId={siteId} current="artworks" />
           <ArtworkFilterBar
             values={filters}
             curations={curations}

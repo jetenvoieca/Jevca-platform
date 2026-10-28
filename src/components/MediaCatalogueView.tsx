@@ -48,10 +48,7 @@ export default function MediaCatalogueView({
   purpose,
   q,
   tag,
-  artworkId,
-  counts,
   tagPresets,
-  artistArtworks,
   initialSelected,
 }: {
   siteId: string;
@@ -62,10 +59,7 @@ export default function MediaCatalogueView({
   purpose: Exclude<MediaTab, "artworks">;
   q: string;
   tag: string;
-  artworkId: string;
-  counts: { marketing: number; related: number };
   tagPresets: string[];
-  artistArtworks: { id: string; catalogueName: string }[];
   initialSelected: MediaDetail | null;
 }) {
   const words = useClientWords();
@@ -163,7 +157,7 @@ export default function MediaCatalogueView({
   // tag/artwork navigate immediately on change, since picking an option
   // is already a single deliberate action with nothing to debounce.
   // Reads the *current* URL for anything not being changed (rather than
-  // only the q/tag/artworkId props) so it never drops an unrelated
+  // only the q/tag props) so it never drops an unrelated
   // param — "selected", for instance, is tracked outside these props
   // entirely, via updateUrlSelected above.
   //
@@ -171,7 +165,7 @@ export default function MediaCatalogueView({
   // or even know why I would") along with this function's own sort
   // handling; results are always Date added order now, same as the
   // dropdown's own default.
-  const applyFilters = (overrides: { q?: string; tag?: string; artworkId?: string }) => {
+  const applyFilters = (overrides: { q?: string; tag?: string }) => {
     const params = new URLSearchParams(window.location.search);
     params.set("purpose", purpose);
 
@@ -179,17 +173,9 @@ export default function MediaCatalogueView({
     if (nextQ) params.set("q", nextQ);
     else params.delete("q");
 
-    if (purpose !== "related") {
-      const nextTag = overrides.tag ?? tag;
-      if (nextTag) params.set("tag", nextTag);
-      else params.delete("tag");
-      params.delete("artworkId");
-    } else {
-      const nextArtworkId = overrides.artworkId ?? artworkId;
-      if (nextArtworkId) params.set("artworkId", nextArtworkId);
-      else params.delete("artworkId");
-      params.delete("tag");
-    }
+    const nextTag = overrides.tag ?? tag;
+    if (nextTag) params.set("tag", nextTag);
+    else params.delete("tag");
 
     router.push(`/sites/${siteId}/media?${params.toString()}`);
   };
@@ -286,7 +272,6 @@ export default function MediaCatalogueView({
           ...mediaListFilters(purpose),
           q: q || undefined,
           tag: tag || undefined,
-          artworkId: artworkId || undefined,
           offset: items.length,
           limit: pageSize,
         });
@@ -305,7 +290,7 @@ export default function MediaCatalogueView({
         setLoadingMore(false);
       }
     })();
-  }, [artistId, purpose, q, tag, artworkId, items.length, pageSize]);
+  }, [artistId, purpose, q, tag, items.length, pageSize]);
 
   // Infinite scroll (2026-08-13, matching the same change on the Artwork
   // Catalogue) — an invisible sentinel below the last row auto-triggers
@@ -431,11 +416,11 @@ export default function MediaCatalogueView({
           </div>
         </div>
 
-        {/* Row 2: Marketing/Related toggle + filtering. Plain div, not a
+        {/* Row 2: the views + filtering. Plain div, not a
             <form>, now that filters apply live (2026-09-12) rather than
             on submit — see applyFilters/handleSearchChange above. */}
         <div className="flex flex-wrap items-center gap-3">
-          <MediaCatalogueTabs siteId={siteId} current={purpose} relatedCount={counts.related} />
+          <MediaCatalogueTabs siteId={siteId} current={purpose} />
 
           <div className="flex flex-wrap items-center gap-2">
             <input
@@ -445,33 +430,18 @@ export default function MediaCatalogueView({
               placeholder="Search caption, alt text"
               className="w-44 rounded-md border border-neutral-300 px-3 py-1.5 text-sm"
             />
-            {purpose !== "related" ? (
-              <select
-                value={tag}
-                onChange={(e) => applyFilters({ tag: e.target.value })}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">All tags</option>
-                {tagPresets.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
-            ) : (
-              <select
-                value={artworkId}
-                onChange={(e) => applyFilters({ artworkId: e.target.value })}
-                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">All {words.items.toLowerCase()}</option>
-                {artistArtworks.map((a) => (
-                  <option key={a.id} value={a.id}>
-                    {a.catalogueName}
-                  </option>
-                ))}
-              </select>
-            )}
+            <select
+              value={tag}
+              onChange={(e) => applyFilters({ tag: e.target.value })}
+              className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            >
+              <option value="">All tags</option>
+              {tagPresets.map((t) => (
+                <option key={t} value={t}>
+                  {t}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
         </div>
