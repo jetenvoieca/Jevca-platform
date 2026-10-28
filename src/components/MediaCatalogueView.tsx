@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Link from "next/link";
+import AddIconButton from "@/components/AddIconButton";
 import { useRouter } from "next/navigation";
 import { listMedia, getMediaDetail, deleteMediaItems } from "@/lib/actions/mediaCatalogue";
 import MediaDetailPanel, { type MediaDetail } from "@/components/MediaDetailPanel";
@@ -336,7 +337,13 @@ export default function MediaCatalogueView({
         {/* Row 1: title + view controls — same pattern as the Artwork
             Catalogue, both govern how the whole catalogue displays. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
+          {/* ⊞ goes to the Hopper (2026-08-19), the one way media comes in
+              (see hopper-design.md) — the standard add icon since
+              2026-10-28. */}
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-neutral-900">Media Catalogue</h1>
+            {!selectMode && <AddIconButton label="Add pictures or videos" href={`/sites/${siteId}/hopper`} />}
+          </div>
 
           <div className="flex items-center gap-3">
             {selectMode ? (
@@ -529,7 +536,6 @@ export default function MediaCatalogueView({
                 )}
               </button>
             ))}
-            {!selectMode && <AddNewTile siteId={siteId} />}
           </div>
         ) : (
           <table className="w-full border-collapse text-sm">
@@ -575,13 +581,6 @@ export default function MediaCatalogueView({
                   </td>
                 </tr>
               ))}
-              {!selectMode && (
-                <tr className="border-b border-neutral-100">
-                  <td colSpan={4} className="py-2">
-                    <AddNewRow siteId={siteId} />
-                  </td>
-                </tr>
-              )}
             </tbody>
           </table>
         )}
@@ -621,35 +620,6 @@ export default function MediaCatalogueView({
         </div>
       )}
     </div>
-  );
-}
-
-// 2026-08-19, direct request — replaces a direct-upload flow (pick a
-// file, straight into the Media Catalogue, no Hopper involved at all)
-// with the same "goes to the Hopper instead" change already made for
-// Artworks' "+ Add New" — the Hopper is meant to be the single, primary
-// way media gets into either catalogue (see hopper-design.md); this tile
-// was a second, uncaptioned, un-sorted way in that bypassed it entirely.
-function AddNewTile({ siteId }: { siteId: string }) {
-  return (
-    <Link
-      href={`/sites/${siteId}/hopper`}
-      className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-    >
-      + Add New
-    </Link>
-  );
-}
-
-// Same "+ Add New" action, as a row for List view.
-function AddNewRow({ siteId }: { siteId: string }) {
-  return (
-    <Link
-      href={`/sites/${siteId}/hopper`}
-      className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
-    >
-      + Add New
-    </Link>
   );
 }
 

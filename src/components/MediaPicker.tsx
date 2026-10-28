@@ -1,5 +1,6 @@
 "use client";
 
+import AddIconButton from "@/components/AddIconButton";
 import { useEffect, useRef, useState, useTransition, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
@@ -346,20 +347,7 @@ export default function MediaPicker({
   // box, like a campaign mail's components. The trigger stays in place.
   let trigger: ReactNode;
   if (variant === "icon") {
-    trigger = (
-      <button
-        type="button"
-        onClick={handleOpen}
-        title={label}
-        aria-label={label}
-        className="rounded p-1 text-neutral-700 hover:bg-neutral-100"
-      >
-        <svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden>
-          <rect x="1.5" y="1.5" width="15" height="15" rx="1" />
-          <path d="M9 5v8M5 9h8" />
-        </svg>
-      </button>
-    );
+    trigger = <AddIconButton label={label} onClick={handleOpen} />;
   } else if (variant === "button") {
     trigger = (
       <button

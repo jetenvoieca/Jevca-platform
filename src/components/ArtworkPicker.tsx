@@ -9,30 +9,30 @@ import {
 } from "@/lib/actions/media";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import AddIconButton from "@/components/AddIconButton";
 import { FILTER_NONE } from "@/lib/artworkFilters";
 
 export default function ArtworkPicker({
   artistId,
   mode = "single",
   label,
-  variant = "tile",
+  variant = "icon",
   allowCreate = true,
   excludeIds = [],
   availableOnly = false,
-  small = false,
   onSelect,
 }: {
   artistId: string;
   mode?: "single" | "multi";
   // Defaults to "Add Artwork" / "Add Product".
   label?: string;
-  // "tile": the universal dashed-tile trigger used everywhere media/
-  // artworks get ADDED to a grid (default, unchanged).
+  // "icon": the standard ⊞ add icon (AddIconButton, 2026-10-28 — was a
+  // dashed "+ Add" tile), for adding works to a list.
   // "button": a plain standard button — for places like the Hopper where
-  // the action is assigning/routing an existing item, not adding new
-  // media, so the "+ Add" tile's implication (this creates something new)
-  // would be misleading. See decisions-log, 2026-08-05.
-  variant?: "tile" | "button";
+  // the action is assigning/routing an existing item, not adding, so the
+  // add icon's implication would be misleading. See decisions-log,
+  // 2026-08-05.
+  variant?: "icon" | "button";
   // Whether the "type a new artwork name… Create" box is offered
   // (2026-09-24). Off for Curations, which only ever gather works that
   // already exist in the catalogue.
@@ -42,9 +42,6 @@ export default function ArtworkPicker({
   excludeIds?: string[];
   // Only works still for sale (2026-10-20) — e.g. Locations' Add works.
   availableOnly?: boolean;
-  // The "button" trigger at the small size of the buttons beside it
-  // (2026-10-20 — Locations' Add works).
-  small?: boolean;
   onSelect: (artworks: PickedArtwork[]) => void;
 }) {
   const words = useClientWords();
@@ -205,10 +202,8 @@ export default function ArtworkPicker({
     });
   };
 
-  // Same trigger as MediaPicker by default — a blank dashed tile, not a
-  // button. See decisions-log.md, 2026-07-31. The "button" variant opts
-  // out of that for contexts where a dashed "+ Add" tile would mislead
-  // (see prop comment above).
+  // The ⊞ add icon by default, as MediaPicker's; the "button" variant
+  // opts out (see the prop comment above).
   // The modal opens over the whole screen through a portal (2026-10-08),
   // so it works wherever the picker sits — even inside a moved or scaled
   // box, like a campaign mail's components. The trigger stays in place.
@@ -218,23 +213,13 @@ export default function ArtworkPicker({
       <button
         type="button"
         onClick={handleOpen}
-        className={`rounded-md border border-neutral-300 bg-white hover:bg-neutral-50 ${
-          small ? "px-3 py-[4px] text-xs" : "px-4 py-2 text-sm"
-        }`}
+        className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
       >
         {triggerLabel}
       </button>
     );
   } else {
-    trigger = (
-      <button
-        type="button"
-        onClick={handleOpen}
-        className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-      >
-        + {triggerLabel}
-      </button>
-    );
+    trigger = <AddIconButton label={triggerLabel} onClick={handleOpen} />;
   }
 
   const modal = (

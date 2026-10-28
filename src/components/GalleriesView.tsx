@@ -23,6 +23,7 @@ import { netOwed } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
 import ArtworkDetailPanel, { type ArtworkDetail, type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkPicker from "@/components/ArtworkPicker";
+import AddIconButton from "@/components/AddIconButton";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import { ACTION_BUTTON_LOOK } from "@/components/ActionPanel";
@@ -775,22 +776,23 @@ export default function GalleriesView({
             <h1 className="truncate text-2xl font-semibold text-neutral-900">
               {selectedDetail ? `Works at ${selectedDetail.name}` : "Works"}
             </h1>
-          </div>
-          {selectedDetail && (
-            <div className="flex shrink-0 items-center gap-2">
-              {/* Add works (2026-10-20, Craig's request): puts works still
-                  for sale at this location — see moveArtworksToLocation. */}
+            {/* ⊞ adds works (2026-10-20, Craig's request; the standard add
+                icon since 2026-10-28): puts works still for sale at this
+                location — see moveArtworksToLocation. */}
+            {selectedDetail && (
               <ArtworkPicker
                 artistId={artistId}
                 mode="multi"
-                variant="button"
                 label={`Add ${words.items.toLowerCase()}`}
                 allowCreate={false}
                 availableOnly
-                small
                 excludeIds={selectedDetail.consignedWorks.map((w) => w.id)}
                 onSelect={(picked) => addWorksHere(selectedDetail, picked.map((p) => p.id))}
               />
+            )}
+          </div>
+          {selectedDetail && (
+            <div className="flex shrink-0 items-center gap-2">
               <button
                 type="button"
                 onClick={() => setMobileStep("details")}
@@ -1281,13 +1283,11 @@ export default function GalleriesView({
         }`}
       >
         <div className="border-b border-neutral-200 p-4">
-          <button
-            type="button"
-            onClick={() => setAdding(true)}
-            className="mb-3 w-full rounded-md bg-neutral-900 px-3 py-[4px] text-sm font-medium text-white hover:bg-neutral-700"
-          >
-            + Add Location
-          </button>
+          {/* ⊞ adds a location (the standard add icon, 2026-10-28). */}
+          <div className="mb-3 flex items-center gap-2">
+            <h2 className="text-lg font-semibold text-neutral-900">Locations</h2>
+            <AddIconButton label="Add a location" onClick={() => setAdding(true)} />
+          </div>
           <input
             type="text"
             value={q}

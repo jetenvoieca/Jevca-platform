@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import Link from "next/link";
 import {
   getArtworkDetailForClient,
   listArtworks,
@@ -19,6 +18,7 @@ import { artworkMatchesFilters, isSold } from "@/lib/artworkFilters";
 import SoldFlag from "@/components/SoldFlag";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import ArtworkFilterBar from "@/components/ArtworkFilterBar";
+import AddIconButton from "@/components/AddIconButton";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
@@ -486,19 +486,12 @@ export default function ArtworksCatalogueView({
     return `/api/artwork-catalogue-csv?${params.toString()}`;
   };
 
-  // Goes to "Add Artworks" (2026-10-15) — the Hopper narrowed to adding
-  // artworks and their ancillary images (see HopperView's artworkIntake),
-  // rather than creating a blank row directly. Uses resolvedBasePath (2026-09-12) rather than a
-  // hardcoded /sites/${siteId} so this stays inside the evaluation
-  // reduced-menu shell when rendered there.
-  const addNewTile = (
-    <Link
-      href={`${resolvedBasePath}/artworks/add`}
-      className="flex aspect-square w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600"
-    >
-      + Add New
-    </Link>
-  );
+  // ⊞ beside the title goes to "Add Artworks" (2026-10-15; the standard
+  // add icon since 2026-10-28) — the Hopper narrowed to adding artworks
+  // and their ancillary images (see HopperView's artworkIntake), rather
+  // than creating a blank row directly. resolvedBasePath keeps it inside
+  // the evaluation reduced-menu shell when rendered there.
+  const addHref = `${resolvedBasePath}/artworks/add`;
 
   const loadMoreRow = hasMore && (
     <div ref={sentinelRef} className="mt-4 flex h-8 items-center justify-center">
@@ -530,7 +523,10 @@ export default function ArtworksCatalogueView({
             RESERVED ("Sold - Not Paid") works — see SOLD_AVAILABILITIES
             in lib/artworkFilters.ts. */}
         <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-2xl font-semibold text-neutral-900">{words.catalogue}</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-semibold text-neutral-900">{words.catalogue}</h1>
+            <AddIconButton label={`Add ${words.items.toLowerCase()}`} href={addHref} />
+          </div>
 
             <div className="flex items-center gap-3">
               {/* Export / import (2026-10-17, direct request — one icon in
@@ -704,7 +700,6 @@ export default function ArtworksCatalogueView({
                   <p className="text-xs text-neutral-500">{a.type || "—"}</p>
                 </button>
               ))}
-              {addNewTile}
             </div>
           ) : (
             <table className="w-full border-collapse text-sm">
@@ -745,16 +740,6 @@ export default function ArtworksCatalogueView({
                     <td className="py-2 text-neutral-500">{formatAvailability(a.availability)}</td>
                   </tr>
                 ))}
-                <tr className="border-b border-neutral-100">
-                  <td colSpan={5} className="py-2">
-                    <Link
-                      href={`${resolvedBasePath}/artworks/add`}
-                      className="text-sm text-neutral-500 hover:text-neutral-900 hover:underline"
-                    >
-                      + Add New
-                    </Link>
-                  </td>
-                </tr>
               </tbody>
             </table>
           )}

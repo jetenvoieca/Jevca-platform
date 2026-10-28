@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import ArtworkPicker from "@/components/ArtworkPicker";
+import AddIconButton from "@/components/AddIconButton";
 import CurationWorkPresentation from "@/components/CurationWorkPresentation";
 import SoldFlag from "@/components/SoldFlag";
 import { isSold } from "@/lib/artworkFilters";
@@ -42,10 +43,10 @@ function formatPrice(amount: string | null, currency: string): string | null {
 }
 
 // Curations page (2026-09-24, stage one). Two columns:
-// - left: the open curation — its name (click to rename), About, Delete,
-//   and its works in order (drag to reorder, hover × to remove, "+ Add
-//   Works" tile to pick more).
-// - right: every curation; click one to open it, or add a new one.
+// - left: the open curation — its name (click to rename), ⊞ to add works,
+//   About, Delete, and its works in order (drag to reorder, hover × to
+//   remove).
+// - right: every curation; click one to open it, or ⊞ to add a new one.
 //
 // About (2026-10-16, Craig's mockup): the curation's optional content —
 // its Title (the curation's name) and the presentation sections
@@ -374,6 +375,18 @@ export default function CurationsView({
                 title="Click to rename"
                 className="-mx-1 min-w-0 flex-1 rounded-md border border-transparent px-1 py-0.5 text-3xl font-light text-neutral-900 hover:border-neutral-300 focus:border-neutral-300 focus:outline-none"
               />
+              {/* ⊞ adds works to this curation (the standard add icon,
+                  2026-10-28). */}
+              <div className="mt-2 shrink-0">
+                <ArtworkPicker
+                  artistId={artistId}
+                  mode="multi"
+                  label={`Add ${words.items.toLowerCase()}`}
+                  allowCreate={false}
+                  excludeIds={selected.works.map((w) => w.artworkId)}
+                  onSelect={handleAddWorks}
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setAboutOpen(true)}
@@ -472,15 +485,10 @@ export default function CurationsView({
                     </div>
                   );
                 })}
-                <ArtworkPicker
-                  artistId={artistId}
-                  mode="multi"
-                  label={`Add ${words.items}`}
-                  allowCreate={false}
-                  excludeIds={selected.works.map((w) => w.artworkId)}
-                  onSelect={handleAddWorks}
-                />
               </div>
+              {selected.works.length === 0 && (
+                <p className="text-sm text-neutral-400">No {words.items.toLowerCase()} yet — add them with ⊞.</p>
+              )}
 
               {selected.works.length > 1 && (
                 <p className="mt-4 text-xs text-neutral-400">Drag to reorder.</p>
@@ -569,7 +577,10 @@ export default function CurationsView({
       <aside className="flex min-h-0 flex-col p-6">
         <div className="flex min-h-0 flex-1 flex-col rounded-xl border border-neutral-300 p-4">
           {/* Frozen heading; the list beneath it scrolls. */}
-          <h2 className="mb-4 shrink-0 text-center text-lg text-neutral-900">Curation Name</h2>
+          <div className="mb-4 flex shrink-0 items-center justify-center gap-2">
+            <h2 className="text-lg text-neutral-900">Curation Name</h2>
+            <AddIconButton label="Add a curation" onClick={() => setAdding(true)} />
+          </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="flex flex-col gap-1">
@@ -627,15 +638,7 @@ export default function CurationsView({
                   </button>
                 </div>
               </div>
-            ) : (
-              <button
-                type="button"
-                onClick={() => setAdding(true)}
-                className="mt-3 rounded-md px-2 py-1.5 text-left text-sm text-neutral-500 hover:bg-neutral-50"
-              >
-                + Add New Curation
-              </button>
-            )}
+            ) : null}
           </div>
         </div>
       </aside>
