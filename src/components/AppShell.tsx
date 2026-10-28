@@ -20,6 +20,7 @@ export default function AppShell({
   lastPublishedAt = null,
   navItems,
   nav,
+  topActions,
 }: {
   // Omit entirely (leave as null/undefined) when a page has nothing to
   // preview — e.g. a plain list. Reserving a fixed 340px column that just
@@ -56,6 +57,9 @@ export default function AppShell({
   // own explicit "active" key up through this layout). Exactly one of
   // navItems / nav should be given.
   nav?: React.ReactNode;
+  // Icons shown beside the menu button in the narrow-screen top bar
+  // (2026-10-28 — e.g. a site's published-site globe).
+  topActions?: React.ReactNode;
 }) {
   const hasPreview = preview !== undefined && preview !== null;
   const hasRightPanel = rightPanel !== undefined && rightPanel !== null;
@@ -102,10 +106,11 @@ export default function AppShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      {/* Mobile top bar — hamburger only, hidden at/above 1180px where
+      {/* Mobile top bar — hamburger (and any topActions), hidden at/above 1180px where
           the sidebar is a static column with its own visible Publish
           button already. */}
-      <div className="flex items-center justify-end border-b border-neutral-200 p-4 min-[1180px]:hidden">
+      <div className="flex items-center justify-end gap-3 border-b border-neutral-200 p-4 min-[1180px]:hidden">
+        {topActions}
         <button
           type="button"
           onClick={() => setMobileNavOpen(true)}

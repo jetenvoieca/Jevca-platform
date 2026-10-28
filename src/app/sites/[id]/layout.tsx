@@ -1,3 +1,4 @@
+import PublishedSiteLink from "@/components/PublishedSiteLink";
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/currentUser";
@@ -72,9 +73,12 @@ export default async function SiteLayout({
         lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
         recentSites={recentSites}
         allowed={allowed}
+        topActions={<PublishedSiteLink href={publishedHomePath(site.id)} />}
         header={
-          // Site name left, the page's own heading (if any) centred,
-          // View published site right.
+          // Site name left, the page's own heading (if any) centred, the
+          // published site's globe right (at full width — on a narrower
+          // screen it sits beside the menu button instead; see AppShell's
+          // topActions).
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
             <SiteNameField
               site={{
@@ -88,15 +92,7 @@ export default async function SiteLayout({
               ownerName={site.artist.name}
             />
             <PageHeadingSlot />
-            {/* The site as last published (2026-10-06), in a new tab. */}
-            <a
-              href={publishedHomePath(site.id)}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="justify-self-end rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
-            >
-              View published site ↗
-            </a>
+            <PublishedSiteLink href={publishedHomePath(site.id)} className="hidden justify-self-end min-[1180px]:inline-flex" />
           </div>
         }
       >

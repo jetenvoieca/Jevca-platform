@@ -21,6 +21,7 @@ export default function SiteShell({
   recentSites,
   allowed,
   header,
+  topActions,
   children,
 }: {
   siteId: string;
@@ -36,6 +37,8 @@ export default function SiteShell({
   // content — built by the (server) layout since it needs the site
   // record, passed in ready-made. It holds the PageHeadingSlot.
   header: ReactNode;
+  // Beside the menu button on a narrower screen (see AppShell).
+  topActions?: ReactNode;
   children: ReactNode;
 }) {
   const pathname = usePathname();
@@ -59,6 +62,7 @@ export default function SiteShell({
       publishAction={publishSite.bind(null, siteId)}
       lastPublishedAt={lastPublishedAt}
       navItems={navItems}
+      topActions={topActions}
       content={
         <PageHeadingProvider>
           <div className="flex h-full flex-col">
