@@ -6,7 +6,9 @@ import { useDndMonitor, useDraggable, useDroppable } from "@dnd-kit/core";
 // the order, in a page's Arrange (PageSectionsArranger) — a component's
 // pictures (works or Supporting Media) and, since 2026-10-27, its
 // Profile stories and Entries: one way of reordering for all of them
-// (Craig: standardise, don't duplicate). Each list uses useArrangeItem on
+// (Craig: standardise, don't duplicate). Also a curation work's
+// presentation images (CurationImageEditor, in its own DndContext,
+// 2026-10-29). Each list uses useArrangeItem on
 // its items (spread `listeners` on the whole item, or on a handle when
 // the item holds typing boxes) and useArrangeReorder to hear a drop.
 
