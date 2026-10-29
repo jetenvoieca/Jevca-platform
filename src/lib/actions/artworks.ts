@@ -3,8 +3,6 @@
 import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { retireArtworkPaymentLinks, saleInvoicesInclude, toSaleInvoices } from "@/lib/invoices";
-import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 import { publicMediaUrl } from "@/lib/r2";
 import {
   buildArtworkWhere,
@@ -21,9 +19,8 @@ import { isSaleOverdue, overdueInvoiceSelect } from "@/lib/overdue";
 type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 
 // Artworks belong to the Artist, not any one Site — the same piece can be
-// featured on more than one of that artist's sites. Actions here take an
-// explicit `siteId` only where it's needed to know which site's URL to
-// redirect to — never to scope which artworks are returned.
+// featured on more than one of that artist's sites. A `siteId` some
+// actions take never scopes which artworks are returned.
 //
 // Deliberately NOT calling revalidatePath(`/sites/${siteId}/artworks`)
 // from most actions below (2026-08-15 removal) — that route is already
@@ -38,8 +35,7 @@ type Availability = "AVAILABLE" | "RESERVED" | "SOLD";
 // via these revalidatePath calls. The embedded Catalogue view already
 // keeps itself in sync via direct client-side fetches
 // (getArtworkDetailForClient/listArtworks), so this revalidation was
-// pure downside for that flow. createArtwork keeps its call since it's
-// immediately followed by a real redirect(), not an in-place edit.
+// pure downside for that flow.
 
 async function nextCatalogueNumber(artistId: string) {
   // Based on the highest catalogue number actually in use, not the row
@@ -132,26 +128,6 @@ export async function createArtworkWithRetry(
     }
   }
   throw new Error("Could not generate a unique catalogue number.");
-}
-
-// "+ New" — a Name is optional. If left blank the record is created as
-// "Untitled" so you can jump straight in and upload an image first, name
-// it later. Name (catalogueName) is the artwork's one and only name,
-// used everywhere (the separate Presentation title was retired
-// 2026-09-23, direct request).
-// `siteId` here is only which site you're currently working in, so the
-// new artwork's editor opens back on that site's URL — it doesn't scope
-// ownership, `artistId` does.
-export async function createArtwork(artistId: string, siteId: string, formData: FormData) {
-  await requireArtistAccess(artistId);
-  const title = (formData.get("title") as string)?.trim() || "Untitled";
-
-  const artwork = await createArtworkWithRetry(artistId, {
-    catalogueName: title,
-  });
-
-  revalidatePath(`/sites/${siteId}/artworks`);
-  redirect(`/sites/${siteId}/artworks?selected=${artwork.id}`);
 }
 
 // "Create Derivative" (2026-08-16) — for when the same physical piece
@@ -384,7 +360,7 @@ export async function listArtworks(
 }
 
 // Full record for the slide-in detail panel — both facets and its picture.
-export async function getArtworkDetail(id: string) {
+async function getArtworkDetail(id: string) {
   await artworkOwner(id);
   const result = await db.artwork.findUnique({
     where: { id },

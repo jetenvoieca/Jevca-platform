@@ -2,18 +2,12 @@
 
 import { db } from "@/lib/db";
 import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
-import { readLocations, type LocationSummary, type LocationType } from "@/lib/artworkSettingsData";
+import type { LocationSummary, LocationType } from "@/lib/artworkSettingsData";
 import { revalidatePath } from "next/cache";
 import { retireStatementPaymentLinks } from "@/lib/paymentLinks";
 import { createCustomer, type CustomerKind, type CustomerSummary } from "./customers";
 
 export type { LocationType, LocationSummary } from "@/lib/artworkSettingsData";
-
-// The single canonical list a Location picker offers — see readLocations.
-export async function listLocations(artistId: string): Promise<LocationSummary[]> {
-  await requireArtistAccess(artistId);
-  return readLocations(artistId);
-}
 
 // Same list, but shaped for the Locations page's own left-hand list
 // (2026-09-22 rework of the old Galleries page — see GalleriesView.tsx),

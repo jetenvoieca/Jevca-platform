@@ -4,7 +4,7 @@
 // pictures) went 2026-10-28 — an artwork has one picture. Plain module.
 export type MediaTab = "artworks" | "marketing" | "videos";
 
-export function readMediaTab(value: string | undefined): MediaTab {
+function readMediaTab(value: string | undefined): MediaTab {
   return value === "artworks" || value === "videos" ? value : "marketing";
 }
 
