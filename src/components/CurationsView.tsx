@@ -541,7 +541,7 @@ export default function CurationsView({
         >
           <div className="flex max-h-full w-full max-w-md flex-col rounded-lg bg-white shadow-xl">
             {/* Frozen: which work this is, and Close. */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3">
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-2.5">
               <h2 className="min-w-0 flex-1 truncate text-lg text-neutral-900">
                 Presentation — {presentingWork.catalogueName}
               </h2>
@@ -553,7 +553,7 @@ export default function CurationsView({
                 Close
               </button>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-4">
+            <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
               <CurationWorkPresentation
                 key={`${selected.id}:${presentingWork.artworkId}`}
                 curationId={selected.id}
