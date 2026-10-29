@@ -21,7 +21,8 @@ import { startGallerySale, type PurchaseDetail } from "@/lib/actions/payments";
 import { produceInvoice } from "@/lib/actions/invoices";
 import { netOwed } from "@/lib/saleMath";
 import { formatDate } from "@/lib/formatDate";
-import ArtworkDetailPanel, { type ArtworkDetail, type ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import type { ArtworkDetail, ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import ArtworkCatalogueModal from "@/components/ArtworkCatalogueModal";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import AddIconButton from "@/components/AddIconButton";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -374,13 +375,6 @@ export default function GalleriesView({
   // Artwork Catalogue details in a modal over the sale, instead of going
   // to the Artwork Catalogue. Changes refresh the work and the location.
   const [catalogueOpen, setCatalogueOpen] = useState(false);
-  const closeCatalogue = () => setCatalogueOpen(false);
-  const catalogueBackdrop = useBackdropClose(closeCatalogue);
-  const refreshCatalogueWork = () => {
-    if (!selectedWorkId) return;
-    getArtworkDetailForClient(selectedWorkId).then(setSelectedWorkDetail);
-    if (selectedId) refreshGalleryDetail(selectedId);
-  };
 
   // Auto-opens a Location (and, if given, one of its works) from the
   // URL's own ?location=&work=&sale= query params (2026-09-22) — this is what
@@ -1372,25 +1366,21 @@ export default function GalleriesView({
       {/* ---- Artwork sale modal ---- */}
       {/* The open work's Catalogue window, over its sale. */}
       {catalogueOpen && selectedWorkDetail && (
-        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-6" {...catalogueBackdrop}>
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
-            <ArtworkDetailPanel
-              key={selectedWorkDetail.id}
-              siteId={siteId}
-              artistId={artistId}
-              artwork={selectedWorkDetail}
-              settings={settings}
-              onClose={closeCatalogue}
-              onDeleted={() => {
-                closeWork();
-                if (selectedId) refreshGalleryDetail(selectedId);
-              }}
-              onDuplicated={closeCatalogue}
-              onDataChanged={refreshCatalogueWork}
-              showCloseButton={true}
-            />
-          </div>
-        </div>
+        <ArtworkCatalogueModal
+          siteId={siteId}
+          artistId={artistId}
+          artwork={selectedWorkDetail}
+          settings={settings}
+          onClose={() => setCatalogueOpen(false)}
+          onChanged={(detail) => {
+            setSelectedWorkDetail(detail);
+            if (selectedId) refreshGalleryDetail(selectedId);
+          }}
+          onDeleted={() => {
+            closeWork();
+            if (selectedId) refreshGalleryDetail(selectedId);
+          }}
+        />
       )}
 
       {/* Fixed overlay on top of everything, at every width. Shared

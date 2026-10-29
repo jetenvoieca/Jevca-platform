@@ -20,7 +20,8 @@ import {
   type CurationSummary,
 } from "@/lib/actions/curations";
 import { useClientWords } from "@/components/ClientWordsProvider";
-import ArtworkDetailPanel, { type ArtworkDetail, type ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import type { ArtworkDetail, ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import ArtworkCatalogueModal from "@/components/ArtworkCatalogueModal";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { moveArtworksToLocation } from "@/lib/actions/locations";
 import { useBackdropClose } from "@/lib/useBackdropClose";
@@ -298,13 +299,6 @@ export default function CurationsView({
     if (detail) setCatalogueWork(detail);
   };
   const closeCatalogue = () => setCatalogueWork(null);
-  const catalogueBackdrop = useBackdropClose(closeCatalogue);
-  const refreshCatalogueWork = async () => {
-    if (!catalogueWork) return;
-    const detail = await getArtworkDetailForClient(catalogueWork.id);
-    if (detail) setCatalogueWork(detail);
-    if (selected) reload(selected.id);
-  };
 
   // Curations: which curations the work is in, then Move to (out of this
   // one, into the one chosen) or Add to (into the one chosen as well).
@@ -701,25 +695,20 @@ export default function CurationsView({
       </aside>
 
       {catalogueWork && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...catalogueBackdrop}>
-          <div className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg shadow-xl">
-            <ArtworkDetailPanel
-              key={catalogueWork.id}
-              siteId={siteId}
-              artistId={artistId}
-              artwork={catalogueWork}
-              settings={settings}
-              onClose={closeCatalogue}
-              onDeleted={() => {
-                closeCatalogue();
-                if (selected) reload(selected.id);
-              }}
-              onDuplicated={closeCatalogue}
-              onDataChanged={refreshCatalogueWork}
-              showCloseButton={true}
-            />
-          </div>
-        </div>
+        <ArtworkCatalogueModal
+          siteId={siteId}
+          artistId={artistId}
+          artwork={catalogueWork}
+          settings={settings}
+          onClose={closeCatalogue}
+          onChanged={() => {
+            if (selected) reload(selected.id);
+          }}
+          onDeleted={() => {
+            closeCatalogue();
+            if (selected) reload(selected.id);
+          }}
+        />
       )}
 
       {curationsWork && selected && (
