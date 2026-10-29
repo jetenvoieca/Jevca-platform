@@ -71,6 +71,9 @@ export type CurationDetail = {
 export type CurationWorkPresentation = {
   artworkId: string;
   catalogueName: string;
+  // Shown small in the window's bottom-left corner (2026-10-29, Craig's
+  // request). Absent from sites published before then.
+  catalogueNumber?: string;
   // Exactly what the Presentation panel shows and the website shows —
   // never anything else (2026-10-26, direct request: fallbacks confuse).
   // This curation's own wording once written; until then the artwork's
@@ -415,6 +418,7 @@ export async function getCurationWorkPresentation(
       artwork: {
         select: {
           catalogueName: true,
+          catalogueNumber: true,
           type: true,
           size: true,
           medium: true,
@@ -446,6 +450,7 @@ export async function getCurationWorkPresentation(
   return {
     artworkId,
     catalogueName: artwork.catalogueName,
+    catalogueNumber: artwork.catalogueNumber,
     description: item.description ?? defaultDescription(artwork) ?? "",
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     priceCurrency: artwork.priceCurrency,

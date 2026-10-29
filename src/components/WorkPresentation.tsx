@@ -180,6 +180,16 @@ export default function WorkPresentation({
           </svg>
         </button>
       )}
+      {/* The catalogue number, small in the bottom-left corner
+          (2026-10-29, Craig's request), inside the window's padding. */}
+      {data.catalogueNumber && (
+        <span
+          className="pointer-events-none absolute bottom-2 left-3.5"
+          style={{ color: colours.muted, fontSize: Math.round(settings.textSize * 0.75) }}
+        >
+          {data.catalogueNumber}
+        </span>
+      )}
       {/* The picture, the work's other pictures, its title and details,
           then the price, Purchase / Pay in instalments, the instalment
           terms, Enquire and where it can be seen (2026-10-20, Craig's
