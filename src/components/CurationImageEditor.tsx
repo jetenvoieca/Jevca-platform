@@ -7,7 +7,9 @@ import { setCurationWorkImages } from "@/lib/actions/curations";
 import type { ArtworkImage } from "@/lib/artworkImages";
 
 // A work's images within one curation (2026-10-03): the main image large
-// on top, up to 3 more in a row of squares beneath it. Everything here
+// on the left, up to 3 more in a column of squares beside it (2026-10-29,
+// Craig's mockup — the main square is exactly the height of the three).
+// Everything here
 // changes this curation only, never the artwork or the Catalogue — see
 // CurationItem.ownImages in schema.prisma.
 // - Click one of the 3 smaller images to show "Make main image".
@@ -15,8 +17,8 @@ import type { ArtworkImage } from "@/lib/artworkImages";
 //   image has no ✕ (2026-10-04, direct request) — it's only ever changed
 //   by making another image main, so a work always keeps one once it has
 //   one. setCurationWorkImages enforces the same rule.
-// - "+" picks a picture or video to add — the artwork's own, or any other
-//   in the Media Catalogue (Marketing, Videos, Related; 2026-10-20).
+// - "+ Add" picks a picture or video from the Media Catalogue (Marketing
+//   or Videos).
 export default function CurationImageEditor({
   curationId,
   artworkId,
@@ -59,8 +61,8 @@ export default function CurationImageEditor({
   const add = (added: { id: string }[]) =>
     save([...ids, ...added.map((a) => a.id).filter((id) => !ids.includes(id))].slice(0, 4));
 
-  const addTile = (key: string, label: string) => (
-    <div key={key} className="aspect-square">
+  const addTile = (key: string, label: string, className = "aspect-square") => (
+    <div key={key} className={className}>
       <MediaPicker
         artistId={artistId}
         siteId={siteId}
@@ -90,50 +92,50 @@ export default function CurationImageEditor({
   );
 
   return (
-    <div className={busy ? "pointer-events-none opacity-60" : ""}>
+    // Four columns: the main image spans three columns and three rows, so
+    // it's square and level with the three small squares beside it.
+    <div className={`grid grid-cols-4 gap-3 ${busy ? "pointer-events-none opacity-60" : ""}`}>
       {main ? (
-        <div className="relative aspect-square overflow-hidden rounded-md bg-neutral-100">
+        <div className="relative col-span-3 row-span-3 overflow-hidden rounded-md bg-neutral-100">
           <ImageFill image={main} large />
           <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1.5 py-0.5 text-[10px] text-white">
             Main
           </span>
         </div>
       ) : (
-        addTile("add-main", "Add main image")
+        addTile("add-main", "Add main image", "col-span-3 row-span-3")
       )}
 
-      <div className="mt-3 grid grid-cols-3 gap-3">
-        {[0, 1, 2].map((i) => {
-          const img = others[i];
-          if (!img) return addTile(`add-${i}`, "Add");
-          return (
-            <div
-              key={img.id}
-              role="button"
-              tabIndex={0}
-              onClick={() => setOptionsFor((prev) => (prev === img.id ? null : img.id))}
-              className="group relative aspect-square cursor-pointer overflow-hidden rounded-md bg-neutral-100"
-            >
-              <ImageFill image={img} />
-              {removeButton(img.id)}
-              {optionsFor === img.id && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/40">
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      makeMain(img.id);
-                    }}
-                    className="rounded-md bg-white px-2 py-1 text-xs font-medium text-neutral-900 hover:bg-neutral-100"
-                  >
-                    Make main image
-                  </button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {[0, 1, 2].map((i) => {
+        const img = others[i];
+        if (!img) return addTile(`add-${i}`, "Add");
+        return (
+          <div
+            key={img.id}
+            role="button"
+            tabIndex={0}
+            onClick={() => setOptionsFor((prev) => (prev === img.id ? null : img.id))}
+            className="group relative aspect-square cursor-pointer overflow-hidden rounded-md bg-neutral-100"
+          >
+            <ImageFill image={img} />
+            {removeButton(img.id)}
+            {optionsFor === img.id && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    makeMain(img.id);
+                  }}
+                  className="rounded-md bg-white px-2 py-1 text-xs font-medium text-neutral-900 hover:bg-neutral-100"
+                >
+                  Make main image
+                </button>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
