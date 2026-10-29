@@ -12,7 +12,7 @@ import { db } from "@/lib/db";
 // isn't a safe enough match.
 //
 // 2026-08-16 fix: an explicit `customerId` (set when the person actually
-// picks a result from CustomerPicker, rather than just typing a name)
+// picks an existing customer, rather than just typing a name)
 // is now authoritative and skips the name/email matching entirely. Before
 // this, picking an existing customer only copied their name/email/address
 // into the form's free-text fields — if that customer had no email on

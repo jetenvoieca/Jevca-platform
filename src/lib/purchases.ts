@@ -343,7 +343,7 @@ async function startPurchase(
   const buyerEmail = (formData.get("buyerEmail") as string)?.trim();
   const type = (formData.get("type") as string) === "INSTALMENTS" ? "INSTALMENTS" : "FULL";
   const source = (formData.get("source") as string)?.trim() || null;
-  // Set only when the person actually picked a result from CustomerPicker
+  // Set only when the person actually picked an existing customer
   // (2026-08-16) — see the matching note on findOrCreateCustomer for why
   // this has to be authoritative rather than re-matched by email.
   const customerId = (formData.get("customerId") as string)?.trim() || null;

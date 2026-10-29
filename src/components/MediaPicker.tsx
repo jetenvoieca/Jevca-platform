@@ -215,8 +215,8 @@ export default function MediaPicker({
 
   // Debounced search-as-you-type (2026-08-31) — previously fired a full
   // server request (fetching up to PICKER_FETCH_LIMIT rows) on every
-  // keystroke, with no visible loading state. Same fix as ArtworkPicker.tsx
-  // / CustomerPicker.tsx. Only reacts to `query` changing — handleSourceChange
+  // keystroke, with no visible loading state. Same fix as ArtworkPicker.tsx.
+  // Only reacts to `query` changing — handleSourceChange
   // below still reloads immediately on an explicit tab click, and
   // handleOpen's own immediate load() above still runs right away when the
   // picker is first opened.

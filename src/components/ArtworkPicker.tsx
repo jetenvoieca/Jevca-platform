@@ -144,9 +144,7 @@ export default function ArtworkPicker({
   };
 
   // Debounced search-as-you-type (2026-08-31) — previously fired a full
-  // server request on every keystroke, same issue already fixed in
-  // CustomerPicker.tsx (see that file for the original pattern this
-  // copies). Only fires while the picker is open, and only reacts to
+  // server request on every keystroke. Only fires while the picker is open, and only reacts to
   // `query` changing — handleOpen's own immediate load() above still
   // runs right away when the picker is first opened.
   useEffect(() => {
