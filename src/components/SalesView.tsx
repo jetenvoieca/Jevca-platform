@@ -3,7 +3,7 @@
 import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { formatDate, ukYearMonth } from "@/lib/formatDate";
-import { CURRENCIES, type Currency } from "@/lib/currencies";
+import { CURRENCIES, type Currency, formatMoney } from "@/lib/currencies";
 import { SaleStatusBadge } from "@/components/GallerySaleCard";
 import SaleModal, { type SaleModalTarget } from "@/components/SaleModal";
 import type { SaleRow } from "@/lib/actions/sales";
@@ -28,10 +28,6 @@ const CURRENCY_SYMBOL: Record<Currency, string> = { GBP: "£", EUR: "€" };
 // Which currency's sales are shown: one, or both side by side.
 const CURRENCY_VIEWS = ["EUR", "GBP", "BOTH"] as const;
 type CurrencyView = (typeof CURRENCY_VIEWS)[number];
-
-function formatMoney(amount: number, currency: string) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
-}
 
 function inPeriod(sale: SaleRow, period: Period, year: number): boolean {
   if (period === "ALL") return true;

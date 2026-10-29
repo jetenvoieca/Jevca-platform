@@ -19,11 +19,7 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 import InvoiceModal from "@/components/InvoiceModal";
 import { hasInvoiceToOpen, invoiceCancelNote, invoiceToOpen } from "@/lib/saleInvoice";
-
-function formatMoney(amount: string, currency: string) {
-  const n = parseFloat(amount);
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-}
+import { formatMoney } from "@/lib/currencies";
 
 // The panel for an unpaid direct Stripe sale — one started from the
 // Studio app by payment link or card (studioSales.ts) — opened from the

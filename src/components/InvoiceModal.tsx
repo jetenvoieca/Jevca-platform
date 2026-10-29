@@ -6,12 +6,9 @@ import { getInvoiceEmailDraft, sendInvoiceEmail } from "@/lib/actions/invoiceEma
 import { formatDate } from "@/lib/formatDate";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { formatMoney } from "@/lib/currencies";
 
 type Tab = "invoice" | "email";
-function formatMoney(amount: string, currency: string) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(parseFloat(amount));
-}
-
 // The invoice window (2026-10-14; was the Part Three invoice email
 // window): one invoice — for one sale or several — with two tabs, the
 // real PDF (the same one that's emailed, so the preview can't drift from

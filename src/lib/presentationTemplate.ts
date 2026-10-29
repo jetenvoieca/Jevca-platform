@@ -278,18 +278,3 @@ export function fillLabel(label: string, values: Record<string, string>): string
   return label.replace(/\{(\w+)\}/g, (whole, name: string) => values[name] ?? whole);
 }
 
-// A price as the Presentation window shows it: whole amounts without
-// pence (£1,995), unless `pence` (£399.00).
-export function formatMoney(n: number, currency: string, pence = false): string {
-  const digits = pence || !Number.isInteger(n) ? 2 : 0;
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: digits,
-      maximumFractionDigits: 2,
-    }).format(n);
-  } catch {
-    return `${currency} ${n.toFixed(digits)}`;
-  }
-}

@@ -6,7 +6,7 @@ import { isCurrency } from "@/lib/currencies";
 import { EMAIL_DOMAIN } from "@/lib/email";
 import type { ButtonPayment } from "@/lib/mailContent";
 import { getArtistStripeTarget } from "@/lib/paymentLinks";
-import { formatMoney } from "@/lib/presentationTemplate";
+import { formatMoney } from "@/lib/currencies";
 import { getStripeClient, fromMinorUnits, toMinorUnits, type StripeTarget } from "@/lib/stripe";
 
 // A mail's payment button (2026-10-21, Craig's request — a deposit for a
@@ -140,7 +140,7 @@ export async function recordMailDeposit(paymentIntentId: string, target: StripeT
   const description = session
     ? ((await stripe.checkout.sessions.listLineItems(session.id, { limit: 1 })).data[0]?.description ?? "Deposit")
     : "Deposit";
-  const amount = formatMoney(fromMinorUnits(intent.amount_received), intent.currency.toUpperCase(), true);
+  const amount = formatMoney(fromMinorUnits(intent.amount_received), intent.currency.toUpperCase());
 
   const customer = await findOrCreateCustomerRecord(artistId, { name, email });
   if (phone) {

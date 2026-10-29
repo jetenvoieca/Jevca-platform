@@ -11,7 +11,7 @@ import {
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
 import { catalogueFileName, clientWords, type ClientKind } from "@/lib/clientKind";
-import { formatMoney } from "@/lib/studioShared";
+import { formatMoney } from "@/lib/currencies";
 
 // The shared catalogue filters (lib/artworkFilters.ts — the same ones
 // the on-screen grid uses), plus this export's own header wording.

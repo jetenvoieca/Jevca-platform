@@ -51,7 +51,8 @@ import SiteFooter from "@/components/SiteFooter";
 import { bodyTextCss } from "@/components/textStyleCss";
 import CurationWorkView from "@/components/CurationWorkView";
 import { PresentationProvider } from "@/components/WorkPresentation";
-import { DEFAULT_PRESENTATION, formatMoney } from "@/lib/presentationTemplate";
+import { DEFAULT_PRESENTATION } from "@/lib/presentationTemplate";
+import { formatMoney } from "@/lib/currencies";
 import SignupForm from "@/components/SignupForm";
 import SlidingDoors from "@/components/SlidingDoors";
 import HeroBlock from "@/components/HeroBlock";
@@ -386,7 +387,7 @@ export function blockFiller({
             id: w.artworkId,
             url: w.imageUrl,
             title: w.catalogueName,
-            price: w.offeredPrice != null ? formatMoney(Number(w.offeredPrice), w.priceCurrency) : null,
+            price: w.offeredPrice != null ? formatMoney(Number(w.offeredPrice), w.priceCurrency, "when-any") : null,
             sold: isSold(w.availability),
           }))}
           spacing={layout.gridSpacing}

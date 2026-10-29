@@ -13,12 +13,9 @@ import {
 import { formatDate } from "@/lib/formatDate";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { SaleStatusBadge } from "@/components/GallerySaleCard";
+import { formatMoney } from "@/lib/currencies";
 
 type Tab = "statement" | "email";
-
-function formatMoney(amount: string, currency: string) {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(parseFloat(amount));
-}
 
 // The statement window for a Gallery location (2026-10-20). First the
 // works still owed there, each with a tick box (Craig's request: choose

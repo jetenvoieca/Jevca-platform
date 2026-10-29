@@ -51,10 +51,6 @@ export function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
 
-export function formatMoney(amount: number, currency: string): string {
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
-}
-
 // Today's date on the phone's own calendar, as a date field expects it
 // (YYYY-MM-DD).
 export function todayIso(): string {

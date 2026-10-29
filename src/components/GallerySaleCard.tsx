@@ -34,6 +34,7 @@ import CertificateEmailModal from "@/components/CertificateEmailModal";
 import StripeCardForm from "@/components/StripeCardForm";
 import { ACTION_BUTTON_LOOK } from "@/components/ActionPanel";
 import { invoiceCancelNote } from "@/lib/saleInvoice";
+import { formatMoney } from "@/lib/currencies";
 
 // Every action-panel button: the shared outlined look (ActionPanel.tsx).
 const actionButtonCls = `rounded-md px-3 py-2 ${ACTION_BUTTON_LOOK}`;
@@ -130,11 +131,6 @@ function AmountOptions({
       </button>
     </div>
   );
-}
-
-function formatMoney(amount: string, currency: string) {
-  const n = parseFloat(amount);
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
 }
 
 // Status badge for list/table rows (Locations Sales tab, Sales page,

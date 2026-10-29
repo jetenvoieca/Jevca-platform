@@ -7,11 +7,7 @@ import { hasInvoiceToOpen, invoiceToOpen } from "@/lib/saleInvoice";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 import InvoiceModal from "@/components/InvoiceModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
-
-function formatMoney(amount: string, currency: string) {
-  const n = parseFloat(amount);
-  return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-}
+import { formatMoney } from "@/lib/currencies";
 
 function Field({ label, value }: { label: string; value: string | null | undefined }) {
   if (!value) return null;

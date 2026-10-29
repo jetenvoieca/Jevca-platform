@@ -15,18 +15,10 @@ import {
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ExpenseBudgetPanel from "@/components/ExpenseBudgetPanel";
 import { formatDate } from "@/lib/formatDate";
+import { formatMoney } from "@/lib/currencies";
 
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
-
-function formatMoney(amount: string, currency: string) {
-  const n = parseFloat(amount);
-  try {
-    return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-  } catch {
-    return `${currency} ${n.toFixed(2)}`;
-  }
-}
 
 type Period = "all" | "thisYear" | "Q1" | "Q2" | "Q3" | "Q4";
 

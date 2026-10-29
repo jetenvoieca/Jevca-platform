@@ -25,24 +25,7 @@ import ArtworkCatalogueModal from "@/components/ArtworkCatalogueModal";
 import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { moveArtworksToLocation } from "@/lib/actions/locations";
 import { useBackdropClose } from "@/lib/useBackdropClose";
-
-// Whole amounts show without pence ("£400"), as in the mockup.
-function formatPrice(amount: string | null, currency: string): string | null {
-  if (amount == null) return null;
-  const n = parseFloat(amount);
-  if (Number.isNaN(n)) return null;
-  const digits = Number.isInteger(n) ? 0 : 2;
-  try {
-    return new Intl.NumberFormat("en-GB", {
-      style: "currency",
-      currency,
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
-    }).format(n);
-  } catch {
-    return `${currency} ${n.toFixed(digits)}`;
-  }
-}
+import { formatMoney } from "@/lib/currencies";
 
 // Curations page (2026-09-24, stage one). Two columns:
 // - left: the open curation — its name (click to rename), ⊞ to add works,
@@ -452,7 +435,7 @@ export default function CurationsView({
             <div className="min-h-0 flex-1 overflow-y-auto px-6 pb-6">
               <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-6">
                 {selected.works.map((w, i) => {
-                  const price = formatPrice(w.offeredPrice, w.priceCurrency);
+                  const price = w.offeredPrice != null ? formatMoney(w.offeredPrice, w.priceCurrency, "when-any") : null;
                   return (
                     <div
                       key={w.artworkId}

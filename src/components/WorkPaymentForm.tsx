@@ -7,7 +7,8 @@ import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import type { CardEntry } from "@/lib/actions/payments";
 import { confirmWebsitePayment, startWebsitePayment, type BuyerAddress } from "@/lib/actions/websitePurchase";
 import { MAX_EMAIL_LENGTH } from "@/lib/emailAddress";
-import { fillLabel, formatMoney, type PresentationSettings } from "@/lib/presentationTemplate";
+import { fillLabel, type PresentationSettings } from "@/lib/presentationTemplate";
+import { formatMoney } from "@/lib/currencies";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 import type { SiteForms } from "@/lib/siteData";
 import { useTurnstile } from "@/lib/useTurnstile";
@@ -60,10 +61,10 @@ export default function WorkPaymentForm({
   const byInstalments = instalments && isValidInstalmentCount(count);
   const today = byInstalments ? splitIntoInstalments(price, count)[0] : price;
   const values = {
-    price: formatMoney(price, data.priceCurrency),
+    price: formatMoney(price, data.priceCurrency, "when-any"),
     count: String(count),
-    amount: formatMoney(today, data.priceCurrency, true),
-    today: formatMoney(today, data.priceCurrency, byInstalments),
+    amount: formatMoney(today, data.priceCurrency),
+    today: formatMoney(today, data.priceCurrency, byInstalments ? "always" : "when-any"),
   };
   const payButton = button(colours.purchaseBackground, colours.purchaseText);
 

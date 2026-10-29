@@ -4,6 +4,7 @@ import { getStripeClientForSale, toMinorUnits } from "@/lib/stripe";
 import { artworkDetailLines } from "@/lib/artworkDetails";
 import { publicMediaUrl } from "@/lib/r2";
 import type { DocumentSale } from "@/lib/invoices";
+import { formatMoney } from "@/lib/currencies";
 
 // Building payment links for consigned sales (2026-10-20) — persistent
 // Stripe Payment Links (not Checkout Sessions, which expire within a
@@ -34,7 +35,7 @@ export async function payFromLabel(artist: { id: string; name: string }): Promis
 // One work as a line item for its balance, with its product.
 export async function workLineItem(sale: DocumentSale, label: string): Promise<LineItem> {
   const stripe = getStripeClientForSale(sale);
-  const money = (n: number) => new Intl.NumberFormat("en-GB", { style: "currency", currency: sale.currency }).format(n);
+  const money = (n: number) => formatMoney(n, sale.currency);
   const b = saleBreakdown(sale);
   const deductions = [
     b.commission ? `less ${b.commissionPercent}% commission` : null,

@@ -11,21 +11,10 @@ import {
 } from "@/lib/actions/expenses";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { formatDate } from "@/lib/formatDate";
+import { formatMoney } from "@/lib/currencies";
 
 const inputCls =
   "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm disabled:opacity-50";
-
-function formatMoney(amount: string, currency: string) {
-  const n = parseFloat(amount);
-  try {
-    return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(n);
-  } catch {
-    // Falls back if `currency` is ever something Intl doesn't recognise
-    // — shouldn't happen via the form's own currency field, but a typo'd
-    // manual entry shouldn't crash the whole page over it.
-    return `${currency} ${n.toFixed(2)}`;
-  }
-}
 
 export default function ExpensesView({
   siteId,

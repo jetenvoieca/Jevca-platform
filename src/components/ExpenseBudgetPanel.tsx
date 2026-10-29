@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import type { PlatformExpenseRow } from "@/lib/actions/platformExpenses";
+import { formatMoney } from "@/lib/currencies";
 
 // Budget on Accounts → Expenses (2026-10-10, direct request — "how much I
 // spend each month, how much spent this month and how much more is
@@ -21,14 +22,6 @@ type Row = {
 };
 
 type Totals = { last: number; current: number; expected: number };
-
-function formatMoney(amount: number, currency: string) {
-  try {
-    return new Intl.NumberFormat("en-GB", { style: "currency", currency }).format(amount);
-  } catch {
-    return `${currency} ${amount.toFixed(2)}`;
-  }
-}
 
 // "2026-09" → "September 2026".
 function monthLabel(month: string): string {

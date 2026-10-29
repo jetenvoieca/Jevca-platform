@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createPaymentLink, startCardPayment } from "@/lib/studioApi";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
-import { CURRENCIES } from "@/lib/currencies";
+import { CURRENCIES, formatMoney } from "@/lib/currencies";
 import {
   isValidInstalmentCount,
   MAX_INSTALMENTS,
@@ -11,7 +11,6 @@ import {
   splitIntoInstalments,
 } from "@/lib/saleMath";
 import {
-  formatMoney,
   isEditionType,
   isValidEmail,
   parsePrice,

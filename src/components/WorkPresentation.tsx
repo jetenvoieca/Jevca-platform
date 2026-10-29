@@ -4,7 +4,8 @@ import { createContext, useContext, useState, type CSSProperties, type ReactNode
 import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 import { SITE_FONT_FAMILY } from "@/lib/siteFontFaces";
-import { DEFAULT_PRESENTATION, fillLabel, formatMoney, type PresentationSettings } from "@/lib/presentationTemplate";
+import { DEFAULT_PRESENTATION, fillLabel, type PresentationSettings } from "@/lib/presentationTemplate";
+import { formatMoney } from "@/lib/currencies";
 import FadeImage from "@/components/FadeImage";
 import WorkEnquiryForm from "@/components/WorkEnquiryForm";
 import WorkPaymentForm from "@/components/WorkPaymentForm";
@@ -62,7 +63,7 @@ export default function WorkPresentation({
   const perInstalment = priced && isValidInstalmentCount(count) ? splitIntoInstalments(price, count)[0] : null;
   const values = {
     count: String(count),
-    amount: perInstalment != null ? formatMoney(perInstalment, data.priceCurrency, true) : "",
+    amount: perInstalment != null ? formatMoney(perInstalment, data.priceCurrency) : "",
     location: data.viewingLocation ?? "",
   };
   const editionLine = [data.edition, data.type].filter(Boolean).join(" - ");
@@ -75,7 +76,7 @@ export default function WorkPresentation({
   const mailto = (action: string) => {
     if (!data.enquiryEmail) return undefined;
     const subject = `${action}: ${data.catalogueName}`;
-    const body = `Hello,\n\nI'm interested in "${data.catalogueName}"${priced ? ` (${formatMoney(price, data.priceCurrency)})` : ""}.\n\n`;
+    const body = `Hello,\n\nI'm interested in "${data.catalogueName}"${priced ? ` (${formatMoney(price, data.priceCurrency, "when-any")})` : ""}.\n\n`;
     return `mailto:${data.enquiryEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
   };
 
@@ -243,7 +244,7 @@ export default function WorkPresentation({
             </div>
           )}
           {show.price && priced && (
-            <p style={{ fontSize: settings.textSize }}>{formatMoney(price, data.priceCurrency)}</p>
+            <p style={{ fontSize: settings.textSize }}>{formatMoney(price, data.priceCurrency, "when-any")}</p>
           )}
 
           {data.available ? (
