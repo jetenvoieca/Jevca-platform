@@ -11,8 +11,6 @@ import {
   createArtworkFromHopperQuick,
 } from "@/lib/actions/hopper";
 import { uploadFileDirect } from "@/lib/uploadDirect";
-import ArtworkPicker from "@/components/ArtworkPicker";
-import { setArtworkMainImage } from "@/lib/actions/artworks";
 import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
@@ -328,22 +326,6 @@ export default function HopperView({
       }
       setAddError(null);
       logProcessed(item, "Added to Video Edit", `/sites/${siteId}/bucket`);
-      advanceAfterAction();
-    });
-  };
-
-  // An existing artwork's one picture (2026-09-13; Main only since
-  // 2026-10-28 — an artwork has one picture): this item becomes it, and
-  // the picture it replaces is taken off the artwork.
-  const handleSetMainPicture = (item: HopperItem, artworkId: string, artworkName: string) => {
-    startTransition(async () => {
-      const result = await setArtworkMainImage(artworkId, item.id);
-      if ("error" in result) {
-        setAddError(result.error);
-        return;
-      }
-      setAddError(null);
-      logProcessed(item, `Main picture for ${artworkName}`, `${resolvedBasePath}/artworks?selected=${artworkId}`);
       advanceAfterAction();
     });
   };
@@ -743,7 +725,6 @@ export default function HopperView({
                 onBin={() => handleBin(current)}
                 onAddToMedia={() => handleAddToMedia(current)}
                 onAddToBucket={() => handleAddToBucket(current)}
-                onSetMainPicture={(artworkId, artworkName) => handleSetMainPicture(current, artworkId, artworkName)}
                 onAddNewArtwork={(fields) => handleAddNewArtwork(current, fields)}
                 onImageChanged={() => router.refresh()}
               />
@@ -864,7 +845,6 @@ function SortingCard({
   onBin,
   onAddToMedia,
   onAddToBucket,
-  onSetMainPicture,
   onAddNewArtwork,
   onImageChanged,
 }: {
@@ -880,8 +860,6 @@ function SortingCard({
   onBin: () => void;
   onAddToMedia: () => void;
   onAddToBucket: () => void;
-  // Makes this item an existing artwork's one picture.
-  onSetMainPicture: (artworkId: string, artworkName: string) => void;
   onAddNewArtwork: (fields: FormData) => Promise<boolean>;
   // Called after the photo itself changes in place (a saved crop), so
   // the page re-fetches the item's new image URLs.
@@ -891,19 +869,11 @@ function SortingCard({
   const [showCropEditor, setShowCropEditor] = useState(false);
   const [showQuickForm, setShowQuickForm] = useState(false);
   const [creatingArtwork, setCreatingArtwork] = useState(false);
-  const [showManageForm, setShowManageForm] = useState(false);
 
   // The routing buttons share the row evenly (2026-10-17 tidy).
   const actionCls =
     "flex-1 whitespace-nowrap rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50 disabled:opacity-50";
-  const openManage = () => {
-    setShowManageForm(true);
-    setShowQuickForm(false);
-  };
-  const openQuick = () => {
-    setShowQuickForm(true);
-    setShowManageForm(false);
-  };
+  const openQuick = () => setShowQuickForm(true);
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
@@ -929,7 +899,6 @@ function SortingCard({
                 type="button"
                 onClick={() => {
                   setShowCropEditor(true);
-                  setShowManageForm(false);
                   setShowQuickForm(false);
                 }}
                 disabled={isPending}
@@ -974,7 +943,7 @@ function SortingCard({
           Whichever routing button is chosen next collects only what
           that specific destination actually needs: Create new artwork
           collects Name itself (see QuickCatalogueFields below); Add to
-          Media/Add to Bucket/Manage Artwork need neither — a caption can
+          Media/Add to Bucket need neither — a caption can
           always be added afterwards from the Media Catalogue's own edit
           form if wanted. */}
 
@@ -1009,14 +978,6 @@ function SortingCard({
               >
                 {words.item}
               </button>
-              <button
-                type="button"
-                onClick={openManage}
-                disabled={isPending || showManageForm}
-                className={actionCls}
-              >
-                Main picture
-              </button>
             </>
           )}
           {artworkIntake && (
@@ -1030,18 +991,6 @@ function SortingCard({
             </button>
           )}
         </div>
-      )}
-
-      {showManageForm && (
-        <MainPicturePanel
-          artistId={artistId}
-          busy={isPending}
-          onCancel={() => setShowManageForm(false)}
-          onDone={(artworkId, artworkName) => {
-            onSetMainPicture(artworkId, artworkName);
-            setShowManageForm(false);
-          }}
-        />
       )}
 
       {showQuickForm && (
@@ -1060,71 +1009,6 @@ function SortingCard({
           }}
         />
       )}
-    </div>
-  );
-}
-
-// "Main picture" (full Hopper): choose the artwork this item becomes the
-// one picture of (2026-10-28 — was Main or Related).
-function MainPicturePanel({
-  artistId,
-  busy,
-  onCancel,
-  onDone,
-}: {
-  artistId: string;
-  busy: boolean;
-  onCancel: () => void;
-  onDone: (artworkId: string, artworkName: string) => void;
-}) {
-  const words = useClientWords();
-  const [selected, setSelected] = useState<{ id: string; catalogueName: string } | null>(null);
-
-  return (
-    <div className="mt-4 space-y-4 rounded-md border border-neutral-300 p-4">
-      <div>
-        <label className="mb-1 block text-sm font-medium text-neutral-700">
-          The {words.item.toLowerCase()} this becomes the picture of
-        </label>
-        {selected ? (
-          <button
-            type="button"
-            onClick={() => setSelected(null)}
-            className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
-          >
-            {selected.catalogueName} <span className="text-neutral-400">(change)</span>
-          </button>
-        ) : (
-          <ArtworkPicker
-            artistId={artistId}
-            mode="single"
-            variant="button"
-            label={`Choose ${words.item.toLowerCase()}…`}
-            onSelect={(artworks) => {
-              if (artworks[0]) setSelected({ id: artworks[0].id, catalogueName: artworks[0].catalogueName });
-            }}
-          />
-        )}
-      </div>
-      <p className="text-xs text-neutral-500">Any picture it has now is taken off it (it stays in the Media Catalogue).</p>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={() => selected && onDone(selected.id, selected.catalogueName)}
-          disabled={!selected || busy}
-          className="rounded-md bg-neutral-900 px-4 py-2 text-sm font-medium text-white hover:bg-neutral-700 disabled:opacity-50"
-        >
-          {busy ? "Saving…" : "Done, next item"}
-        </button>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          className="text-sm text-neutral-500 hover:text-neutral-700 disabled:opacity-50"
-        >
-          Cancel
-        </button>
-      </div>
     </div>
   );
 }
