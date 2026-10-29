@@ -377,6 +377,17 @@ export async function removeWorkFromCuration(
   return { ok: true };
 }
 
+// The curations a work is in (2026-10-29 — a work's Curations window on
+// the Curations page, to move it or add it to another).
+export async function curationsWithWork(artistId: string, artworkId: string): Promise<string[]> {
+  await requireArtistAccess(artistId);
+  const rows = await db.curationItem.findMany({
+    where: { artworkId, curation: { artistId } },
+    select: { curationId: true },
+  });
+  return rows.map((r) => r.curationId);
+}
+
 // Saves a new order after a drag and drop. `artworkIds` is the whole
 // curation in its new order. Done as one database statement, however
 // many works the curation holds.

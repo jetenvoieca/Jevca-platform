@@ -10,6 +10,7 @@ import CurationSectionsEditor from "@/components/CurationSectionsEditor";
 import {
   addWorksToCuration,
   createCuration,
+  curationsWithWork,
   deleteCuration,
   getCuration,
   removeWorkFromCuration,
@@ -60,6 +61,10 @@ function formatPrice(amount: string | null, currency: string): string | null {
 // appears when hovering over a work, rather than sitting beside the
 // works.
 //
+// Curations (2026-10-29, Craig's mockup) — a hover button above Catalogue
+// opening a window to move the work to another curation or add it to
+// another as well (current curation shaded, ones it's already in greyed).
+//
 // Catalogue and Consign (2026-10-27, Craig's mockup) — two more hover
 // buttons above Presentation: Catalogue opens the work's Artwork
 // Catalogue details (ArtworkDetailPanel) in a modal; Consign (unsold
@@ -99,6 +104,15 @@ export default function CurationsView({
   const [catalogueWork, setCatalogueWork] = useState<ArtworkDetail | null>(null);
   const [consignWork, setConsignWork] = useState<ArtworkDetail | null>(null);
   const [consignError, setConsignError] = useState<string | null>(null);
+  // The work whose Curations window is open (2026-10-29, Craig's mockup):
+  // move it to another curation, or add it to another as well.
+  const [curationsWork, setCurationsWork] = useState<{
+    artworkId: string;
+    name: string;
+    inIds: string[];
+    mode: "move" | "add";
+  } | null>(null);
+  const [curationsError, setCurationsError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   // Which curation is meant to be open right now, readable inside
@@ -292,6 +306,38 @@ export default function CurationsView({
     if (selected) reload(selected.id);
   };
 
+  // Curations: which curations the work is in, then Move to (out of this
+  // one, into the one chosen) or Add to (into the one chosen as well).
+  const openCurationsFor = async (artworkId: string, name: string) => {
+    setCurationsError(null);
+    const inIds = await curationsWithWork(artistId, artworkId);
+    setCurationsWork({ artworkId, name, inIds, mode: "move" });
+  };
+  const closeCurations = () => setCurationsWork(null);
+  const curationsBackdrop = useBackdropClose(closeCurations);
+  const putInCuration = (targetId: string) => {
+    if (!curationsWork || !selected) return;
+    const { artworkId, mode } = curationsWork;
+    const fromId = selected.id;
+    setCurationsError(null);
+    startTransition(async () => {
+      const added = await addWorksToCuration(targetId, artistId, [artworkId]);
+      if ("error" in added) {
+        setCurationsError(added.error);
+        return;
+      }
+      if (mode === "move") {
+        const removed = await removeWorkFromCuration(fromId, artistId, artworkId);
+        if ("error" in removed) {
+          setCurationsError(removed.error);
+          return;
+        }
+        await reload(fromId);
+      }
+      closeCurations();
+    });
+  };
+
   // Consign: choose the location to put the work at.
   const openConsign = async (artworkId: string) => {
     setConsignError(null);
@@ -369,15 +415,18 @@ export default function CurationsView({
         ) : (
           <div className={`flex min-h-0 flex-1 flex-col ${loadingId ? "opacity-60" : ""}`}>
             {/* Frozen: the curation's name, About and Delete. */}
-            <div className="flex shrink-0 items-start gap-3 px-6 pb-4 pt-6">
+            <div className="flex shrink-0 items-center gap-3 px-6 pb-4 pt-6">
+              {/* As wide as the name, so ⊞ sits right after it,
+                  vertically centred on it (2026-10-29, Craig's mockup). */}
               <input
                 {...nameInputProps}
+                size={Math.max(titleDraft.length, 4)}
                 title="Click to rename"
-                className="-mx-1 min-w-0 flex-1 rounded-md border border-transparent px-1 py-0.5 text-3xl font-light text-neutral-900 hover:border-neutral-300 focus:border-neutral-300 focus:outline-none"
+                className="-mx-1 min-w-0 max-w-full rounded-md border border-transparent px-1 py-0.5 text-3xl font-light text-neutral-900 hover:border-neutral-300 focus:border-neutral-300 focus:outline-none"
               />
               {/* ⊞ adds works to this curation (the standard add icon,
                   2026-10-28). */}
-              <div className="mt-2 shrink-0">
+              <div className="flex shrink-0 items-center">
                 <ArtworkPicker
                   artistId={artistId}
                   mode="multi"
@@ -387,10 +436,11 @@ export default function CurationsView({
                   onSelect={handleAddWorks}
                 />
               </div>
+              <div className="flex-1" />
               <button
                 type="button"
                 onClick={() => setAboutOpen(true)}
-                className="mt-1.5 shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm text-neutral-900 hover:bg-neutral-50"
+                className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm text-neutral-900 hover:bg-neutral-50"
               >
                 About
               </button>
@@ -398,7 +448,7 @@ export default function CurationsView({
                 type="button"
                 onClick={handleDelete}
                 disabled={isPending}
-                className="mt-1.5 shrink-0 rounded-md border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
+                className="shrink-0 rounded-md border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
               >
                 Delete
               </button>
@@ -440,6 +490,13 @@ export default function CurationsView({
                           </div>
                         )}
                         <div className="absolute bottom-2 left-1/2 hidden -translate-x-1/2 flex-col items-stretch gap-1 group-hover:flex">
+                          <button
+                            type="button"
+                            onClick={() => openCurationsFor(w.artworkId, w.catalogueName)}
+                            className="rounded-md bg-white/90 px-2 py-1 text-xs text-neutral-900 shadow hover:bg-white"
+                          >
+                            Curations
+                          </button>
                           <button
                             type="button"
                             onClick={() => openCatalogue(w.artworkId)}
@@ -661,6 +718,64 @@ export default function CurationsView({
               onDataChanged={refreshCatalogueWork}
               showCloseButton={true}
             />
+          </div>
+        </div>
+      )}
+
+      {curationsWork && selected && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-6" {...curationsBackdrop}>
+          <div className="flex max-h-full w-full max-w-sm flex-col rounded-lg bg-white shadow-xl">
+            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-3">
+              <h2 className="min-w-0 flex-1 truncate text-lg text-neutral-900">Curations — {curationsWork.name}</h2>
+              <button
+                type="button"
+                onClick={closeCurations}
+                className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
+              >
+                Close
+              </button>
+            </div>
+            <div className="grid shrink-0 grid-cols-2 gap-2 px-4 pt-4">
+              {(["move", "add"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setCurationsWork({ ...curationsWork, mode: m })}
+                  className={`rounded-md border px-3 py-1.5 text-sm ${
+                    curationsWork.mode === m
+                      ? "border-neutral-900 bg-neutral-900 text-white"
+                      : "border-neutral-300 hover:bg-neutral-50"
+                  }`}
+                >
+                  {m === "move" ? "Move to" : "Add to"}
+                </button>
+              ))}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto p-2">
+              {curations.map((c) => {
+                const here = c.id === selected.id;
+                const already = curationsWork.inIds.includes(c.id);
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    onClick={() => putInCuration(c.id)}
+                    disabled={already || isPending}
+                    className={`flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm text-neutral-800 hover:bg-neutral-50 disabled:hover:bg-transparent ${
+                      here ? "bg-neutral-100 disabled:hover:bg-neutral-100" : ""
+                    }`}
+                  >
+                    <span className={already && !here ? "text-neutral-400" : ""}>{c.name}</span>
+                    {here ? (
+                      <span className="text-xs text-neutral-500">This one</span>
+                    ) : already ? (
+                      <span className="text-xs text-neutral-400">Already in</span>
+                    ) : null}
+                  </button>
+                );
+              })}
+              {curationsError && <p className="p-3 text-sm text-red-600">{curationsError}</p>}
+            </div>
           </div>
         </div>
       )}
