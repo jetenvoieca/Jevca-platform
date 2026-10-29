@@ -16,7 +16,7 @@ import { setArtworkMainImage } from "@/lib/actions/artworks";
 import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
-import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
+import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
 import HopperCropEditor from "@/components/HopperCropEditor";
 import { computeReferencePrice } from "@/lib/pricing";
@@ -1280,7 +1280,7 @@ function QuickCatalogueFields({
                   name="catalogueName"
                   defaultValue={parsed.name}
                   placeholder="Untitled"
-                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                  className={`w-full rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`}
                 />
               </div>
             }
@@ -1311,7 +1311,7 @@ function QuickCatalogueFields({
                   type="text"
                   readOnly
                   value={referencePrice != null ? referencePrice.toFixed(2) : "—"}
-                  className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
+                  className={`w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-500 ${FIELD_HEIGHT}`}
                 />
               </div>
               <div>
@@ -1323,7 +1323,7 @@ function QuickCatalogueFields({
                   name="offeredPrice"
                   defaultValue={initialPrice}
                   placeholder="e.g. 450.00"
-                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                  className={`w-full rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`}
                 />
               </div>
             </div>

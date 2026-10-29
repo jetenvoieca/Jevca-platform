@@ -38,6 +38,12 @@ export type ArtworkFacetValues = {
 // arbitrary value, since no standard Tailwind step lands on exactly
 // 20% less. Horizontal padding untouched; only height was asked for.
 const inputCls = "w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm";
+// Every single-line box (text input, dropdown, button beside one) is
+// exactly this tall (2026-10-29): an input and a select with the same
+// padding render at different heights, which put Name and Location out
+// of line. Shared with the Catalogue window's own Name and price boxes.
+export const FIELD_HEIGHT = "h-9";
+const lineCls = `w-full rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`;
 const labelCls = "mb-1 block text-sm font-medium text-neutral-700";
 
 // Sentinel option value for "+ Add new…" (2026-09-11) — never a real
@@ -232,7 +238,7 @@ export default function ArtworkCatalogueFields({
                 onTypeOrSizeChange?.(v, sizeValue);
                 onAutosave?.(form);
               }}
-              className={inputCls}
+              className={lineCls}
             >
               <option value="">Choose from list…</option>
               {withCurrent(settings.artworkTypes, typeValue).map((t) => (
@@ -255,11 +261,11 @@ export default function ArtworkCatalogueFields({
                 name="edition"
                 defaultValue={values.edition}
                 onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-                className={inputCls}
+                className={lineCls}
               />
             ) : (
               <>
-                <input type="text" disabled value={values.edition} aria-label="Edition" className={`${inputCls} bg-neutral-50 text-neutral-400`} />
+                <input type="text" disabled value={values.edition} aria-label="Edition" className={`${lineCls} bg-neutral-50 text-neutral-400`} />
                 <input type="hidden" name="edition" value={values.edition} />
               </>
             )}
@@ -280,7 +286,7 @@ export default function ArtworkCatalogueFields({
                 onTypeOrSizeChange?.(typeValue, v);
                 onAutosave?.(form);
               }}
-              className={inputCls}
+              className={lineCls}
             >
               <option value="">Choose from list…</option>
               {withCurrent(settings.sizePresets, sizeValue).map((s) => (
@@ -314,7 +320,7 @@ export default function ArtworkCatalogueFields({
                   onLocationChange?.(v);
                   onAutosave?.(form);
                 }}
-                className={`${inputCls} min-w-0`}
+                className={`${lineCls} min-w-0`}
               >
                 <option value="">Choose from list…</option>
                 {withCurrent(
@@ -331,7 +337,7 @@ export default function ArtworkCatalogueFields({
                 <button
                   type="button"
                   onClick={onViewLocation}
-                  className="shrink-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-600 hover:bg-neutral-50"
+                  className={`shrink-0 rounded-md border border-neutral-300 px-3 text-sm text-neutral-600 hover:bg-neutral-50 ${FIELD_HEIGHT}`}
                 >
                   View
                 </button>
@@ -355,7 +361,7 @@ export default function ArtworkCatalogueFields({
             setMediumValue(v);
             onAutosave?.(form);
           }}
-          className={inputCls}
+          className={lineCls}
         >
           <option value="">Choose from list…</option>
           {withCurrent(settings.mediumPresets, mediumValue).map((m) => (
@@ -378,7 +384,7 @@ export default function ArtworkCatalogueFields({
             defaultValue={values.date}
             placeholder="e.g. June 2025"
             onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-            className={inputCls}
+            className={lineCls}
           />
         </div>
         <label className={labelCls}>Notes</label>

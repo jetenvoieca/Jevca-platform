@@ -13,7 +13,7 @@ import type { LocationSummary } from "@/lib/actions/locations";
 import { computeReferencePrice } from "@/lib/pricing";
 import { CURRENCIES } from "@/lib/currencies";
 import MediaPicker from "@/components/MediaPicker";
-import ArtworkCatalogueFields from "@/components/ArtworkCatalogueFields";
+import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 
 export type ArtworkDetail = {
@@ -364,7 +364,7 @@ export default function ArtworkDetailPanel({
                 required
                 placeholder="Name"
                 aria-label="Name"
-                className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                className={`w-full rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`}
               />
             }
             picture={
@@ -434,7 +434,7 @@ export default function ArtworkDetailPanel({
                   type="text"
                   readOnly
                   value={referencePrice != null ? Math.round(referencePrice).toString() : "—"}
-                  className="w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 py-[6.4px] text-sm text-neutral-500"
+                  className={`w-full rounded-md border border-neutral-200 bg-neutral-50 px-3 text-sm text-neutral-500 ${FIELD_HEIGHT}`}
                 />
               </div>
               <div>
@@ -447,14 +447,14 @@ export default function ArtworkDetailPanel({
                     name="offeredPrice"
                     defaultValue={artwork.offeredPrice || ""}
                     placeholder="e.g. 450.00"
-                    className="w-full min-w-0 rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+                    className={`w-full min-w-0 rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`}
                   />
                   <select
                     name="priceCurrency"
                     aria-label="Currency"
                     defaultValue={artwork.priceCurrency}
                     onChange={(e) => autosaveCatalogue(e.currentTarget.form!)}
-                    className="shrink-0 rounded-md border border-neutral-300 px-1 py-[6.4px] text-sm"
+                    className={`shrink-0 rounded-md border border-neutral-300 px-1 text-sm ${FIELD_HEIGHT}`}
                   >
                     {CURRENCIES.map((c) => (
                       <option key={c} value={c}>
@@ -475,7 +475,7 @@ export default function ArtworkDetailPanel({
                     type="button"
                     onClick={openSale}
                     title={artwork.availability === "RESERVED" ? "Sold - Not Paid — open the sale" : "Open the sale"}
-                    className="rounded-md border border-neutral-300 px-4 py-[6.4px] text-sm font-medium text-neutral-900 hover:bg-neutral-50"
+                    className={`rounded-md border border-neutral-300 px-4 text-sm font-medium text-neutral-900 hover:bg-neutral-50 ${FIELD_HEIGHT}`}
                   >
                     SOLD
                   </button>
