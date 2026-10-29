@@ -21,6 +21,7 @@ import ArtworkFilterBar from "@/components/ArtworkFilterBar";
 import AddIconButton from "@/components/AddIconButton";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import GridLayoutButton, { useGridLayout } from "@/components/GridLayoutButton";
 
 // Every filter the catalogue offers, and the sort, in one shape — what
 // the URL, the grid fetches and the PDF/CSV exports all read from.
@@ -33,8 +34,7 @@ type Filters = {
   sort: string;
 };
 
-const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
-const DENSITY_STORAGE_KEY = "jevca:artworks-density";
+const LAYOUT_STORAGE_KEY = "jevca:artworks-density";
 
 // Availability now has three real values — AVAILABLE, RESERVED ("Sold -
 // Not Paid"), SOLD (2026-09-20 rebuild, see the "Availability model"
@@ -124,12 +124,12 @@ export default function ArtworksCatalogueView({
   settings: ArtworkSettings;
 }) {
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
-  const [view, setView] = useState<"tile" | "list">("tile");
+  const gridLayout = useGridLayout(LAYOUT_STORAGE_KEY);
+  const { view, perRow: density } = gridLayout;
   // Export PDF now opens a small dialog first (2026-08-17) rather than
   // being a plain download link, so the header title/subtitle can be
   // overridden just for this one export — see ExportPdfDialog.tsx.
   const [showExportDialog, setShowExportDialog] = useState(false);
-  const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
   const [showImport, setShowImport] = useState(false);
   // The export/import menu: Export PDF, Export CSV (the current filtered
   // view), Import CSV (ArtworkImportPanel).
@@ -441,39 +441,6 @@ export default function ArtworksCatalogueView({
     })();
   };
 
-  // One layout button (2026-10-17, direct request — less clutter for
-  // something rarely changed): each click goes to the next of tiles 3, 5,
-  // 7 and 9 to a row, then the list, then back. Remembered on this
-  // browser ("list" or the number per row).
-  useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
-      if (stored === "list") {
-        setView("list");
-        return;
-      }
-      const parsed = stored ? parseInt(stored, 10) : NaN;
-      if (DENSITY_OPTIONS.includes(parsed as (typeof DENSITY_OPTIONS)[number])) {
-        setDensity(parsed as (typeof DENSITY_OPTIONS)[number]);
-      }
-    } catch {
-      // No storage here — the default layout stays.
-    }
-  }, []);
-
-  const nextLayout = () => {
-    const at = DENSITY_OPTIONS.indexOf(density);
-    const toList = view === "tile" && at === DENSITY_OPTIONS.length - 1;
-    const nextDensity = view === "list" ? DENSITY_OPTIONS[0] : DENSITY_OPTIONS[Math.min(at + 1, DENSITY_OPTIONS.length - 1)];
-    setView(toList ? "list" : "tile");
-    if (!toList) setDensity(nextDensity);
-    try {
-      window.localStorage.setItem(DENSITY_STORAGE_KEY, toList ? "list" : String(nextDensity));
-    } catch {
-      // Not remembered — fine.
-    }
-  };
-
   // Builds the CSV export URL from whatever filters are currently active
   // — same query-param shape as the PDF export below, minus the
   // header-title fields that dialog adds (a CSV has no printed header to
@@ -584,31 +551,7 @@ export default function ArtworksCatalogueView({
                 )}
               </div>
 
-              <button
-                type="button"
-                onClick={nextLayout}
-                title={view === "list" ? "List — click for tiles" : `${density} to a row — click to change`}
-                aria-label="Change layout"
-                className="flex items-center gap-1.5 rounded-md border border-neutral-300 px-2.5 py-[4.8px] text-sm text-neutral-700 hover:bg-neutral-50"
-              >
-                {view === "list" ? (
-                  <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor" aria-hidden>
-                    <rect x="1" y="2" width="14" height="2" rx="0.5" />
-                    <rect x="1" y="7" width="14" height="2" rx="0.5" />
-                    <rect x="1" y="12" width="14" height="2" rx="0.5" />
-                  </svg>
-                ) : (
-                  <>
-                    <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor" aria-hidden>
-                      <rect x="1" y="1" width="6" height="6" rx="1" />
-                      <rect x="9" y="1" width="6" height="6" rx="1" />
-                      <rect x="1" y="9" width="6" height="6" rx="1" />
-                      <rect x="9" y="9" width="6" height="6" rx="1" />
-                    </svg>
-                    {density}
-                  </>
-                )}
-              </button>
+              <GridLayoutButton layout={gridLayout} onClick={gridLayout.next} />
             </div>
           </div>
 

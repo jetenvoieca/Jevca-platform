@@ -10,6 +10,7 @@ import VideoThumb from "@/components/VideoThumb";
 import MediaCatalogueTabs from "@/components/MediaCatalogueTabs";
 import { mediaListFilters, type MediaTab } from "@/lib/mediaTabs";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import GridLayoutButton, { useGridLayout } from "@/components/GridLayoutButton";
 
 type MediaRow = {
   id: string;
@@ -20,8 +21,7 @@ type MediaRow = {
   artwork: { id: string; catalogueName: string } | null;
 };
 
-const DENSITY_OPTIONS = [3, 5, 7, 9] as const;
-const DENSITY_STORAGE_KEY = "jevca:media-density";
+const LAYOUT_STORAGE_KEY = "jevca:media-density";
 
 // Debounce for the search box, so "filters activate as you type"
 // (2026-09-12, direct request) doesn't fire a navigation on every
@@ -64,8 +64,8 @@ export default function MediaCatalogueView({
 }) {
   const words = useClientWords();
   const router = useRouter();
-  const [view, setView] = useState<"tile" | "list">("tile");
-  const [density, setDensity] = useState<(typeof DENSITY_OPTIONS)[number]>(5);
+  const gridLayout = useGridLayout(LAYOUT_STORAGE_KEY);
+  const { view, perRow: density } = gridLayout;
 
   // The visible list, appended to by "Load more". Previously assumed a
   // purpose/filter change was always "a real page load, which remounts
@@ -135,19 +135,6 @@ export default function MediaCatalogueView({
     setDeleting(false);
     leaveSelectMode();
     router.refresh();
-  };
-
-  useEffect(() => {
-    const stored = window.localStorage.getItem(DENSITY_STORAGE_KEY);
-    const parsed = stored ? parseInt(stored, 10) : NaN;
-    if (DENSITY_OPTIONS.includes(parsed as (typeof DENSITY_OPTIONS)[number])) {
-      setDensity(parsed as (typeof DENSITY_OPTIONS)[number]);
-    }
-  }, []);
-
-  const setDensityAndStore = (n: (typeof DENSITY_OPTIONS)[number]) => {
-    setDensity(n);
-    window.localStorage.setItem(DENSITY_STORAGE_KEY, String(n));
   };
 
   // Live filters (2026-09-12, direct request — "filters should activate
@@ -368,49 +355,7 @@ export default function MediaCatalogueView({
                 Select
               </button>
             )}
-            <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-              <button
-                type="button"
-                onClick={() => setView("tile")}
-                className={`px-3 py-1.5 ${
-                  view === "tile" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                }`}
-              >
-                Tile
-              </button>
-              <button
-                type="button"
-                onClick={() => setView("list")}
-                className={`px-3 py-1.5 ${
-                  view === "list" ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"
-                }`}
-              >
-                List
-              </button>
-            </div>
-
-            {/* "Per row" label removed (2026-09-12, direct request) —
-                the buttons' own numbers already say what they do; the
-                Artwork Catalogue's matching density control has never
-                had a label either. */}
-            {view === "tile" && (
-              <div className="flex items-center gap-1 text-sm text-neutral-500">
-                {DENSITY_OPTIONS.map((n) => (
-                  <button
-                    key={n}
-                    type="button"
-                    onClick={() => setDensityAndStore(n)}
-                    className={`h-7 w-7 rounded-md text-sm ${
-                      density === n
-                        ? "bg-neutral-900 text-white"
-                        : "border border-neutral-300 hover:bg-neutral-50"
-                    }`}
-                  >
-                    {n}
-                  </button>
-                ))}
-              </div>
-            )}
+            <GridLayoutButton layout={gridLayout} onClick={gridLayout.next} />
           </div>
         </div>
 
