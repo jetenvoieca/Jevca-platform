@@ -195,14 +195,25 @@ export default function ArtworkCatalogueFields({
 
   return (
     <>
-      {/* Craig's mockup (2026-10-28): the picture (when given) on the
-          left; Name, Type, Size, Edition, the price (children) and
-          Location beside it; Medium below; then Date and the notes in
-          the private Studio notes box. */}
-      <div className={picture ? "grid grid-cols-2 gap-4" : ""}>
-        {picture && <div>{picture}</div>}
-        <div className="space-y-3">
-          {name}
+      {/* Craig's mockups (2026-10-28/29): Type, Edition, Size, the price
+          (children) and Location; Medium below; then Date and the notes
+          in the private Studio notes box. */}
+      {/* With a picture (2026-10-29, Craig's mockup): picture and Name
+          under it on the left, the other fields on the right, both
+          columns the same height so the picture's top meets Type's and
+          Name's bottom meets Location's. Without one (the Hopper), Name
+          heads the single column. */}
+      <div className={picture ? "grid grid-cols-2 items-stretch gap-4" : ""}>
+        {picture && (
+          <div className="flex flex-col justify-between gap-3">
+            {picture}
+            {name}
+          </div>
+        )}
+        {/* Spread to the full height beside the picture, so the first
+            and last fields line up with its top and Name's bottom. */}
+        <div className={picture ? "flex flex-col justify-between gap-3" : "space-y-3"}>
+          {!picture && name}
           <div>
             <label className={labelCls}>Type</label>
             <select
@@ -232,6 +243,27 @@ export default function ArtworkCatalogueFields({
               <option value={ADD_NEW}>+ Add new…</option>
             </select>
           </div>
+          {/* Edition only applies to editioned work — Originals and Uniques
+              are one-offs (2026-08-15 decision). Always shown, below Type,
+              and greyed out unless the Type includes "Edition" (2026-10-29,
+              Craig's mockup); any value on record is kept either way. */}
+          <div>
+            <label className={`${labelCls} ${isEditionType ? "" : "text-neutral-400"}`}>Edition</label>
+            {isEditionType ? (
+              <input
+                type="text"
+                name="edition"
+                defaultValue={values.edition}
+                onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
+                className={inputCls}
+              />
+            ) : (
+              <>
+                <input type="text" disabled value={values.edition} aria-label="Edition" className={`${inputCls} bg-neutral-50 text-neutral-400`} />
+                <input type="hidden" name="edition" value={values.edition} />
+              </>
+            )}
+          </div>
           <div>
             <label className={labelCls}>Size</label>
             <select
@@ -259,26 +291,6 @@ export default function ArtworkCatalogueFields({
               <option value={ADD_NEW}>+ Add new…</option>
             </select>
           </div>
-          {/* Edition only applies to editioned work — Originals and Uniques
-              (and materials like Aluminium that aren't editioned) are
-              one-offs (2026-08-15 decision). */}
-          {isEditionType ? (
-            <div>
-              <label className={labelCls}>Edition</label>
-              <input
-                type="text"
-                name="edition"
-                defaultValue={values.edition}
-                onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-                className={inputCls}
-              />
-            </div>
-          ) : (
-            // Preserve any Edition value already on record rather than
-            // wiping it out just because Type changed — it'll reappear if
-            // switched back.
-            <input type="hidden" name="edition" value={values.edition} />
-          )}
           {/* Available (qty) removed from the visible form (2026-09-11,
               direct request) — always a hidden input now, regardless of
               Type, so any existing value on record is preserved rather than

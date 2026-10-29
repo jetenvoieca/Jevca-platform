@@ -356,16 +356,16 @@ export default function ArtworkDetailPanel({
       <form onBlur={(e) => autosaveCatalogue(e.currentTarget)} className="space-y-4">
           <ArtworkCatalogueFields
             name={
-              <div>
-                <label className="mb-1 block text-sm font-medium text-neutral-700">Name</label>
-                <input
-                  type="text"
-                  name="catalogueName"
-                  defaultValue={artwork.catalogueName}
-                  required
-                  className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
-                />
-              </div>
+              // Under the picture, no label (2026-10-29, Craig's mockup).
+              <input
+                type="text"
+                name="catalogueName"
+                defaultValue={artwork.catalogueName}
+                required
+                placeholder="Name"
+                aria-label="Name"
+                className="w-full rounded-md border border-neutral-300 px-3 py-[6.4px] text-sm"
+              />
             }
             picture={
               // The work's one picture (2026-10-28): click it to choose
