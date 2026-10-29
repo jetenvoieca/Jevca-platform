@@ -35,6 +35,10 @@ export async function listImages(artistId: string, q?: string) {
     where: {
       artistId,
       status: { not: "ARCHIVED" },
+      // Not the works' own pictures (2026-10-28: each work has one, set
+      // from its Catalogue window) — the same media as the Media
+      // Catalogue's Marketing and Videos views.
+      artworkId: null,
       ...(q
         ? {
             OR: [
@@ -45,13 +49,6 @@ export async function listImages(artistId: string, q?: string) {
         : {}),
     },
     orderBy: { createdAt: "desc" },
-    // Included 2026-08-17 so MediaPicker can show which artwork an image
-    // is already related to (previously only its caption showed, so a
-    // photo already tied to a specific piece looked no different from an
-    // unrelated one until you'd actually picked it and looked closer).
-    // The artwork's Name — its one and only name (2026-09-23).
-    include: { artwork: { select: { id: true, catalogueName: true } } },
-    relationLoadStrategy: "query",
     take: 60,
   });
 }

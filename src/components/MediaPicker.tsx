@@ -17,8 +17,6 @@ type PickedImage = {
   posterUrl: string | null;
   caption: string | null;
   kind: string;
-  // The artwork's Name — its one and only name (2026-09-23).
-  artwork: { id: string; catalogueName: string } | null;
 };
 
 type MediaRow = {
@@ -27,7 +25,6 @@ type MediaRow = {
   posterUrl: string | null;
   caption: string | null;
   kind: string;
-  artwork: { id: string; catalogueName: string } | null;
 };
 
 // videoOnly stays exactly as it was (used by a curation's Video section) —
@@ -58,7 +55,6 @@ function toPicked(rows: MediaRow[], videoOnly: boolean, mediaKinds?: ("PHOTO" | 
       posterUrl: img.posterUrl,
       caption: img.caption,
       kind: img.kind,
-      artwork: img.artwork,
     }));
 }
 
@@ -413,11 +409,6 @@ export default function MediaPicker({
                   {img.caption && (
                     <p className="mt-1 truncate text-xs text-neutral-500" title={img.caption}>
                       {img.caption}
-                    </p>
-                  )}
-                  {img.artwork && (
-                    <p className="truncate text-xs font-medium text-rose-600" title={img.artwork.catalogueName}>
-                      → {img.artwork.catalogueName}
                     </p>
                   )}
                 </button>
