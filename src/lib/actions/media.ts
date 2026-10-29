@@ -38,7 +38,7 @@ export async function listImages(artistId: string, q?: string) {
       // Not the works' own pictures (2026-10-28: each work has one, set
       // from its Catalogue window) — the same media as the Media
       // Catalogue's Marketing and Videos views.
-      artworkId: null,
+      mainImageOfArtwork: { is: null },
       ...(q
         ? {
             OR: [

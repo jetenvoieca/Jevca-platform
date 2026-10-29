@@ -36,7 +36,7 @@ export async function listMedia(artistId: string, filters: ListFilters) {
   const where = {
     artistId,
     status: { not: "ARCHIVED" as const },
-    ...(purpose === "marketing" ? { artworkId: null } : {}),
+    ...(purpose === "marketing" ? { mainImageOfArtwork: { is: null } } : {}),
     ...(kind ? { kind } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
     ...(q
@@ -59,8 +59,8 @@ export async function listMedia(artistId: string, filters: ListFilters) {
       // was removed entirely (2026-09-12, direct request — "never used
       // it or even know why I would"); this is now the only order.
       orderBy: { createdAt: newestFirst ? "desc" : "asc" },
-      // The artwork's Name — its one and only name (2026-09-23).
-      include: { artwork: { select: { id: true, catalogueName: true } } },
+      // The Name of the work it's the picture of (2026-09-23).
+      include: { mainImageOfArtwork: { select: { id: true, catalogueName: true } } },
       relationLoadStrategy: "query",
       skip: offset,
       take: limit,
@@ -72,8 +72,9 @@ export async function listMedia(artistId: string, filters: ListFilters) {
   // the thumbnail (fast, served straight from storage) always wins here
   // — falls back to the original proxied url only for images uploaded
   // before 2026-08-13 that haven't been backfilled yet.
-  const rowsWithThumbnails = rows.map((r) => ({
+  const rowsWithThumbnails = rows.map(({ mainImageOfArtwork, ...r }) => ({
     ...r,
+    artwork: mainImageOfArtwork,
     url: publicMediaUrl(r.thumbnailKey) || r.url,
   }));
 
@@ -85,14 +86,15 @@ export async function getMediaDetail(id: string) {
   const image = await db.image.findUnique({
     where: { id },
     // catalogueName — see the matching note in listMedia above.
-    include: { artwork: { select: { id: true, catalogueName: true } } },
+    include: { mainImageOfArtwork: { select: { id: true, catalogueName: true } } },
     relationLoadStrategy: "query",
   });
   if (!image) return null;
+  const { mainImageOfArtwork, ...rest } = image;
   // displayUrl is for the panel's medium preview; url stays the true
   // original throughout, since the lightbox's "view full size" click
   // deliberately shows the real, unresized file.
-  return { ...image, displayUrl: publicMediaUrl(image.displayKey) || image.url };
+  return { ...rest, artwork: mainImageOfArtwork, displayUrl: publicMediaUrl(image.displayKey) || image.url };
 }
 
 export async function updateMedia(id: string, siteId: string, formData: FormData): Promise<void> {

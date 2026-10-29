@@ -138,7 +138,6 @@ export default async function MediaCataloguePage({
           caption: selectedItem.caption,
           altText: selectedItem.altText,
           tags: selectedItem.tags,
-          artworkId: selectedItem.artworkId,
           artwork: selectedItem.artwork,
         }
       : null;

@@ -230,7 +230,7 @@ export async function createArtworkFromHopperQuick(
   await db.$transaction(async (tx) => {
     await tx.image.update({
       where: { id: hopperImageId },
-      data: { status: "SORTED", artworkId: artwork.id },
+      data: { status: "SORTED" },
     });
     await tx.artwork.update({ where: { id: artwork.id }, data: { mainImageId: hopperImageId } });
   });

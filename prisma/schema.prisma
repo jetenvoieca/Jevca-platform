@@ -1629,8 +1629,7 @@ model Artwork {
   // Catalogue in the nav.
   needsReview Boolean @default(false)
 
-  images Image[]
-
+  // The work's one picture (2026-10-28).
   mainImageId String? @unique
   // onDelete: Restrict (2026-09-12 fix) — was left at Prisma/Postgres's
   // default action for an optional FK, which is SetNull, not Restrict.
@@ -2213,9 +2212,9 @@ model Image {
   // updateMedia. Powers the "raw import, not yet reviewed" count shown
   // next to Media Catalogue in the nav.
   needsReview Boolean @default(false)
-  artworkId String?
-  artwork   Artwork?    @relation(fields: [artworkId], references: [id])
 
+  // The work this is the one picture of (Artwork.mainImage) — a picture
+  // belongs to a work only that way (2026-10-29).
   mainImageOfArtwork Artwork? @relation("ArtworkMainImage")
   profileImageOfArtist Artist? @relation("ArtistProfileImage")
   // Curations using this image in a work's own image set (2026-10-03) —
@@ -2235,7 +2234,6 @@ model Image {
   updatedAt DateTime @updatedAt
 
   @@index([artistId])
-  @@index([artworkId])
   @@index([artistId, sourceUrl])
 }
 

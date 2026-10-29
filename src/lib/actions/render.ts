@@ -564,9 +564,8 @@ export async function getRenderStatus(artistId: string) {
           caption: true,
           altText: true,
           tags: true,
-          artworkId: true,
-          // The artwork's Name — its one and only name (2026-09-23).
-          artwork: { select: { id: true, catalogueName: true } },
+          // The Name of the work it's the picture of (2026-09-23).
+          mainImageOfArtwork: { select: { id: true, catalogueName: true } },
         },
       },
     },
@@ -621,8 +620,7 @@ export async function getRenderStatus(artistId: string) {
           caption: render.resultImage.caption,
           altText: render.resultImage.altText,
           tags: render.resultImage.tags,
-          artworkId: render.resultImage.artworkId,
-          artwork: render.resultImage.artwork,
+          artwork: render.resultImage.mainImageOfArtwork,
         }
       : null,
   };

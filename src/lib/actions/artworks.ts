@@ -284,7 +284,6 @@ export async function duplicateArtwork(
         tags: img.tags,
         status: img.status,
         source: img.source,
-        artworkId: created.id,
       },
     });
     await db.artwork.update({ where: { id: created.id }, data: { mainImageId: copy.id } });
@@ -720,8 +719,7 @@ export async function deleteArtwork(siteId: string, id: string) {
 // The artwork's one picture (2026-10-28, Craig: the Catalogue is a plain
 // record of the works — other pictures belong to curations'
 // presentations): this Media Catalogue picture becomes its Main, and the
-// one it replaces is taken off the artwork (it stays in the Media
-// Catalogue).
+// one it replaces stays in the Media Catalogue.
 export async function setArtworkMainImage(
   artworkId: string,
   imageId: string,
@@ -739,11 +737,8 @@ export async function setArtworkMainImage(
   const artwork = await db.artwork.findUnique({ where: { id: artworkId }, select: { mainImageId: true } });
   if (artwork?.mainImageId === imageId) return { ok: true };
   await db.$transaction([
-    ...(artwork?.mainImageId
-      ? [db.image.update({ where: { id: artwork.mainImageId }, data: { artworkId: null } })]
-      : []),
     db.artwork.update({ where: { id: artworkId }, data: { mainImageId: imageId } }),
-    db.image.update({ where: { id: imageId }, data: { artworkId, status: "SORTED" } }),
+    db.image.update({ where: { id: imageId }, data: { status: "SORTED" } }),
   ]);
   return { ok: true };
 }

@@ -14,8 +14,7 @@ export type MediaDetail = {
   caption: string | null;
   altText: string | null;
   tags: string[];
-  artworkId: string | null;
-  // The artwork's Name — its one and only name (2026-09-23).
+  // The Name of the work it's the picture of (2026-09-23).
   artwork: { id: string; catalogueName: string } | null;
 };
 

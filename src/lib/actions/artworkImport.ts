@@ -246,7 +246,6 @@ export async function importArtworkRow(
         mimeType: imageResult.mimeType,
         status: "SORTED",
         source: "CSV import",
-        artworkId: artwork.id,
       },
     });
 

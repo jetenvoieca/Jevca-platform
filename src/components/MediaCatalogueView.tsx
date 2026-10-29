@@ -218,7 +218,6 @@ export default function MediaCatalogueView({
           caption: item.caption,
           altText: item.altText,
           tags: item.tags,
-          artworkId: item.artworkId,
           artwork: item.artwork,
         });
         updateUrlSelected(mediaId);
@@ -251,7 +250,6 @@ export default function MediaCatalogueView({
           caption: item.caption,
           altText: item.altText,
           tags: item.tags,
-          artworkId: item.artworkId,
           artwork: item.artwork,
         });
       }
