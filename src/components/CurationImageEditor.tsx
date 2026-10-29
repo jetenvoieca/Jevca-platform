@@ -94,7 +94,7 @@ export default function CurationImageEditor({
   return (
     // Four columns: the main image spans three columns and three rows, so
     // it's square and level with the three small squares beside it.
-    <div className={`grid grid-cols-4 gap-3 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+    <div className={`grid grid-cols-4 gap-2.5 ${busy ? "pointer-events-none opacity-60" : ""}`}>
       {main ? (
         <div className="relative col-span-3 row-span-3 overflow-hidden rounded-md bg-neutral-100">
           <ImageFill image={main} large />

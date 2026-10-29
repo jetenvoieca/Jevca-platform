@@ -40,8 +40,8 @@ import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 // The boxed panels (Name, Presentation medium, Description, Purchase
 // Options) — about 10% shorter than before (2026-10-29, Craig: tighten
 // the modal): less padding above and below, and under each heading.
-const PANEL = "rounded-xl border border-neutral-300 px-4 py-3";
-const PANEL_TITLE = "mb-1.5 text-center text-lg text-neutral-900";
+const PANEL = "rounded-xl border border-neutral-300 px-3.5 py-2.5";
+const PANEL_TITLE = "mb-1 text-center text-base text-neutral-900";
 
 // Amounts in Purchase Options: thousands separated, pence only when
 // there are any ("25,000", "4,999.50"). The currency is the dropdown
@@ -212,7 +212,7 @@ export default function CurationWorkPresentation({
       : null;
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2.5">
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
       <CurationImageEditor
@@ -239,7 +239,7 @@ export default function CurationWorkPresentation({
           onKeyDown={(e) => {
             if (e.key === "Enter") e.currentTarget.blur();
           }}
-          className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
+          className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
         />
       </div>
 
@@ -251,7 +251,7 @@ export default function CurationWorkPresentation({
           onBlur={saveMedium}
           rows={2}
           placeholder="e.g. Original work on aluminium. Mixed media…"
-          className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
+          className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
         />
       </div>
 
@@ -261,9 +261,9 @@ export default function CurationWorkPresentation({
           value={descriptionDraft}
           onChange={(e) => setDescriptionDraft(e.target.value)}
           onBlur={saveDescription}
-          rows={4}
+          rows={3}
           placeholder="Describe this work for this curation"
-          className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-800"
+          className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
         />
       </div>
 
@@ -277,7 +277,7 @@ export default function CurationWorkPresentation({
               setCurrencyDraft(e.target.value);
               savePrice(priceDraft, e.target.value);
             }}
-            className="shrink-0 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-sm"
           >
             {CURRENCIES.map((c) => (
               <option key={c} value={c}>
