@@ -360,7 +360,7 @@ export default function ArtworkDetailPanel({
             picture={
               // The work's one picture (2026-10-28): click it to choose
               // another from the Media Catalogue.
-              <div className="relative">
+              <div>
                 <MediaPicker
                   artistId={artistId}
                   siteId={siteId}
@@ -373,11 +373,6 @@ export default function ArtworkDetailPanel({
                     if (images[0]) changeMainImage(images[0].id);
                   }}
                 />
-                {mainImage && (
-                  <span className="pointer-events-none absolute bottom-2 left-2 rounded bg-black/70 px-1.5 py-0.5 text-xs text-white">
-                    Main
-                  </span>
-                )}
                 {pictureError && <p className="mt-1 text-xs text-red-600">{pictureError}</p>}
               </div>
             }
