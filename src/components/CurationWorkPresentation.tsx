@@ -37,6 +37,12 @@ import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 // Rendered with a key of curation + work by its parent, so it starts
 // fresh whenever a different work is shown.
 
+// The boxed panels (Name, Presentation medium, Description, Purchase
+// Options) — about 10% shorter than before (2026-10-29, Craig: tighten
+// the modal): less padding above and below, and under each heading.
+const PANEL = "rounded-xl border border-neutral-300 px-4 py-3";
+const PANEL_TITLE = "mb-1.5 text-center text-lg text-neutral-900";
+
 // Amounts in Purchase Options: thousands separated, pence only when
 // there are any ("25,000", "4,999.50"). The currency is the dropdown
 // beside them.
@@ -206,7 +212,7 @@ export default function CurationWorkPresentation({
       : null;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-3">
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
       <CurationImageEditor
@@ -223,8 +229,8 @@ export default function CurationWorkPresentation({
         onError={setError}
       />
 
-      <div className="rounded-xl border border-neutral-300 p-4">
-        <h3 className="mb-2 text-center text-lg text-neutral-900">Name</h3>
+      <div className={PANEL}>
+        <h3 className={PANEL_TITLE}>Name</h3>
         <input
           type="text"
           value={nameDraft}
@@ -237,8 +243,8 @@ export default function CurationWorkPresentation({
         />
       </div>
 
-      <div className="rounded-xl border border-neutral-300 p-4">
-        <h3 className="mb-2 text-center text-lg text-neutral-900">Presentation medium</h3>
+      <div className={PANEL}>
+        <h3 className={PANEL_TITLE}>Presentation medium</h3>
         <textarea
           value={mediumDraft}
           onChange={(e) => setMediumDraft(e.target.value)}
@@ -249,8 +255,8 @@ export default function CurationWorkPresentation({
         />
       </div>
 
-      <div className="rounded-xl border border-neutral-300 p-4">
-        <h3 className="mb-2 text-center text-lg text-neutral-900">Description</h3>
+      <div className={PANEL}>
+        <h3 className={PANEL_TITLE}>Description</h3>
         <textarea
           value={descriptionDraft}
           onChange={(e) => setDescriptionDraft(e.target.value)}
@@ -261,8 +267,8 @@ export default function CurationWorkPresentation({
         />
       </div>
 
-      <div className="rounded-xl border border-neutral-300 p-4">
-        <h3 className="mb-3 text-center text-lg text-neutral-900">Purchase Options</h3>
+      <div className={PANEL}>
+        <h3 className={PANEL_TITLE}>Purchase Options</h3>
         <label className="mb-1 block text-xs font-medium text-neutral-700">Full price</label>
         <div className="flex items-center gap-2">
           <select
