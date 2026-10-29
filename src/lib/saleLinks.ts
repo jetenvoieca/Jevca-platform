@@ -48,8 +48,7 @@ export async function workLineItem(sale: DocumentSale, label: string): Promise<L
   ]
     .filter(Boolean)
     .join(" — ");
-  const imageKey = sale.artwork.mainImage?.displayKey ?? sale.artwork.images[0]?.displayKey;
-  const imageUrl = publicMediaUrl(imageKey);
+  const imageUrl = publicMediaUrl(sale.artwork.mainImage?.displayKey);
   const product = await stripe.products.create({
     name: saleTitle(sale.artwork.catalogueName, sale.chargeKind),
     ...(description ? { description } : {}),

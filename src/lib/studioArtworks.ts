@@ -53,14 +53,13 @@ export async function listStudioArtworks(artistId: string, offset: number) {
         offeredPrice: true,
         priceCurrency: true,
         mainImage: { select: { url: true, thumbnailKey: true, displayKey: true } },
-        images: { take: 1, select: { url: true, thumbnailKey: true, displayKey: true } },
       },
     }),
     db.artwork.count({ where }),
   ]);
 
   const artworks: StudioArtworkTile[] = rows.map((a) => {
-    const image = a.mainImage ?? a.images[0] ?? null;
+    const image = a.mainImage;
     const thumbnailUrl = image ? publicMediaUrl(image.thumbnailKey) || image.url : null;
     return {
       id: a.id,

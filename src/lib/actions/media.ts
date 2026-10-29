@@ -105,24 +105,20 @@ export async function getArtworksForArtist(
         presentationPrice: true,
         availability: true,
         mainImage: { select: { url: true, thumbnailKey: true } },
-        images: { take: 1, select: { url: true, thumbnailKey: true } },
       },
       skip: offset,
       take: PICKER_PAGE_SIZE,
     }),
     db.artwork.count({ where }),
   ]);
-  // The chosen main image, else the first image; its small thumbnail
-  // where one exists — same as the Artwork Catalogue grid.
+  // The work's picture, as its small thumbnail where one exists — same
+  // as the Artwork Catalogue grid.
   return {
-    rows: rows.map(({ mainImage, images, presentationPrice, ...a }) => {
-      const image = mainImage || images[0] || null;
-      return {
-        ...a,
-        presentationPrice: presentationPrice != null ? presentationPrice.toString() : null,
-        imageUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
-      };
-    }),
+    rows: rows.map(({ mainImage, presentationPrice, ...a }) => ({
+      ...a,
+      presentationPrice: presentationPrice != null ? presentationPrice.toString() : null,
+      imageUrl: mainImage ? publicMediaUrl(mainImage.thumbnailKey) || mainImage.url : null,
+    })),
     total,
   };
 }

@@ -177,7 +177,6 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
               size: true,
               description: true,
               mainImage: { select: { url: true, thumbnailKey: true } },
-              images: { take: 1, select: { url: true, thumbnailKey: true } },
             },
           },
           invoice: { select: { id: true, createdAt: true, paidAt: true, cancelledAt: true } },
@@ -226,16 +225,12 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
     notes: customer.notes,
     createdAt: customer.createdAt.toISOString(),
     purchases: customer.purchases.map((p) => {
-      // Prefers the chosen main image over whatever was returned first
-      // (2026-08-16, same pattern as listArtworks).
-      const effectiveImage = p.artwork.mainImage || p.artwork.images[0];
+      const image = p.artwork.mainImage;
       return {
         id: p.id,
         artworkId: p.artworkId,
         artworkTitle: saleTitle(p.artwork.catalogueName, p.chargeKind),
-        artworkImageUrl: effectiveImage
-          ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
-          : null,
+        artworkImageUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
         artworkMedium: p.artwork.medium,
         artworkSize: p.artwork.size,
         artworkDescription: p.artwork.description,
@@ -313,7 +308,6 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
       size: true,
       availability: true,
       mainImage: { select: { url: true, thumbnailKey: true } },
-      images: { take: 1, select: { url: true, thumbnailKey: true } },
     },
     orderBy: { catalogueName: "asc" },
   });
@@ -321,9 +315,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
   return {
     ...detail,
     consignedWorks: works.map((w) => {
-      // Prefers the chosen main image over whatever was returned first
-      // (2026-08-16, same pattern as listArtworks).
-      const effectiveImage = w.mainImage || w.images[0];
+      const image = w.mainImage;
       return {
         id: w.id,
         catalogueName: w.catalogueName,
@@ -333,9 +325,7 @@ export async function getGalleryDetail(customerId: string): Promise<GalleryDetai
         medium: w.medium,
         size: w.size,
         availability: w.availability,
-        imageUrl: effectiveImage
-          ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
-          : null,
+        imageUrl: image ? publicMediaUrl(image.thumbnailKey) || image.url : null,
       };
     }),
   };

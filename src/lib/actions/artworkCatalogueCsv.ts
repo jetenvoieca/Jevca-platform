@@ -39,12 +39,11 @@ export async function generateArtworkCatalogueCsv(
       availability: true,
       studioNotes: true,
       mainImage: { select: { key: true, displayKey: true, thumbnailKey: true } },
-      images: { take: 1, select: { key: true, displayKey: true, thumbnailKey: true } },
     },
   });
 
   const rows = artworks.map((a) => {
-    const img = a.mainImage || a.images[0];
+    const img = a.mainImage;
     // Prefers the original upload (`key`) over the derived display/
     // thumbnail sizes, unlike the PDF export — a re-import fetching this
     // URL should get the best available copy, not a resized one.

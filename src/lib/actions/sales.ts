@@ -33,7 +33,7 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
   const purchases = await db.purchase.findMany({
     where: { artwork: { artistId } },
     include: {
-      artwork: { include: { images: { take: 1 }, mainImage: true, artist: { select: { invoiceOverdueDays: true } } } },
+      artwork: { include: { mainImage: true, artist: { select: { invoiceOverdueDays: true } } } },
       invoice: overdueInvoiceSelect,
     },
     relationLoadStrategy: "query",
@@ -44,9 +44,7 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
     purchaseId: p.id,
     artworkId: p.artworkId,
     artworkTitle: saleTitle(p.artwork.catalogueName, p.chargeKind),
-    // Prefers the chosen main image over whatever Prisma returned first
-    // (2026-08-16, same pattern as listArtworks).
-    artworkThumbnail: p.artwork.mainImage?.url ?? p.artwork.images[0]?.url ?? null,
+    artworkThumbnail: p.artwork.mainImage?.url ?? null,
     buyerName: p.buyerName,
     buyerEmail: p.buyerEmail,
     type: p.type,

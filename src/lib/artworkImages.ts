@@ -1,8 +1,9 @@
 import { publicMediaUrl } from "@/lib/r2";
 
-// An artwork's images as the admin screens show them (2026-10-03) —
-// shared by the Artwork Catalogue's detail panel and the Curations
-// page, so both read the same images the same way.
+// A picture or video as the admin screens show it (2026-10-03) — a
+// work's one picture (Artwork.mainImage) in the Artwork Catalogue, the
+// Media Catalogue's Artworks view and the Curations page, and the
+// pictures a curation chooses for a work's presentation.
 export type ArtworkImage = {
   id: string;
   // Small thumbnail (600px), for tiles.
@@ -13,6 +14,16 @@ export type ArtworkImage = {
   posterUrl: string | null;
 };
 
+// What toArtworkImage needs of an Image row — use in a Prisma select.
+export const ARTWORK_IMAGE_SELECT = {
+  id: true,
+  url: true,
+  thumbnailKey: true,
+  displayKey: true,
+  kind: true,
+  posterUrl: true,
+} as const;
+
 type ImageRow = {
   id: string;
   url: string;
@@ -22,22 +33,14 @@ type ImageRow = {
   posterUrl: string | null;
 };
 
-// Main image first, if one is set — everything else keeps the order it
-// was given in. Each falls back to the original file when its smaller
-// versions haven't been generated.
-export function toArtworkImages(images: ImageRow[], mainImageId: string | null): ArtworkImage[] {
-  return images
-    .slice()
-    .sort((a, b) => {
-      if (a.id === mainImageId) return -1;
-      if (b.id === mainImageId) return 1;
-      return 0;
-    })
-    .map((img) => ({
-      id: img.id,
-      url: publicMediaUrl(img.thumbnailKey) || img.url,
-      displayUrl: publicMediaUrl(img.displayKey) || publicMediaUrl(img.thumbnailKey) || img.url,
-      kind: img.kind,
-      posterUrl: img.posterUrl,
-    }));
+// Each size falls back to the original file when its smaller versions
+// haven't been generated.
+export function toArtworkImage(img: ImageRow): ArtworkImage {
+  return {
+    id: img.id,
+    url: publicMediaUrl(img.thumbnailKey) || img.url,
+    displayUrl: publicMediaUrl(img.displayKey) || publicMediaUrl(img.thumbnailKey) || img.url,
+    kind: img.kind,
+    posterUrl: img.posterUrl,
+  };
 }

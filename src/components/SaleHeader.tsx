@@ -36,8 +36,7 @@ export default function SaleHeader({
   onTitleClick?: () => void;
   onOpenCatalogue?: () => void;
 }) {
-  const mainImage =
-    artwork.images.find((i) => i.id === artwork.mainImageId) ?? artwork.images[0] ?? null;
+  const { mainImage } = artwork;
   const thumbUrl = mainImage
     ? mainImage.kind === "VIDEO"
       ? mainImage.posterUrl

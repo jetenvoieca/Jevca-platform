@@ -319,11 +319,11 @@ export async function addPicksToTimeline(
 
   const artworks = await db.artwork.findMany({
     where: { id: { in: picks.artworkIds }, artistId },
-    select: { id: true, mainImageId: true, images: { take: 1, select: { id: true } } },
+    select: { id: true, mainImageId: true },
   });
   const artworkImageIds = picks.artworkIds.flatMap((id) => {
     const artwork = artworks.find((a) => a.id === id);
-    const imageId = artwork?.mainImageId ?? artwork?.images[0]?.id;
+    const imageId = artwork?.mainImageId;
     return imageId ? [imageId] : [];
   });
   const imageIds = [...picks.imageIds, ...artworkImageIds];

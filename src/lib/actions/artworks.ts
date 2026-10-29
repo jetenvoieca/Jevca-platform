@@ -13,7 +13,7 @@ import {
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
 import { isCurrency } from "@/lib/currencies";
-import { toArtworkImages } from "@/lib/artworkImages";
+import { ARTWORK_IMAGE_SELECT, toArtworkImage } from "@/lib/artworkImages";
 import { getArtistDefaultCurrency } from "@/lib/primarySite";
 import type { PurchaseDetail } from "./payments";
 import { isSaleOverdue, overdueInvoiceSelect } from "@/lib/overdue";
@@ -159,14 +159,13 @@ export async function createArtwork(artistId: string, siteId: string, formData: 
 // Original alongside a Paper Edition of it, or the same image reused for
 // a different size option). Duplicates the Catalogue fields, Presentation
 // fields (including pricing, so it's immediately sellable — not left
-// needing a re-save before Payment will accept a sale), and every image
-// currently on the artwork — main and Related alike.
+// needing a re-save before Payment will accept a sale), and its picture.
 //
-// Images are duplicated as new `Image` rows pointing at the exact same
+// The picture is copied as a new `Image` row pointing at the exact same
 // stored file (same `key`/`url`/thumbnailKey/displayKey), not re-uploaded
-// — `Image.artworkId` is a single foreign key (one image belongs to
-// exactly one artwork), so two artworks can never literally share one
-// row, but they can cheaply share the same underlying file.
+// — a picture is the main picture of one work only, so two works can
+// never share one row, but they can cheaply share the same file (which
+// deleteImageFiles leaves in place while another row still uses it).
 //
 // Name (2026-09-11, direct request — "don't add 'derivative' to
 // title") — copied across exactly as-is, no " Derivative" suffix. The
@@ -207,7 +206,7 @@ export async function duplicateArtwork(
   await artworkOwner(artworkId);
   const original = await db.artwork.findUniqueOrThrow({
     where: { id: artworkId },
-    include: { images: true, saleTerms: true },
+    include: { mainImage: true, saleTerms: true },
   });
 
   const typeLower = (original.type || "").trim().toLowerCase();
@@ -267,41 +266,28 @@ export async function duplicateArtwork(
     });
   }
 
-  // Duplicate every image row (main and Related alike) — Promise.all
-  // preserves input order in its results, which is what lets the
-  // mainImageId lookup below just match by array index rather than
-  // needing to re-identify anything after the fact.
-  const newImages = await Promise.all(
-    original.images.map((img) =>
-      db.image.create({
-        data: {
-          artistId: original.artistId,
-          key: img.key,
-          url: img.url,
-          thumbnailKey: img.thumbnailKey,
-          displayKey: img.displayKey,
-          posterUrl: img.posterUrl,
-          kind: img.kind,
-          mimeType: img.mimeType,
-          caption: img.caption,
-          altText: img.altText,
-          tags: img.tags,
-          status: img.status,
-          source: img.source,
-          artworkId: created.id,
-        },
-      })
-    )
-  );
-
-  if (original.mainImageId) {
-    const mainIndex = original.images.findIndex((img) => img.id === original.mainImageId);
-    if (mainIndex !== -1) {
-      await db.artwork.update({
-        where: { id: created.id },
-        data: { mainImageId: newImages[mainIndex].id },
-      });
-    }
+  const img = original.mainImage;
+  if (img) {
+    const copy = await db.image.create({
+      data: {
+        artistId: original.artistId,
+        key: img.key,
+        url: img.url,
+        thumbnailKey: img.thumbnailKey,
+        displayKey: img.displayKey,
+        squareKey: img.squareKey,
+        posterUrl: img.posterUrl,
+        kind: img.kind,
+        mimeType: img.mimeType,
+        caption: img.caption,
+        altText: img.altText,
+        tags: img.tags,
+        status: img.status,
+        source: img.source,
+        artworkId: created.id,
+      },
+    });
+    await db.artwork.update({ where: { id: created.id }, data: { mainImageId: copy.id } });
   }
 
   return { id: created.id };
@@ -372,13 +358,7 @@ export async function listArtworks(
         catalogueNumber: true,
         availability: true,
         type: true,
-        // mainImage is a direct single-row lookup (via mainImageId),
-        // not a scan — cheap even across many rows. Preferred over
-        // images[0] wherever both are available (2026-08-16); images
-        // stays as the fallback for artworks with no main image chosen
-        // yet, same as before.
         mainImage: { select: { url: true, thumbnailKey: true } },
-        images: { take: 1, select: { url: true, thumbnailKey: true } },
       },
       skip: offset,
       take: limit,
@@ -394,32 +374,24 @@ export async function listArtworks(
   // Prefers the small thumbnail (fast, served straight from storage) —
   // falls back to the original proxied url for any image uploaded before
   // 2026-08-13 that hasn't been backfilled yet, so nothing breaks or goes
-  // blank in the meantime. An artwork with a chosen main image shows
-  // that one; anything without one falls back to its first image.
-  const listRows: ArtworkListRow[] = rows.map(
-    ({ mainImage, images, presentationPrice, ...rest }) => {
-      const effectiveImage = mainImage || images[0] || null;
-      return {
-        ...rest,
-        presentationPrice: presentationPrice != null ? presentationPrice.toString() : null,
-        imageUrl: effectiveImage
-          ? publicMediaUrl(effectiveImage.thumbnailKey) || effectiveImage.url
-          : null,
-      };
-    }
-  );
+  // blank in the meantime.
+  const listRows: ArtworkListRow[] = rows.map(({ mainImage, presentationPrice, ...rest }) => ({
+    ...rest,
+    presentationPrice: presentationPrice != null ? presentationPrice.toString() : null,
+    imageUrl: mainImage ? publicMediaUrl(mainImage.thumbnailKey) || mainImage.url : null,
+  }));
 
   return { rows: listRows, total, soldCount };
 }
 
-// Full record for the slide-in detail panel — both facets, all images.
+// Full record for the slide-in detail panel — both facets and its picture.
 export async function getArtworkDetail(id: string) {
   await artworkOwner(id);
   const result = await db.artwork.findUnique({
     where: { id },
     relationLoadStrategy: "join",
     include: {
-      images: true,
+      mainImage: { select: ARTWORK_IMAGE_SELECT },
       purchases: {
         include: {
           payments: { orderBy: { sequence: "asc" } },
@@ -541,16 +513,8 @@ export async function getArtworkDetailForClient(id: string) {
     // isn't itself a derivative. See the matching note on
     // Artwork.derivedFromId in schema.prisma.
     derivedFromCatalogueNumber: artwork.derivedFrom?.catalogueNumber ?? null,
-    // Which image (if any) is actually Main (2026-09-13) — exposed
-    // explicitly rather than left for the client to infer from array
-    // position. The images array below is still sorted Main-first when
-    // one is set, but ArtworkImageManager now needs to tell Main and
-    // Related apart with certainty (no more "Set as Main" swapping
-    // between existing images — see actions/artworks.ts), so an id
-    // comparison against this replaces the old positional guess.
-    mainImageId: artwork.mainImageId,
-    // Main image first — see toArtworkImages (lib/artworkImages.ts).
-    images: toArtworkImages(artwork.images, artwork.mainImageId),
+    // The work's one picture (2026-10-28).
+    mainImage: artwork.mainImage ? toArtworkImage(artwork.mainImage) : null,
     activePurchase: purchases.find((p) => p.status === "ACTIVE") || null,
     purchaseHistory: purchases.filter((p) => p.status !== "ACTIVE"),
   };
@@ -719,14 +683,14 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
   await artworkOwner(artworkId);
   const artwork = await db.artwork.findUnique({
     where: { id: artworkId },
-    include: { images: true, saleTerms: true, purchases: true },
+    include: { saleTerms: true, purchases: true },
     relationLoadStrategy: "query",
   });
   if (!artwork) return;
 
   const isBlank =
     artwork.catalogueName === "Untitled" &&
-    artwork.images.length === 0 &&
+    !artwork.mainImageId &&
     !artwork.saleTerms &&
     artwork.purchases.length === 0 &&
     !artwork.presentationPrice &&

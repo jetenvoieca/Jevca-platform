@@ -5,9 +5,10 @@ import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { randomUUID } from "crypto";
 import Papa from "papaparse";
-import { uploadToR2, deleteFromR2 } from "@/lib/r2";
+import { uploadToR2 } from "@/lib/r2";
 import { generateImageSizes } from "@/lib/imageSizes";
 import { createArtworkWithRetry } from "./artworks";
+import { deleteImageFiles } from "./imageDelete";
 import {
   browserFetchHeaders,
   extensionForContentType,
@@ -300,22 +301,19 @@ export async function deleteArtworksByIds(
     try {
       const artwork = await db.artwork.findFirst({
         where: { id, artistId },
-        select: { images: { select: { id: true, key: true } } },
+        select: {
+          mainImage: { select: { id: true, key: true, thumbnailKey: true, displayKey: true, squareKey: true } },
+        },
       });
       if (!artwork) continue;
 
       // mainImageId is a unique FK pointing at an Image — cleared first
       // so that Image can actually be deleted below without conflict.
-      await db.artwork.update({ where: { id }, data: { mainImageId: null } });
-
-      for (const img of artwork.images) {
-        try {
-          await deleteFromR2(img.key);
-        } catch {
-          // An already-gone R2 object shouldn't block the database
-          // cleanup — the end state (nothing left behind) is the same.
-        }
+      const img = artwork.mainImage;
+      if (img) {
+        await db.artwork.update({ where: { id }, data: { mainImageId: null } });
         await db.image.delete({ where: { id: img.id } });
+        await deleteImageFiles(img);
       }
 
       await db.artwork.delete({ where: { id } });

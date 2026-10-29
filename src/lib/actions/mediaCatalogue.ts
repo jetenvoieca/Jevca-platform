@@ -4,7 +4,7 @@ import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
 import { publicMediaUrl } from "@/lib/r2";
-import { toArtworkImages } from "@/lib/artworkImages";
+import { ARTWORK_IMAGE_SELECT, toArtworkImage } from "@/lib/artworkImages";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 
 type ListFilters = {
@@ -200,25 +200,18 @@ export async function removeMediaTagPreset(artistId: string, siteId: string, val
   revalidatePath(`/sites/${siteId}/marketing/settings`);
 }
 
-// One artwork's images, for the Media Catalogue's read-only Artworks
-// view (2026-10-15) — Main first. Only this artist's own.
-export async function getArtworkImagesForMedia(artistId: string, artworkId: string) {
+// One artwork's name and picture, for the Media Catalogue's read-only
+// Artworks view (2026-10-15). Only this artist's own.
+export async function getArtworkForMedia(artistId: string, artworkId: string) {
   await requireArtistAccess(artistId);
   const artwork = await db.artwork.findFirst({
     where: { id: artworkId, artistId },
-    select: {
-      id: true,
-      catalogueName: true,
-      mainImageId: true,
-      images: {
-        select: { id: true, url: true, thumbnailKey: true, displayKey: true, kind: true, posterUrl: true },
-      },
-    },
+    select: { id: true, catalogueName: true, mainImage: { select: ARTWORK_IMAGE_SELECT } },
   });
   if (!artwork) return null;
   return {
     id: artwork.id,
     catalogueName: artwork.catalogueName,
-    images: toArtworkImages(artwork.images, artwork.mainImageId),
+    image: artwork.mainImage ? toArtworkImage(artwork.mainImage) : null,
   };
 }

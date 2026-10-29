@@ -418,7 +418,7 @@ export default function ArtworksCatalogueView({
                     presentationPrice: item.presentationPrice,
                     availability: item.availability,
                     type: item.type,
-                    imageUrl: item.images[0]?.url ?? a.imageUrl,
+                    imageUrl: item.mainImage?.url ?? null,
                   }
                 : a
             )

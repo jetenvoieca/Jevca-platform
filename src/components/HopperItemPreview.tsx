@@ -9,13 +9,8 @@ export type HopperPreviewItem = {
   createdAt: string;
 };
 
-// Shared image/video preview + "Received" timestamp — used identically
-// by the full Hopper's SortingCard (HopperView.tsx) and the limited
-// "set new Main image" modal opened from Delete & Replace
-// (SetMainFromHopperModal.tsx). Pulled out into its own file (2026-09-13,
-// direct request — "one set of code not different versions in different
-// places") so the two can never visually drift apart into two separately
-// -maintained copies of the same thing.
+// The Hopper's image/video preview + "Received" timestamp, for its
+// SortingCard (HopperView.tsx).
 //
 // `corner` (2026-10-17, the Hopper's Crop): a control on the picture's
 // bottom-right corner.

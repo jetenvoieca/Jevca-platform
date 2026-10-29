@@ -113,7 +113,6 @@ export async function generateArtworkCataloguePdf(
         priceCurrency: true,
         availability: true,
         mainImage: { select: { thumbnailKey: true, displayKey: true } },
-        images: { take: 1, select: { thumbnailKey: true, displayKey: true } },
       },
     }),
     // The Curation filter holds an id — its name is what's printed in
@@ -184,9 +183,7 @@ export async function generateArtworkCataloguePdf(
   // — everything needed to know how tall this one item will end up
   // being, before anything is actually drawn.
   const prepareItem = async (a: (typeof artworks)[number]) => {
-    const effectiveImage = a.mainImage || a.images[0];
-    const imageUrl =
-      publicMediaUrl(effectiveImage?.displayKey) || publicMediaUrl(effectiveImage?.thumbnailKey);
+    const imageUrl = publicMediaUrl(a.mainImage?.displayKey) || publicMediaUrl(a.mainImage?.thumbnailKey);
     let embedded: Awaited<ReturnType<typeof doc.embedJpg>> | null = null;
     let scaledW = 0;
     let scaledH = 0;

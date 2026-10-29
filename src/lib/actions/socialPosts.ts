@@ -143,7 +143,7 @@ export async function createReelFromVideo(imageId: string): Promise<string | nul
 }
 
 // The picker's picks as post items: media as picked, each artwork as its
-// Main image (or its first, if it has no Main).
+// picture.
 export async function socialMediaForPicks(
   artistId: string,
   picks: { imageIds: string[]; artworkIds: string[] }
@@ -151,11 +151,11 @@ export async function socialMediaForPicks(
   await requireArtistAccess(artistId);
   const artworks = await db.artwork.findMany({
     where: { id: { in: picks.artworkIds }, artistId },
-    select: { id: true, mainImageId: true, images: { take: 1, select: { id: true } } },
+    select: { id: true, mainImageId: true },
   });
   const artworkImageIds = picks.artworkIds.flatMap((id) => {
     const artwork = artworks.find((a) => a.id === id);
-    const imageId = artwork?.mainImageId ?? artwork?.images[0]?.id;
+    const imageId = artwork?.mainImageId;
     return imageId ? [imageId] : [];
   });
   const ids = [...picks.imageIds, ...artworkImageIds];

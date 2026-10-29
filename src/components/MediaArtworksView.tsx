@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { listArtworks, type ArtworkListRow } from "@/lib/actions/artworks";
-import { getArtworkImagesForMedia } from "@/lib/actions/mediaCatalogue";
+import { getArtworkForMedia } from "@/lib/actions/mediaCatalogue";
 import type { CurationSummary } from "@/lib/actions/curations";
 import type { ArtworkImage } from "@/lib/artworkImages";
 import ArtworkFilterBar, { type ArtworkFilterValues } from "@/components/ArtworkFilterBar";
@@ -17,7 +17,7 @@ import { useBackdropClose } from "@/lib/useBackdropClose";
 // catalogue's works, to look at and pick from for mailings, PR and
 // social — read only. Every work is shown, sold ones marked. Filters are
 // the Artwork Catalogue's own (ArtworkFilterBar). Opening a work shows
-// its images and name, with a button to the work in the Artwork
+// its picture and name, with a button to the work in the Artwork
 // Catalogue, where it is edited.
 export default function MediaArtworksView({
   siteId,
@@ -49,9 +49,8 @@ export default function MediaArtworksView({
   const [open, setOpen] = useState<{
     id: string;
     catalogueName: string;
-    images: ArtworkImage[];
+    image: ArtworkImage | null;
   } | null>(null);
-  const [activeImageId, setActiveImageId] = useState<string | null>(null);
   const backdrop = useBackdropClose(() => setOpen(null));
 
   const listFilters = (f: ArtworkFilterValues) => ({
@@ -92,13 +91,9 @@ export default function MediaArtworksView({
   };
 
   const openArtwork = async (id: string) => {
-    const artwork = await getArtworkImagesForMedia(artistId, id);
-    if (!artwork) return;
-    setOpen(artwork);
-    setActiveImageId(artwork.images[0]?.id ?? null);
+    const artwork = await getArtworkForMedia(artistId, id);
+    if (artwork) setOpen(artwork);
   };
-
-  const activeImage = open?.images.find((i) => i.id === activeImageId) ?? null;
 
   return (
     <div className="px-6 py-4">
@@ -176,30 +171,12 @@ export default function MediaArtworksView({
               </div>
             </div>
 
-            {open.images.length === 0 ? (
-              <p className="text-sm text-neutral-400">This work has no images yet.</p>
+            {open.image ? (
+              <div className="aspect-square overflow-hidden rounded-md bg-neutral-100">
+                <ImageFill image={open.image} large />
+              </div>
             ) : (
-              <>
-                <div className="aspect-square overflow-hidden rounded-md bg-neutral-100">
-                  {activeImage && <ImageFill image={activeImage} large />}
-                </div>
-                {open.images.length > 1 && (
-                  <div className="mt-3 grid grid-cols-4 gap-2">
-                    {open.images.map((img) => (
-                      <button
-                        key={img.id}
-                        type="button"
-                        onClick={() => setActiveImageId(img.id)}
-                        className={`aspect-square overflow-hidden rounded-md ${
-                          img.id === activeImageId ? "ring-2 ring-neutral-900" : ""
-                        }`}
-                      >
-                        <ImageFill image={img} />
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </>
+              <p className="text-sm text-neutral-400">This work has no picture yet.</p>
             )}
           </div>
         </div>

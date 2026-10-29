@@ -15,6 +15,7 @@ import { CURRENCIES } from "@/lib/currencies";
 import MediaPicker from "@/components/MediaPicker";
 import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import type { PurchaseDetail } from "@/lib/actions/payments";
+import type { ArtworkImage } from "@/lib/artworkImages";
 
 export type ArtworkDetail = {
   id: string;
@@ -45,19 +46,8 @@ export type ArtworkDetail = {
   // itself a "Create Derivative" copy. See the matching note on
   // Artwork.derivedFromId in schema.prisma.
   derivedFromCatalogueNumber: string | null;
-  // Which image (if any) is actually Main (2026-09-13) — see the
-  // matching note in getArtworkDetailForClient (actions/artworks.ts).
-  // The work's one picture (2026-10-28) — `images` holds just it.
-  mainImageId: string | null;
-  images: {
-    id: string;
-    url: string;
-    // Larger version for the enlarged preview (2026-08-16) — see the
-    // matching note in getArtworkDetailForClient.
-    displayUrl: string;
-    kind: string;
-    posterUrl: string | null;
-  }[];
+  // The work's one picture (2026-10-28).
+  mainImage: ArtworkImage | null;
   activePurchase: PurchaseDetail | null;
   purchaseHistory: PurchaseDetail[];
 };
@@ -231,7 +221,7 @@ export default function ArtworkDetailPanel({
   // edition-type source does, since a new print copy needs its own
   // edition number, not the original's.
   // The work's one picture (2026-10-28); changing it refreshes the work.
-  const mainImage = artwork.images.find((i) => i.id === artwork.mainImageId) ?? artwork.images[0] ?? null;
+  const { mainImage } = artwork;
   const [pictureError, setPictureError] = useState<string | null>(null);
   const changeMainImage = (imageId: string) => {
     setPictureError(null);

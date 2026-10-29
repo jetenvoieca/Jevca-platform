@@ -121,7 +121,6 @@ export async function loadMailAssets(
             offeredPrice: true,
             priceCurrency: true,
             mainImage: { select: IMAGE_SELECT },
-            images: { take: 1, orderBy: { createdAt: "asc" }, select: IMAGE_SELECT },
           },
         })
       : [],
@@ -141,7 +140,7 @@ export async function loadMailAssets(
   const artworks: Record<string, MailArtwork> = {};
   for (const row of artworkRows) {
     const key = pictureKey({ kind: "artwork", id: row.id });
-    const photo = row.mainImage ?? row.images[0] ?? null;
+    const photo = row.mainImage;
     const image = toMailImage(photo, baseUrl, row.catalogueName);
     if (image && photo) {
       pictureMap[key] = image;

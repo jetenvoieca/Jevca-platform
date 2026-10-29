@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { EMAIL_DOMAIN } from "@/lib/email";
 import { publicMediaUrl } from "@/lib/r2";
 import { artworkDetailLines } from "@/lib/artworkDetails";
-import { toArtworkImages, type ArtworkImage } from "@/lib/artworkImages";
+import { ARTWORK_IMAGE_SELECT, toArtworkImage, type ArtworkImage } from "@/lib/artworkImages";
 import { CURATION_SECTION_TYPES } from "@/lib/curationSections";
 
 // Curations (2026-09-24) — named, ordered selections of an artist's
@@ -102,18 +102,8 @@ export type CurationWorkPresentation = {
   instagramHandle?: string | null;
 };
 
-// A work's images in a curation: up to 4, main first — the same limit as
-// an artwork's own images.
+// A work's images in a curation: up to 4, main first.
 const MAX_CURATION_IMAGES = 4;
-
-const IMAGE_FIELDS = {
-  id: true,
-  url: true,
-  thumbnailKey: true,
-  displayKey: true,
-  kind: true,
-  posterUrl: true,
-} as const;
 
 // What a work's tile needs of an image, and of the curation item and
 // artwork to find its main image in this curation.
@@ -130,24 +120,22 @@ const TILE_ITEM_IMAGES = {
 
 const TILE_ARTWORK_IMAGES = {
   mainImage: { select: TILE_IMAGE_FIELDS },
-  images: { take: 1, select: TILE_IMAGE_FIELDS },
 } as const;
 
 type TileImage = { url: string; thumbnailKey: string | null; displayKey: string | null };
 
 // A work's main image in a curation (see CurationItem.ownImages) — the
-// Catalogue's Main, falling back to its first image, until changed on
-// the Curations page — as a small thumbnail and a larger version. Each
+// work's picture in the Catalogue until changed on the Curations page — as a small thumbnail and a larger version. Each
 // falls back to the original file when its smaller versions haven't
 // been generated.
 function tileUrls(item: {
   ownImages: boolean;
   images: { image: TileImage }[];
-  artwork: { mainImage: TileImage | null; images: TileImage[] };
+  artwork: { mainImage: TileImage | null };
 }): { imageUrl: string | null; displayUrl: string | null } {
   const image = item.ownImages
     ? (item.images[0]?.image ?? null)
-    : item.artwork.mainImage || item.artwork.images[0] || null;
+    : item.artwork.mainImage;
   if (!image) return { imageUrl: null, displayUrl: null };
   return {
     imageUrl: publicMediaUrl(image.thumbnailKey) || image.url,
@@ -423,7 +411,7 @@ export async function getCurationWorkPresentation(
     select: {
       description: true,
       ownImages: true,
-      images: { orderBy: { position: "asc" }, select: { image: { select: IMAGE_FIELDS } } },
+      images: { orderBy: { position: "asc" }, select: { image: { select: ARTWORK_IMAGE_SELECT } } },
       artwork: {
         select: {
           catalogueName: true,
@@ -436,8 +424,7 @@ export async function getCurationWorkPresentation(
           availability: true,
           offeredPrice: true,
           priceCurrency: true,
-          mainImageId: true,
-          images: { select: IMAGE_FIELDS },
+          mainImage: { select: ARTWORK_IMAGE_SELECT },
           artist: {
             select: {
               defaultInstalmentCount: true,
@@ -464,11 +451,10 @@ export async function getCurationWorkPresentation(
     priceCurrency: artwork.priceCurrency,
     defaultInstalmentCount: artwork.artist.defaultInstalmentCount,
     images: item.ownImages
-      ? toArtworkImages(
-          item.images.map((i) => i.image),
-          null,
-        )
-      : toArtworkImages(artwork.images, artwork.mainImageId),
+      ? item.images.map((i) => toArtworkImage(i.image))
+      : artwork.mainImage
+        ? [toArtworkImage(artwork.mainImage)]
+        : [],
     medium: artwork.presentationMedium ?? artwork.medium,
     edition: artwork.edition,
     type: artwork.type,
@@ -507,7 +493,7 @@ export async function setCurationWorkImages(
       id: true,
       ownImages: true,
       images: { orderBy: { position: "asc" }, take: 1, select: { imageId: true } },
-      artwork: { select: { mainImageId: true, images: { take: 1, select: { id: true } } } },
+      artwork: { select: { mainImageId: true } },
     },
   });
   if (!item) return { error: "This work is no longer in the curation." };
@@ -515,14 +501,14 @@ export async function setCurationWorkImages(
   // The main image as shown now: this curation's own, or the Catalogue's.
   const currentMainId = item.ownImages
     ? (item.images[0]?.imageId ?? null)
-    : (item.artwork.mainImageId ?? item.artwork.images[0]?.id ?? null);
+    : item.artwork.mainImageId;
   if (currentMainId && !ids.includes(currentMainId)) {
     return { error: "The main image can't be removed — make another image main instead." };
   }
 
   const images = await db.image.findMany({
     where: { id: { in: ids }, artistId },
-    select: IMAGE_FIELDS,
+    select: ARTWORK_IMAGE_SELECT,
   });
   if (images.length !== ids.length) return { error: "One of those images couldn't be found." };
 
@@ -535,12 +521,7 @@ export async function setCurationWorkImages(
   ]);
 
   const byId = new Map(images.map((img) => [img.id, img]));
-  return {
-    images: toArtworkImages(
-      ids.map((id) => byId.get(id)!),
-      null,
-    ),
-  };
+  return { images: ids.map((id) => toArtworkImage(byId.get(id)!)) };
 }
 
 // Saves a work's Description within this curation only. From then on

@@ -8,17 +8,31 @@ import { deleteFromR2 } from "@/lib/r2";
 // failure to the caller; the DB delete is what actually matters for the
 // person's immediate action. Also used by cropImage (imageCrop.ts) to
 // remove the pre-crop files once the cropped version has replaced them.
+// A file another Image row still uses is left in place — a Create
+// Derivative copy shares its original's files (duplicateArtwork).
 export async function deleteImageFiles(image: {
   key: string;
   thumbnailKey: string | null;
   displayKey: string | null;
   squareKey: string | null;
 }) {
-  await Promise.all(
-    [image.key, image.thumbnailKey, image.displayKey, image.squareKey]
-      .filter((key): key is string => !!key)
-      .map((key) => deleteFromR2(key).catch(() => {}))
+  const keys = [image.key, image.thumbnailKey, image.displayKey, image.squareKey].filter(
+    (key): key is string => !!key
   );
+  if (keys.length === 0) return;
+  const stillUsed = await db.image.findMany({
+    where: {
+      OR: [
+        { key: { in: keys } },
+        { thumbnailKey: { in: keys } },
+        { displayKey: { in: keys } },
+        { squareKey: { in: keys } },
+      ],
+    },
+    select: { key: true, thumbnailKey: true, displayKey: true, squareKey: true },
+  });
+  const used = new Set(stillUsed.flatMap((r) => [r.key, r.thumbnailKey, r.displayKey, r.squareKey]));
+  await Promise.all(keys.filter((key) => !used.has(key)).map((key) => deleteFromR2(key).catch(() => {})));
 }
 
 // 2026-08-19, direct request — replaces the Archive pattern for Images

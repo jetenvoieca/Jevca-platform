@@ -25,7 +25,6 @@ export const documentSaleInclude = {
       size: true,
       medium: true,
       mainImage: { select: { displayKey: true } },
-      images: { take: 1, select: { displayKey: true } },
     },
   },
   customer: true,
