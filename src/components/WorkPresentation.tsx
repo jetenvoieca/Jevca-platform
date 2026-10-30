@@ -181,13 +181,14 @@ export default function WorkPresentation({
         </button>
       )}
       {/* The catalogue number, small in the bottom-left corner
-          (2026-10-29, Craig's request), inside the window's padding. */}
+          (2026-10-29, Craig's request), inside the window's padding —
+          just the number, without the "AW-" in front (2026-10-30). */}
       {data.catalogueNumber && (
         <span
           className="pointer-events-none absolute bottom-2 left-3.5"
           style={{ color: colours.muted, fontSize: Math.round(settings.textSize * 0.75) }}
         >
-          {data.catalogueNumber}
+          {data.catalogueNumber.replace(/^\D+/, "")}
         </span>
       )}
       {/* The picture, the work's other pictures, its title and details,
