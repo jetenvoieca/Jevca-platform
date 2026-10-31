@@ -28,6 +28,7 @@ import AddIconButton from "@/components/AddIconButton";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import GallerySaleCard, { SaleStatusBadge } from "@/components/GallerySaleCard";
+import { ACTION_PANEL_LOOK, ActionButton } from "@/components/ActionPanel";
 import InvoiceModal from "@/components/InvoiceModal";
 import StatementModal from "@/components/StatementModal";
 import SaleHeader from "@/components/SaleHeader";
@@ -292,6 +293,9 @@ export default function GalleriesView({
   // Artwork Catalogue details in a modal over the sale, instead of going
   // to the Artwork Catalogue. Changes refresh the work and the location.
   const [catalogueOpen, setCatalogueOpen] = useState(false);
+  // The sale window's action column (2026-10-31, Craig's mockup) — a
+  // consigned sale's card renders its buttons into it (GallerySaleCard).
+  const [actionSlot, setActionSlot] = useState<HTMLDivElement | null>(null);
 
   // Auto-opens a Location (and, if given, one of its works) from the
   // URL's own ?location=&work=&sale= query params (2026-09-22) — this is what
@@ -1216,10 +1220,11 @@ export default function GalleriesView({
 
       {/* Fixed overlay on top of everything, at every width. Shared
           SaleHeader on top; below it either the sale card (sale already
-          recorded) or the blank Record Sale form. */}
+          recorded) or the blank Record Sale form. The action column sits
+          to the right (2026-10-31, Craig's mockup), or below on a phone. */}
       {selectedWorkId && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" {...workBackdrop}>
-          <div className="flex max-h-[90dvh] w-full max-w-[560px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
+          <div className="flex max-h-[90dvh] w-full max-w-[760px] flex-col overflow-hidden rounded-2xl bg-white shadow-xl">
             {workLoadError ? (
               <div className="flex items-center justify-between gap-4 p-6">
                 <p className="text-sm text-red-600">{workLoadError}</p>
@@ -1243,60 +1248,75 @@ export default function GalleriesView({
             ) : workLoading || !selectedWorkDetail ? (
               <p className="p-6 text-sm text-neutral-400">Loading…</p>
             ) : (
-              <>
-                <div className="shrink-0">
-                  <SaleHeader
-                    artwork={selectedWorkDetail}
-                    purchase={shownSale}
-                    siteId={siteId}
-                    // A sale opened from its picture is read only — no Edit
-                    // (2026-10-14).
-                    onChanged={workView === "image" && shownSale ? undefined : refreshAfterSaleChange}
-                    onClose={closeWork}
-                    onTitleClick={() => setFocusedSaleId(null)}
-                    onOpenCatalogue={() => setCatalogueOpen(true)}
-                  />
+              <div className="flex min-h-0 flex-1 flex-col sm:flex-row">
+                <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+                  <div className="shrink-0">
+                    <SaleHeader
+                      artwork={selectedWorkDetail}
+                      purchase={shownSale}
+                      siteId={siteId}
+                      // A sale opened from its picture is read only — no Edit
+                      // (2026-10-14).
+                      onChanged={workView === "image" && shownSale ? undefined : refreshAfterSaleChange}
+                      onClose={closeWork}
+                      onTitleClick={() => setFocusedSaleId(null)}
+                    />
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto px-5 py-5">
+                    {shownSale ? (
+                      shownSale.channel === "GALLERY" ? (
+                        <GallerySaleCard
+                          purchase={shownSale}
+                          siteId={siteId}
+                          paymentMethods={settings.paymentMethods}
+                          onChanged={refreshAfterSaleChange}
+                          focusedId={focusedSaleId}
+                          onFocusChange={setFocusedSaleId}
+                          view={workView}
+                          actionSlot={actionSlot}
+                          onOpenCatalogue={() => setCatalogueOpen(true)}
+                        />
+                      ) : (
+                        <p className="text-sm text-neutral-500">
+                          This {words.item.toLowerCase()} already has an unpaid Studio sale in
+                          progress — manage it from the Sales page.
+                        </p>
+                      )
+                    ) : (
+                      selectedId &&
+                      selectedDetail && (
+                        <RecordSaleForm
+                          key={selectedWorkDetail.id}
+                          siteId={siteId}
+                          artwork={selectedWorkDetail}
+                          location={{
+                            customerId: selectedId,
+                            type: selectedLocationType,
+                            name: selectedDetail.name,
+                            email: selectedDetail.email,
+                            defaultCommissionPercent: selectedDetail.defaultCommissionPercent,
+                          }}
+                          vatRate={vatRate}
+                          onRecorded={afterSaleRecorded}
+                        />
+                      )
+                    )}
+                  </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto px-5 py-5">
-                  {shownSale ? (
-                    shownSale.channel === "GALLERY" ? (
-                      <GallerySaleCard
-                        purchase={shownSale}
-                        siteId={siteId}
-                        paymentMethods={settings.paymentMethods}
-                        onChanged={refreshAfterSaleChange}
-                        focusedId={focusedSaleId}
-                        onFocusChange={setFocusedSaleId}
-                        view={workView}
-                      />
-                    ) : (
-                      <p className="text-sm text-neutral-500">
-                        This {words.item.toLowerCase()} already has an unpaid Studio sale in
-                        progress — manage it from the Sales page.
-                      </p>
-                    )
-                  ) : (
-                    selectedId &&
-                    selectedDetail && (
-                      <RecordSaleForm
-                        key={selectedWorkDetail.id}
-                        siteId={siteId}
-                        artwork={selectedWorkDetail}
-                        location={{
-                          customerId: selectedId,
-                          type: selectedLocationType,
-                          name: selectedDetail.name,
-                          email: selectedDetail.email,
-                          defaultCommissionPercent: selectedDetail.defaultCommissionPercent,
-                        }}
-                        vatRate={vatRate}
-                        onRecorded={afterSaleRecorded}
-                      />
-                    )
+                {/* The action column. A consigned sale's card fills it;
+                    otherwise (the Record Sale form, a Studio sale) it holds
+                    just View Catalogue. */}
+                <div
+                  ref={setActionSlot}
+                  className={`${ACTION_PANEL_LOOK} m-3 flex shrink-0 flex-wrap justify-center gap-2 p-3 sm:ml-0 sm:flex-col sm:flex-nowrap sm:justify-start`}
+                >
+                  {shownSale?.channel !== "GALLERY" && (
+                    <ActionButton onClick={() => setCatalogueOpen(true)}>View Catalogue</ActionButton>
                   )}
                 </div>
-              </>
+              </div>
             )}
           </div>
         </div>

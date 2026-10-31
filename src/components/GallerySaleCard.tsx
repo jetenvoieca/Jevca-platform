@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import {
   recordGalleryPayment,
@@ -32,12 +33,9 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import InvoiceModal from "@/components/InvoiceModal";
 import CertificateEmailModal from "@/components/CertificateEmailModal";
 import StripeCardForm from "@/components/StripeCardForm";
-import { ACTION_BUTTON_LOOK } from "@/components/ActionPanel";
+import { ActionButton } from "@/components/ActionPanel";
 import { invoiceCancelNote } from "@/lib/saleInvoice";
 import { formatMoney } from "@/lib/currencies";
-
-// Every action-panel button: the shared outlined look (ActionPanel.tsx).
-const actionButtonCls = `rounded-md px-3 py-2 ${ACTION_BUTTON_LOOK}`;
 
 // Inputs inside the sliding panel — centred text, per mockup.
 const drawerInputCls =
@@ -46,7 +44,7 @@ const drawerInputCls =
 const iconButtonCls =
   "shrink-0 rounded-md p-1 text-neutral-800 hover:bg-neutral-100 disabled:opacity-50";
 
-// Which input panel the action panel slides down to reveal.
+// Which input panel slides down under the figures.
 type DrawerKind = "payment" | "card";
 
 const DRAWER_TITLE: Record<DrawerKind, string> = {
@@ -238,9 +236,8 @@ function showsCalculation(purchase: PurchaseDetail): boolean {
 
 // A sale's figures and history: price, framing/delivery, paid and Net
 // Due, then each payment and what has been sent. The top of every sale
-// panel, and each line of the summary list. `aside` sits to the right of
-// the history (2026-10-20, Craig's mockup: the line view's View Invoice).
-function SaleFigures({ purchase, aside }: { purchase: PurchaseDetail; aside?: ReactNode }) {
+// panel, and each line of the summary list.
+function SaleFigures({ purchase }: { purchase: PurchaseDetail }) {
   const isPaid = purchase.status === "COMPLETED";
   const amounts = saleBreakdown(purchase);
   const money = (n: number) => formatMoney(n.toFixed(2), purchase.currency);
@@ -265,8 +262,7 @@ function SaleFigures({ purchase, aside }: { purchase: PurchaseDetail; aside?: Re
         </div>
       </div>
 
-      <div className="mt-3 flex items-start justify-between gap-4">
-      <div className="min-h-[1.25rem] min-w-0 space-y-0.5 text-xs text-neutral-500">
+      <div className="mt-3 min-h-[1.25rem] space-y-0.5 text-xs text-neutral-500">
         {purchase.status === "ABANDONED" && (
           <p className="text-red-700">Cancelled{purchase.closedAt ? ` ${formatDate(purchase.closedAt)}` : ""}</p>
         )}
@@ -309,8 +305,6 @@ function SaleFigures({ purchase, aside }: { purchase: PurchaseDetail; aside?: Re
           <p>Certificate of authenticity sent {formatDate(purchase.certificateEmailedAt)}</p>
         )}
       </div>
-      {aside}
-      </div>
     </>
   );
 }
@@ -331,7 +325,18 @@ type CardProps = {
   // an Own location's framing and delivery) are produced from the Sales
   // tab's tick boxes.
   view: "image" | "line";
+  // The sale window's action column (2026-10-31, Craig's mockup), which
+  // sits beside the window's header and figures, so the buttons are
+  // rendered into it (SaleActions); null until it's on screen. View
+  // Catalogue (`onOpenCatalogue`) is one of them.
+  actionSlot: HTMLElement | null;
+  onOpenCatalogue: () => void;
 };
+
+// Renders the sale's buttons into the window's action column.
+function SaleActions({ slot, children }: { slot: HTMLElement | null; children: ReactNode }) {
+  return slot ? createPortal(children, slot) : null;
+}
 
 // One GALLERY-channel (consigned) sale on its Location — the only place
 // it's managed (2026-10-14), shown as CardProps.view says; a cancelled
@@ -377,6 +382,9 @@ export default function GallerySaleCard({
 
   return (
     <div className="-mx-2 divide-y divide-neutral-200">
+      <SaleActions slot={props.actionSlot}>
+        <ActionButton onClick={props.onOpenCatalogue}>View Catalogue</ActionButton>
+      </SaleActions>
       {[purchase, ...liveCharges].map((p) => (
         <div
           key={p.id}
@@ -419,7 +427,7 @@ export function ConsignedSaleSummary({ purchase }: { purchase: PurchaseDetail })
 
 // One sale's panel: its figures, a sliding input panel (Record Payment
 // or Take Card) and its actions, as CardProps.view says.
-function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardProps) {
+function SalePanel({ purchase, siteId, paymentMethods, onChanged, view, actionSlot, onOpenCatalogue }: CardProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
@@ -638,30 +646,16 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
     });
   };
 
-  // Line view: the sale's invoice (or receipt), beside its history — to
-  // see it while recording the payment.
-  const viewInvoice =
-    isLine && invoice ? (
-      <button
-        type="button"
-        onClick={() => setInvoiceModalId(invoice.id)}
-        disabled={isPending}
-        className="shrink-0 rounded-md border border-neutral-300 px-4 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
-      >
-        View {invoice.paidAt ? "Receipt" : "Invoice"}
-      </button>
-    ) : null;
-
   return (
     <div>
-      <SaleFigures purchase={purchase} aside={viewInvoice} />
+      <SaleFigures purchase={purchase} />
 
       {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
 
       {/* ---- Sliding input panel ---- */}
       {/* Animates its height between 0 and its content (grid-rows
-          0fr <-> 1fr), which pushes the action panel below down and back
-          up smoothly. Content stays rendered while closing. */}
+          0fr <-> 1fr), so it opens and closes smoothly. Content stays
+          rendered while closing. */}
       <div
         className={`grid transition-[grid-template-rows] duration-300 ease-out ${
           drawerOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]"
@@ -799,49 +793,48 @@ function SalePanel({ purchase, siteId, paymentMethods, onChanged, view }: CardPr
         </div>
       </div>
 
-      {/* ---- Actions (line view only — the picture view is read only) ---- */}
-      {isLine && (
-        <>
-          {/* Every action in one panel, two to a row (2026-10-20,
-              Craig's mockup): paying (unpaid) or the certificate (paid),
-              then Cancel / Delete — a cancelled sale can only be deleted. */}
-          <div className="mt-4 grid grid-cols-2 gap-2 rounded-lg bg-[#F9F6EE] p-3">
-            {purchase.status === "ACTIVE" && (
-              <>
-                <button type="button" onClick={() => openDrawer("card")} disabled={isPending} className={actionButtonCls}>
-                  Take Card
-                </button>
-                <button type="button" onClick={() => openDrawer("payment")} disabled={isPending} className={actionButtonCls}>
-                  Record Payment
-                </button>
-              </>
-            )}
-            {isPaid && !isCharge && (
-              <button
-                type="button"
-                onClick={() => setShowCertificateModal(true)}
-                disabled={isPending}
-                className={`col-span-2 ${actionButtonCls}`}
-              >
-                Certificate of Authenticity
-              </button>
-            )}
-            {!isCancelled && (
-              <button type="button" onClick={handleCancelSale} disabled={isPending} className={actionButtonCls}>
-                Cancel {saleNoun}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={handleDeleteSale}
-              disabled={isPending}
-              className={`${isCancelled ? "col-span-2 " : ""}${actionButtonCls}`}
-            >
-              Delete {saleNoun}
-            </button>
-          </div>
-        </>
-      )}
+      {/* ---- Actions, in the window's action column (2026-10-31, Craig's
+          mockup). The picture view is read only — just View Catalogue.
+          The line view: paying (unpaid) or the certificate (paid), the
+          invoice or receipt, View Catalogue, then Cancel and, last,
+          Delete — a cancelled sale can only be deleted. ---- */}
+      <SaleActions slot={actionSlot}>
+        {isLine && purchase.status === "ACTIVE" && (
+          <>
+            <ActionButton onClick={() => openDrawer("card")} disabled={isPending}>
+              Take card
+            </ActionButton>
+            <ActionButton onClick={() => openDrawer("payment")} disabled={isPending}>
+              Record payment
+            </ActionButton>
+          </>
+        )}
+        {isLine && isPaid && !isCharge && (
+          <ActionButton
+            onClick={() => setShowCertificateModal(true)}
+            disabled={isPending}
+            title="Certificate of Authenticity"
+          >
+            Certificate
+          </ActionButton>
+        )}
+        {isLine && invoice && (
+          <ActionButton onClick={() => setInvoiceModalId(invoice.id)} disabled={isPending}>
+            View {invoice.paidAt ? "Receipt" : "Invoice"}
+          </ActionButton>
+        )}
+        <ActionButton onClick={onOpenCatalogue}>View Catalogue</ActionButton>
+        {isLine && !isCancelled && (
+          <ActionButton onClick={handleCancelSale} disabled={isPending}>
+            Cancel {saleNoun}
+          </ActionButton>
+        )}
+        {isLine && (
+          <ActionButton onClick={handleDeleteSale} disabled={isPending}>
+            Delete {saleNoun}
+          </ActionButton>
+        )}
+      </SaleActions>
 
       <ConfirmDialog
         open={pendingConfirm !== null}

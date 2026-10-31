@@ -18,8 +18,9 @@ import type { ReactNode } from "react";
 // same panel and buttons, sized to fit a header such as an opened
 // email's: less padding, narrower buttons, two to a row.
 
-// Shared by both button sizes, so they can't drift apart.
-const PANEL_CLS = "rounded-md border border-[#5E5E5E] bg-[#F9F6EF]";
+// Shared by every panel, so they can't drift apart — also used by the
+// sale window's action column in Locations (GalleriesView).
+export const ACTION_PANEL_LOOK = "rounded-md border border-[#5E5E5E] bg-[#F9F6EF]";
 // The outlined look itself (no size), also used by the sale buttons in
 // locations so every action button looks the same.
 export const ACTION_BUTTON_LOOK =
@@ -36,7 +37,7 @@ export function ActionPanel({
   footer?: ReactNode;
 }) {
   return (
-    <div className={`${PANEL_CLS} p-5`}>
+    <div className={`${ACTION_PANEL_LOOK} p-5`}>
       <div className={`flex flex-col gap-3 ${align === "end" ? "items-end" : "items-start"}`}>{children}</div>
       {footer && <div className="mt-8 flex justify-end">{footer}</div>}
     </div>
@@ -66,7 +67,7 @@ export function ActionButton({
 export function MiniActionBar({ children }: { children: ReactNode }) {
   return (
     <div
-      className={`${PANEL_CLS} grid shrink-0 grid-cols-2 content-center gap-2 self-start p-3 sm:self-stretch`}
+      className={`${ACTION_PANEL_LOOK} grid shrink-0 grid-cols-2 content-center gap-2 self-start p-3 sm:self-stretch`}
     >
       {children}
     </div>
