@@ -7,7 +7,7 @@ import { invoiceExtras } from "@/lib/invoices";
 import type { SaleModalTarget } from "@/components/SaleModal";
 import { MANUAL_SUBSCRIPTION_METHODS } from "@/lib/subscriptionMethods";
 import { clientAlertId } from "@/lib/clientAlertIds";
-import { HOPPER_ADDED_ALERT_TYPE } from "@/lib/hopperAlerts";
+import { HOPPER_ADDED_ALERT_TYPE, hopperArrivalNotes } from "@/lib/hopperAlerts";
 
 // 2026-08-13 decision: manual (PayPal/DD) artists are expected roughly
 // monthly, flagged overdue 14 days after that's due — i.e. 44 days since
@@ -82,6 +82,9 @@ export type AlertItem = {
   // The client's site, shown with their name on a Hopper alert
   // (2026-10-31) — the Hopper is the client's, so their main site.
   siteName?: string;
+  // The instructions that came in that arrival, shown on the alert
+  // (2026-10-31, Craig's request).
+  notes?: string[];
   linkHref: string | null;
   linkLabel: string;
   createdAt: string;
@@ -331,6 +334,8 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       ),
     ]);
 
+  const arrivalNotes = await hopperArrivalNotes(stored.filter((a) => a.type === HOPPER_ADDED_ALERT_TYPE));
+
   const storedItems: AlertItem[] = stored.map((a) => {
     const site = a.artist?.sites[0] ?? null;
     const siteId = site?.id || null;
@@ -344,6 +349,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       artistName: a.artist?.name || null,
       siteId,
       siteName: a.type === HOPPER_ADDED_ALERT_TYPE ? site?.name : undefined,
+      notes: arrivalNotes.get(a.id),
       linkHref: link.href,
       linkLabel: link.label,
       createdAt: a.createdAt.toISOString(),

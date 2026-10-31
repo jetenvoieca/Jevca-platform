@@ -39,7 +39,20 @@ export default function AlertDetail({
       {hasDate && <p className="text-xs text-neutral-400">{formatDateTime(item.createdAt)}</p>}
 
       {(item.linkHref || item.dismissable) && (
-        <ActionPanel>
+        <ActionPanel
+          aside={
+            // A Hopper alert's instructions (2026-10-31).
+            item.notes && (
+              <div className="space-y-3">
+                {item.notes.map((text, i) => (
+                  <p key={i} className="whitespace-pre-wrap text-sm text-neutral-800">
+                    {text}
+                  </p>
+                ))}
+              </div>
+            )
+          }
+        >
           {item.linkHref && (
             <ActionButton onClick={() => onLink(item)} disabled={busy}>
               {item.linkLabel}

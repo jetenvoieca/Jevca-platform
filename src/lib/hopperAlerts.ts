@@ -127,3 +127,33 @@ export async function noteHopperProcessed(artistId: string, count = 1): Promise<
     console.error("noteHopperProcessed failed", artistId, err);
   }
 }
+
+// The instructions (HopperNote text) that came in with each "added" alert
+// — those sent between the arrival's first and latest item, oldest first
+// — for the alert to show (2026-10-31). A note is saved just before its
+// alert is raised, hence the minute's slack at the start. By alert id;
+// alerts with none are left out.
+const NOTE_SLACK_MS = 60 * 1000;
+
+export async function hopperArrivalNotes(
+  alerts: { id: string; artistId: string | null; createdAt: Date; lastItemAt: Date | null }[]
+): Promise<Map<string, string[]>> {
+  const byAlert = new Map<string, string[]>();
+  const artistIds = [...new Set(alerts.flatMap((a) => (a.artistId ? [a.artistId] : [])))];
+  if (artistIds.length === 0) return byAlert;
+  const earliest = Math.min(...alerts.map((a) => a.createdAt.getTime())) - NOTE_SLACK_MS;
+  const notes = await db.hopperNote.findMany({
+    where: { artistId: { in: artistIds }, createdAt: { gte: new Date(earliest) } },
+    orderBy: { createdAt: "asc" },
+    select: { artistId: true, text: true, createdAt: true },
+  });
+  for (const a of alerts) {
+    const from = a.createdAt.getTime() - NOTE_SLACK_MS;
+    const to = (a.lastItemAt ?? a.createdAt).getTime();
+    const texts = notes
+      .filter((n) => n.artistId === a.artistId && n.createdAt.getTime() >= from && n.createdAt.getTime() <= to)
+      .map((n) => n.text);
+    if (texts.length > 0) byAlert.set(a.id, texts);
+  }
+  return byAlert;
+}

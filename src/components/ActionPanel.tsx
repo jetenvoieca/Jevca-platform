@@ -12,7 +12,9 @@ import type { ReactNode } from "react";
 //
 // `align` sets which side the stacked buttons hug (default: right).
 // `footer` is for the one main button that belongs alone at the
-// bottom-right of the panel (e.g. "Up to date").
+// bottom-right of the panel (e.g. "Up to date"). `aside` is content
+// shown on the left of the buttons (2026-10-31 — an alert's instruction
+// text).
 //
 // The mini action bar (2026-10-01, direct request — see mock-up) is the
 // same panel and buttons, sized to fit a header such as an opened
@@ -31,14 +33,26 @@ export function ActionPanel({
   children,
   align = "end",
   footer,
+  aside,
 }: {
   children: ReactNode;
   align?: "start" | "end";
   footer?: ReactNode;
+  aside?: ReactNode;
 }) {
+  const buttons = (
+    <div className={`flex flex-col gap-3 ${align === "end" ? "items-end" : "items-start"}`}>{children}</div>
+  );
   return (
     <div className={`${ACTION_PANEL_LOOK} p-5`}>
-      <div className={`flex flex-col gap-3 ${align === "end" ? "items-end" : "items-start"}`}>{children}</div>
+      {aside ? (
+        <div className="flex items-start gap-5">
+          <div className="min-w-0 flex-1">{aside}</div>
+          <div className="shrink-0">{buttons}</div>
+        </div>
+      ) : (
+        buttons
+      )}
       {footer && <div className="mt-8 flex justify-end">{footer}</div>}
     </div>
   );
