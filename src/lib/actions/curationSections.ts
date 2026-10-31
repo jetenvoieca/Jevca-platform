@@ -12,7 +12,7 @@ import {
 
 // A curation's presentation sections (2026-10-06) — see CurationSection
 // in schema.prisma and lib/curationSections.ts. Every curation has the
-// same three, made with it (createCuration), so there's nothing to add,
+// same two, made with it (createCuration), so there's nothing to add,
 // delete or reorder (2026-10-13). Every action takes the artistId and
 // only touches sections of that artist's own curations, and only that
 // artist's own images and videos can be used.
@@ -64,7 +64,7 @@ function toData(row: SectionRow): CurationSectionData {
   };
 }
 
-// The curation's three sections, in their fixed order (the type's order).
+// The curation's two sections, in their fixed order (the type's order).
 export async function listCurationSections(curationId: string, artistId: string): Promise<CurationSectionData[]> {
   await requireArtistAccess(artistId);
   const rows = await db.curationSection.findMany({
@@ -100,9 +100,8 @@ export async function updateCurationSectionText(
   });
 }
 
-// Sets the Video section's video (one, or none) or the Supporting
-// Media section's pictures and videos (in order; videos since
-// 2026-10-25), replacing what was there.
+// Sets the Supporting Media section's pictures and videos (in order;
+// videos since 2026-10-25), replacing what was there.
 export async function setCurationSectionMedia(
   sectionId: string,
   artistId: string,
@@ -114,24 +113,18 @@ export async function setCurationSectionMedia(
     select: { id: true, type: true },
   });
   if (!section) return { error: "Section not found." };
-  if (section.type !== "VIDEO" && section.type !== "IMAGES") {
-    return { error: "This section can't hold images or video." };
-  }
+  if (section.type !== "IMAGES") return { error: "This section can't hold pictures or videos." };
 
   const ids = [...new Set(imageIds)];
-  const isVideo = section.type === "VIDEO";
-  if (isVideo && ids.length > 1) return { error: "A Video section holds one video." };
-  if (!isVideo && ids.length > MAX_SUPPORTING_MEDIA) {
+  if (ids.length > MAX_SUPPORTING_MEDIA) {
     return { error: `Supporting Media can hold at most ${MAX_SUPPORTING_MEDIA} pictures and videos.` };
   }
 
   const images = await db.image.findMany({
-    where: { id: { in: ids }, artistId, ...(isVideo ? { kind: "VIDEO" as const } : {}) },
+    where: { id: { in: ids }, artistId },
     select: { id: true, kind: true, url: true, displayKey: true, posterUrl: true },
   });
-  if (images.length !== ids.length) {
-    return { error: isVideo ? "That video couldn't be found." : "A picture or video couldn't be found." };
-  }
+  if (images.length !== ids.length) return { error: "A picture or video couldn't be found." };
 
   await db.$transaction([
     db.curationSectionMedia.deleteMany({ where: { sectionId } }),

@@ -17,10 +17,12 @@ import {
 
 // The Curations page's presentation sections (2026-10-06; fixed
 // 2026-10-13, Craig's mockup) — what the curation panel on a page shows
-// under the artwork. Always the same three boxes, in this order:
-// Description, Video and Supporting Media. They can't be added,
-// removed or reordered; further layout is done in Pages. Text saves when
-// the box is left, a video or images save as soon as they're picked —
+// under the artwork. Always the same two boxes, in this order:
+// Description and Supporting Media, one grid of pictures and videos
+// (2026-10-31 — the separate Video box merged into it). They can't be
+// added, removed or reordered; further layout is done in Pages. Text
+// saves when the box is left, pictures and videos as soon as they're
+// picked —
 // from the Media Catalogue's views (2026-10-25, Craig's request, so
 // marketing media can go into story pages): Marketing, Videos and
 // Related, searchable, not only the newest pictures.
@@ -50,12 +52,12 @@ export default function CurationSectionsEditor({
   }
 
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex flex-col gap-2">
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
       {sections.map((s) => (
-        <div key={s.id} className="rounded-xl border border-neutral-300 p-3">
-          <h3 className="mb-2 text-center text-base text-neutral-900">{curationSectionLabel(s.type)}</h3>
+        <div key={s.id} className="rounded-lg border border-neutral-300 p-2">
+          <h3 className="mb-1 text-center text-sm text-neutral-900">{curationSectionLabel(s.type)}</h3>
           <SectionBody section={s} artistId={artistId} siteId={siteId} onSaved={replace} onError={setError} />
         </div>
       ))}
@@ -108,34 +110,10 @@ function SectionBody({
         onChange={(e) => setText(e.target.value)}
         onBlur={saveText}
         maxLength={MAX_SECTION_TEXT}
-        rows={8}
-        placeholder="Write a description…"
+        rows={6}
+        placeholder="About this curation"
         className="w-full resize-y rounded-md border border-transparent bg-transparent p-1 text-sm text-neutral-800 hover:border-neutral-300 focus:border-neutral-400 focus:outline-none"
       />
-    );
-  }
-
-  if (section.type === "VIDEO") {
-    const video = section.media[0];
-    return (
-      <div className="flex flex-col gap-1">
-        <MediaPicker
-          artistId={artistId}
-          siteId={siteId}
-          videoOnly
-          catalogueViews
-          label="Choose video"
-          previewUrl={video ? (video.posterUrl ?? video.url) : undefined}
-          previewKind={video && !video.posterUrl ? "video" : "image"}
-          previewClassName="aspect-video"
-          onSelect={(picked) => picked[0] && saveMedia([picked[0].id])}
-        />
-        {video && (
-          <button type="button" onClick={() => saveMedia([])} className="self-end text-xs text-red-500 hover:underline">
-            Remove video
-          </button>
-        )}
-      </div>
     );
   }
 

@@ -86,8 +86,8 @@ import type { SiteArtist } from "@/lib/siteArtist";
 // Arrange for a Block Build page (2026-10-07; 2026-10-13 from Craig's
 // mockup: Page Styles set the layout, curations what's available, and
 // the page brings them together) — shown in the Pages page's Preview
-// panel. On the left, the page's curation's works and its Description,
-// Video and Supporting Media; on the right, the page's Display Style
+// panel. On the left, the page's curation's works and its Description
+// and Supporting Media; on the right, the page's Display Style
 // (desktop width) with what each component holds drawn in it:
 // - A Header or Byline is typed straight in.
 // - Drag the works or a section onto a component to put it there. A
@@ -161,7 +161,6 @@ function sectionContent(section: CurationSectionData): Content {
 // A line saying what a section holds: the start of its text, or how
 // many pictures.
 function sectionDetail(section: CurationSectionData): string {
-  if (section.type === "VIDEO") return section.media.length > 0 ? "Video chosen" : "No video yet";
   if (section.type === "IMAGES") {
     return section.media.length === 1 ? "1 picture or video" : `${section.media.length} pictures and videos`;
   }
@@ -926,17 +925,6 @@ function FilledSlot({
         style={textStyle}
         onSave={onSaveText}
       />
-    );
-  } else if (kind === "VIDEO") {
-    const video = section?.media[0];
-    body = video ? (
-      video.posterUrl ? (
-        <img src={video.posterUrl} alt="" className="aspect-video w-full rounded object-cover" />
-      ) : (
-        <video src={video.url} className="aspect-video w-full rounded bg-black" />
-      )
-    ) : (
-      <p className="py-6 text-center text-sm text-neutral-400">No video yet — choose one on the Curations page.</p>
     );
   }
 

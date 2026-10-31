@@ -23,7 +23,7 @@ const GRID_COLUMNS = 4;
 // The curation panel (2026-10-06, from Craig's mockups) — opened by
 // clicking an artwork on a Canvas page. Scrolls as one: the artwork
 // clicked, large, with its name; then the curation's presentation
-// sections in order (Description, Video, Supporting Media — see
+// sections in order (Description, Supporting Media — see
 // CurationSectionView); then a grid of the curation's other works,
 // which fly in as they're scrolled into view (see FlyIn). Clicking a
 // work in the grid puts it at the top and scrolls back up. Clicking the

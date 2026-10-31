@@ -185,10 +185,6 @@ export function BlockShape({
           </div>
         </div>
       );
-    case "video":
-      return (
-        <div className="flex h-40 items-center justify-center rounded bg-neutral-200 text-2xl text-neutral-400">▶</div>
-      );
     case "textgrid":
       return (
         <div className="grid grid-cols-3 gap-2">

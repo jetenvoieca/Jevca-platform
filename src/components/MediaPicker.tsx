@@ -27,12 +27,8 @@ type MediaRow = {
   kind: string;
 };
 
-// videoOnly stays exactly as it was (used by a curation's Video section) —
-// mediaKinds is the new, more general option, for pickers that want both
-// kinds together (e.g. a curation work's presentation pictures, which can
-// include video).
-// When mediaKinds is given it takes over entirely; otherwise videoOnly's
-// old true/false logic applies unchanged.
+// Pictures only, unless mediaKinds says otherwise — e.g. ["PHOTO",
+// "VIDEO"] for a curation's Supporting Media, which can include video.
 type PickerSource = MediaTab | "media";
 
 const SOURCE_LABEL: Record<Exclude<PickerSource, "artworks">, string> = {
@@ -41,14 +37,14 @@ const SOURCE_LABEL: Record<Exclude<PickerSource, "artworks">, string> = {
   media: "Media",
 };
 
-function matchesKind(kind: string, videoOnly: boolean, mediaKinds?: ("PHOTO" | "VIDEO")[]): boolean {
+function matchesKind(kind: string, mediaKinds?: ("PHOTO" | "VIDEO")[]): boolean {
   if (mediaKinds) return mediaKinds.includes(kind as "PHOTO" | "VIDEO");
-  return videoOnly ? kind === "VIDEO" : kind === "PHOTO";
+  return kind === "PHOTO";
 }
 
-function toPicked(rows: MediaRow[], videoOnly: boolean, mediaKinds?: ("PHOTO" | "VIDEO")[]): PickedImage[] {
+function toPicked(rows: MediaRow[], mediaKinds?: ("PHOTO" | "VIDEO")[]): PickedImage[] {
   return rows
-    .filter((img) => matchesKind(img.kind, videoOnly, mediaKinds))
+    .filter((img) => matchesKind(img.kind, mediaKinds))
     .map((img) => ({
       id: img.id,
       url: img.url,
@@ -62,11 +58,9 @@ export default function MediaPicker({
   artistId,
   siteId,
   mode = "single",
-  videoOnly = false,
   mediaKinds,
   label = "Add Image",
   previewUrl,
-  previewKind = "image",
   previewClassName,
   variant = "tile",
   onClose,
@@ -78,9 +72,7 @@ export default function MediaPicker({
   // For the "Upload new" link to this site's Hopper.
   siteId: string;
   mode?: "single" | "multi";
-  videoOnly?: boolean;
-  // Overrides videoOnly when given — lets a picker show both kinds
-  // together, e.g. ["PHOTO", "VIDEO"] for an artwork's Related Images.
+  // Which kinds it offers; pictures only when not given.
   mediaKinds?: ("PHOTO" | "VIDEO")[];
   label?: string;
   // When set (2026-08-30), the closed-state trigger renders this actual
@@ -93,11 +85,6 @@ export default function MediaPicker({
   // longer need their own separate <img> + small MediaPicker pairing —
   // this one picker is now both the preview and the trigger.
   previewUrl?: string;
-  // "video" renders previewUrl in a muted <video> instead of an <img>
-  // (2026-09-04; e.g. a curation's Video section) — pass a poster
-  // frame's URL with previewKind="image" if one exists, or the video
-  // file itself with previewKind="video" as a fallback when it doesn't.
-  previewKind?: "image" | "video";
   // Overrides the default `aspect-[4/3] w-full` box the preview/trigger
   // renders at (2026-09-04) — e.g. `aspect-video` for a video. Also
   // applied to the empty (no previewUrl yet) dashed placeholder, so a
@@ -138,8 +125,8 @@ export default function MediaPicker({
   // What the grid shows. With artworks (2026-10-16): the Media
   // Catalogue's own views — Artworks, Marketing, Videos — those
   // holding a kind this picker takes. Otherwise one list, "media".
-  const takesPhotos = matchesKind("PHOTO", videoOnly, mediaKinds);
-  const takesVideos = matchesKind("VIDEO", videoOnly, mediaKinds);
+  const takesPhotos = matchesKind("PHOTO", mediaKinds);
+  const takesVideos = matchesKind("VIDEO", mediaKinds);
   const tabbed = withArtworks || catalogueViews;
   const sources: PickerSource[] = tabbed
     ? [
@@ -164,7 +151,7 @@ export default function MediaPicker({
   const load = (q: string) => {
     startTransition(async () => {
       const results = await listImages(artistId, q || undefined);
-      setImages(toPicked(results, videoOnly, mediaKinds));
+      setImages(toPicked(results, mediaKinds));
     });
   };
 
@@ -184,7 +171,7 @@ export default function MediaPicker({
         limit: PICKER_FETCH_LIMIT,
         newestFirst: true,
       });
-      setImages(toPicked(rows, videoOnly, mediaKinds));
+      setImages(toPicked(rows, mediaKinds));
     });
   };
 
@@ -300,12 +287,8 @@ export default function MediaPicker({
         onClick={handleOpen}
         className={`group relative block w-full overflow-hidden rounded-md ${previewClassName ?? "aspect-[4/3]"}`}
       >
-        {previewKind === "video" ? (
-          <video src={previewUrl} muted playsInline className="h-full w-full object-cover" />
-        ) : (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={previewUrl} alt="" className="h-full w-full object-cover" />
-        )}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={previewUrl} alt="" className="h-full w-full object-cover" />
         <div className="absolute inset-0 flex items-center justify-center bg-black/0 transition-colors group-hover:bg-black/20">
           <div className="hidden h-2/3 w-2/3 items-center justify-center border-2 border-dashed border-white group-hover:flex">
             <span className="text-2xl leading-none text-white">+</span>
@@ -460,11 +443,11 @@ export default function MediaPicker({
             placeholder={
               source === "artworks"
                 ? `Search ${words.items.toLowerCase()}…`
-                : mediaKinds && mediaKinds.length > 1
-                  ? "Search images and videos…"
-                  : videoOnly
-                    ? "Search videos…"
-                    : "Search images…"
+                : mediaKinds?.includes("VIDEO")
+                  ? mediaKinds.length > 1
+                    ? "Search images and videos…"
+                    : "Search videos…"
+                  : "Search images…"
             }
             autoFocus
             className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"

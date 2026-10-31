@@ -134,9 +134,9 @@ enum PageContentSource {
 }
 
 // In display order (Postgres sorts an enum by its declared order).
+// (VIDEO was merged into IMAGES 2026-10-31 — one media grid.)
 enum CurationSectionType {
   DESCRIPTION
-  VIDEO
   IMAGES
 }
 
@@ -691,11 +691,11 @@ model Curation {
 }
 
 // One section of a curation's presentation (2026-10-06; fixed
-// 2026-10-13, Craig's mockup): every curation has exactly three — a
-// Description (`text`), a Video (one video from the Media Catalogue, in
-// `media`) and Supporting Images (photos from the Media Catalogue, in
-// `media`) — created with the curation, shown in that order (the type's
-// order), never added, removed or reordered. Edited on the Curations
+// 2026-10-13, Craig's mockup): every curation has exactly two — a
+// Description (`text`) and Supporting Media (pictures and videos from the
+// Media Catalogue, in `media`; the separate Video section was merged into
+// it 2026-10-31) — created with the curation, shown in that order (the
+// type's order), never added, removed or reordered. Edited on the Curations
 // page. Removed with its curation. Can also be put in a Block Build
 // page's components (2026-10-07) — see PageComponentContent.
 model CurationSection {
@@ -1437,8 +1437,8 @@ model PageCanvasItem {
 // Arrange. `source` says what it holds:
 // - WORKS: the page's curation's works (Gallery, Sliding doors).
 // - SECTION: one of the curation's sections (`sectionId`) — a
-//   Description (Text, Text grid), the Video, or Supporting Images
-//   (Single Image, Gallery). A Description can be edited for this page
+//   Description (Text, Text grid), or Supporting Media (Single Image,
+//   Gallery). A Description can be edited for this page
 //   only: `text` is the page's own copy, null = the curation's.
 // - TYPED: text typed on the page (`text`) — a Header.
 // Works and Supporting Images can be removed on this page (`hiddenIds`)

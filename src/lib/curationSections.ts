@@ -4,15 +4,15 @@
 // module, not "use server", so all of them can import it. See
 // CurationSection in schema.prisma.
 //
-// Every curation has exactly these three, in this order (2026-10-13,
-// Craig's mockup) — never added, removed or reordered. Further layout is
-// done in Pages.
+// Every curation has exactly these two, in this order (2026-10-13,
+// Craig's mockup; the separate Video merged into Supporting Media
+// 2026-10-31) — never added, removed or reordered. Further layout is done
+// in Pages.
 
 export const CURATION_SECTION_TYPES = [
   { value: "DESCRIPTION", label: "Description" },
-  { value: "VIDEO", label: "Video" },
-  // Pictures and videos (2026-10-25, was Supporting Media — pictures
-  // only), for story pages.
+  // Pictures and videos (2026-10-25, was pictures only), for story pages
+  // and galleries.
   { value: "IMAGES", label: "Supporting Media" },
 ] as const;
 

@@ -58,7 +58,6 @@ export const LAYOUT_BLOCK_TYPES = [
   { value: "image", label: "Single Image" },
   { value: "gallery", label: "Gallery" },
   { value: "artwork", label: "Feature" },
-  { value: "video", label: "Video" },
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },
   { value: "signup", label: "Sign-up form" },

@@ -51,7 +51,6 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   byline: ["TYPED"],
   text: ["DESCRIPTION", "TYPED"],
   textgrid: ["DESCRIPTION"],
-  video: ["VIDEO"],
   image: ["IMAGES", "WORKS"],
   gallery: ["IMAGES", "WORKS"],
   slidingdoors: ["WORKS"],

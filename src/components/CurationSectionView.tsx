@@ -31,13 +31,6 @@ export default function CurationSectionView({
         </p>
       );
 
-    case "VIDEO": {
-      const video = section.media[0];
-      return (
-        <video src={video.url} poster={video.posterUrl ?? undefined} controls className="w-full rounded-md bg-black" />
-      );
-    }
-
     case "IMAGES":
       return (
         <div className="flex flex-col gap-2">
