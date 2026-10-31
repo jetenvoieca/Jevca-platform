@@ -420,7 +420,8 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
     view = "inbox",
     initialTasks = [],
     initialInsights = [],
-    initialToday = "",
+    // The Dashboard shows no tasks, so it needs no date from the server.
+    initialToday = parisToday(),
     openTaskId = null,
     initialAlerts = [],
     selectedAlertId = null,
