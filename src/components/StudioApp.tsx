@@ -5,7 +5,7 @@ import AddArtwork from "@/components/studio/AddArtwork";
 import ArtworkCatalogue from "@/components/studio/ArtworkCatalogue";
 import ConsignArtwork from "@/components/studio/ConsignArtwork";
 import RecordSale from "@/components/studio/RecordSale";
-import TakePayment from "@/components/studio/TakePayment";
+import SendInstructions from "@/components/studio/SendInstructions";
 import { NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
 import type { StudioArtworkTile } from "@/lib/studioArtworks";
@@ -13,14 +13,15 @@ import type { StudioSettings } from "@/lib/studioSettings";
 import { priceToInput } from "@/lib/studioShared";
 
 // The Studio app for one artist: the first screen (logo + four options)
-// and whichever flow the artist chose. Consign, Sold and Payment each
-// start from the catalogue of unsold works, where a single tap chooses
-// one; that flow's own screen then takes over. Every screen but the first
-// has a Back link at the top left to the first screen (as does tapping the
-// "JEVCA Studio" title). On the Payment panel a magnifier at the top right
-// shows the chosen artwork large, over everything; tapping closes it.
+// and whichever flow the artist chose. Consign and Sold each start from
+// the catalogue of unsold works, where a single tap chooses one; that
+// flow's own screen then takes over. Instructions (2026-10-31, Craig's
+// mockup — replacing Payment, which will come back revised) sends a note
+// to the artist's Hopper. Every screen but the first has a Back link at
+// the top left to the first screen (as does tapping the "JEVCA Studio"
+// title).
 
-type Mode = "home" | "add" | "consign" | "sold" | "payment";
+type Mode = "home" | "add" | "consign" | "sold" | "instructions";
 
 function BackIcon() {
   return (
@@ -36,25 +37,6 @@ function BackIcon() {
       aria-hidden
     >
       <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
-}
-
-function MagnifierIcon() {
-  return (
-    <svg
-      width="28"
-      height="28"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <circle cx="11" cy="11" r="7" />
-      <path d="m20 20-3.5-3.5M11 8v6M8 11h6" />
     </svg>
   );
 }
@@ -76,12 +58,10 @@ export default function StudioApp({
   // True while a flow is saving something — leaving then would hide
   // whether it worked.
   const [busy, setBusy] = useState(false);
-  const [enlarged, setEnlarged] = useState(false);
 
   const goHome = (message: Notice | null = null) => {
     setNotice(message);
     setArtwork(null);
-    setEnlarged(false);
     setMode("home");
   };
 
@@ -104,6 +84,9 @@ export default function StudioApp({
         />
       );
     }
+    if (mode === "instructions") {
+      return <SendInstructions token={token} onDone={goHome} onBusyChange={setBusy} />;
+    }
     if (!artwork) return <ArtworkCatalogue token={token} onChosen={setArtwork} />;
     if (mode === "consign") {
       return (
@@ -116,33 +99,19 @@ export default function StudioApp({
         />
       );
     }
-    if (mode === "sold") {
-      return (
-        <RecordSale
-          token={token}
-          artwork={artwork}
-          initialPrice={priceToInput(artwork.price)}
-          initialCurrency={artwork.priceCurrency}
-          locations={settings.locations}
-          paymentMethods={settings.paymentMethods}
-          onDone={goHome}
-          onBusyChange={setBusy}
-        />
-      );
-    }
     return (
-      <TakePayment
+      <RecordSale
         token={token}
         artwork={artwork}
+        initialPrice={priceToInput(artwork.price)}
+        initialCurrency={artwork.priceCurrency}
         locations={settings.locations}
-        defaultInstalmentCount={settings.defaultInstalmentCount}
+        paymentMethods={settings.paymentMethods}
         onDone={goHome}
         onBusyChange={setBusy}
       />
     );
   };
-
-  const enlargeUrl = mode === "payment" ? artwork?.displayUrl : null;
 
   return (
     <main
@@ -170,16 +139,6 @@ export default function StudioApp({
           <div>JEVCA Studio</div>
           <div>Personal Art Manager</div>
         </button>
-        {enlargeUrl && (
-          <button
-            type="button"
-            onClick={() => setEnlarged(true)}
-            aria-label="Show the artwork larger"
-            className="absolute right-0 top-1/2 -translate-y-1/2 p-2 text-[#333]"
-          >
-            <MagnifierIcon />
-          </button>
-        )}
       </div>
 
       {mode === "home" ? (
@@ -204,26 +163,11 @@ export default function StudioApp({
             <StudioButton onClick={() => start("add")}>NEW ART</StudioButton>
             <StudioButton onClick={() => start("consign")}>CONSIGN</StudioButton>
             <StudioButton onClick={() => start("sold")}>SOLD</StudioButton>
-            <StudioButton onClick={() => start("payment")}>PAYMENT</StudioButton>
+            <StudioButton onClick={() => start("instructions")}>INSTRUCTIONS</StudioButton>
           </div>
         </section>
       ) : (
         flow()
-      )}
-
-      {enlarged && enlargeUrl && (
-        <button
-          type="button"
-          onClick={() => setEnlarged(false)}
-          aria-label="Close the larger view"
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4"
-        >
-          <img
-            src={enlargeUrl}
-            alt={artwork?.title ?? ""}
-            className="max-h-full max-w-full object-contain"
-          />
-        </button>
       )}
     </main>
   );

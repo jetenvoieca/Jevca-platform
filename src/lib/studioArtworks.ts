@@ -24,8 +24,6 @@ export type StudioArtworkTile = {
   price: string | null;
   priceCurrency: string;
   thumbnailUrl: string | null;
-  // The larger version, for the Payment panel's enlarged view.
-  displayUrl: string | null;
 };
 
 // One page of an artist's unsold artworks for the Studio app (every sold
@@ -52,7 +50,7 @@ export async function listStudioArtworks(artistId: string, offset: number) {
         location: true,
         offeredPrice: true,
         priceCurrency: true,
-        mainImage: { select: { url: true, thumbnailKey: true, displayKey: true } },
+        mainImage: { select: { url: true, thumbnailKey: true } },
       },
     }),
     db.artwork.count({ where }),
@@ -73,7 +71,6 @@ export async function listStudioArtworks(artistId: string, offset: number) {
       price: a.offeredPrice != null ? a.offeredPrice.toString() : null,
       priceCurrency: a.priceCurrency,
       thumbnailUrl,
-      displayUrl: image ? publicMediaUrl(image.displayKey) || thumbnailUrl : null,
     };
   });
 

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { listHopperQueue } from "@/lib/actions/hopper";
+import { listHopperNotes, listHopperQueue } from "@/lib/actions/hopper";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import HopperView from "@/components/HopperView";
 
@@ -23,8 +23,9 @@ export default async function HopperPage({
   const site = await db.site.findUnique({ where: { id }, select: { artistId: true } });
   const artistId = site!.artistId;
 
-  const [queue, settings] = await Promise.all([
+  const [queue, notes, settings] = await Promise.all([
     listHopperQueue(artistId),
+    listHopperNotes(artistId),
     // Only needed for the inline "quick catalogue" fields shown after
     // "Add Artwork" (2026-08-17) — see HopperView.tsx.
     getArtworkSettings(artistId),
@@ -35,6 +36,7 @@ export default async function HopperPage({
       siteId={id}
       artistId={artistId}
       queue={queue}
+      notes={notes}
       artworkSettings={settings}
       returnTo={returnTo}
     />

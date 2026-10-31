@@ -337,6 +337,9 @@ model Artist {
 
   images Image[]
   hopperVideoImports HopperVideoImport[]
+  // Notes sent to the Hopper from the Studio app (2026-10-31) — see
+  // HopperNote.
+  hopperNotes HopperNote[]
   // Marketing → Social Media (2026-10-15). See SocialPost.
   socialPosts SocialPost[]
   // The artist's Music library (2026-10-16). See MusicTrack.
@@ -2054,6 +2057,21 @@ enum HopperVideoImportStatus {
   COPYING
   DONE
   FAILED
+}
+
+// A note in a client's Hopper (2026-10-31, Craig's mockup): text sent
+// from the Studio app's Instructions screen. Shown on the Hopper page,
+// where it's read and marked done, which deletes it. Counts towards the
+// Dashboard's Hopper alerts like any item (see lib/hopperAlerts.ts).
+model HopperNote {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  text     String
+
+  createdAt DateTime @default(now())
+
+  @@index([artistId, createdAt])
 }
 
 model HopperVideoImport {

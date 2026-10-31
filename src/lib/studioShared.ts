@@ -10,26 +10,6 @@ export function isEditionType(type: string | null): boolean {
   return (type ?? "").toLowerCase().includes("edition");
 }
 
-// What the app sends to start taking payment for an artwork, by card or by
-// payment link. `deposit` is "" when there is none; `saleDate` is
-// YYYY-MM-DD; `instalmentCount` is how many instalments the net due is
-// split into when `option` is INSTALMENTS. `edition` is the edition number
-// to save on the artwork ("" clears it), or null to leave it unchanged —
-// only an edition-type artwork sends one.
-export type StudioPaymentDetails = {
-  artworkId: string;
-  edition: string | null;
-  saleDate: string;
-  price: string;
-  currency: string;
-  deposit: string;
-  option: "FULL" | "INSTALMENTS";
-  instalmentCount: number;
-  source: string;
-  buyerName: string;
-  buyerEmail: string;
-};
-
 // Accepts "1200", "1 200", "1200,50" or "1200.50". Returns the plain
 // number string the server expects, "" when left blank, or null when
 // it isn't a valid price.

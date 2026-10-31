@@ -318,8 +318,8 @@ async function seedSaleTerms(
 // the sale is dated now. Refuses if there's already an ACTIVE purchase
 // for this artwork, or if the artwork is already RESERVED/SOLD. Does NOT
 // touch Availability itself (2026-09-20 rebuild) — that's the caller's
-// job, so each of startArtworkSaleAndGetLink and
-// startArtworkSaleAndEnterCard marks RESERVED right after this succeeds.
+// job, so startArtworkSaleAndEnterCard marks RESERVED right after this
+// succeeds.
 // See the file-level note above.
 async function startPurchase(
   artworkId: string,
@@ -399,36 +399,11 @@ async function startPurchase(
   return { ok: true, purchaseId: purchase.id };
 }
 
-// ---------- Direct Stripe sales, started from the Studio app ----------
-
-// Payment link (rule 3 above): once the Purchase itself is
-// successfully started, this marks the artwork RESERVED ("Sold - Not
-// Paid") immediately — before attempting to actually generate the
-// Stripe link — so the reservation holds even if link-creation itself
-// then fails; the Purchase already exists and can be retried from the
-// Sales page either way.
-export async function startArtworkSaleAndGetLink(
-  artworkId: string,
-  siteId: string,
-  formData: FormData,
-): Promise<{ ok: true; purchaseId: string; url: string } | { ok: false; error: string }> {
-  const seeded = await seedSaleTerms(artworkId, formData);
-  if (!seeded.ok) return seeded;
-
-  const started = await startPurchase(artworkId, siteId, formData);
-  if (!started.ok) return started;
-
-  await db.artwork.update({ where: { id: artworkId }, data: { availability: "RESERVED" } });
-
-  const link = await createPaymentLink(started.purchaseId, siteId, artworkId);
-  if (!link.ok) return { ok: false, error: link.error };
-
-  return { ok: true, purchaseId: started.purchaseId, url: link.url };
-}
+// ---------- Direct Stripe sales: a card entered in the app ----------
 
 // Card payment (rule 1 above): marks RESERVED the moment the
-// Purchase itself is started — the same instant as the payment link
-// above, before the card form has even loaded — rather than waiting
+// Purchase itself is started — before the card form has even loaded —
+// rather than waiting
 // for the payment to actually succeed. SOLD only happens later, once
 // the card payment genuinely confirms (handleFirstPaymentSucceeded/
 // completeIfSettled, reached via the Stripe webhook or the direct
@@ -1176,64 +1151,6 @@ function firstChargeAmount(purchase: { type: string; totalAmount: unknown; insta
   return total;
 }
 
-// ---------- Take payment: hosted Stripe payment link ----------
-
-async function createPaymentLink(
-  purchaseId: string,
-  siteId: string,
-  artworkId: string,
-): Promise<{ ok: true; url: string } | { ok: false; error: string }> {
-  try {
-    const purchase = await db.purchase.findUnique({
-      where: { id: purchaseId },
-      include: { artwork: true },
-      relationLoadStrategy: "query",
-    });
-    if (!purchase) return { ok: false, error: "Purchase not found." };
-    if (!purchase.buyerEmail) {
-      return { ok: false, error: "This purchase has no buyer email on file." };
-    }
-
-    const stripe = getStripeClientForSale(purchase);
-    const customerId = await getOrCreateStripeCustomer(stripe, {
-      ...purchase,
-      buyerEmail: purchase.buyerEmail,
-    });
-    const amount = firstChargeAmount(purchase);
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "payment",
-      customer: customerId,
-      payment_intent_data: {
-        setup_future_usage: "off_session",
-        metadata: { purchaseId: purchase.id, sequence: "1" },
-      },
-      line_items: [
-        {
-          quantity: 1,
-          price_data: {
-            currency: purchase.currency.toLowerCase(),
-            unit_amount: toMinorUnits(amount),
-            product_data: { name: purchase.artwork.catalogueName },
-          },
-        },
-      ],
-      success_url: `${APP_URL}/sites/${siteId}/artworks/${artworkId}?payment=success`,
-      cancel_url: `${APP_URL}/sites/${siteId}/artworks/${artworkId}?payment=cancelled`,
-    });
-
-    await db.purchase.update({
-      where: { id: purchase.id },
-      data: { stripeCheckoutSessionId: session.id },
-    });
-
-    if (!session.url) return { ok: false, error: "Stripe did not return a payment link." };
-    return { ok: true, url: session.url };
-  } catch (err) {
-    return { ok: false, error: stripeErrorMessage(err) };
-  }
-}
-
 // ---------- Take payment: card entered directly in the app ----------
 
 export async function createCardEntryIntent(
@@ -1347,10 +1264,9 @@ async function scheduleRemainingInstalments(opts: {
 // Marks the first Payment on a direct Stripe Purchase PAID and completes
 // it if that was the only one due. Reached through recordPaymentIntent
 // below (both the Stripe webhook and the in-app card form, which records
-// the moment Stripe confirms rather than waiting on the webhook), and by
-// the Studio app's confirmStudioCardPayment (lib/studioSales.ts), which
-// verifies the payment with Stripe itself first. Idempotent (the
-// sequence-1 check below), so whichever arrives first does the work.
+// the moment Stripe confirms rather than waiting on the webhook).
+// Idempotent (the sequence-1 check below), so whichever arrives first
+// does the work.
 //
 // RESERVED was already set the moment this sale started (see the
 // file-level note above); completeIfSettled promotes it to SOLD once the

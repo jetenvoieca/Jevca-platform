@@ -249,3 +249,26 @@ export async function createArtworkFromHopperQuick(
 
   return { ok: true, artwork: { id: artwork.id } };
 }
+
+// ---------- Notes sent from the Studio app (2026-10-31) ----------
+
+export type HopperNoteItem = { id: string; text: string; createdAt: string };
+
+// The client's Hopper notes, oldest first like the rest of the Hopper.
+export async function listHopperNotes(artistId: string): Promise<HopperNoteItem[]> {
+  await requireArtistAccess(artistId);
+  const rows = await db.hopperNote.findMany({
+    where: { artistId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true, text: true, createdAt: true },
+  });
+  return rows.map((n) => ({ id: n.id, text: n.text, createdAt: n.createdAt.toISOString() }));
+}
+
+// Done: the note has been read and dealt with, so it leaves the Hopper.
+export async function completeHopperNote(id: string): Promise<void> {
+  const note = await db.hopperNote.findUnique({ where: { id }, select: { artistId: true } });
+  await requireRecordAccess(Promise.resolve(note));
+  const { count } = await db.hopperNote.deleteMany({ where: { id } });
+  await noteHopperProcessed(note!.artistId, count);
+}

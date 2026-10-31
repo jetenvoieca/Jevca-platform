@@ -9,8 +9,6 @@ export type StudioSettings = {
   sizePresets: string[];
   // How a sale was paid: bank transfer, cash, ...
   paymentMethods: string[];
-  // How many payments an instalment plan is split into.
-  defaultInstalmentCount: number;
 };
 
 export async function getStudioSettings(artistId: string): Promise<StudioSettings> {
@@ -20,6 +18,5 @@ export async function getStudioSettings(artistId: string): Promise<StudioSetting
     locations: settings.locations.map((l) => l.name),
     sizePresets: settings.sizePresets,
     paymentMethods: settings.paymentMethods,
-    defaultInstalmentCount: settings.defaultInstalmentCount,
   };
 }

@@ -12,7 +12,11 @@ import { parisToDate, parisToday } from "@/lib/parisTime";
 //
 // - HOPPER_ITEMS_PROCESSED (in the Processed list from the start): "3
 //   Hopper items processed" — one per client per day (Paris), counting
-//   items moved to Media, the Bucket, made an artwork, or deleted.
+//   items moved to Media, the Bucket, made an artwork, or deleted, and
+//   notes marked done.
+//
+// An item is a picture or video (an Image in the Hopper) or a note sent
+// from the Studio app (HopperNote).
 //
 // Both count every item, whoever added or processed it. Neither ever
 // stops what raised it: a failure here is logged, not passed on.
@@ -110,8 +114,11 @@ export async function noteHopperProcessed(artistId: string, count = 1): Promise<
       });
     }
 
-    const waiting = await db.image.count({ where: { artistId, status: "HOPPER" } });
-    if (waiting === 0) {
+    const [pictures, notes] = await Promise.all([
+      db.image.count({ where: { artistId, status: "HOPPER" } }),
+      db.hopperNote.count({ where: { artistId } }),
+    ]);
+    if (pictures + notes === 0) {
       await db.alertEvent.deleteMany({
         where: { artistId, type: HOPPER_ADDED_ALERT_TYPE, resolvedAt: null },
       });

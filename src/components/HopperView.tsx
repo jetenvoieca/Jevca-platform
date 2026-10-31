@@ -16,6 +16,8 @@ import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
+import HopperNotes from "@/components/HopperNotes";
+import type { HopperNoteItem } from "@/lib/actions/hopper";
 import HopperCropEditor from "@/components/HopperCropEditor";
 import { computeReferencePrice } from "@/lib/pricing";
 import { useClientWords } from "@/components/ClientWordsProvider";
@@ -84,6 +86,7 @@ export default function HopperView({
   basePath,
   artistId,
   queue,
+  notes = [],
   artworkSettings,
   artworkIntake = false,
   returnTo,
@@ -101,6 +104,8 @@ export default function HopperView({
   basePath?: string;
   artistId: string;
   queue: HopperItem[];
+  // Notes sent from the Studio app (2026-10-31) — the Hopper page only.
+  notes?: HopperNoteItem[];
   // Used by the inline "quick catalogue" fields shown after "Create new
   // artwork" — see the note by that button in SortingCard.
   artworkSettings: ArtworkSettings;
@@ -632,6 +637,7 @@ export default function HopperView({
             </div>
           </div>
           <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
+            <HopperNotes notes={notes} />
             {sortedQueue.length === 0 ? null : remaining.length === 0 ? (
               <p className="text-xs text-neutral-400">This is the last one.</p>
             ) : (
