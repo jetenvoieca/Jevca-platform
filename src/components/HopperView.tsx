@@ -9,6 +9,9 @@ import {
   addHopperItemToMedia,
   addHopperItemToBucket,
   createArtworkFromHopperQuick,
+  completeHopperNote,
+  deleteHopperNote,
+  type HopperNoteItem,
 } from "@/lib/actions/hopper";
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import VideoThumb from "@/components/VideoThumb";
@@ -16,12 +19,11 @@ import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
-import HopperNotes from "@/components/HopperNotes";
-import type { HopperNoteItem } from "@/lib/actions/hopper";
 import HopperCropEditor from "@/components/HopperCropEditor";
 import { computeReferencePrice } from "@/lib/pricing";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { PageHeading } from "@/components/PageHeading";
+import { formatDateTime } from "@/lib/formatDate";
 
 export type HopperItem = {
   id: string;
@@ -60,6 +62,16 @@ export type HopperItem = {
   createdAt: string;
 };
 
+// One thing waiting in the Hopper: a picture or video, or a note sent
+// from the Studio app (2026-10-31, Craig's mockup — sorted the same way:
+// a tile in the list, opened in the sorting panel).
+type QueueEntry =
+  | { type: "image"; id: string; createdAt: string; item: HopperItem }
+  | { type: "note"; id: string; createdAt: string; note: HopperNoteItem };
+
+// The navy of a note's tile and panel — the site header's icons' colour.
+const NOTE_BG = "bg-[#2c3e6b]";
+
 // A running, session-only log of what's just been done — pure visual
 // confirmation ("did that just work"), not persisted anywhere. Cleared
 // on refresh or via the "Clear list" button.
@@ -67,6 +79,7 @@ type ProcessedEntry = {
   key: string;
   url: string;
   posterUrl: string | null;
+  // "PHOTO", "VIDEO" or "NOTE".
   kind: string;
   label: string;
   // Where this item actually ended up — its own Media Catalogue page, or
@@ -190,10 +203,11 @@ export default function HopperView({
 
   // Always newest first (2026-10-16): the item you're asked to sort is
   // the most recently added. Sorted here by createdAt rather than relying
-  // on the server's order.
-  const sortedQueue = [...queue].sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  // on the server's order. Pictures and notes together (2026-10-31).
+  const sortedQueue: QueueEntry[] = [
+    ...queue.map((item): QueueEntry => ({ type: "image", id: item.id, createdAt: item.createdAt, item })),
+    ...notes.map((note): QueueEntry => ({ type: "note", id: note.id, createdAt: note.createdAt, note })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 
   // 2026-08-19 — separate from `current` itself: tracks whether the
   // person has actually gotten going yet (picked something, or completed
@@ -217,14 +231,20 @@ export default function HopperView({
       ? sortedQueue[0] ?? null
       : null;
   const remaining = sortedQueue.filter((i) => i.id !== current?.id);
+  // Bulk select covers pictures and videos only.
+  const remainingImageIds = remaining.flatMap((e) => (e.type === "image" ? [e.id] : []));
 
-  const logProcessed = (item: HopperItem, label: string, href: string | null) => {
+  const logProcessed = (
+    source: { id: string; url: string; posterUrl: string | null; kind: string },
+    label: string,
+    href: string | null
+  ) => {
     setProcessedLog((prev) => [
       {
-        key: `${item.id}-${Date.now()}`,
-        url: item.url,
-        posterUrl: item.posterUrl,
-        kind: item.kind,
+        key: `${source.id}-${Date.now()}`,
+        url: source.url,
+        posterUrl: source.posterUrl,
+        kind: source.kind,
         label,
         href,
       },
@@ -254,6 +274,19 @@ export default function HopperView({
   const revealLatestArrival = () => {
     setHasInteracted(true);
     setSelectedId(null);
+  };
+
+  // A note's Done or Delete (2026-10-31).
+  const handleNote = (note: HopperNoteItem, action: "done" | "delete") => {
+    startTransition(async () => {
+      await (action === "done" ? completeHopperNote(note.id) : deleteHopperNote(note.id));
+      logProcessed(
+        { id: note.id, url: "", posterUrl: null, kind: "NOTE" },
+        action === "done" ? "Done" : "Deleted",
+        null
+      );
+      advanceAfterAction();
+    });
   };
 
   const handleBin = (item: HopperItem) => {
@@ -596,14 +629,14 @@ export default function HopperView({
                     type="button"
                     onClick={() =>
                       setSelectedForDelete(
-                        selectedForDelete.size === remaining.length
+                        selectedForDelete.size === remainingImageIds.length
                           ? new Set()
-                          : new Set(remaining.map((i) => i.id))
+                          : new Set(remainingImageIds)
                       )
                     }
                     className="text-xs text-neutral-500 hover:text-neutral-900 hover:underline"
                   >
-                    {selectedForDelete.size === remaining.length ? "Select none" : "Select all"}
+                    {selectedForDelete.size === remainingImageIds.length ? "Select none" : "Select all"}
                   </button>
                   <button
                     type="button"
@@ -637,12 +670,28 @@ export default function HopperView({
             </div>
           </div>
           <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
-            <HopperNotes notes={notes} />
             {sortedQueue.length === 0 ? null : remaining.length === 0 ? (
               <p className="text-xs text-neutral-400">This is the last one.</p>
             ) : (
               <div className="grid grid-cols-6 gap-2 lg:grid-cols-[repeat(auto-fill,minmax(80px,1fr))]">
-                {remaining.map((item) => {
+                {remaining.map((entry) => {
+                  // A note's tile (2026-10-31, Craig's mockup) — not part
+                  // of bulk select.
+                  if (entry.type === "note") {
+                    return (
+                      <button
+                        key={entry.id}
+                        type="button"
+                        onClick={() => setSelectedId(entry.id)}
+                        disabled={bulkSelectMode}
+                        title={entry.note.text}
+                        className={`flex aspect-square items-center justify-center rounded-md border-2 border-transparent ${NOTE_BG} px-1 text-[11px] font-semibold tracking-wide text-white hover:border-neutral-300 disabled:opacity-40`}
+                      >
+                        INSTRUCTION
+                      </button>
+                    );
+                  }
+                  const item = entry.item;
                   const isSelected = selectedForDelete.has(item.id);
                   return (
                     <button
@@ -714,24 +763,32 @@ export default function HopperView({
           <div className="lg:flex-1 lg:overflow-y-auto lg:pr-1">
             {!current ? (
               <div className="rounded-lg border border-dashed border-neutral-300 py-16 text-center text-sm text-neutral-400">
-                {queue.length === 0
+                {sortedQueue.length === 0
                   ? "Drag and drop files here, or use the buttons above."
                   : "Drag and drop a new file in, or pick one from the list to start sorting."}
               </div>
+            ) : current.type === "note" ? (
+              <NoteCard
+                key={current.id}
+                note={current.note}
+                isPending={isPending}
+                onDone={() => handleNote(current.note, "done")}
+                onDelete={() => handleNote(current.note, "delete")}
+              />
             ) : (
               <SortingCard
                 key={current.id}
                 siteId={siteId}
                 artistId={artistId}
-                item={current}
+                item={current.item}
                 isPending={isPending}
                 settings={artworkSettings}
                 artworkIntake={artworkIntake}
                 mediaIntake={!!returnTo}
-                onBin={() => handleBin(current)}
-                onAddToMedia={() => handleAddToMedia(current)}
-                onAddToBucket={() => handleAddToBucket(current)}
-                onAddNewArtwork={(fields) => handleAddNewArtwork(current, fields)}
+                onBin={() => handleBin(current.item)}
+                onAddToMedia={() => handleAddToMedia(current.item)}
+                onAddToBucket={() => handleAddToBucket(current.item)}
+                onAddNewArtwork={(fields) => handleAddNewArtwork(current.item, fields)}
                 onImageChanged={() => router.refresh()}
               />
             )}
@@ -756,7 +813,13 @@ export default function HopperView({
               <div className="space-y-2 lg:flex-1 lg:overflow-y-auto lg:pr-1">
                 {processedLog.map((entry) => {
                   const thumb =
-                    entry.kind === "VIDEO" ? (
+                    entry.kind === "NOTE" ? (
+                      <span
+                        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded ${NOTE_BG} text-[9px] font-semibold text-white`}
+                      >
+                        IN
+                      </span>
+                    ) : entry.kind === "VIDEO" ? (
                       entry.posterUrl ? (
                         <img
                           src={entry.posterUrl}
@@ -780,7 +843,7 @@ export default function HopperView({
                     <div className="min-w-0">
                       <p className="truncate text-sm text-neutral-700">✓ {entry.label}</p>
                       <p className="text-xs text-neutral-400">
-                        {entry.kind === "VIDEO" ? "Video" : "Photo"}
+                        {entry.kind === "NOTE" ? "Instruction" : entry.kind === "VIDEO" ? "Video" : "Photo"}
                       </p>
                     </div>
                   );
@@ -836,6 +899,40 @@ export default function HopperView({
           }}
         />
       )}
+    </div>
+  );
+}
+
+// A note opened for sorting (2026-10-31, Craig's mockup): when it came,
+// its text on the Hopper's navy, then Done (kept on record) or Delete.
+function NoteCard({
+  note,
+  isPending,
+  onDone,
+  onDelete,
+}: {
+  note: HopperNoteItem;
+  isPending: boolean;
+  onDone: () => void;
+  onDelete: () => void;
+}) {
+  const buttonCls =
+    "w-44 rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50";
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white p-6">
+      <p className="mb-3 text-xs text-neutral-400">Received {formatDateTime(note.createdAt)}</p>
+      <div className={`mb-8 min-h-[360px] rounded-md ${NOTE_BG} px-4 py-8 text-white`}>
+        <p className="mb-12 text-center text-xs font-semibold tracking-wide">INSTRUCTION</p>
+        <p className="whitespace-pre-wrap text-lg font-semibold">{note.text}</p>
+      </div>
+      <div className="flex justify-between gap-3">
+        <button type="button" onClick={onDone} disabled={isPending} className={buttonCls}>
+          Done
+        </button>
+        <button type="button" onClick={onDelete} disabled={isPending} className={buttonCls}>
+          Delete
+        </button>
+      </div>
     </div>
   );
 }

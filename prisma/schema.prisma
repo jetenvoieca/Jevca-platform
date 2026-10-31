@@ -2059,19 +2059,22 @@ enum HopperVideoImportStatus {
   FAILED
 }
 
-// A note in a client's Hopper (2026-10-31, Craig's mockup): text sent
-// from the Studio app's Instructions screen. Shown on the Hopper page,
-// where it's read and marked done, which deletes it. Counts towards the
-// Dashboard's Hopper alerts like any item (see lib/hopperAlerts.ts).
+// A note in a client's Hopper (2026-10-31, Craig's mockups): text sent
+// from the Studio app's Instructions screen. Sorted on the Hopper page
+// like a picture: Done (`doneAt` set — it leaves the Hopper but is kept
+// on record) or Delete (removed for good). In the Hopper while `doneAt` is
+// null; counts towards the Dashboard's Hopper alerts like any item (see
+// lib/hopperAlerts.ts).
 model HopperNote {
   id       String @id @default(cuid())
   artistId String
   artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
   text     String
+  doneAt   DateTime?
 
   createdAt DateTime @default(now())
 
-  @@index([artistId, createdAt])
+  @@index([artistId, doneAt])
 }
 
 model HopperVideoImport {

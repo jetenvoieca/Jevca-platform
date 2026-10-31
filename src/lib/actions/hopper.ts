@@ -254,21 +254,34 @@ export async function createArtworkFromHopperQuick(
 
 export type HopperNoteItem = { id: string; text: string; createdAt: string };
 
-// The client's Hopper notes, oldest first like the rest of the Hopper.
+// The notes still in a client's Hopper (see HopperNote).
 export async function listHopperNotes(artistId: string): Promise<HopperNoteItem[]> {
   await requireArtistAccess(artistId);
   const rows = await db.hopperNote.findMany({
-    where: { artistId },
+    where: { artistId, doneAt: null },
     orderBy: { createdAt: "asc" },
     select: { id: true, text: true, createdAt: true },
   });
   return rows.map((n) => ({ id: n.id, text: n.text, createdAt: n.createdAt.toISOString() }));
 }
 
-// Done: the note has been read and dealt with, so it leaves the Hopper.
-export async function completeHopperNote(id: string): Promise<void> {
+// The note's client, once the person logged in is checked to have access.
+async function noteOwner(id: string): Promise<string> {
   const note = await db.hopperNote.findUnique({ where: { id }, select: { artistId: true } });
   await requireRecordAccess(Promise.resolve(note));
-  const { count } = await db.hopperNote.deleteMany({ where: { id } });
-  await noteHopperProcessed(note!.artistId, count);
+  return note!.artistId;
+}
+
+// Done: dealt with — it leaves the Hopper, kept on record.
+export async function completeHopperNote(id: string): Promise<void> {
+  const artistId = await noteOwner(id);
+  const { count } = await db.hopperNote.updateMany({ where: { id, doneAt: null }, data: { doneAt: new Date() } });
+  await noteHopperProcessed(artistId, count);
+}
+
+// Delete: removed for good.
+export async function deleteHopperNote(id: string): Promise<void> {
+  const artistId = await noteOwner(id);
+  const { count } = await db.hopperNote.deleteMany({ where: { id, doneAt: null } });
+  await noteHopperProcessed(artistId, count);
 }

@@ -13,7 +13,7 @@ import { parisToDate, parisToday } from "@/lib/parisTime";
 // - HOPPER_ITEMS_PROCESSED (in the Processed list from the start): "3
 //   Hopper items processed" — one per client per day (Paris), counting
 //   items moved to Media, the Bucket, made an artwork, or deleted, and
-//   notes marked done.
+//   notes marked done or deleted.
 //
 // An item is a picture or video (an Image in the Hopper) or a note sent
 // from the Studio app (HopperNote).
@@ -116,7 +116,7 @@ export async function noteHopperProcessed(artistId: string, count = 1): Promise<
 
     const [pictures, notes] = await Promise.all([
       db.image.count({ where: { artistId, status: "HOPPER" } }),
-      db.hopperNote.count({ where: { artistId } }),
+      db.hopperNote.count({ where: { artistId, doneAt: null } }),
     ]);
     if (pictures + notes === 0) {
       await db.alertEvent.deleteMany({
