@@ -58,7 +58,7 @@ export default function PublishButton({
     : `Publish to live site — ${shown ? `last published ${formatDateTime(shown)}` : "not published yet"}`;
 
   return (
-    <div className="relative">
+    <div className="relative flex">
       <button
         type="button"
         onClick={publish}

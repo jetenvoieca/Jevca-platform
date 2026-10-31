@@ -67,7 +67,7 @@ export default async function SiteLayout({
   // — in the header at full width; on a narrower screen beside the menu
   // button instead (see AppShell's topActions).
   const siteIcons = (className: string) => (
-    <div className={`items-center gap-2 ${className}`}>
+    <div className={`items-center gap-1 ${className}`}>
       <PublishButton siteId={id} lastPublishedAt={lastPublishedAt?.toISOString() ?? null} />
       <PublishedSiteLink href={publishedHomePath(site.id)} />
     </div>
