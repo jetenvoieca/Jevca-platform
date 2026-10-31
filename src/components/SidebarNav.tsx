@@ -123,11 +123,14 @@ function NavLink({ item, indented }: { item: AppShellNavItem; indented: boolean 
     <Link
       href={item.href}
       prefetch={false}
-      className={`flex items-center justify-between rounded-md px-3 py-1 text-sm font-medium ${
+      // A long label (e.g. a recent site's "Owner · Site name") is cut
+      // short to one line; hovering shows it in full.
+      title={item.label}
+      className={`flex items-center justify-between gap-2 rounded-md px-3 py-1 text-sm font-medium ${
         indented ? "ml-2" : ""
       } ${item.active ? "bg-[#E7E7E7] text-neutral-900" : "text-neutral-700 hover:bg-neutral-100"}`}
     >
-      {item.label}
+      <span className="min-w-0 truncate">{item.label}</span>
       {!!item.badge && (
         <span className="rounded-full bg-red-100 px-1.5 py-0.5 text-[10px] font-semibold text-red-700">
           {item.badge}

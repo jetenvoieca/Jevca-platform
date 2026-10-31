@@ -8,9 +8,15 @@ export const RECENT_SITES_COUNT = 2;
 
 export type RecentSite = { id: string; label: string };
 
-// Most recently opened sites, newest first, labelled by owner name (as
-// in the Sites list). `excludeSiteId` leaves out the site currently
-// open, which the per-site menu adds itself.
+// How the admin's menu names a site (2026-10-31, Craig's request — an
+// owner can have several sites): "Owner · Site name".
+export function recentSiteLabel(ownerName: string, siteName: string): string {
+  return `${ownerName} · ${siteName}`;
+}
+
+// Most recently opened sites, newest first (see recentSiteLabel).
+// `excludeSiteId` leaves out the site currently open, which the
+// per-site menu adds itself.
 export async function getRecentSites({
   excludeSiteId,
   take = RECENT_SITES_COUNT,
@@ -20,12 +26,12 @@ export async function getRecentSites({
       lastVisitedAt: { not: null },
       ...(excludeSiteId ? { id: { not: excludeSiteId } } : {}),
     },
-    select: { id: true, artist: { select: { name: true } } },
+    select: { id: true, name: true, artist: { select: { name: true } } },
     relationLoadStrategy: "query",
     orderBy: { lastVisitedAt: "desc" },
     take,
   });
-  return sites.map((s) => ({ id: s.id, label: s.artist.name }));
+  return sites.map((s) => ({ id: s.id, label: recentSiteLabel(s.artist.name, s.name) }));
 }
 
 // Records that a site was just opened. Plain SQL so a visit doesn't

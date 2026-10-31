@@ -9,7 +9,7 @@ import { db } from "@/lib/db";
 import { getLastPublishedAt } from "@/lib/actions/siteSnapshot";
 import { publishedHomePath } from "@/lib/siteSnapshot";
 import { getOpenAlerts } from "@/lib/alerts";
-import { getClientSites, getRecentSites, recordSiteVisit } from "@/lib/recentSites";
+import { getClientSites, getRecentSites, recentSiteLabel, recordSiteVisit } from "@/lib/recentSites";
 import SiteShell from "@/components/SiteShell";
 import SiteNameField from "@/components/SiteNameField";
 import ClientWordsProvider from "@/components/ClientWordsProvider";
@@ -61,7 +61,10 @@ export default async function SiteLayout({
     artistLogin ? getClientSites(site.artistId, id) : getRecentSites({ excludeSiteId: id, take: 1 }),
     artistLogin ? Promise.resolve() : recordSiteVisit(id),
   ]);
-  const recentSites = [{ id, label: artistLogin ? site.name : site.artist.name }, ...previousSites];
+  const recentSites = [
+    { id, label: artistLogin ? site.name : recentSiteLabel(site.artist.name, site.name) },
+    ...previousSites,
+  ];
 
   // Publish, then the published site's globe (2026-10-31, Craig's mockup)
   // — in the header at full width; on a narrower screen beside the menu
