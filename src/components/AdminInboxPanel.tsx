@@ -396,6 +396,8 @@ type DashboardProps = SharedProps & {
   view: InboxView;
   initialAlerts: AlertItem[];
   selectedAlertId: string | null;
+  // Open on the Alert tab (?tab=alert).
+  openAlertTab: boolean;
   // The client cards for a payment-overdue or no-payment-method alert.
   clientPanel: { alertType: ClientAlertType; data: ClientPanelData } | null;
   // Unread received messages in each mailbox's Inbox, for the pills.
@@ -438,6 +440,7 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
     openTaskId = null,
     initialAlerts = [],
     selectedAlertId = null,
+    openAlertTab = false,
     clientPanel = null,
     taskCategories = [],
     artistOptions = [],
@@ -456,13 +459,13 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
     () => [...initialTasks, ...initialInsights].find((t) => t.id === openTaskId) ?? null
   );
 
-  // The Dashboard opens straight into Alert mode if the address already
-  // names an alert (e.g. after a page reload), otherwise into the
-  // address's mailbox. The Inbox opens on the task asked for, if any,
+  // The Dashboard opens straight into Alert mode if the address names an
+  // alert (e.g. after a page reload) or asks for the tab, otherwise into
+  // the address's mailbox. The Inbox opens on the task asked for, if any,
   // otherwise on Personal.
   const [mode, setMode] = useState<Mode>(() => {
     if (page === "inbox") return arrivingTask ? (arrivingTask.keptOn ? "insight" : "task") : "personal";
-    return selectedAlertId ? "alert" : mailbox === "BUSINESS" ? "business" : "art";
+    return selectedAlertId || openAlertTab ? "alert" : mailbox === "BUSINESS" ? "business" : "art";
   });
   const modeMailbox = mailboxOf(mode);
   const isMailMode = modeMailbox !== null;

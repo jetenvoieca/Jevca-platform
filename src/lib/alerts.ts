@@ -168,7 +168,9 @@ export async function resolveAlertsOfType(artistId: string, type: string): Promi
 function storedAlertLink(type: string, siteId: string | null): { href: string | null; label: string } {
   if (type === EMAIL_ALERT_TYPE) return { href: "/accounts/dashboard", label: "View dashboard" };
   if (type === HOPPER_ADDED_ALERT_TYPE) {
-    return { href: siteId ? `/sites/${siteId}/hopper` : null, label: "Open Hopper" };
+    // Opened from the Dashboard, so the Hopper shows the way back (see
+    // BackToDashboardLink).
+    return { href: siteId ? `/sites/${siteId}/hopper?from=dashboard` : null, label: "Open Hopper" };
   }
   if (SALE_ALERT_TYPES.includes(type)) {
     return { href: siteId ? `/sites/${siteId}/sales` : null, label: "View sales" };

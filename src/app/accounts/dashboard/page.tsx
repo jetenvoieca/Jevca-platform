@@ -21,6 +21,9 @@ export const metadata = studioAppMetadata;
 // Inbox, Archived (?view=archived) or Spam (?view=spam) — are in the URL,
 // so a link can land on them.
 //
+// ?tab=alert opens on the Alert tab (2026-10-31 — the way back from a page
+// an alert opened, see BackToDashboardLink).
+//
 // The selected alert is in the URL too (?alert=...): a payment-overdue
 // alert opens the client's Owner/Domain/Subscription cards, whose data
 // has to come from the server so their own router.refresh() after a save
@@ -28,9 +31,9 @@ export const metadata = studioAppMetadata;
 export default async function DashboardPage({
   searchParams,
 }: {
-  searchParams: Promise<{ alert?: string; view?: string; mailbox?: string }>;
+  searchParams: Promise<{ alert?: string; view?: string; mailbox?: string; tab?: string }>;
 }) {
-  const { alert: alertId, view: viewParam, mailbox: mailboxParam } = await searchParams;
+  const { alert: alertId, view: viewParam, mailbox: mailboxParam, tab } = await searchParams;
   const view: InboxView = viewParam === "archived" || viewParam === "spam" ? viewParam : "inbox";
   const mailbox: Mailbox = mailboxParam === "business" ? "BUSINESS" : "ART";
 
@@ -62,6 +65,7 @@ export default async function DashboardPage({
           view={view}
           initialAlerts={alerts}
           selectedAlertId={alertId || null}
+          openAlertTab={tab === "alert"}
           clientPanel={clientPanel}
           unreadCounts={unreadCounts}
           composeRecipients={composeRecipients}

@@ -1,5 +1,6 @@
 import PublishedSiteLink from "@/components/PublishedSiteLink";
 import PublishButton from "@/components/PublishButton";
+import BackToDashboardLink from "@/components/BackToDashboardLink";
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/currentUser";
@@ -67,11 +68,13 @@ export default async function SiteLayout({
     ...previousSites,
   ];
 
-  // Publish, then the published site's globe (2026-10-31, Craig's mockup)
-  // — in the header at full width; on a narrower screen beside the menu
-  // button instead (see AppShell's topActions).
+  // Back to the Dashboard (only when opened from an alert), publish, then
+  // the published site's globe (2026-10-31, Craig's mockups) — in the
+  // header at full width; on a narrower screen beside the menu button
+  // instead (see AppShell's topActions).
   const siteIcons = (className: string) => (
     <div className={`items-center gap-1 ${className}`}>
+      <BackToDashboardLink />
       <PublishButton siteId={id} lastPublishedAt={lastPublishedAt?.toISOString() ?? null} />
       <PublishedSiteLink href={publishedHomePath(site.id)} />
     </div>
