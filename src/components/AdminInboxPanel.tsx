@@ -269,7 +269,8 @@ const DELETE_MESSAGE_CONFIRM =
 type Mode = "art" | "business" | "task" | "insight" | "alert" | "personal";
 
 // Which page the panel is (2026-10-31): the Dashboard (work) or the Inbox
-// (personal) — each with its own pills, the first being where it opens.
+// (personal) — each with its own pills. The Dashboard opens on Alert, the
+// Inbox on Personal.
 type Page = "dashboard" | "inbox";
 
 const MODES: Record<Page, { mode: Mode; label: string }[]> = {
@@ -396,8 +397,9 @@ type DashboardProps = SharedProps & {
   view: InboxView;
   initialAlerts: AlertItem[];
   selectedAlertId: string | null;
-  // Open on the Alert tab (?tab=alert).
-  openAlertTab: boolean;
+  // Open on the mailbox rather than the Alert tab — the address names one
+  // (?mailbox= or ?view=).
+  openMailbox: boolean;
   // The client cards for a payment-overdue or no-payment-method alert.
   clientPanel: { alertType: ClientAlertType; data: ClientPanelData } | null;
   // Unread received messages in each mailbox's Inbox, for the pills.
@@ -440,7 +442,7 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
     openTaskId = null,
     initialAlerts = [],
     selectedAlertId = null,
-    openAlertTab = false,
+    openMailbox = false,
     clientPanel = null,
     taskCategories = [],
     artistOptions = [],
@@ -459,13 +461,14 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
     () => [...initialTasks, ...initialInsights].find((t) => t.id === openTaskId) ?? null
   );
 
-  // The Dashboard opens straight into Alert mode if the address names an
-  // alert (e.g. after a page reload) or asks for the tab, otherwise into
-  // the address's mailbox. The Inbox opens on the task asked for, if any,
-  // otherwise on Personal.
+  // The Dashboard opens on the Alert tab (2026-10-31, Craig's request),
+  // unless the address names a mailbox or list (e.g. after a page reload
+  // in Business or Archived). The Inbox opens on the task asked for, if
+  // any, otherwise on Personal.
   const [mode, setMode] = useState<Mode>(() => {
     if (page === "inbox") return arrivingTask ? (arrivingTask.keptOn ? "insight" : "task") : "personal";
-    return selectedAlertId || openAlertTab ? "alert" : mailbox === "BUSINESS" ? "business" : "art";
+    if (!openMailbox) return "alert";
+    return mailbox === "BUSINESS" ? "business" : "art";
   });
   const modeMailbox = mailboxOf(mode);
   const isMailMode = modeMailbox !== null;

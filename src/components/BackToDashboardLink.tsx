@@ -13,7 +13,7 @@ export default function BackToDashboardLink() {
   if (params.get("from") !== "dashboard") return null;
   return (
     <Link
-      href="/accounts/dashboard?tab=alert"
+      href="/accounts/dashboard"
       title="Back to alerts"
       aria-label="Back to alerts"
       className="inline-flex shrink-0 rounded-full p-0.5 hover:bg-neutral-100"
