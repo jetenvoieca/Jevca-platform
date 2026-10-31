@@ -18,7 +18,6 @@ export default async function PresentationsPage() {
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("presentationTemplates", openAlerts.length, recentSites)}
       content={<PresentationTemplatesManager templates={templates} />}
     />

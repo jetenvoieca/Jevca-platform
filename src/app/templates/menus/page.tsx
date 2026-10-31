@@ -18,7 +18,6 @@ export default async function MenusPage() {
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("menuStyles", openAlerts.length, recentSites)}
       content={<MenuStylesManager styles={styles} />}
     />

@@ -4,9 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { logout } from "@/lib/actions/auth";
-import type { PublishResult } from "@/lib/siteSnapshot";
 import SidebarNav from "@/components/SidebarNav";
-import PublishButton from "@/components/PublishButton";
 import type { AppShellNavEntry } from "@/components/SidebarNav";
 
 export type { AppShellNavItem, AppShellNavEntry } from "@/components/SidebarNav";
@@ -15,9 +13,6 @@ export default function AppShell({
   preview,
   content,
   rightPanel,
-  publishEnabled = false,
-  publishAction,
-  lastPublishedAt = null,
   navItems,
   nav,
   topActions,
@@ -34,18 +29,6 @@ export default function AppShell({
   // (2026-08-13, in response to direct feedback that the list
   // disappearing was a step backward).
   rightPanel?: React.ReactNode;
-  // Publish is greyed out unless a specific site is open — callers
-  // with nothing to publish leave this false.
-  publishEnabled?: boolean;
-  // Server action that performs the publish, bound to whatever the
-  // caller needs (e.g. a specific site id), and reports the result
-  // (see PublishButton). Callers with nothing publishable (the
-  // top-level Accounts pages) leave this undefined — the button then
-  // stays disabled regardless of publishEnabled.
-  publishAction?: () => Promise<PublishResult>;
-  // When the site was last published (ISO date), shown under the
-  // button; null if never.
-  lastPublishedAt?: string | null;
   // Static nav data — AppShell renders it via SidebarNav itself. Fine
   // for navs that don't depend on anything besides props already known
   // server-side (e.g. an explicit "active" key passed in per page).
@@ -58,7 +41,7 @@ export default function AppShell({
   // navItems / nav should be given.
   nav?: React.ReactNode;
   // Icons shown beside the menu button in the narrow-screen top bar
-  // (2026-10-28 — e.g. a site's published-site globe).
+  // (2026-10-28 — e.g. a site's publish icon and published-site globe).
   topActions?: React.ReactNode;
 }) {
   const hasPreview = preview !== undefined && preview !== null;
@@ -91,8 +74,7 @@ export default function AppShell({
   // Mobile nav drawer (2026-09-11, direct request — the fixed 220px
   // sidebar column ate too much of a tablet's screen). Below 1180px the
   // sidebar becomes a slide-over panel instead of a static column,
-  // opened via a hamburger button that takes the Publish row's place in
-  // a full-width top bar until then. `pathname` closes the drawer
+  // opened via a hamburger button in a full-width top bar. `pathname` closes the drawer
   // automatically the moment a link inside it is actually followed —
   // this works uniformly across every kind of nav content this
   // component can render (plain SidebarNav links or a caller's own
@@ -106,9 +88,8 @@ export default function AppShell({
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
-      {/* Mobile top bar — hamburger (and any topActions), hidden at/above 1180px where
-          the sidebar is a static column with its own visible Publish
-          button already. */}
+      {/* Mobile top bar — hamburger (and any topActions), hidden at/above
+          1180px where the sidebar is a static column. */}
       <div className="flex items-center justify-end gap-3 border-b border-neutral-200 p-4 min-[1180px]:hidden">
         {topActions}
         <button
@@ -155,20 +136,13 @@ export default function AppShell({
             mobileNavOpen ? "translate-x-0" : "translate-x-full"
           } min-[1180px]:static min-[1180px]:inset-auto min-[1180px]:z-auto min-[1180px]:h-full min-[1180px]:w-auto min-[1180px]:translate-x-0 min-[1180px]:shadow-none min-[1180px]:transition-none`}
         >
-          <div className="flex items-start gap-2 border-b border-neutral-200 p-4">
-            <div className="min-w-0 flex-1">
-              <PublishButton
-                action={publishAction}
-                enabled={publishEnabled}
-                lastPublishedAt={lastPublishedAt}
-              />
-            </div>
-            {/* Explicit close, alongside the backdrop-tap — mobile only. */}
+          {/* Explicit close, alongside the backdrop-tap — mobile only. */}
+          <div className="flex justify-end border-b border-neutral-200 p-4 min-[1180px]:hidden">
             <button
               type="button"
               onClick={() => setMobileNavOpen(false)}
               aria-label="Close menu"
-              className="shrink-0 rounded-md border border-neutral-300 p-2 hover:bg-neutral-50 min-[1180px]:hidden"
+              className="shrink-0 rounded-md border border-neutral-300 p-2 hover:bg-neutral-50"
             >
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
@@ -180,8 +154,7 @@ export default function AppShell({
             {nav ?? <SidebarNav entries={navItems ?? []} />}
           </nav>
 
-          {/* Fixed footer, same non-scrolling treatment as the Publish
-              header above — sits outside the scrolling <nav>, not inside
+          {/* Fixed footer — sits outside the scrolling <nav>, not inside
               it, so it stays visible regardless of list length. */}
           <form action={logout} className="border-t border-neutral-200 p-4">
             <Link

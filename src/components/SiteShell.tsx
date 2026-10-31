@@ -3,21 +3,18 @@
 import type { ReactNode } from "react";
 import { usePathname } from "next/navigation";
 import AppShell from "@/components/AppShell";
-import { publishSite } from "@/lib/actions/siteSnapshot";
 import { buildSiteNavEntries, type SiteNavKey } from "@/lib/siteNav";
 import { siteNavKeyForPath } from "@/lib/siteMenuAccess";
 import type { RecentSite } from "@/lib/recentSites";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { PageHeadingProvider } from "@/components/PageHeading";
 
-// "Publish to live site" (2026-10-06) is always available: it saves a
-// fresh snapshot of the whole site each time (lib/actions/siteSnapshot.ts)
-// and shows when the site was last published (see PublishButton).
+// The menu and page frame around every page of a site. Publishing is the
+// icon in the site's header (see PublishButton, from the layout).
 export default function SiteShell({
   siteId,
   salesEnabled,
   alertCount,
-  lastPublishedAt,
   recentSites,
   allowed,
   header,
@@ -27,8 +24,6 @@ export default function SiteShell({
   siteId: string;
   salesEnabled: boolean;
   alertCount: number;
-  // ISO date, or null if the site has never been published.
-  lastPublishedAt: string | null;
   // The recent sites under "Sites" in the menu — this site first.
   recentSites: RecentSite[];
   // An artist login's ticked menu items (2026-10-26); null for an admin.
@@ -58,9 +53,6 @@ export default function SiteShell({
 
   return (
     <AppShell
-      publishEnabled
-      publishAction={publishSite.bind(null, siteId)}
-      lastPublishedAt={lastPublishedAt}
       navItems={navItems}
       topActions={topActions}
       content={

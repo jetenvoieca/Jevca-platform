@@ -57,7 +57,6 @@ export default async function ClientAdminPage({
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("clients", openAlerts.length, recentSites)}
       rightPanel={
         <SitesListColumn

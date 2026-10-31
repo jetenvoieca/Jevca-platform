@@ -1281,6 +1281,8 @@ model Site {
   pages Page[]
   // The site as last published (2026-10-06) — see SitePublication.
   publication SitePublication?
+  // Every publish of the site, kept (2026-10-31) — see SitePublishLog.
+  publishLogs SitePublishLog[]
 
   // The site's menu (2026-10-06) — a Menu Style, chosen under Live
   // Pages on the Pages page. Every page uses it unless it has its own
@@ -1309,6 +1311,35 @@ model SitePublication {
 
   data        Json
   publishedAt DateTime @default(now())
+}
+
+// How a publish went (2026-10-31): PUBLISHED, PUBLISHED_WITH_WARNING
+// (live, but something on it won't work yet — see publishSite) or
+// FAILED (nothing changed on the live site).
+enum PublishOutcome {
+  PUBLISHED
+  PUBLISHED_WITH_WARNING
+  FAILED
+}
+
+// One publish of a site (2026-10-31, Craig's request — kept for later
+// use): when, by which login, and how it went, with the warning or error
+// shown at the time. A record only — the live site is SitePublication.
+// Removed with its site; kept, without the login, if that login is
+// deleted.
+model SitePublishLog {
+  id      String         @id @default(cuid())
+  siteId  String
+  site    Site           @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  userId  String?
+  user    User?          @relation(fields: [userId], references: [id], onDelete: SetNull)
+  outcome PublishOutcome
+  message String?
+
+  createdAt DateTime @default(now())
+
+  @@index([siteId, createdAt])
+  @@index([userId])
 }
 
 model Page {
@@ -2696,6 +2727,8 @@ model User {
   lastLoginAt    DateTime?
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
+  // The publishes this login made (2026-10-31) — see SitePublishLog.
+  publishLogs    SitePublishLog[]
 
   @@index([artistId])
 }

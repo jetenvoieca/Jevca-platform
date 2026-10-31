@@ -98,7 +98,6 @@ export default async function InboxPage({
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("inbox", alerts.length, recentSites)}
       content={
         <AdminInboxPanel

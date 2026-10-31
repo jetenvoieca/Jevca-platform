@@ -1,6 +1,6 @@
 "use server";
 
-import { requireSiteAccess } from "@/lib/currentUser";
+import { getCurrentUser, requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { listProfileStories } from "@/lib/actions/profileStories";
 import { readPageStories } from "@/lib/pageStories";
@@ -135,38 +135,63 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
   };
 }
 
-// "Publish to live site" — replaces the site's published snapshot and
-// reports back when it was published, or what went wrong (2026-10-06),
-// so the button can say so. A site with a sign-up form (2026-10-10)
-// also brings Cloudflare's robot check up to date for its domain and the
-// preview (lib/turnstile.ts); if that fails the site is still published,
-// with a warning.
+// Publishing — replaces the site's published snapshot and reports back
+// when it was published, or what went wrong (2026-10-06), so the publish
+// icon can say so. A site with a sign-up form (2026-10-10) also brings
+// Cloudflare's robot check up to date for its domain and the preview
+// (lib/turnstile.ts); if that fails the site is still published, with a
+// warning. Every publish, failed ones included, is kept in the site's
+// publish log (2026-10-31 — see SitePublishLog).
 export async function publishSite(siteId: string): Promise<PublishResult> {
   await requireSiteAccess(siteId);
+  const userId = (await getCurrentUser())?.id ?? null;
+  let result: PublishResult;
   try {
     const snapshot = await buildSiteSnapshot(siteId);
-    if (!snapshot) return { error: "Site not found." };
-    const publishedAt = new Date();
-    await db.sitePublication.upsert({
-      where: { siteId },
-      create: { siteId, data: snapshot as object, publishedAt },
-      update: { data: snapshot as object, publishedAt },
-    });
-    const hasSignupForm = snapshot.pages.some((p) => p.signupForms.length > 0);
-    const sync = hasSignupForm ? await syncTurnstileDomains() : null;
-    return {
-      publishedAt: publishedAt.toISOString(),
-      ...(sync && "error" in sync ? { warning: sync.error } : {}),
-    };
+    if (!snapshot) {
+      result = { error: "Site not found." };
+    } else {
+      const publishedAt = new Date();
+      await db.sitePublication.upsert({
+        where: { siteId },
+        create: { siteId, data: snapshot as object, publishedAt },
+        update: { data: snapshot as object, publishedAt },
+      });
+      const hasSignupForm = snapshot.pages.some((p) => p.signupForms.length > 0);
+      const sync = hasSignupForm ? await syncTurnstileDomains() : null;
+      result = {
+        publishedAt: publishedAt.toISOString(),
+        ...(sync && "error" in sync ? { warning: sync.error } : {}),
+      };
+    }
   } catch (err) {
     console.error("publishSite failed", siteId, err);
-    return { error: "Publishing failed — please try again." };
+    result = { error: "Publishing failed — please try again." };
+  }
+  await logPublish(siteId, userId, result);
+  return result;
+}
+
+// One row in the site's publish log. A log that can't be written never
+// changes what the publish itself reports.
+async function logPublish(siteId: string, userId: string | null, result: PublishResult) {
+  try {
+    await db.sitePublishLog.create({
+      data:
+        "error" in result
+          ? { siteId, userId, outcome: "FAILED", message: result.error }
+          : result.warning
+            ? { siteId, userId, outcome: "PUBLISHED_WITH_WARNING", message: result.warning, createdAt: result.publishedAt }
+            : { siteId, userId, outcome: "PUBLISHED", createdAt: result.publishedAt },
+    });
+  } catch (err) {
+    console.error("publish log failed", siteId, err);
   }
 }
 
 // When the site was last published, or null if it never has been (or
 // was published in an older shape — see SNAPSHOT_VERSION). Reads only
-// the date, not the whole snapshot, for the admin's Publish button.
+// the date, not the whole snapshot, for the publish icon.
 export async function getLastPublishedAt(siteId: string): Promise<Date | null> {
   await requireSiteAccess(siteId);
   const row = await db.sitePublication.findUnique({

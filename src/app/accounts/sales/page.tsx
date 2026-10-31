@@ -101,7 +101,6 @@ export default async function ConsolidatedSalesPage() {
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("sales", openAlerts.length, recentSites)}
       content={
         // Reverted to max-w-4xl (2026-09-12) — widening the whole page

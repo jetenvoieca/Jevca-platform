@@ -4,7 +4,6 @@ import NamecheapImportForm from "@/components/NamecheapImportForm";
 export default function NamecheapSyncPage() {
   return (
     <AppShell
-      publishEnabled={false}
       navItems={[{ label: "Sites", href: "/" }]}
       preview={
         <div className="text-sm text-neutral-600">

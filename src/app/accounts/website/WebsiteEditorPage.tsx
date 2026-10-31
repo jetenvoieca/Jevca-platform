@@ -36,7 +36,6 @@ export default async function WebsiteEditorPage({ selectedId }: { selectedId: st
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("website", openAlerts.length, recentSites)}
       content={content}
     />

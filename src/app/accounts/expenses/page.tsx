@@ -23,7 +23,6 @@ export default async function AccountsExpensesPage() {
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("expenses", openAlerts.length, recentSites)}
       content={
         <div className="mx-auto max-w-3xl px-6 py-6">

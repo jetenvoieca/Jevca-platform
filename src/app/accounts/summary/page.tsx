@@ -34,7 +34,6 @@ export default async function AccountSummaryPage() {
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("accountSummary", openAlerts.length, recentSites)}
       content={
         <div className="mx-auto max-w-5xl px-6 py-6">

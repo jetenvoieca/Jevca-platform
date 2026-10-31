@@ -18,7 +18,6 @@ export default async function MailTemplatesPage() {
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("mailTemplates", openAlerts.length, recentSites)}
       content={<MailTemplatesManager templates={templates} />}
     />

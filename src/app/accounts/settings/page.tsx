@@ -31,7 +31,6 @@ export default async function AccountsSettingsPage() {
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("accountSettings", openAlerts.length, recentSites)}
       content={
         <div className="mx-auto max-w-2xl px-6 py-6">

@@ -20,7 +20,6 @@ export default async function GuidesPage() {
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("guides", openAlerts.length, recentSites)}
       content={
         <div className="mx-auto max-w-2xl px-6 py-6">

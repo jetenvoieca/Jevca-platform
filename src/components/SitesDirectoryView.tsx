@@ -29,7 +29,6 @@ export default function SitesDirectoryView({
 }) {
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("sites", alertCount, recentSites)}
       rightPanel={
         <SitesListColumn

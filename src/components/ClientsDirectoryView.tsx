@@ -30,7 +30,6 @@ export default function ClientsDirectoryView({
 }) {
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("clients", alertCount, recentSites)}
       rightPanel={
         <SitesListColumn

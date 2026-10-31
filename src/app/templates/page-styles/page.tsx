@@ -29,7 +29,6 @@ export default async function PageStylesPage({
 
   return (
     <AppShell
-      publishEnabled={false}
       navItems={buildTopNavItems("pageStyles", openAlerts.length, recentSites)}
       content={
         <PageStylesManager

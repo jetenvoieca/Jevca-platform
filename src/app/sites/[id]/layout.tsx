@@ -1,4 +1,5 @@
 import PublishedSiteLink from "@/components/PublishedSiteLink";
+import PublishButton from "@/components/PublishButton";
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
 import { getCurrentUser } from "@/lib/currentUser";
@@ -62,6 +63,16 @@ export default async function SiteLayout({
   ]);
   const recentSites = [{ id, label: artistLogin ? site.name : site.artist.name }, ...previousSites];
 
+  // Publish, then the published site's globe (2026-10-31, Craig's mockup)
+  // — in the header at full width; on a narrower screen beside the menu
+  // button instead (see AppShell's topActions).
+  const siteIcons = (className: string) => (
+    <div className={`items-center gap-2 ${className}`}>
+      <PublishButton siteId={id} lastPublishedAt={lastPublishedAt?.toISOString() ?? null} />
+      <PublishedSiteLink href={publishedHomePath(site.id)} />
+    </div>
+  );
+
   // Everything inside the site words itself for the client's type
   // (Artwork / Product, Gallery / Store…) — see ClientWordsProvider.
   return (
@@ -70,15 +81,12 @@ export default async function SiteLayout({
         siteId={id}
         salesEnabled={site.salesEnabled}
         alertCount={openAlerts.length}
-        lastPublishedAt={lastPublishedAt?.toISOString() ?? null}
         recentSites={recentSites}
         allowed={allowed}
-        topActions={<PublishedSiteLink href={publishedHomePath(site.id)} />}
+        topActions={siteIcons("flex")}
         header={
           // Site name left, the page's own heading (if any) centred, the
-          // published site's globe right (at full width — on a narrower
-          // screen it sits beside the menu button instead; see AppShell's
-          // topActions).
+          // site's icons right (at full width — see siteIcons).
           <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4">
             <SiteNameField
               site={{
@@ -92,7 +100,7 @@ export default async function SiteLayout({
               ownerName={site.artist.name}
             />
             <PageHeadingSlot />
-            <PublishedSiteLink href={publishedHomePath(site.id)} className="hidden justify-self-end min-[1180px]:inline-flex" />
+            {siteIcons("hidden justify-self-end min-[1180px]:flex")}
           </div>
         }
       >
