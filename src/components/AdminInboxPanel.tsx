@@ -91,12 +91,15 @@ import { PROJECT_FILL, PROJECT_INK } from "@/lib/projectColours";
 // modal over both columns rather than a third column, so the two lists
 // always have room to breathe and the screen works on an iPad.
 //
-// A pill toggle in a band across the top (Art | Business | Personal |
-// Alert | Task | Insight, each with its count — unread emails, open
-// alerts, open tasks, insights; layout 2026-10-10, direct request — see
-// mock-up) switches the
-// whole screen between its modes, and both columns follow it. The New
-// message / New Task button sits on the Inbox heading's line:
+// A pill toggle in a band across the top (each with its count — unread
+// emails, open alerts, open tasks, insights; layout 2026-10-10, direct
+// request — see mock-up) switches the whole screen between its modes,
+// and both columns follow it. Since 2026-10-31 (Craig's mockup —
+// separating work from personal matters) it's two pages, which each
+// show only their own pills (see `page`): the Dashboard (Art | Business
+// | Alert) and the Inbox (Personal | Task | Insight). A task opened from
+// a Dashboard email goes to the Inbox (?task=<id>). The New message /
+// New Task button sits on the Inbox heading's line:
 //   - Art and Business (2026-09-27, replacing the single Inbox mode) are
 //     the two mailboxes (see lib/email.ts): left = received messages,
 //     right = Sent list (every OutboundEmail from that mailbox — in Art
@@ -141,7 +144,7 @@ import { PROJECT_FILL, PROJECT_INK } from "@/lib/projectColours";
 // Inbox/Archived lives in the URL and is applied on the server. (The
 // artist filters, left and right, were removed 2026-10-10, direct
 // request — each row shows its artist anyway.) The selected alert also lives in the
-// URL (?alert=...) — see the note on InboxPage — so closing the modal on
+// URL (?alert=...) — see the note on DashboardPage — so closing the modal on
 // an alert has to clear it from the address too. (The exception is a
 // sale alert, which is plain client state: the sale modal loads its own
 // data, and has to stay open even after the alert itself clears — e.g.
@@ -264,14 +267,25 @@ const DELETE_MESSAGE_CONFIRM =
 
 type Mode = "art" | "business" | "task" | "insight" | "alert" | "personal";
 
-const MODES: { mode: Mode; label: string }[] = [
-  { mode: "art", label: "Art" },
-  { mode: "business", label: "Business" },
-  { mode: "personal", label: "Personal" },
-  { mode: "alert", label: "Alert" },
-  { mode: "task", label: "Task" },
-  { mode: "insight", label: "Insight" },
-];
+// Which page the panel is (2026-10-31): the Dashboard (work) or the Inbox
+// (personal) — each with its own pills, the first being where it opens.
+type Page = "dashboard" | "inbox";
+
+const MODES: Record<Page, { mode: Mode; label: string }[]> = {
+  dashboard: [
+    { mode: "art", label: "Art" },
+    { mode: "business", label: "Business" },
+    { mode: "alert", label: "Alert" },
+  ],
+  inbox: [
+    { mode: "personal", label: "Personal" },
+    { mode: "task", label: "Task" },
+    { mode: "insight", label: "Insight" },
+  ],
+};
+
+const DASHBOARD_PATH = "/accounts/dashboard";
+const INBOX_PATH = "/accounts/inbox";
 
 const EMPTY_TASK_FORM: TaskInput = {
   id: null,
@@ -338,76 +352,104 @@ const PANEL_STYLES = {
   },
 } as const;
 
-type InboxUrlParams = {
+type DashboardUrlParams = {
   mailbox: Mailbox;
   view: InboxView;
   alertId?: string;
 };
 
-// The Inbox's address, with the mailbox, Inbox/Archived/Spam and
+// The Dashboard's address, with the mailbox, Inbox/Archived/Spam and
 // (optionally) the selected alert in the query string.
-function inboxUrl({ mailbox, view, alertId }: InboxUrlParams): string {
+function dashboardUrl({ mailbox, view, alertId }: DashboardUrlParams): string {
   const params = new URLSearchParams();
   if (mailbox === "BUSINESS") params.set("mailbox", "business");
   if (view !== "inbox") params.set("view", view);
   if (alertId) params.set("alert", alertId);
   const qs = params.toString();
-  return qs ? `/accounts/inbox?${qs}` : "/accounts/inbox";
+  return qs ? `${DASHBOARD_PATH}?${qs}` : DASHBOARD_PATH;
 }
 
-export default function AdminInboxPanel({
-  mailbox,
-  initialList,
-  view,
-  initialTasks,
-  initialInsights,
-  initialToday,
-  initialAlerts,
-  selectedAlertId,
-  clientPanel,
-  taskCategories,
-  artistOptions,
-  unreadCounts,
-  gmailTaskIds,
-  composeRecipients,
-  mailboxAddresses,
-  gmail,
-  gmailError,
-  openPersonal,
-}: {
+// What both pages give the panel: the addresses mail can be sent to and
+// from (new messages on the Dashboard, a task's Email on the Inbox).
+type SharedProps = {
+  composeRecipients: ComposeRecipient[];
+  mailboxAddresses: Record<Mailbox, string>;
+};
+
+type DashboardProps = SharedProps & {
+  page: "dashboard";
   mailbox: Mailbox;
   initialList: InboxSummaryItem[];
   view: InboxView;
-  initialTasks: TaskItem[];
-  initialInsights: TaskItem[];
-  initialToday: string; // "YYYY-MM-DD", Paris
   initialAlerts: AlertItem[];
   selectedAlertId: string | null;
   // The client cards for a payment-overdue or no-payment-method alert.
   clientPanel: { alertType: ClientAlertType; data: ClientPanelData } | null;
+  // Unread received messages in each mailbox's Inbox, for the pills.
+  unreadCounts: Record<Mailbox, number>;
+};
+
+type InboxProps = SharedProps & {
+  page: "inbox";
+  initialTasks: TaskItem[];
+  initialInsights: TaskItem[];
+  initialToday: string; // "YYYY-MM-DD", Paris
+  // The task to open on arrival (?task=), e.g. from a Dashboard email.
+  openTaskId: string | null;
   taskCategories: string[];
   // The task form's Owner options.
   artistOptions: { id: string; name: string }[];
-  // Unread received messages in each mailbox's Inbox, for the pills.
-  unreadCounts: Record<Mailbox, number>;
   // Personal (Gmail) conversations that already have a task: id → task id.
   gmailTaskIds: Record<string, string>;
-  composeRecipients: ComposeRecipient[];
-  mailboxAddresses: Record<Mailbox, string>;
   // Craig's own Gmail, for the Personal tab (2026-10-09) — see
-  // PersonalMailPanel. `openPersonal` = arrived back from connecting it.
+  // PersonalMailPanel.
   gmail: { email: string } | null;
   gmailError: string | null;
-  openPersonal: boolean;
-}) {
+};
+
+// Each page passes only what its own modes use; the other page's data is
+// simply empty here, as its modes never show.
+type AllProps = SharedProps & { page: Page } & Partial<Omit<DashboardProps, "page">> &
+  Partial<Omit<InboxProps, "page">>;
+
+export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
+  const {
+    page,
+    mailbox = "ART",
+    initialList = [],
+    view = "inbox",
+    initialTasks = [],
+    initialInsights = [],
+    initialToday = "",
+    openTaskId = null,
+    initialAlerts = [],
+    selectedAlertId = null,
+    clientPanel = null,
+    taskCategories = [],
+    artistOptions = [],
+    unreadCounts = { ART: 0, BUSINESS: 0 },
+    gmailTaskIds = {},
+    composeRecipients,
+    mailboxAddresses,
+    gmail = null,
+    gmailError = null,
+  }: AllProps = props;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
-  // Opens straight into Alert mode if the address already names an alert
-  // (e.g. after a page reload), otherwise into the address's mailbox.
-  const [mode, setMode] = useState<Mode>(
-    openPersonal ? "personal" : selectedAlertId ? "alert" : mailbox === "BUSINESS" ? "business" : "art"
+  // The task asked for in the address (?task=), if it's still there.
+  const [arrivingTask] = useState(
+    () => [...initialTasks, ...initialInsights].find((t) => t.id === openTaskId) ?? null
   );
+
+  // The Dashboard opens straight into Alert mode if the address already
+  // names an alert (e.g. after a page reload), otherwise into the
+  // address's mailbox. The Inbox opens on the task asked for, if any,
+  // otherwise on Personal.
+  const [mode, setMode] = useState<Mode>(() => {
+    if (page === "inbox") return arrivingTask ? (arrivingTask.keptOn ? "insight" : "task") : "personal";
+    return selectedAlertId ? "alert" : mailbox === "BUSINESS" ? "business" : "art";
+  });
   const modeMailbox = mailboxOf(mode);
   const isMailMode = modeMailbox !== null;
   // Just after switching between Art and Business, until the server has
@@ -570,9 +612,9 @@ export default function AdminInboxPanel({
   // sent item) — see the sticky message header in the thread view.
   const threadOpen = isMailMode && !composing && !selectedSent && openId !== null;
 
-  // The Inbox's address with the current filters, changed as given.
-  const currentUrl = (changes: Partial<InboxUrlParams> = {}) =>
-    inboxUrl({ mailbox, view, ...changes });
+  // The Dashboard's address with the current filters, changed as given.
+  const currentUrl = (changes: Partial<DashboardUrlParams> = {}) =>
+    dashboardUrl({ mailbox, view, ...changes });
 
   const refreshRight = () => setRightRefreshKey((k) => k + 1);
 
@@ -732,8 +774,12 @@ export default function AdminInboxPanel({
   };
 
   // Switches to Task mode — or Insight mode, for one kept as an insight —
-  // with the task open.
+  // with the task open; from the Dashboard, on the Inbox page.
   const showTask = (t: TaskItem) => {
+    if (page === "dashboard") {
+      router.push(`${INBOX_PATH}?task=${t.id}`);
+      return;
+    }
     setMode(t.keptOn ? "insight" : "task");
     setTypeFilter("");
     resetModal();
@@ -1120,6 +1166,16 @@ export default function AdminInboxPanel({
     setTaskPopup(null);
   };
 
+  // Arriving with ?task= (from a Dashboard email): opens that task once,
+  // then drops it from the address so a reload doesn't open it again.
+  useEffect(() => {
+    if (openTaskId === null) return;
+    if (arrivingTask) openTask(arrivingTask);
+    router.replace(INBOX_PATH);
+    // Only on arrival.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const startTask = () => {
     setTaskForm(EMPTY_TASK_FORM);
     setTaskEmail("");
@@ -1289,12 +1345,12 @@ export default function AdminInboxPanel({
   };
 
   // An alert's link normally leaves this screen for the page where it
-  // can be dealt with; the exception is a link back to the Inbox itself
-  // (a new-email-reply alert, always Art), which switches this screen to
-  // Art mode.
+  // can be dealt with; the exception is a link back to the Dashboard
+  // itself (a new-email-reply alert, always Art), which switches this
+  // screen to Art mode.
   const handleAlertLink = (a: AlertItem) => {
     if (!a.linkHref) return;
-    if (a.linkHref.startsWith("/accounts/inbox")) {
+    if (a.linkHref.startsWith(DASHBOARD_PATH)) {
       setMode("art");
       setTypeFilter("");
       setSentList(null);
@@ -1351,7 +1407,7 @@ export default function AdminInboxPanel({
 
   const modeBar = (
     <div className={pillWrapCls}>
-      {MODES.map((m) => {
+      {MODES[page].map((m) => {
         const count = modeCounts[m.mode];
         return (
           <button

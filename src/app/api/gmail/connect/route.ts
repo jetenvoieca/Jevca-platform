@@ -13,7 +13,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(gmailAuthorizeUrl(state));
   } catch (err) {
     const back = new URL("/accounts/inbox", request.url);
-    back.searchParams.set("personal", "1");
     back.searchParams.set("gmailError", err instanceof Error ? err.message : "Couldn't start the Gmail connection.");
     return NextResponse.redirect(back);
   }

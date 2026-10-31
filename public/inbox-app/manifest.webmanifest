@@ -1,7 +1,7 @@
 {
   "name": "JEVCAStudio",
   "short_name": "JEVCAStudio",
-  "start_url": "/accounts/inbox",
+  "start_url": "/accounts/dashboard",
   "scope": "/",
   "display": "standalone",
   "background_color": "#ffffff",

@@ -407,6 +407,7 @@ export async function deleteTask(id: string): Promise<void> {
   await Promise.all(files.map((f) => deleteFromR2(f.r2Key)));
   await db.task.deleteMany({ where: { id } });
   revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
 }
 
 // One entry in a task's Activity: an email sent from it, a reply to one,
@@ -557,6 +558,7 @@ export async function createTaskFromEmail(
   });
   await db.inboundEmail.update({ where: { id: inboundEmailId }, data: { taskId: task.id } });
   revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
   return { ok: true, task: toTaskItem(task) };
 }
 

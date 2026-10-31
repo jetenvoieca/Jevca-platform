@@ -161,8 +161,7 @@ export async function processInboundEmail(eventData: {
     });
   }
 
-  revalidatePath("/accounts/inbox");
-  revalidatePath("/alerts");
+  revalidatePath("/accounts/dashboard");
 }
 
 // Copies each of an inbound email's attachments from Resend (whose
@@ -403,7 +402,6 @@ export async function getThread(inboundEmailId: string): Promise<InboxThreadItem
     if (inbound.artistId) {
       await resolveAlertsOfType(inbound.artistId, EMAIL_REPLY_ALERT);
     }
-    revalidatePath("/alerts");
   }
 
   const replies = await db.outboundEmail.findMany({
@@ -515,7 +513,7 @@ export async function sendInboxReply(
   });
   if (inbound.taskId && data?.id) await recordSentMessageId(resend, reply.id, data.id);
 
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
   return { ok: true };
 }
 
@@ -534,8 +532,7 @@ export async function archiveInboundEmail(id: string): Promise<void> {
   if (!existing.isRead && existing.artistId) {
     await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);
   }
-  revalidatePath("/accounts/inbox");
-  revalidatePath("/alerts");
+  revalidatePath("/accounts/dashboard");
 }
 
 // Not spam (2026-10-20): moves a message from Spam into the Inbox, and
@@ -546,7 +543,7 @@ export async function markNotSpam(id: string): Promise<void> {
   if (!existing) return;
   await db.inboundEmail.update({ where: { id }, data: { spamAt: null, spamReason: null } });
   await setSenderRule(existing.fromAddress, "TRUSTED");
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
 }
 
 // Mark as spam (2026-10-20): moves a message from the Inbox or Archived
@@ -567,15 +564,14 @@ export async function markAsSpam(id: string): Promise<void> {
   if (!existing.isRead && existing.artistId) {
     await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);
   }
-  revalidatePath("/accounts/inbox");
-  revalidatePath("/alerts");
+  revalidatePath("/accounts/dashboard");
 }
 
 // Moves an archived message back into the Inbox (2026-09-27). It stays
 // read — it has already been dealt with once.
 export async function unarchiveInboundEmail(id: string): Promise<void> {
   await db.inboundEmail.updateMany({ where: { id }, data: { archivedAt: null } });
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
 }
 
 // Deletes a received message (2026-09-06, direct request — "enable
@@ -600,8 +596,7 @@ export async function deleteInboundEmail(id: string): Promise<void> {
   if (existing.artistId) {
     await resolveAlertsOfType(existing.artistId, EMAIL_REPLY_ALERT);
   }
-  revalidatePath("/accounts/inbox");
-  revalidatePath("/alerts");
+  revalidatePath("/accounts/dashboard");
 }
 
 // Deletes a sent message — an ad hoc admin send, a reply, or a logged
@@ -612,5 +607,5 @@ export async function deleteInboundEmail(id: string): Promise<void> {
 // the send itself, so deleting it just tidies the list.
 export async function deleteOutboundEmail(id: string): Promise<void> {
   await db.outboundEmail.delete({ where: { id } });
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
 }

@@ -8,6 +8,7 @@ export type TopNavKey =
   | "menuStyles"
   | "presentationTemplates"
   | "mailTemplates"
+  | "dashboard"
   | "inbox"
   | "subscriptions"
   | "expenses"
@@ -40,7 +41,10 @@ export type TopNavKey =
 // for every reply to an artist's own @jevca.art address plus ad hoc
 // admin emails (see AdminInboxPanel.tsx). Since 2026-09-19 (CRM Phase 3)
 // it also holds Tasks and the Alerts that used to have their own "Alerts"
-// page and menu item — so the open-alerts count badge lives on Inbox now.
+// page and menu item. Split in two 2026-10-31 (Craig's mockup): the
+// Dashboard (work — Art, Business and Alerts, so the open-alerts count
+// badge is on Dashboard) and the Inbox (personal — Personal, Task and
+// Insight).
 //
 // "Clients" added 2026-09-12, direct request — the admin-only view of
 // every site's Owner/Domain/Subscription/Hopper Token details (see
@@ -64,7 +68,8 @@ export function buildAccountsSection(
     key: "accounts",
     children: [
       { label: "Clients", href: "/clients", active: active === "clients" },
-      { label: "Inbox", href: "/accounts/inbox", active: active === "inbox", badge: alertCount },
+      { label: "Dashboard", href: "/accounts/dashboard", active: active === "dashboard", badge: alertCount },
+      { label: "Inbox", href: "/accounts/inbox", active: active === "inbox" },
       { label: "Subscriptions", href: "/accounts", active: active === "subscriptions" },
       { label: "Expenses", href: "/accounts/expenses", active: active === "expenses" },
       { label: "Account", href: "/accounts/summary", active: active === "accountSummary" },

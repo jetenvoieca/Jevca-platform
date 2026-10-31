@@ -174,6 +174,5 @@ export async function recordMailDeposit(paymentIntentId: string, target: StripeT
     severity: "WARNING",
     message: `Deposit paid: ${name}, ${amount} — check the inbox.`,
   });
-  revalidatePath("/accounts/inbox");
-  revalidatePath("/alerts");
+  revalidatePath("/accounts/dashboard");
 }

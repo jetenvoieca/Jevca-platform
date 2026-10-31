@@ -158,11 +158,11 @@ export async function resolveAlertsOfType(artistId: string, type: string): Promi
   });
 }
 
-// Where a stored alert's link goes and what it says: the Inbox for an
+// Where a stored alert's link goes and what it says: the Dashboard for an
 // email reply, the site's Sales page for a sale, otherwise the site's
 // Settings page.
 function storedAlertLink(type: string, siteId: string | null): { href: string | null; label: string } {
-  if (type === EMAIL_ALERT_TYPE) return { href: "/accounts/inbox", label: "View inbox" };
+  if (type === EMAIL_ALERT_TYPE) return { href: "/accounts/dashboard", label: "View dashboard" };
   if (SALE_ALERT_TYPES.includes(type)) {
     return { href: siteId ? `/sites/${siteId}/sales` : null, label: "View sales" };
   }

@@ -106,7 +106,7 @@ export async function updateAdminEmailAddress(value: string): Promise<void> {
     update: { adminEmailAddress: address },
     create: { id: SINGLETON_ID, adminEmailAddress: address },
   });
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
 }
 
 // Sends an ad hoc email from the mailbox's own address (see the
@@ -170,7 +170,7 @@ export async function sendAdminEmail(
   // (2026-10-10 — the address is no longer on the task form).
   if (task) await db.task.update({ where: { id: task.id }, data: { email: to } });
 
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
   return { ok: true };
 }
 
@@ -312,6 +312,6 @@ export async function forwardEmail(
   });
   if (original.taskId && data?.id) await recordSentMessageId(resend, sent.id, data.id);
 
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
   return { ok: true };
 }

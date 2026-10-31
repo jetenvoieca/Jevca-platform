@@ -55,7 +55,7 @@ export async function markSubscriptionUpToDate(
     },
   });
   updateTag(OPEN_ALERTS_TAG);
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
   return { ok: true };
 }
 
@@ -92,7 +92,7 @@ export async function cancelSubscription(
   ]);
   updateTag(OPEN_ALERTS_TAG);
   revalidatePath("/");
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
   return { ok: true };
 }
 

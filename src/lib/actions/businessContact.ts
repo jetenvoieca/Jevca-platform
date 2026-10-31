@@ -74,6 +74,6 @@ export async function sendBusinessContact(input: {
       ...(verdict.spam ? { spamAt: new Date(), spamReason: verdict.reason } : {}),
     },
   });
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
   return { ok: true };
 }

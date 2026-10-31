@@ -104,8 +104,7 @@ export async function sendWebsiteEnquiry(input: {
     severity: "WARNING",
     message: `New website enquiry about "${artwork.catalogueName}" — check the inbox.`,
   });
-  revalidatePath("/accounts/inbox");
-  revalidatePath("/alerts");
+  revalidatePath("/accounts/dashboard");
 
   if (input.joinMailingList) {
     const [firstName, ...rest] = name.split(/\s+/);

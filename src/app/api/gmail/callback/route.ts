@@ -7,14 +7,13 @@ import { completeGmailConnection, GMAIL_STATE_PURPOSE } from "@/lib/gmail";
 // Checks the signed `state` the connect route sent (so only a sign-in
 // this app started, in the last few minutes, is accepted — and this route
 // is behind the admin login too), saves the connection, and goes back to
-// the Inbox's Personal tab either way, with a message if it didn't work.
+// the Inbox (which opens on Personal) either way, with a message if it didn't work.
 export async function GET(request: NextRequest) {
   if (!(await passes(requireAdmin()))) return new Response("Not allowed.", { status: 403 });
   const params = request.nextUrl.searchParams;
 
   const back = (error: string | null) => {
     const url = new URL("/accounts/inbox", request.url);
-    url.searchParams.set("personal", "1");
     if (error) url.searchParams.set("gmailError", error);
     return NextResponse.redirect(url);
   };

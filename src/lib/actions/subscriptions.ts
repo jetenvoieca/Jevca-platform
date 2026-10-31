@@ -127,5 +127,5 @@ export async function dismissAlert(id: string) {
     data: { resolvedAt: new Date() },
   });
   updateTag(OPEN_ALERTS_TAG);
-  revalidatePath("/accounts/inbox");
+  revalidatePath("/accounts/dashboard");
 }
