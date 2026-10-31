@@ -9,7 +9,8 @@ import { db } from "@/lib/db";
 import { getLastPublishedAt } from "@/lib/actions/siteSnapshot";
 import { publishedHomePath } from "@/lib/siteSnapshot";
 import { getOpenAlerts } from "@/lib/alerts";
-import { getClientSites, getRecentSites, recentSiteLabel, recordSiteVisit } from "@/lib/recentSites";
+import { getClientSites, getRecentSites, recordSiteVisit } from "@/lib/recentSites";
+import { siteLabel } from "@/lib/siteLabel";
 import SiteShell from "@/components/SiteShell";
 import SiteNameField from "@/components/SiteNameField";
 import ClientWordsProvider from "@/components/ClientWordsProvider";
@@ -62,7 +63,7 @@ export default async function SiteLayout({
     artistLogin ? Promise.resolve() : recordSiteVisit(id),
   ]);
   const recentSites = [
-    { id, label: artistLogin ? site.name : recentSiteLabel(site.artist.name, site.name) },
+    { id, label: artistLogin ? site.name : siteLabel(site.artist.name, site.name) },
     ...previousSites,
   ];
 

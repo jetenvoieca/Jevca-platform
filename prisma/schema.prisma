@@ -493,7 +493,7 @@ model SubscriptionPayment {
 // creates a payment link; see purchaseId below.
 model AlertEvent {
   id       String @id @default(cuid())
-  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED" | "EMAIL_REPLY_RECEIVED" | "SALE_RECORDED" | "SALE_LINK_CREATED"
+  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED" | "EMAIL_REPLY_RECEIVED" | "SALE_RECORDED" | "SALE_LINK_CREATED" | "HOPPER_ITEMS_ADDED" | "HOPPER_ITEMS_PROCESSED"
   severity String @default("WARNING") // "INFO" | "WARNING" | "CRITICAL"
   message  String
 
@@ -506,6 +506,12 @@ model AlertEvent {
   // sale is later deleted (the alert itself stays).
   purchaseId String?
   purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+
+  // The Hopper alerts (2026-10-31, Craig's mockup — see lib/hopperAlerts.ts):
+  // how many items, and when the latest of them arrived or was processed.
+  // Null for every other alert type.
+  itemCount  Int?
+  lastItemAt DateTime?
 
   resolvedAt DateTime?
   createdAt  DateTime  @default(now())

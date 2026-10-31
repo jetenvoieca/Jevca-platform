@@ -11,6 +11,7 @@ import {
   type HopperVideoImportState,
 } from "@/lib/hopperVideoImport";
 import { fetchAndUploadImage } from "./artworkImport";
+import { noteHopperAdded } from "@/lib/hopperAlerts";
 
 // Import a CSV straight into the Hopper's sorting queue, rather than
 // creating finished artworks the way the Artwork Catalogue's own CSV
@@ -90,6 +91,7 @@ export async function importHopperCsvRow(
       caption: row.title || null,
     },
   });
+  await noteHopperAdded(artistId);
 
   revalidatePath(`/sites/${siteId}/hopper`);
   return { ok: true };

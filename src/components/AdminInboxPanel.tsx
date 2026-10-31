@@ -47,7 +47,8 @@ import type { ClientPanelData } from "@/lib/clientPanelData";
 import type { ClientAlertType } from "@/lib/clientAlertIds";
 import type { PersonalMailItem } from "@/lib/gmailMessages";
 import type { Mailbox } from "@/lib/email";
-import { ALERT_TYPE_LABELS } from "@/lib/alertLabels";
+import { ALERT_TYPE_LABELS, ALERTS_SHOWN_WITH_TIME } from "@/lib/alertLabels";
+import { siteLabel } from "@/lib/siteLabel";
 import { formatDate, formatDateTime } from "@/lib/formatDate";
 import { capitaliseParagraphs } from "@/lib/text";
 import TaskForm from "@/components/TaskForm";
@@ -312,6 +313,18 @@ function mailboxOf(mode: Mode): Mailbox | null {
 // worked out live and can't be dismissed, so `dismissable` rules them out.
 function isInformationalSaleAlert(alert: AlertItem): boolean {
   return alert.dismissable && alert.type.startsWith("SALE_");
+}
+
+// Who an alert row is about: the client — with their site on a Hopper
+// alert (2026-10-31) — or "General".
+function alertWho(a: { artistName: string | null; siteName?: string }): string {
+  if (a.artistName && a.siteName) return siteLabel(a.artistName, a.siteName);
+  return a.artistName || "General";
+}
+
+// An alert row's date — with the time for the types that need it.
+function alertWhen(type: string, at: string): string {
+  return ALERTS_SHOWN_WITH_TIME.has(type) ? formatDateTime(at) : formatDate(at);
 }
 
 // The open task rows' tints and text colours: the Today panel, the This
@@ -1651,11 +1664,11 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
                       </span>
                       {new Date(a.createdAt).getTime() > 0 && (
                         <span className="shrink-0 text-[10px] text-neutral-400">
-                          {formatDate(a.createdAt)}
+                          {alertWhen(a.type, a.createdAt)}
                         </span>
                       )}
                     </div>
-                    <p className="truncate text-xs text-neutral-500">{a.artistName || "General"}</p>
+                    <p className="truncate text-xs text-neutral-500">{alertWho(a)}</p>
                     <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">
                       {capitaliseParagraphs(a.message)}
                     </p>
@@ -1792,9 +1805,9 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
                         <span className="truncate text-sm font-semibold text-neutral-900">
                           {ALERT_TYPE_LABELS[a.type] || a.type}
                         </span>
-                        <span className="shrink-0 text-[10px] text-neutral-400">{formatDate(a.resolvedAt)}</span>
+                        <span className="shrink-0 text-[10px] text-neutral-400">{alertWhen(a.type, a.resolvedAt)}</span>
                       </div>
-                      <p className="truncate text-xs text-neutral-500">{a.artistName || "General"}</p>
+                      <p className="truncate text-xs text-neutral-500">{alertWho(a)}</p>
                       <p className="mt-0.5 line-clamp-2 text-xs text-neutral-400">{capitaliseParagraphs(a.message)}</p>
                     </div>
                   </SwipeRow>

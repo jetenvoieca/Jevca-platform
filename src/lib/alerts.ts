@@ -7,6 +7,7 @@ import { invoiceExtras } from "@/lib/invoices";
 import type { SaleModalTarget } from "@/components/SaleModal";
 import { MANUAL_SUBSCRIPTION_METHODS } from "@/lib/subscriptionMethods";
 import { clientAlertId } from "@/lib/clientAlertIds";
+import { HOPPER_ADDED_ALERT_TYPE } from "@/lib/hopperAlerts";
 
 // 2026-08-13 decision: manual (PayPal/DD) artists are expected roughly
 // monthly, flagged overdue 14 days after that's due — i.e. 44 days since
@@ -36,7 +37,7 @@ async function findOverdueInvoiceIds(): Promise<string[]> {
 
 // Stored alert types that link somewhere other than a site's Settings
 // page — see storedAlertLink below. EMAIL_REPLY_RECEIVED (2026-09-05,
-// Email Integration) links to the Inbox. The two sale types (2026-09-21)
+// Email Integration) links to the Dashboard. The two sale types (2026-09-21)
 // are raised by the Studio app and link to the site's Sales page:
 // SALE_RECORDED when a sale is recorded or a card payment is taken,
 // SALE_LINK_CREATED when a payment link is created for a buyer. Each
@@ -78,6 +79,9 @@ export type AlertItem = {
   artistId: string | null;
   artistName: string | null;
   siteId: string | null;
+  // The client's site, shown with their name on a Hopper alert
+  // (2026-10-31) — the Hopper is the client's, so their main site.
+  siteName?: string;
   linkHref: string | null;
   linkLabel: string;
   createdAt: string;
@@ -159,10 +163,13 @@ export async function resolveAlertsOfType(artistId: string, type: string): Promi
 }
 
 // Where a stored alert's link goes and what it says: the Dashboard for an
-// email reply, the site's Sales page for a sale, otherwise the site's
-// Settings page.
+// email reply, the site's Sales page for a sale, its Hopper for items
+// added there, otherwise the site's Settings page.
 function storedAlertLink(type: string, siteId: string | null): { href: string | null; label: string } {
   if (type === EMAIL_ALERT_TYPE) return { href: "/accounts/dashboard", label: "View dashboard" };
+  if (type === HOPPER_ADDED_ALERT_TYPE) {
+    return { href: siteId ? `/sites/${siteId}/hopper` : null, label: "Open Hopper" };
+  }
   if (SALE_ALERT_TYPES.includes(type)) {
     return { href: siteId ? `/sites/${siteId}/sales` : null, label: "View sales" };
   }
@@ -190,7 +197,19 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       db.alertEvent.findMany({
         where: { resolvedAt: null },
         include: {
-          artist: { select: { id: true, name: true, sites: { select: { id: true }, where: { status: { not: "ARCHIVED" } }, take: 1 } } },
+          // The client's main site (see getPrimarySite).
+          artist: {
+            select: {
+              id: true,
+              name: true,
+              sites: {
+                select: { id: true, name: true },
+                where: { status: { not: "ARCHIVED" } },
+                orderBy: { createdAt: "asc" },
+                take: 1,
+              },
+            },
+          },
           // Which artwork a sale alert's sale is for, so the Inbox can open it.
           purchase: { select: { artworkId: true } },
         },
@@ -311,7 +330,8 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
     ]);
 
   const storedItems: AlertItem[] = stored.map((a) => {
-    const siteId = a.artist?.sites[0]?.id || null;
+    const site = a.artist?.sites[0] ?? null;
+    const siteId = site?.id || null;
     const link = storedAlertLink(a.type, siteId);
     return {
       id: a.id,
@@ -321,6 +341,7 @@ const getOpenAlertsUncached = async (): Promise<AlertItem[]> => {
       artistId: a.artistId,
       artistName: a.artist?.name || null,
       siteId,
+      siteName: a.type === HOPPER_ADDED_ALERT_TYPE ? site?.name : undefined,
       linkHref: link.href,
       linkLabel: link.label,
       createdAt: a.createdAt.toISOString(),

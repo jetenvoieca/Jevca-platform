@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
+import { noteHopperProcessed } from "@/lib/hopperAlerts";
 
 // None of these actions revalidate /sites/[id]/hopper OR /sites/[id]/
 // artworks (2026-08-17, second pass at this same fix) — both those
@@ -35,11 +36,13 @@ import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 // checking if this recurs there too.
 
 // The client a picture belongs to, once the person logged in is checked
-// to have access to it (2026-10-26).
-async function imageOwner(imageId: string): Promise<{ artistId: string }> {
-  const image = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true } });
+// to have access to it (2026-10-26), and whether it's still in the Hopper
+// — taking it out counts towards the Dashboard's Hopper alert
+// (2026-10-31, see noteHopperProcessed).
+async function imageOwner(imageId: string): Promise<{ artistId: string; inHopper: boolean }> {
+  const image = await db.image.findUnique({ where: { id: imageId }, select: { artistId: true, status: true } });
   await requireRecordAccess(Promise.resolve(image));
-  return image!;
+  return { artistId: image!.artistId, inHopper: image!.status === "HOPPER" };
 }
 
 // Returns rows already in the exact shape HopperView's HopperItem
@@ -107,8 +110,10 @@ export async function binHopperItem(
   id: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await imageOwner(id);
-  return deleteImagePermanently(id);
+  const { artistId, inHopper } = await imageOwner(id);
+  const result = await deleteImagePermanently(id);
+  if (result.ok && inHopper) await noteHopperProcessed(artistId);
+  return result;
 }
 
 // Bulk version of binHopperItem (2026-09-07, direct request — "add
@@ -119,24 +124,31 @@ export async function binHopperItems(
   ids: string[]
 ): Promise<{ deletedCount: number; failed: { id: string; error: string }[] }> {
   await requireArtistAccess(artistId);
-  return deleteImagesPermanently(artistId, ids);
+  const inHopper = await db.image.findMany({
+    where: { id: { in: ids }, artistId, status: "HOPPER" },
+    select: { id: true },
+  });
+  const result = await deleteImagesPermanently(artistId, ids);
+  const failed = new Set(result.failed.map((f) => f.id));
+  await noteHopperProcessed(artistId, inHopper.filter((i) => !failed.has(i.id)).length);
+  return result;
 }
 
 export async function addHopperItemToMedia(id: string, siteId: string): Promise<void> {
-  await imageOwner(id);
+  const { artistId, inHopper } = await imageOwner(id);
   await db.image.update({ where: { id }, data: { status: "SORTED", needsReview: true } });
+  if (inHopper) await noteHopperProcessed(artistId);
 }
 
 export async function addHopperItemToBucket(
   id: string,
   siteId: string
 ): Promise<{ ok: true } | { ok: false; error: string }> {
-  await imageOwner(id);
-  const image = await db.image.findUnique({ where: { id }, select: { artistId: true } });
-  if (!image) return { ok: false, error: "That item couldn't be found." };
-  const result = await appendImageToTimeline(image.artistId, siteId, id);
+  const { artistId, inHopper } = await imageOwner(id);
+  const result = await appendImageToTimeline(artistId, siteId, id);
   if (result.ok) {
     revalidatePath(`/sites/${siteId}/bucket`);
+    if (inHopper) await noteHopperProcessed(artistId);
   }
   return result;
 }
@@ -174,9 +186,8 @@ export async function createArtworkFromHopperQuick(
 ): Promise<{ ok: true; artwork: { id: string } } | { ok: false; error: string }> {
   await requireArtistAccess(artistId);
   // The picture must be this client's.
-  if (!(await db.image.findFirst({ where: { id: hopperImageId, artistId }, select: { id: true } }))) {
-    return { ok: false, error: "That item couldn't be found." };
-  }
+  const picture = await db.image.findFirst({ where: { id: hopperImageId, artistId }, select: { status: true } });
+  if (!picture) return { ok: false, error: "That item couldn't be found." };
   const title = ((formData.get("catalogueName") as string) || "").trim() || "Untitled";
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
   const dateRaw = (formData.get("date") as string)?.trim();
@@ -234,6 +245,7 @@ export async function createArtworkFromHopperQuick(
     });
     await tx.artwork.update({ where: { id: artwork.id }, data: { mainImageId: hopperImageId } });
   });
+  if (picture.status === "HOPPER") await noteHopperProcessed(artistId);
 
   return { ok: true, artwork: { id: artwork.id } };
 }

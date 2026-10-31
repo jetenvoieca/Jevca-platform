@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { revalidatePath, updateTag } from "next/cache";
 import { OPEN_ALERTS_TAG, isArtistSubscriptionOverdue } from "@/lib/alerts";
 import type { ClientAlertType } from "@/lib/clientAlertIds";
+import { HOPPER_PROCESSED_ALERT_TYPE } from "@/lib/hopperAlerts";
 
 // Server actions for the Inbox's Alert view.
 
@@ -123,14 +124,17 @@ export type ProcessedAlertItem = {
   message: string;
   artistId: string | null;
   artistName: string | null;
+  // The client's main site, on a Hopper entry (2026-10-31) — see
+  // AlertItem.siteName.
+  siteName?: string;
   resolvedAt: string; // ISO
 };
 
 // The Alert view's processed list (2026-09-28, direct request — it used
 // to show the task Done list, which was confusing): every stored alert
 // that's been dealt with — dismissed, cleared by opening it (an email
-// reply), or a client marked Up to date — most recently dealt with
-// first. Fetched on demand, like the Sent and
+// reply), or a client marked Up to date — and the Hopper's processed
+// entries (2026-10-31), most recently dealt with first. Fetched on demand, like the Sent and
 // Done lists. Alerts worked out live (an overdue invoice, say) aren't
 // stored, so they simply stop appearing once dealt with and have nothing
 // to list here.
@@ -140,7 +144,19 @@ export async function getProcessedAlerts(): Promise<ProcessedAlertItem[]> {
     where: { resolvedAt: { not: null } },
     orderBy: { resolvedAt: "desc" },
     take: 200,
-    include: { artist: { select: { name: true } } },
+    include: {
+      artist: {
+        select: {
+          name: true,
+          sites: {
+            select: { name: true },
+            where: { status: { not: "ARCHIVED" } },
+            orderBy: { createdAt: "asc" },
+            take: 1,
+          },
+        },
+      },
+    },
   });
   return rows.map((r) => ({
     id: r.id,
@@ -148,6 +164,7 @@ export async function getProcessedAlerts(): Promise<ProcessedAlertItem[]> {
     message: r.message,
     artistId: r.artistId,
     artistName: r.artist?.name || null,
+    siteName: r.type === HOPPER_PROCESSED_ALERT_TYPE ? r.artist?.sites[0]?.name : undefined,
     resolvedAt: (r.resolvedAt ?? r.createdAt).toISOString(),
   }));
 }

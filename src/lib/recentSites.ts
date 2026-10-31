@@ -1,4 +1,5 @@
 import { db } from "@/lib/db";
+import { siteLabel } from "@/lib/siteLabel";
 
 // The sites shown under "Sites" in the main menu (2026-10-07). Saved in
 // the database (Site.lastVisitedAt), so the list is the same on every
@@ -8,13 +9,8 @@ export const RECENT_SITES_COUNT = 2;
 
 export type RecentSite = { id: string; label: string };
 
-// How the admin's menu names a site (2026-10-31, Craig's request — an
-// owner can have several sites): "Owner · Site name".
-export function recentSiteLabel(ownerName: string, siteName: string): string {
-  return `${ownerName} · ${siteName}`;
-}
-
-// Most recently opened sites, newest first (see recentSiteLabel).
+// Most recently opened sites, newest first, labelled "Owner · Site name"
+// (see siteLabel).
 // `excludeSiteId` leaves out the site currently open, which the
 // per-site menu adds itself.
 export async function getRecentSites({
@@ -31,7 +27,7 @@ export async function getRecentSites({
     orderBy: { lastVisitedAt: "desc" },
     take,
   });
-  return sites.map((s) => ({ id: s.id, label: recentSiteLabel(s.artist.name, s.name) }));
+  return sites.map((s) => ({ id: s.id, label: siteLabel(s.artist.name, s.name) }));
 }
 
 // Records that a site was just opened. Plain SQL so a visit doesn't

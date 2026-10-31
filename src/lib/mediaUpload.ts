@@ -4,6 +4,7 @@ import { generateImageSizes } from "@/lib/imageSizes";
 import { randomUUID } from "crypto";
 import { sanitizeFilename } from "@/lib/sanitizeFilename";
 import { requestVideoPosters } from "@/lib/videoPosters";
+import { noteHopperAdded } from "@/lib/hopperAlerts";
 
 // Uploading a picture or video into a client's media (moved here from
 // lib/actions/media.ts, 2026-10-26): plain server code, used by the
@@ -160,6 +161,8 @@ export async function saveUpload(
   });
   // A video that came without a still picture gets one made (2026-10-16).
   if (kind === "VIDEO" && !image.posterUrl) await requestVideoPosters();
+  // The Dashboard's Hopper alert (2026-10-31).
+  if (status === "HOPPER") await noteHopperAdded(artistId);
   return {
     image: {
       ...image,

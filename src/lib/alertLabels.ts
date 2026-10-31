@@ -18,4 +18,11 @@ export const ALERT_TYPE_LABELS: Record<string, string> = {
   // 2026-09-05, Email Integration — see raiseAlertIfNotAlreadyOpen in
   // lib/actions/inboundEmail.ts.
   EMAIL_REPLY_RECEIVED: "New email reply",
+  // 2026-10-31 — see lib/hopperAlerts.ts.
+  HOPPER_ITEMS_ADDED: "Added to Hopper",
+  HOPPER_ITEMS_PROCESSED: "Hopper processed",
 };
+
+// Alert types whose time matters as well as their date (2026-10-31, the
+// Hopper's — several can arrive in a day), shown with both in the lists.
+export const ALERTS_SHOWN_WITH_TIME = new Set(["HOPPER_ITEMS_ADDED", "HOPPER_ITEMS_PROCESSED"]);

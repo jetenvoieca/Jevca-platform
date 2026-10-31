@@ -5,6 +5,7 @@ import { extensionForContentType } from "@/lib/importHelpers";
 import { type VideoCopyRequest } from "@/lib/hopperVideoCopy";
 import { MEDIA_JOB_SECRET_HEADER } from "@/lib/mediaJobs";
 import { requestVideoPosters } from "@/lib/videoPosters";
+import { noteHopperAdded } from "@/lib/hopperAlerts";
 
 // Videos in the Hopper's CSV import (2026-10-15). A video is too big to
 // copy within a normal request (60 seconds on Netlify), so each one is
@@ -90,6 +91,7 @@ export async function finishHopperVideoImport(
       data: { status: "DONE", imageId: image.id },
     });
   });
+  await noteHopperAdded(job.artistId);
   // Its still picture (2026-10-16 — see lib/videoPosters.ts).
   await requestVideoPosters();
 }
