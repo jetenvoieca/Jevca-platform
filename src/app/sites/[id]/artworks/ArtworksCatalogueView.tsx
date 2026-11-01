@@ -32,6 +32,8 @@ type Filters = {
   location: string;
   type: string;
   curation: string;
+  // "1" = Base works only (2026-11-01).
+  base: string;
   sort: string;
 };
 
@@ -67,6 +69,7 @@ function toListFilters(filters: Filters) {
     location: filters.location || undefined,
     type: filters.type || undefined,
     curation: filters.curation || undefined,
+    base: filters.base || undefined,
     sort: filters.sort || undefined,
   };
 }
@@ -87,6 +90,7 @@ export default function ArtworksCatalogueView({
   type: initialType,
   sort: initialSort,
   curation: initialCuration = "",
+  base: initialBase = "",
   curations = [],
   initialSelected,
   settings,
@@ -120,6 +124,8 @@ export default function ArtworksCatalogueView({
   // (which don't have Curations yet) need no change; with no curations
   // passed, the dropdown isn't shown.
   curation?: string;
+  // Base works only (2026-11-01, Craig's request — to help setting up).
+  base?: string;
   curations?: CurationSummary[];
   initialSelected: ArtworkDetail | null;
   settings: ArtworkSettings;
@@ -169,13 +175,14 @@ export default function ArtworksCatalogueView({
   const [type, setType] = useState(initialType);
   const [curation, setCuration] = useState(initialCuration);
   const [sort, setSort] = useState(initialSort);
+  const [base, setBase] = useState(initialBase ? "1" : "");
 
   // The Name list changes when a work is renamed, duplicated or deleted.
   const refreshNames = () => {
     listArtworkNames(artistId).then(setNames);
   };
 
-  const currentFilters: Filters = { name, availability, location, type, curation, sort };
+  const currentFilters: Filters = { name, availability, location, type, curation, base, sort };
 
   // Declared up here, ahead of applyFilters below, specifically because
   // applyFilters' own dependency array reads `selected` directly
@@ -201,7 +208,7 @@ export default function ArtworksCatalogueView({
 
   const applyFilters = useCallback(
     async (overrides: Partial<Filters>) => {
-      const next: Filters = { name, availability, location, type, curation, sort, ...overrides };
+      const next: Filters = { name, availability, location, type, curation, base, sort, ...overrides };
       const { rows, total: newTotal, soldCount: newSoldCount } = await listArtworks(artistId, {
         ...toListFilters(next),
         limit: pageSize,
@@ -229,7 +236,7 @@ export default function ArtworksCatalogueView({
         updateUrlSelected(null);
       }
     },
-    [artistId, name, availability, location, type, curation, sort, pageSize, selected]
+    [artistId, name, availability, location, type, curation, base, sort, pageSize, selected]
   );
 
   const handleLoadMore = useCallback(async () => {
@@ -237,7 +244,7 @@ export default function ArtworksCatalogueView({
     setLoadMoreError(false);
     try {
       const { rows } = await listArtworks(artistId, {
-        ...toListFilters({ name, availability, location, type, curation, sort }),
+        ...toListFilters({ name, availability, location, type, curation, base, sort }),
         offset: artworks.length,
         limit: pageSize,
       });
@@ -252,7 +259,7 @@ export default function ArtworksCatalogueView({
     } finally {
       setLoadingMore(false);
     }
-  }, [artistId, artworks.length, name, availability, location, type, curation, sort, pageSize]);
+  }, [artistId, artworks.length, name, availability, location, type, curation, base, sort, pageSize]);
 
   // Infinite scroll: an invisible sentinel sits just past the last row.
   // When it enters the viewport we auto-fetch the next page — no "Load
@@ -419,6 +426,7 @@ export default function ArtworksCatalogueView({
                     presentationPrice: item.presentationPrice,
                     availability: item.availability,
                     type: item.type,
+                    isBase: item.isBase,
                     imageUrl: item.mainImage?.url ?? null,
                   }
                 : a
@@ -556,25 +564,29 @@ export default function ArtworksCatalogueView({
             </div>
           </div>
 
-          {/* Row 2: filtering — All/Sold, then the filters shared with the
-              Media Catalogue's Artworks view (ArtworkFilterBar). */}
+          {/* Row 2: filtering — All / Sold / Base (Base added 2026-11-01,
+              for setting up — one of the three at a time), then the
+              filters shared with the Media Catalogue's Artworks view
+              (ArtworkFilterBar). */}
           <div className="mb-3">
             <ArtworkFilterBar
               before={
                 <div className="flex gap-2">
                   {[
-                    { value: "", label: "All" },
-                    { value: "SOLD", label: "Sold" },
+                    { label: "All", availability: "", base: "" },
+                    { label: "Sold", availability: "SOLD", base: "" },
+                    { label: "Base", availability: "", base: "1" },
                   ].map((option) => (
                     <button
                       key={option.label}
                       type="button"
                       onClick={() => {
-                        setAvailability(option.value);
-                        applyFilters({ availability: option.value });
+                        setAvailability(option.availability);
+                        setBase(option.base);
+                        applyFilters({ availability: option.availability, base: option.base });
                       }}
                       className={`rounded-full px-3 py-[4.8px] text-sm ${
-                        availability === option.value
+                        availability === option.availability && base === option.base
                           ? "bg-neutral-900 text-white"
                           : "border border-neutral-300 hover:bg-neutral-50"
                       }`}

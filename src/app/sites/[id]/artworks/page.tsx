@@ -17,6 +17,8 @@ type SearchParams = {
   // Curation filter (2026-09-24) — a Curation's id. See
   // ArtworkFilterInput in lib/artworkFilters.ts.
   curation?: string;
+  // Base works only (2026-11-01) — see ArtworkFilterInput.
+  base?: string;
   // Deep-link to a specific artwork's detail panel (e.g. right after
   // creating one, or a link from elsewhere) — read once on first load.
   // Selecting a *different* artwork afterwards happens client-side,
@@ -50,6 +52,7 @@ export default async function ArtworksCataloguePage({
       location: sp.location,
       type: sp.type,
       curation: sp.curation,
+      base: sp.base,
       sort: sp.sort,
       limit: PAGE_SIZE,
     }),
@@ -77,6 +80,7 @@ export default async function ArtworksCataloguePage({
       type={sp.type || ""}
       sort={sp.sort || ""}
       curation={sp.curation || ""}
+      base={sp.base || ""}
       curations={curations}
       initialSelected={selected}
       settings={settings}

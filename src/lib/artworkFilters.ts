@@ -37,6 +37,9 @@ export type ArtworkFilterInput = {
   // rename never breaks a saved/bookmarked filter). Matches every
   // artwork in that curation. See Curation in schema.prisma.
   curation?: string;
+  // Base works only (2026-11-01, Craig's request — to help setting up):
+  // "1" shows only works ticked Base (Artwork.isBase).
+  base?: string;
   // The order, not a filter (2026-10-26, direct request) — carried with
   // the filters so the grid, the URL and the PDF/CSV exports all follow
   // it. See ARTWORK_SORT_NUMBER and buildArtworkOrderBy.
@@ -57,7 +60,7 @@ function blankField(field: "location" | "type") {
 }
 
 export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput) {
-  const { q, name, availability, location, type, curation } = filters;
+  const { q, name, availability, location, type, curation, base } = filters;
   const none = [
     ...(location === FILTER_NONE ? [blankField("location")] : []),
     ...(type === FILTER_NONE ? [blankField("type")] : []),
@@ -78,6 +81,7 @@ export function buildArtworkWhere(artistId: string, filters: ArtworkFilterInput)
     ...(availability ? { availability: { in: availabilitiesFor(availability) } } : {}),
     ...(location && location !== FILTER_NONE ? { location } : {}),
     ...(type && type !== FILTER_NONE ? { type } : {}),
+    ...(base ? { isBase: true } : {}),
     ...(curation === FILTER_NONE
       ? { curationItems: { none: {} } }
       : curation
@@ -110,11 +114,13 @@ export function artworkMatchesFilters(
     availability: string;
     location: string | null;
     type: string | null;
+    isBase: boolean;
   },
   filters: ArtworkFilterInput
 ): boolean {
-  const { name, availability, location, type } = filters;
+  const { name, availability, location, type, base } = filters;
   if (name && artwork.catalogueName !== name) return false;
+  if (base && !artwork.isBase) return false;
   if (availability && !availabilitiesFor(availability).includes(artwork.availability as Availability)) {
     return false;
   }
