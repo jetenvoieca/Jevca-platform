@@ -415,7 +415,15 @@ export default function PageSectionsArranger({
       onDragEnd={handleDragEnd}
       onDragCancel={() => setDragging(null)}
     >
-      <div className="flex min-h-0 flex-1 gap-4 p-4">
+      {/* The screen's own labels can't be selected, and nothing can be
+          dropped into its text boxes as text (2026-11-01 — a component's
+          labels were dragged into a Description by mistake and saved with
+          it). Moving things uses the drag above, not the browser's own;
+          typing and pasting work as usual. */}
+      <div
+        className="flex min-h-0 flex-1 select-none gap-4 p-4 [&_input]:select-text [&_textarea]:select-text"
+        onDrop={(e) => e.preventDefault()}
+      >
         <Tray
           sections={sections}
           hasCuration={!!curationId}
