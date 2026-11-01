@@ -31,6 +31,10 @@ export type ArtworkFacetValues = {
   // Artwork.date in schema.prisma.
   date: string;
   studioNotes: string;
+  // The Base tick box (2026-11-01, Craig's request — a work others are
+  // derived from; see Artwork.isBase). Only the Catalogue's details panel
+  // passes it; without it the box isn't shown (the Hopper's quick form).
+  isBase?: boolean;
 };
 
 // Vertical padding cut ~20% (2026-09-11, direct request — "catalogue
@@ -90,6 +94,7 @@ export default function ArtworkCatalogueFields({
   onTypeOrSizeChange,
   onLocationChange,
   onViewLocation,
+  onBaseChange,
   children,
   name,
   picture,
@@ -114,6 +119,9 @@ export default function ArtworkCatalogueFields({
   // A View button beside Location, shown when given: opens the work in
   // its Location.
   onViewLocation?: () => void;
+  // Fired when the Base box is ticked or unticked, so the details panel's
+  // header star follows straight away.
+  onBaseChange?: (isBase: boolean) => void;
   // The price (Catalogue / Hopper's own), shown after Size / Edition.
   children?: React.ReactNode;
   // The Name field, first in the column (2026-10-28).
@@ -376,16 +384,33 @@ export default function ArtworkCatalogueFields({
         <p className={labelCls}>
           Studio notes <span className="font-normal text-neutral-400">(private)</span>
         </p>
-        <div className="mb-3 w-1/2">
-          <label className={labelCls}>Date</label>
-          <input
-            type="text"
-            name="date"
-            defaultValue={values.date}
-            placeholder="e.g. June 2025"
-            onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-            className={lineCls}
-          />
+        <div className="mb-3 flex items-end gap-4">
+          <div className="w-1/2">
+            <label className={labelCls}>Date</label>
+            <input
+              type="text"
+              name="date"
+              defaultValue={values.date}
+              placeholder="e.g. June 2025"
+              onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
+              className={lineCls}
+            />
+          </div>
+          {values.isBase !== undefined && (
+            <label className={`flex items-center gap-2 text-sm text-neutral-700 ${FIELD_HEIGHT}`}>
+              <input
+                type="checkbox"
+                name="isBase"
+                defaultChecked={values.isBase}
+                onChange={(e) => {
+                  onBaseChange?.(e.currentTarget.checked);
+                  onAutosave?.(e.currentTarget.form!);
+                }}
+                className="h-4 w-4"
+              />
+              Base
+            </label>
+          )}
         </div>
         <label className={labelCls}>Notes</label>
         <textarea

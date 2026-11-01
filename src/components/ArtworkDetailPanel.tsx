@@ -14,6 +14,7 @@ import { computeReferencePrice } from "@/lib/pricing";
 import { CURRENCIES } from "@/lib/currencies";
 import MediaPicker from "@/components/MediaPicker";
 import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
+import BaseStar from "@/components/BaseStar";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 import type { ArtworkImage } from "@/lib/artworkImages";
 
@@ -42,6 +43,8 @@ export type ArtworkDetail = {
   // The currency of offeredPrice — see Artwork.priceCurrency.
   priceCurrency: string;
   studioNotes: string | null;
+  // A work others are derived from (2026-11-01) — see Artwork.isBase.
+  isBase: boolean;
   // "Derived from #..." (2026-09-11) — null for any artwork that isn't
   // itself a "Create Derivative" copy. See the matching note on
   // Artwork.derivedFromId in schema.prisma.
@@ -126,6 +129,8 @@ export default function ArtworkDetailPanel({
 }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  // The Base box (2026-11-01), so the header's star follows it at once.
+  const [isBase, setIsBase] = useState(artwork.isBase);
   // Live state for Type/Size (2026-08-28) — needed for the Reference
   // price preview below. Owned here (rather than inside
   // ArtworkCatalogueFields) since Reference price is Catalogue-tab-only;
@@ -289,7 +294,9 @@ export default function ArtworkDetailPanel({
       <div className="sticky top-0 z-10 -mx-6 -mt-6 mb-4 flex items-start justify-between border-b border-neutral-200 bg-white px-6 pb-4 pt-6">
         <div>
           <h2 className="text-xl font-semibold text-neutral-900">{artwork.catalogueName}</h2>
-          <p className="text-sm text-neutral-500">Catalogue #{artwork.catalogueNumber}</p>
+          <p className="text-sm text-neutral-500">
+            Catalogue <BaseStar isBase={isBase} />#{artwork.catalogueNumber}
+          </p>
           {/* "Derived from #..." (2026-09-11, direct request — "show
               which artwork the current work is derived from") — replaces
               the word "Derivative" ever appearing in the title/name
@@ -386,7 +393,9 @@ export default function ArtworkDetailPanel({
               availableQty: artwork.availableQty?.toString() ?? "",
               date: artwork.date || "",
               studioNotes: artwork.studioNotes || "",
+              isBase,
             }}
+            onBaseChange={setIsBase}
             onAutosave={autosaveCatalogue}
             onTypeOrSizeChange={(type, size) => {
               setTypeValue(type);

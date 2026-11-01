@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
+import BaseStar from "@/components/BaseStar";
 import {
   getArtworkDetailForClient,
   listArtworks,
@@ -640,7 +641,13 @@ export default function ArtworksCatalogueView({
                   <p className="mt-1 truncate text-sm font-medium text-neutral-900">
                     {a.catalogueName}
                   </p>
-                  <p className="text-xs text-neutral-500">{a.type || "—"}</p>
+                  {/* Type, then the catalogue number (2026-11-01). */}
+                  <p className="flex gap-1 text-xs text-neutral-500">
+                    <span className="truncate">{a.type || "—"}</span>
+                    <span className="shrink-0 text-neutral-400">
+                      <BaseStar isBase={a.isBase} />#{a.catalogueNumber}
+                    </span>
+                  </p>
                 </button>
               ))}
             </div>
@@ -676,7 +683,10 @@ export default function ArtworksCatalogueView({
                       )}
                     </td>
                     <td className="py-2 font-medium text-neutral-900">{a.catalogueName}</td>
-                    <td className="py-2 text-neutral-500">{a.catalogueNumber}</td>
+                    <td className="py-2 text-neutral-500">
+                      <BaseStar isBase={a.isBase} />
+                      {a.catalogueNumber}
+                    </td>
                     <td className="py-2 text-neutral-500">
                       {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
                     </td>

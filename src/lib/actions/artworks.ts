@@ -291,6 +291,8 @@ export type ArtworkListRow = {
   catalogueName: string;
   presentationPrice: string | null;
   catalogueNumber: string;
+  // A Base work (see Artwork.isBase).
+  isBase: boolean;
   availability: string;
   type: string | null;
   imageUrl: string | null;
@@ -331,6 +333,7 @@ export async function listArtworks(
         catalogueName: true,
         presentationPrice: true,
         catalogueNumber: true,
+        isBase: true,
         availability: true,
         type: true,
         mainImage: { select: { url: true, thumbnailKey: true } },
@@ -484,6 +487,7 @@ export async function getArtworkDetailForClient(id: string) {
     offeredPrice: artwork.offeredPrice != null ? artwork.offeredPrice.toString() : null,
     priceCurrency: artwork.priceCurrency,
     studioNotes: artwork.studioNotes,
+    isBase: artwork.isBase,
     // "Derived from #..." (2026-09-11) — null for any artwork that
     // isn't itself a derivative. See the matching note on
     // Artwork.derivedFromId in schema.prisma.
@@ -509,6 +513,8 @@ export async function updateCatalogue(
   const edition = (formData.get("edition") as string)?.trim() || null;
   const availableQtyRaw = (formData.get("availableQty") as string)?.trim();
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
+  // The Base tick box, in Studio notes (2026-11-01).
+  const isBase = formData.get("isBase") === "on";
   const medium = (formData.get("medium") as string)?.trim() || null;
   // The actual asking price (2026-08-28), replacing the old "Catalogue
   // holds no price" rule now that Offered price is the one place price
@@ -544,6 +550,7 @@ export async function updateCatalogue(
       edition,
       availableQty: availableQtyRaw ? parseInt(availableQtyRaw, 10) : null,
       studioNotes,
+      isBase,
       medium,
       offeredPrice: offeredPriceRaw || null,
       // Mirrors into Presentation's Price (2026-08-28) — see the note on

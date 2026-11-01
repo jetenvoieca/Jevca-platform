@@ -1696,6 +1696,11 @@ model Artwork {
   derivedFrom   Artwork?  @relation("ArtworkDerivative", fields: [derivedFromId], references: [id], onDelete: SetNull)
   derivatives   Artwork[] @relation("ArtworkDerivative")
 
+  // A Base work (2026-11-01, Craig's request): one others are derived
+  // from. Ticked in the Catalogue's Studio notes; shown as a small grey
+  // star before the catalogue number (see BaseStar).
+  isBase Boolean @default(false)
+
   saleTerms SaleTerms?
   purchases Purchase[]
   // Every Curation this artwork is in (2026-09-24) — see CurationItem.
