@@ -7,6 +7,7 @@ import {
   PRESENTATION_LAYOUTS,
   PRESENTATION_LIMITS,
   PRESENTATION_PARTS,
+  MEDIUM_PLACES,
   normalizePresentation,
   type PresentationSettings,
 } from "@/lib/presentationTemplate";
@@ -75,6 +76,20 @@ export default function PresentationTemplateEditor({
             onCommit={(maxWidth) => set({ maxWidth })}
             wide
           />
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <span className="w-24 shrink-0">Medium</span>
+            <select
+              value={settings.mediumPlace}
+              onChange={(e) => set({ mediumPlace: e.target.value as PresentationSettings["mediumPlace"] })}
+              className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+            >
+              {MEDIUM_PLACES.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
           {settings.layout === "side" && (
             <NumberField
               label="Picture width"

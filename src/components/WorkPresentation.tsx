@@ -16,9 +16,9 @@ import type { SiteForms } from "@/lib/siteData";
 // lib/presentationTemplate.ts): the picture (and the work's other
 // pictures beneath it, to switch between), the title and details, the
 // price, Purchase / Pay in instalments, the instalment terms, Enquire and
-// where it can be seen; beside them the medium and description. Enquire
-// slides the enquiry form (WorkEnquiryForm) in over the medium and
-// description; Purchase and Pay in instalments the payment form
+// where it can be seen; beside them the description (the medium goes
+// under the title or above the description — see mediumPlace). Enquire
+// slides the enquiry form (WorkEnquiryForm) in over the description; Purchase and Pay in instalments the payment form
 // (WorkPaymentForm) when the site takes payments, otherwise they open an
 // email to the artist. Shared by the
 // Presentation window (CurationWorkView) and Templates → Presentations'
@@ -118,7 +118,10 @@ export default function WorkPresentation({
   // With no medium or description to show, the column beside the picture
   // folds away and the window narrows to the picture's width (2026-10-20,
   // Craig's request) — until a form opens there.
-  const hasWords = (show.medium && !!data.medium) || (show.description && !!description);
+  // The medium goes under the title or with the description (mediumPlace).
+  const medium = show.medium && data.medium ? data.medium : null;
+  const mediumInWords = settings.mediumPlace === "words";
+  const hasWords = (mediumInWords && !!medium) || (show.description && !!description);
   const folded = side && !hasWords && panel === "words";
   // The picture column's width when unfolded (the window's width less its
   // padding and the gap between the columns), plus the padding.
@@ -245,6 +248,11 @@ export default function WorkPresentation({
         >
           {data.catalogueName}
         </h2>
+        {!mediumInWords && medium && (
+          <p className="mt-2 text-center italic" style={{ color: colours.muted, fontSize: small, lineHeight: 1.6 }}>
+            {medium}
+          </p>
+        )}
         {/* The details, price and buttons, a little narrower than the
             picture, all lined up on the left. */}
         <div className="mt-6 flex w-4/5 flex-col gap-6 self-center">
@@ -323,9 +331,9 @@ export default function WorkPresentation({
             panel !== "words" ? `invisible -translate-x-1/4 opacity-0 ${hiddenLayer}` : ""
           }`}
         >
-          {show.medium && data.medium && (
+          {mediumInWords && medium && (
             <p className="italic" style={{ color: colours.muted, fontSize: small, lineHeight: 1.6 }}>
-              {data.medium}
+              {medium}
             </p>
           )}
           {show.description && description && (

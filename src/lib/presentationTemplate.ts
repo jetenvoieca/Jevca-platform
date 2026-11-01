@@ -6,7 +6,8 @@ import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 // module, shared by the editor, the server and the window itself
 // (CurationWorkView). The defaults are the first template, adapted from
 // Louise Dear's website: picture on the left with the title and details
-// under it; on the right the medium, the description, Purchase and Pay in
+// under it (the medium under the title since 2026-11-01 — see
+// mediumPlace); on the right the description, Purchase and Pay in
 // instalments, the instalment terms, Enquire, and where it can be seen.
 // Enquire opens the enquiry form in place of the price and buttons
 // (2026-10-19, see WorkEnquiryForm).
@@ -16,6 +17,14 @@ export const PRESENTATION_LAYOUTS = [
   { value: "stacked", label: "Picture on top" },
 ] as const;
 export type PresentationLayout = (typeof PRESENTATION_LAYOUTS)[number]["value"];
+
+// Where the medium goes (2026-11-01, Craig's request): under the title,
+// or with the description, above it.
+export const MEDIUM_PLACES = [
+  { value: "title", label: "Under the title" },
+  { value: "words", label: "Above the description" },
+] as const;
+export type MediumPlace = (typeof MEDIUM_PLACES)[number]["value"];
 
 // The details and buttons that can be turned on or off, in the order the
 // editor lists them.
@@ -117,6 +126,7 @@ export type PresentationSettings = {
   maxWidth: number;
   // The picture's share of the width, beside the words.
   pictureShare: number;
+  mediumPlace: MediumPlace;
   colours: PresentationColours;
   borderWidth: number;
   rounding: number;
@@ -138,6 +148,7 @@ export const DEFAULT_PRESENTATION: PresentationSettings = {
   layout: "side",
   maxWidth: 1000,
   pictureShare: 48,
+  mediumPlace: "title",
   colours: {
     background: "#f7f6f2",
     border: "#a8a8a8",
@@ -249,6 +260,7 @@ export function normalizePresentation(raw: unknown): PresentationSettings {
     layout: PRESENTATION_LAYOUTS.some((o) => o.value === v.layout) ? (v.layout as PresentationLayout) : d.layout,
     maxWidth: cleanNumber(v.maxWidth, l.maxWidth, d.maxWidth),
     pictureShare: cleanNumber(v.pictureShare, l.pictureShare, d.pictureShare),
+    mediumPlace: MEDIUM_PLACES.some((o) => o.value === v.mediumPlace) ? (v.mediumPlace as MediumPlace) : d.mediumPlace,
     colours: Object.fromEntries(
       PRESENTATION_COLOURS.map(({ key }) => [key, cleanColour(colours[key], d.colours[key])]),
     ) as PresentationColours,
