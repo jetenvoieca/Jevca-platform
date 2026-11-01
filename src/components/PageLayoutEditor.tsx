@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { updatePageStyle, type PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { BlockBuildLayout } from "@/lib/pageStyleLayout";
@@ -9,6 +9,7 @@ import PageStyleLayoutEditor from "@/components/PageStyleLayoutEditor";
 import { blockFiller, usePageContent } from "@/components/PagePreview";
 import { PresentationProvider } from "@/components/WorkPresentation";
 import { useAutoSave } from "@/components/useAutoSave";
+import { useRegisterPageViewReturn } from "@/lib/pageViewReturn";
 
 // A page's layout, edited on the page itself (2026-10-22, Craig's
 // request — "so we can see what we are doing"): its Display Style's
@@ -69,6 +70,11 @@ export default function PageLayoutEditor({
     await autoSave.flush();
     onClose();
   };
+  // The site header's eye does the same as Done (see ViewPageButton).
+  const closeRef = useRef(close);
+  closeRef.current = close;
+  const viewReturn = useCallback(() => void closeRef.current(), []);
+  useRegisterPageViewReturn(viewReturn);
 
   if (loading || !content) {
     return <p className="py-10 text-center text-sm text-neutral-400">Loading…</p>;

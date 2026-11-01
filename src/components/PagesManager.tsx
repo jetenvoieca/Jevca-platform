@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useCallback, useEffect, useState, useTransition } from "react";
+import { useRegisterPageViewReturn } from "@/lib/pageViewReturn";
 import { useRouter } from "next/navigation";
 import {
   createPage,
@@ -128,10 +129,12 @@ export default function PagesManager({
   const canArrange = !!canvasStyle || !!blockBuildStyle;
   const arrangingSections = arranging && !!blockBuildStyle;
 
-  const closeArrange = () => {
+  const closeArrange = useCallback(() => {
     setArranging(false);
     setPreviewVersion((v) => v + 1);
-  };
+  }, []);
+  // While arranging, the site header's eye closes Arrange (ViewPageButton).
+  useRegisterPageViewReturn(arrangingSections ? closeArrange : null);
 
   // The style has changed: fresh styles from the server, then the preview.
   const closeLayout = () => {
