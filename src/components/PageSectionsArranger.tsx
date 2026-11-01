@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type CSSProperties, type ReactNode } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -29,7 +29,6 @@ import {
   arrangeItems,
   contentFits,
   contentKindOf,
-  hiddenItems,
   pageWorks,
   hasTypedWords,
   isTypedContent,
@@ -108,6 +107,7 @@ import type { SiteArtist } from "@/lib/siteArtist";
 // (2026-10-13) shows the artist's Logo from Settings.
 
 const TRAY_ID = "tray";
+const HIDDEN_ID = "hidden";
 
 // Something in the list that can go in a component: a section, or
 // (`sectionId` null) the curation's works — all of them, or with
@@ -119,14 +119,18 @@ type Content = { sectionId: string | null; unsoldOnly?: boolean; kind: ContentKi
 // (to change the order).
 // A Profile Catalogue story dragged from the Sections column onto a
 // Profile stories component (2026-10-26).
+// A hidden work (or Supporting Media picture) dragged from Hidden works
+// back onto a component (2026-11-01).
 type DragData =
   | { type: "content"; content: Content; fromBlockId: string | null }
   | ItemDragData
-  | { type: "story"; story: ProfileStoryRow };
+  | { type: "story"; story: ProfileStoryRow }
+  | { type: "hidden"; itemId: string; url: string | null };
 
 // What a droppable is, so a drag only meets the targets it can use.
+// "hidden": the Hidden works box at the foot of the Sections.
 type DropData =
-  { kind: "tray" } | { kind: "block"; block: LayoutBlock } | ItemDropData;
+  { kind: "tray" } | { kind: "hidden" } | { kind: "block"; block: LayoutBlock } | ItemDropData;
 
 // One picture in a component: a work or a Supporting Image.
 // `video`: one of the Supporting Media that's a video (2026-10-25),
@@ -177,10 +181,13 @@ const collide: CollisionDetection = (args) => {
   const droppableContainers = args.droppableContainers.filter((c) => {
     const target = c.data.current as DropData | undefined;
     if (!target || !dragged) return false;
+    // A picture: another of its component's pictures, or Hidden works.
     if (dragged.type === "item") {
-      return target.kind === "item" && target.blockId === dragged.blockId;
+      return (target.kind === "item" && target.blockId === dragged.blockId) || target.kind === "hidden";
     }
-    return target.kind !== "item";
+    // A hidden one: back onto any component.
+    if (dragged.type === "hidden") return target.kind === "block";
+    return target.kind !== "item" && target.kind !== "hidden";
   });
   return pointerWithin({ ...args, droppableContainers });
 };
@@ -401,6 +408,41 @@ export default function PageSectionsArranger({
     return section.media.map((m) => ({ id: m.imageId, url: stillOf(m), title: "", video: m.kind === "VIDEO" }));
   };
 
+  // Hidden works (2026-11-01, Craig's mockup): a work or Supporting Media
+  // picture hidden is hidden from every component on this page that
+  // shows it (each component's hiddenIds); put back, it's back in all of
+  // them, at the end of any order set here.
+  const pictureHolders = (itemId: string) =>
+    [...contents.values()].filter((c) => itemsOf(c).some((i) => i.id === itemId));
+  const hideOnPage = (itemId: string) => {
+    for (const c of pictureHolders(itemId)) {
+      if (c.hiddenIds.includes(itemId)) continue;
+      saveItems(c.blockId, {
+        hiddenIds: [...c.hiddenIds, itemId],
+        orderIds: c.orderIds.filter((id) => id !== itemId),
+      });
+    }
+  };
+  const showOnPage = (itemId: string) => {
+    for (const c of pictureHolders(itemId)) {
+      if (!c.hiddenIds.includes(itemId)) continue;
+      saveItems(c.blockId, {
+        hiddenIds: c.hiddenIds.filter((id) => id !== itemId),
+        orderIds: c.orderIds.length > 0 ? [...c.orderIds, itemId] : [],
+      });
+    }
+  };
+  // Every picture hidden on this page, once each.
+  const hiddenOnPage = [
+    ...new Map(
+      [...contents.values()].flatMap((c) =>
+        itemsOf(c)
+          .filter((i) => c.hiddenIds.includes(i.id))
+          .map((i) => [i.id, i] as const),
+      ),
+    ).values(),
+  ];
+
   const handleDragStart = (e: DragStartEvent) => {
     setDragging((e.active.data.current as DragData | undefined) ?? null);
   };
@@ -412,8 +454,20 @@ export default function PageSectionsArranger({
     if (!data || !target) return;
 
     // An item dropped on another in its component reorders it — heard by
-    // that component itself (useArrangeReorder, arrangeItemDrag.ts).
-    if (data.type === "item") return;
+    // that component itself (useArrangeReorder, arrangeItemDrag.ts). A
+    // work or Supporting Media picture dropped on Hidden works is hidden
+    // from the page.
+    if (data.type === "item") {
+      const holder = contents.get(data.blockId);
+      if (target.kind === "hidden" && holder && itemsOf(holder).some((i) => i.id === data.itemId)) {
+        hideOnPage(data.itemId);
+      }
+      return;
+    }
+    if (data.type === "hidden") {
+      if (target.kind === "block") showOnPage(data.itemId);
+      return;
+    }
 
     if (data.type === "story") {
       if (target.kind !== "block" || target.block.type !== "stories") return;
@@ -436,6 +490,7 @@ export default function PageSectionsArranger({
   };
 
   return (
+    <HideContext.Provider value={hideOnPage}>
     <DndContext
       sensors={sensors}
       collisionDetection={collide}
@@ -479,6 +534,8 @@ export default function PageSectionsArranger({
             )
           }
           removing={dragging?.type === "content" && !!dragging.fromBlockId}
+          hidden={curationId ? hiddenOnPage : null}
+          hiding={dragging?.type === "item"}
         />
 
         <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
@@ -683,7 +740,7 @@ export default function PageSectionsArranger({
             <p className="min-w-0 truncate text-sm text-neutral-900">{dragging.story.caption || "Untitled"}</p>
           </div>
         )}
-        {dragging?.type === "item" && (
+        {(dragging?.type === "item" || dragging?.type === "hidden") && (
           <div className="h-20 w-20 overflow-hidden rounded-md shadow-md">
             {dragging.url ? (
               <img src={dragging.url} alt="" className="h-full w-full object-cover" />
@@ -694,8 +751,12 @@ export default function PageSectionsArranger({
         )}
       </DragOverlay>
     </DndContext>
+    </HideContext.Provider>
   );
 }
+
+// Hides a picture from the whole page (see hideOnPage) — for a tile's ✕.
+const HideContext = createContext<(itemId: string) => void>(() => {});
 
 // The list on the left: the works and the curation's sections, to drag
 // onto the page — and, while a component's content is being dragged,
@@ -710,6 +771,8 @@ function Tray({
   stories,
   storiesOnPage,
   removing,
+  hidden,
+  hiding,
 }: {
   curationChooser: ReactNode;
   sections: CurationSectionData[] | null;
@@ -717,6 +780,10 @@ function Tray({
   stories: ProfileStoryRow[] | null;
   storiesOnPage: Set<string>;
   removing: boolean;
+  // The pictures hidden on this page (null without a curation), and
+  // whether a picture is being dragged (to drop on Hidden works).
+  hidden: Item[] | null;
+  hiding: boolean;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: TRAY_ID, data: { kind: "tray" } });
   const outline = !removing
@@ -762,8 +829,57 @@ function Tray({
             ? "Drop here to empty the component."
             : "Drag onto a component to fill it. Drag back here to empty it."}
         </p>
+        {hidden && sections !== null && <HiddenWorks items={hidden} hiding={hiding} />}
       </div>
     </aside>
+  );
+}
+
+// Hidden works (2026-11-01, Craig's mockup), at the foot of the Sections:
+// drag a work or Supporting Media picture here to hide it from this page
+// (every component showing it); drag one back onto a component to show it
+// again.
+function HiddenWorks({ items, hiding }: { items: Item[]; hiding: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: HIDDEN_ID, data: { kind: "hidden" } satisfies DropData });
+  return (
+    <div
+      ref={setNodeRef}
+      className={`mt-auto rounded-md border p-2 ${
+        hiding ? (isOver ? "border-blue-500 bg-blue-50" : "border-dashed border-blue-400") : "border-neutral-400"
+      }`}
+    >
+      <p className="text-center text-sm text-neutral-700">Hidden works</p>
+      {items.length > 0 ? (
+        <div className="mt-2 grid grid-cols-3 gap-1.5">
+          {items.map((item) => (
+            <HiddenTile key={item.id} item={item} />
+          ))}
+        </div>
+      ) : (
+        <p className="mt-1 text-center text-xs text-neutral-400">Drag works here to hide them from this page.</p>
+      )}
+    </div>
+  );
+}
+
+function HiddenTile({ item }: { item: Item }) {
+  const data: DragData = { type: "hidden", itemId: item.id, url: item.url };
+  const { setNodeRef, attributes, listeners, isDragging } = useDraggable({ id: `hidden:${item.id}`, data });
+  return (
+    <div
+      ref={setNodeRef}
+      {...attributes}
+      {...listeners}
+      title={item.title ? `${item.title} — drag onto a component to show it again` : "Drag onto a component to show it again"}
+      className={`relative cursor-grab overflow-hidden rounded active:cursor-grabbing ${isDragging ? "opacity-30" : "opacity-60 hover:opacity-100"}`}
+    >
+      {item.url ? (
+        <img src={item.url} alt="" draggable={false} className="aspect-square w-full object-cover" />
+      ) : (
+        <div className={`aspect-square w-full ${item.video ? "bg-neutral-800" : "bg-neutral-200"}`} />
+      )}
+      {item.video && <PlayMark />}
+    </div>
   );
 }
 
@@ -1089,8 +1205,9 @@ function DescriptionText({
 }
 
 // Works or Supporting Media as this page shows them: drag one onto
-// another to change the order, ✕ to remove it from this page. Removed
-// ones are listed below; click one to put it back.
+// another to change the order; ✕, or dragging it to Hidden works, hides
+// it from the page (2026-11-01 — see hideOnPage). Hidden ones are in
+// Hidden works, to drag back.
 function ItemsGrid({
   blockId,
   items,
@@ -1106,8 +1223,8 @@ function ItemsGrid({
   dragging: DragData | null;
   onSave: (items: { hiddenIds: string[]; orderIds: string[] }) => void;
 }) {
+  const hide = useContext(HideContext);
   const shown = arrangeItems(items, (i) => i.id, content);
-  const removed = hiddenItems(items, (i) => i.id, content);
   const orderIds = shown.map((i) => i.id);
   useArrangeReorder(blockId, (fromId, toId) => {
     const next = moveItem(orderIds, (id) => id, fromId, toId);
@@ -1120,7 +1237,7 @@ function ItemsGrid({
       {shown.length === 0 ? (
         <p className="py-6 text-center text-sm text-neutral-400">
           {items.length > 0
-            ? "Everything has been removed."
+            ? "Everything is hidden — drag them back from Hidden works."
             : content.unsoldOnly
               ? "No unsold works in the curation."
               : "Nothing in the curation yet."}
@@ -1133,48 +1250,16 @@ function ItemsGrid({
               blockId={blockId}
               item={item}
               dragging={dragging}
-              onRemove={() =>
-                onSave({
-                  hiddenIds: [...content.hiddenIds, item.id],
-                  orderIds: orderIds.filter((id) => id !== item.id),
-                })
-              }
+              onRemove={() => hide(item.id)}
             />
           ))}
-        </div>
-      )}
-      {removed.length > 0 && (
-        <div className="mt-3 border-t border-neutral-200 pt-2">
-          <p className="mb-1.5 text-xs text-neutral-500">Removed from this page — click one to put it back:</p>
-          <div className="flex flex-wrap gap-2">
-            {removed.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() =>
-                  onSave({
-                    hiddenIds: content.hiddenIds.filter((id) => id !== item.id),
-                    orderIds: [...orderIds, item.id],
-                  })
-                }
-                title={item.title ? `Put back ${item.title}` : "Put back"}
-                className="h-16 w-16 overflow-hidden rounded opacity-50 hover:opacity-100"
-              >
-                {item.url ? (
-                  <img src={item.url} alt="" className="h-full w-full object-cover" />
-                ) : (
-                  <div className="h-full w-full bg-neutral-200" />
-                )}
-              </button>
-            ))}
-          </div>
         </div>
       )}
     </div>
   );
 }
 
-// One picture: dragged onto another to change the order, ✕ to remove.
+// One picture: dragged onto another to change the order, ✕ to hide it.
 function ItemTile({
   blockId,
   item,
@@ -1207,8 +1292,8 @@ function ItemTile({
         type="button"
         onPointerDown={(e) => e.stopPropagation()}
         onClick={onRemove}
-        aria-label="Remove from this page"
-        title="Remove from this page"
+        aria-label="Hide from this page"
+        title="Hide from this page"
         className="absolute right-1.5 top-1.5 hidden rounded bg-black/60 px-2 py-0.5 text-sm text-white group-hover:block"
       >
         ✕
