@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { updatePageStyle, type PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { BlockBuildLayout } from "@/lib/pageStyleLayout";
 import { groupBlocksByRow, rowKey, rowSettingsOf } from "@/lib/rowLayout";
@@ -21,12 +22,16 @@ export default function PageLayoutEditor({
   pageId,
   curationId,
   style,
+  templateHref,
   onClose,
 }: {
   pageId: string;
   // Null for a page without a curation (2026-10-26).
   curationId: string | null;
   style: Extract<PageStyleSummary, { type: "BLOCK_BUILD" }>;
+  // The Display Style in Templates → Page Styles, and back here from there
+  // (2026-11-01 — moved here from each page's Template button in Pages).
+  templateHref: string;
   onClose: () => void;
 }) {
   const { content, loading } = usePageContent(pageId, curationId, true);
@@ -98,13 +103,22 @@ export default function PageLayoutEditor({
             Layout of <span className="font-medium text-neutral-800">{style.name}</span> — changes apply to every page
             using it. <span className="text-neutral-400">{autoSave.status.text}</span>
           </p>
-          <button
-            type="button"
-            onClick={close}
-            className="shrink-0 rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
-          >
-            Done
-          </button>
+          <div className="flex shrink-0 items-center gap-2">
+            <Link
+              href={templateHref}
+              title="Edit this page's Display Style in Templates"
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+            >
+              Template
+            </Link>
+            <button
+              type="button"
+              onClick={close}
+              className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"
+            >
+              Done
+            </button>
+          </div>
         </div>
         <PageStyleLayoutEditor
           layout={layout}

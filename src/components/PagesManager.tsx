@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   createPage,
@@ -82,8 +81,8 @@ export default function PagesManager({
   siteMenuStyleId: string | null;
   // The page to start on (coming back from its Display Style).
   initialPageId?: string | null;
-  // Whether Layout and each page's Template button (editing the page's
-  // Display Style, shared by every site) are offered — admin only
+  // Whether Layout (with its Template button — editing the page's
+  // Display Style, shared by every site) is offered — admin only
   // (2026-10-26).
   canEditStyles: boolean;
 }) {
@@ -290,20 +289,6 @@ export default function PagesManager({
                     p.title
                   )}
                 </button>
-                {/* Straight to the page's Display Style (2026-10-22, Craig's
-                  request), and back to this page from there — admin only,
-                  like Layout (2026-10-26). */}
-                {canEditStyles && p.pageStyleId && (
-                  <Link
-                    href={`/templates/page-styles?edit=${p.pageStyleId}&back=${encodeURIComponent(
-                      `/sites/${siteId}/pages?page=${p.id}`,
-                    )}`}
-                    title="Edit this page's Display Style"
-                    className="shrink-0 rounded-md border border-neutral-200 px-2 py-2 text-xs text-neutral-600 hover:bg-neutral-50"
-                  >
-                    Template
-                  </Link>
-                )}
               </div>
             </div>
           );
@@ -328,6 +313,9 @@ export default function PagesManager({
               pageId={selected.id}
               curationId={selected.curationId}
               style={blockBuildStyle}
+              templateHref={`/templates/page-styles?edit=${blockBuildStyle.id}&back=${encodeURIComponent(
+                `/sites/${siteId}/pages?page=${selected.id}`,
+              )}`}
               onClose={closeLayout}
             />
           </LiveSiteData>
