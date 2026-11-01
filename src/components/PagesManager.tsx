@@ -338,6 +338,14 @@ export default function PagesManager({
               siteId={siteId}
               pageId={selected.id}
               curationId={selected.curationId}
+              curations={curations}
+              onCurationChanged={(curationId) => {
+                const withCuration = (list: PageListItem[]) =>
+                  list.map((p) => (p.id === selected.id ? { ...p, curationId } : p));
+                setLive(withCuration);
+                setHidden(withCuration);
+                router.refresh();
+              }}
               layout={blockBuildStyle.layout}
             />
           </LiveSiteData>

@@ -21,7 +21,8 @@ import {
   setPageComponentItems,
   setPageComponentText,
 } from "@/lib/actions/pageComponents";
-import type { CurationDetail } from "@/lib/actions/curations";
+import type { CurationDetail, CurationSummary } from "@/lib/actions/curations";
+import { setPageCuration } from "@/lib/actions/pages";
 import { MAX_SECTION_TEXT, curationSectionLabel, type CurationSectionData } from "@/lib/curationSections";
 import {
   MAX_TYPED_TEXT,
@@ -188,6 +189,8 @@ export default function PageSectionsArranger({
   siteId,
   pageId,
   curationId,
+  curations,
+  onCurationChanged,
   layout,
 }: {
   siteId: string;
@@ -196,6 +199,10 @@ export default function PageSectionsArranger({
   // sections to drag, but Profile stories, Entries, typed components
   // and the rest still arrange.
   curationId: string | null;
+  // The client's curations, for the chooser above the Sections
+  // (2026-11-01, Craig's mockup), and once the page's has changed.
+  curations: CurationSummary[];
+  onCurationChanged: (curationId: string | null) => void;
   layout: BlockBuildLayout;
 }) {
   const siteData = useSiteData();
@@ -240,6 +247,27 @@ export default function PageSectionsArranger({
   useEffect(() => {
     load();
   }, [load]);
+
+  // A new curation for the page (the chooser above the Sections). It
+  // empties the components holding the old one's Description or
+  // Supporting Media and resets its works' order, so it asks first.
+  const changeCuration = async (next: string | null) => {
+    if (
+      curationId &&
+      !confirm(
+        "Change this page's curation? Components holding its Description or Supporting Media are emptied, and the works' order on this page starts afresh.",
+      )
+    ) {
+      return;
+    }
+    setError(null);
+    const result = await setPageCuration(siteId, pageId, next);
+    if ("error" in result) {
+      setError(result.error);
+      return;
+    }
+    onCurationChanged(next);
+  };
 
   const sectionById = new Map((sections ?? []).map((s) => [s.id, s]));
   const sectionTypes = new Map((sections ?? []).map((s) => [s.id, s.type]));
@@ -425,6 +453,21 @@ export default function PageSectionsArranger({
         onDrop={(e) => e.preventDefault()}
       >
         <Tray
+          curationChooser={
+            <select
+              value={curationId ?? ""}
+              onChange={(e) => changeCuration(e.target.value || null)}
+              aria-label="Curation"
+              className="mb-2 w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+            >
+              <option value="">No curation</option>
+              {curations.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          }
           sections={sections}
           hasCuration={!!curationId}
           stories={layout.blocks.some((b) => b.type === "stories") ? stories : null}
@@ -661,12 +704,14 @@ export default function PageSectionsArranger({
 // component (2026-10-26), the Profile Catalogue's stories too, to drag
 // onto it — those already on the page marked so.
 function Tray({
+  curationChooser,
   sections,
   hasCuration,
   stories,
   storiesOnPage,
   removing,
 }: {
+  curationChooser: ReactNode;
   sections: CurationSectionData[] | null;
   hasCuration: boolean;
   stories: ProfileStoryRow[] | null;
@@ -682,6 +727,7 @@ function Tray({
   return (
     <aside className="flex w-56 shrink-0 flex-col">
       <h3 className="mb-2 px-1 text-base text-neutral-800">Sections</h3>
+      {curationChooser}
       <div
         ref={setNodeRef}
         className={`flex min-h-0 flex-1 flex-col gap-1.5 overflow-y-auto rounded-lg border-2 p-2 ${outline}`}
@@ -690,7 +736,7 @@ function Tray({
           <p className="text-xs text-neutral-400">Loading…</p>
         ) : !hasCuration ? (
           <p className="text-xs text-neutral-400">
-            This page has no curation, so no works or sections — choose one with Edit to use them.
+            This page has no curation, so no works or sections — choose one above to use them.
           </p>
         ) : (
           <>

@@ -172,22 +172,14 @@ export async function updatePageDetails(
   ]);
   if ("error" in parent) return parent;
 
-  // A new Display Style clears every component's content. A new
-  // curation (2026-10-13) clears its sections and resets its works'
-  // choices (removed, order — they were the old curation's works); typed
-  // Headers stay.
+  // A new Display Style clears every component's content; a new curation
+  // only what was the old curation's (see curationChangeClears).
   const styleChanged = current.pageStyleId !== pageStyleId;
   const curationChanged = current.curationId !== curationId;
   const clearComponents = styleChanged
     ? [db.pageComponentContent.deleteMany({ where: { pageId } })]
     : curationChanged
-      ? [
-          db.pageComponentContent.deleteMany({ where: { pageId, source: "SECTION" } }),
-          db.pageComponentContent.updateMany({
-            where: { pageId, source: "WORKS" },
-            data: { hiddenIds: [], orderIds: [] },
-          }),
-        ]
+      ? curationChangeClears(pageId)
       : [];
 
   await db.$transaction([
@@ -197,6 +189,38 @@ export async function updatePageDetails(
     }),
     ...clearComponents,
     ...(styleChanged ? [db.pageSignupForm.deleteMany({ where: { pageId } })] : []),
+  ]);
+  return { ok: true };
+}
+
+// What a page's new curation clears (2026-10-13): its sections, and its
+// works' choices (removed, order — they were the old curation's works).
+// Typed components stay.
+function curationChangeClears(pageId: string) {
+  return [
+    db.pageComponentContent.deleteMany({ where: { pageId, source: "SECTION" } }),
+    db.pageComponentContent.updateMany({
+      where: { pageId, source: "WORKS" },
+      data: { hiddenIds: [], orderIds: [] },
+    }),
+  ];
+}
+
+// Changes just the page's curation (2026-11-01 — Arrange's curation
+// chooser), clearing what was the old one's like Edit does.
+export async function setPageCuration(
+  siteId: string,
+  pageId: string,
+  curationIdRaw: string | null,
+): Promise<{ ok: true } | { error: string }> {
+  await requireSiteAccess(siteId);
+  const current = await db.page.findFirst({ where: { id: pageId, siteId }, select: { curationId: true } });
+  if (!current) return { error: "Page not found." };
+  const curationId = await ownCurationId(siteId, curationIdRaw);
+  if (current.curationId === curationId) return { ok: true };
+  await db.$transaction([
+    db.page.update({ where: { id: pageId }, data: { curationId } }),
+    ...curationChangeClears(pageId),
   ]);
   return { ok: true };
 }
