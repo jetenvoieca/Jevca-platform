@@ -131,16 +131,6 @@ export function pageWorks<T extends { availability: string }>(
   return content.unsoldOnly ? works.filter((w) => !isSold(w.availability)) : works;
 }
 
-// The items removed on the page, in the curation's order.
-export function hiddenItems<T>(
-  items: T[],
-  idOf: (item: T) => string,
-  content: Pick<ComponentContent, "hiddenIds">,
-): T[] {
-  const hidden = new Set(content.hiddenIds);
-  return items.filter((item) => hidden.has(idOf(item)));
-}
-
 // The longest Header or Byline that can be typed.
 export const MAX_TYPED_TEXT = 300;
 
