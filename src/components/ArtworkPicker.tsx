@@ -11,6 +11,7 @@ import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import AddIconButton from "@/components/AddIconButton";
 import { FILTER_NONE } from "@/lib/artworkFilters";
+import BaseStar from "@/components/BaseStar";
 
 export default function ArtworkPicker({
   artistId,
@@ -187,6 +188,7 @@ export default function ArtworkPicker({
           id: result.artwork.id,
           catalogueName: result.artwork.catalogueName,
           catalogueNumber: result.artwork.catalogueNumber,
+          isBase: false,
           type: null,
           imageUrl: null,
           presentationPrice: null,
@@ -335,7 +337,9 @@ export default function ArtworkPicker({
                   <div className="px-1 py-1">
                     <p className="flex gap-1 text-xs text-neutral-700">
                       <span className="truncate">{a.catalogueName}</span>
-                      <span className="shrink-0 text-neutral-400">#{a.catalogueNumber}</span>
+                      <span className="shrink-0 text-neutral-400">
+                        <BaseStar isBase={a.isBase} />#{a.catalogueNumber}
+                      </span>
                     </p>
                     <p className="truncate text-xs text-neutral-500">{a.type || "—"}</p>
                   </div>

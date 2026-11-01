@@ -26,6 +26,7 @@ import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { moveArtworksToLocation } from "@/lib/actions/locations";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { formatMoney } from "@/lib/currencies";
+import BaseStar from "@/components/BaseStar";
 
 // Curations page (2026-09-24, stage one). Two columns:
 // - left: the open curation — its name (click to rename), ⊞ to add works,
@@ -502,7 +503,9 @@ export default function CurationsView({
                       </div>
                       <p className="mt-2 flex gap-1.5 text-sm font-medium text-neutral-900">
                         <span className="truncate">{w.catalogueName}</span>
-                        <span className="shrink-0 font-normal text-neutral-400">#{w.catalogueNumber}</span>
+                        <span className="shrink-0 font-normal text-neutral-400">
+                          <BaseStar isBase={w.isBase} />#{w.catalogueNumber}
+                        </span>
                       </p>
                       {price && <p className="text-sm text-neutral-400">{price}</p>}
                       <button

@@ -11,6 +11,8 @@ export type StudioArtworkTile = {
   id: string;
   title: string;
   catalogueNumber: string;
+  // A Base work, starred (see Artwork.isBase).
+  isBase: boolean;
   // "Type - Edition", the same line the Consigned Works tiles show —
   // empty when the artwork has neither.
   typeEdition: string;
@@ -44,6 +46,7 @@ export async function listStudioArtworks(artistId: string, offset: number) {
         id: true,
         catalogueName: true,
         catalogueNumber: true,
+        isBase: true,
         type: true,
         edition: true,
         size: true,
@@ -63,6 +66,7 @@ export async function listStudioArtworks(artistId: string, offset: number) {
       id: a.id,
       title: a.catalogueName,
       catalogueNumber: a.catalogueNumber,
+      isBase: a.isBase,
       typeEdition: [a.type, a.edition].filter(Boolean).join(" - "),
       type: a.type,
       edition: a.edition,

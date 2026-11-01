@@ -4,6 +4,7 @@ import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 import { formatDate } from "@/lib/formatDate";
 import EditSaleButton from "@/components/EditSaleButton";
+import BaseStar from "@/components/BaseStar";
 
 // The one header used by every sale modal (Locations page, Sales page,
 // Consolidated Sales, Inbox): artwork image, title, catalogue number,
@@ -57,7 +58,9 @@ export default function SaleHeader({
           <p className="truncate text-base font-medium leading-6 text-neutral-900">
             {artwork.catalogueName}
           </p>
-          <p>Catalogue #{artwork.catalogueNumber}</p>
+          <p>
+            Catalogue <BaseStar isBase={artwork.isBase} />#{artwork.catalogueNumber}
+          </p>
           {typeLine && <p>{typeLine}</p>}
           {artwork.size && <p>Size: {artwork.size}</p>}
           {purchase && purchase.status !== "ABANDONED" && (

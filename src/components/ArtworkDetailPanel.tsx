@@ -49,6 +49,8 @@ export type ArtworkDetail = {
   // itself a "Create Derivative" copy. See the matching note on
   // Artwork.derivedFromId in schema.prisma.
   derivedFromCatalogueNumber: string | null;
+  // Whether that work is a Base work, for its star.
+  derivedFromIsBase: boolean;
   // The work's one picture (2026-10-28).
   mainImage: ArtworkImage | null;
   activePurchase: PurchaseDetail | null;
@@ -305,7 +307,7 @@ export default function ArtworkDetailPanel({
               artwork's catalogue number instead. */}
           {artwork.derivedFromCatalogueNumber && (
             <p className="text-sm text-neutral-500">
-              Derived from #{artwork.derivedFromCatalogueNumber}
+              Derived from <BaseStar isBase={artwork.derivedFromIsBase} />#{artwork.derivedFromCatalogueNumber}
             </p>
           )}
         </div>

@@ -205,6 +205,11 @@ export async function duplicateArtwork(
     studioNotes: isOriginalOrUnique ? null : original.studioNotes,
     derivedFromId: original.id,
   });
+  // The work it came from is now a Base work (2026-11-01, Craig's
+  // request) — see Artwork.isBase.
+  if (!original.isBase) {
+    await db.artwork.update({ where: { id: original.id }, data: { isBase: true } });
+  }
 
   // Fields createArtworkWithRetry's signature doesn't cover (added to the
   // schema after that helper was written for the plain "+ New" flow) —
@@ -383,7 +388,7 @@ async function getArtworkDetail(id: string) {
       // Only the catalogue number is actually shown ("Derived from
       // #AW-0021") — 2026-09-11, see the matching note on
       // Artwork.derivedFromId in schema.prisma.
-      derivedFrom: { select: { catalogueNumber: true } },
+      derivedFrom: { select: { catalogueNumber: true, isBase: true } },
     },
   });
   return result;
@@ -492,6 +497,7 @@ export async function getArtworkDetailForClient(id: string) {
     // isn't itself a derivative. See the matching note on
     // Artwork.derivedFromId in schema.prisma.
     derivedFromCatalogueNumber: artwork.derivedFrom?.catalogueNumber ?? null,
+    derivedFromIsBase: artwork.derivedFrom?.isBase ?? false,
     // The work's one picture (2026-10-28).
     mainImage: artwork.mainImage ? toArtworkImage(artwork.mainImage) : null,
     activePurchase: purchases.find((p) => p.status === "ACTIVE") || null,

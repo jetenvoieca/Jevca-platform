@@ -67,6 +67,8 @@ export type PickerArtwork = {
   // Shown beside the name (2026-10-26), since several works can share a
   // name.
   catalogueNumber: string;
+  // A Base work, starred (see Artwork.isBase).
+  isBase: boolean;
   // Shown under the name, as in the Artwork Catalogue — several works can
   // share a name but differ in type.
   type: string | null;
@@ -101,6 +103,7 @@ export async function getArtworksForArtist(
         id: true,
         catalogueName: true,
         catalogueNumber: true,
+        isBase: true,
         type: true,
         presentationPrice: true,
         availability: true,

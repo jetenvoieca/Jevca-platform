@@ -7,6 +7,7 @@ import { CURRENCIES } from "@/lib/currencies";
 import { isEditionType, parsePrice, priceToInput } from "@/lib/studioShared";
 import { inputCls, NoticeLine, panelCls, StudioButton } from "@/components/studio/StudioUi";
 import type { Notice } from "@/components/studio/StudioUi";
+import BaseStar from "@/components/BaseStar";
 
 // "Consign": the chosen work (a small picture, its name, catalogue number
 // and Type), the price and currency agreed — and, when the Type is an
@@ -93,7 +94,9 @@ export default function ConsignArtwork({
         )}
         <div className="min-w-0 flex-1 leading-snug">
           <p className="truncate text-lg text-[#333]">{artwork.title}</p>
-          <p className="truncate text-sm text-[#8a8a8a]">#{artwork.catalogueNumber}</p>
+          <p className="truncate text-sm text-[#8a8a8a]">
+            <BaseStar isBase={artwork.isBase} />#{artwork.catalogueNumber}
+          </p>
           <p className="truncate text-sm text-[#555]">{artwork.type}</p>
         </div>
       </section>
