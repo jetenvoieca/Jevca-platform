@@ -95,7 +95,8 @@ export default function ArtworkCatalogueFields({
   onLocationChange,
   onViewLocation,
   onBaseChange,
-  studioAction,
+  studioActions,
+  studioError,
   children,
   name,
   picture,
@@ -123,9 +124,10 @@ export default function ArtworkCatalogueFields({
   // Fired when the Base box is ticked or unticked, so the details panel's
   // header star follows straight away.
   onBaseChange?: (isBase: boolean) => void;
-  // A button at the end of Studio notes' first row (2026-11-01 — the
-  // details panel's Add to curation).
-  studioAction?: React.ReactNode;
+  // Buttons after Base in Studio notes (2026-11-01 — the details panel's
+  // Make Derivative and Curation), and a message under them.
+  studioActions?: React.ReactNode;
+  studioError?: string | null;
   // The price (Catalogue / Hopper's own), shown after Size / Edition.
   children?: React.ReactNode;
   // The Name field, first in the column (2026-10-28).
@@ -384,22 +386,25 @@ export default function ArtworkCatalogueFields({
           <option value={ADD_NEW}>+ Add new…</option>
         </select>
       </div>
+      {/* Studio notes (2026-11-01, Craig's mockup): the heading with Date
+          beside it; then Base and the details panel's buttons; then Notes. */}
       <div className="rounded-md border border-neutral-200 p-3">
-        <p className={labelCls}>
-          Studio notes <span className="font-normal text-neutral-400">(private)</span>
-        </p>
-        <div className="mb-3 flex items-end gap-4">
-          <div className="w-1/2">
-            <label className={labelCls}>Date</label>
-            <input
-              type="text"
-              name="date"
-              defaultValue={values.date}
-              placeholder="e.g. June 2025"
-              onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-              className={lineCls}
-            />
-          </div>
+        <div className="mb-3 flex items-center gap-4">
+          <p className="flex-1 text-sm font-medium text-neutral-700">
+            Studio notes <span className="font-normal text-neutral-400">(private)</span>
+          </p>
+          <input
+            type="text"
+            name="date"
+            defaultValue={values.date}
+            placeholder="Date — e.g. June 2025"
+            aria-label="Date"
+            onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
+            className={`w-1/2 rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`}
+          />
+        </div>
+        {(values.isBase !== undefined || studioActions) && (
+        <div className="mb-3 flex items-center gap-4">
           {values.isBase !== undefined && (
             <label className={`flex items-center gap-2 text-sm text-neutral-700 ${FIELD_HEIGHT}`}>
               <input
@@ -415,8 +420,10 @@ export default function ArtworkCatalogueFields({
               Base
             </label>
           )}
-          {studioAction && <div className="flex min-w-0 flex-1">{studioAction}</div>}
+          {studioActions && <div className="flex min-w-0 flex-1 gap-4">{studioActions}</div>}
         </div>
+        )}
+        {studioError && <p className="-mt-2 mb-3 text-xs text-red-600">{studioError}</p>}
         <label className={labelCls}>Notes</label>
         <textarea
           name="studioNotes"

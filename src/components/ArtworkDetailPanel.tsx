@@ -134,6 +134,7 @@ export default function ArtworkDetailPanel({
   const [saved, setSaved] = useState(false);
   // The Base box (2026-11-01), so the header's star follows it at once.
   const [isBase, setIsBase] = useState(artwork.isBase);
+  const [derivativeError, setDerivativeError] = useState<string | null>(null);
   // Live state for Type/Size (2026-08-28) — needed for the Reference
   // price preview below. Owned here (rather than inside
   // ArtworkCatalogueFields) since Reference price is Catalogue-tab-only;
@@ -254,10 +255,15 @@ export default function ArtworkDetailPanel({
       newEdition = window.prompt("Edition number for this derivative (e.g. 6/25):");
     }
 
+    setDerivativeError(null);
     startTransition(async () => {
-      const { id: newId } = await duplicateArtwork(artwork.id, siteId, newEdition);
-      if (onDuplicated) onDuplicated(newId);
-      else router.push(`/sites/${siteId}/artworks?selected=${newId}`);
+      const result = await duplicateArtwork(artwork.id, siteId, newEdition);
+      if ("error" in result) {
+        setDerivativeError(result.error);
+        return;
+      }
+      if (onDuplicated) onDuplicated(result.id);
+      else router.push(`/sites/${siteId}/artworks?selected=${result.id}`);
     });
   };
 
@@ -313,19 +319,11 @@ export default function ArtworkDetailPanel({
           )}
         </div>
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={handleDuplicate}
-            disabled={isPending}
-            className="rounded-md border border-neutral-300 px-3 py-[4.8px] text-sm hover:bg-neutral-50 disabled:opacity-50"
-          >
-            {/* Shortened from "Create Derivative" (2026-09-10, direct
-                request). Button heights cut ~20% throughout this
-                header/form (2026-09-11, direct request — "catalogue
-                will be a high usage area") via arbitrary py values, same
-                reasoning as ArtworkCatalogueFields' shared inputCls. */}
-            Derivative
-          </button>
+          {/* Button heights cut ~20% throughout this header/form
+              (2026-09-11, direct request — "catalogue will be a high
+              usage area") via arbitrary py values, same reasoning as
+              ArtworkCatalogueFields' shared inputCls. (Derivative moved
+              to Studio notes 2026-11-01, as Make Derivative.) */}
           <button
             type="button"
             onClick={handleDelete}
@@ -399,14 +397,29 @@ export default function ArtworkDetailPanel({
               isBase,
             }}
             onBaseChange={setIsBase}
-            studioAction={
-              <AddToCurationButton
-                artistId={artistId}
-                artworkId={artwork.id}
-                artworkName={artwork.catalogueName}
-                className={`w-full ${FIELD_HEIGHT}`}
-              />
+            studioActions={
+              // Make Derivative only from a Base work (2026-11-01, Craig's
+              // mockup), then the work's curations.
+              <>
+                {isBase && (
+                  <button
+                    type="button"
+                    onClick={handleDuplicate}
+                    disabled={isPending}
+                    className={`shrink-0 rounded-md border border-neutral-400 px-3 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 ${FIELD_HEIGHT}`}
+                  >
+                    Make Derivative
+                  </button>
+                )}
+                <AddToCurationButton
+                  artistId={artistId}
+                  artworkId={artwork.id}
+                  artworkName={artwork.catalogueName}
+                  className={`min-w-0 flex-1 ${FIELD_HEIGHT}`}
+                />
+              </>
             }
+            studioError={derivativeError}
             onAutosave={autosaveCatalogue}
             onTypeOrSizeChange={(type, size) => {
               setTypeValue(type);

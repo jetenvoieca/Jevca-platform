@@ -174,16 +174,20 @@ export async function createArtworkWithRetry(
 //   via createArtworkWithRetry) — never reuses the original's number.
 // - Curations aren't copied — a derivative is added to a curation
 //   from the Curations page like any other artwork.
+//
+// Only from a Base work (2026-11-01, Craig's request — see
+// Artwork.isBase).
 export async function duplicateArtwork(
   artworkId: string,
   siteId: string,
   newEdition?: string | null
-) {
+): Promise<{ id: string } | { error: string }> {
   await artworkOwner(artworkId);
   const original = await db.artwork.findUniqueOrThrow({
     where: { id: artworkId },
     include: { mainImage: true, saleTerms: true },
   });
+  if (!original.isBase) return { error: "Tick Base first — derivatives are made from a Base work." };
 
   const typeLower = (original.type || "").trim().toLowerCase();
   const isOriginalOrUnique = typeLower.includes("original") || typeLower.includes("unique");
@@ -205,11 +209,6 @@ export async function duplicateArtwork(
     studioNotes: isOriginalOrUnique ? null : original.studioNotes,
     derivedFromId: original.id,
   });
-  // The work it came from is now a Base work (2026-11-01, Craig's
-  // request) — see Artwork.isBase.
-  if (!original.isBase) {
-    await db.artwork.update({ where: { id: original.id }, data: { isBase: true } });
-  }
 
   // Fields createArtworkWithRetry's signature doesn't cover (added to the
   // schema after that helper was written for the plain "+ New" flow) —

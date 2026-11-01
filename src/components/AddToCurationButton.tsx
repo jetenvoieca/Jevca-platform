@@ -11,7 +11,7 @@ import { useBackdropClose } from "@/lib/useBackdropClose";
 
 // Add to curation (2026-11-01, Craig's mockup) — in the Artwork Catalogue's
 // Studio notes. The button names the curations the work is in (or says
-// Add to curation when it's in none); it opens a list of the client's
+// Curation when it's in none); it opens a list of the client's
 // curations, those the work is already in greyed; choosing one adds the
 // work to the end of it.
 export default function AddToCurationButton({
@@ -51,7 +51,7 @@ export default function AddToCurationButton({
   }, [artistId, artworkId]);
 
   const inNames = (curations ?? []).filter((c) => inIds.includes(c.id)).map((c) => c.name);
-  const label = inNames.length > 0 ? inNames.join(", ") : "Add to curation";
+  const label = inNames.length > 0 ? inNames.join(", ") : "Curation";
 
   const show = () => {
     setOpen(true);
