@@ -95,6 +95,7 @@ export default function ArtworkCatalogueFields({
   onLocationChange,
   onViewLocation,
   onBaseChange,
+  studioAction,
   children,
   name,
   picture,
@@ -122,6 +123,9 @@ export default function ArtworkCatalogueFields({
   // Fired when the Base box is ticked or unticked, so the details panel's
   // header star follows straight away.
   onBaseChange?: (isBase: boolean) => void;
+  // A button at the end of Studio notes' first row (2026-11-01 — the
+  // details panel's Add to curation).
+  studioAction?: React.ReactNode;
   // The price (Catalogue / Hopper's own), shown after Size / Edition.
   children?: React.ReactNode;
   // The Name field, first in the column (2026-10-28).
@@ -411,6 +415,7 @@ export default function ArtworkCatalogueFields({
               Base
             </label>
           )}
+          {studioAction && <div className="flex min-w-0 flex-1">{studioAction}</div>}
         </div>
         <label className={labelCls}>Notes</label>
         <textarea

@@ -15,6 +15,7 @@ import { CURRENCIES } from "@/lib/currencies";
 import MediaPicker from "@/components/MediaPicker";
 import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import BaseStar from "@/components/BaseStar";
+import AddToCurationButton from "@/components/AddToCurationButton";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 import type { ArtworkImage } from "@/lib/artworkImages";
 
@@ -398,6 +399,14 @@ export default function ArtworkDetailPanel({
               isBase,
             }}
             onBaseChange={setIsBase}
+            studioAction={
+              <AddToCurationButton
+                artistId={artistId}
+                artworkId={artwork.id}
+                artworkName={artwork.catalogueName}
+                className={`w-full ${FIELD_HEIGHT}`}
+              />
+            }
             onAutosave={autosaveCatalogue}
             onTypeOrSizeChange={(type, size) => {
               setTypeValue(type);
