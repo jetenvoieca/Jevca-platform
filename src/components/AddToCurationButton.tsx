@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import {
   addWorksToCuration,
   curationsWithWork,
@@ -10,8 +10,10 @@ import {
 import { useBackdropClose } from "@/lib/useBackdropClose";
 
 // Add to curation (2026-11-01, Craig's mockup) — in the Artwork Catalogue's
-// Studio notes: lists the client's curations, those the work is already in
-// greyed; choosing one adds the work to the end of it.
+// Studio notes. The button names the curations the work is in (or says
+// Add to curation when it's in none); it opens a list of the client's
+// curations, those the work is already in greyed; choosing one adds the
+// work to the end of it.
 export default function AddToCurationButton({
   artistId,
   artworkId,
@@ -33,16 +35,28 @@ export default function AddToCurationButton({
   const close = () => setOpen(false);
   const backdrop = useBackdropClose(close);
 
+  // Which curations it's in, for the button — loaded with the work.
+  useEffect(() => {
+    let cancelled = false;
+    setCurations(null);
+    setInIds([]);
+    Promise.all([listCurations(artistId), curationsWithWork(artistId, artworkId)]).then(([list, already]) => {
+      if (cancelled) return;
+      setCurations(list);
+      setInIds(already);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [artistId, artworkId]);
+
+  const inNames = (curations ?? []).filter((c) => inIds.includes(c.id)).map((c) => c.name);
+  const label = inNames.length > 0 ? inNames.join(", ") : "Add to curation";
+
   const show = () => {
     setOpen(true);
     setError(null);
     setAddedTo(null);
-    setCurations(null);
-    startTransition(async () => {
-      const [list, already] = await Promise.all([listCurations(artistId), curationsWithWork(artistId, artworkId)]);
-      setCurations(list);
-      setInIds(already);
-    });
   };
 
   const add = (curation: CurationSummary) => {
@@ -63,9 +77,10 @@ export default function AddToCurationButton({
       <button
         type="button"
         onClick={show}
-        className={`rounded-md border border-neutral-400 px-3 text-sm text-neutral-700 hover:bg-neutral-50 ${className}`}
+        title={inNames.length > 0 ? `In ${label} — add to another` : undefined}
+        className={`truncate rounded-md border border-neutral-400 px-3 text-sm text-neutral-700 hover:bg-neutral-50 ${className}`}
       >
-        Add to curation
+        {label}
       </button>
 
       {open && (
