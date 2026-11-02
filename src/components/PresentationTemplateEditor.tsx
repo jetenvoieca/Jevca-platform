@@ -169,6 +169,14 @@ export default function PresentationTemplateEditor({
             onCommit={(rounding) => set({ rounding })}
             wide
           />
+          <label className="flex items-center gap-2 text-sm text-neutral-700">
+            <input
+              type="checkbox"
+              checked={settings.pictureShadow}
+              onChange={(e) => set({ pictureShadow: e.target.checked })}
+            />
+            Shadow under the picture
+          </label>
           <NumberField
             label="Button rounding"
             unit="pixels"

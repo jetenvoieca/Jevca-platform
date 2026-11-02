@@ -21,8 +21,17 @@ import type { SiteForms } from "@/lib/siteData";
 // slides the enquiry form (WorkEnquiryForm) in over the description; Purchase and Pay in instalments the payment form
 // (WorkPaymentForm) when the site takes payments, otherwise they open an
 // email to the artist. Shared by the
-// Presentation window (CurationWorkView) and Templates → Presentations'
-// preview.
+// Presentation window (CurationWorkView), Templates → Presentations'
+// preview and (2026-11-02, `inline`) a Portfolio viewer's chosen work
+// (ViewerBlock) — drawn in the page itself: no padding, no width limit,
+// no close cross or catalogue number.
+//
+// The "column" layout (2026-11-02, the ISYT sites): the picture, the
+// title, then the description, then the details and the rest, all lined
+// up on the left.
+
+// The picture's soft shadow, when the template has one.
+const PICTURE_SHADOW = "shadow-[0_2px_10px_rgba(0,0,0,0.35)]";
 
 const PresentationContext = createContext<PresentationSettings>(DEFAULT_PRESENTATION);
 
@@ -42,6 +51,7 @@ export default function WorkPresentation({
   onView,
   onClose,
   site = null,
+  inline = false,
 }: {
   data: CurationWorkPresentation;
   settings: PresentationSettings;
@@ -51,6 +61,7 @@ export default function WorkPresentation({
   onClose?: () => void;
   // Where the enquiry form sends from — the published site only.
   site?: SiteForms | null;
+  inline?: boolean;
 }) {
   const { colours, show, labels } = settings;
   // Which is showing: the words and buttons, or one of the forms over them.
@@ -115,12 +126,16 @@ export default function WorkPresentation({
   };
 
   const side = settings.layout === "side";
+  const column = settings.layout === "column";
   // With no medium or description to show, the column beside the picture
   // folds away and the window narrows to the picture's width (2026-10-20,
   // Craig's request) — until a form opens there.
-  // The medium goes under the title or with the description (mediumPlace).
+  // The medium goes under the title, with the description or with the
+  // details (mediumPlace).
   const medium = show.medium && data.medium ? data.medium : null;
   const mediumInWords = settings.mediumPlace === "words";
+  const mediumUnderTitle = settings.mediumPlace === "title";
+  const mediumInDetails = settings.mediumPlace === "details";
   const hasWords = (mediumInWords && !!medium) || (show.description && !!description);
   const folded = side && !hasWords && panel === "words";
   // The picture column's width when unfolded (the window's width less its
@@ -157,9 +172,9 @@ export default function WorkPresentation({
 
   return (
     <div
-      className={`relative mx-auto flex w-full flex-col gap-8 p-6 transition-[max-width] duration-500 ease-out sm:p-8 ${
-        side && !folded ? "site:grid site:items-start site:gap-12" : ""
-      }`}
+      className={`relative mx-auto flex w-full flex-col transition-[max-width] duration-500 ease-out ${
+        column ? "gap-5" : "gap-8"
+      } ${inline ? "" : "p-6 sm:p-8"} ${side && !folded ? "site:grid site:items-start site:gap-12" : ""}`}
       style={{
         background: colours.background,
         border: settings.borderWidth > 0 ? `${settings.borderWidth}px solid ${colours.border}` : undefined,
@@ -167,10 +182,10 @@ export default function WorkPresentation({
         color: colours.text,
         fontFamily: textFont,
         gridTemplateColumns: side && !folded ? `${settings.pictureShare}% 1fr` : undefined,
-        maxWidth: folded ? foldedWidth : settings.maxWidth,
+        maxWidth: inline ? undefined : folded ? foldedWidth : settings.maxWidth,
       }}
     >
-      {onClose && (
+      {onClose && !inline && (
         <button
           type="button"
           onClick={onClose}
@@ -186,7 +201,7 @@ export default function WorkPresentation({
       {/* The catalogue number, small in the bottom-left corner
           (2026-10-29, Craig's request), inside the window's padding —
           just the number, without the "AW-" in front (2026-10-30). */}
-      {data.catalogueNumber && (
+      {data.catalogueNumber && !inline && (
         <span
           className="pointer-events-none absolute bottom-2 left-3.5"
           style={{ color: colours.muted, fontSize: Math.round(settings.textSize * 0.75) }}
@@ -198,7 +213,10 @@ export default function WorkPresentation({
           then the price, Purchase / Pay in instalments, the instalment
           terms, Enquire and where it can be seen (2026-10-20, Craig's
           mock-up). */}
-      <div className="flex min-w-0 flex-col">
+      {/* In the column layout this column's parts sit in the window
+          itself, so the description can come between the title and the
+          details (the words' and details' order). */}
+      <div className={column ? "contents" : "flex min-w-0 flex-col"}>
         {!viewed && (
           <div
             className="flex aspect-square w-full items-center justify-center text-sm"
@@ -214,13 +232,19 @@ export default function WorkPresentation({
               src={viewed.displayUrl}
               poster={viewed.posterUrl ?? undefined}
               controls
-              className="max-h-[70vh] w-full bg-black object-contain"
+              className={`max-h-[70vh] w-full bg-black object-contain ${settings.pictureShadow ? PICTURE_SHADOW : ""}`}
             />
           ) : (
             <FadeImage
               src={viewed.displayUrl}
               alt={data.catalogueName}
-              className="max-h-[70vh] w-full object-contain"
+              // With a shadow, the picture's box is the picture's own
+              // size, so the shadow sits on its edges.
+              className={
+                settings.pictureShadow
+                  ? `${column ? "" : "mx-auto"} block h-auto max-h-[70vh] w-auto max-w-full ${PICTURE_SHADOW}`
+                  : "max-h-[70vh] w-full object-contain"
+              }
             />
           ))}
         {data.images.length > 1 && (
@@ -243,22 +267,27 @@ export default function WorkPresentation({
           </div>
         )}
         <h2
-          className="mt-6 text-center font-light leading-tight"
+          className={column ? "font-light leading-tight" : "mt-6 text-center font-light leading-tight"}
           style={{ fontFamily: titleFont, fontSize: settings.titleSize }}
         >
           {data.catalogueName}
         </h2>
-        {!mediumInWords && medium && (
-          <p className="mt-2 text-center italic" style={{ color: colours.muted, fontSize: small, lineHeight: 1.6 }}>
+        {mediumUnderTitle && medium && (
+          <p
+            className={column ? "-mt-3 italic" : "mt-2 text-center italic"}
+            style={{ color: colours.muted, fontSize: small, lineHeight: 1.6 }}
+          >
             {medium}
           </p>
         )}
-        {/* The details, price and buttons, a little narrower than the
-            picture, all lined up on the left. */}
-        <div className="mt-6 flex w-4/5 flex-col gap-6 self-center">
-          {((show.edition && editionLine) || (show.size && data.size)) && (
+        {/* The details, price and buttons, all lined up on the left — a
+            little narrower than the picture, or in the column layout the
+            full width, after the description. */}
+        <div className={column ? "order-2 flex flex-col gap-4" : "mt-6 flex w-4/5 flex-col gap-6 self-center"}>
+          {((show.edition && editionLine) || (mediumInDetails && medium) || (show.size && data.size)) && (
             <div style={{ fontSize: settings.textSize }}>
               {show.edition && editionLine && <p>{editionLine}</p>}
+              {mediumInDetails && medium && <p>{medium}</p>}
               {show.size && data.size && <p>{data.size}</p>}
             </div>
           )}
@@ -324,7 +353,11 @@ export default function WorkPresentation({
           keeps its size when a form opens; elsewhere the hidden ones are
           lifted out of the way. A form's Back sits above it, clear of
           the close cross. */}
-      <div className={`relative grid min-w-0 overflow-hidden ${!hasWords && panel === "words" ? "hidden" : ""}`}>
+      <div
+        className={`relative grid min-w-0 overflow-hidden ${column ? "order-1" : ""} ${
+          !hasWords && panel === "words" ? "hidden" : ""
+        }`}
+      >
         <div
           inert={panel !== "words"}
           className={`col-start-1 row-start-1 flex min-w-0 flex-col gap-6 transition-all duration-500 ease-out ${

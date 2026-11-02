@@ -8,6 +8,7 @@ import {
   type SignupLook,
   type SlidingDoorsSettings,
   type StoriesSettings,
+  type ViewerSettings,
 } from "@/lib/pageStyleLayout";
 import type { MailBlockType } from "@/lib/mailTemplateLayout";
 import type { GridSpacing } from "@/lib/rowLayout";
@@ -31,6 +32,7 @@ export function BlockShape({
   hero,
   pictureWords,
   stories,
+  viewer,
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
@@ -43,6 +45,7 @@ export function BlockShape({
   hero?: HeroSettings;
   pictureWords?: PictureWordsSettings;
   stories?: StoriesSettings;
+  viewer?: ViewerSettings;
   device?: PreviewDevice;
 }) {
   switch (type) {
@@ -129,6 +132,55 @@ export function BlockShape({
               </div>
             );
           })}
+        </div>
+      );
+    }
+    case "viewer": {
+      // Thumbnails, the line, then the chosen work and its details; on a
+      // phone the work above the thumbnails.
+      const v = viewer;
+      const phone = device === "phone";
+      const across = (phone ? v?.phonePerRow : v?.perRow) ?? 3;
+      const ratio = pictureShapeRatio(v?.shape ?? "portrait");
+      const thumbs = (
+        <div
+          className="grid content-start"
+          style={{
+            gridTemplateColumns: `repeat(${across}, minmax(0, 1fr))`,
+            columnGap: spacing.horizontal,
+            rowGap: phone ? (spacing.phoneVertical ?? spacing.vertical) : spacing.vertical,
+          }}
+        >
+          {Array.from({ length: across * 3 }, (_, i) => (
+            <div key={i} className="rounded bg-neutral-200" style={{ aspectRatio: ratio }} />
+          ))}
+        </div>
+      );
+      const work = (
+        <div className="flex flex-col gap-3">
+          <div className="aspect-square w-full rounded bg-neutral-200" />
+          <Bar className="h-4 w-1/2" />
+          <Bar className="h-2.5 w-full" />
+          <Bar className="h-2.5 w-4/5" />
+        </div>
+      );
+      if (phone) {
+        return (
+          <div className="flex flex-col gap-6">
+            {work}
+            {thumbs}
+          </div>
+        );
+      }
+      const gap = v?.gap ?? 20;
+      return (
+        <div
+          className="grid items-stretch"
+          style={{ gridTemplateColumns: `${v?.thumbShare ?? 42}% auto 1fr`, columnGap: gap }}
+        >
+          {thumbs}
+          <div style={v?.line ? { borderLeft: `${v.line.thickness}px solid ${v.line.colour}` } : undefined} />
+          {work}
         </div>
       );
     }

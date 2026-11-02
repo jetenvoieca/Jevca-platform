@@ -64,6 +64,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
                     hero={b.hero}
                     pictureWords={b.pictureWords}
                     stories={b.stories}
+                    viewer={b.viewer}
                     spacing={layout.gridSpacing}
                   />
                 </Labelled>

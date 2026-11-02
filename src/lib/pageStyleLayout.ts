@@ -57,6 +57,9 @@ export const LAYOUT_BLOCK_TYPES = [
   { value: "text", label: "Text" },
   { value: "image", label: "Single Image" },
   { value: "gallery", label: "Gallery" },
+  // Thumbnails of the curation's works beside the chosen one, shown large
+  // with its details (2026-11-02, the ISYT sites' portfolio pages).
+  { value: "viewer", label: "Portfolio viewer" },
   { value: "artwork", label: "Feature" },
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },
@@ -462,6 +465,52 @@ export function cleanPictureWords(raw: unknown): PictureWordsSettings {
   };
 }
 
+// A Portfolio viewer (2026-11-02, the ISYT sites' portfolio pages): the
+// curation's works as thumbnails, `perRow` across in boxes of `shape`
+// (the page's grid spacing between them), taking `thumbShare` % of the
+// width; then the `line` (null = none) with `gap` pixels either side;
+// then the chosen work, shown with the page's Presentation Template —
+// before one is chosen, the curation's Description. On a phone the
+// thumbnails fill the width, `phonePerRow` across, with the chosen work
+// (or the Description) above them.
+export type ViewerSettings = {
+  perRow: number;
+  phonePerRow: number;
+  shape: PictureShape;
+  thumbShare: number;
+  gap: number;
+  line: LineLook | null;
+};
+
+export const VIEWER_LIMITS = {
+  perRow: { min: 1, max: 8 },
+  thumbShare: { min: 20, max: 70 },
+  gap: { min: 0, max: 120 },
+} as const;
+
+export const DEFAULT_VIEWER: ViewerSettings = {
+  perRow: 3,
+  phonePerRow: 3,
+  shape: "portrait",
+  thumbShare: 42,
+  gap: 20,
+  line: { colour: "#cccccc", thickness: 1 },
+};
+
+export function cleanViewer(raw: unknown): ViewerSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof ViewerSettings, unknown>>;
+  const d = DEFAULT_VIEWER;
+  const l = VIEWER_LIMITS;
+  return {
+    perRow: cleanNumber(value.perRow, l.perRow, d.perRow, 0),
+    phonePerRow: cleanNumber(value.phonePerRow, l.perRow, d.phonePerRow, 0),
+    shape: cleanPictureShape(value.shape, d.shape),
+    thumbShare: cleanNumber(value.thumbShare, l.thumbShare, d.thumbShare, 0),
+    gap: cleanNumber(value.gap, l.gap, d.gap, 0),
+    line: value.line === null ? null : value.line ? cleanLine(value.line) : d.line,
+  };
+}
+
 // Profile stories (2026-10-26, Craig's request): the Profile Catalogue
 // stories chosen on each page (lib/pageStories.ts), stacked
 // `storySpace` apart, each its picture beside its caption (the headline)
@@ -602,7 +651,8 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 // `doors` (Sliding doors), `signup` (Sign-up form), `logoHeight` and
 // `byline` (Logo), `line` (Line), `perRow`, `names` and `tiles`
 // (Gallery), `hero` (Hero), `pictureWords` (Picture & words), `entries`
-// (Entries), `pageHeading` (Page heading), `stories` (Profile stories).
+// (Entries), `pageHeading` (Page heading), `stories` (Profile stories),
+// `viewer` (Portfolio viewer).
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -618,6 +668,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     pictureWords?: PictureWordsSettings;
     entries?: EntriesSettings;
     stories?: StoriesSettings;
+    viewer?: ViewerSettings;
     pageHeading?: PageHeadingSettings;
     byline?: LogoByline;
   };
@@ -778,6 +829,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "stories") {
             clean.stories = cleanStoriesSettings((b as Partial<LayoutBlock>).stories);
           }
+          if (clean.type === "viewer") {
+            clean.viewer = cleanViewer((b as Partial<LayoutBlock>).viewer);
+          }
           if (clean.type === "picturewords") {
             clean.pictureWords = cleanPictureWords((b as Partial<LayoutBlock>).pictureWords);
           }
@@ -822,6 +876,7 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "picturewords") return { id, type, pictureWords: DEFAULT_PICTURE_WORDS };
   if (type === "entries") return { id, type, entries: DEFAULT_ENTRIES };
   if (type === "stories") return { id, type, stories: DEFAULT_STORIES };
+  if (type === "viewer") return { id, type, viewer: DEFAULT_VIEWER };
   if (type === "pageheading") return { id, type, pageHeading: DEFAULT_PAGE_HEADING };
   return { id, type };
 }

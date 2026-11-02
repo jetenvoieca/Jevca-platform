@@ -30,6 +30,9 @@ import {
   cleanPictureWords,
   cleanStoriesSettings,
   STORIES_LIMITS,
+  cleanViewer,
+  VIEWER_LIMITS,
+  type ViewerSettings,
   type PictureWordsLook,
   PICTURE_SHAPES,
   cleanGalleryNames,
@@ -97,6 +100,7 @@ export default function PageStyleLayoutEditor({
             hero={b.hero}
             pictureWords={b.pictureWords}
             stories={b.stories}
+            viewer={b.viewer}
             device={device}
             spacing={layout.gridSpacing}
           />
@@ -316,6 +320,15 @@ export default function PageStyleLayoutEditor({
             ),
           };
         }
+        if (b.viewer) {
+          return {
+            button: "Settings",
+            title: "Portfolio viewer",
+            content: (
+              <ViewerPanel settings={b.viewer} onChange={(viewer) => onBlock({ ...b, viewer: cleanViewer(viewer) })} />
+            ),
+          };
+        }
         if (b.type === "gallery") {
           return {
             button: "Settings",
@@ -508,6 +521,90 @@ function ColourRow({ label, value, onChange }: { label: string; value: string; o
       />
       <span className="w-16 text-xs text-neutral-400">{value}</span>
     </label>
+  );
+}
+
+// A Portfolio viewer's settings (2026-11-02): the thumbnails — how many
+// across, their shape, their share of the width — and the line between
+// them and the chosen work. The space between thumbnails is the page's
+// grid spacing (Page settings).
+function ViewerPanel({ settings, onChange }: { settings: ViewerSettings; onChange: (v: ViewerSettings) => void }) {
+  const set = (patch: Partial<ViewerSettings>) => onChange(cleanViewer({ ...settings, ...patch }));
+  return (
+    <>
+      <NumberField
+        label="Thumbnails across"
+        unit=""
+        step={1}
+        value={settings.perRow}
+        limits={VIEWER_LIMITS.perRow}
+        onCommit={(perRow) => set({ perRow })}
+        wide
+      />
+      <NumberField
+        label="Thumbnails across, phone"
+        unit=""
+        step={1}
+        value={settings.phonePerRow}
+        limits={VIEWER_LIMITS.perRow}
+        onCommit={(phonePerRow) => set({ phonePerRow })}
+        wide
+      />
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <span className="flex-1">Thumbnail shape</span>
+        <select
+          value={settings.shape}
+          onChange={(e) => set({ shape: e.target.value as ViewerSettings["shape"] })}
+          className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+        >
+          {PICTURE_SHAPES.map((s) => (
+            <option key={s.value} value={s.value}>
+              {s.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <NumberField
+        label="Thumbnails' share of the width"
+        unit="%"
+        step={1}
+        value={settings.thumbShare}
+        limits={VIEWER_LIMITS.thumbShare}
+        onCommit={(thumbShare) => set({ thumbShare })}
+        wide
+      />
+      <NumberField
+        label="Space either side of the line"
+        unit="pixels"
+        step={1}
+        value={settings.gap}
+        limits={VIEWER_LIMITS.gap}
+        onCommit={(gap) => set({ gap })}
+        wide
+      />
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={settings.line !== null}
+          onChange={(e) => set({ line: e.target.checked ? { colour: "#cccccc", thickness: 1 } : null })}
+        />
+        <span className="flex-1">Line between</span>
+        {settings.line && (
+          <input
+            type="color"
+            value={settings.line.colour}
+            onChange={(e) => set({ line: { ...settings.line!, colour: e.target.value } })}
+            aria-label="Line colour"
+            className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+          />
+        )}
+      </label>
+      <p className="text-xs text-neutral-400">
+        The works are dragged onto it in Pages → Arrange. Clicking a thumbnail shows that work beside them, in the
+        page&apos;s Presentation Template; before one is chosen the curation&apos;s Description shows there. On a phone
+        the work shows above the thumbnails.
+      </p>
+    </>
   );
 }
 

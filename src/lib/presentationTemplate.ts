@@ -15,14 +15,19 @@ import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 export const PRESENTATION_LAYOUTS = [
   { value: "side", label: "Picture on the left" },
   { value: "stacked", label: "Picture on top" },
+  // The ISYT sites' (2026-11-02): the picture, then the title,
+  // description, details and the rest under it, all lined up on the left.
+  { value: "column", label: "Picture on top, words on the left" },
 ] as const;
 export type PresentationLayout = (typeof PRESENTATION_LAYOUTS)[number]["value"];
 
 // Where the medium goes (2026-11-01, Craig's request): under the title,
-// or with the description, above it.
+// or with the description, above it; or (2026-11-02, the ISYT sites)
+// among the details, between the edition and type and the size.
 export const MEDIUM_PLACES = [
   { value: "title", label: "Under the title" },
   { value: "words", label: "Above the description" },
+  { value: "details", label: "With the details" },
 ] as const;
 export type MediumPlace = (typeof MEDIUM_PLACES)[number]["value"];
 
@@ -130,6 +135,8 @@ export type PresentationSettings = {
   colours: PresentationColours;
   borderWidth: number;
   rounding: number;
+  // A soft shadow under the picture (2026-11-02, the ISYT sites).
+  pictureShadow: boolean;
   buttonRounding: number;
   // Every button's height, in pixels (2026-10-20) — a little taller if
   // its words go onto two lines.
@@ -164,6 +171,7 @@ export const DEFAULT_PRESENTATION: PresentationSettings = {
   },
   borderWidth: 1,
   rounding: 40,
+  pictureShadow: false,
   buttonRounding: 0,
   buttonHeight: 44,
   titleFont: "jost",
@@ -266,6 +274,7 @@ export function normalizePresentation(raw: unknown): PresentationSettings {
     ) as PresentationColours,
     borderWidth: cleanNumber(v.borderWidth, l.borderWidth, d.borderWidth),
     rounding: cleanNumber(v.rounding, l.rounding, d.rounding),
+    pictureShadow: typeof v.pictureShadow === "boolean" ? v.pictureShadow : d.pictureShadow,
     buttonRounding: cleanNumber(v.buttonRounding, l.buttonRounding, d.buttonRounding),
     buttonHeight: cleanNumber(v.buttonHeight, l.buttonHeight, d.buttonHeight),
     titleFont: isSiteFontId(v.titleFont) ? v.titleFont : d.titleFont,

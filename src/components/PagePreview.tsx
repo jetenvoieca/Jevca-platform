@@ -59,6 +59,7 @@ import HeroBlock from "@/components/HeroBlock";
 import PictureWordsBlock, { type PictureWordsPicture } from "@/components/PictureWordsBlock";
 import SectionMediaView from "@/components/SectionMediaView";
 import EntriesBlock from "@/components/EntriesBlock";
+import ViewerBlock from "@/components/ViewerBlock";
 import { readEntries } from "@/lib/pageEntries";
 import StoriesBlock from "@/components/StoriesBlock";
 import { readPageStories } from "@/lib/pageStories";
@@ -98,7 +99,8 @@ import SiteLogo from "@/components/SiteLogo";
 //   component. A Picture & words (2026-10-24) is a picture beside a
 //   typed headline and the curation's Description — see
 //   PictureWordsBlock. Entries (2026-10-24) is a list typed on the page
-//   — see EntriesBlock.
+//   — see EntriesBlock. A Portfolio viewer (2026-11-02) shows the works
+//   as thumbnails beside the chosen one, in the page — see ViewerBlock.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Every page but a Canvas ends with the site's footer (2026-10-13) — see
 // SiteFooter.
@@ -397,6 +399,23 @@ export function blockFiller({
           outlinedId={heroShowing}
           contentWidth={contentWidth}
           onOpen={onOpen}
+        />
+      );
+    }
+    if (block.type === "viewer" && block.viewer && curation && shown.length > 0) {
+      return (
+        <ViewerBlock
+          curationId={curation.id}
+          works={shown.map((w) => ({
+            id: w.artworkId,
+            url: w.imageUrl,
+            title: w.catalogueName,
+            sold: isSold(w.availability),
+          }))}
+          settings={block.viewer}
+          spacing={layout.gridSpacing}
+          description={sections.find((s) => s.type === "DESCRIPTION")?.text ?? null}
+          descriptionStyle={bodyTextCss(layout.textStyles.text, contentWidth)}
         />
       );
     }
