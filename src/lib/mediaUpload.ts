@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getPresignedUploadUrl, getFromR2, uploadToR2, publicMediaUrl } from "@/lib/r2";
+import { getPresignedUploadUrl, getFromR2, uploadToR2, publicMediaUrl, deleteFromR2 } from "@/lib/r2";
 import { generateImageSizes } from "@/lib/imageSizes";
 import { randomUUID } from "crypto";
 import { sanitizeFilename } from "@/lib/sanitizeFilename";
@@ -70,7 +70,18 @@ export type FinalizeUploadOptions = {
   artworkViewingLocation?: string;
   artworkPortfolio?: string;
   sourceUrl?: string;
+  // Turn away a photo that can't be read as a picture (see saveUpload).
+  rejectUnreadable?: boolean;
 };
+
+// Thrown by saveUpload with `rejectUnreadable` for a photo that isn't a
+// readable picture.
+export class UnreadablePictureError extends Error {
+  constructor() {
+    super("That file isn't a picture that can be shown.");
+    this.name = "UnreadablePictureError";
+  }
+}
 
 // Step 2 of 2: once the browser (or the iPhone Shortcut / Studio app, for
 // the Hopper — see src/app/api/hopper/finalize/route.ts) has PUT the file
@@ -113,13 +124,24 @@ export async function saveUpload(
   // succeeds with thumbnailKey/displayKey left null — every place that
   // reads them already falls back to the original url, so nothing breaks;
   // it's just not sped up for this one image until a retry or backfill.
+  //
+  // Except with `rejectUnreadable` (2026-11-02 — the iPhone Shortcut,
+  // Studio app and website importer, via /api/hopper/finalize): a "photo"
+  // that can't be read as a picture at all (e.g. a web page saved instead
+  // of its image) is turned away and its file deleted, rather than sitting
+  // blank in the Hopper.
   let thumbnailKey: string | null = null;
   let displayKey: string | null = null;
   if (kind === "PHOTO") {
+    let bytes: Uint8Array | null = null;
     try {
       const original = await getFromR2(key);
-      if (original.Body) {
-        const bytes = await original.Body.transformToByteArray();
+      if (original.Body) bytes = await original.Body.transformToByteArray();
+    } catch (err) {
+      console.error(`[finalizeUpload] Could not read ${key}:`, err);
+    }
+    if (bytes) {
+      try {
         const sizes = await generateImageSizes(Buffer.from(bytes));
         thumbnailKey = `${key}-thumb.jpg`;
         displayKey = `${key}-display.jpg`;
@@ -127,9 +149,13 @@ export async function saveUpload(
           uploadToR2(thumbnailKey, sizes.thumbnail, sizes.contentType),
           uploadToR2(displayKey, sizes.display, sizes.contentType),
         ]);
+      } catch (err) {
+        console.error(`[finalizeUpload] Could not generate sizes for ${key}:`, err);
+        if (options.rejectUnreadable) {
+          await deleteFromR2(key).catch(() => {});
+          throw new UnreadablePictureError();
+        }
       }
-    } catch (err) {
-      console.error(`[finalizeUpload] Could not generate sizes for ${key}:`, err);
     }
   }
 

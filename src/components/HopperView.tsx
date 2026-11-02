@@ -16,7 +16,9 @@ import {
 import { uploadFileDirect } from "@/lib/uploadDirect";
 import VideoThumb from "@/components/VideoThumb";
 import HopperImportPanel from "@/components/HopperImportPanel";
-import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import { type ArtworkDetail, type ArtworkSettings } from "@/components/ArtworkDetailPanel";
+import ArtworkCatalogueModal from "@/components/ArtworkCatalogueModal";
+import { getArtworkDetailForClient } from "@/lib/actions/artworks";
 import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
 import AddToCurationButton from "@/components/AddToCurationButton";
@@ -87,6 +89,9 @@ type ProcessedEntry = {
   // the artwork it was linked to/created. Null for "Binned", since an
   // archived item has no edit panel to jump to.
   href: string | null;
+  // A new artwork (2026-11-02, Craig's request): clicking it opens its
+  // Catalogue details over the Hopper instead of going to the Catalogue.
+  artworkId?: string;
 };
 
 // Persisted per artist so the Processed trail survives navigating away
@@ -238,7 +243,8 @@ export default function HopperView({
   const logProcessed = (
     source: { id: string; url: string; posterUrl: string | null; kind: string },
     label: string,
-    href: string | null
+    href: string | null,
+    artworkId?: string
   ) => {
     setProcessedLog((prev) => [
       {
@@ -248,9 +254,18 @@ export default function HopperView({
         kind: source.kind,
         label,
         href,
+        artworkId,
       },
       ...prev,
     ]);
+  };
+
+  // A processed new artwork's Catalogue details, over the Hopper.
+  const [catalogueWork, setCatalogueWork] = useState<ArtworkDetail | null>(null);
+  const openCatalogue = async (artworkId: string) => {
+    const detail = await getArtworkDetailForClient(artworkId);
+    if (detail) setCatalogueWork(detail);
+    else setAddError("That artwork couldn't be found — it may have been deleted.");
   };
 
   // After any sort action, drop back to "no explicit selection" so the
@@ -393,7 +408,12 @@ export default function HopperView({
     }
     setAddError(null);
     const finalTitle = ((fields.get("catalogueName") as string) || "").trim() || "Untitled";
-    logProcessed(item, `New ${words.item.toLowerCase()}: ${finalTitle}`, `${resolvedBasePath}/artworks?selected=${result.artwork.id}`);
+    logProcessed(
+      item,
+      `New ${words.item.toLowerCase()}: ${finalTitle}`,
+      `${resolvedBasePath}/artworks?selected=${result.artwork.id}`,
+      result.artwork.id
+    );
     advanceAfterAction();
     return true;
   };
@@ -862,6 +882,23 @@ export default function HopperView({
                       ×
                     </button>
                   );
+                  if (entry.artworkId) {
+                    const artworkId = entry.artworkId;
+                    return (
+                      <div
+                        key={entry.key}
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => openCatalogue(artworkId)}
+                        onKeyDown={(e) => e.key === "Enter" && openCatalogue(artworkId)}
+                        className="relative flex cursor-pointer items-center gap-2 rounded-md border border-neutral-200 p-2 pr-8 hover:border-neutral-300 hover:bg-neutral-50"
+                      >
+                        {thumb}
+                        {text}
+                        {removeButton}
+                      </div>
+                    );
+                  }
                   return entry.href ? (
                     <Link
                       key={entry.key}
@@ -888,6 +925,17 @@ export default function HopperView({
           )}
         </div>
       </div>
+
+      {catalogueWork && (
+        <ArtworkCatalogueModal
+          siteId={siteId}
+          artistId={artistId}
+          artwork={catalogueWork}
+          settings={artworkSettings}
+          onClose={() => setCatalogueWork(null)}
+          onDeleted={() => setCatalogueWork(null)}
+        />
+      )}
 
       {showCsvImport && (
         <HopperImportPanel

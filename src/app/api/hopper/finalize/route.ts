@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { saveUpload } from "@/lib/mediaUpload";
+import { saveUpload, UnreadablePictureError } from "@/lib/mediaUpload";
 
 // Trims a value from the request body and treats anything that isn't a
 // non-empty string as "not provided".
@@ -117,22 +117,33 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Key does not belong to this artist." }, { status: 400 });
   }
 
-  const result = await saveUpload(artist.id, key, contentType, kind, {
-    status: "HOPPER",
-    source: optionalText(source) ?? "iPhone Shortcut",
-    caption: optionalText(caption),
-    description: optionalText(description),
-    artworkSize: optionalText(artworkSize),
-    artworkPrice: price,
-    artworkType: optionalText(artworkType),
-    artworkLocation: optionalText(artworkLocation),
-    artworkMedium: optionalText(artworkMedium),
-    artworkEdition: optionalText(artworkEdition),
-    artworkSold: artworkSold === true,
-    artworkViewingLocation: optionalText(artworkViewingLocation),
-    artworkPortfolio: optionalText(artworkPortfolio),
-    sourceUrl: optionalText(sourceUrl),
-  });
+  // A file that isn't a readable picture is turned away (2026-11-02 — a
+  // web page saved by the website importer sat blank in the Hopper).
+  let result: Awaited<ReturnType<typeof saveUpload>>;
+  try {
+    result = await saveUpload(artist.id, key, contentType, kind, {
+      rejectUnreadable: true,
+      status: "HOPPER",
+      source: optionalText(source) ?? "iPhone Shortcut",
+      caption: optionalText(caption),
+      description: optionalText(description),
+      artworkSize: optionalText(artworkSize),
+      artworkPrice: price,
+      artworkType: optionalText(artworkType),
+      artworkLocation: optionalText(artworkLocation),
+      artworkMedium: optionalText(artworkMedium),
+      artworkEdition: optionalText(artworkEdition),
+      artworkSold: artworkSold === true,
+      artworkViewingLocation: optionalText(artworkViewingLocation),
+      artworkPortfolio: optionalText(artworkPortfolio),
+      sourceUrl: optionalText(sourceUrl),
+    });
+  } catch (err) {
+    if (err instanceof UnreadablePictureError) {
+      return NextResponse.json({ error: err.message }, { status: 422 });
+    }
+    throw err;
+  }
 
   return NextResponse.json(result);
 }
