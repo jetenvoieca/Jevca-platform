@@ -66,6 +66,7 @@ import { readPageStories } from "@/lib/pageStories";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 import ExhibitionsBlock from "@/components/ExhibitionsBlock";
+import ShowcaseBlock from "@/components/ShowcaseBlock";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import SoldFlag from "@/components/SoldFlag";
@@ -103,6 +104,8 @@ import SiteLogo from "@/components/SiteLogo";
 //   PictureWordsBlock. Entries (2026-10-24) is a list typed on the page
 //   — see EntriesBlock. A Portfolio viewer (2026-11-02) shows the works
 //   as thumbnails beside the chosen one, in the page — see ViewerBlock.
+//   A Showcase (2026-11-02) shows every work the site shows, a pair at
+//   a time — see ShowcaseBlock.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
 // Every page but a Canvas ends with the site's footer (2026-10-13) — see
 // SiteFooter.
@@ -118,7 +121,8 @@ import SiteLogo from "@/components/SiteLogo";
 // Without one: a simple grid of the curation's works with its
 // Description in a box beside them, as on the Curations page.
 //
-// Clicking a work (2026-10-05) opens its presentation in this curation,
+// Clicking a work (2026-10-05) opens its presentation in this curation
+// (a Showcase's works, 2026-11-02, in the curation each is shown in),
 // read-only — see CurationWorkView.
 //
 // No title is drawn above the page (2026-10-07), so the admin preview
@@ -137,13 +141,22 @@ export default function PagePreview({
   fullScreen?: boolean;
 }) {
   const siteData = useSiteData();
-  const [viewingId, setViewingId] = useState<string | null>(null);
+  // The work open, and the curation it's opened in.
+  const [viewing, setViewing] = useState<{ curationId: string; artworkId: string } | null>(null);
   const blockBuild = style?.type === "BLOCK_BUILD";
   const { content, loading } = usePageContent(pageId, curationId, blockBuild);
-  useEffect(() => setViewingId(null), [pageId, curationId]);
+  useEffect(() => setViewing(null), [pageId, curationId]);
 
-  const closeView = useCallback(() => setViewingId(null), []);
+  const closeView = useCallback(() => setViewing(null), []);
   const curation = content?.curation ?? null;
+  // A work opens in the page's curation unless another is given.
+  const open = useCallback(
+    (artworkId: string, inCuration?: string) => {
+      const id = inCuration ?? curation?.id;
+      if (id) setViewing({ curationId: id, artworkId });
+    },
+    [curation],
+  );
 
   // A Block Build page needs no curation (2026-10-26 — e.g. one showing
   // only profile stories); its components that show the curation's works
@@ -171,20 +184,20 @@ export default function PagePreview({
         stories={content.stories}
         exhibitions={content.exhibitions}
         homeHref={siteData.homeHref}
-        onOpen={setViewingId}
+        onOpen={open}
       />
     );
   } else if (curation) {
     body = (
       <>
-        <PlainPage curation={curation} onOpen={setViewingId} />
+        <PlainPage curation={curation} onOpen={open} />
         {content.artist && <SiteFooter footer={content.artist.footer} />}
       </>
     );
   }
 
-  const viewer = curation && viewingId && (
-    <CurationWorkView curationId={curation.id} artworkId={viewingId} onClose={closeView} />
+  const viewer = viewing && (
+    <CurationWorkView curationId={viewing.curationId} artworkId={viewing.artworkId} onClose={closeView} />
   );
 
   // Works open with the Page Style's Presentation Template (2026-10-19)
@@ -292,7 +305,9 @@ export type BlockFillerInput = {
   stories: ProfileStoryRow[];
   // The Exhibitions catalogue, for Exhibitions (2026-11-02).
   exhibitions: ExhibitionRow[];
-  onOpen: (artworkId: string) => void;
+  // Opens a work — in the page's curation, or the one given (a
+  // Showcase's works, 2026-11-02).
+  onOpen: (artworkId: string, curationId?: string) => void;
   heroShowing?: string | null;
   onHeroShowing?: (artworkId: string | null) => void;
 };
@@ -488,6 +503,17 @@ export function blockFiller({
         />
       );
     }
+    if (block.type === "showcase" && block.showcase) {
+      return (
+        <ShowcaseBlock
+          settings={block.showcase}
+          textStyle={layout.textStyles.text}
+          contentWidth={contentWidth}
+          background={{ desktop: layout.backgroundColor, phone: layout.phoneBackgroundColor }}
+          onOpen={onOpen}
+        />
+      );
+    }
     if (block.type === "signup") {
       const form = formByBlock.get(block.id);
       if (!form || !block.signup) return null;
@@ -594,7 +620,7 @@ function BlockBuildPage({
   stories: ProfileStoryRow[];
   exhibitions: ExhibitionRow[];
   homeHref: string | null;
-  onOpen: (artworkId: string) => void;
+  onOpen: (artworkId: string, curationId?: string) => void;
 }) {
   const { layout } = style;
   const [heroShowing, setHeroShowing] = useState<string | null>(null);

@@ -23,6 +23,8 @@ import { getPageHeadingNames } from "@/lib/actions/pages";
 import type { HeadingNames } from "@/lib/pageHeading";
 import { listProfileStories, type ProfileStoryRow } from "@/lib/actions/profileStories";
 import { listShownExhibitions, type ExhibitionRow } from "@/lib/actions/exhibitions";
+import { listLiveSiteWorks } from "@/lib/actions/siteSnapshot";
+import { siteWorks, type SiteWork } from "@/lib/siteWorks";
 
 // Where the page components (PagePreview, CanvasPlayer, CurationPanel,
 // CurationWorkView, PageSectionsArranger) get their content from
@@ -68,6 +70,9 @@ export type SiteData = {
   // The artist's exhibitions a site shows (2026-11-02): all but the
   // archived ones.
   listExhibitions(): Promise<ExhibitionRow[]>;
+  // Every work the site shows, each once (2026-11-02, for a Showcase —
+  // see lib/siteWorks.ts).
+  listSiteWorks(): Promise<SiteWork[]>;
   // Everything a page shows, at once (2026-10-13): from the published
   // snapshot, which is already in the browser, so a page is drawn
   // straight away — no "Loading…". Null in the admin preview, whose
@@ -124,6 +129,7 @@ export function LiveSiteData({
       getHeadingNames: (pageId) => getPageHeadingNames(siteId, pageId),
       listProfileStories: () => listProfileStories(artistId),
       listExhibitions: () => listShownExhibitions(artistId),
+      listSiteWorks: () => listLiveSiteWorks(siteId),
       pageContentNow: () => null,
       canvasNow: () => null,
       homeHref: null,
@@ -164,6 +170,11 @@ export function SnapshotSiteData({
       getHeadingNames: async (pageId) => snapshotHeadingNames(snapshot, pageId),
       listProfileStories: async () => snapshot.profileStories,
       listExhibitions: async () => snapshot.exhibitions,
+      listSiteWorks: async () =>
+        siteWorks(
+          snapshot.pages,
+          Object.fromEntries(Object.entries(snapshot.curations).map(([id, c]) => [id, c.detail])),
+        ),
       pageContentNow: (pageId, curationId) => {
         const page = snapshot.pages.find((p) => p.id === pageId);
         const curation = curationId ? snapshot.curations[curationId] : undefined;

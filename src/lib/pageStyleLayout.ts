@@ -63,6 +63,9 @@ export const LAYOUT_BLOCK_TYPES = [
   // The artist's Exhibitions catalogue as a list beside the chosen one
   // (2026-11-02, the ISYT sites' exhibitions pages).
   { value: "exhibitions", label: "Exhibitions" },
+  // Every work the site shows, shuffled, a pair at a time, sliding apart
+  // to the next (2026-11-02, the ISYT sites' showcase pages).
+  { value: "showcase", label: "Showcase" },
   { value: "artwork", label: "Feature" },
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },
@@ -570,6 +573,65 @@ export function cleanExhibitions(raw: unknown): ExhibitionsSettings {
   };
 }
 
+// Showcase (2026-11-02, the ISYT sites' showcase pages — Craig's
+// screenshot of jillysuttonsculpture.com): every work the site shows
+// (lib/siteWorks.ts), in a new random order on each visit, two at a
+// time side by side with the `line` (null = none) between them, `gap`
+// pixels either side. Each is its picture, whole, in a box `height`
+// pixels tall (desktop / phone), then its title (`titleSize` pixels, in
+// `accent`) and details in the page's Text look. After `duration`
+// seconds the pair slides apart over `speed` seconds — left one left,
+// right one right — showing the next pair behind, on a continuous loop.
+// Above them five dots in `accent`, the middle one larger, which
+// flashes once each time the pair changes. On a phone the pair is
+// stacked and slides up and down. Clicking a picture opens the work.
+export type ShowcaseSettings = {
+  duration: number;
+  speed: number;
+  height: { desktop: number; phone: number };
+  gap: number;
+  line: LineLook | null;
+  accent: string;
+  titleSize: number;
+};
+
+export const SHOWCASE_LIMITS = {
+  duration: SLIDING_DOORS_LIMITS.duration,
+  speed: SLIDING_DOORS_LIMITS.speed,
+  height: { min: 100, max: 1200 },
+  gap: { min: 0, max: 120 },
+  titleSize: { min: 12, max: 48 },
+} as const;
+
+export const DEFAULT_SHOWCASE: ShowcaseSettings = {
+  duration: 5,
+  speed: 1.5,
+  height: { desktop: 384, phone: 300 },
+  gap: 24,
+  line: { colour: "#cccccc", thickness: 2 },
+  accent: "#8b1a1a",
+  titleSize: 15,
+};
+
+export function cleanShowcase(raw: unknown): ShowcaseSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof ShowcaseSettings, unknown>>;
+  const height = (value.height ?? {}) as Partial<Record<"desktop" | "phone", unknown>>;
+  const d = DEFAULT_SHOWCASE;
+  const l = SHOWCASE_LIMITS;
+  return {
+    duration: cleanNumber(value.duration, l.duration, d.duration, 1),
+    speed: cleanNumber(value.speed, l.speed, d.speed, 1),
+    height: {
+      desktop: cleanNumber(height.desktop, l.height, d.height.desktop, 0),
+      phone: cleanNumber(height.phone, l.height, d.height.phone, 0),
+    },
+    gap: cleanNumber(value.gap, l.gap, d.gap, 0),
+    line: value.line === null ? null : value.line ? cleanLine(value.line) : d.line,
+    accent: cleanColour(value.accent) ?? d.accent,
+    titleSize: cleanNumber(value.titleSize, l.titleSize, d.titleSize, 0),
+  };
+}
+
 // Profile stories (2026-10-26, Craig's request): the Profile Catalogue
 // stories chosen on each page (lib/pageStories.ts), stacked
 // `storySpace` apart, each its picture beside its caption (the headline)
@@ -711,7 +773,8 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 // `byline` (Logo), `line` (Line), `perRow`, `names` and `tiles`
 // (Gallery), `hero` (Hero), `pictureWords` (Picture & words), `entries`
 // (Entries), `pageHeading` (Page heading), `stories` (Profile stories),
-// `viewer` (Portfolio viewer), `exhibitions` (Exhibitions).
+// `viewer` (Portfolio viewer), `exhibitions` (Exhibitions), `showcase`
+// (Showcase).
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -729,6 +792,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     stories?: StoriesSettings;
     viewer?: ViewerSettings;
     exhibitions?: ExhibitionsSettings;
+    showcase?: ShowcaseSettings;
     pageHeading?: PageHeadingSettings;
     byline?: LogoByline;
   };
@@ -895,6 +959,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "exhibitions") {
             clean.exhibitions = cleanExhibitions((b as Partial<LayoutBlock>).exhibitions);
           }
+          if (clean.type === "showcase") {
+            clean.showcase = cleanShowcase((b as Partial<LayoutBlock>).showcase);
+          }
           if (clean.type === "picturewords") {
             clean.pictureWords = cleanPictureWords((b as Partial<LayoutBlock>).pictureWords);
           }
@@ -941,6 +1008,7 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "stories") return { id, type, stories: DEFAULT_STORIES };
   if (type === "viewer") return { id, type, viewer: DEFAULT_VIEWER };
   if (type === "exhibitions") return { id, type, exhibitions: DEFAULT_EXHIBITIONS };
+  if (type === "showcase") return { id, type, showcase: DEFAULT_SHOWCASE };
   if (type === "pageheading") return { id, type, pageHeading: DEFAULT_PAGE_HEADING };
   return { id, type };
 }

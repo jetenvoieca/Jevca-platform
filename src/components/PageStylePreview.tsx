@@ -66,6 +66,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
                     stories={b.stories}
                     viewer={b.viewer}
                     exhibitions={b.exhibitions}
+                    showcase={b.showcase}
                     spacing={layout.gridSpacing}
                   />
                 </Labelled>

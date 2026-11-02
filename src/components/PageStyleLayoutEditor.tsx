@@ -35,6 +35,9 @@ import {
   type ViewerSettings,
   cleanExhibitions,
   EXHIBITIONS_LIMITS,
+  cleanShowcase,
+  SHOWCASE_LIMITS,
+  type ShowcaseSettings,
   type ExhibitionsSettings,
   type PictureWordsLook,
   PICTURE_SHAPES,
@@ -105,6 +108,7 @@ export default function PageStyleLayoutEditor({
             stories={b.stories}
             viewer={b.viewer}
             exhibitions={b.exhibitions}
+            showcase={b.showcase}
             device={device}
             spacing={layout.gridSpacing}
           />
@@ -321,6 +325,18 @@ export default function PageStyleLayoutEditor({
                   wide
                 />
               </>
+            ),
+          };
+        }
+        if (b.showcase) {
+          return {
+            button: "Settings",
+            title: "Showcase",
+            content: (
+              <ShowcasePanel
+                settings={b.showcase}
+                onChange={(showcase) => onBlock({ ...b, showcase: cleanShowcase(showcase) })}
+              />
             ),
           };
         }
@@ -619,6 +635,111 @@ function ExhibitionsPanel({
       <p className="text-xs text-neutral-400">
         Shows the artist&apos;s Exhibitions (Artworks → Exhibitions), archived ones left out, in the page&apos;s Text
         look. The first is shown to start with; clicking another shows it instead.
+      </p>
+    </>
+  );
+}
+
+// A Showcase's settings (2026-11-02): its timing, the pictures' height
+// on a desktop and a phone, the line between the pair and the space
+// either side of it, the accent colour (titles and dots) and the
+// titles' size.
+function ShowcasePanel({
+  settings,
+  onChange,
+}: {
+  settings: ShowcaseSettings;
+  onChange: (v: ShowcaseSettings) => void;
+}) {
+  const set = (patch: Partial<ShowcaseSettings>) => onChange(cleanShowcase({ ...settings, ...patch }));
+  return (
+    <>
+      <NumberField
+        label="Showing for"
+        unit="seconds"
+        step={0.5}
+        value={settings.duration}
+        limits={SHOWCASE_LIMITS.duration}
+        onCommit={(duration) => set({ duration })}
+        wide
+      />
+      <NumberField
+        label="Sliding apart takes"
+        unit="seconds"
+        step={0.1}
+        value={settings.speed}
+        limits={SHOWCASE_LIMITS.speed}
+        onCommit={(speed) => set({ speed })}
+        wide
+      />
+      <NumberField
+        label="Picture height on a desktop"
+        unit="pixels"
+        step={1}
+        value={settings.height.desktop}
+        limits={SHOWCASE_LIMITS.height}
+        onCommit={(desktop) => set({ height: { ...settings.height, desktop } })}
+        wide
+      />
+      <NumberField
+        label="Picture height on a phone"
+        unit="pixels"
+        step={1}
+        value={settings.height.phone}
+        limits={SHOWCASE_LIMITS.height}
+        onCommit={(phone) => set({ height: { ...settings.height, phone } })}
+        wide
+      />
+      <NumberField
+        label="Space either side of the line"
+        unit="pixels"
+        step={1}
+        value={settings.gap}
+        limits={SHOWCASE_LIMITS.gap}
+        onCommit={(gap) => set({ gap })}
+        wide
+      />
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={settings.line !== null}
+          onChange={(e) => set({ line: e.target.checked ? { colour: "#cccccc", thickness: 2 } : null })}
+        />
+        <span className="flex-1">Line between</span>
+        {settings.line && (
+          <input
+            type="color"
+            value={settings.line.colour}
+            onChange={(e) => set({ line: { ...settings.line!, colour: e.target.value } })}
+            aria-label="Line colour"
+            className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+          />
+        )}
+      </label>
+      {settings.line && (
+        <NumberField
+          label="Line thickness"
+          unit="pixels"
+          step={0.5}
+          value={settings.line.thickness}
+          limits={LINE_THICKNESS_LIMITS}
+          onCommit={(thickness) => set({ line: { ...settings.line!, thickness } })}
+          wide
+        />
+      )}
+      <ColourRow label="Titles and dots" value={settings.accent} onChange={(accent) => set({ accent })} />
+      <NumberField
+        label="Title size"
+        unit="pixels"
+        step={1}
+        value={settings.titleSize}
+        limits={SHOWCASE_LIMITS.titleSize}
+        onCommit={(titleSize) => set({ titleSize })}
+        wide
+      />
+      <p className="text-xs text-neutral-400">
+        Shows every work on the site&apos;s live pages, in a new random order on each visit, two at a time, in the
+        page&apos;s Text look. Clicking a picture opens the work.
       </p>
     </>
   );

@@ -10,6 +10,7 @@ import {
   type StoriesSettings,
   type ViewerSettings,
   type ExhibitionsSettings,
+  type ShowcaseSettings,
 } from "@/lib/pageStyleLayout";
 import type { MailBlockType } from "@/lib/mailTemplateLayout";
 import type { GridSpacing } from "@/lib/rowLayout";
@@ -35,6 +36,7 @@ export function BlockShape({
   stories,
   viewer,
   exhibitions,
+  showcase,
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
@@ -49,6 +51,7 @@ export function BlockShape({
   stories?: StoriesSettings;
   viewer?: ViewerSettings;
   exhibitions?: ExhibitionsSettings;
+  showcase?: ShowcaseSettings;
   device?: PreviewDevice;
 }) {
   switch (type) {
@@ -230,6 +233,47 @@ export function BlockShape({
           {listed}
           <div style={ex?.line ? { borderLeft: `${ex.line.thickness}px solid ${ex.line.colour}` } : undefined} />
           {chosen}
+        </div>
+      );
+    }
+    case "showcase": {
+      // The dots, then the pair — side by side with the line between,
+      // or stacked on a phone — each a picture, a title and lines.
+      const accent = showcase?.accent ?? "#8b1a1a";
+      const work = (
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <div className="h-32 w-4/5 rounded bg-neutral-200" />
+          <div className="h-3 w-2/3 rounded" style={{ background: accent, opacity: 0.4 }} />
+          <Bar className="h-2.5 w-full" />
+          <Bar className="h-2.5 w-1/2" />
+        </div>
+      );
+      const phone = device === "phone";
+      const line = showcase?.line;
+      return (
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-center gap-3">
+            {[0, 1, 2, 3, 4].map((i) => (
+              <span
+                key={i}
+                className="rounded-full"
+                style={{ width: i === 2 ? 10 : 5, height: i === 2 ? 10 : 5, background: accent }}
+              />
+            ))}
+          </div>
+          <div className={phone ? "flex flex-col" : "flex"} style={{ gap: showcase?.gap ?? 24 }}>
+            {work}
+            {line && (
+              <div
+                style={
+                  phone
+                    ? { borderTop: `${line.thickness}px solid ${line.colour}` }
+                    : { borderLeft: `${line.thickness}px solid ${line.colour}` }
+                }
+              />
+            )}
+            {work}
+          </div>
         </div>
       );
     }

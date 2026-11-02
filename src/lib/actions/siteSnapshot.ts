@@ -10,8 +10,10 @@ import {
   getCuration,
   getCurationWorkPresentation,
   listCurationCovers,
+  type CurationDetail,
   type CurationWorkPresentation,
 } from "@/lib/actions/curations";
+import { siteWorks, type SiteWork } from "@/lib/siteWorks";
 import { listCurationSections } from "@/lib/actions/curationSections";
 import { getPageCanvas } from "@/lib/actions/pageCanvas";
 import { getPageComponents } from "@/lib/actions/pageComponents";
@@ -34,7 +36,11 @@ import {
 // sections and each work's presentation, and the menu each page shows
 // (2026-10-06 — the page's own, or else the site's).
 
-async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
+// The site and its Live Pages in order, each with its Display Style,
+// curation or canvas placements, what fills its components and its
+// sign-up forms — what a published site and Showcase's live works
+// (listLiveSiteWorks) start from.
+async function loadLivePages(siteId: string) {
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: {
@@ -77,6 +83,24 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
       };
     })
   );
+  return { site, pages };
+}
+
+// Every curation the pages show (their own, and those placed on a
+// Canvas).
+function pageCurationIds(pages: SnapshotPage[]): Set<string> {
+  const ids = new Set<string>();
+  for (const p of pages) {
+    if (p.curationId) ids.add(p.curationId);
+    for (const c of p.canvas) ids.add(c.curationId);
+  }
+  return ids;
+}
+
+async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
+  const loaded = await loadLivePages(siteId);
+  if (!loaded) return null;
+  const { site, pages } = loaded;
 
   const menuIds = [...new Set(pages.flatMap((p) => (p.menuStyleId ? [p.menuStyleId] : [])))];
   const menuRows = await db.menuStyle.findMany({
@@ -86,11 +110,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
   const menus: Record<string, MenuStyleLayout> = {};
   for (const m of menuRows) menus[m.id] = normalizeMenuStyle(m.layout);
 
-  const curationIds = new Set<string>();
-  for (const p of pages) {
-    if (p.curationId) curationIds.add(p.curationId);
-    for (const c of p.canvas) curationIds.add(c.curationId);
-  }
+  const curationIds = pageCurationIds(pages);
 
   // One curation at a time, so publishing a large site doesn't flood
   // the database.
@@ -141,6 +161,21 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
     profileStories,
     exhibitions,
   };
+}
+
+// Every work the site shows as it is now (2026-11-02), for a Showcase
+// in the admin preview — see lib/siteWorks.ts. The published site works
+// it out from its snapshot instead.
+export async function listLiveSiteWorks(siteId: string): Promise<SiteWork[]> {
+  await requireSiteAccess(siteId);
+  const loaded = await loadLivePages(siteId);
+  if (!loaded) return [];
+  const curations: Record<string, CurationDetail> = {};
+  for (const id of pageCurationIds(loaded.pages)) {
+    const detail = await getCuration(id, loaded.site.artistId);
+    if (detail) curations[id] = detail;
+  }
+  return siteWorks(loaded.pages, curations);
 }
 
 // Publishing — replaces the site's published snapshot and reports back
