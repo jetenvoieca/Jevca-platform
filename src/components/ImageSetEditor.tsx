@@ -12,38 +12,39 @@ import {
 import MediaPicker from "@/components/MediaPicker";
 import ImageFill from "@/components/ImageFill";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
-import { setCurationWorkImages } from "@/lib/actions/curations";
 import type { ArtworkImage } from "@/lib/artworkImages";
 
-// A work's images within one curation (2026-10-03): the main image large
-// on top, up to 3 more in a row of squares under it (2026-11-02, Craig's
-// mockup — the main square is exactly the width of the three).
-// Everything here changes this curation only, never the artwork or the
-// Catalogue — see CurationItem.ownImages in schema.prisma.
+// A main picture and up to 3 more (2026-10-03, a work's images within a
+// curation; shared 2026-11-02 with an Exhibition's pictures): the main
+// image large on top, the others in a row of squares under it
+// (2026-11-02, Craig's mockup — the main square is exactly the width of
+// the three). `save` stores the new list (main first) and returns it as
+// saved — e.g. a curation's own images, never the artwork's (see
+// CurationItem.ownImages in schema.prisma).
 // - Drag an image onto another to change the order (2026-10-29, Craig's
 //   request) — dropped on the main image, it becomes the main image. The
 //   same dragging as a page's Arrange (arrangeItemDrag.ts).
-// - Hover a smaller image for ✕ to take it out of this curation. The main
-//   image has no ✕ (2026-10-04, direct request) — it's only ever changed
-//   by making another image main, so a work always keeps one once it has
-//   one. setCurationWorkImages enforces the same rule.
+// - Hover a smaller image for ✕ to take it out. The main image has no ✕
+//   (2026-10-04, direct request) — it's only ever changed by making
+//   another image main, so once there is one there always is.
 // - "+ Add" picks a picture or video from the Media Catalogue (Marketing
 //   or Videos).
 
 // The drag list's name, as a page's component id is in Arrange.
-const LIST_ID = "curation-images";
+const LIST_ID = "image-set";
+
+type SaveImages = (imageIds: string[]) => Promise<{ images: ArtworkImage[] } | { error: string }>;
 
 function thumbUrl(img: ArtworkImage): string | null {
   return img.kind === "VIDEO" ? img.posterUrl : img.url;
 }
 
-export default function CurationImageEditor(props: {
-  curationId: string;
-  artworkId: string;
+export default function ImageSetEditor(props: {
   artistId: string;
   siteId: string;
   // Main first.
   images: ArtworkImage[];
+  save: SaveImages;
   onSaved: (images: ArtworkImage[]) => void;
   onError: (message: string) => void;
 }) {
@@ -76,20 +77,18 @@ export default function CurationImageEditor(props: {
 }
 
 function ImageGrid({
-  curationId,
-  artworkId,
   artistId,
   siteId,
   images,
+  save: store,
   onSaved,
   onError,
   dragging,
 }: {
-  curationId: string;
-  artworkId: string;
   artistId: string;
   siteId: string;
   images: ArtworkImage[];
+  save: SaveImages;
   onSaved: (images: ArtworkImage[]) => void;
   onError: (message: string) => void;
   dragging: ItemDragData | null;
@@ -100,7 +99,7 @@ function ImageGrid({
 
   const save = async (imageIds: string[]) => {
     setBusy(true);
-    const result = await setCurationWorkImages(curationId, artistId, artworkId, imageIds);
+    const result = await store(imageIds);
     setBusy(false);
     if ("error" in result) {
       onError(result.error);
@@ -156,7 +155,7 @@ function ImageGrid({
               type="button"
               onClick={() => remove(img.id)}
               disabled={busy}
-              title="Remove from this curation"
+              title="Remove"
               className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1.5 py-0.5 text-[10px] text-white group-hover:block"
             >
               ✕

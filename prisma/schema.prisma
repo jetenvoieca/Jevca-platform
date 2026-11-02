@@ -235,6 +235,8 @@ model Artist {
   curations Curation[]
   // The Profile Catalogue (2026-10-26) — see ProfileStory below.
   profileStories ProfileStory[]
+  // The Exhibitions catalogue (2026-11-02) — see Exhibition below.
+  exhibitions Exhibition[]
   // Logins for this client (2026-10-26) — see User below.
   users User[]
   // The site menu items this client's login may reach (2026-10-26),
@@ -648,6 +650,9 @@ model Location {
   customerId String   @unique
   customer   Customer @relation(fields: [customerId], references: [id])
 
+  // Exhibitions held here (2026-11-02) — see Exhibition.
+  exhibitions Exhibition[]
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -729,6 +734,53 @@ model CurationSectionMedia {
 
   @@unique([sectionId, imageId])
   @@index([sectionId, position])
+  @@index([imageId])
+}
+
+// One entry in an artist's Exhibitions catalogue (2026-11-02, Craig's
+// mockup): its name, venue (one of the artist's Locations — its address,
+// phone, email and website show with it; null if none chosen or the
+// Location was deleted), the dates it runs (`startDate` to `endDate`,
+// either may be blank), its opening times and description as typed,
+// and up to 4 pictures (ExhibitionImage, the first its main picture).
+// Archived ones (`archivedAt`) are kept but listed apart. Listed by
+// start date, earliest first.
+model Exhibition {
+  id       String @id @default(cuid())
+  artistId String
+  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+
+  name         String    @default("")
+  locationId   String?
+  location     Location? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  startDate    DateTime? @db.Date
+  endDate      DateTime? @db.Date
+  openingTimes String    @default("")
+  description  String    @default("")
+  archivedAt   DateTime?
+
+  images ExhibitionImage[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([artistId, startDate])
+  @@index([locationId])
+}
+
+// One of an Exhibition's pictures or videos from the Media Catalogue
+// (2026-11-02). `position` sets the order (0 = the main picture).
+// Removed if the exhibition or the picture is deleted.
+model ExhibitionImage {
+  id           String     @id @default(cuid())
+  exhibitionId String
+  exhibition   Exhibition @relation(fields: [exhibitionId], references: [id], onDelete: Cascade)
+  imageId      String
+  image        Image      @relation(fields: [imageId], references: [id], onDelete: Cascade)
+  position     Int
+
+  @@unique([exhibitionId, imageId])
+  @@index([exhibitionId, position])
   @@index([imageId])
 }
 
@@ -2292,6 +2344,8 @@ model Image {
   socialPostMedia SocialPostMedia[]
   // Profile Catalogue stories showing this picture or video (2026-10-26).
   profileStories ProfileStory[]
+  // Exhibitions showing this picture or video (2026-11-02).
+  exhibitionImages ExhibitionImage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -1,9 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import CurationImageEditor from "@/components/CurationImageEditor";
+import ImageSetEditor from "@/components/ImageSetEditor";
 import {
   getCurationWorkPresentation,
+  setCurationWorkImages,
   updateCurationWorkDescription,
   type CurationWorkPresentation as Presentation,
 } from "@/lib/actions/curations";
@@ -21,7 +22,7 @@ import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 // right (2026-11-02, Craig's mockup); one column on a narrow screen.
 // - Images: this curation's own main image + up to 3 more — the
 //   Catalogue's until changed here, and changing them never touches the
-//   Catalogue (see CurationImageEditor).
+//   Catalogue (see ImageSetEditor and setCurationWorkImages).
 // - Name: the artwork's own name (renames it everywhere).
 // - Presentation medium (2026-10-26): the artwork's own, the italic line
 //   on the website (changes it in every curation). The Catalogue's Medium
@@ -211,12 +212,11 @@ export default function CurationWorkPresentation({
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
       <div className="grid items-start gap-4 md:grid-cols-[4fr_5fr]">
-        <CurationImageEditor
-          curationId={curationId}
-          artworkId={artworkId}
+        <ImageSetEditor
           artistId={artistId}
           siteId={siteId}
           images={data.images}
+          save={(imageIds) => setCurationWorkImages(curationId, artistId, artworkId, imageIds)}
           onSaved={(images) => {
             setError(null);
             setData({ ...data, images });

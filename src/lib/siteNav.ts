@@ -21,6 +21,7 @@ export type SiteNavKey =
   | "artworks"
   | "curations"
   | "profileCatalogue"
+  | "exhibitions"
   | "galleries"
   | "artworkSettings"
   | "hopper"
@@ -40,7 +41,14 @@ export type SiteNavKey =
   | "socialMedia"
   | "pr";
 
-const ARTWORK_KEYS: SiteNavKey[] = ["artworks", "profileCatalogue", "curations", "galleries", "artworkSettings"];
+const ARTWORK_KEYS: SiteNavKey[] = [
+  "artworks",
+  "profileCatalogue",
+  "exhibitions",
+  "curations",
+  "galleries",
+  "artworkSettings",
+];
 
 const FINANCIAL_KEYS: SiteNavKey[] = [
   "account",
@@ -99,6 +107,8 @@ export function buildSiteNavEntries({
       href: `${base}/profile-catalogue`,
       active: active === "profileCatalogue",
     },
+    // Exhibitions (2026-11-02, Craig's mockup) — under Profile Catalogue.
+    { label: "Exhibitions", href: `${base}/exhibitions`, active: active === "exhibitions" },
     { label: "Curations", href: `${base}/curations`, active: active === "curations" },
     // "Locations" — the /galleries route, relabelled.
     { label: "Locations", href: `${base}/galleries`, active: active === "galleries" },

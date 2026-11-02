@@ -19,6 +19,7 @@ export const SITE_MENU: {
     items: [
       { key: "artworks", label: "Catalogue" },
       { key: "profileCatalogue", label: "Profile Catalogue" },
+      { key: "exhibitions", label: "Exhibitions" },
       { key: "curations", label: "Curations" },
       { key: "galleries", label: "Locations" },
       { key: "artworkSettings", label: "Settings" },
@@ -77,6 +78,7 @@ export function siteNavKeyForPath(
   if (pathname.startsWith(`${base}/artworks`)) return "artworks";
   if (pathname.startsWith(`${base}/profile-catalogue`))
     return "profileCatalogue";
+  if (pathname.startsWith(`${base}/exhibitions`)) return "exhibitions";
   if (pathname.startsWith(`${base}/curations`)) return "curations";
   if (pathname.startsWith(`${base}/galleries`)) return "galleries";
   if (pathname.startsWith(`${base}/media`)) return "media";
@@ -107,6 +109,7 @@ const PATHS: Record<SiteNavKey, string> = {
   artworks: "/artworks",
   artworkSettings: "/artworks/settings",
   profileCatalogue: "/profile-catalogue",
+  exhibitions: "/exhibitions",
   curations: "/curations",
   galleries: "/galleries",
   media: "/media",
