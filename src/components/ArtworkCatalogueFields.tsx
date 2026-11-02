@@ -377,11 +377,15 @@ export default function ArtworkCatalogueFields({
           className={lineCls}
         >
           <option value="">Choose from list…</option>
-          {withCurrent(settings.mediumPresets, mediumValue).map((m) => (
-            <option key={m} value={m}>
-              {m}
-            </option>
-          ))}
+          {/* A–Z (2026-11-02, Craig's request). */}
+          {withCurrent(settings.mediumPresets, mediumValue)
+            .slice()
+            .sort((x, y) => x.localeCompare(y, "en", { sensitivity: "base" }))
+            .map((m) => (
+              <option key={m} value={m}>
+                {m}
+              </option>
+            ))}
           <option value={ADD_NEW}>+ Add new…</option>
         </select>
       </div>
