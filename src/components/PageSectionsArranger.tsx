@@ -1084,7 +1084,8 @@ function FilledSlot({
         blockId={block.id}
         items={items}
         content={content}
-        note={block.type === "image" ? "Only the first is shown." : null}
+        single={block.type === "image"}
+        note={null}
         dragging={dragging}
         onSave={onSaveItems}
       />
@@ -1210,12 +1211,16 @@ function DescriptionText({
 // Works or Supporting Media as this page shows them: drag one onto
 // another to change the order; ✕, or dragging it to Hidden works, hides
 // it from the page (2026-11-01 — see hideOnPage). Hidden ones are in
-// Hidden works, to drag back.
+// Hidden works, to drag back. A component showing only one (`single`:
+// a Single Image or Picture & words) shows the first: clicking another
+// picture (2026-11-02, Craig's request — e.g. the ISYT home page's work)
+// moves it first, so it's the one shown.
 function ItemsGrid({
   blockId,
   items,
   content,
   note,
+  single = false,
   dragging,
   onSave,
 }: {
@@ -1223,6 +1228,7 @@ function ItemsGrid({
   items: Item[];
   content: ComponentContent;
   note: string | null;
+  single?: boolean;
   dragging: DragData | null;
   onSave: (items: { hiddenIds: string[]; orderIds: string[] }) => void;
 }) {
@@ -1233,10 +1239,16 @@ function ItemsGrid({
     const next = moveItem(orderIds, (id) => id, fromId, toId);
     if (next) onSave({ hiddenIds: content.hiddenIds, orderIds: next });
   });
+  const choose = (id: string) =>
+    onSave({ hiddenIds: content.hiddenIds, orderIds: [id, ...orderIds.filter((o) => o !== id)] });
 
   return (
     <div>
-      {note && <p className="mb-2 text-xs text-neutral-500">{note}</p>}
+      {(note || single) && (
+        <p className="mb-2 text-xs text-neutral-500">
+          {[note, single ? "Click a picture to show it — only that one is shown." : null].filter(Boolean).join(" ")}
+        </p>
+      )}
       {shown.length === 0 ? (
         <p className="py-6 text-center text-sm text-neutral-400">
           {items.length > 0
@@ -1254,6 +1266,8 @@ function ItemsGrid({
               item={item}
               dragging={dragging}
               onRemove={() => hide(item.id)}
+              showing={single && item.id === orderIds[0]}
+              onChoose={single && item.id !== orderIds[0] ? () => choose(item.id) : undefined}
             />
           ))}
         </div>
@@ -1263,16 +1277,22 @@ function ItemsGrid({
 }
 
 // One picture: dragged onto another to change the order, ✕ to hide it.
+// In a component showing only one: the one `showing` is marked, and
+// clicking another chooses it (`onChoose`).
 function ItemTile({
   blockId,
   item,
   dragging,
   onRemove,
+  showing = false,
+  onChoose,
 }: {
   blockId: string;
   item: Item;
   dragging: DragData | null;
   onRemove: () => void;
+  showing?: boolean;
+  onChoose?: () => void;
 }) {
   const drag = useArrangeItem(blockId, item.id, item.url, dragging);
   return (
@@ -1280,10 +1300,11 @@ function ItemTile({
       ref={drag.setNodeRef}
       {...drag.attributes}
       {...drag.listeners}
+      onClick={onChoose}
       title={item.title || undefined}
       className={`group relative cursor-grab overflow-hidden rounded active:cursor-grabbing ${
         drag.isDragging ? "opacity-30" : ""
-      } ${drag.target ? "ring-4 ring-blue-500" : ""}`}
+      } ${drag.target || showing ? "ring-4 ring-blue-500" : ""} ${onChoose ? "opacity-60 hover:opacity-100" : ""}`}
     >
       {item.url ? (
         <img src={item.url} alt="" draggable={false} className="aspect-square w-full object-cover" />
@@ -1291,10 +1312,18 @@ function ItemTile({
         <div className={`aspect-square w-full ${item.video ? "bg-neutral-800" : "bg-neutral-100"}`} />
       )}
       {item.video && <PlayMark />}
+      {showing && (
+        <span className="absolute bottom-1.5 left-1.5 rounded bg-blue-500 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-white">
+          Showing
+        </span>
+      )}
       <button
         type="button"
         onPointerDown={(e) => e.stopPropagation()}
-        onClick={onRemove}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRemove();
+        }}
         aria-label="Hide from this page"
         title="Hide from this page"
         className="absolute right-1.5 top-1.5 hidden rounded bg-black/60 px-2 py-0.5 text-sm text-white group-hover:block"
@@ -1453,7 +1482,8 @@ function PictureWordsSlot({
           blockId={block.id}
           items={items}
           content={content}
-          note={content.unsoldOnly ? "Unsold works — only the first is shown." : "Only the first is shown."}
+          single
+          note={content.unsoldOnly ? "Unsold works." : null}
           dragging={dragging}
           onSave={onSaveItems}
         />
