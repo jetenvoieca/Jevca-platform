@@ -882,8 +882,11 @@ export default function HopperView({
                       ×
                     </button>
                   );
-                  if (entry.artworkId) {
-                    const artworkId = entry.artworkId;
+                  // Entries saved before artworkId existed carry it only in
+                  // their link (…/artworks?selected=<id>).
+                  const artworkId =
+                    entry.artworkId ?? entry.href?.match(/\/artworks\?selected=([^&]+)/)?.[1];
+                  if (artworkId) {
                     return (
                       <div
                         key={entry.key}
