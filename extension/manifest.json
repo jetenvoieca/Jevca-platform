@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Jevca Hopper Importer",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Select images on any page, or import a whole ISYT website with its artwork details, straight into an artist's Hopper on the Jevca platform.",
   "permissions": ["storage", "scripting", "activeTab", "tabs"],
   "host_permissions": ["<all_urls>"],

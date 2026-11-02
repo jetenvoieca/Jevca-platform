@@ -11,8 +11,10 @@ tokens to paste.
 
 ## Install it (one-time, ~1 minute)
 
-1. Download this `extension` folder from the repo and keep it somewhere (don't delete it afterwards —
-   Chrome keeps loading the extension from this folder).
+1. Download it from Jevca — https://jevca.netlify.app/importer/jevca-hopper-importer.zip
+   (made fresh from this folder at every deploy) — unzip it, and keep the
+   `extension` folder somewhere (don't delete it afterwards — Chrome keeps
+   loading the extension from this folder).
 2. Open Chrome and go to `chrome://extensions`.
 3. Turn on **Developer mode** (top-right toggle).
 4. Click **Load unpacked**, and select this folder.
@@ -25,6 +27,14 @@ all your data on all websites". That's expected — it's what lets the
 extension download images regardless of which site or CDN they're hosted
 on. It only acts when you click "Activate on this page"; it doesn't run in
 the background on sites you haven't asked it to.
+
+## Keeping it up to date (since v1.3.0)
+
+Chrome never updates a "Load unpacked" extension by itself. The popup checks
+Jevca's latest version each time it opens and, when there's a newer one, shows
+**Update available** with a link to download it: unzip, remove the old one at
+`chrome://extensions`, then **Load unpacked** the new `extension` folder.
+Raise `version` in manifest.json with every change, so the notice appears.
 
 ## Load the artist list (do this once, and any time artists change)
 

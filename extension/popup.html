@@ -57,6 +57,15 @@
       }
       .ok { color: green; }
       .err { color: #c0392b; }
+      #update {
+        margin-bottom: 12px;
+        padding: 8px 10px;
+        border-radius: 6px;
+        background: #fff4d6;
+        border: 1px solid #f0c040;
+        font-size: 12px;
+        line-height: 1.4;
+      }
       hr {
         border: none;
         border-top: 1px solid #ddd;
@@ -65,6 +74,13 @@
     </style>
   </head>
   <body>
+    <!-- Shown when Jevca has a newer version (see checkForUpdate in popup.js). -->
+    <div id="update" hidden>
+      <strong>Update available</strong> — version <span id="update-latest"></span> (you have
+      <span id="update-current"></span>).
+      <a href="#" id="update-download">Download it</a>, unzip it, then at chrome://extensions remove this
+      one and Load unpacked the new <em>extension</em> folder.
+    </div>
     <h3>Artist</h3>
     <p>Which artist's Hopper are you importing into?</p>
     <select id="artist"><option value="">Loading\u2026</option></select>

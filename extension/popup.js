@@ -107,3 +107,40 @@ activateBtn.addEventListener("click", () => activate("content.js", activateStatu
 importIsytBtn.addEventListener("click", () => activate("isyt.js", isytStatus));
 
 loadInitialState();
+
+// ---------- Update notice (2026-11-02) ----------
+// Jevca publishes the importer's latest version (scripts/zip-extension.mjs,
+// at every deploy). If it's newer than this copy, the popup says so, with
+// a link to download it — Chrome never updates a "Load unpacked" extension
+// by itself.
+const UPDATE_ORIGIN = "https://jevca.netlify.app";
+
+function isNewer(latest, current) {
+  const a = latest.split(".").map(Number);
+  const b = current.split(".").map(Number);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+  }
+  return false;
+}
+
+async function checkForUpdate() {
+  try {
+    const res = await fetch(`${UPDATE_ORIGIN}/importer/version.json`, { cache: "no-store" });
+    if (!res.ok) return;
+    const { version: latest } = await res.json();
+    const current = chrome.runtime.getManifest().version;
+    if (!latest || !isNewer(latest, current)) return;
+    document.getElementById("update-latest").textContent = latest;
+    document.getElementById("update-current").textContent = current;
+    document.getElementById("update-download").addEventListener("click", (e) => {
+      e.preventDefault();
+      chrome.tabs.create({ url: `${UPDATE_ORIGIN}/importer/jevca-hopper-importer.zip` });
+    });
+    document.getElementById("update").hidden = false;
+  } catch {
+    // Offline or Jevca unreachable — no notice, the rest still works.
+  }
+}
+
+checkForUpdate();

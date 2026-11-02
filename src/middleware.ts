@@ -93,6 +93,9 @@ const PUBLIC_PATH_PREFIXES = [
   "/api/spam-cleanup",
   "/login",
   "/inbox-app/",
+  // The Hopper Importer's download and version (scripts/zip-extension.mjs),
+  // read by the extension itself.
+  "/importer/",
   "/privacy",
 ];
 

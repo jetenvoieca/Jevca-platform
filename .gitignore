@@ -149,3 +149,6 @@ vite.config.ts.timestamp-*
 
 # Prisma-generated client (regenerated automatically on install/build)
 src/generated
+
+# The Hopper Importer as downloaded from Jevca — made by scripts/zip-extension.mjs
+/public/importer/
