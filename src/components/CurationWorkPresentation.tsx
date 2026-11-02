@@ -17,6 +17,8 @@ import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
 
 // One work's presentation within a curation (2026-10-03) — shown on the
 // Curations page beside the works, for whichever work is selected:
+// Laid out with the images on the left and the boxed panels on the
+// right (2026-11-02, Craig's mockup); one column on a narrow screen.
 // - Images: this curation's own main image + up to 3 more — the
 //   Catalogue's until changed here, and changing them never touches the
 //   Catalogue (see CurationImageEditor).
@@ -109,11 +111,7 @@ export default function CurationWorkPresentation({
 
   if (loading) return <p className="text-sm text-neutral-400">Loading…</p>;
   if (!data) {
-    return (
-      <p className="text-sm text-neutral-400">
-        {error ?? "This work is no longer in the curation."}
-      </p>
-    );
+    return <p className="text-sm text-neutral-400">{error ?? "This work is no longer in the curation."}</p>;
   }
 
   const saveName = async () => {
@@ -158,12 +156,7 @@ export default function CurationWorkPresentation({
     if (descriptionDraft.trim() === data.description.trim()) return;
     setError(null);
     setSaving(true);
-    const result = await updateCurationWorkDescription(
-      curationId,
-      artistId,
-      artworkId,
-      descriptionDraft
-    );
+    const result = await updateCurationWorkDescription(curationId, artistId, artworkId, descriptionDraft);
     setSaving(false);
     if ("error" in result) {
       setError(result.error);
@@ -180,9 +173,7 @@ export default function CurationWorkPresentation({
     const price = parsePriceInput(priceInput);
     const unchanged =
       currency === data.priceCurrency &&
-      (price.trim() === ""
-        ? data.offeredPrice == null
-        : Number(price) === Number(data.offeredPrice));
+      (price.trim() === "" ? data.offeredPrice == null : Number(price) === Number(data.offeredPrice));
     if (unchanged) return;
     setError(null);
     setSaving(true);
@@ -194,7 +185,11 @@ export default function CurationWorkPresentation({
       setCurrencyDraft(data.priceCurrency);
       return;
     }
-    setData({ ...data, offeredPrice: result.offeredPrice, priceCurrency: currency });
+    setData({
+      ...data,
+      offeredPrice: result.offeredPrice,
+      priceCurrency: currency,
+    });
     setPriceDraft(result.offeredPrice ?? "");
     onArtworkChanged();
   };
@@ -215,108 +210,110 @@ export default function CurationWorkPresentation({
     <div className="flex flex-col gap-2.5">
       {error && <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
-      <CurationImageEditor
-        curationId={curationId}
-        artworkId={artworkId}
-        artistId={artistId}
-        siteId={siteId}
-        images={data.images}
-        onSaved={(images) => {
-          setError(null);
-          setData({ ...data, images });
-          onArtworkChanged();
-        }}
-        onError={setError}
-      />
-
-      <div className={PANEL}>
-        <h3 className={PANEL_TITLE}>Name</h3>
-        <input
-          type="text"
-          value={nameDraft}
-          onChange={(e) => setNameDraft(e.target.value)}
-          onBlur={saveName}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") e.currentTarget.blur();
+      <div className="grid items-start gap-4 md:grid-cols-[4fr_5fr]">
+        <CurationImageEditor
+          curationId={curationId}
+          artworkId={artworkId}
+          artistId={artistId}
+          siteId={siteId}
+          images={data.images}
+          onSaved={(images) => {
+            setError(null);
+            setData({ ...data, images });
+            onArtworkChanged();
           }}
-          className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
+          onError={setError}
         />
-      </div>
 
-      <div className={PANEL}>
-        <h3 className={PANEL_TITLE}>Presentation medium</h3>
-        <textarea
-          value={mediumDraft}
-          onChange={(e) => setMediumDraft(e.target.value)}
-          onBlur={saveMedium}
-          rows={2}
-          placeholder="e.g. Original work on aluminium. Mixed media…"
-          className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
-        />
-      </div>
-
-      <div className={PANEL}>
-        <h3 className={PANEL_TITLE}>Description</h3>
-        <textarea
-          value={descriptionDraft}
-          onChange={(e) => setDescriptionDraft(e.target.value)}
-          onBlur={saveDescription}
-          rows={3}
-          placeholder="Describe this work for this curation"
-          className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
-        />
-      </div>
-
-      <div className={PANEL}>
-        <h3 className={PANEL_TITLE}>Purchase Options</h3>
-        <label className="mb-1 block text-xs font-medium text-neutral-700">Full price</label>
-        <div className="flex items-center gap-2">
-          <select
-            value={currencyDraft}
-            onChange={(e) => {
-              setCurrencyDraft(e.target.value);
-              savePrice(priceDraft, e.target.value);
-            }}
-            className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-sm"
-          >
-            {CURRENCIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-          <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-neutral-200 p-1">
+        <div className="flex flex-col gap-2.5">
+          <div className={PANEL}>
+            <h3 className={PANEL_TITLE}>Name</h3>
             <input
               type="text"
-              inputMode="decimal"
-              value={priceShown}
-              onFocus={() => {
-                setEditingPrice(true);
-                // Plain number while typing ("25000", not "25000.00").
-                if (priceDraft.trim() !== "" && Number.isFinite(typedPrice)) {
-                  setPriceDraft(String(typedPrice));
-                }
-              }}
-              onChange={(e) => setPriceDraft(e.target.value)}
-              onBlur={() => {
-                setEditingPrice(false);
-                savePrice(priceDraft, currencyDraft);
-              }}
+              value={nameDraft}
+              onChange={(e) => setNameDraft(e.target.value)}
+              onBlur={saveName}
               onKeyDown={(e) => {
                 if (e.key === "Enter") e.currentTarget.blur();
               }}
-              placeholder="0"
-              className="w-24 min-w-0 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+              className="w-full rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
             />
-            <span className="whitespace-nowrap text-sm text-neutral-500">
-              or {count} instalments of
-            </span>
-            <span
-              title="Follows the full price. The number of instalments is set in Settings → Financial → Payments defaults."
-              className="w-20 shrink-0 rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm text-neutral-700"
-            >
-              {perInstalment != null ? formatAmount(perInstalment) : "—"}
-            </span>
+          </div>
+
+          <div className={PANEL}>
+            <h3 className={PANEL_TITLE}>Presentation medium</h3>
+            <textarea
+              value={mediumDraft}
+              onChange={(e) => setMediumDraft(e.target.value)}
+              onBlur={saveMedium}
+              rows={2}
+              placeholder="e.g. Original work on aluminium. Mixed media…"
+              className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
+            />
+          </div>
+
+          <div className={PANEL}>
+            <h3 className={PANEL_TITLE}>Description</h3>
+            <textarea
+              value={descriptionDraft}
+              onChange={(e) => setDescriptionDraft(e.target.value)}
+              onBlur={saveDescription}
+              rows={3}
+              placeholder="Describe this work for this curation"
+              className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
+            />
+          </div>
+
+          <div className={PANEL}>
+            <h3 className={PANEL_TITLE}>Purchase Options</h3>
+            <label className="mb-1 block text-xs font-medium text-neutral-700">Full price</label>
+            <div className="flex items-center gap-2">
+              <select
+                value={currencyDraft}
+                onChange={(e) => {
+                  setCurrencyDraft(e.target.value);
+                  savePrice(priceDraft, e.target.value);
+                }}
+                className="shrink-0 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+              >
+                {CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-neutral-200 p-1">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={priceShown}
+                  onFocus={() => {
+                    setEditingPrice(true);
+                    // Plain number while typing ("25000", not "25000.00").
+                    if (priceDraft.trim() !== "" && Number.isFinite(typedPrice)) {
+                      setPriceDraft(String(typedPrice));
+                    }
+                  }}
+                  onChange={(e) => setPriceDraft(e.target.value)}
+                  onBlur={() => {
+                    setEditingPrice(false);
+                    savePrice(priceDraft, currencyDraft);
+                  }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  placeholder="0"
+                  className="w-24 min-w-0 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                />
+                <span className="whitespace-nowrap text-sm text-neutral-500">or {count} instalments of</span>
+                <span
+                  title="Follows the full price. The number of instalments is set in Settings → Financial → Payments defaults."
+                  className="w-20 shrink-0 rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm text-neutral-700"
+                >
+                  {perInstalment != null ? formatAmount(perInstalment) : "—"}
+                </span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

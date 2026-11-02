@@ -16,8 +16,8 @@ import { setCurationWorkImages } from "@/lib/actions/curations";
 import type { ArtworkImage } from "@/lib/artworkImages";
 
 // A work's images within one curation (2026-10-03): the main image large
-// on the left, up to 3 more in a column of squares beside it (2026-10-29,
-// Craig's mockup — the main square is exactly the height of the three).
+// on top, up to 3 more in a row of squares under it (2026-11-02, Craig's
+// mockup — the main square is exactly the width of the three).
 // Everything here changes this curation only, never the artwork or the
 // Catalogue — see CurationItem.ownImages in schema.prisma.
 // - Drag an image onto another to change the order (2026-10-29, Craig's
@@ -134,17 +134,17 @@ function ImageGrid({
   );
 
   return (
-    // Four columns: the main image spans three columns and three rows, so
-    // it's square and level with the three small squares beside it.
-    <div className={`grid grid-cols-4 gap-2.5 ${busy ? "pointer-events-none opacity-60" : ""}`}>
+    // Three columns: the main image spans all three, square, with the
+    // three small squares in a row under it.
+    <div className={`grid grid-cols-3 gap-2.5 ${busy ? "pointer-events-none opacity-60" : ""}`}>
       {main ? (
-        <ImageTile image={main} dragging={dragging} className="col-span-3 row-span-3" large>
+        <ImageTile image={main} dragging={dragging} className="col-span-3 aspect-square" large>
           <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1.5 py-0.5 text-[10px] text-white">
             Main
           </span>
         </ImageTile>
       ) : (
-        addTile("add-main", "Add main image", "col-span-3 row-span-3")
+        addTile("add-main", "Add main image", "col-span-3 aspect-square")
       )}
 
       {[0, 1, 2].map((i) => {

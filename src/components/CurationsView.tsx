@@ -542,7 +542,7 @@ export default function CurationsView({
             if (e.target === e.currentTarget) closePresentation();
           }}
         >
-          <div className="flex max-h-full w-full max-w-md flex-col rounded-lg bg-white shadow-xl">
+          <div className="flex max-h-full w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl">
             {/* Frozen: which work this is, and Close. */}
             <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-2.5">
               <h2 className="min-w-0 flex-1 truncate text-lg text-neutral-900">
