@@ -19,6 +19,7 @@ import HopperImportPanel from "@/components/HopperImportPanel";
 import { type ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import HopperItemPreview from "@/components/HopperItemPreview";
+import AddToCurationButton from "@/components/AddToCurationButton";
 import HopperCropEditor from "@/components/HopperCropEditor";
 import { computeReferencePrice } from "@/lib/pricing";
 import { useClientWords } from "@/components/ClientWordsProvider";
@@ -1283,7 +1284,19 @@ function QuickCatalogueFields({
               location: item.artworkLocation ?? "",
               date: "",
               studioNotes: parsed.studioNotes,
+              isBase: false,
             }}
+            // The same Studio notes as the Catalogue's details panel
+            // (2026-11-01): Base, and the curations to put it in. Make
+            // Derivative needs the work to exist, so it's in the Catalogue.
+            studioActions={
+              <AddToCurationButton
+                artistId={artistId}
+                artworkId={null}
+                artworkName="new work"
+                className={`min-w-0 flex-1 ${FIELD_HEIGHT}`}
+              />
+            }
             onTypeOrSizeChange={(type, size) => {
               setTypeValue(type);
               setSizeValue(size);

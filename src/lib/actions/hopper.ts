@@ -6,6 +6,7 @@ import { publicMediaUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
+import { addWorksToCuration } from "./curations";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 import { noteHopperProcessed } from "@/lib/hopperAlerts";
 
@@ -204,6 +205,10 @@ export async function createArtworkFromHopperQuick(
   const description = (formData.get("description") as string)?.trim() || null;
   const viewingLocation = (formData.get("viewingLocation") as string)?.trim() || null;
   const sold = formData.get("sold") === "on";
+  // Base and the curations to put it in (2026-11-01 — the same Studio
+  // notes as the Catalogue's details panel).
+  const isBase = formData.get("isBase") === "on";
+  const curationIds = formData.getAll("curationIds").map(String);
 
   let artwork: { id: string };
   try {
@@ -233,9 +238,13 @@ export async function createArtworkFromHopperQuick(
       availability: sold ? "SOLD" : "AVAILABLE",
       date: dateRaw || null,
       needsReview: true,
+      isBase,
     });
   } catch {
     return { ok: false, error: "Couldn't create the catalogue entry. Try again." };
+  }
+  for (const curationId of curationIds) {
+    await addWorksToCuration(curationId, artistId, [artwork.id]);
   }
 
   await db.$transaction(async (tx) => {

@@ -14,6 +14,10 @@ import { useBackdropClose } from "@/lib/useBackdropClose";
 // Curation when it's in none); it opens a list of the client's
 // curations, those the work is already in greyed; choosing one adds the
 // work to the end of it.
+//
+// For a work not created yet (the Hopper's new-artwork form, `artworkId`
+// null), choosing a curation only marks it: the choices go with the form
+// as `curationIds`, and the work is added to them once it's created.
 export default function AddToCurationButton({
   artistId,
   artworkId,
@@ -21,7 +25,7 @@ export default function AddToCurationButton({
   className = "",
 }: {
   artistId: string;
-  artworkId: string;
+  artworkId: string | null;
   artworkName: string;
   className?: string;
 }) {
@@ -40,7 +44,10 @@ export default function AddToCurationButton({
     let cancelled = false;
     setCurations(null);
     setInIds([]);
-    Promise.all([listCurations(artistId), curationsWithWork(artistId, artworkId)]).then(([list, already]) => {
+    Promise.all([
+      listCurations(artistId),
+      artworkId ? curationsWithWork(artistId, artworkId) : Promise.resolve<string[]>([]),
+    ]).then(([list, already]) => {
       if (cancelled) return;
       setCurations(list);
       setInIds(already);
@@ -61,6 +68,11 @@ export default function AddToCurationButton({
 
   const add = (curation: CurationSummary) => {
     setError(null);
+    if (!artworkId) {
+      setInIds((prev) => [...prev, curation.id]);
+      setAddedTo(curation.name);
+      return;
+    }
     startTransition(async () => {
       const result = await addWorksToCuration(curation.id, artistId, [artworkId]);
       if ("error" in result) {
@@ -82,6 +94,7 @@ export default function AddToCurationButton({
       >
         {label}
       </button>
+      {!artworkId && inIds.map((id) => <input key={id} type="hidden" name="curationIds" value={id} />)}
 
       {open && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 p-6" {...backdrop}>
@@ -97,7 +110,11 @@ export default function AddToCurationButton({
               </button>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto p-2">
-              {addedTo && <p className="px-3 py-2 text-sm text-green-700">Added to {addedTo}.</p>}
+              {addedTo && (
+                <p className="px-3 py-2 text-sm text-green-700">
+                  {artworkId ? `Added to ${addedTo}.` : `It goes into ${addedTo} once created.`}
+                </p>
+              )}
               {curations === null ? (
                 <p className="p-3 text-sm text-neutral-400">Loading…</p>
               ) : curations.length === 0 ? (

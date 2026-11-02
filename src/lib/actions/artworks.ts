@@ -111,6 +111,8 @@ export async function createArtworkWithRetry(
     // The currency of offeredPrice — omitted, it starts in the artist's
     // default currency (getArtistDefaultCurrency, lib/primarySite.ts).
     priceCurrency: string;
+    // A Base work (2026-11-01 — the Hopper's form can tick it too).
+    isBase: boolean;
   }> & { catalogueName: string }
 ) {
   await requireArtistAccess(artistId);

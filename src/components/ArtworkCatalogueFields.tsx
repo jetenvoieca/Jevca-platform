@@ -32,8 +32,7 @@ export type ArtworkFacetValues = {
   date: string;
   studioNotes: string;
   // The Base tick box (2026-11-01, Craig's request — a work others are
-  // derived from; see Artwork.isBase). Only the Catalogue's details panel
-  // passes it; without it the box isn't shown (the Hopper's quick form).
+  // derived from; see Artwork.isBase). Without it the box isn't shown.
   isBase?: boolean;
 };
 
