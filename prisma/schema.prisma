@@ -793,10 +793,16 @@ model ExhibitionImage {
 // artwork — a picture or video, its caption, and its story (plain text,
 // for now). `position` sets the order in the catalogue (0 first). If its
 // picture or video is deleted, the story stays, without a picture.
+//
+// `kind` (2026-11-02, Craig's mockup): every artist also has one Artist
+// Statement (picture and text) and one Biography / CV (text, picture
+// optional) — made when the catalogue is first opened, shown first,
+// named by their kind, never deleted or reordered. The rest are stories.
 model ProfileStory {
-  id       String @id @default(cuid())
+  id       String           @id @default(cuid())
   artistId String
-  artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  artist   Artist           @relation(fields: [artistId], references: [id], onDelete: Cascade)
+  kind     ProfileStoryKind @default(STORY)
   imageId  String?
   image    Image? @relation(fields: [imageId], references: [id], onDelete: SetNull)
   caption  String @default("")
@@ -808,6 +814,12 @@ model ProfileStory {
 
   @@index([artistId, position])
   @@index([imageId])
+}
+
+enum ProfileStoryKind {
+  STORY
+  STATEMENT
+  BIOGRAPHY
 }
 
 // One artwork's place in one Curation (2026-09-24). `position` sets the

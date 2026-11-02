@@ -20,6 +20,11 @@ import {
 // reorder. Clicking a tile opens its details in a modal, like the
 // Artwork Catalogue: the picture (click for full size) or video (plays in
 // place), Caption and Story, each saved when the box is left.
+//
+// The Artist Statement and Biography / CV (2026-11-02, Craig's mockup)
+// come first, always there: named by their kind (no Caption box), not
+// dragged or deleted; a picture is chosen in their window (an empty box
+// until then).
 export default function ProfileCatalogueView({
   artistId,
   siteId,
@@ -53,7 +58,7 @@ export default function ProfileCatalogueView({
   };
 
   const handleDrop = (target: number) => {
-    if (dragIndex === null || dragIndex === target) {
+    if (dragIndex === null || dragIndex === target || stories[target].kind !== "STORY") {
       setDragIndex(null);
       return;
     }
@@ -67,7 +72,7 @@ export default function ProfileCatalogueView({
     (async () => {
       const result = await reorderProfileStories(
         artistId,
-        next.map((s) => s.id)
+        next.filter((s) => s.kind === "STORY").map((s) => s.id)
       );
       if ("error" in result) {
         setError(result.error);
@@ -107,7 +112,7 @@ export default function ProfileCatalogueView({
               <button
                 key={s.id}
                 type="button"
-                draggable
+                draggable={s.kind === "STORY"}
                 onClick={() => setOpenId(s.id)}
                 onDragStart={(e) => {
                   e.dataTransfer.effectAllowed = "move";
@@ -130,6 +135,8 @@ export default function ProfileCatalogueView({
                       draggable={false}
                       className="aspect-square w-full rounded-md object-cover"
                     />
+                  ) : !s.media && s.kind !== "STORY" ? (
+                    <div className="aspect-square w-full rounded-md border border-neutral-300" />
                   ) : (
                     <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
                       {s.media ? "Video" : "No picture"}
@@ -219,6 +226,8 @@ function StoryModal({
   };
 
   const media = story.media;
+  // The Artist Statement or Biography / CV.
+  const fixed = story.kind !== "STORY";
 
   // Choose (or change) its picture or video (2026-10-27).
   const pickMedia = async (imageId: string) => {
@@ -249,13 +258,15 @@ function StoryModal({
           <h2 className="min-w-0 flex-1 break-words text-lg font-semibold text-neutral-900">
             {caption.trim() || "Untitled"}
           </h2>
-          <button
-            type="button"
-            onClick={handleDelete}
-            className="shrink-0 rounded-md border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50"
-          >
-            Delete
-          </button>
+          {fixed ? null : (
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="shrink-0 rounded-md border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50"
+            >
+              Delete
+            </button>
+          )}
           <button
             type="button"
             onClick={close}
@@ -268,7 +279,9 @@ function StoryModal({
 
         {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
-        {!media ? (
+        {!media && fixed ? (
+          <div className="mb-4">{picker(story.kind === "BIOGRAPHY" ? "Add a picture (optional)" : "Add a picture")}</div>
+        ) : !media ? (
           <div className="mb-4 flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 rounded-md bg-neutral-100 text-sm text-neutral-400">
             <span>Its picture or video was deleted from the Media Catalogue.</span>
             {picker("Choose a picture or video")}
@@ -294,16 +307,20 @@ function StoryModal({
 
         {media && <div className="mb-4">{picker("Change picture or video")}</div>}
 
-        <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
-        <input
-          type="text"
-          value={caption}
-          onChange={(e) => setCaption(e.target.value)}
-          onBlur={() => save({ caption })}
-          className="mb-4 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
-        />
+        {!fixed && (
+          <>
+            <label className="mb-1 block text-sm font-medium text-neutral-700">Caption</label>
+            <input
+              type="text"
+              value={caption}
+              onChange={(e) => setCaption(e.target.value)}
+              onBlur={() => save({ caption })}
+              className="mb-4 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
+          </>
+        )}
 
-        <label className="mb-1 block text-sm font-medium text-neutral-700">Story</label>
+        <label className="mb-1 block text-sm font-medium text-neutral-700">{fixed ? "Text" : "Story"}</label>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
