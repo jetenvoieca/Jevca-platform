@@ -154,15 +154,18 @@ function isUniqueViolation(err: unknown): boolean {
   return typeof err === "object" && err !== null && (err as { code?: string }).code === "P2002";
 }
 
-// What a work's Description is until one is written for it: the
-// artwork's Type, Size and Medium, one per line, skipping any that are
-// blank. Worked out each time it's shown, so it always matches the
-// Catalogue.
+// What a work's Description is until one is written for it in the
+// curation: the artwork's own description (e.g. brought in from an old
+// website by the importer — 2026-11-02), or else its Type, Size and
+// Medium, one per line, skipping any that are blank. Worked out each time
+// it's shown, so it always matches the Catalogue.
 function defaultDescription(artwork: {
+  description: string | null;
   type: string | null;
   size: string | null;
   medium: string | null;
 }): string | null {
+  if (artwork.description?.trim()) return artwork.description.trim();
   const lines = artworkDetailLines(artwork);
   return lines.length > 0 ? lines.join("\n") : null;
 }
@@ -423,6 +426,7 @@ export async function getCurationWorkPresentation(
         select: {
           catalogueName: true,
           catalogueNumber: true,
+          description: true,
           type: true,
           size: true,
           medium: true,
