@@ -4,7 +4,15 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData, type SectionMedia } from "@/lib/curationSections";
-import { arrangeItems, pageWorks, contentFits, contentKindOf, readHeroText, type ComponentContent } from "@/lib/pageComponents";
+import {
+  arrangeItems,
+  pageWorks,
+  contentFits,
+  contentKindOf,
+  readHeroText,
+  showingWorkId,
+  type ComponentContent,
+} from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
 import {
@@ -67,6 +75,7 @@ import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 import ExhibitionsBlock from "@/components/ExhibitionsBlock";
 import ShowcaseBlock from "@/components/ShowcaseBlock";
+import WorkDescriptionText from "@/components/WorkDescriptionText";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import SoldFlag from "@/components/SoldFlag";
@@ -102,8 +111,10 @@ import SiteLogo from "@/components/SiteLogo";
 //   component. A Picture & words (2026-10-24) is a picture beside a
 //   typed headline and the curation's Description — see
 //   PictureWordsBlock. Entries (2026-10-24) is a list typed on the page
-//   — see EntriesBlock. A Portfolio viewer (2026-11-02) shows the works
-//   as thumbnails beside the chosen one, in the page — see ViewerBlock.
+//   — see EntriesBlock. A Text can show the description of the work the
+//   page's picture shows (2026-11-02). A Portfolio viewer (2026-11-02)
+//   shows the works as thumbnails beside the chosen one, in the page —
+//   see ViewerBlock.
 //   A Showcase (2026-11-02) shows every work the site shows, a pair at
 //   a time — see ShowcaseBlock.
 // - Canvas: the page's placed curations, played — see CanvasPlayer.
@@ -540,6 +551,19 @@ export function blockFiller({
       );
     }
     if (content.source === "WORKS") return works(block, content);
+    // The description of the work the page's picture shows (2026-11-02).
+    if (content.source === "WORK_DESCRIPTION") {
+      const artworkId = curation ? showingWorkId(layout.blocks, components, curation.works) : null;
+      if (!curation || !artworkId) return null;
+      const style = textStyleOf(block);
+      return (
+        <WorkDescriptionText
+          curationId={curation.id}
+          artworkId={artworkId}
+          style={style ? bodyTextCss(style, contentWidth) : undefined}
+        />
+      );
+    }
     if (content.source === "TYPED") {
       if (!content.text) return null;
       const style = textStyleOf(block);

@@ -34,10 +34,13 @@ import {
   isTypedContent,
   maxTypedLength,
   readHeroText,
+  showingWorkId,
   writeHeroText,
   type ComponentContent,
   type ContentKind,
+  type PageFill,
 } from "@/lib/pageComponents";
+import WorkDescriptionText from "@/components/WorkDescriptionText";
 import {
   DEFAULT_LINE,
   DEFAULT_LOGO_HEIGHT,
@@ -109,10 +112,11 @@ import type { SiteArtist } from "@/lib/siteArtist";
 const TRAY_ID = "tray";
 const HIDDEN_ID = "hidden";
 
-// Something in the list that can go in a component: a section, or
-// (`sectionId` null) the curation's works — all of them, or with
-// `unsoldOnly` (2026-10-26) the unsold ones.
-type Content = { sectionId: string | null; unsoldOnly?: boolean; kind: ContentKind; label: string; detail: string };
+// Something in the list that can go in a component (`fill`): the
+// curation's works — all of them, or (2026-10-26) the unsold ones — a
+// section, or (2026-11-02) the description of the work the page's
+// picture shows.
+type Content = { fill: PageFill; kind: ContentKind; label: string; detail: string };
 
 // What's being dragged: something from the list or a component (to
 // fill, move or empty a component), or one picture within a component
@@ -138,25 +142,39 @@ type DropData =
 type Item = { id: string; url: string | null; title: string; video?: boolean };
 
 const WORKS: Content = {
-  sectionId: null,
+  fill: { source: "WORKS", unsoldOnly: false },
   kind: "WORKS",
   label: "Works",
   detail: "The curation's works — for a Single Image, Gallery or Sliding doors",
 };
 
 const UNSOLD_WORKS: Content = {
-  sectionId: null,
-  unsoldOnly: true,
+  fill: { source: "WORKS", unsoldOnly: true },
   kind: "WORKS",
   label: "Unsold works",
   detail: "The curation's works, leaving out any sold",
 };
 
+const WORK_DESCRIPTION: Content = {
+  fill: { source: "WORK_DESCRIPTION" },
+  kind: "WORK_DESCRIPTION",
+  label: "Work's description",
+  detail: "The description of the work showing in the Single Image — for a Text",
+};
+
+// A list item's draggable id.
+function contentKey(content: Content): string {
+  const { fill } = content;
+  if (fill.source === "SECTION") return fill.sectionId;
+  if (fill.source === "WORKS") return fill.unsoldOnly ? "unsold" : "works";
+  return "work-description";
+}
+
 const DETAIL_LENGTH = 60;
 
 function sectionContent(section: CurationSectionData): Content {
   return {
-    sectionId: section.id,
+    fill: { source: "SECTION", sectionId: section.id },
     kind: section.type,
     label: curationSectionLabel(section.type),
     detail: sectionDetail(section),
@@ -278,6 +296,10 @@ export default function PageSectionsArranger({
 
   const sectionById = new Map((sections ?? []).map((s) => [s.id, s]));
   const sectionTypes = new Map((sections ?? []).map((s) => [s.id, s.type]));
+  // The work the page's picture shows (2026-11-02), for a Work's
+  // description.
+  const showingId = curation ? showingWorkId(layout.blocks, [...contents.values()], curation.works) : null;
+  const showingWork = curation && showingId ? { curationId: curation.id, artworkId: showingId } : null;
 
   // Changes one component's content on screen, then saves; if the save
   // is refused, says why and reloads what's saved.
@@ -300,21 +322,21 @@ export default function PageSectionsArranger({
   };
 
   const fill = (blockId: string, content: Content) => {
-    const unsoldOnly = content.sectionId === null && !!content.unsoldOnly;
+    const { fill: what } = content;
     return change(
       (m) =>
         m.set(blockId, {
           blockId,
-          source: content.sectionId === null ? "WORKS" : "SECTION",
-          sectionId: content.sectionId,
+          source: what.source,
+          sectionId: what.source === "SECTION" ? what.sectionId : null,
           // A Hero or Picture & words keeps its words when pictures are
           // dropped on it again.
           text: blockTyped(blockId) ? (m.get(blockId)?.text ?? null) : null,
           hiddenIds: [],
           orderIds: [],
-          unsoldOnly,
+          unsoldOnly: what.source === "WORKS" && what.unsoldOnly,
         }),
-      () => setPageComponent(siteId, pageId, blockId, content.sectionId, unsoldOnly),
+      () => setPageComponent(siteId, pageId, blockId, what),
     );
   };
 
@@ -690,6 +712,7 @@ export default function PageSectionsArranger({
                                   kind={kind}
                                   section={content.sectionId ? sectionById.get(content.sectionId) : undefined}
                                   items={itemsOf(content)}
+                                  showingWork={showingWork}
                                   textStyle={textStyle ? bodyTextCss(textStyle) : undefined}
                                   dragging={dragging}
                                   onEmpty={() => empty(b.id)}
@@ -812,6 +835,7 @@ function Tray({
           <>
             <TrayItem content={WORKS} />
             <TrayItem content={UNSOLD_WORKS} />
+            <TrayItem content={WORK_DESCRIPTION} />
             {sections.map((s) => (
               <TrayItem key={s.id} content={sectionContent(s)} />
             ))}
@@ -912,7 +936,7 @@ function TrayStory({ story, onPage }: { story: ProfileStoryRow; onPage: boolean 
 function TrayItem({ content }: { content: Content }) {
   const data: DragData = { type: "content", content, fromBlockId: null };
   const { setNodeRef, attributes, listeners } = useDraggable({
-    id: `tray:${content.sectionId ?? (content.unsoldOnly ? "unsold" : "works")}`,
+    id: `tray:${contentKey(content)}`,
     data,
   });
   return (
@@ -1056,6 +1080,7 @@ function FilledSlot({
   kind,
   section,
   items,
+  showingWork,
   textStyle,
   dragging,
   onEmpty,
@@ -1067,6 +1092,8 @@ function FilledSlot({
   kind: ContentKind;
   section: CurationSectionData | undefined;
   items: Item[];
+  // The work the page's picture shows, for a Work's description.
+  showingWork: { curationId: string; artworkId: string } | null;
   textStyle: CSSProperties | undefined;
   dragging: DragData | null;
   onEmpty: () => void;
@@ -1074,7 +1101,13 @@ function FilledSlot({
   onSaveItems: (items: { hiddenIds: string[]; orderIds: string[] }) => void;
 }) {
   const barContent: Content =
-    kind === "WORKS" || !section ? (content.unsoldOnly ? UNSOLD_WORKS : WORKS) : sectionContent(section);
+    kind === "WORK_DESCRIPTION"
+      ? WORK_DESCRIPTION
+      : kind === "WORKS" || !section
+        ? content.unsoldOnly
+          ? UNSOLD_WORKS
+          : WORKS
+        : sectionContent(section);
   const edited = kind === "DESCRIPTION" && content.text !== null;
 
   let body: ReactNode = null;
@@ -1089,6 +1122,17 @@ function FilledSlot({
         dragging={dragging}
         onSave={onSaveItems}
       />
+    );
+  } else if (kind === "WORK_DESCRIPTION") {
+    body = showingWork ? (
+      <WorkDescriptionText
+        curationId={showingWork.curationId}
+        artworkId={showingWork.artworkId}
+        style={textStyle}
+        empty="The work showing has no description — add one in its Presentation."
+      />
+    ) : (
+      <p className="text-sm text-neutral-400">Choose a work in the Single Image — its description shows here.</p>
     );
   } else if (kind === "DESCRIPTION") {
     body = (

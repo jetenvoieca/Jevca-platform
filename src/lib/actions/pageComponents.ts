@@ -12,6 +12,7 @@ import {
   writeHeroText,
   type ComponentContent,
   type ContentKind,
+  type PageFill,
 } from "@/lib/pageComponents";
 import { blockTypeLabel, normalizeLayout, type LayoutBlock } from "@/lib/pageStyleLayout";
 import { readEntries, writeEntries } from "@/lib/pageEntries";
@@ -86,15 +87,14 @@ async function pageBlock(
   return { curationId: page.curationId, block };
 }
 
-// Fills one component with a section of the page's curation (or, with
-// `sectionId` null, its works — `unsoldOnly`: only the unsold ones),
-// replacing what it held.
+// Fills one component with the page's curation's works (`unsoldOnly`:
+// only the unsold ones), one of its sections, or (2026-11-02) the
+// description of the work its picture shows — replacing what it held.
 export async function setPageComponent(
   siteId: string,
   pageId: string,
   blockId: string,
-  sectionId: string | null,
-  unsoldOnly: boolean,
+  fill: PageFill,
 ): Promise<Result> {
   await requireSiteAccess(siteId);
   const found = await pageBlock(siteId, pageId, blockId);
@@ -103,25 +103,27 @@ export async function setPageComponent(
   // sections.
   if (!found.curationId) return { error: "This page has no curation. Choose one with Edit." };
 
-  let kind: ContentKind = "WORKS";
-  if (sectionId !== null) {
+  let kind: ContentKind;
+  if (fill.source === "SECTION") {
     const section = await db.curationSection.findFirst({
-      where: { id: sectionId, curationId: found.curationId },
+      where: { id: fill.sectionId, curationId: found.curationId },
       select: { type: true },
     });
     if (!section) return { error: "That section is no longer in the page's curation." };
     kind = section.type;
+  } else {
+    kind = fill.source;
   }
   if (!contentFits(found.block.type, kind)) {
     return { error: `That can't go in a ${blockTypeLabel(found.block.type)} component.` };
   }
 
   const data = {
-    source: sectionId === null ? ("WORKS" as const) : ("SECTION" as const),
-    sectionId,
+    source: fill.source,
+    sectionId: fill.source === "SECTION" ? fill.sectionId : null,
     hiddenIds: [],
     orderIds: [],
-    unsoldOnly: sectionId === null && unsoldOnly,
+    unsoldOnly: fill.source === "WORKS" && fill.unsoldOnly,
   };
   // A Hero (2026-10-22) or Picture & words (2026-10-24) keeps the words
   // typed on it.

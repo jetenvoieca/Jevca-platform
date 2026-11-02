@@ -17,11 +17,14 @@ import { isSold } from "@/lib/artworkFilters";
 // - SECTION: the curation's section `sectionId`; for a Description,
 //   `text` is this page's own copy (null = the curation's).
 // - TYPED: `text`, typed on the page (a Header or Byline).
+// - WORK_DESCRIPTION (2026-11-02, Craig's request — the ISYT home
+//   page): the presentation description of the work the page's picture
+//   shows (see showingWorkId), in a Text.
 // `hiddenIds` / `orderIds`: works or Supporting Media removed on this
 // page, and the order chosen — see arrangeItems.
 export type ComponentContent = {
   blockId: string;
-  source: "WORKS" | "SECTION" | "TYPED";
+  source: "WORKS" | "SECTION" | "TYPED" | "WORK_DESCRIPTION";
   sectionId: string | null;
   text: string | null;
   hiddenIds: string[];
@@ -29,9 +32,17 @@ export type ComponentContent = {
   unsoldOnly: boolean;
 };
 
-// What can go in a component: a section, by its type, the works, or
-// typed text.
-export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
+// What can go in a component: a section, by its type, the works, typed
+// text, or the description of the work the page's picture shows.
+export type ContentKind = CurationSectionType | "WORKS" | "TYPED" | "WORK_DESCRIPTION";
+
+// What Arrange fills a component with from its list: the curation's
+// works (all, or only the unsold ones), one of its sections, or the
+// description of the work the page's picture shows.
+export type PageFill =
+  | { source: "WORKS"; unsoldOnly: boolean }
+  | { source: "SECTION"; sectionId: string }
+  | { source: "WORK_DESCRIPTION" };
 
 // Which content each component takes (Craig's choice: match by kind;
 // 2026-10-13: a Header or Byline is typed in, a Text or Text grid takes the
@@ -52,7 +63,7 @@ export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   header: ["TYPED"],
   byline: ["TYPED"],
-  text: ["DESCRIPTION", "TYPED"],
+  text: ["DESCRIPTION", "TYPED", "WORK_DESCRIPTION"],
   textgrid: ["DESCRIPTION"],
   image: ["IMAGES", "WORKS"],
   gallery: ["IMAGES", "WORKS"],
@@ -107,6 +118,7 @@ export function contentKindOf(
 ): ContentKind | null {
   if (content.source === "WORKS") return "WORKS";
   if (content.source === "TYPED") return "TYPED";
+  if (content.source === "WORK_DESCRIPTION") return "WORK_DESCRIPTION";
   return (content.sectionId && sectionTypes.get(content.sectionId)) || null;
 }
 
@@ -135,6 +147,26 @@ export function pageWorks<T extends { availability: string }>(
   content: Pick<ComponentContent, "unsoldOnly">,
 ): T[] {
   return content.unsoldOnly ? works.filter((w) => !isSold(w.availability)) : works;
+}
+
+// The work a page's picture shows (2026-11-02), whose description a
+// Text holding WORK_DESCRIPTION shows: the first work, as arranged on
+// the page, of its first Single Image or Picture & words holding the
+// works (in the style's order) — null if none does.
+export function showingWorkId<T extends { artworkId: string; availability: string }>(
+  blocks: { id: string; type: LayoutBlockType }[],
+  components: ComponentContent[],
+  works: T[],
+): string | null {
+  const byBlock = new Map(components.map((c) => [c.blockId, c]));
+  for (const b of blocks) {
+    if (b.type !== "image" && b.type !== "picturewords") continue;
+    const content = byBlock.get(b.id);
+    if (content?.source !== "WORKS") continue;
+    const first = arrangeItems(pageWorks(works, content), (w) => w.artworkId, content)[0];
+    if (first) return first.artworkId;
+  }
+  return null;
 }
 
 // The longest Header or Byline that can be typed.

@@ -131,6 +131,9 @@ enum PageContentSource {
   WORKS
   SECTION
   TYPED
+  // The presentation description of the work the page's picture shows
+  // (2026-11-02, a Text — see showingWorkId in lib/pageComponents.ts).
+  WORK_DESCRIPTION
 }
 
 // In display order (Postgres sorts an enum by its declared order).
