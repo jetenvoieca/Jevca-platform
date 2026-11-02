@@ -18,15 +18,19 @@ import { useBackdropClose } from "@/lib/useBackdropClose";
 // For a work not created yet (the Hopper's new-artwork form, `artworkId`
 // null), choosing a curation only marks it: the choices go with the form
 // as `curationIds`, and the work is added to them once it's created.
+// `alsoInto`: a curation it goes into anyway, named on the button (an
+// imported work's portfolio section — see addToPortfolioCuration).
 export default function AddToCurationButton({
   artistId,
   artworkId,
   artworkName,
+  alsoInto = null,
   className = "",
 }: {
   artistId: string;
   artworkId: string | null;
   artworkName: string;
+  alsoInto?: string | null;
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -57,7 +61,12 @@ export default function AddToCurationButton({
     };
   }, [artistId, artworkId]);
 
-  const inNames = (curations ?? []).filter((c) => inIds.includes(c.id)).map((c) => c.name);
+  const inNames = [
+    ...new Set([
+      ...(alsoInto ? [alsoInto] : []),
+      ...(curations ?? []).filter((c) => inIds.includes(c.id)).map((c) => c.name),
+    ]),
+  ];
   const label = inNames.length > 0 ? inNames.join(", ") : "Curation";
 
   const show = () => {
@@ -121,7 +130,7 @@ export default function AddToCurationButton({
                 <p className="p-3 text-sm text-neutral-400">No curations yet — add one on the Curations page.</p>
               ) : (
                 curations.map((c) => {
-                  const already = inIds.includes(c.id);
+                  const already = inIds.includes(c.id) || c.name === alsoInto;
                   return (
                     <button
                       key={c.id}

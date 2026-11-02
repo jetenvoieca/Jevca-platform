@@ -59,6 +59,8 @@ export type HopperItem = {
   artworkEdition: string | null;
   artworkSold: boolean;
   artworkViewingLocation: string | null;
+  // The old website's portfolio section (2026-11-02) — its curation.
+  artworkPortfolio: string | null;
   sourceUrl: string | null;
   altText: string | null;
   tags: string[];
@@ -1347,6 +1349,9 @@ function QuickCatalogueFields({
                 artistId={artistId}
                 artworkId={null}
                 artworkName="new work"
+                // An imported work goes into its old portfolio section's
+                // curation (2026-11-02).
+                alsoInto={item.artworkPortfolio}
                 className={`min-w-0 flex-1 ${FIELD_HEIGHT}`}
               />
             }

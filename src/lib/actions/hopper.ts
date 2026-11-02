@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
 import { addWorksToCuration } from "./curations";
+import { CURATION_SECTION_TYPES } from "@/lib/curationSections";
 import { createLocation } from "./locations";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 import { noteHopperProcessed } from "@/lib/hopperAlerts";
@@ -87,6 +88,7 @@ export async function listHopperQueue(artistId: string) {
       artworkEdition: true,
       artworkSold: true,
       artworkViewingLocation: true,
+      artworkPortfolio: true,
       sourceUrl: true,
       altText: true,
       tags: true,
@@ -188,7 +190,10 @@ export async function createArtworkFromHopperQuick(
 ): Promise<{ ok: true; artwork: { id: string } } | { ok: false; error: string }> {
   await requireArtistAccess(artistId);
   // The picture must be this client's.
-  const picture = await db.image.findFirst({ where: { id: hopperImageId, artistId }, select: { status: true } });
+  const picture = await db.image.findFirst({
+    where: { id: hopperImageId, artistId },
+    select: { status: true, artworkPortfolio: true, createdAt: true },
+  });
   if (!picture) return { ok: false, error: "That item couldn't be found." };
   const title = ((formData.get("catalogueName") as string) || "").trim() || "Untitled";
   const offeredPriceRaw = (formData.get("offeredPrice") as string)?.trim();
@@ -253,6 +258,9 @@ export async function createArtworkFromHopperQuick(
   for (const curationId of curationIds) {
     await addWorksToCuration(curationId, artistId, [artwork.id]);
   }
+  if (picture.artworkPortfolio) {
+    await addToPortfolioCuration(artistId, picture.artworkPortfolio, artwork.id, picture.createdAt);
+  }
 
   await db.$transaction(async (tx) => {
     await tx.image.update({
@@ -264,6 +272,38 @@ export async function createArtworkFromHopperQuick(
   if (picture.status === "HOPPER") await noteHopperProcessed(artistId);
 
   return { ok: true, artwork: { id: artwork.id } };
+}
+
+// A work imported from an old website goes into the curation named after
+// its portfolio section there (2026-11-02, Craig's request — e.g. "Head
+// Sculptures"), made if it isn't there yet. The works keep the old site's
+// order whichever is sorted first: each goes before the first work in the
+// curation whose picture was imported after its own.
+async function addToPortfolioCuration(artistId: string, name: string, artworkId: string, importedAt: Date) {
+  const curation =
+    (await db.curation.findUnique({ where: { artistId_name: { artistId, name } }, select: { id: true } })) ??
+    (await db.curation.create({
+      data: { artistId, name, sections: { create: CURATION_SECTION_TYPES.map((t) => ({ type: t.value })) } },
+      select: { id: true },
+    }));
+  const items = await db.curationItem.findMany({
+    where: { curationId: curation.id },
+    orderBy: { position: "asc" },
+    select: { artworkId: true, artwork: { select: { mainImage: { select: { createdAt: true } } } } },
+  });
+  if (items.some((i) => i.artworkId === artworkId)) return;
+  const at = items.findIndex((i) => (i.artwork.mainImage?.createdAt ?? new Date(8.64e15)) > importedAt);
+  const ordered = items.map((i) => i.artworkId);
+  ordered.splice(at < 0 ? ordered.length : at, 0, artworkId);
+  await db.$transaction([
+    db.curationItem.create({ data: { curationId: curation.id, artworkId, position: ordered.length } }),
+    ...ordered.map((id, position) =>
+      db.curationItem.update({
+        where: { curationId_artworkId: { curationId: curation.id, artworkId: id } },
+        data: { position },
+      }),
+    ),
+  ]);
 }
 
 // ---------- Notes sent from the Studio app (2026-10-31) ----------
