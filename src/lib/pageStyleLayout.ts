@@ -521,7 +521,8 @@ export function cleanViewer(raw: unknown): ViewerSettings {
 // year, the chosen one shaded `highlight`; then the `line` (null = none)
 // with `gap` pixels either side; then the chosen exhibition — its
 // picture, its name and venue as a heading (`titleSize` pixels), its
-// dates, opening times and description. The first is chosen to start
+// dates, opening times, the venue's address, website, phone and email
+// (those it has), and description. The first is chosen to start
 // with. The year and heading are in `accent`; everything else in the
 // page's Text look. On a phone the chosen one shows above the list.
 export type ExhibitionsSettings = {

@@ -10,7 +10,9 @@ import { bodyTextCss } from "@/components/textStyleCss";
 
 // Exhibitions on a page (2026-11-02, the ISYT sites' exhibitions pages —
 // see ExhibitionsSettings in lib/pageStyleLayout.ts): the list of
-// exhibitions, a line, and the chosen one — the first to start with. On
+// exhibitions, a line, and the chosen one — the first to start with —
+// with its venue's address, website, phone and email (2026-11-02, from
+// its Location), those it has. On
 // a phone the chosen one shows above the list, scrolled to when chosen.
 
 // The year it starts (or ends) in.
@@ -51,6 +53,7 @@ export default function ExhibitionsBlock({
   const picture = chosen.images[0];
   const heading = [chosen.name, chosen.venue?.name].filter(Boolean).join(" - ");
   const dates = datesLine(chosen);
+  const venue = chosen.venue;
 
   return (
     <div
@@ -124,6 +127,22 @@ export default function ExhibitionsBlock({
         )}
         {dates && <p className="font-bold opacity-80">{dates}</p>}
         {chosen.openingTimes && <p className="whitespace-pre-line">{chosen.openingTimes}</p>}
+        {venue && (venue.address || venue.websiteUrl || venue.phone || venue.email) && (
+          <div className="flex flex-col">
+            {venue.address && <p className="whitespace-pre-line">{venue.address}</p>}
+            {venue.websiteUrl && (
+              <a href={venue.websiteUrl} target="_blank" rel="noopener noreferrer" className="underline hover:opacity-70">
+                {venue.websiteName || venue.websiteUrl.replace(/^https?:\/\//, "").replace(/\/$/, "")}
+              </a>
+            )}
+            {venue.phone && <p>{venue.phone}</p>}
+            {venue.email && (
+              <a href={`mailto:${venue.email}`} className="underline hover:opacity-70">
+                {venue.email}
+              </a>
+            )}
+          </div>
+        )}
         {chosen.description && <p className="whitespace-pre-line break-words">{chosen.description}</p>}
       </div>
     </div>
