@@ -82,9 +82,18 @@
 
   // ---------- reading the site ----------
 
+  // Some ISYT menus link with http:// though the site is on https://,
+  // which the browser blocks (2026-11-02) — the site's own pages are
+  // always fetched as this page is (same protocol and address).
+  function onThisSite(url) {
+    const u = new URL(url, location.href);
+    if (u.hostname === location.hostname) u.protocol = location.protocol;
+    return u.toString();
+  }
+
   async function fetchDoc(url) {
     try {
-      const res = await fetch(url, { credentials: "same-origin" });
+      const res = await fetch(onThisSite(url), { credentials: "same-origin" });
       if (!res.ok) return null;
       return new DOMParser().parseFromString(await res.text(), "text/html");
     } catch (e) {
