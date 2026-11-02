@@ -1332,7 +1332,9 @@ function QuickCatalogueFields({
               size: initialSize,
               edition: item.artworkEdition ?? "",
               availableQty: "",
-              location: item.artworkLocation ?? "",
+              // "Can be seen at …" from an old website is its Location
+              // (2026-11-02) — added as a Gallery on create if new.
+              location: item.artworkLocation ?? item.artworkViewingLocation ?? "",
               date: "",
               studioNotes: parsed.studioNotes,
               isBase: false,

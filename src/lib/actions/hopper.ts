@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache";
 import { appendImageToTimeline } from "./videoEditor";
 import { createArtworkWithRetry } from "./artworks";
 import { addWorksToCuration } from "./curations";
+import { createLocation } from "./locations";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 import { noteHopperProcessed } from "@/lib/hopperAlerts";
 
@@ -197,6 +198,12 @@ export async function createArtworkFromHopperQuick(
   const edition = (formData.get("edition") as string)?.trim() || null;
   const availableQtyRaw = (formData.get("availableQty") as string)?.trim();
   const location = (formData.get("location") as string)?.trim() || null;
+  // A Location not yet in the client's list (e.g. "Can be seen at …" from an
+  // old website — 2026-11-02, Craig's request) is added as a Gallery.
+  if (location && !(await db.location.findUnique({ where: { artistId_name: { artistId, name: location } } }))) {
+    const created = await createLocation(artistId, siteId, location, "GALLERY");
+    if ("error" in created) return { ok: false, error: created.error };
+  }
   const studioNotes = (formData.get("studioNotes") as string)?.trim() || null;
   const medium = (formData.get("medium") as string)?.trim() || null;
   // Only on the form for a work imported from an old website (2026-10-26
