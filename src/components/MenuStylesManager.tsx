@@ -14,11 +14,13 @@ import MenuStyleEditor, { type MenuStyleDraft } from "@/components/MenuStyleEdit
 import MenuStylePreview from "@/components/MenuStylePreview";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAutoSave } from "@/components/useAutoSave";
+import { ThemedStyleList } from "@/components/ThemedStyleList";
 
 // Templates → Menus (2026-10-06, from Craig's request): the shared
 // library of site menu designs, laid out like Page Styles — the Preview
 // on the left; on the right, Add / Edit / Duplicate / Delete above the
-// list of menus. Clicking a menu selects it — Edit, Duplicate and
+// list of menus, grouped under their themes (2026-11-02, see
+// ThemedStyleList). Clicking a menu selects it — Edit, Duplicate and
 // Delete act on it.
 //
 // Add and Edit swap the list for the editor panel (MenuStyleEditor),
@@ -171,23 +173,12 @@ export default function MenuStylesManager({ styles }: { styles: MenuStyleSummary
                   No menus yet. Use Add to create one.
                 </p>
               )}
-              {styles.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelectedId(s.id === selectedId ? null : s.id)}
-                  className={`flex w-full items-baseline justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm ${
-                    s.id === selectedId
-                      ? "border-neutral-900 bg-neutral-100 text-neutral-900"
-                      : "border-transparent text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                >
-                  <span className="truncate">{s.name}</span>
-                  <span className="shrink-0 text-xs text-neutral-400">
-                    {MENU_KINDS.find((k) => k.value === s.layout.kind)?.label}
-                  </span>
-                </button>
-              ))}
+              <ThemedStyleList
+                items={styles}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                tag={(s) => MENU_KINDS.find((k) => k.value === s.layout.kind)?.label}
+              />
             </div>
           </div>
         )}

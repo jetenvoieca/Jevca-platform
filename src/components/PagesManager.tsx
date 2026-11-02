@@ -14,6 +14,7 @@ import {
 import type { CurationSummary } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { MenuStyleSummary } from "@/lib/actions/menuStyles";
+import { ThemedStyleOptions } from "@/components/ThemedStyleList";
 import { LiveSiteData } from "@/lib/siteData";
 import PageDetailsModal from "@/components/PageDetailsModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -414,11 +415,7 @@ export default function PagesManager({
             className="min-w-0 flex-1 rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
           >
             <option value="">None</option>
-            {menuStyles.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
+            <ThemedStyleOptions items={menuStyles} />
           </select>
         </label>
         {renderList("hidden", "Hidden Pages", hidden)}

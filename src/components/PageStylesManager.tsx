@@ -15,10 +15,12 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 import { useAutoSave } from "@/components/useAutoSave";
 import PageStylePreview from "@/components/PageStylePreview";
 import PageStyleLayoutEditor from "@/components/PageStyleLayoutEditor";
+import { ThemedStyleList } from "@/components/ThemedStyleList";
 
 // Templates → Page Styles (2026-10-04, from Craig's mockups): the Preview
 // panel on the left; on the right, Add / Edit / Duplicate / Delete above
-// the list of styles. Clicking a style selects it — Edit, Duplicate
+// the list of styles, grouped under their themes (2026-11-02, see
+// ThemedStyleList). Clicking a style selects it — Edit, Duplicate
 // (2026-10-05) and Delete act on it.
 //
 // Add and Edit swap the list for the editor panel (PageStyleEditor),
@@ -222,21 +224,12 @@ export default function PageStylesManager({
               {styles.length === 0 && (
                 <p className="py-4 text-center text-xs text-neutral-400">No styles yet. Use Add to create one.</p>
               )}
-              {styles.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => setSelectedId(s.id === selectedId ? null : s.id)}
-                  className={`flex w-full items-baseline justify-between gap-2 rounded-md border px-3 py-2 text-left text-sm ${
-                    s.id === selectedId
-                      ? "border-neutral-900 bg-neutral-100 text-neutral-900"
-                      : "border-transparent text-neutral-700 hover:bg-neutral-50"
-                  }`}
-                >
-                  <span className="truncate">{s.name}</span>
-                  <span className="shrink-0 text-xs text-neutral-400">{pageStyleTypeLabel(s.type)}</span>
-                </button>
-              ))}
+              <ThemedStyleList
+                items={styles}
+                selectedId={selectedId}
+                onSelect={setSelectedId}
+                tag={(s) => pageStyleTypeLabel(s.type)}
+              />
             </div>
           </div>
         )}

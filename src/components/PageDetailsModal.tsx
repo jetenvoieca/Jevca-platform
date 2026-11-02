@@ -5,6 +5,7 @@ import type { CurationSummary } from "@/lib/actions/curations";
 import type { PageDetailsInput } from "@/lib/actions/pages";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { MenuStyleSummary } from "@/lib/actions/menuStyles";
+import { ThemedStyleOptions } from "@/components/ThemedStyleList";
 
 // The Pages page's Add / Edit modal (2026-10-04, from Craig's mockup):
 // Page Name, Curation and Display Style. The same modal is used for both
@@ -110,11 +111,7 @@ export default function PageDetailsModal({
             className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
           >
             <option value="">None</option>
-            {pageStyles.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
+            <ThemedStyleOptions items={pageStyles} />
           </select>
 
           <label htmlFor="page-menu" className="text-sm text-neutral-700">
@@ -127,11 +124,7 @@ export default function PageDetailsModal({
             className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
           >
             <option value="">Site menu</option>
-            {menuStyles.map((m) => (
-              <option key={m.id} value={m.id}>
-                {m.name}
-              </option>
-            ))}
+            <ThemedStyleOptions items={menuStyles} />
           </select>
 
           {!hasChildren && (
