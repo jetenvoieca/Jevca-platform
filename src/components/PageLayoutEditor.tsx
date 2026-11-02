@@ -90,6 +90,7 @@ export default function PageLayoutEditor({
     artist: content.artist,
     heading: content.heading,
     stories: content.stories,
+    exhibitions: content.exhibitions,
     homeHref: null,
     onOpen: () => {},
     heroShowing,

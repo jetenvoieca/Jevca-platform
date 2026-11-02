@@ -65,6 +65,7 @@ export default function PageStylePreview({ style }: { style: PageStyleLayout }) 
                     pictureWords={b.pictureWords}
                     stories={b.stories}
                     viewer={b.viewer}
+                    exhibitions={b.exhibitions}
                     spacing={layout.gridSpacing}
                   />
                 </Labelled>

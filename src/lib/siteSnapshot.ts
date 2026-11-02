@@ -11,6 +11,7 @@ import type { ComponentContent } from "@/lib/pageComponents";
 import type { SignupFormContent } from "@/lib/signupForms";
 import type { SiteArtist } from "@/lib/siteArtist";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
+import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 import { readPageStories } from "@/lib/pageStories";
 
 // A published site (2026-10-06) — everything its pages show, saved when
@@ -109,6 +110,10 @@ export type SiteSnapshot = {
   // (2026-10-26) — only those, so unpublished ones stay private. Read as
   // none for a site published before they existed.
   profileStories: ProfileStoryRow[];
+  // The Exhibitions catalogue (2026-11-02; archived ones left out), when
+  // a page shows it — otherwise none. Read as none for a site published
+  // before then.
+  exhibitions: ExhibitionRow[];
 };
 
 // What "Publish to live site" reports back (2026-10-06): when the site

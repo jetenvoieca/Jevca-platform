@@ -43,7 +43,8 @@ export type ContentKind = CurationSectionType | "WORKS" | "TYPED";
 // on the page, for a text the curation's one Description isn't — e.g.
 // Louise Dear's Materials and Commissions; 2026-10-26: Profile stories
 // are chosen on the page — see lib/pageStories.ts; 2026-11-02: a
-// Portfolio viewer takes the works). Feature takes nothing yet. A Sign-up form (2026-10-10)
+// Portfolio viewer takes the works; Exhibitions shows the Exhibitions
+// catalogue and takes nothing). Feature takes nothing yet. A Sign-up form (2026-10-10)
 // takes no content: it's set up on its own in Arrange (see
 // lib/signupForms.ts). A Logo (2026-10-13) is always the artist's own,
 // and a Line (2026-10-23) is only a line.
@@ -55,6 +56,7 @@ const FITS: Record<LayoutBlockType, readonly ContentKind[]> = {
   image: ["IMAGES", "WORKS"],
   gallery: ["IMAGES", "WORKS"],
   viewer: ["WORKS"],
+  exhibitions: [],
   slidingdoors: ["WORKS"],
   entries: ["TYPED"],
   stories: ["TYPED"],

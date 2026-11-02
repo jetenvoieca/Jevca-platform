@@ -33,6 +33,9 @@ import {
   cleanViewer,
   VIEWER_LIMITS,
   type ViewerSettings,
+  cleanExhibitions,
+  EXHIBITIONS_LIMITS,
+  type ExhibitionsSettings,
   type PictureWordsLook,
   PICTURE_SHAPES,
   cleanGalleryNames,
@@ -101,6 +104,7 @@ export default function PageStyleLayoutEditor({
             pictureWords={b.pictureWords}
             stories={b.stories}
             viewer={b.viewer}
+            exhibitions={b.exhibitions}
             device={device}
             spacing={layout.gridSpacing}
           />
@@ -320,6 +324,18 @@ export default function PageStyleLayoutEditor({
             ),
           };
         }
+        if (b.exhibitions) {
+          return {
+            button: "Settings",
+            title: "Exhibitions",
+            content: (
+              <ExhibitionsPanel
+                settings={b.exhibitions}
+                onChange={(exhibitions) => onBlock({ ...b, exhibitions: cleanExhibitions(exhibitions) })}
+              />
+            ),
+          };
+        }
         if (b.viewer) {
           return {
             button: "Settings",
@@ -521,6 +537,90 @@ function ColourRow({ label, value, onChange }: { label: string; value: string; o
       />
       <span className="w-16 text-xs text-neutral-400">{value}</span>
     </label>
+  );
+}
+
+// Exhibitions' settings (2026-11-02): the order, the list's share of the
+// width and picture size, the line, the chosen one's shading, the
+// accent colour (year and heading) and the heading's size.
+function ExhibitionsPanel({
+  settings,
+  onChange,
+}: {
+  settings: ExhibitionsSettings;
+  onChange: (v: ExhibitionsSettings) => void;
+}) {
+  const set = (patch: Partial<ExhibitionsSettings>) => onChange(cleanExhibitions({ ...settings, ...patch }));
+  return (
+    <>
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={settings.newestFirst}
+          onChange={(e) => set({ newestFirst: e.target.checked })}
+        />
+        Newest first
+      </label>
+      <NumberField
+        label="List's share of the width"
+        unit="%"
+        step={1}
+        value={settings.listShare}
+        limits={EXHIBITIONS_LIMITS.listShare}
+        onCommit={(listShare) => set({ listShare })}
+        wide
+      />
+      <NumberField
+        label="Picture size in the list"
+        unit="pixels"
+        step={1}
+        value={settings.thumbSize}
+        limits={EXHIBITIONS_LIMITS.thumbSize}
+        onCommit={(thumbSize) => set({ thumbSize })}
+        wide
+      />
+      <NumberField
+        label="Space either side of the line"
+        unit="pixels"
+        step={1}
+        value={settings.gap}
+        limits={EXHIBITIONS_LIMITS.gap}
+        onCommit={(gap) => set({ gap })}
+        wide
+      />
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={settings.line !== null}
+          onChange={(e) => set({ line: e.target.checked ? { colour: "#cccccc", thickness: 1 } : null })}
+        />
+        <span className="flex-1">Line between</span>
+        {settings.line && (
+          <input
+            type="color"
+            value={settings.line.colour}
+            onChange={(e) => set({ line: { ...settings.line!, colour: e.target.value } })}
+            aria-label="Line colour"
+            className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+          />
+        )}
+      </label>
+      <ColourRow label="Chosen one's shading" value={settings.highlight} onChange={(highlight) => set({ highlight })} />
+      <ColourRow label="Year and heading" value={settings.accent} onChange={(accent) => set({ accent })} />
+      <NumberField
+        label="Heading size"
+        unit="pixels"
+        step={1}
+        value={settings.titleSize}
+        limits={EXHIBITIONS_LIMITS.titleSize}
+        onCommit={(titleSize) => set({ titleSize })}
+        wide
+      />
+      <p className="text-xs text-neutral-400">
+        Shows the artist&apos;s Exhibitions (Artworks → Exhibitions), archived ones left out, in the page&apos;s Text
+        look. The first is shown to start with; clicking another shows it instead.
+      </p>
+    </>
   );
 }
 

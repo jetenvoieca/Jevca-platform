@@ -678,6 +678,7 @@ export default function PageSectionsArranger({
                                     hero={b.hero}
                                     pictureWords={b.pictureWords}
                                     viewer={b.viewer}
+                                    exhibitions={b.exhibitions}
                                     spacing={layout.gridSpacing}
                                   />
                                 </Labelled>

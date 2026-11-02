@@ -9,6 +9,7 @@ import {
   type SlidingDoorsSettings,
   type StoriesSettings,
   type ViewerSettings,
+  type ExhibitionsSettings,
 } from "@/lib/pageStyleLayout";
 import type { MailBlockType } from "@/lib/mailTemplateLayout";
 import type { GridSpacing } from "@/lib/rowLayout";
@@ -33,6 +34,7 @@ export function BlockShape({
   pictureWords,
   stories,
   viewer,
+  exhibitions,
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
@@ -46,6 +48,7 @@ export function BlockShape({
   pictureWords?: PictureWordsSettings;
   stories?: StoriesSettings;
   viewer?: ViewerSettings;
+  exhibitions?: ExhibitionsSettings;
   device?: PreviewDevice;
 }) {
   switch (type) {
@@ -181,6 +184,52 @@ export function BlockShape({
           {thumbs}
           <div style={v?.line ? { borderLeft: `${v.line.thickness}px solid ${v.line.colour}` } : undefined} />
           {work}
+        </div>
+      );
+    }
+    case "exhibitions": {
+      // The list (picture, three lines), the line, then the chosen one;
+      // on a phone the chosen one above the list.
+      const ex = exhibitions;
+      const size = Math.min(ex?.thumbSize ?? 78, 60);
+      const listed = (
+        <div className="flex flex-col gap-2">
+          {[0, 1, 2, 3].map((i) => (
+            <div key={i} className={`flex items-start gap-3 ${i === 0 ? "bg-neutral-100" : ""}`}>
+              <div className="shrink-0 rounded bg-neutral-200" style={{ width: size, height: size }} />
+              <div className="flex flex-1 flex-col gap-1.5 pt-1">
+                <Bar className="h-2.5 w-3/4" />
+                <Bar className="h-2.5 w-1/2" />
+                <Bar className="h-2 w-10 bg-rose-200" />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+      const chosen = (
+        <div className="flex flex-col gap-3">
+          <div className="aspect-square w-4/5 rounded bg-neutral-200" />
+          <Bar className="h-4 w-2/3 bg-rose-200" />
+          <Bar className="h-2.5 w-1/2" />
+          <Bar className="h-2.5 w-full" />
+        </div>
+      );
+      if (device === "phone") {
+        return (
+          <div className="flex flex-col gap-6">
+            {chosen}
+            {listed}
+          </div>
+        );
+      }
+      return (
+        <div
+          className="grid items-stretch"
+          style={{ gridTemplateColumns: `${ex?.listShare ?? 50}% auto 1fr`, columnGap: ex?.gap ?? 15 }}
+        >
+          {listed}
+          <div style={ex?.line ? { borderLeft: `${ex.line.thickness}px solid ${ex.line.colour}` } : undefined} />
+          {chosen}
         </div>
       );
     }

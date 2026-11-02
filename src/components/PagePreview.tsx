@@ -64,6 +64,8 @@ import { readEntries } from "@/lib/pageEntries";
 import StoriesBlock from "@/components/StoriesBlock";
 import { readPageStories } from "@/lib/pageStories";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
+import type { ExhibitionRow } from "@/lib/actions/exhibitions";
+import ExhibitionsBlock from "@/components/ExhibitionsBlock";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import SoldFlag from "@/components/SoldFlag";
@@ -167,6 +169,7 @@ export default function PagePreview({
         artist={content.artist}
         heading={content.heading}
         stories={content.stories}
+        exhibitions={content.exhibitions}
         homeHref={siteData.homeHref}
         onOpen={setViewingId}
       />
@@ -242,9 +245,10 @@ export function usePageContent(
       siteData.getArtist(),
       blockBuild ? siteData.getHeadingNames(pageId) : Promise.resolve(null),
       blockBuild ? siteData.listProfileStories() : Promise.resolve<ProfileStoryRow[]>([]),
-    ]).then(([curation, sections, components, signupForms, artist, heading, stories]) => {
+      blockBuild ? siteData.listExhibitions() : Promise.resolve<ExhibitionRow[]>([]),
+    ]).then(([curation, sections, components, signupForms, artist, heading, stories, exhibitions]) => {
       if (!current) return;
-      setLoaded({ curation, sections, components, signupForms, artist, heading, stories });
+      setLoaded({ curation, sections, components, signupForms, artist, heading, stories, exhibitions });
       setLoading(false);
     });
     return () => {
@@ -286,6 +290,8 @@ export type BlockFillerInput = {
   heading: HeadingNames | null;
   // The Profile Catalogue stories, for Profile stories (2026-10-26).
   stories: ProfileStoryRow[];
+  // The Exhibitions catalogue, for Exhibitions (2026-11-02).
+  exhibitions: ExhibitionRow[];
   onOpen: (artworkId: string) => void;
   heroShowing?: string | null;
   onHeroShowing?: (artworkId: string | null) => void;
@@ -302,6 +308,7 @@ export function blockFiller({
   homeHref,
   heading,
   stories,
+  exhibitions,
   onOpen,
   heroShowing = null,
   onHeroShowing,
@@ -470,6 +477,17 @@ export function blockFiller({
       return <PageHeadingView settings={block.pageHeading} lines={shown} contentWidth={contentWidth} />;
     }
     if (block.type === "line") return <LineView look={block.line ?? DEFAULT_LINE} />;
+    if (block.type === "exhibitions" && block.exhibitions) {
+      if (exhibitions.length === 0) return null;
+      return (
+        <ExhibitionsBlock
+          exhibitions={exhibitions}
+          settings={block.exhibitions}
+          textStyle={layout.textStyles.text}
+          contentWidth={contentWidth}
+        />
+      );
+    }
     if (block.type === "signup") {
       const form = formByBlock.get(block.id);
       if (!form || !block.signup) return null;
@@ -561,6 +579,7 @@ function BlockBuildPage({
   artist,
   heading,
   stories,
+  exhibitions,
   homeHref,
   onOpen,
 }: {
@@ -573,6 +592,7 @@ function BlockBuildPage({
   artist: SiteArtist | null;
   heading: HeadingNames | null;
   stories: ProfileStoryRow[];
+  exhibitions: ExhibitionRow[];
   homeHref: string | null;
   onOpen: (artworkId: string) => void;
 }) {
@@ -589,6 +609,7 @@ function BlockBuildPage({
     homeHref,
     heading,
     stories,
+    exhibitions,
     onOpen,
     heroShowing,
     onHeroShowing: setHeroShowing,

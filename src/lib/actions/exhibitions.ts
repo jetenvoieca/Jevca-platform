@@ -134,6 +134,12 @@ export async function listExhibitions(artistId: string): Promise<ExhibitionRow[]
   return rows.map(toRow);
 }
 
+// The exhibitions a site shows (2026-11-02): all but the archived ones,
+// in the catalogue's order.
+export async function listShownExhibitions(artistId: string): Promise<ExhibitionRow[]> {
+  return (await listExhibitions(artistId)).filter((e) => !e.archived);
+}
+
 // A new, blank exhibition, to fill in.
 export async function createExhibition(artistId: string): Promise<ExhibitionRow> {
   await requireArtistAccess(artistId);

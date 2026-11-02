@@ -22,6 +22,7 @@ import type { SiteArtist } from "@/lib/siteArtist";
 import { getPageHeadingNames } from "@/lib/actions/pages";
 import type { HeadingNames } from "@/lib/pageHeading";
 import { listProfileStories, type ProfileStoryRow } from "@/lib/actions/profileStories";
+import { listShownExhibitions, type ExhibitionRow } from "@/lib/actions/exhibitions";
 
 // Where the page components (PagePreview, CanvasPlayer, CurationPanel,
 // CurationWorkView, PageSectionsArranger) get their content from
@@ -42,6 +43,8 @@ export type PageContent = {
   heading: HeadingNames | null;
   // The Profile Catalogue stories, for Profile stories (2026-10-26).
   stories: ProfileStoryRow[];
+  // The Exhibitions catalogue, for Exhibitions (2026-11-02).
+  exhibitions: ExhibitionRow[];
 };
 
 export type SiteData = {
@@ -62,6 +65,9 @@ export type SiteData = {
   // The artist's Profile Catalogue stories (2026-10-26): all of them in
   // the admin; on the published site, those its pages show.
   listProfileStories(): Promise<ProfileStoryRow[]>;
+  // The artist's exhibitions a site shows (2026-11-02): all but the
+  // archived ones.
+  listExhibitions(): Promise<ExhibitionRow[]>;
   // Everything a page shows, at once (2026-10-13): from the published
   // snapshot, which is already in the browser, so a page is drawn
   // straight away — no "Loading…". Null in the admin preview, whose
@@ -117,6 +123,7 @@ export function LiveSiteData({
       getArtist: () => getSiteArtist(artistId),
       getHeadingNames: (pageId) => getPageHeadingNames(siteId, pageId),
       listProfileStories: () => listProfileStories(artistId),
+      listExhibitions: () => listShownExhibitions(artistId),
       pageContentNow: () => null,
       canvasNow: () => null,
       homeHref: null,
@@ -156,6 +163,7 @@ export function SnapshotSiteData({
       getArtist: async () => snapshot.artist,
       getHeadingNames: async (pageId) => snapshotHeadingNames(snapshot, pageId),
       listProfileStories: async () => snapshot.profileStories,
+      listExhibitions: async () => snapshot.exhibitions,
       pageContentNow: (pageId, curationId) => {
         const page = snapshot.pages.find((p) => p.id === pageId);
         const curation = curationId ? snapshot.curations[curationId] : undefined;
@@ -167,6 +175,7 @@ export function SnapshotSiteData({
           artist: snapshot.artist,
           heading: snapshotHeadingNames(snapshot, pageId),
           stories: snapshot.profileStories,
+          exhibitions: snapshot.exhibitions,
         };
       },
       canvasNow: (pageId) => ({

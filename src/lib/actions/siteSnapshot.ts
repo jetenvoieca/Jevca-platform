@@ -3,6 +3,7 @@
 import { getCurrentUser, requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { listProfileStories } from "@/lib/actions/profileStories";
+import { listShownExhibitions } from "@/lib/actions/exhibitions";
 import { readPageStories } from "@/lib/pageStories";
 import { getSiteArtist } from "@/lib/actions/siteArtist";
 import {
@@ -123,6 +124,12 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
     ? (await listProfileStories(site.artistId)).filter((s) => storyIds.has(s.id))
     : [];
 
+  // The exhibitions, if a page shows them (2026-11-02).
+  const showsExhibitions = pages.some(
+    (p) => p.style?.type === "BLOCK_BUILD" && p.style.layout.blocks.some((b) => b.type === "exhibitions"),
+  );
+  const exhibitions = showsExhibitions ? await listShownExhibitions(site.artistId) : [];
+
   return {
     version: SNAPSHOT_VERSION,
     siteName: site.name,
@@ -132,6 +139,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
     covers,
     menus,
     profileStories,
+    exhibitions,
   };
 }
 

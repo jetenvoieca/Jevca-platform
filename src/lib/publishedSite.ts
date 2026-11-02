@@ -53,7 +53,13 @@ export async function getPublishedSite(
     menus[id] = normalizeMenuStyle(layout);
   }
   return {
-    snapshot: { ...snapshot, pages, menus, profileStories: snapshot.profileStories ?? [] },
+    snapshot: {
+      ...snapshot,
+      pages,
+      menus,
+      profileStories: snapshot.profileStories ?? [],
+      exhibitions: snapshot.exhibitions ?? [],
+    },
     publishedAt: row.publishedAt,
   };
 }

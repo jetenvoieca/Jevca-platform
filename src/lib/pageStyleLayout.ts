@@ -60,6 +60,9 @@ export const LAYOUT_BLOCK_TYPES = [
   // Thumbnails of the curation's works beside the chosen one, shown large
   // with its details (2026-11-02, the ISYT sites' portfolio pages).
   { value: "viewer", label: "Portfolio viewer" },
+  // The artist's Exhibitions catalogue as a list beside the chosen one
+  // (2026-11-02, the ISYT sites' exhibitions pages).
+  { value: "exhibitions", label: "Exhibitions" },
   { value: "artwork", label: "Feature" },
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },
@@ -511,6 +514,61 @@ export function cleanViewer(raw: unknown): ViewerSettings {
   };
 }
 
+// Exhibitions (2026-11-02, the ISYT sites' exhibitions pages): the
+// artist's Exhibitions catalogue (archived ones left out), newest first
+// unless `newestFirst` is off — a list taking `listShare` % of the width,
+// each its main picture (`thumbSize` pixels square), name, venue and
+// year, the chosen one shaded `highlight`; then the `line` (null = none)
+// with `gap` pixels either side; then the chosen exhibition — its
+// picture, its name and venue as a heading (`titleSize` pixels), its
+// dates, opening times and description. The first is chosen to start
+// with. The year and heading are in `accent`; everything else in the
+// page's Text look. On a phone the chosen one shows above the list.
+export type ExhibitionsSettings = {
+  newestFirst: boolean;
+  listShare: number;
+  thumbSize: number;
+  gap: number;
+  line: LineLook | null;
+  highlight: string;
+  accent: string;
+  titleSize: number;
+};
+
+export const EXHIBITIONS_LIMITS = {
+  listShare: { min: 25, max: 70 },
+  thumbSize: { min: 40, max: 200 },
+  gap: { min: 0, max: 120 },
+  titleSize: { min: 12, max: 48 },
+} as const;
+
+export const DEFAULT_EXHIBITIONS: ExhibitionsSettings = {
+  newestFirst: true,
+  listShare: 50,
+  thumbSize: 78,
+  gap: 15,
+  line: { colour: "#cccccc", thickness: 1 },
+  highlight: "#aaaaaa",
+  accent: "#8b1a1a",
+  titleSize: 19,
+};
+
+export function cleanExhibitions(raw: unknown): ExhibitionsSettings {
+  const value = (raw ?? {}) as Partial<Record<keyof ExhibitionsSettings, unknown>>;
+  const d = DEFAULT_EXHIBITIONS;
+  const l = EXHIBITIONS_LIMITS;
+  return {
+    newestFirst: value.newestFirst !== false,
+    listShare: cleanNumber(value.listShare, l.listShare, d.listShare, 0),
+    thumbSize: cleanNumber(value.thumbSize, l.thumbSize, d.thumbSize, 0),
+    gap: cleanNumber(value.gap, l.gap, d.gap, 0),
+    line: value.line === null ? null : value.line ? cleanLine(value.line) : d.line,
+    highlight: cleanColour(value.highlight) ?? d.highlight,
+    accent: cleanColour(value.accent) ?? d.accent,
+    titleSize: cleanNumber(value.titleSize, l.titleSize, d.titleSize, 0),
+  };
+}
+
 // Profile stories (2026-10-26, Craig's request): the Profile Catalogue
 // stories chosen on each page (lib/pageStories.ts), stacked
 // `storySpace` apart, each its picture beside its caption (the headline)
@@ -652,7 +710,7 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 // `byline` (Logo), `line` (Line), `perRow`, `names` and `tiles`
 // (Gallery), `hero` (Hero), `pictureWords` (Picture & words), `entries`
 // (Entries), `pageHeading` (Page heading), `stories` (Profile stories),
-// `viewer` (Portfolio viewer).
+// `viewer` (Portfolio viewer), `exhibitions` (Exhibitions).
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -669,6 +727,7 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     entries?: EntriesSettings;
     stories?: StoriesSettings;
     viewer?: ViewerSettings;
+    exhibitions?: ExhibitionsSettings;
     pageHeading?: PageHeadingSettings;
     byline?: LogoByline;
   };
@@ -832,6 +891,9 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "viewer") {
             clean.viewer = cleanViewer((b as Partial<LayoutBlock>).viewer);
           }
+          if (clean.type === "exhibitions") {
+            clean.exhibitions = cleanExhibitions((b as Partial<LayoutBlock>).exhibitions);
+          }
           if (clean.type === "picturewords") {
             clean.pictureWords = cleanPictureWords((b as Partial<LayoutBlock>).pictureWords);
           }
@@ -877,6 +939,7 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "entries") return { id, type, entries: DEFAULT_ENTRIES };
   if (type === "stories") return { id, type, stories: DEFAULT_STORIES };
   if (type === "viewer") return { id, type, viewer: DEFAULT_VIEWER };
+  if (type === "exhibitions") return { id, type, exhibitions: DEFAULT_EXHIBITIONS };
   if (type === "pageheading") return { id, type, pageHeading: DEFAULT_PAGE_HEADING };
   return { id, type };
 }
