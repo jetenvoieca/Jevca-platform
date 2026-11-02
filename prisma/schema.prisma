@@ -744,7 +744,9 @@ model CurationSectionMedia {
 // either may be blank), its opening times and description as typed,
 // and up to 4 pictures (ExhibitionImage, the first its main picture).
 // Archived ones (`archivedAt`) are kept but listed apart. Listed by
-// start date, earliest first.
+// start date, earliest first. `sourceUrl` (2026-11-02): its page on the
+// artist's old ISYT site, when brought in by the browser importer — so
+// it's never imported twice.
 model Exhibition {
   id       String @id @default(cuid())
   artistId String
@@ -758,12 +760,14 @@ model Exhibition {
   openingTimes String    @default("")
   description  String    @default("")
   archivedAt   DateTime?
+  sourceUrl    String?
 
   images ExhibitionImage[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  @@unique([artistId, sourceUrl])
   @@index([artistId, startDate])
   @@index([locationId])
 }

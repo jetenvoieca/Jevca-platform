@@ -17,6 +17,18 @@
 //   where the site made them (720 is the largest seen), so a few are tried
 //   largest first.
 // Lines it can't place stay in the description, for checking in the Hopper.
+//
+// Exhibitions (2026-11-02): the site's exhibitions page (exhibitions.aspx,
+// in the menu) lists them as rows (tr#datarow_N: picture, .gridline-title,
+// .gridline-line2, the year in .entry-date with sometimes a name after
+// it); each one's own page is exhibitions.aspx?id=N, whose
+// #datadetails .entry holds an h2 heading, the dates ("03/05/2024 to
+// 15/06/2024"), the opening times and the description, with its picture
+// (320px; 400px is the largest made). They go straight into Jevca's
+// Exhibitions (/api/hopper/exhibition-import), their pictures into the
+// Media Catalogue — not the Hopper. Name: the words after the year, else
+// line 2; no venue (chosen afterwards from Locations); the old heading
+// kept at the top of the description, for checking.
 (function () {
   const HOST_ID = "hopper-isyt-host";
   const OTHER_HOST_ID = "hopper-picker-host";
@@ -177,6 +189,114 @@
     return found ? [...larger, new URL(found, location.href).toString()] : larger;
   }
 
+  // ---------- exhibitions ----------
+
+  // The site's exhibitions page, from its menu — null if it has none.
+  function findExhibitionsPage(doc) {
+    for (const a of doc.querySelectorAll("a[href]")) {
+      try {
+        const u = new URL(a.getAttribute("href"), location.href);
+        if (/\/exhibitions\.aspx$/i.test(u.pathname) && !u.searchParams.has("id")) return u.toString();
+      } catch (e) {
+        // not an address
+      }
+    }
+    return null;
+  }
+
+  // "03/05/2024" → "2024-05-03".
+  const isoDay = (ukDate) => {
+    const [d, m, y] = ukDate.split("/");
+    return `${y}-${m}-${d}`;
+  };
+  const DATES_LINE = /(\d{2}\/\d{2}\/\d{4})(?:\s*(?:to|-|–)\s*(\d{2}\/\d{2}\/\d{4}))?/;
+
+  // An element's words, its line breaks kept.
+  function linesOf(el) {
+    const copy = el.cloneNode(true);
+    copy.querySelectorAll("br").forEach((br) => br.replaceWith("\n"));
+    return copy.textContent.split("\n").map(clean).filter(Boolean).join("\n");
+  }
+
+  // One exhibition's page → its dates, opening times, description and
+  // picture.
+  function parseExhibition(doc) {
+    const entry = doc.querySelector("#datadetails .entry");
+    if (!entry) return null;
+    const heading = [entry.querySelector("h2"), entry.querySelector("h3")].map((h) => clean(h?.textContent)).filter(Boolean);
+    let startDate = "";
+    let endDate = "";
+    const times = [];
+    const words = [];
+    for (const child of entry.children) {
+      if (/^H[23]$/.test(child.tagName) || child.id === "profileButtons") continue;
+      const text = linesOf(child);
+      if (!text) continue;
+      const dates = !startDate && child.tagName === "P" && text.match(DATES_LINE);
+      if (dates) {
+        startDate = isoDay(dates[1]);
+        endDate = dates[2] ? isoDay(dates[2]) : "";
+      } else if (child.tagName === "P" && !words.length) times.push(text);
+      else words.push(text);
+    }
+    const picture = doc.querySelector("#datadetails img")?.getAttribute("src") || null;
+    return {
+      startDate,
+      endDate,
+      openingTimes: times.join("\n"),
+      description: [heading.join("\n"), ...words].filter(Boolean).join("\n\n"),
+      picture: picture ? new URL(picture, location.href).toString() : null,
+    };
+  }
+
+  // The picture at the largest size the site makes (400px), then as found.
+  function exhibitionPictureCandidates(found) {
+    if (!found) return null;
+    const larger = found.replace(/\/(\d+)\/(\d+\.jpg)$/i, (whole, size, file) => (Number(size) < 400 ? `/400/${file}` : whole));
+    return larger === found ? [found] : [larger, found];
+  }
+
+  async function readExhibitions(say) {
+    const pageUrl = findExhibitionsPage(document);
+    if (!pageUrl) return [];
+    say("Reading the exhibitions…");
+    const doc = await fetchDoc(pageUrl);
+    if (!doc) return [];
+    const rows = [...doc.querySelectorAll('tr[id^="datarow_"]')].map((tr) => {
+      const id = tr.id.replace("datarow_", "");
+      const dateEl = tr.querySelector(".entry-date");
+      const year = clean(dateEl?.textContent);
+      const afterYear = clean(dateEl?.parentElement?.textContent).replace(year, "").trim();
+      const line2 = clean(tr.querySelector(".gridline-line2")?.textContent);
+      const thumb = tr.querySelector("img")?.getAttribute("src");
+      return {
+        id,
+        name: afterYear || line2 || clean(tr.querySelector(".gridline-title")?.textContent),
+        year,
+        thumb: thumb ? new URL(thumb, location.href).toString() : null,
+      };
+    });
+    let done = 0;
+    const read = await inPool(rows, async (row) => {
+      const sourceUrl = new URL(`/exhibitions.aspx?id=${row.id}`, location.href).toString();
+      const page = await fetchDoc(sourceUrl);
+      done++;
+      say(`Reading exhibition ${done} of ${rows.length}…`);
+      const details = page && parseExhibition(page);
+      if (!details) return null;
+      return {
+        kind: "exhibition",
+        ...row,
+        ...details,
+        title: row.name,
+        sourceUrl,
+        thumb: row.thumb || details.picture,
+        candidates: exhibitionPictureCandidates(details.picture),
+      };
+    });
+    return read.filter(Boolean);
+  }
+
   async function readSite(say) {
     const sections = findSections(document);
     const works = [];
@@ -222,7 +342,19 @@
   }
 
   function detailLine(w) {
+    if (w.kind === "exhibition") {
+      return [w.startDate, w.endDate].filter(Boolean).join(" to ") || w.year;
+    }
     return [w.type, w.medium, w.size, w.edition, w.price && `£${w.price}`].filter(Boolean).join(" · ");
+  }
+
+  function hoverText(w) {
+    if (w.kind === "exhibition") {
+      return [w.title, detailLine(w), w.openingTimes, w.description].filter(Boolean).join("\n\n");
+    }
+    return [w.title, w.description, detailLine(w), w.viewingLocation && `Can be seen at ${w.viewingLocation}`]
+      .filter(Boolean)
+      .join("\n\n");
   }
 
   function buildPanel(shadow, artistName) {
@@ -242,7 +374,7 @@
             <button id="all" disabled>Select all</button>
             <button id="none" disabled>Deselect all</button>
             <span id="count"></span>
-            <button id="send" disabled>Send to Hopper</button>
+            <button id="send" disabled>Send to Jevca</button>
             <button id="close" title="Close">✕</button>
           </div>
         </div>
@@ -285,9 +417,10 @@
       const wrap = document.createElement("div");
       wrap.className = "section";
       const fresh = section.works.filter((w) => !known.has(w.sourceUrl)).length;
+      const noun = section.exhibitions ? "exhibitions" : "works";
       wrap.innerHTML = `
         <label class="section-head"><input type="checkbox" ${fresh ? "checked" : ""}>
-          ${escapeHtml(section.name)} <span class="count">${section.works.length} works${
+          ${escapeHtml(section.name)} <span class="count">${section.works.length} ${noun}${
             fresh < section.works.length ? `, ${section.works.length - fresh} already in Jevca` : ""
           }</span></label>
         <div class="grid"></div>`;
@@ -306,9 +439,7 @@
             ${w.sold ? `<div class="flag">Sold</div>` : ""}
             ${isKnown ? `<div class="flag">Already in Jevca</div>` : ""}
           </div>`;
-        card.title = [w.title, w.description, detailLine(w), w.viewingLocation && `Can be seen at ${w.viewingLocation}`]
-          .filter(Boolean)
-          .join("\n\n");
+        card.title = hoverText(w);
         cards.set(w, card);
         card.querySelector("input").addEventListener("change", (e) => {
           choose(w, e.target.checked);
@@ -336,9 +467,41 @@
       update();
     });
 
+    // Works go to the Hopper first, then exhibitions straight into
+    // Exhibitions.
     let sending = [];
+    let sendingExhibitions = [];
+    const sendExhibitions = () => {
+      if (!sendingExhibitions.length) {
+        status.textContent += " — All done!";
+        update();
+        return;
+      }
+      status.textContent = `Sending exhibition 1 of ${sendingExhibitions.length}…`;
+      chrome.runtime.sendMessage({
+        type: "SEND_EXHIBITIONS",
+        token,
+        exhibitions: sendingExhibitions.map((x) => ({
+          candidates: x.candidates,
+          filename: `exhibition-${x.id}.jpg`,
+          name: x.name,
+          startDate: x.startDate,
+          endDate: x.endDate,
+          openingTimes: x.openingTimes,
+          description: x.description,
+          sourceUrl: x.sourceUrl,
+        })),
+      });
+    };
     sendBtn.addEventListener("click", () => {
-      sending = all.filter((w) => selected.has(w)); // in the site's order
+      const chosen = all.filter((w) => selected.has(w)); // in the site's order
+      sending = chosen.filter((w) => w.kind !== "exhibition");
+      sendingExhibitions = chosen.filter((w) => w.kind === "exhibition");
+      sendBtn.disabled = true;
+      if (!sending.length) {
+        sendExhibitions();
+        return;
+      }
       const images = sending.map((w) => ({
         url: w.thumb,
         candidates: w.candidates,
@@ -358,10 +521,19 @@
           sourceUrl: w.sourceUrl,
         },
       }));
-      sendBtn.disabled = true;
       status.textContent = `Sending 1 of ${images.length}…`;
       chrome.runtime.sendMessage({ type: "SEND_TO_HOPPER", images, token });
     });
+
+    const markSent = (item, ok) => {
+      const card = cards.get(item);
+      card.classList.add(ok ? "ok" : "error");
+      if (ok) {
+        known.add(item.sourceUrl);
+        choose(item, false);
+        card.classList.add("known");
+      }
+    };
 
     chrome.runtime.onMessage.addListener((message) => {
       if (message.type === "HOPPER_PROGRESS") {
@@ -369,17 +541,17 @@
         status.textContent = `${message.index + 1} of ${message.total}: ${work?.title || message.filename} ${
           message.ok ? "✔" : `✖ (${message.error})`
         }`;
-        if (work) {
-          const card = cards.get(work);
-          card.classList.add(message.ok ? "ok" : "error");
-          if (message.ok) {
-            known.add(work.sourceUrl);
-            choose(work, false);
-            card.classList.add("known");
-          }
-        }
+        if (work) markSent(work, message.ok);
       }
-      if (message.type === "HOPPER_DONE") {
+      if (message.type === "HOPPER_DONE") sendExhibitions();
+      if (message.type === "EXHIBITION_PROGRESS") {
+        const item = sendingExhibitions[message.index];
+        status.textContent = `Exhibition ${message.index + 1} of ${message.total}: ${item?.title || ""} ${
+          message.ok ? "✔" : `✖ (${message.error})`
+        }`;
+        if (item) markSent(item, message.ok);
+      }
+      if (message.type === "EXHIBITIONS_DONE") {
         status.textContent += " — All done!";
         update();
       }
@@ -399,27 +571,30 @@
     const say = (text) => (status.textContent = text);
 
     if (!token) return say("No artist selected — open the extension, pick an artist, then try again.");
-    if (!findSections(document).length) {
+    if (!findSections(document).length && !findExhibitionsPage(document)) {
       return say("This doesn't look like an ISYT site — no portfolio sections in its menu. Open the site's home page and try again.");
     }
 
     const { sections, works } = await readSite(say);
-    if (!works.length) return say("No works found in this site's portfolio sections.");
+    const exhibitions = await readExhibitions(say);
+    if (!works.length && !exhibitions.length) return say("No works or exhibitions found on this site.");
+    if (exhibitions.length) sections.push({ id: "exhibitions", name: "Exhibitions", exhibitions: true, works: exhibitions });
 
-    say("Checking which works are already in Jevca…");
+    say("Checking what's already in Jevca…");
     const answer = await chrome.runtime.sendMessage({
       type: "KNOWN_SOURCES",
       token,
-      sourceUrls: works.map((w) => w.sourceUrl),
+      sourceUrls: [...works, ...exhibitions].map((w) => w.sourceUrl),
     });
     if (answer?.error) return say(`Couldn't check Jevca: ${answer.error}`);
     const known = new Set(answer.known);
 
-    const withWorks = sections.filter((s) => s.works.length).length;
+    const withWorks = sections.filter((s) => s.works.length && !s.exhibitions).length;
     say(
       `Found ${works.length} works in ${withWorks} sections` +
+        (exhibitions.length ? ` and ${exhibitions.length} exhibitions` : "") +
         (known.size ? `, ${known.size} already in Jevca (not ticked).` : ".") +
-        " Hover a work to see all its details."
+        " Hover one to see all its details."
     );
     renderWorks(overlay, sections, known, token);
   }

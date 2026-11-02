@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 
 // Which of these old-website addresses this artist already has
-// (2026-10-26) — asked by the browser importer before it sends anything,
+// (2026-10-26; exhibitions too, 2026-11-02) — asked by the browser importer before it sends anything,
 // so a work imported once isn't imported again (see the note on
 // Image.sourceUrl in schema.prisma). Authenticated by the artist's
 // hopperToken, like the rest of /api/hopper/*.
@@ -26,9 +26,10 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid token." }, { status: 401 });
   }
 
-  const rows = await db.image.findMany({
-    where: { artistId: artist.id, sourceUrl: { in: sourceUrls } },
-    select: { sourceUrl: true },
-  });
-  return NextResponse.json({ known: [...new Set(rows.map((r) => r.sourceUrl))] });
+  // Works (their pictures) and exhibitions (2026-11-02).
+  const [images, exhibitions] = await Promise.all([
+    db.image.findMany({ where: { artistId: artist.id, sourceUrl: { in: sourceUrls } }, select: { sourceUrl: true } }),
+    db.exhibition.findMany({ where: { artistId: artist.id, sourceUrl: { in: sourceUrls } }, select: { sourceUrl: true } }),
+  ]);
+  return NextResponse.json({ known: [...new Set([...images, ...exhibitions].map((r) => r.sourceUrl))] });
 }
