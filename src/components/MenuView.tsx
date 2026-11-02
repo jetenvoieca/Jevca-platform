@@ -40,7 +40,8 @@ export const SITE_PAGE_ATTRIBUTE = "data-site-page";
 //   hovered or tapped.
 // - Side list (2026-10-23): the list down one side, always shown and
 //   staying in place; narrower than its `hamburgerBelow` it becomes a
-//   menu button that opens it full screen.
+//   menu button that opens it full screen. With a `frame` (2026-11-02)
+//   it sits beside the page, the two centred in the window.
 // - Top bar (2026-10-23): the artist's Logo across the top, any kind.
 // - `phone`: every kind opens full screen.
 // - Floating closes the menu once a page is chosen; Fixed leaves it
@@ -258,7 +259,7 @@ export default function MenuView({
           style={{
             ...surface,
             top: barHeight,
-            [side]: 0,
+            [side]: layout.list.frame && !contained ? frameMargin(layout.list.frame.width) : 0,
             width: layout.list.width,
             [side === "right" ? "borderLeft" : "borderRight"]: layout.list.line
               ? `${layout.list.line.thickness}px solid ${layout.list.line.colour}`
@@ -381,6 +382,12 @@ function narrowClass(scope: string, contained: boolean, phone: boolean): string 
   return `${scope}-narrow`;
 }
 
+// The space either side of a Side list and its page kept together
+// (`list.frame`) `width` pixels wide — half what's left of the window.
+function frameMargin(width: number): string {
+  return `max(0px, calc((100% - ${width}px) / 2))`;
+}
+
 // The site's CSS for this menu: room for the top bar (its phone height
 // below 700px) and, from the Side list's width up, room for the list on
 // its side, the list shown and its button hidden.
@@ -392,10 +399,16 @@ function menuCss(layout: MenuStyleLayout, scope: string): string {
     rules.push(`@media (min-width:${SITE_DESKTOP_MIN}px){${page}{padding-top:${layout.topBar.height.desktop}px}}`);
   }
   if (layout.kind === "sidelist") {
-    const { side, width, hamburgerBelow } = layout.list;
+    const { side, width, hamburgerBelow, frame } = layout.list;
+    const other = side === "right" ? "left" : "right";
+    // Kept beside the page (`frame`): the space either side of the two,
+    // in the outside colour; otherwise the list's width only.
+    const room = frame
+      ? `padding-${other}:${frameMargin(frame.width)};padding-${side}:calc(${frameMargin(frame.width)} + ${width}px);background:${frame.outside}`
+      : `padding-${side}:${width}px`;
     rules.push(`.${scope}-wide{display:none}`);
     rules.push(
-      `@media (min-width:${hamburgerBelow}px){.${scope}-wide{display:flex}.${scope}-narrow{display:none}${page}{padding-${side}:${width}px}}`,
+      `@media (min-width:${hamburgerBelow}px){.${scope}-wide{display:flex}.${scope}-narrow{display:none}${page}{${room}}}`,
     );
   }
   return rules.join("");

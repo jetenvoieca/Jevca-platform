@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import {
   DEFAULT_HIGHLIGHT,
   DEFAULT_SOCIAL_TEXT,
+  DEFAULT_FRAME,
   DEFAULT_TOP_BAR,
   MENU_BEHAVIOURS,
   MENU_KINDS,
@@ -111,6 +112,33 @@ export default function MenuStyleEditor({
                 />
               )}
             </label>
+            <label className="flex items-center gap-2 text-sm text-neutral-700">
+              <input
+                type="checkbox"
+                checked={layout.list.frame !== null}
+                onChange={(e) => setList({ frame: e.target.checked ? DEFAULT_FRAME : null })}
+              />
+              <span className="flex-1">Beside the page, centred together</span>
+              {layout.list.frame && (
+                <input
+                  type="color"
+                  value={layout.list.frame.outside}
+                  onChange={(e) => setList({ frame: { ...layout.list.frame!, outside: e.target.value } })}
+                  aria-label="Colour either side"
+                  title="Colour either side"
+                  className="h-6 w-6 shrink-0 cursor-pointer rounded border border-neutral-300 p-0"
+                />
+              )}
+            </label>
+            {layout.list.frame && (
+              <WholeNumber
+                label="Page and menu width"
+                unit="pixels"
+                value={layout.list.frame.width}
+                limits={l.frameWidth}
+                onCommit={(width) => setList({ frame: { ...layout.list.frame!, width } })}
+              />
+            )}
             <WholeNumber
               label="Space above"
               unit="pixels"

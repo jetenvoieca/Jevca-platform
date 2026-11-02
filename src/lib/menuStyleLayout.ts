@@ -46,7 +46,8 @@ import { NO_TEXT_STYLE, cleanTextStyle } from "@/lib/textStyle";
 //   (Page.parentId) are listed under it, indented, in their own look
 //   (blank = the pages' look, smaller) — while on that group's pages
 //   only ("open"), or always. A Side list can have a line beside it
-//   (`list.line`, on the page's side).
+//   (`list.line`, on the page's side), and (2026-11-02) be kept beside
+//   the page, the two centred together (`list.frame`).
 
 export const MENU_KINDS = [
   { value: "button", label: "Menu button" },
@@ -97,9 +98,15 @@ export type MenuTopBar = {
 // between pages, how the pages line up, the width below which it
 // becomes a menu button, and the look of the Instagram / Facebook links
 // under it (null = not shown; `capitals` writes them in capitals).
+// `frame` (2026-11-02, the ISYT sites): the page and the list kept
+// together, `width` pixels wide in all, centred in the window with the
+// `outside` colour either side — null = the list at the window's edge.
+export type MenuSideListFrame = { width: number; outside: string };
+
 export type MenuSideList = {
   side: "left" | "right";
   line: LineLook | null;
+  frame: MenuSideListFrame | null;
   width: number;
   top: number;
   gap: number;
@@ -167,9 +174,12 @@ export const DEFAULT_SOCIAL_TEXT: PageTextStyle = {
   spacing: 14,
 };
 
+export const DEFAULT_FRAME: MenuSideListFrame = { width: 960, outside: "#808080" };
+
 export const DEFAULT_SIDE_LIST: MenuSideList = {
   side: "right",
   line: null,
+  frame: null,
   width: 260,
   top: 48,
   gap: 40,
@@ -201,6 +211,7 @@ export const MENU_STYLE_LIMITS = {
   barHeight: { min: 32, max: 300 },
   barPadding: { min: 0, max: 200 },
   listWidth: { min: 120, max: 600 },
+  frameWidth: { min: 600, max: 2400 },
   listTop: { min: 0, max: 400 },
   listGap: { min: 0, max: 200 },
   hamburgerBelow: { min: 700, max: 2400 },
@@ -292,6 +303,12 @@ function cleanSideList(raw: unknown): MenuSideList {
   return {
     side: value.side === "left" ? "left" : "right",
     line: value.line ? cleanLine(value.line) : null,
+    frame: value.frame
+      ? {
+          width: cleanNumber(asObject<MenuSideListFrame>(value.frame).width, l.frameWidth, DEFAULT_FRAME.width),
+          outside: cleanColour(asObject<MenuSideListFrame>(value.frame).outside, DEFAULT_FRAME.outside),
+        }
+      : null,
     width: cleanNumber(value.width, l.listWidth, d.width),
     top: cleanNumber(value.top, l.listTop, d.top),
     gap: cleanNumber(value.gap, l.listGap, d.gap),
