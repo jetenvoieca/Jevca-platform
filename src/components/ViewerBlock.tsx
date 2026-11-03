@@ -6,15 +6,16 @@ import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import { pictureShapeRatio, type PageGridSpacing, type ViewerSettings } from "@/lib/pageStyleLayout";
 import { SITE_PHONE_QUERY } from "@/lib/siteBreakpoint";
 import { useSiteData } from "@/lib/siteData";
+import { useSitePhone } from "@/lib/useSitePhone";
 import FadeImage from "@/components/FadeImage";
 import WorkPresentation, { usePresentation } from "@/components/WorkPresentation";
 
 // A Portfolio viewer on a page (2026-11-02, the ISYT sites' portfolio
 // pages — see ViewerSettings in lib/pageStyleLayout.ts): the works'
 // thumbnails, a line, and the chosen work in the page's Presentation
-// Template (WorkPresentation, drawn in the page). Before one is chosen,
-// the curation's Description shows there. On a phone the Description is
-// above the thumbnails, which fill the width, and tapping one opens the
+// Template (WorkPresentation, drawn in the page) — the first work until
+// another is chosen (2026-11-03, Craig's request, so there's no empty
+// space). On a phone the curation's Description is above the thumbnails, which fill the width, and tapping one opens the
 // work over them, full screen, with ✕ to go back (2026-11-03, Craig's
 // request — as Exhibitions).
 
@@ -39,7 +40,10 @@ export default function ViewerBlock({
 }) {
   const siteData = useSiteData();
   const presentation = usePresentation();
-  const [chosenId, setChosenId] = useState<string | null>(null);
+  const phone = useSitePhone();
+  const [picked, setPicked] = useState<string | null>(null);
+  // Beside the thumbnails, the first work until one is picked.
+  const chosenId = picked ?? (phone ? null : (works[0]?.id ?? null));
   const [data, setData] = useState<CurationWorkPresentation | null>(null);
   const [viewIndex, setViewIndex] = useState(0);
   const [phoneOpen, setPhoneOpen] = useState(false);
@@ -58,7 +62,7 @@ export default function ViewerBlock({
   }, [siteData, curationId, chosenId]);
 
   const choose = (id: string) => {
-    setChosenId(id);
+    setPicked(id);
     if (window.matchMedia(SITE_PHONE_QUERY).matches) setPhoneOpen(true);
   };
 
@@ -131,7 +135,7 @@ export default function ViewerBlock({
       {/* A phone: the Description above the thumbnails. */}
       {descriptionText && <div className="order-1 site:hidden">{descriptionText}</div>}
 
-      <div className="hidden min-w-0 site:block">{work ?? (!chosenId && descriptionText)}</div>
+      <div className="hidden min-w-0 site:block">{work}</div>
 
       {phoneOpen &&
         createPortal(
