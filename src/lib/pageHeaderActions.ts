@@ -8,7 +8,9 @@ import { useEffect, useSyncExternalStore } from "react";
 // nothing is registered. One at a time each; cleared when it unmounts.
 // - the eye (ViewPageButton): back to a page's preview from its Layout
 //   or Arrange;
-// - Layout (PageLayoutButton): open the selected page's Layout.
+// - Layout (PageLayoutButton): open the selected page's Layout;
+// - Theme (PageThemeButton, 2026-11-03): choose a Site Theme to make its
+//   pages on the site.
 type Action = () => void;
 
 function headerAction() {
@@ -46,8 +48,11 @@ function headerAction() {
 
 const viewReturn = headerAction();
 const layoutOpen = headerAction();
+const themeOpen = headerAction();
 
 export const useRegisterPageViewReturn = viewReturn.useRegister;
 export const usePageViewReturn = viewReturn.useCurrent;
 export const useRegisterPageLayoutOpen = layoutOpen.useRegister;
 export const usePageLayoutOpen = layoutOpen.useCurrent;
+export const useRegisterPageThemeOpen = themeOpen.useRegister;
+export const usePageThemeOpen = themeOpen.useCurrent;

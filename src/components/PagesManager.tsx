@@ -1,7 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { useRegisterPageLayoutOpen, useRegisterPageViewReturn } from "@/lib/pageHeaderActions";
+import {
+  useRegisterPageLayoutOpen,
+  useRegisterPageThemeOpen,
+  useRegisterPageViewReturn,
+} from "@/lib/pageHeaderActions";
 import { useRouter } from "next/navigation";
 import {
   createPage,
@@ -73,9 +77,9 @@ type ListKey = "live" | "hidden";
 // can have its own instead, chosen in its Edit. A page sitting under
 // another in the menu (2026-10-25, chosen in its Edit) shows ↳ and which.
 //
-// Theme (2026-11-03, admin only): choose a Site Theme (Templates → Site
-// Themes) to make all its pages on this site at once — see
-// applySiteTheme.
+// Theme (2026-11-03, admin only — the site header's Theme icon,
+// PageThemeButton): choose a Site Theme (Templates → Site Themes) to make
+// all its pages on this site at once — see applySiteTheme.
 export default function PagesManager({
   siteId,
   artistId,
@@ -119,7 +123,7 @@ export default function PagesManager({
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   // Theme: its list open, the theme chosen (to confirm), and what it did.
-  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [themeListOpen, setThemeListOpen] = useState(false);
   const [themeToApply, setThemeToApply] = useState<{ id: string; name: string } | null>(null);
   const [themeMessage, setThemeMessage] = useState<string | null>(null);
   const [arranging, setArranging] = useState(false);
@@ -167,6 +171,10 @@ export default function PagesManager({
     setLayingOut(true);
   }, []);
   useRegisterPageLayoutOpen(selected && blockBuildStyle && canEditStyles && !layingOut ? openLayout : null);
+  // The site header's Theme icon (PageThemeButton) opens the list of Site
+  // Themes — for an admin, when there are any.
+  const openThemes = useCallback(() => setThemeListOpen(true), []);
+  useRegisterPageThemeOpen(canEditStyles && themes.length > 0 ? openThemes : null);
 
   // The style has changed: fresh styles from the server, then the preview.
   const closeLayout = () => {
@@ -341,7 +349,7 @@ export default function PagesManager({
   );
 
   const buttonClass =
-    "rounded-md border border-neutral-300 px-1 py-2 text-[13px] text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
+    "rounded-md border border-neutral-300 px-2 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
 
   const applyTheme = () => {
     const theme = themeToApply;
@@ -418,38 +426,7 @@ export default function PagesManager({
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">
-        <div className={`grid gap-1.5 ${canEditStyles ? "grid-cols-5" : "grid-cols-4"}`}>
-          {canEditStyles && (
-            <div className="relative grid">
-              <button
-                type="button"
-                onClick={() => setThemeMenuOpen((o) => !o)}
-                disabled={isPending || themes.length === 0}
-                title="Make all the pages of a Site Theme on this site"
-                aria-expanded={themeMenuOpen}
-                className={buttonClass}
-              >
-                Theme
-              </button>
-              {themeMenuOpen && (
-                <div className="absolute left-0 top-full z-30 mt-1 flex w-56 flex-col gap-1.5 rounded-lg border border-neutral-300 bg-white p-2 shadow-lg">
-                  {themes.map((t) => (
-                    <button
-                      key={t.id}
-                      type="button"
-                      onClick={() => {
-                        setThemeMenuOpen(false);
-                        setThemeToApply(t);
-                      }}
-                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50"
-                    >
-                      {t.name}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
+        <div className="grid grid-cols-4 gap-2">
           <button type="button" onClick={() => openModal("add")} disabled={isPending} className={buttonClass}>
             Add
           </button>
@@ -550,6 +527,29 @@ export default function PagesManager({
           backgroundColor={canvasStyle.layout.backgroundColor}
           onClose={closeArrange}
         />
+      )}
+
+      {themeListOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setThemeListOpen(false)}>
+          <div className="w-full max-w-xs rounded-lg bg-white p-4 shadow-lg" onClick={(e) => e.stopPropagation()}>
+            <h3 className="mb-3 text-base font-medium text-neutral-900">Site Theme</h3>
+            <div className="flex flex-col gap-1.5">
+              {themes.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => {
+                    setThemeListOpen(false);
+                    setThemeToApply(t);
+                  }}
+                  className="rounded-md border border-neutral-300 px-3 py-2 text-sm text-neutral-800 hover:bg-neutral-50"
+                >
+                  {t.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
 
       <ConfirmDialog

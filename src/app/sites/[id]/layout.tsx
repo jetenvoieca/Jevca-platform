@@ -3,6 +3,7 @@ import PublishButton from "@/components/PublishButton";
 import BackToDashboardLink from "@/components/BackToDashboardLink";
 import ViewPageButton from "@/components/ViewPageButton";
 import PageLayoutButton from "@/components/PageLayoutButton";
+import PageThemeButton from "@/components/PageThemeButton";
 import SiteResetButton from "@/components/SiteResetButton";
 import { notFound, redirect } from "next/navigation";
 import { headers } from "next/headers";
@@ -71,7 +72,8 @@ export default async function SiteLayout({
     ...previousSites,
   ];
 
-  // Back to the Dashboard (only when opened from an alert), a page's
+  // Back to the Dashboard (only when opened from an alert), Site Theme (on
+  // Pages, for an admin — PageThemeButton, 2026-11-03), a page's
   // Layout (only when it can be used — PageLayoutButton, 2026-11-03), back
   // to a page's preview (only in its Layout or Arrange — ViewPageButton), publish, then
   // the published site's globe (2026-10-31, Craig's mockups), then for an
@@ -81,6 +83,7 @@ export default async function SiteLayout({
   const siteIcons = (className: string) => (
     <div className={`items-center gap-1 ${className}`}>
       <BackToDashboardLink />
+      <PageThemeButton />
       <PageLayoutButton />
       <ViewPageButton />
       <PublishButton siteId={id} lastPublishedAt={lastPublishedAt?.toISOString() ?? null} />
