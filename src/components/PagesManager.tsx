@@ -260,7 +260,11 @@ export default function PagesManager({
         e.preventDefault();
         handleDrop();
       }}
-      className="flex min-h-0 flex-1 flex-col rounded-lg border border-neutral-300 bg-white p-3"
+      // Live Pages takes twice the height of Hidden Pages (2026-11-03,
+      // Craig's request — a site's live pages are the longer list).
+      className={`flex min-h-0 flex-col rounded-lg border border-neutral-300 bg-white p-3 ${
+        key === "live" ? "flex-[2]" : "flex-1"
+      }`}
     >
       <h2 className="mb-3 text-center text-base text-neutral-800">{title}</h2>
       <div
