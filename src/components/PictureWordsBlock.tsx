@@ -1,5 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
-import { pictureShapeRatio, type PageTextStyle, type PictureWordsLook } from "@/lib/pageStyleLayout";
+import { wordsPictureRatio, type PageTextStyle, type PictureWordsLook } from "@/lib/pageStyleLayout";
 import type { SectionMedia } from "@/lib/curationSections";
 import { bodyTextCss } from "@/components/textStyleCss";
 import SectionMediaView from "@/components/SectionMediaView";
@@ -52,8 +52,8 @@ export default function PictureWordsBlock({
     "--pw-columns": columns,
     "--pw-gap": `${s.gap.desktop}px`,
     "--pw-gap-phone": `${s.gap.phone}px`,
-    "--pw-shape": pictureShapeRatio(s.shape.desktop),
-    "--pw-shape-phone": pictureShapeRatio(s.shape.phone),
+    "--pw-shape": wordsPictureRatio(s.shape.desktop),
+    "--pw-shape-phone": wordsPictureRatio(s.shape.phone),
   } as CSSProperties;
   const big = (style: PageTextStyle): CSSProperties => ({ ...bodyTextCss(style, contentWidth), lineHeight: 1.1 });
 
@@ -61,9 +61,14 @@ export default function PictureWordsBlock({
   const pictureOrder = `${s.pictureFirstOnPhone ? "order-1" : "order-2"} ${pictureFirst ? "site:order-1" : "site:order-2"}`;
   const wordsOrder = `${s.pictureFirstOnPhone ? "order-2" : "order-1"} ${pictureFirst ? "site:order-2" : "site:order-1"}`;
 
+  // The picture fills its box, cropped to the box's shape — or, shown
+  // whole (2026-11-03), sets the box's height itself.
+  const fit = `${s.shape.phone === "whole" ? "h-auto" : "h-full object-cover"} ${
+    s.shape.desktop === "whole" ? "site:h-auto site:object-fill" : "site:h-full site:object-cover"
+  }`;
   const image = picture && (
     <>
-      <SectionMediaView media={picture.media} alt={picture.alt} fill />
+      <SectionMediaView media={picture.media} alt={picture.alt} className={fit} />
       {picture.sold && <SoldFlag />}
     </>
   );

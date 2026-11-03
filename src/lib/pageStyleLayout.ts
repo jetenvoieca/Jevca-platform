@@ -311,6 +311,25 @@ function cleanPictureShape(raw: unknown, fallback: PictureShape): PictureShape {
   return PICTURE_SHAPES.find((s) => s.value === raw)?.value ?? fallback;
 }
 
+// A Picture & words's or Profile story's picture can also be shown whole,
+// at its own shape, never cropped (2026-11-03, Craig's request — a portrait
+// profile photo was cut to a landscape box on phones).
+export const WORDS_PICTURE_SHAPES = [
+  ...PICTURE_SHAPES,
+  { value: "whole", label: "Whole picture (its own shape)" },
+] as const;
+export type WordsPictureShape = PictureShape | "whole";
+
+// The box's shape for a Picture & words's or story's picture: "auto" for a
+// whole picture, which takes its own shape.
+export function wordsPictureRatio(shape: WordsPictureShape): string {
+  return shape === "whole" ? "auto" : pictureShapeRatio(shape);
+}
+
+function cleanWordsPictureShape(raw: unknown, fallback: WordsPictureShape): WordsPictureShape {
+  return raw === "whole" ? "whole" : cleanPictureShape(raw, fallback === "whole" ? "landscape" : fallback);
+}
+
 // A Hero (2026-10-22, from Louise Dear's home page): beside each
 // other on a desktop, the words typed on each page — a small line in
 // capitals, the headline, a second headline line in its own look (e.g.
@@ -407,7 +426,7 @@ export type PictureWordsLook = {
   side: "left" | "right";
   pictureShare: number;
   gap: { desktop: number; phone: number };
-  shape: { desktop: PictureShape; phone: PictureShape };
+  shape: { desktop: WordsPictureShape; phone: WordsPictureShape };
   pictureFirstOnPhone: boolean;
   wordsAt: "top" | "middle";
   headlineSpace: number;
@@ -451,8 +470,8 @@ function cleanPictureWordsLook(raw: unknown, d: PictureWordsLook): PictureWordsL
       phone: cleanNumber(gap.phone, l.gap, d.gap.phone, 0),
     },
     shape: {
-      desktop: cleanPictureShape(shape.desktop, d.shape.desktop),
-      phone: cleanPictureShape(shape.phone, d.shape.phone),
+      desktop: cleanWordsPictureShape(shape.desktop, d.shape.desktop),
+      phone: cleanWordsPictureShape(shape.phone, d.shape.phone),
     },
     pictureFirstOnPhone:
       typeof value.pictureFirstOnPhone === "boolean" ? value.pictureFirstOnPhone : d.pictureFirstOnPhone,

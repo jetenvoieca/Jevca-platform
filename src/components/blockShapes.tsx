@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import {
   pictureShapeRatio,
+  type WordsPictureShape,
   type GalleryPerRow,
   type HeroSettings,
   type LayoutBlockType,
@@ -88,7 +89,7 @@ export function BlockShape({
       const box = (
         <div
           className="w-full rounded bg-neutral-200"
-          style={{ aspectRatio: pictureShapeRatio(pictureWords?.shape.desktop ?? "portrait") }}
+          style={{ aspectRatio: placeholderRatio(pictureWords?.shape.desktop ?? "portrait") }}
         />
       );
       const words = (
@@ -113,7 +114,7 @@ export function BlockShape({
     case "stories": {
       // Two stories, the second with its picture swapped to the other side.
       const share = stories?.pictureShare ?? 50;
-      const ratio = pictureShapeRatio(stories?.shape.desktop ?? "landscape");
+      const ratio = placeholderRatio(stories?.shape.desktop ?? "landscape");
       return (
         <div className="flex flex-col gap-6">
           {[0, 1].map((i) => {
@@ -418,6 +419,12 @@ export function Labelled({ label, children }: { label: string; children: ReactNo
       {children}
     </div>
   );
+}
+
+// A Picture & words's or story's picture in a placeholder: a whole
+// picture (its own shape) is drawn portrait.
+function placeholderRatio(shape: WordsPictureShape): string {
+  return pictureShapeRatio(shape === "whole" ? "portrait" : shape);
 }
 
 function Bar({ className }: { className: string }) {

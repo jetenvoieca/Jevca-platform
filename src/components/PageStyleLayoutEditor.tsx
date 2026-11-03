@@ -41,6 +41,7 @@ import {
   type ExhibitionsSettings,
   type PictureWordsLook,
   PICTURE_SHAPES,
+  WORDS_PICTURE_SHAPES,
   cleanGalleryNames,
   cleanHero,
   type HeroSettings,
@@ -1128,7 +1129,7 @@ function PictureWordsPanel<T extends PictureWordsLook & { accent?: PageTextStyle
           {number(`Gap, ${device}`, "pixels", settings.gap[device], l.gap, (v) =>
             onChange({ ...settings, gap: { ...settings.gap, [device]: v } }),
           )}
-          {select(`Picture shape, ${device}`, settings.shape[device], PICTURE_SHAPES, (v) =>
+          {select(`Picture shape, ${device}`, settings.shape[device], WORDS_PICTURE_SHAPES, (v) =>
             onChange(clean({ ...settings, shape: { ...settings.shape, [device]: v } })),
           )}
         </div>
