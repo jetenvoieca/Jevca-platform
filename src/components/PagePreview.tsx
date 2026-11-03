@@ -77,6 +77,8 @@ import ExhibitionsBlock from "@/components/ExhibitionsBlock";
 import ShowcaseBlock from "@/components/ShowcaseBlock";
 import WorkDescriptionText from "@/components/WorkDescriptionText";
 import ContactPanel, { useOpenContactPanel } from "@/components/ContactPanel";
+import { useSitePhone } from "@/lib/useSitePhone";
+import { createPortal } from "react-dom";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import SoldFlag from "@/components/SoldFlag";
@@ -710,7 +712,7 @@ function BlockBuildPage({
 // the page's contents on the right — its share of the width on a desktop,
 // all of it on a phone — in the same grid cell, so the page is as tall as
 // the taller; anything off to the right (the panel sliding) is cut off
-// rather than widening the page.
+// rather than widening the page. On a phone it covers the whole screen.
 function StyledFrame({
   margins,
   maxWidth,
@@ -732,6 +734,7 @@ function StyledFrame({
     .map((r) => ({ ...r, cells: r.cells.filter((c) => c.content) }))
     .filter((r) => r.cells.length > 0);
   const panel = useOpenContactPanel();
+  const phone = useSitePhone();
 
   return (
     <div
@@ -746,14 +749,24 @@ function StyledFrame({
           {rows.length === 0 ? <Message text={empty} /> : <FrameRows rows={rows} />}
           {footer && <div className="mt-auto">{footer}</div>}
         </div>
-        {panel && (
-          <div
-            className="relative z-10 col-start-1 row-start-1 w-full justify-self-end site:w-[var(--panel-share)]"
-            style={{ "--panel-share": `${panel.settings.share}%` } as CSSProperties}
-          >
-            <ContactPanel settings={panel.settings} onClosed={panel.onClosed} />
-          </div>
-        )}
+        {panel &&
+          (phone ? (
+            // A phone (2026-11-03): over the whole screen, the site's menu
+            // button included, so its ✕ isn't under the button.
+            createPortal(
+              <div className="fixed inset-0 z-[60] overflow-y-auto overflow-x-hidden">
+                <ContactPanel settings={panel.settings} onClosed={panel.onClosed} />
+              </div>,
+              document.body,
+            )
+          ) : (
+            <div
+              className="relative z-10 col-start-1 row-start-1 justify-self-end"
+              style={{ width: `${panel.settings.share}%` }}
+            >
+              <ContactPanel settings={panel.settings} onClosed={panel.onClosed} />
+            </div>
+          ))}
       </div>
     </div>
   );

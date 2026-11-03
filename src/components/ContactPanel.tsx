@@ -119,7 +119,7 @@ export default function ContactPanel({ settings, onClosed }: OpenPanel) {
   };
 
   return (
-    <div className="relative h-full px-6 pb-8 pt-1 shadow-[-12px_0_24px_-16px_rgba(0,0,0,0.35)]" style={look}>
+    <div className="relative min-h-full px-6 pb-8 pt-1 shadow-[-12px_0_24px_-16px_rgba(0,0,0,0.35)]" style={look}>
       <button
         type="button"
         onClick={() => setPhase("out")}

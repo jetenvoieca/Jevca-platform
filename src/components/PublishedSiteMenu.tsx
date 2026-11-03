@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import type { MenuStyleLayout } from "@/lib/menuStyleLayout";
 import type { SiteArtist } from "@/lib/siteArtist";
 import { publishedPagePath } from "@/lib/siteSnapshot";
-import { SITE_PHONE_QUERY } from "@/lib/siteBreakpoint";
+import { useSitePhone } from "@/lib/useSitePhone";
 import MenuView, { type MenuViewItem } from "@/components/MenuView";
 
 // What the menu needs of each Live Page, in order — the first is the
@@ -39,7 +38,7 @@ export default function PublishedSiteMenu({
   // The page being shown — null on an address that isn't one.
   currentId: string | null;
 }) {
-  const phone = usePhone();
+  const phone = useSitePhone();
 
   const current = pages.find((p) => p.id === currentId);
   const layout = current?.menuStyleId ? menus[current.menuStyleId] : undefined;
@@ -84,18 +83,4 @@ function menuTree(siteId: string, pages: PublishedMenuPage[]): MenuViewItem[] {
       const own = item(p);
       return children.length ? { ...own, href: children[0].href, children } : own;
     });
-}
-
-// Whether the screen is phone-sized, following changes (e.g. turning a
-// tablet). False until measured in the browser.
-function usePhone(): boolean {
-  const [phone, setPhone] = useState(false);
-  useEffect(() => {
-    const query = window.matchMedia(SITE_PHONE_QUERY);
-    const update = () => setPhone(query.matches);
-    update();
-    query.addEventListener("change", update);
-    return () => query.removeEventListener("change", update);
-  }, []);
-  return phone;
 }
