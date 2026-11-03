@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useState, type CSSProperties } from "react";
+import { createPortal } from "react-dom";
 import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import { pictureShapeRatio, type PageGridSpacing, type ViewerSettings } from "@/lib/pageStyleLayout";
 import { SITE_PHONE_QUERY } from "@/lib/siteBreakpoint";
@@ -12,8 +13,10 @@ import WorkPresentation, { usePresentation } from "@/components/WorkPresentation
 // pages — see ViewerSettings in lib/pageStyleLayout.ts): the works'
 // thumbnails, a line, and the chosen work in the page's Presentation
 // Template (WorkPresentation, drawn in the page). Before one is chosen,
-// the curation's Description shows there. On a phone the thumbnails fill
-// the width with the chosen work above them, scrolled to when chosen.
+// the curation's Description shows there. On a phone the Description is
+// above the thumbnails, which fill the width, and tapping one opens the
+// work over them, full screen, with ✕ to go back (2026-11-03, Craig's
+// request — as Exhibitions).
 
 // No SOLD flag on the thumbnails (2026-11-03, Craig's request): the
 // chosen work's details say Sold.
@@ -39,7 +42,7 @@ export default function ViewerBlock({
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [data, setData] = useState<CurationWorkPresentation | null>(null);
   const [viewIndex, setViewIndex] = useState(0);
-  const workRef = useRef<HTMLDivElement>(null);
+  const [phoneOpen, setPhoneOpen] = useState(false);
 
   useEffect(() => {
     if (!chosenId) return;
@@ -56,13 +59,27 @@ export default function ViewerBlock({
 
   const choose = (id: string) => {
     setChosenId(id);
-    if (window.matchMedia(SITE_PHONE_QUERY).matches) {
-      workRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    if (window.matchMedia(SITE_PHONE_QUERY).matches) setPhoneOpen(true);
   };
 
   const shown = data && data.artworkId === chosenId ? data : null;
   const ratio = pictureShapeRatio(settings.shape);
+  const work = shown && (
+    <WorkPresentation
+      key={shown.artworkId}
+      data={shown}
+      settings={presentation}
+      viewIndex={viewIndex}
+      onView={setViewIndex}
+      site={siteData.forms}
+      inline
+    />
+  );
+  const descriptionText = description && (
+    <p className="whitespace-pre-line break-words" style={descriptionStyle}>
+      {description}
+    </p>
+  );
 
   return (
     <div
@@ -111,26 +128,28 @@ export default function ViewerBlock({
         style={settings.line ? { borderLeft: `${settings.line.thickness}px solid ${settings.line.colour}` } : undefined}
       />
 
-      <div ref={workRef} className="order-1 min-w-0 scroll-mt-4 site:order-none">
-        {shown ? (
-          <WorkPresentation
-            key={shown.artworkId}
-            data={shown}
-            settings={presentation}
-            viewIndex={viewIndex}
-            onView={setViewIndex}
-            site={siteData.forms}
-            inline
-          />
-        ) : (
-          !chosenId &&
-          description && (
-            <p className="whitespace-pre-line break-words" style={descriptionStyle}>
-              {description}
-            </p>
-          )
+      {/* A phone: the Description above the thumbnails. */}
+      {descriptionText && <div className="order-1 site:hidden">{descriptionText}</div>}
+
+      <div className="hidden min-w-0 site:block">{work ?? (!chosenId && descriptionText)}</div>
+
+      {phoneOpen &&
+        createPortal(
+          <div
+            className="fixed inset-0 z-50 overflow-y-auto site:hidden"
+            style={{ background: presentation.colours.background }}
+          >
+            <div className="sticky top-0 z-10 flex justify-end p-2" style={{ color: presentation.colours.text }}>
+              <button type="button" onClick={() => setPhoneOpen(false)} aria-label="Close" className="p-2 opacity-70">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-6 w-6">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="px-5 pb-10">{work ?? <p className="py-16 text-center text-sm opacity-50">Loading…</p>}</div>
+          </div>,
+          document.body,
         )}
-      </div>
     </div>
   );
 }
