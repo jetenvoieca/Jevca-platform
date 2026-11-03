@@ -5,6 +5,7 @@ import type { CurationWorkPresentation } from "@/lib/actions/curations";
 import type { PageTextStyle, ShowcaseSettings } from "@/lib/pageStyleLayout";
 import type { SiteWork } from "@/lib/siteWorks";
 import { useSiteData } from "@/lib/siteData";
+import { useSitePhone } from "@/lib/useSitePhone";
 import { isSold } from "@/lib/artworkFilters";
 import { bodyTextCss } from "@/components/textStyleCss";
 import { PAGE_BACKGROUND_CLASS, pageBackgroundStyle } from "@/components/pageMargins";
@@ -15,10 +16,10 @@ import { PAGE_BACKGROUND_CLASS, pageBackgroundStyle } from "@/components/pageMar
 // order (with an odd number the last pairs with the first). Each side is
 // a door: the front pair sits over the next one, in the page's own
 // background so the next doesn't show through, and slides off its side
-// (left / right; up / down on a phone, where the pair is stacked) to
-// reveal it, as Sliding doors do. The line between the pair stays put.
-// The five dots above are only decoration: the middle one flashes once
-// each time the pair changes. Each work's words come from its
+// (left / right) to reveal it, as Sliding doors do. The line between the
+// pair stays put. On a phone (2026-11-03, Craig's request) there's one
+// work at a time, sliding off to the left. The five dots above are only
+// decoration: the middle one flashes once each time the works change. Each work's words come from its
 // presentation in the curation it's shown in, which a click opens.
 
 // The dots: their sizes, the space between them and below them.
@@ -54,6 +55,7 @@ export default function ShowcaseBlock({
   onOpen: (artworkId: string, curationId: string) => void;
 }) {
   const siteData = useSiteData();
+  const phone = useSitePhone();
   // Null until loaded and shuffled — shuffled in the browser only, so the
   // page as first drawn never differs from the server's.
   const [works, setWorks] = useState<SiteWork[] | null>(null);
@@ -75,13 +77,20 @@ export default function ShowcaseBlock({
     };
   }, [siteData]);
 
+  // The works shown together: pairs, or one at a time on a phone.
   const pairs = useMemo(() => {
     if (!works || works.length === 0) return [];
-    if (works.length === 1) return [[works[0]]];
+    if (works.length === 1 || phone) return works.map((w) => [w]);
     const out: SiteWork[][] = [];
     for (let i = 0; i < works.length; i += 2) out.push([works[i], works[i + 1] ?? works[0]]);
     return out;
-  }, [works]);
+  }, [works, phone]);
+
+  // Starts again when the screen changes between phone and desktop.
+  useEffect(() => {
+    setIndex(0);
+    setOpening(false);
+  }, [phone]);
 
   // Waits `duration`, then opens; once open (`speed` later), the next
   // pair becomes the front pair, closed again, and the wait restarts.
@@ -154,11 +163,11 @@ export default function ShowcaseBlock({
             animation. */}
         <div
           key={index}
-          className={`relative col-start-1 row-start-1 min-w-0 [transform:translateY(var(--sc-away))] site:[transform:translateX(var(--sc-away))] ${PAGE_BACKGROUND_CLASS}`}
+          className={`relative col-start-1 row-start-1 min-w-0 ${PAGE_BACKGROUND_CLASS}`}
           style={
             {
               ...frontBackground,
-              "--sc-away": away,
+              transform: `translateX(${away})`,
               transition: opening ? `transform ${settings.speed}s ease-in-out` : "none",
             } as CSSProperties
           }
@@ -192,7 +201,11 @@ export default function ShowcaseBlock({
       </div>
 
       <div
-        className="flex flex-col gap-[var(--sc-gap)] site:grid site:gap-y-0 site:[column-gap:var(--sc-gap)] site:[grid-template-columns:minmax(0,1fr)_auto_minmax(0,1fr)]"
+        className={
+          current.length > 1
+            ? "grid [column-gap:var(--sc-gap)] [grid-template-columns:minmax(0,1fr)_auto_minmax(0,1fr)]"
+            : "grid"
+        }
         style={
           {
             "--sc-gap": `${settings.gap}px`,
@@ -204,15 +217,10 @@ export default function ShowcaseBlock({
         {door(0)}
         {current.length > 1 && (
           <>
-            {/* The line: across between the stacked pair on a phone,
-                down between them on a desktop. */}
+            {/* The line down between the pair. */}
             <div
               aria-hidden
-              className={
-                settings.line
-                  ? "border-t-[length:var(--sc-line)] site:border-l-[length:var(--sc-line)] site:border-t-0"
-                  : "hidden site:block"
-              }
+              className={settings.line ? "border-l-[length:var(--sc-line)]" : undefined}
               style={
                 settings.line
                   ? ({ "--sc-line": `${settings.line.thickness}px`, borderColor: settings.line.colour } as CSSProperties)
