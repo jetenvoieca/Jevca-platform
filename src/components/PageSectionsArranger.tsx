@@ -702,7 +702,6 @@ export default function PageSectionsArranger({
                                     viewer={b.viewer}
                                     exhibitions={b.exhibitions}
                                     showcase={b.showcase}
-                                    contact={b.contact}
                                     spacing={layout.gridSpacing}
                                   />
                                 </Labelled>

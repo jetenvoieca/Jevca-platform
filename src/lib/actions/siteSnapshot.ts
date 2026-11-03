@@ -14,6 +14,7 @@ import {
   type CurationWorkPresentation,
 } from "@/lib/actions/curations";
 import { siteWorks, type SiteWork } from "@/lib/siteWorks";
+import { readContactPanel } from "@/lib/contactPanel";
 import { listCurationSections } from "@/lib/actions/curationSections";
 import { getPageCanvas } from "@/lib/actions/pageCanvas";
 import { getPageComponents } from "@/lib/actions/pageComponents";
@@ -58,7 +59,7 @@ async function loadLivePages(siteId: string) {
           pageStyleId: true,
           menuStyleId: true,
           parentId: true,
-          opensPageId: true,
+          contactPanel: true,
         },
       },
     },
@@ -81,7 +82,7 @@ async function loadLivePages(siteId: string) {
         signupForms: style?.type === "BLOCK_BUILD" ? await getPageSignupForms(siteId, p.id) : [],
         menuStyleId: p.menuStyleId ?? site.menuStyleId,
         parentId: p.parentId,
-        opensPageId: p.opensPageId,
+        contactPanel: readContactPanel(p.contactPanel),
       };
     })
   );

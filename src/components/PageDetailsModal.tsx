@@ -6,6 +6,9 @@ import type { PageDetailsInput } from "@/lib/actions/pages";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import type { MenuStyleSummary } from "@/lib/actions/menuStyles";
 import { ThemedStyleOptions } from "@/components/ThemedStyleList";
+import NumberField from "@/components/NumberField";
+import { CONTACT_PANEL_LIMITS, DEFAULT_CONTACT_PANEL, cleanContactPanel, type ContactPanelSettings } from "@/lib/contactPanel";
+import { SITE_FONTS } from "@/lib/siteFonts";
 
 // The Pages page's Add / Edit modal (2026-10-04, from Craig's mockup):
 // Page Name, Curation and Display Style. The same modal is used for both
@@ -18,9 +21,9 @@ import { ThemedStyleOptions } from "@/components/ThemedStyleList";
 // (2026-10-25): the page this one sits under in the menu — one of the
 // site's pages at the top (`topPages`); not offered for a page that has
 // pages under it. Shows (2026-11-03, the ISYT sites' "contact"): the
-// page's own content, or another page with its Contact panel slid open
-// (`openablePages`) — then it has no Curation or Display Style of its
-// own. Not offered for a page that others open (`isOpened`).
+// page's own content, or the site's Contact panel sliding over whatever
+// page is showing (see lib/contactPanel.ts) — then it has no Curation or
+// Display Style of its own, and the panel's look is set here.
 export default function PageDetailsModal({
   heading,
   initial,
@@ -29,8 +32,6 @@ export default function PageDetailsModal({
   menuStyles,
   topPages,
   hasChildren,
-  openablePages,
-  isOpened,
   saving,
   error,
   onSave,
@@ -43,8 +44,6 @@ export default function PageDetailsModal({
   menuStyles: MenuStyleSummary[];
   topPages: { id: string; title: string }[];
   hasChildren: boolean;
-  openablePages: { id: string; title: string }[];
-  isOpened: boolean;
   saving: boolean;
   error: string | null;
   onSave: (input: PageDetailsInput) => void;
@@ -55,15 +54,16 @@ export default function PageDetailsModal({
   const [pageStyleId, setPageStyleId] = useState(initial.pageStyleId ?? "");
   const [menuStyleId, setMenuStyleId] = useState(initial.menuStyleId ?? "");
   const [parentId, setParentId] = useState(initial.parentId ?? "");
-  const [opensPageId, setOpensPageId] = useState(initial.opensPageId ?? "");
+  const [panel, setPanel] = useState<ContactPanelSettings | null>(initial.contactPanel);
+  const setLook = (patch: Partial<ContactPanelSettings>) => setPanel((p) => cleanContactPanel({ ...p, ...patch }));
 
-  const opens = !!opensPageId;
+  const opens = !!panel;
   const isCanvas = !opens && pageStyles.find((s) => s.id === pageStyleId)?.type === "CANVAS";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
       <form
-        className="w-full max-w-sm rounded-lg bg-white p-5 shadow-lg"
+        className="max-h-[90vh] w-full max-w-sm overflow-y-auto rounded-lg bg-white p-5 shadow-lg"
         onClick={(e) => e.stopPropagation()}
         onSubmit={(e) => {
           e.preventDefault();
@@ -73,7 +73,7 @@ export default function PageDetailsModal({
             pageStyleId: opens ? null : pageStyleId || null,
             menuStyleId: menuStyleId || null,
             parentId: parentId || null,
-            opensPageId: opensPageId || null,
+            contactPanel: panel,
           });
         }}
       >
@@ -90,26 +90,18 @@ export default function PageDetailsModal({
         />
 
         <div className="mb-6 grid grid-cols-[110px_1fr] items-center gap-x-3 gap-y-4">
-          {!isOpened && (
-            <>
-              <label htmlFor="page-shows" className="text-sm text-neutral-700">
-                Shows
-              </label>
-              <select
-                id="page-shows"
-                value={opensPageId}
-                onChange={(e) => setOpensPageId(e.target.value)}
-                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-              >
-                <option value="">Its own content</option>
-                {openablePages.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.title}, with its Contact panel open
-                  </option>
-                ))}
-              </select>
-            </>
-          )}
+          <label htmlFor="page-shows" className="text-sm text-neutral-700">
+            Shows
+          </label>
+          <select
+            id="page-shows"
+            value={panel ? "contact" : ""}
+            onChange={(e) => setPanel(e.target.value ? (initial.contactPanel ?? DEFAULT_CONTACT_PANEL) : null)}
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+          >
+            <option value="">Its own content</option>
+            <option value="contact">Contact panel over the current page</option>
+          </select>
 
           {!isCanvas && !opens && (
             <>
@@ -187,11 +179,82 @@ export default function PageDetailsModal({
         {isCanvas && (
           <p className="mb-4 text-xs text-neutral-500">A Canvas page&apos;s curations are placed with Arrange.</p>
         )}
-        {opens && (
-          <p className="mb-4 text-xs text-neutral-500">
-            Its menu item opens that page with the Contact panel slid across — the page&apos;s Display Style needs a
-            Contact panel component (e.g. ISYT — Profile).
-          </p>
+        {panel && (
+          <div className="mb-6 flex flex-col gap-3 rounded-md border border-neutral-200 p-3">
+            <p className="text-xs text-neutral-500">
+              Its menu item slides this panel over whatever page is showing: the phone and email from the artist&apos;s
+              Settings, then a form. Messages go to the Inbox; the tick box adds the visitor to Subscribers.
+            </p>
+            <label className="flex flex-col gap-1 text-sm text-neutral-700">
+              Title
+              <input
+                type="text"
+                value={panel.title}
+                maxLength={CONTACT_PANEL_LIMITS.title}
+                onChange={(e) => setPanel({ ...panel, title: e.target.value })}
+                className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              />
+            </label>
+            <NumberField
+              label="Width on a desktop"
+              unit="%"
+              step={1}
+              value={panel.share}
+              limits={CONTACT_PANEL_LIMITS.share}
+              onCommit={(share) => setLook({ share })}
+              wide
+            />
+            <label className="flex items-center justify-between gap-3 text-sm text-neutral-700">
+              Font
+              <select
+                value={panel.font}
+                onChange={(e) => setLook({ font: e.target.value as ContactPanelSettings["font"] })}
+                className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+              >
+                {SITE_FONTS.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <NumberField
+              label="Text size"
+              unit="pixels"
+              step={1}
+              value={panel.textSize}
+              limits={CONTACT_PANEL_LIMITS.textSize}
+              onCommit={(textSize) => setLook({ textSize })}
+              wide
+            />
+            <NumberField
+              label="Title size"
+              unit="pixels"
+              step={1}
+              value={panel.titleSize}
+              limits={CONTACT_PANEL_LIMITS.titleSize}
+              onCommit={(titleSize) => setLook({ titleSize })}
+              wide
+            />
+            <label className="flex items-center justify-between gap-3 text-sm text-neutral-700">
+              Text colour
+              <input
+                type="color"
+                value={panel.textColour}
+                onChange={(e) => setLook({ textColour: e.target.value })}
+                className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+              />
+            </label>
+            <label className="flex items-center justify-between gap-3 text-sm text-neutral-700">
+              Background
+              <input
+                type="color"
+                value={panel.background}
+                onChange={(e) => setLook({ background: e.target.value })}
+                className="h-7 w-10 cursor-pointer rounded border border-neutral-300 p-0"
+              />
+            </label>
+          </div>
         )}
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}

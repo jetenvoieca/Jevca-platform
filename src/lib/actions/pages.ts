@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { slugify } from "@/lib/pageSlug";
 import type { HeadingNames } from "@/lib/pageHeading";
+import { Prisma } from "@/generated/prisma/client";
+import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel";
 
 // Deliberately NOT calling revalidatePath(`/sites/${siteId}`) from the
 // actions below (2026-08-31 removal) — the same fix already made in
@@ -37,35 +39,32 @@ async function uniqueSlug(siteId: string, base: string) {
 // What the Pages page's Add / Edit modal saves (2026-10-04): name,
 // curation, Display Style (a Page Style, 2026-10-05), Menu (a Menu
 // Style, 2026-10-06 — null = the site's menu), the page it sits under
-// in the menu (2026-10-25 — null = at the top) and the page it opens
-// with its Contact panel slid open (2026-11-03 — null = its own content;
-// see Page.opensPageId).
+// in the menu (2026-10-25 — null = at the top) and, for a Contact panel
+// page (2026-11-03 — see lib/contactPanel.ts), the panel's settings
+// (null = an ordinary page).
 export type PageDetailsInput = {
   title: string;
   curationId: string | null;
   pageStyleId: string | null;
   menuStyleId: string | null;
   parentId: string | null;
-  opensPageId: string | null;
+  contactPanel: ContactPanelSettings | null;
 };
 
-// The page another opens (2026-11-03): one of the same site's pages, not
-// the page itself, and not one that opens another page itself — nor may
-// a page that others open start opening one.
-async function checkedOpensPageId(
+// A Contact panel page's settings, checked: one such page a site.
+async function checkedContactPanel(
   siteId: string,
   pageId: string | null,
-  opensPageId: string | null,
-): Promise<{ opensPageId: string | null } | { error: string }> {
-  if (!opensPageId) return { opensPageId: null };
-  if (opensPageId === pageId) return { error: "A page can't open itself." };
-  const target = await db.page.findFirst({ where: { id: opensPageId, siteId }, select: { opensPageId: true } });
-  if (!target) return { opensPageId: null };
-  if (target.opensPageId) return { error: "That page opens another page itself — choose a page with its own content." };
-  if (pageId && (await db.page.count({ where: { opensPageId: pageId } })) > 0) {
-    return { error: "Another page opens this one, so it keeps its own content." };
-  }
-  return { opensPageId };
+  raw: unknown,
+): Promise<{ contactPanel: ContactPanelSettings | null } | { error: string }> {
+  const contactPanel = readContactPanel(raw);
+  if (!contactPanel) return { contactPanel: null };
+  const other = await db.page.findFirst({
+    where: { siteId, NOT: { contactPanel: { equals: Prisma.DbNull } }, ...(pageId ? { id: { not: pageId } } : {}) },
+    select: { title: true },
+  });
+  if (other) return { error: `"${other.title}" is already this site's Contact panel page.` };
+  return { contactPanel };
 }
 
 // The page another sits under (2026-10-25): one of the same site's pages
@@ -137,19 +136,19 @@ export async function createPage(siteId: string, input: PageDetailsInput): Promi
   const title = input.title.trim();
   if (!title) return { error: "Give the page a name." };
 
-  const [slug, curationId, pageStyleId, menuStyleId, parent, opens, last] = await Promise.all([
+  const [slug, curationId, pageStyleId, menuStyleId, parent, panel, last] = await Promise.all([
     uniqueSlug(siteId, slugify(title)),
     ownCurationId(siteId, input.curationId),
     existingPageStyleId(input.pageStyleId),
     existingMenuStyleId(input.menuStyleId),
     checkedParentId(siteId, null, input.parentId),
-    checkedOpensPageId(siteId, null, input.opensPageId),
+    checkedContactPanel(siteId, null, input.contactPanel),
     db.page.aggregate({ where: { siteId }, _max: { position: true } }),
   ]);
   if ("error" in parent) return parent;
-  if ("error" in opens) return opens;
-  // A page that opens another has no content of its own.
-  const own = !opens.opensPageId;
+  if ("error" in panel) return panel;
+  // A Contact panel page has no content of its own.
+  const own = !panel.contactPanel;
 
   const page = await db.page.create({
     data: {
@@ -160,7 +159,7 @@ export async function createPage(siteId: string, input: PageDetailsInput): Promi
       pageStyleId: own ? pageStyleId : null,
       menuStyleId,
       parentId: parent.parentId,
-      opensPageId: opens.opensPageId,
+      contactPanel: panel.contactPanel ?? Prisma.DbNull,
       visible: false,
       position: (last._max.position ?? -1) + 1,
     },
@@ -191,18 +190,18 @@ export async function updatePageDetails(
   });
   if (!current) return { error: "Page not found." };
 
-  const [checkedCurationId, checkedStyleId, menuStyleId, parent, opens] = await Promise.all([
+  const [checkedCurationId, checkedStyleId, menuStyleId, parent, panel] = await Promise.all([
     ownCurationId(siteId, input.curationId),
     existingPageStyleId(input.pageStyleId),
     existingMenuStyleId(input.menuStyleId),
     checkedParentId(siteId, pageId, input.parentId),
-    checkedOpensPageId(siteId, pageId, input.opensPageId),
+    checkedContactPanel(siteId, pageId, input.contactPanel),
   ]);
   if ("error" in parent) return parent;
-  if ("error" in opens) return opens;
-  // A page that opens another has no content of its own.
-  const curationId = opens.opensPageId ? null : checkedCurationId;
-  const pageStyleId = opens.opensPageId ? null : checkedStyleId;
+  if ("error" in panel) return panel;
+  // A Contact panel page has no content of its own.
+  const curationId = panel.contactPanel ? null : checkedCurationId;
+  const pageStyleId = panel.contactPanel ? null : checkedStyleId;
 
   // A new Display Style clears every component's content; a new curation
   // only what was the old curation's (see curationChangeClears).
@@ -217,7 +216,14 @@ export async function updatePageDetails(
   await db.$transaction([
     db.page.update({
       where: { id: pageId },
-      data: { title, curationId, pageStyleId, menuStyleId, parentId: parent.parentId, opensPageId: opens.opensPageId },
+      data: {
+        title,
+        curationId,
+        pageStyleId,
+        menuStyleId,
+        parentId: parent.parentId,
+        contactPanel: panel.contactPanel ?? Prisma.DbNull,
+      },
     }),
     ...clearComponents,
     ...(styleChanged ? [db.pageSignupForm.deleteMany({ where: { pageId } })] : []),

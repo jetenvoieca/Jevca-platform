@@ -1485,14 +1485,12 @@ model Page {
   parent   Page?   @relation("PageParent", fields: [parentId], references: [id], onDelete: SetNull)
   children Page[]  @relation("PageParent")
 
-  // The page this one opens instead of content of its own (2026-11-03,
-  // the ISYT sites' "contact"): its menu item shows that page with its
-  // Contact panel slid open. Another of the site's pages that doesn't open
-  // one itself; its own curation and Display Style are then none. Cleared,
-  // not the page deleted, if that page is deleted.
-  opensPageId String?
-  opensPage   Page?   @relation("PageOpens", fields: [opensPageId], references: [id], onDelete: SetNull)
-  openedBy    Page[]  @relation("PageOpens")
+  // A Contact panel page (2026-11-03, the ISYT sites' "contact" — see
+  // lib/contactPanel.ts): its menu item slides the site's Contact panel
+  // over whatever page is showing instead of opening a page; this holds
+  // the panel's settings. Null for an ordinary page. Such a page has no
+  // curation or Display Style of its own.
+  contactPanel Json?
 
   // The curations placed on this page's canvas (2026-10-05) — used when
   // its Display Style is a Canvas. See PageCanvasItem.
@@ -1515,7 +1513,6 @@ model Page {
   @@index([pageStyleId])
   @@index([menuStyleId])
   @@index([parentId])
-  @@index([opensPageId])
 }
 
 // One curation placed on a Canvas page (2026-10-05) — its tile's

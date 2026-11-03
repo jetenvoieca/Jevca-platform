@@ -76,7 +76,7 @@ import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 import ExhibitionsBlock from "@/components/ExhibitionsBlock";
 import ShowcaseBlock from "@/components/ShowcaseBlock";
 import WorkDescriptionText from "@/components/WorkDescriptionText";
-import ContactBlock from "@/components/ContactBlock";
+import ContactPanel, { useOpenContactPanel } from "@/components/ContactPanel";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import SoldFlag from "@/components/SoldFlag";
@@ -141,21 +141,18 @@ import SiteLogo from "@/components/SiteLogo";
 // starts where the published page does.
 //
 // `fullScreen` (the site's own pages): a Canvas fills the browser window.
-// `contactOpen` (2026-11-03): the page is shown by a page that opens it
-// (e.g. "contact" — see Page.opensPageId), so its Contact panel slides
-// open; otherwise a Contact panel isn't shown.
+// The site's Contact panel (2026-11-03), when open, lies over a Block
+// Build page — see StyledFrame and ContactPanel.
 export default function PagePreview({
   pageId,
   curationId,
   style,
   fullScreen = false,
-  contactOpen = false,
 }: {
   pageId: string;
   curationId: string | null;
   style: PageStyleSummary | null;
   fullScreen?: boolean;
-  contactOpen?: boolean;
 }) {
   const siteData = useSiteData();
   // The work open, and the curation it's opened in.
@@ -201,7 +198,6 @@ export default function PagePreview({
         stories={content.stories}
         exhibitions={content.exhibitions}
         homeHref={siteData.homeHref}
-        contactOpen={contactOpen}
         onOpen={open}
       />
     );
@@ -291,12 +287,10 @@ export function usePageContent(
 }
 
 // One row of the page as shown: its blocks' contents and widths, the
-// space below it, the space between its blocks and its alignment. A
-// Contact panel (2026-11-03) is a cell that lies over the rows below it
-// (`overlay`: the % of the width it covers on the right on a desktop).
+// space below it, the space between its blocks and its alignment.
 type Row = {
   key: string;
-  cells: { id: string; content: ReactNode; width: number; overlay?: number }[];
+  cells: { id: string; content: ReactNode; width: number }[];
   below: number;
   between: number;
   horizontal: HorizontalAlign;
@@ -325,8 +319,6 @@ export type BlockFillerInput = {
   stories: ProfileStoryRow[];
   // The Exhibitions catalogue, for Exhibitions (2026-11-02).
   exhibitions: ExhibitionRow[];
-  // Whether a Contact panel is open (2026-11-03 — see PagePreview).
-  contactOpen: boolean;
   // Opens a work — in the page's curation, or the one given (a
   // Showcase's works, 2026-11-02).
   onOpen: (artworkId: string, curationId?: string) => void;
@@ -346,7 +338,6 @@ export function blockFiller({
   heading,
   stories,
   exhibitions,
-  contactOpen,
   onOpen,
   heroShowing = null,
   onHeroShowing,
@@ -537,18 +528,6 @@ export function blockFiller({
         />
       );
     }
-    if (block.type === "contact" && block.contact) {
-      if (!contactOpen) return null;
-      return (
-        <ContactBlock
-          settings={block.contact}
-          textStyle={layout.textStyles.text}
-          contentWidth={contentWidth}
-          phone={artist?.contact?.phone ?? null}
-          email={artist?.contact?.email ?? null}
-        />
-      );
-    }
     if (block.type === "signup") {
       const form = formByBlock.get(block.id);
       if (!form || !block.signup) return null;
@@ -655,7 +634,6 @@ function BlockBuildPage({
   stories,
   exhibitions,
   homeHref,
-  contactOpen,
   onOpen,
 }: {
   pageId: string;
@@ -669,7 +647,6 @@ function BlockBuildPage({
   stories: ProfileStoryRow[];
   exhibitions: ExhibitionRow[];
   homeHref: string | null;
-  contactOpen: boolean;
   onOpen: (artworkId: string, curationId?: string) => void;
 }) {
   const { layout } = style;
@@ -686,7 +663,6 @@ function BlockBuildPage({
     heading,
     stories,
     exhibitions,
-    contactOpen,
     onOpen,
     heroShowing,
     onHeroShowing: setHeroShowing,
@@ -701,7 +677,6 @@ function BlockBuildPage({
         id: b.id,
         content: fill(b, settings.horizontal),
         width: blockWidthOf(b),
-        overlay: b.type === "contact" ? b.contact?.share : undefined,
       })),
       ...settings,
     };
@@ -729,7 +704,11 @@ function BlockBuildPage({
 // empty. It grows to fill the space it's in (the whole window on the
 // published site), so the background reaches the bottom — and both
 // sides — however short or narrow the page, as it does in the admin
-// preview.
+// preview. The site's Contact panel (2026-11-03), when open, lies over
+// the page's contents on the right — its share of the width on a desktop,
+// all of it on a phone — in the same grid cell, so the page is as tall as
+// the taller; anything off to the right (the panel sliding) is cut off
+// rather than widening the page.
 function StyledFrame({
   margins,
   maxWidth,
@@ -750,6 +729,7 @@ function StyledFrame({
   const rows = allRows
     .map((r) => ({ ...r, cells: r.cells.filter((c) => c.content) }))
     .filter((r) => r.cells.length > 0);
+  const panel = useOpenContactPanel();
 
   return (
     <div
@@ -757,60 +737,43 @@ function StyledFrame({
       style={pageBackgroundStyle(backgroundColor, phoneBackgroundColor)}
     >
       <div
-        className={`mx-auto flex w-full grow flex-col ${PAGE_MARGIN_CLASS}`}
+        className={`mx-auto grid w-full grow overflow-x-clip ${PAGE_MARGIN_CLASS}`}
         style={{ ...pageMarginStyle(margins), maxWidth: maxWidth ?? undefined, containerType: "inline-size" }}
       >
-        {rows.length === 0 ? <Message text={empty} /> : <FrameRows rows={rows} />}
-        {footer && <div className="mt-auto">{footer}</div>}
+        <div className="col-start-1 row-start-1 flex min-w-0 flex-col">
+          {rows.length === 0 ? <Message text={empty} /> : <FrameRows rows={rows} />}
+          {footer && <div className="mt-auto">{footer}</div>}
+        </div>
+        {panel && (
+          <div
+            className="relative z-10 col-start-1 row-start-1 w-full justify-self-end site:w-[var(--panel-share)]"
+            style={{ "--panel-share": `${panel.settings.share}%` } as CSSProperties}
+          >
+            <ContactPanel settings={panel.settings} onClosed={panel.onClosed} />
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-// The page's rows, each the space below the one before. From a row with
-// a Contact panel (2026-11-03), the panel lies over the rows after it —
-// both in one grid cell, so the space is as tall as the taller — on the
-// right, `overlay` % of the width on a desktop, all of it on a phone, and
-// its own row takes no space. Anything off to the right (the panel
-// sliding) is cut off rather than widening the page.
+// The page's rows, each the space below the one before.
 function FrameRows({ rows }: { rows: Row[] }) {
-  // Rows one under another, the first `top` below what's above them.
-  const drawn = (list: Row[], top: number) =>
-    list.map((row, i) => (
-      <div
-        key={row.key}
-        className={rowClass(row.horizontal, row.vertical)}
-        style={{ marginTop: i > 0 ? list[i - 1].below : top, gap: row.between }}
-      >
-        {row.cells.map((c) => (
-          <div key={c.id} className={rowBlockClass()} style={rowBlockStyle(c.width)}>
-            {c.content}
-          </div>
-        ))}
-      </div>
-    ));
-
-  const at = rows.findIndex((r) => r.cells.some((c) => c.overlay !== undefined));
-  if (at < 0) return <>{drawn(rows, 0)}</>;
-
-  const panel = rows[at].cells.find((c) => c.overlay !== undefined)!;
-  const others = rows[at].cells.filter((c) => c !== panel);
-  // Above the panel: the rows before it, and its own row's other cells.
-  const above = [...rows.slice(0, at), ...(others.length ? [{ ...rows[at], cells: others }] : [])];
-  const under = rows.slice(at + 1);
-  const last = above[above.length - 1];
   return (
     <>
-      {drawn(above, 0)}
-      <div className="grid overflow-x-clip" style={{ marginTop: last ? last.below : 0 }}>
-        <div className="col-start-1 row-start-1 min-w-0">{drawn(under, 0)}</div>
+      {rows.map((row, i) => (
         <div
-          className="relative z-10 col-start-1 row-start-1 w-full justify-self-end site:w-[var(--overlay-share)]"
-          style={{ "--overlay-share": `${panel.overlay}%` } as CSSProperties}
+          key={row.key}
+          className={rowClass(row.horizontal, row.vertical)}
+          style={{ marginTop: i > 0 ? rows[i - 1].below : 0, gap: row.between }}
         >
-          {panel.content}
+          {row.cells.map((c) => (
+            <div key={c.id} className={rowBlockClass()} style={rowBlockStyle(c.width)}>
+              {c.content}
+            </div>
+          ))}
         </div>
-      </div>
+      ))}
     </>
   );
 }

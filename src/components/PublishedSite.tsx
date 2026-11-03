@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type PointerEvent } from "react";
 import { usePathname } from "next/navigation";
 import {
   pageForPath,
   pageImageUrls,
   publishedHomePath,
-  shownPage,
   type SiteSnapshot,
   type SnapshotPage,
 } from "@/lib/siteSnapshot";
@@ -14,6 +13,7 @@ import { SnapshotSiteData } from "@/lib/siteData";
 import PagePreview from "@/components/PagePreview";
 import PublishedSiteMenu from "@/components/PublishedSiteMenu";
 import { SITE_PAGE_ATTRIBUTE } from "@/components/MenuView";
+import { ContactPanelProvider } from "@/components/ContactPanel";
 
 // How long the old page takes to fade out as the new one fades in —
 // matches the page-fade animations in tailwind.config.ts.
@@ -34,6 +34,10 @@ type Leaving = { page: SnapshotPage; scrollY: number };
 // pictures. The old page fades out as the new one fades in (Craig's
 // choice: a plain cross-fade, 0.8 s), the menu staying where it is. Back and forward
 // work as usual, and every address still opens its page directly.
+// The site's Contact panel page (2026-11-03 — see lib/contactPanel.ts)
+// isn't a page to go to: following its link slides the panel over the
+// page showing, the address unchanged; arriving at its address shows the
+// home page with the panel open. Going to another page closes it.
 // `siteKey` (2026-10-10): the robot check's public key for this address,
 // for the visitor's forms; `salesEnabled` (2026-10-19): whether works can
 // be bought online.
@@ -49,7 +53,12 @@ export default function PublishedSite({
   snapshot: SiteSnapshot;
 }) {
   const pathname = usePathname();
-  const page = pageForPath(siteId, snapshot.pages, pathname);
+  const routed = pageForPath(siteId, snapshot.pages, pathname);
+  const contactPage = snapshot.pages.find((p) => p.contactPanel) ?? null;
+  const homePage = snapshot.pages.find((p) => !p.contactPanel) ?? null;
+  const page = routed?.contactPanel ? homePage : routed;
+  const [panelOpen, setPanelOpen] = useState(!!routed?.contactPanel);
+  const closePanel = useCallback(() => setPanelOpen(false), []);
   const [leaving, setLeaving] = useState<Leaving[]>([]);
   const previous = useRef<SnapshotPage | null>(page);
   // Whether a page has changed since the visitor arrived — the first
@@ -66,6 +75,7 @@ export default function PublishedSite({
     const before = previous.current;
     previous.current = page;
     if (!before || before.id === page?.id) return;
+    setPanelOpen(false);
     const gone: Leaving = { page: before, scrollY: window.scrollY };
     setChanged(true);
     setLeaving((list) => [...list.filter((l) => l.page.id !== before.id), gone]);
@@ -107,8 +117,13 @@ export default function PublishedSite({
     const link = (e.target as Element).closest("a");
     if (!link || (link.target && link.target !== "_self") || link.hasAttribute("download")) return;
     const url = new URL(link.href, window.location.href);
-    if (!url.pathname.startsWith(publishedHomePath(siteId)) || !linkedPage(link)) return;
+    const target = url.pathname.startsWith(publishedHomePath(siteId)) ? linkedPage(link) : null;
+    if (!target) return;
     e.preventDefault();
+    if (target.contactPanel) {
+      setPanelOpen(true);
+      return;
+    }
     if (url.pathname !== window.location.pathname) {
       window.history.pushState(null, "", url.pathname);
     }
@@ -140,22 +155,15 @@ export default function PublishedSite({
               style={l ? { top: -l.scrollY } : undefined}
               aria-hidden={l ? true : undefined}
             >
-              {(() => {
-                // A page that opens another (2026-11-03, e.g. "contact")
-                // shows that page with its Contact panel open.
-                const shown = shownPage(snapshot.pages, p);
-                return (
-                  shown && (
-                    <PagePreview
-                      pageId={shown.page.id}
-                      curationId={shown.page.curationId}
-                      style={shown.page.style}
-                      contactOpen={shown.contactOpen}
-                      fullScreen
-                    />
-                  )
-                );
-              })()}
+              <ContactPanelProvider
+                panel={
+                  !l && panelOpen && contactPage?.contactPanel
+                    ? { settings: contactPage.contactPanel, onClosed: closePanel }
+                    : null
+                }
+              >
+                <PagePreview pageId={p.id} curationId={p.curationId} style={p.style} fullScreen />
+              </ContactPanelProvider>
             </main>
           );
         })}

@@ -13,6 +13,7 @@ import type { SiteArtist } from "@/lib/siteArtist";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 import { readPageStories } from "@/lib/pageStories";
+import type { ContactPanelSettings } from "@/lib/contactPanel";
 
 // A published site (2026-10-06) — everything its pages show, saved when
 // "Publish to live site" is pressed (see SitePublication in
@@ -72,10 +73,10 @@ export function pageForPath<P extends { slug: string }>(
 // components (never their list — see lib/actions/websiteSignup.ts); read
 // as empty for a site published before it existed. `parentId`
 // (2026-10-25) is the page it sits under in the menu — null at the top,
-// and for a site published before it existed. `opensPageId` (2026-11-03)
-// is the page it shows, with its Contact panel open, instead of content
-// of its own (see Page.opensPageId) — null for most pages, and for a site
-// published before it existed.
+// and for a site published before it existed. `contactPanel` (2026-11-03)
+// makes it the site's Contact panel page — its menu item slides the panel
+// over whatever page is showing (see lib/contactPanel.ts); null for an
+// ordinary page, and for a site published before it existed.
 export type SnapshotPage = {
   id: string;
   title: string;
@@ -87,19 +88,8 @@ export type SnapshotPage = {
   signupForms: SignupFormContent[];
   menuStyleId: string | null;
   parentId: string | null;
-  opensPageId: string | null;
+  contactPanel: ContactPanelSettings | null;
 };
-
-// What a page shows (2026-11-03): itself, or the live page it opens with
-// its Contact panel open — null if that page isn't live.
-export function shownPage<P extends { id: string; opensPageId: string | null }>(
-  pages: P[],
-  page: P,
-): { page: P; contactOpen: boolean } | null {
-  if (!page.opensPageId) return { page, contactOpen: false };
-  const opened = pages.find((p) => p.id === page.opensPageId);
-  return opened ? { page: opened, contactOpen: true } : null;
-}
 
 // One curation shown somewhere on the site: its works, its sections, and
 // each work's presentation (the details panel), by artwork id.
@@ -147,11 +137,6 @@ export function pageImageUrls(snapshot: SiteSnapshot, page: SnapshotPage): strin
     if (url) urls.add(url);
   };
   const style = page.style;
-  // A page that opens another shows that page's pictures (2026-11-03).
-  if (page.opensPageId) {
-    const shown = shownPage(snapshot.pages, page);
-    return shown ? pageImageUrls(snapshot, shown.page) : [];
-  }
   if (style?.type === "CANVAS") {
     for (const placement of page.canvas) {
       add(snapshot.covers.find((c) => c.id === placement.curationId)?.imageUrl);

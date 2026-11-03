@@ -66,9 +66,6 @@ export const LAYOUT_BLOCK_TYPES = [
   // Every work the site shows, shuffled, a pair at a time, sliding apart
   // to the next (2026-11-02, the ISYT sites' showcase pages).
   { value: "showcase", label: "Showcase" },
-  // A contact form with the artist's phone and email, sliding in over the
-  // page below it (2026-11-03, the ISYT contact pages).
-  { value: "contact", label: "Contact panel" },
   { value: "artwork", label: "Feature" },
   { value: "textgrid", label: "Text Grid" },
   { value: "slidingdoors", label: "Sliding doors" },
@@ -635,36 +632,6 @@ export function cleanShowcase(raw: unknown): ShowcaseSettings {
   };
 }
 
-// A Contact panel (2026-11-03, Craig's request — the ISYT contact pages):
-// `title`, the phone and email from the artist's Settings, then a form —
-// name, email, message, a tick box to join the mailing list — sent to the
-// artist (lib/actions/websiteContact.ts). It doesn't take a place of its
-// own on the page: it slides in from the right as the page opens and
-// lies over the components below it, covering `share` % of the width
-// on the right (all of it on a phone), in the page's background, until
-// its ✕ slides it away. Its words are in the page's Text look; the title
-// `titleSize` pixels, bold.
-export type ContactSettings = { title: string; share: number; titleSize: number };
-
-export const CONTACT_LIMITS = {
-  title: 80,
-  share: { min: 30, max: 100 },
-  titleSize: { min: 12, max: 48 },
-} as const;
-
-export const DEFAULT_CONTACT: ContactSettings = { title: "Contact / Mailing List", share: 50, titleSize: 19 };
-
-export function cleanContact(raw: unknown): ContactSettings {
-  const value = (raw ?? {}) as Partial<Record<keyof ContactSettings, unknown>>;
-  const d = DEFAULT_CONTACT;
-  const l = CONTACT_LIMITS;
-  return {
-    title: typeof value.title === "string" ? value.title.slice(0, l.title) : d.title,
-    share: cleanNumber(value.share, l.share, d.share, 0),
-    titleSize: cleanNumber(value.titleSize, l.titleSize, d.titleSize, 0),
-  };
-}
-
 // Profile stories (2026-10-26, Craig's request): the Profile Catalogue
 // stories chosen on each page (lib/pageStories.ts), stacked
 // `storySpace` apart, each its picture beside its caption (the headline)
@@ -807,7 +774,7 @@ const DEFAULT_TEXT_STYLES: TextStyles<SiteFontId> = {
 // (Gallery), `hero` (Hero), `pictureWords` (Picture & words), `entries`
 // (Entries), `pageHeading` (Page heading), `stories` (Profile stories),
 // `viewer` (Portfolio viewer), `exhibitions` (Exhibitions), `showcase`
-// (Showcase), `contact` (Contact panel).
+// (Showcase).
 // `textStyle` is a Header, Byline, Text or Text grid component's own
 // look.
 export type LayoutBlock = RowBlock<LayoutBlockType> &
@@ -826,7 +793,6 @@ export type LayoutBlock = RowBlock<LayoutBlockType> &
     viewer?: ViewerSettings;
     exhibitions?: ExhibitionsSettings;
     showcase?: ShowcaseSettings;
-    contact?: ContactSettings;
     pageHeading?: PageHeadingSettings;
     byline?: LogoByline;
   };
@@ -996,9 +962,6 @@ export function normalizeLayout(type: PageStyleType, raw: unknown): PageStyleLay
           if (clean.type === "showcase") {
             clean.showcase = cleanShowcase((b as Partial<LayoutBlock>).showcase);
           }
-          if (clean.type === "contact") {
-            clean.contact = cleanContact((b as Partial<LayoutBlock>).contact);
-          }
           if (clean.type === "picturewords") {
             clean.pictureWords = cleanPictureWords((b as Partial<LayoutBlock>).pictureWords);
           }
@@ -1046,7 +1009,6 @@ export function newLayoutBlock(type: LayoutBlockType): LayoutBlock {
   if (type === "viewer") return { id, type, viewer: DEFAULT_VIEWER };
   if (type === "exhibitions") return { id, type, exhibitions: DEFAULT_EXHIBITIONS };
   if (type === "showcase") return { id, type, showcase: DEFAULT_SHOWCASE };
-  if (type === "contact") return { id, type, contact: DEFAULT_CONTACT };
   if (type === "pageheading") return { id, type, pageHeading: DEFAULT_PAGE_HEADING };
   return { id, type };
 }

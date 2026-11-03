@@ -22,6 +22,12 @@ import PagePreview from "@/components/PagePreview";
 import CanvasArranger from "@/components/CanvasArranger";
 import PageSectionsArranger from "@/components/PageSectionsArranger";
 import PageLayoutEditor from "@/components/PageLayoutEditor";
+import { ContactPanelProvider } from "@/components/ContactPanel";
+import type { ContactPanelSettings } from "@/lib/contactPanel";
+
+// The preview's Contact panel, once its ✕ has slid it away, stays away
+// until the page is selected again.
+const stayClosed = () => {};
 
 export type PageListItem = {
   id: string;
@@ -31,8 +37,8 @@ export type PageListItem = {
   pageStyleId: string | null;
   menuStyleId: string | null;
   parentId: string | null;
-  // The page it opens with its Contact panel slid open (2026-11-03).
-  opensPageId: string | null;
+  // A Contact panel page's panel (2026-11-03 — see lib/contactPanel.ts).
+  contactPanel: ContactPanelSettings | null;
 };
 
 type ListKey = "live" | "hidden";
@@ -124,9 +130,9 @@ export default function PagesManager({
   }, [pages]);
 
   const selected = [...live, ...hidden].find((p) => p.id === selectedId) ?? null;
-  // A page that opens another (2026-11-03) previews that page with its
-  // Contact panel open; it has nothing of its own to arrange.
-  const previewed = (selected?.opensPageId && pages.find((p) => p.id === selected.opensPageId)) || selected;
+  // A Contact panel page (2026-11-03) previews its panel over the home
+  // page (the first Live Page); it has nothing of its own to arrange.
+  const previewed = selected?.contactPanel ? (live.find((p) => !p.contactPanel) ?? null) : selected;
   const previewedStyle = previewed ? (pageStyles.find((s) => s.id === previewed.pageStyleId) ?? null) : null;
   const selectedStyle = selected ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null) : null;
   const canvasStyle = selectedStyle?.type === "CANVAS" ? selectedStyle : null;
@@ -298,11 +304,7 @@ export default function PagesManager({
                   ) : (
                     p.title
                   )}
-                  {p.opensPageId && (
-                    <span className="ml-2 text-xs text-neutral-400">
-                      opens {pages.find((q) => q.id === p.opensPageId)?.title}
-                    </span>
-                  )}
+                  {p.contactPanel && <span className="ml-2 text-xs text-neutral-400">Contact panel</span>}
                 </button>
               </div>
             </div>
@@ -354,13 +356,16 @@ export default function PagesManager({
           </LiveSiteData>
         ) : selected && previewed ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
-            <PagePreview
-              key={`${selected.id}:${previewVersion}`}
-              pageId={previewed.id}
-              curationId={previewed.curationId}
-              style={previewedStyle}
-              contactOpen={!!selected.opensPageId}
-            />
+            <ContactPanelProvider
+              panel={selected.contactPanel ? { settings: selected.contactPanel, onClosed: stayClosed } : null}
+            >
+              <PagePreview
+                key={`${selected.id}:${previewVersion}`}
+                pageId={previewed.id}
+                curationId={previewed.curationId}
+                style={previewedStyle}
+              />
+            </ContactPanelProvider>
           </LiveSiteData>
         ) : (
           <div className="flex flex-1 items-center justify-center">
@@ -456,14 +461,12 @@ export default function PagesManager({
                   pageStyleId: selected.pageStyleId,
                   menuStyleId: selected.menuStyleId,
                   parentId: selected.parentId,
-                  opensPageId: selected.opensPageId,
+                  contactPanel: selected.contactPanel,
                 }
-              : { title: "", curationId: null, pageStyleId: null, menuStyleId: null, parentId: null, opensPageId: null }
+              : { title: "", curationId: null, pageStyleId: null, menuStyleId: null, parentId: null, contactPanel: null }
           }
           topPages={pages.filter((p) => !p.parentId && p.id !== (modal === "edit" ? selected?.id : undefined))}
           hasChildren={modal === "edit" && !!selected && pages.some((p) => p.parentId === selected.id)}
-          openablePages={pages.filter((p) => !p.opensPageId && p.id !== (modal === "edit" ? selected?.id : undefined))}
-          isOpened={modal === "edit" && !!selected && pages.some((p) => p.opensPageId === selected.id)}
           curations={curations}
           pageStyles={pageStyles}
           menuStyles={menuStyles}

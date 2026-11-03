@@ -11,7 +11,6 @@ import {
   type ViewerSettings,
   type ExhibitionsSettings,
   type ShowcaseSettings,
-  type ContactSettings,
 } from "@/lib/pageStyleLayout";
 import type { MailBlockType } from "@/lib/mailTemplateLayout";
 import type { GridSpacing } from "@/lib/rowLayout";
@@ -38,7 +37,6 @@ export function BlockShape({
   viewer,
   exhibitions,
   showcase,
-  contact,
   device,
 }: {
   type: LayoutBlockType | MailBlockType;
@@ -54,7 +52,6 @@ export function BlockShape({
   viewer?: ViewerSettings;
   exhibitions?: ExhibitionsSettings;
   showcase?: ShowcaseSettings;
-  contact?: ContactSettings;
   device?: PreviewDevice;
 }) {
   switch (type) {
@@ -276,27 +273,6 @@ export function BlockShape({
               />
             )}
             {work}
-          </div>
-        </div>
-      );
-    }
-    case "contact": {
-      // The panel at its share of the width on the right (all of it on a
-      // phone): title, two lines, three boxes and Send.
-      const share = device === "phone" ? 100 : (contact?.share ?? 50);
-      return (
-        <div className="flex justify-end">
-          <div
-            className="flex flex-col gap-2 rounded border-l-4 border-neutral-300 bg-white p-3 shadow-sm"
-            style={{ width: `${share}%` }}
-          >
-            <p className="truncate text-sm font-semibold text-neutral-600">{contact?.title || "Contact"}</p>
-            <Bar className="h-2.5 w-1/3" />
-            <Bar className="h-2.5 w-1/2" />
-            <div className="h-5 rounded border border-neutral-300" />
-            <div className="h-5 rounded border border-neutral-300" />
-            <div className="h-12 rounded border border-neutral-300" />
-            <div className="h-5 w-16 rounded border border-neutral-400 bg-neutral-100" />
           </div>
         </div>
       );

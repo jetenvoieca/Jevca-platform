@@ -1,47 +1,52 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties, type FormEvent } from "react";
-import type { ContactSettings, PageTextStyle } from "@/lib/pageStyleLayout";
+import { createContext, useContext, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
+import type { ContactPanelSettings } from "@/lib/contactPanel";
 import { sendWebsiteContact } from "@/lib/actions/websiteContact";
 import { MAX_EMAIL_LENGTH } from "@/lib/emailAddress";
 import { useSiteData } from "@/lib/siteData";
 import { useTurnstile } from "@/lib/useTurnstile";
-import { bodyTextCss } from "@/components/textStyleCss";
-import { PAGE_BACKGROUND_CLASS } from "@/components/pageMargins";
+import { SITE_FONT_FAMILY } from "@/lib/siteFontFaces";
 
-// A Contact panel's contents (2026-11-03, the ISYT contact pages — see
-// ContactSettings in lib/pageStyleLayout.ts): its ✕, title, the artist's
-// phone and email, and the form — name, email, message, the mailing list
-// tick box and Send — in the page's Text look, plain as on the old ISYT
-// sites. The page lays it over the components below it (PagePreview's
-// StyledFrame); it slides in from the right as it first appears, and its
-// ✕ slides it away, then it's gone. Sending is
+// A site's Contact panel (2026-11-03 — see lib/contactPanel.ts): its ✕,
+// title, the artist's phone and email (from Settings), and the form —
+// name, email, message, the mailing list tick box and Send — plain, as on
+// the old ISYT sites, in the panel's own look. Whoever shows a page and
+// knows the panel is open (the published site, the Pages page's preview)
+// says so with ContactPanelProvider; the page lays the panel over itself
+// (PagePreview's StyledFrame). It slides in from the right as it appears;
+// its ✕ slides it away, then tells the provider it's closed. Sending is
 // lib/actions/websiteContact.ts, after Cloudflare Turnstile's check
 // (lib/useTurnstile.ts) — only from the published site (siteData.forms);
-// in the admin's previews the form is only shown.
+// in the admin's preview the form is only shown.
 
 const UNAVAILABLE = "Messages can't be sent right now — please try again later.";
 const MAX_NAME = 100;
 const MAX_MESSAGE = 5000;
 const SLIDE_SECONDS = 0.6;
 
-export default function ContactBlock({
-  settings,
-  textStyle,
-  contentWidth,
-  phone,
-  email: artistEmail,
-}: {
-  settings: ContactSettings;
-  textStyle: PageTextStyle;
-  contentWidth: number;
-  phone: string | null;
-  email: string | null;
-}) {
-  const site = useSiteData().forms;
+// The open panel: its settings, and what to do once it has slid away.
+type OpenPanel = { settings: ContactPanelSettings; onClosed: () => void };
+
+const ContactPanelContext = createContext<OpenPanel | null>(null);
+
+// Shows the panel (`panel`, null = closed) over the page inside.
+export function ContactPanelProvider({ panel, children }: { panel: OpenPanel | null; children: ReactNode }) {
+  return <ContactPanelContext.Provider value={panel}>{children}</ContactPanelContext.Provider>;
+}
+
+// The panel to lay over the page, if it's open.
+export function useOpenContactPanel(): OpenPanel | null {
+  return useContext(ContactPanelContext);
+}
+
+export default function ContactPanel({ settings, onClosed }: OpenPanel) {
+  const siteData = useSiteData();
+  const site = siteData.forms;
   // "start": drawn off to the right, about to slide in; "in": showing;
-  // "out": sliding away; "gone": closed.
-  const [phase, setPhase] = useState<"start" | "in" | "out" | "gone">("start");
+  // "out": sliding away.
+  const [phase, setPhase] = useState<"start" | "in" | "out">("start");
+  const [contact, setContact] = useState<{ phone: string | null; email: string | null } | null>(null);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [message, setMessage] = useState("");
@@ -52,23 +57,39 @@ export default function ContactBlock({
   const check = useTurnstile(site?.siteKey ?? null, phase === "in" && !sent);
   const shownError = error ?? (check.failed ? UNAVAILABLE : null);
 
+  // The artist's phone and email.
+  useEffect(() => {
+    let current = true;
+    siteData.getArtist().then((artist) => {
+      if (current) setContact(artist?.contact ?? null);
+    });
+    return () => {
+      current = false;
+    };
+  }, [siteData]);
+
   // Slides in once it's been drawn off to the right.
   useEffect(() => {
     const frame = requestAnimationFrame(() => setPhase("in"));
     return () => cancelAnimationFrame(frame);
   }, []);
 
-  // Gone once it has slid away.
+  // Closed once it has slid away.
   useEffect(() => {
     if (phase !== "out") return;
-    const timer = setTimeout(() => setPhase("gone"), SLIDE_SECONDS * 1000);
+    const timer = setTimeout(onClosed, SLIDE_SECONDS * 1000);
     return () => clearTimeout(timer);
-  }, [phase]);
+  }, [phase, onClosed]);
 
-  if (phase === "gone") return null;
-
-  const text = bodyTextCss(textStyle, contentWidth);
-  const field: CSSProperties = { font: "inherit", color: "inherit" };
+  const look: CSSProperties = {
+    background: settings.background,
+    color: settings.textColour,
+    fontFamily: SITE_FONT_FAMILY[settings.font],
+    fontSize: settings.textSize,
+    transform: phase === "in" ? "translateX(0)" : "translateX(105%)",
+    transition: phase === "start" ? "none" : `transform ${SLIDE_SECONDS}s ease-out`,
+  };
+  const field: CSSProperties = { font: "inherit", color: "#222222" };
   const fieldClass = "w-full max-w-md border border-neutral-500 bg-white px-2 py-1.5 outline-none focus:border-neutral-800";
 
   const submit = async (e: FormEvent) => {
@@ -97,17 +118,8 @@ export default function ContactBlock({
     setSent(true);
   };
 
-  // In the page's background (its colours are set on the page around it),
-  // over white for a page without one, so nothing below shows through.
   return (
-    <div
-      className="h-full bg-white shadow-[-12px_0_24px_-16px_rgba(0,0,0,0.35)]"
-      style={{
-        transform: phase === "in" ? "translateX(0)" : "translateX(105%)",
-        transition: phase === "start" ? "none" : `transform ${SLIDE_SECONDS}s ease-out`,
-      }}
-    >
-    <div className={`relative h-full px-6 pb-8 pt-1 ${PAGE_BACKGROUND_CLASS}`} style={text}>
+    <div className="relative h-full px-6 pb-8 pt-1 shadow-[-12px_0_24px_-16px_rgba(0,0,0,0.35)]" style={look}>
       <button
         type="button"
         onClick={() => setPhase("out")}
@@ -125,16 +137,16 @@ export default function ContactBlock({
           {settings.title}
         </h2>
       )}
-      {(phone || artistEmail) && (
+      {(contact?.phone || contact?.email) && (
         <div className="mb-6 flex flex-col gap-2">
-          {phone && (
-            <a href={`tel:${phone.replace(/[^\d+]/g, "")}`} className="self-start hover:underline">
-              {phone}
+          {contact.phone && (
+            <a href={`tel:${contact.phone.replace(/[^\d+]/g, "")}`} className="self-start hover:underline">
+              {contact.phone}
             </a>
           )}
-          {artistEmail && (
-            <a href={`mailto:${artistEmail}`} className="self-start hover:underline">
-              {artistEmail}
+          {contact.email && (
+            <a href={`mailto:${contact.email}`} className="self-start hover:underline">
+              {contact.email}
             </a>
           )}
         </div>
@@ -209,7 +221,6 @@ export default function ContactBlock({
           </button>
         </form>
       )}
-    </div>
     </div>
   );
 }

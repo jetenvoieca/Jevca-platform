@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { readContactPanel } from "@/lib/contactPanel";
 import { db } from "@/lib/db";
 import { listCurations } from "@/lib/actions/curations";
 import { listPageStyles } from "@/lib/actions/pageStyles";
@@ -37,7 +38,7 @@ export default async function PagesPage({
         pageStyleId: true,
         menuStyleId: true,
         parentId: true,
-        opensPageId: true,
+        contactPanel: true,
       },
     }),
     listCurations(site.artistId),
@@ -50,7 +51,7 @@ export default async function PagesPage({
     <PagesManager
       siteId={id}
       artistId={site.artistId}
-      pages={pages}
+      pages={pages.map((p) => ({ ...p, contactPanel: readContactPanel(p.contactPanel) }))}
       curations={curations}
       pageStyles={pageStyles}
       menuStyles={menuStyles}

@@ -1,3 +1,4 @@
+import { readContactPanel } from "@/lib/contactPanel";
 import { db } from "@/lib/db";
 import { normalizePresentation } from "@/lib/presentationTemplate";
 import { normalizeLayout } from "@/lib/pageStyleLayout";
@@ -47,8 +48,8 @@ export async function getPublishedSite(
     signupForms: p.signupForms ?? [],
     menuStyleId: p.menuStyleId ?? null,
     parentId: p.parentId ?? null,
-    // Opening no page for a site published before pages could (2026-11-03).
-    opensPageId: p.opensPageId ?? null,
+    // No Contact panel for a site published before there was one (2026-11-03).
+    contactPanel: readContactPanel(p.contactPanel ?? null),
   }));
   const menus: Record<string, MenuStyleLayout> = {};
   for (const [id, layout] of Object.entries(snapshot.menus ?? {})) {

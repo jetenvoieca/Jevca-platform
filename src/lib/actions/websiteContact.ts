@@ -6,7 +6,7 @@ import { checkWebsiteVisitor } from "@/lib/turnstile";
 import { deliverWebsiteMessage, readWebsiteMessage } from "@/lib/websiteMessages";
 
 // A message sent from a website's Contact panel (2026-11-03, Craig's
-// request — the ISYT contact pages; see ContactBlock). Delivered like
+// request — the ISYT contact pages; see ContactPanel). Delivered like
 // every website message (lib/websiteMessages.ts): into the artist's
 // Inbox, emailed to their own address, and the visitor added to their
 // Subscribers if they ticked the mailing list box.
