@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { readContactPanel } from "@/lib/contactPanel";
+import { listSiteThemes } from "@/lib/actions/siteThemes";
 import { db } from "@/lib/db";
 import { listCurations } from "@/lib/actions/curations";
 import { listPageStyles } from "@/lib/actions/pageStyles";
@@ -26,7 +27,7 @@ export default async function PagesPage({
   });
   if (!site) notFound();
 
-  const [pages, curations, pageStyles, menuStyles, user] = await Promise.all([
+  const [pages, curations, pageStyles, menuStyles, user, themes] = await Promise.all([
     db.page.findMany({
       where: { siteId: id },
       orderBy: { position: "asc" },
@@ -45,6 +46,7 @@ export default async function PagesPage({
     listPageStyles(),
     listMenuStyles(),
     getCurrentUser(),
+    listSiteThemes(),
   ]);
 
   return (
@@ -58,6 +60,7 @@ export default async function PagesPage({
       siteMenuStyleId={site.menuStyleId}
       initialPageId={initialPageId ?? null}
       canEditStyles={user?.role === "ADMIN"}
+      themes={user?.role === "ADMIN" ? themes.map((t) => ({ id: t.id, name: t.name })) : []}
     />
   );
 }

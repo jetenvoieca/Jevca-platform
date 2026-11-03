@@ -3,7 +3,7 @@
 import { requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
-import { slugify } from "@/lib/pageSlug";
+import { uniquePageSlug } from "@/lib/pageSlugs";
 import type { HeadingNames } from "@/lib/pageHeading";
 import { Prisma } from "@/generated/prisma/client";
 import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel";
@@ -22,19 +22,6 @@ import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel"
 // or a redirect() to a fresh page).
 //
 // Publishing a site lives in lib/actions/siteSnapshot.ts (2026-10-06).
-
-// The page's web address: its name as a slug, with -2, -3… added if
-// another page on the site already has it. Not exported, so it isn't
-// callable from the browser.
-async function uniqueSlug(siteId: string, base: string) {
-  let slug = base;
-  let n = 2;
-  while (await db.page.findFirst({ where: { siteId, slug } })) {
-    slug = `${base}-${n}`;
-    n++;
-  }
-  return slug;
-}
 
 // What the Pages page's Add / Edit modal saves (2026-10-04): name,
 // curation, Display Style (a Page Style, 2026-10-05), Menu (a Menu
@@ -137,7 +124,7 @@ export async function createPage(siteId: string, input: PageDetailsInput): Promi
   if (!title) return { error: "Give the page a name." };
 
   const [slug, curationId, pageStyleId, menuStyleId, parent, panel, last] = await Promise.all([
-    uniqueSlug(siteId, slugify(title)),
+    uniquePageSlug(siteId, title),
     ownCurationId(siteId, input.curationId),
     existingPageStyleId(input.pageStyleId),
     existingMenuStyleId(input.menuStyleId),

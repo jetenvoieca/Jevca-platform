@@ -1678,9 +1678,30 @@ model MenuStyle {
 
   sites Site[]
   pages Page[]
+  // Site Themes setting this as a site's menu (2026-11-03).
+  siteThemes SiteTheme[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+// A Site Theme (2026-11-03, Craig's request — setting up 40+ ISYT sites):
+// the pages a site of that theme has, made in one go with the Theme
+// button on a site's Pages page. Shared by every site, managed under
+// Templates → Site Themes. `siteMenuStyleId`: the menu set as the site's
+// menu (when it has none). `entries`: the pages, in menu order — see
+// lib/siteThemes.ts.
+model SiteTheme {
+  id              String     @id @default(cuid())
+  name            String     @unique
+  siteMenuStyleId String?
+  siteMenuStyle   MenuStyle? @relation(fields: [siteMenuStyleId], references: [id], onDelete: SetNull)
+  entries         Json       @default("[]")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([siteMenuStyleId])
 }
 
 model Artwork {

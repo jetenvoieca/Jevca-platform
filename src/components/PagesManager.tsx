@@ -18,6 +18,7 @@ import { ThemedStyleOptions } from "@/components/ThemedStyleList";
 import { LiveSiteData } from "@/lib/siteData";
 import PageDetailsModal from "@/components/PageDetailsModal";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import { applySiteTheme } from "@/lib/actions/siteThemes";
 import PagePreview from "@/components/PagePreview";
 import CanvasArranger from "@/components/CanvasArranger";
 import PageSectionsArranger from "@/components/PageSectionsArranger";
@@ -71,6 +72,10 @@ type ListKey = "live" | "hidden";
 // menu uses (Templates → Menus) — saved as soon as it's changed. A page
 // can have its own instead, chosen in its Edit. A page sitting under
 // another in the menu (2026-10-25, chosen in its Edit) shows ↳ and which.
+//
+// Theme (2026-11-03, admin only): choose a Site Theme (Templates → Site
+// Themes) to make all its pages on this site at once — see
+// applySiteTheme.
 export default function PagesManager({
   siteId,
   artistId,
@@ -81,6 +86,7 @@ export default function PagesManager({
   siteMenuStyleId,
   initialPageId = null,
   canEditStyles,
+  themes,
 }: {
   siteId: string;
   artistId: string;
@@ -95,6 +101,8 @@ export default function PagesManager({
   // Display Style, shared by every site) is offered — admin only
   // (2026-10-26).
   canEditStyles: boolean;
+  // The Site Themes, for the Theme button (admin only).
+  themes: { id: string; name: string }[];
 }) {
   const router = useRouter();
   const [live, setLive] = useState(() => pages.filter((p) => p.visible));
@@ -110,6 +118,10 @@ export default function PagesManager({
   const [modal, setModal] = useState<"add" | "edit" | null>(null);
   const [modalError, setModalError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  // Theme: its list open, the theme chosen (to confirm), and what it did.
+  const [themeMenuOpen, setThemeMenuOpen] = useState(false);
+  const [themeToApply, setThemeToApply] = useState<{ id: string; name: string } | null>(null);
+  const [themeMessage, setThemeMessage] = useState<string | null>(null);
   const [arranging, setArranging] = useState(false);
   // The page's layout being edited on the page (2026-10-22).
   const [layingOut, setLayingOut] = useState(false);
@@ -329,7 +341,27 @@ export default function PagesManager({
   );
 
   const buttonClass =
-    "rounded-md border border-neutral-300 px-2 py-2 text-sm text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
+    "rounded-md border border-neutral-300 px-1 py-2 text-[13px] text-neutral-800 hover:bg-neutral-50 disabled:cursor-not-allowed disabled:opacity-40";
+
+  const applyTheme = () => {
+    const theme = themeToApply;
+    if (!theme) return;
+    setThemeToApply(null);
+    setThemeMessage(null);
+    startTransition(async () => {
+      const result = await applySiteTheme(siteId, theme.id);
+      if ("error" in result) {
+        setThemeMessage(result.error);
+        return;
+      }
+      setThemeMessage(
+        `${theme.name}: ${result.created} page${result.created === 1 ? "" : "s"} added` +
+          (result.skipped ? `, ${result.skipped} already here` : "") +
+          ".",
+      );
+      router.refresh();
+    });
+  };
 
   return (
     <div className="grid h-full grid-cols-[1fr_320px] gap-4 p-4">
@@ -386,7 +418,38 @@ export default function PagesManager({
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">
-        <div className="grid grid-cols-4 gap-2">
+        <div className={`grid gap-1.5 ${canEditStyles ? "grid-cols-5" : "grid-cols-4"}`}>
+          {canEditStyles && (
+            <div className="relative grid">
+              <button
+                type="button"
+                onClick={() => setThemeMenuOpen((o) => !o)}
+                disabled={isPending || themes.length === 0}
+                title="Make all the pages of a Site Theme on this site"
+                aria-expanded={themeMenuOpen}
+                className={buttonClass}
+              >
+                Theme
+              </button>
+              {themeMenuOpen && (
+                <div className="absolute left-0 top-full z-30 mt-1 flex w-56 flex-col gap-1.5 rounded-lg border border-neutral-300 bg-white p-2 shadow-lg">
+                  {themes.map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => {
+                        setThemeMenuOpen(false);
+                        setThemeToApply(t);
+                      }}
+                      className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-800 hover:bg-neutral-50"
+                    >
+                      {t.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
           <button type="button" onClick={() => openModal("add")} disabled={isPending} className={buttonClass}>
             Add
           </button>
@@ -420,6 +483,9 @@ export default function PagesManager({
           </button>
         </div>
 
+        {themeMessage && (
+          <p className="-mt-2 rounded-md bg-neutral-100 px-3 py-2 text-xs text-neutral-700">{themeMessage}</p>
+        )}
         {renderList("live", "Live Pages", live)}
         <label className="flex items-center gap-3 rounded-lg border border-neutral-300 bg-white px-3 py-2">
           <span className="shrink-0 text-sm text-neutral-800">Site menu</span>
@@ -485,6 +551,15 @@ export default function PagesManager({
           onClose={closeArrange}
         />
       )}
+
+      <ConfirmDialog
+        open={!!themeToApply}
+        title={`Add the ${themeToApply?.name ?? ""} pages?`}
+        message="Every page of the theme is added to Live Pages, filled in where it can be. Pages this site already has (by name) are left as they are."
+        confirmLabel="Add pages"
+        onConfirm={applyTheme}
+        onCancel={() => setThemeToApply(null)}
+      />
 
       <ConfirmDialog
         open={confirmingDelete && !!selected}
