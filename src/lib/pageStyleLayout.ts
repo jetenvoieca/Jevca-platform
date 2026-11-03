@@ -528,8 +528,12 @@ export function cleanViewer(raw: unknown): ViewerSettings {
 // (those it has), and description. The first is chosen to start
 // with. The year and heading are in `accent`; everything else in the
 // page's Text look. On a phone the chosen one shows above the list.
+// `stickyDetail` (2026-11-03, Craig's request): on a desktop the chosen
+// one stays in view (under a sticky Page heading) while the list scrolls,
+// scrolling on its own if it's taller than the window.
 export type ExhibitionsSettings = {
   newestFirst: boolean;
+  stickyDetail: boolean;
   listShare: number;
   thumbSize: number;
   gap: number;
@@ -548,6 +552,7 @@ export const EXHIBITIONS_LIMITS = {
 
 export const DEFAULT_EXHIBITIONS: ExhibitionsSettings = {
   newestFirst: true,
+  stickyDetail: false,
   listShare: 50,
   thumbSize: 78,
   gap: 15,
@@ -563,6 +568,7 @@ export function cleanExhibitions(raw: unknown): ExhibitionsSettings {
   const l = EXHIBITIONS_LIMITS;
   return {
     newestFirst: value.newestFirst !== false,
+    stickyDetail: value.stickyDetail === true,
     listShare: cleanNumber(value.listShare, l.listShare, d.listShare, 0),
     thumbSize: cleanNumber(value.thumbSize, l.thumbSize, d.thumbSize, 0),
     gap: cleanNumber(value.gap, l.gap, d.gap, 0),
@@ -725,9 +731,12 @@ export function cleanEntriesSettings(raw: unknown): EntriesSettings {
 // A Page heading (2026-10-25, the ISYT sites): the site's name over the
 // page's name (lib/pageHeading.ts), each in its own look, `gap` apart,
 // with an optional line under them `lineSpace` below. `showPage` false:
-// the site's name only (an ISYT home page).
+// the site's name only (an ISYT home page). `sticky` (2026-11-03, Craig's
+// request): on a desktop it stays at the top of the window while the page
+// scrolls under it.
 export type PageHeadingSettings = {
   showPage: boolean;
+  sticky: boolean;
   name: PageTextStyle;
   page: PageTextStyle;
   gap: number;
@@ -737,6 +746,7 @@ export type PageHeadingSettings = {
 
 export const DEFAULT_PAGE_HEADING: PageHeadingSettings = {
   showPage: true,
+  sticky: false,
   name: { ...NO_TEXT_STYLE, size: 40, look: "bold", colour: "#777777" },
   page: { ...NO_TEXT_STYLE, size: 52, look: "regular", colour: "#bbbbbb" },
   gap: 0,
@@ -753,6 +763,7 @@ export function cleanPageHeading(raw: unknown): PageHeadingSettings {
   const style = (v: unknown, fallback: PageTextStyle) => (v ? cleanTextStyle(v, isSiteFontId) : fallback);
   return {
     showPage: value.showPage !== false,
+    sticky: value.sticky === true,
     name: style(value.name, d.name),
     page: style(value.page, d.page),
     gap: cleanNumber(value.gap, space, d.gap, 0),

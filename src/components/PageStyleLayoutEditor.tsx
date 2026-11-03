@@ -139,6 +139,10 @@ export default function PageStyleLayoutEditor({
                   />
                   Show the page&apos;s name under the site&apos;s
                 </label>
+                <label className="flex items-center gap-2 text-sm text-neutral-700">
+                  <input type="checkbox" checked={heading.sticky} onChange={(e) => set({ sticky: e.target.checked })} />
+                  Stays at the top while the page scrolls (desktop)
+                </label>
                 <TextStyleBox
                   label="Site name"
                   value={heading.name}
@@ -576,6 +580,14 @@ function ExhibitionsPanel({
           onChange={(e) => set({ newestFirst: e.target.checked })}
         />
         Newest first
+      </label>
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={settings.stickyDetail}
+          onChange={(e) => set({ stickyDetail: e.target.checked })}
+        />
+        Chosen one stays in view while the list scrolls (desktop)
       </label>
       <NumberField
         label="List's share of the width"

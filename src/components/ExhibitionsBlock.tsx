@@ -111,7 +111,17 @@ export default function ExhibitionsBlock({
         style={settings.line ? { borderLeft: `${settings.line.thickness}px solid ${settings.line.colour}` } : undefined}
       />
 
-      <div ref={detailRef} className="order-1 flex min-w-0 scroll-mt-4 flex-col gap-4 site:order-none">
+      {/* Kept in view on a desktop (`stickyDetail`), under a sticky Page
+          heading (--sticky-top, set by the page), scrolling on its own if
+          taller than the window. */}
+      <div
+        ref={detailRef}
+        className={`order-1 flex min-w-0 scroll-mt-4 flex-col gap-4 site:order-none ${
+          settings.stickyDetail
+            ? "site:sticky site:top-[calc(var(--sticky-top,0px)+16px)] site:max-h-[calc(100dvh-var(--sticky-top,0px)-32px)] site:self-start site:overflow-y-auto"
+            : ""
+        }`}
+      >
         {picture && (
           <FadeImage
             key={picture.id}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { PageStyleSummary } from "@/lib/actions/pageStyles";
 import { sectionIsEmpty, type CurationSectionData, type SectionMedia } from "@/lib/curationSections";
@@ -288,9 +288,11 @@ export function usePageContent(
 
 // One row of the page as shown: its blocks' contents and widths, the
 // space below it, the space between its blocks and its alignment.
+// `sticky` (2026-11-03): it holds a Page heading that stays at the top.
 type Row = {
   key: string;
   cells: { id: string; content: ReactNode; width: number }[];
+  sticky?: boolean;
   below: number;
   between: number;
   horizontal: HorizontalAlign;
@@ -678,6 +680,7 @@ function BlockBuildPage({
         content: fill(b, settings.horizontal),
         width: blockWidthOf(b),
       })),
+      sticky: row.some((b) => b.type === "pageheading" && b.pageHeading?.sticky),
       ...settings,
     };
   });
@@ -757,14 +760,34 @@ function StyledFrame({
   );
 }
 
-// The page's rows, each the space below the one before.
+// The page's rows, each the space below the one before. A sticky row (a
+// Page heading set to stay at the top, 2026-11-03) stays at the top of the
+// window on a desktop, in the page's background, the rest scrolling under
+// it; its height is passed down as --sticky-top, for what stays in view
+// below it (e.g. Exhibitions' chosen one).
 function FrameRows({ rows }: { rows: Row[] }) {
+  const stickyRef = useRef<HTMLDivElement>(null);
+  const [stickyTop, setStickyTop] = useState(0);
+  const hasSticky = rows.some((r) => r.sticky);
+  useEffect(() => {
+    const row = stickyRef.current;
+    if (!row) return;
+    const measure = () => setStickyTop(row.offsetHeight);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [hasSticky]);
+
   return (
-    <>
+    <div className="contents" style={{ "--sticky-top": `${stickyTop}px` } as CSSProperties}>
       {rows.map((row, i) => (
         <div
           key={row.key}
-          className={rowClass(row.horizontal, row.vertical)}
+          ref={row.sticky ? stickyRef : undefined}
+          className={`${rowClass(row.horizontal, row.vertical)} ${
+            row.sticky ? `site:sticky site:top-0 site:z-20 ${PAGE_BACKGROUND_CLASS}` : ""
+          }`}
           style={{ marginTop: i > 0 ? rows[i - 1].below : 0, gap: row.between }}
         >
           {row.cells.map((c) => (
@@ -774,7 +797,7 @@ function FrameRows({ rows }: { rows: Row[] }) {
           ))}
         </div>
       ))}
-    </>
+    </div>
   );
 }
 
