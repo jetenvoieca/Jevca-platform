@@ -448,7 +448,6 @@ export function blockFiller({
             id: w.artworkId,
             url: w.imageUrl,
             title: w.catalogueName,
-            sold: isSold(w.availability),
           }))}
           settings={block.viewer}
           spacing={layout.gridSpacing}

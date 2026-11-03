@@ -6,7 +6,6 @@ import { pictureShapeRatio, type PageGridSpacing, type ViewerSettings } from "@/
 import { SITE_PHONE_QUERY } from "@/lib/siteBreakpoint";
 import { useSiteData } from "@/lib/siteData";
 import FadeImage from "@/components/FadeImage";
-import SoldFlag from "@/components/SoldFlag";
 import WorkPresentation, { usePresentation } from "@/components/WorkPresentation";
 
 // A Portfolio viewer on a page (2026-11-02, the ISYT sites' portfolio
@@ -16,7 +15,9 @@ import WorkPresentation, { usePresentation } from "@/components/WorkPresentation
 // the curation's Description shows there. On a phone the thumbnails fill
 // the width with the chosen work above them, scrolled to when chosen.
 
-export type ViewerWork = { id: string; url: string | null; title: string; sold: boolean };
+// No SOLD flag on the thumbnails (2026-11-03, Craig's request): the
+// chosen work's details say Sold.
+export type ViewerWork = { id: string; url: string | null; title: string };
 
 export default function ViewerBlock({
   curationId,
@@ -100,7 +101,6 @@ export default function ViewerBlock({
             ) : (
               <span className="block h-full w-full bg-neutral-100" />
             )}
-            {w.sold && <SoldFlag />}
           </button>
         ))}
       </div>
