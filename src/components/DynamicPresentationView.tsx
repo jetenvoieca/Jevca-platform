@@ -5,15 +5,15 @@ import { useEffect, useMemo, useState } from "react";
 import type { CurationDetail } from "@/lib/actions/curations";
 import type { DynamicPresentationData } from "@/lib/actions/dynamicPresentations";
 import { useSiteData } from "@/lib/siteData";
-import CurationWorkView from "@/components/CurationWorkView";
+import WorkSidePanel from "@/components/WorkSidePanel";
 import { DynamicSectionBox, DynamicWorksContext, type DynamicWork } from "@/components/DynamicSection";
 
 // A curation's Dynamic presentation on the site (2026-11-03, phase one —
 // see lib/dynamicPresentation.ts): opened from a Canvas page in place of
 // the curation panel, over the page, its sections one under another (up
 // to 1200px wide, centred), scrolling, each section's items making their
-// entrances as it comes into view. Clicking a work opens its
-// Presentation window on top; ✕ or Escape closes.
+// entrances as it comes into view. Clicking a work slides its details in
+// from the left (WorkSidePanel, 2026-11-03); ✕ or Escape closes.
 
 const MAX_WIDTH = 1200;
 
@@ -99,7 +99,7 @@ export default function DynamicPresentationView({
           ))}
         </div>
       </DynamicWorksContext.Provider>
-      {workId && <CurationWorkView curationId={curationId} artworkId={workId} onClose={() => setWorkId(null)} />}
+      {workId && <WorkSidePanel curationId={curationId} artworkId={workId} onClose={() => setWorkId(null)} />}
     </div>,
     document.body,
   );
