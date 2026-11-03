@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import type { CSSProperties, ReactNode } from "react";
 import { pictureShapeRatio, type PageTextStyle, type PictureWordsLook } from "@/lib/pageStyleLayout";
 import type { SectionMedia } from "@/lib/curationSections";
 import { bodyTextCss } from "@/components/textStyleCss";
@@ -22,13 +22,15 @@ export type PictureWordsPicture = {
 // work's picture opens it when clicked (`onOpen`). Sizes shrink with the
 // page (bodyTextCss, `contentWidth` = the page's contents as designed).
 // Also draws each of Profile stories' stories (2026-10-26), which have no
-// second line (`accent` look not given).
+// second line (`accent` look not given) — and under a Galleries entry's
+// text, its list of galleries (`after`, 2026-11-03).
 export default function PictureWordsBlock({
   settings,
   picture,
   headline,
   accent,
   body,
+  after,
   contentWidth,
   onOpen,
 }: {
@@ -37,6 +39,7 @@ export default function PictureWordsBlock({
   headline: string;
   accent: string;
   body: string | null;
+  after?: ReactNode;
   contentWidth: number;
   onOpen?: () => void;
 }) {
@@ -114,6 +117,7 @@ export default function PictureWordsBlock({
             {body}
           </p>
         )}
+        {after}
       </div>
     </div>
   );

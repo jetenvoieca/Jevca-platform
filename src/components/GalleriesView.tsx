@@ -414,6 +414,7 @@ export default function GalleriesView({
       | "email"
       | "phone"
       | "address"
+      | "town"
       | "language"
       | "notes"
       | "contactName"
@@ -453,6 +454,7 @@ export default function GalleriesView({
     fd.set("email", field === "email" ? value : selectedDetail.email || "");
     fd.set("phone", field === "phone" ? value : selectedDetail.phone || "");
     fd.set("address", field === "address" ? value : selectedDetail.address || "");
+    fd.set("town", field === "town" ? value : selectedDetail.town || "");
     // language and notes have no fields in this panel any more (removed
     // 2026-08-31 — not needed for how Galleries are actually used), but
     // their stored values still need to be resent here on every save,
@@ -991,6 +993,19 @@ export default function GalleriesView({
                     onBlur={(e) => saveField("address", e.target.value.trim())}
                     disabled={isPending}
                     rows={2}
+                    className={inputCls}
+                  />
+                </div>
+                {/* Shown with the gallery's name in the Profile
+                    Catalogue's Galleries (2026-11-03). */}
+                <div>
+                  <label className={labelCls}>Town</label>
+                  <input
+                    key={`town-${selectedDetail.id}`}
+                    type="text"
+                    defaultValue={selectedDetail.town || ""}
+                    onBlur={(e) => saveField("town", e.target.value.trim())}
+                    disabled={isPending}
                     className={inputCls}
                   />
                 </div>

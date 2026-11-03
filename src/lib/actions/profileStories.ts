@@ -6,14 +6,25 @@ import { publicMediaUrl } from "@/lib/r2";
 
 // The Profile Catalogue (2026-10-26) — see ProfileStory in schema.prisma.
 
-export type ProfileStoryKind = "STORY" | "STATEMENT" | "BIOGRAPHY";
+export type ProfileStoryKind = "STORY" | "STATEMENT" | "BIOGRAPHY" | "GALLERIES";
 
-// The entries every artist has (2026-11-02), first in the catalogue, in
-// this order, named by their kind.
+// The entries every artist has (2026-11-02; Galleries 2026-11-03), first
+// in the catalogue, in this order, named by their kind.
 const FIXED_ENTRIES: { kind: Exclude<ProfileStoryKind, "STORY">; caption: string }[] = [
   { kind: "STATEMENT", caption: "Artist Statement" },
   { kind: "BIOGRAPHY", caption: "Biography / CV" },
+  { kind: "GALLERIES", caption: "Galleries" },
 ];
+
+// One gallery in a Galleries entry (2026-11-03): its Location's name, and
+// its town and website from its Customer record.
+export type ProfileGalleryRow = {
+  locationId: string;
+  name: string;
+  town: string | null;
+  websiteName: string | null;
+  websiteUrl: string | null;
+};
 
 export type ProfileStoryRow = {
   id: string;
@@ -24,6 +35,8 @@ export type ProfileStoryRow = {
   // Catalogue). thumbUrl: a small picture for the grid (a video's still);
   // fullUrl: the picture or video itself.
   media: { imageId: string; kind: "PHOTO" | "VIDEO"; thumbUrl: string | null; displayUrl: string | null; fullUrl: string } | null;
+  // A Galleries entry's galleries, in order — none for any other entry.
+  galleries: ProfileGalleryRow[];
 };
 
 type Result<T> = T | { error: string };
@@ -35,6 +48,14 @@ const STORY_SELECT = {
   story: true,
   image: {
     select: { id: true, kind: true, url: true, posterUrl: true, thumbnailKey: true, displayKey: true },
+  },
+  galleries: {
+    orderBy: { position: "asc" },
+    select: {
+      location: {
+        select: { id: true, name: true, customer: { select: { town: true, websiteName: true, websiteUrl: true } } },
+      },
+    },
   },
 } as const;
 
@@ -51,6 +72,13 @@ type StoryRecord = {
     thumbnailKey: string | null;
     displayKey: string | null;
   } | null;
+  galleries: {
+    location: {
+      id: string;
+      name: string;
+      customer: { town: string | null; websiteName: string | null; websiteUrl: string | null };
+    };
+  }[];
 };
 
 function toRow(s: StoryRecord): ProfileStoryRow {
@@ -70,11 +98,18 @@ function toRow(s: StoryRecord): ProfileStoryRow {
           fullUrl: img.url,
         }
       : null,
+    galleries: s.galleries.map(({ location: l }) => ({
+      locationId: l.id,
+      name: l.name,
+      town: l.customer.town,
+      websiteName: l.customer.websiteName,
+      websiteUrl: l.customer.websiteUrl,
+    })),
   };
 }
 
-// The whole catalogue: the Artist Statement and Biography / CV first
-// (made here the first time, empty), then the stories in order.
+// The whole catalogue: the fixed entries first (made here the first
+// time, empty), then the stories in order.
 export async function listProfileCatalogue(artistId: string): Promise<ProfileStoryRow[]> {
   await requireArtistAccess(artistId);
   const have = await db.profileStory.findMany({
@@ -135,8 +170,8 @@ export async function createProfileStory(artistId: string, imageId: string): Pro
   return toRow(created);
 }
 
-// The Artist Statement's and Biography / CV's names are fixed — a
-// caption sent for them is ignored.
+// The fixed entries' names are fixed — a caption sent for them is
+// ignored.
 export async function updateProfileStory(
   id: string,
   artistId: string,
@@ -173,15 +208,39 @@ export async function setProfileStoryImage(
   return toRow(row);
 }
 
+// Sets a Galleries entry's galleries, in this order (2026-11-03): the
+// ids of the artist's Locations of type Gallery, first first.
+export async function setProfileGalleries(
+  id: string,
+  artistId: string,
+  locationIds: string[]
+): Promise<Result<ProfileStoryRow>> {
+  await requireArtistAccess(artistId);
+  const entry = await db.profileStory.findFirst({
+    where: { id, artistId, kind: "GALLERIES" },
+    select: { id: true },
+  });
+  if (!entry) return { error: "The Galleries entry wasn't found." };
+  const ids = [...new Set(locationIds)];
+  const found = await db.location.count({ where: { id: { in: ids }, artistId, type: "GALLERY" } });
+  if (found !== ids.length) return { error: "One of those galleries wasn't found — reload and try again." };
+  await db.$transaction([
+    db.profileGallery.deleteMany({ where: { storyId: id } }),
+    db.profileGallery.createMany({ data: ids.map((locationId, position) => ({ storyId: id, locationId, position })) }),
+  ]);
+  const row = await db.profileStory.findUniqueOrThrow({ where: { id }, select: STORY_SELECT });
+  return toRow(row);
+}
+
 // Deletes the story only — its picture or video stays in the Media
-// Catalogue. The Artist Statement and Biography / CV can't be deleted.
+// Catalogue. The fixed entries can't be deleted.
 export async function deleteProfileStory(id: string, artistId: string): Promise<void> {
   await requireArtistAccess(artistId);
   await db.profileStory.deleteMany({ where: { id, artistId, kind: "STORY" } });
 }
 
-// The stories in this order (every story's id, first first — the Artist
-// Statement and Biography / CV stay first and aren't included).
+// The stories in this order (every story's id, first first — the fixed
+// entries stay first and aren't included).
 export async function reorderProfileStories(artistId: string, ids: string[]): Promise<Result<{ ok: true }>> {
   await requireArtistAccess(artistId);
   const owned = await db.profileStory.findMany({ where: { artistId, kind: "STORY" }, select: { id: true } });

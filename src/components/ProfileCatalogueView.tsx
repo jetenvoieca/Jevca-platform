@@ -8,6 +8,7 @@ import {
   createProfileStory,
   deleteProfileStory,
   reorderProfileStories,
+  setProfileGalleries,
   setProfileStoryImage,
   updateProfileStory,
   type ProfileStoryRow,
@@ -24,15 +25,21 @@ import {
 // The Artist Statement and Biography / CV (2026-11-02, Craig's mockup)
 // come first, always there: named by their kind (no Caption box), not
 // dragged or deleted; a picture is chosen in their window (an empty box
-// until then).
+// until then). Galleries (2026-11-03) also lists galleries — chosen from
+// the artist's Locations of type Gallery and put in order in its window.
+
+// A Location of type Gallery, to choose for the Galleries entry.
+type GalleryOption = { id: string; name: string };
 export default function ProfileCatalogueView({
   artistId,
   siteId,
   initialStories,
+  galleries,
 }: {
   artistId: string;
   siteId: string;
   initialStories: ProfileStoryRow[];
+  galleries: GalleryOption[];
 }) {
   const [stories, setStories] = useState(initialStories);
   const [openId, setOpenId] = useState<string | null>(null);
@@ -157,6 +164,7 @@ export default function ProfileCatalogueView({
           story={open}
           artistId={artistId}
           siteId={siteId}
+          galleries={galleries}
           onClose={() => setOpenId(null)}
           onSaved={(row) => setStories((prev) => prev.map((s) => (s.id === row.id ? row : s)))}
           onDeleted={() => {
@@ -173,6 +181,7 @@ function StoryModal({
   story,
   artistId,
   siteId,
+  galleries,
   onClose,
   onSaved,
   onDeleted,
@@ -180,6 +189,7 @@ function StoryModal({
   story: ProfileStoryRow;
   artistId: string;
   siteId: string;
+  galleries: GalleryOption[];
   onClose: () => void;
   onSaved: (row: ProfileStoryRow) => void;
   onDeleted: () => void;
@@ -280,7 +290,7 @@ function StoryModal({
         {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
         {!media && fixed ? (
-          <div className="mb-4">{picker(story.kind === "BIOGRAPHY" ? "Add a picture (optional)" : "Add a picture")}</div>
+          <div className="mb-4">{picker(story.kind === "STATEMENT" ? "Add a picture" : "Add a picture (optional)")}</div>
         ) : !media ? (
           <div className="mb-4 flex aspect-[4/3] w-1/2 flex-col items-center justify-center gap-3 rounded-md bg-neutral-100 p-3 text-center text-sm text-neutral-400">
             <span>Its picture or video was deleted from the Media Catalogue.</span>
@@ -320,14 +330,29 @@ function StoryModal({
           </>
         )}
 
-        <label className="mb-1 block text-sm font-medium text-neutral-700">{fixed ? "Text" : "Story"}</label>
+        <label className="mb-1 block text-sm font-medium text-neutral-700">
+          {story.kind === "GALLERIES" ? "Text (optional)" : fixed ? "Text" : "Story"}
+        </label>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           onBlur={() => save({ story: text })}
-          rows={14}
+          rows={story.kind === "GALLERIES" ? 4 : 14}
           className="w-full rounded-md border border-neutral-300 px-3 py-2 text-sm leading-relaxed"
         />
+
+        {story.kind === "GALLERIES" && (
+          <GalleriesList
+            chosen={story.galleries.map((g) => ({ id: g.locationId, name: g.name }))}
+            options={galleries}
+            onChange={async (ids) => {
+              setError(null);
+              const result = await setProfileGalleries(story.id, artistId, ids);
+              if ("error" in result) setError(result.error);
+              else onSaved(result);
+            }}
+          />
+        )}
       </div>
 
       {fullSize && media && (
@@ -350,6 +375,105 @@ function StoryModal({
           </button>
         </div>
       )}
+    </div>
+  );
+}
+
+// The Galleries entry's galleries (2026-11-03): the chosen ones in order
+// — drag one onto another to move it, ✕ to take it off — and a list of
+// the artist's other galleries to add one. Each change saves at once.
+function GalleriesList({
+  chosen,
+  options,
+  onChange,
+}: {
+  chosen: GalleryOption[];
+  options: GalleryOption[];
+  onChange: (ids: string[]) => void;
+}) {
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const ids = chosen.map((g) => g.id);
+  const others = options.filter((o) => !ids.includes(o.id));
+
+  const drop = (target: number) => {
+    if (dragIndex === null || dragIndex === target) {
+      setDragIndex(null);
+      return;
+    }
+    const next = [...ids];
+    const [moved] = next.splice(dragIndex, 1);
+    next.splice(target, 0, moved);
+    setDragIndex(null);
+    onChange(next);
+  };
+
+  return (
+    <div className="mt-4">
+      <p className="mb-1 text-sm font-medium text-neutral-700">Galleries</p>
+      {chosen.length === 0 ? (
+        <p className="mb-2 text-sm text-neutral-400">None yet — add them below.</p>
+      ) : (
+        <ul className="mb-2 flex flex-col gap-1.5">
+          {chosen.map((g, i) => (
+            <li
+              key={g.id}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.effectAllowed = "move";
+                e.dataTransfer.setData("text/plain", g.id);
+                setDragIndex(i);
+              }}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={(e) => {
+                e.preventDefault();
+                drop(i);
+              }}
+              onDragEnd={() => setDragIndex(null)}
+              className={`flex cursor-grab items-center gap-2 rounded-md border border-neutral-300 bg-white px-3 py-1.5 text-sm text-neutral-800 active:cursor-grabbing ${
+                dragIndex === i ? "opacity-40" : ""
+              }`}
+            >
+              <span className="text-neutral-400" aria-hidden>
+                ⠿
+              </span>
+              <span className="min-w-0 flex-1 truncate">{g.name}</span>
+              <button
+                type="button"
+                onClick={() => onChange(ids.filter((id) => id !== g.id))}
+                aria-label={`Take ${g.name} off`}
+                title="Take off the list"
+                className="text-neutral-400 hover:text-red-600"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+      {options.length === 0 ? (
+        <p className="text-xs text-neutral-400">No galleries yet — add them in Locations, with the type Gallery.</p>
+      ) : (
+        others.length > 0 && (
+          <select
+            value=""
+            onChange={(e) => {
+              if (e.target.value) onChange([...ids, e.target.value]);
+            }}
+            aria-label="Add a gallery"
+            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm text-neutral-700"
+          >
+            <option value="">Add a gallery…</option>
+            {others.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        )
+      )}
+      <p className="mt-1 text-xs text-neutral-400">
+        Each shows its name, town and website — set those on the gallery&apos;s contact card.
+      </p>
     </div>
   );
 }

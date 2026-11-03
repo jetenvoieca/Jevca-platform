@@ -38,6 +38,7 @@ export type CustomerDetail = {
   contactEmail: string | null;
   websiteName: string | null;
   websiteUrl: string | null;
+  town: string | null;
   instagramUrl: string | null;
   facebookUrl: string | null;
   defaultCommissionPercent: string | null;
@@ -216,6 +217,7 @@ export async function getCustomerDetail(customerId: string): Promise<CustomerDet
     contactEmail: customer.contactEmail,
     websiteName: customer.websiteName,
     websiteUrl: customer.websiteUrl,
+    town: customer.town,
     instagramUrl: customer.instagramUrl,
     facebookUrl: customer.facebookUrl,
     defaultCommissionPercent: customer.defaultCommissionPercent
@@ -369,6 +371,7 @@ export async function createCustomer(
   const contactEmail = (formData.get("contactEmail") as string)?.trim() || null;
   const websiteName = (formData.get("websiteName") as string)?.trim() || null;
   const websiteUrl = (formData.get("websiteUrl") as string)?.trim() || null;
+  const town = (formData.get("town") as string)?.trim() || null;
   const instagramUrl = (formData.get("instagramUrl") as string)?.trim() || null;
   const facebookUrl = (formData.get("facebookUrl") as string)?.trim() || null;
   const defaultCommissionRaw = (formData.get("defaultCommissionPercent") as string)?.trim();
@@ -390,6 +393,7 @@ export async function createCustomer(
       contactEmail,
       websiteName,
       websiteUrl,
+      town,
       instagramUrl,
       facebookUrl,
       defaultCommissionPercent,
@@ -421,6 +425,7 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
   const contactEmail = (formData.get("contactEmail") as string)?.trim() || null;
   const websiteName = (formData.get("websiteName") as string)?.trim() || null;
   const websiteUrl = (formData.get("websiteUrl") as string)?.trim() || null;
+  const town = (formData.get("town") as string)?.trim() || null;
   const instagramUrl = (formData.get("instagramUrl") as string)?.trim() || null;
   const facebookUrl = (formData.get("facebookUrl") as string)?.trim() || null;
   const defaultCommissionRaw = (formData.get("defaultCommissionPercent") as string)?.trim();
@@ -442,6 +447,7 @@ export async function updateCustomer(customerId: string, formData: FormData): Pr
       contactEmail,
       websiteName,
       websiteUrl,
+      town,
       instagramUrl,
       facebookUrl,
       defaultCommissionPercent,

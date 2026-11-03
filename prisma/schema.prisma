@@ -574,6 +574,9 @@ model Customer {
   contactEmail String?
   websiteName  String?
   websiteUrl   String?
+  // The gallery's town (2026-11-03), shown with its name in a Profile
+  // Catalogue's Galleries — the address is one block of text.
+  town         String?
   instagramUrl String?
   facebookUrl  String?
   // The gallery's usual cut — a starting point to prefill with when
@@ -655,6 +658,9 @@ model Location {
 
   // Exhibitions held here (2026-11-02) — see Exhibition.
   exhibitions Exhibition[]
+  // Where it's listed in the artist's Galleries entry (2026-11-03) — see
+  // ProfileGallery.
+  profileGalleries ProfileGallery[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -811,6 +817,8 @@ model ProfileStory {
   caption  String @default("")
   story    String @default("")
   position Int
+  // A Galleries entry's galleries, in order (2026-11-03).
+  galleries ProfileGallery[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -823,6 +831,24 @@ enum ProfileStoryKind {
   STORY
   STATEMENT
   BIOGRAPHY
+  GALLERIES
+}
+
+// One gallery listed in an artist's Galleries entry of the Profile
+// Catalogue (2026-11-03, Craig's request): one of their Locations of
+// type Gallery, chosen and put in order (`position`, 0 first) in the
+// entry's window. Shown on a page with its name, town and website (from
+// its Customer record). Goes if the entry or the Location goes.
+model ProfileGallery {
+  id         String       @id @default(cuid())
+  storyId    String
+  story      ProfileStory @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  locationId String
+  location   Location     @relation(fields: [locationId], references: [id], onDelete: Cascade)
+  position   Int
+
+  @@unique([storyId, locationId])
+  @@index([locationId])
 }
 
 // One artwork's place in one Curation (2026-09-24). `position` sets the

@@ -57,7 +57,9 @@ export async function getPublishedSite(
       ...snapshot,
       pages,
       menus,
-      profileStories: snapshot.profileStories ?? [],
+      // A story's galleries (2026-11-03) are read as none for a site
+      // published before they existed.
+      profileStories: (snapshot.profileStories ?? []).map((s) => ({ ...s, galleries: s.galleries ?? [] })),
       exhibitions: snapshot.exhibitions ?? [],
     },
     publishedAt: row.publishedAt,
