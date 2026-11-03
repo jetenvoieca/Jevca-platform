@@ -107,19 +107,22 @@ export async function POST(request: NextRequest) {
   let position = listed.reduce((max, g) => Math.max(max, g.position), -1) + 1;
   let locationsAdded = 0;
   let galleriesListed = 0;
-  for (const g of galleries) {
-    let location: LocationRow | undefined = byName.get(g.name.toLowerCase());
-    if (!location) {
-      location = await db.$transaction(async (tx): Promise<LocationRow> => {
-        const customer = await tx.customer.create({
-          data: { artistId, kind: "GALLERY", name: g.name, websiteUrl: g.websiteUrl || null },
-          select: { id: true },
-        });
-        return tx.location.create({
-          data: { artistId, name: g.name, type: "GALLERY", customerId: customer.id },
-          select: { id: true, name: true, type: true },
-        });
+  // A new Gallery Location, with its contact holding the website.
+  const makeGallery = (g: GalleryIn): Promise<LocationRow> =>
+    db.$transaction(async (tx) => {
+      const customer = await tx.customer.create({
+        data: { artistId, kind: "GALLERY", name: g.name, websiteUrl: g.websiteUrl || null },
+        select: { id: true },
       });
+      return tx.location.create({
+        data: { artistId, name: g.name, type: "GALLERY", customerId: customer.id },
+        select: { id: true, name: true, type: true },
+      });
+    });
+  for (const g of galleries) {
+    const known = byName.get(g.name.toLowerCase());
+    const location = known ?? (await makeGallery(g));
+    if (!known) {
       byName.set(g.name.toLowerCase(), location);
       locationsAdded++;
     }
